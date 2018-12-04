@@ -48,9 +48,10 @@ lazy val coverageSettings = Seq(
   ).mkString(";")
 )
 
-lazy val compilerSettings = CompilerSettings.options ++ Seq(
-  crossScalaVersions := Seq("2.11.12", scalaVersion.value)
-)
+lazy val compilerSettings = CompilerSettings.options 
+//++ Seq(
+//  crossScalaVersions := Seq("2.11.12", scalaVersion.value)
+//)
 
 // Before starting sbt export YOURKIT_AGENT set to the profiling agent appropriate
 // for your OS (https://www.yourkit.com/docs/java/help/agent.jsp)
@@ -93,7 +94,7 @@ lazy val casper = (project in file("casper"))
 //    rholangProtoBuildAssembly := (rholangProtoBuild / Compile / incrementalAssembly).value
   )
   .dependsOn(
-//    blockStorage % "compile->compile;test->test",
+    blockStorage % "compile->compile;test->test",
     comm         % "compile->compile;test->test",
     shared       % "compile->compile;test->test",
     crypto,
@@ -164,6 +165,7 @@ lazy val models = (project in file("models"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
+  .dependsOn(crypto)
 //  .dependsOn(rspace)
 
 lazy val node = (project in file("node"))
@@ -377,19 +379,19 @@ lazy val node = (project in file("node"))
 //  )
 //  .dependsOn(roscalaMacros)
 //
-//lazy val blockStorage = (project in file("block-storage"))
-//  .settings(commonSettings: _*)
-//  .settings(
-//    name := "block-storage",
-//    version := "0.0.1-SNAPSHOT",
-//    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
-//      lmdbjava,
-//      catsCore,
-//      catsEffect,
-//      catsMtl
-//    )
-//  )
-//  .dependsOn(shared, models)
+lazy val blockStorage = (project in file("block-storage"))
+  .settings(commonSettings: _*)
+  .settings(
+    name := "block-storage",
+    version := "0.0.1-SNAPSHOT",
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
+      lmdbjava,
+      catsCore,
+      catsEffect,
+      catsMtl
+    )
+  )
+  .dependsOn(shared, models)
 //
 //lazy val rspace = (project in file("rspace"))
 //  .configs(IntegrationTest extend Test)
@@ -483,7 +485,7 @@ lazy val node = (project in file("node"))
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(
-//    blockStorage,
+    blockStorage,
     casper,
     comm,
     crypto,
