@@ -181,17 +181,16 @@ TBD
 
 #### Installing rnode
 ```bash
-> brew install rchain/rchain/rnode
+> brew install CasperLabs/rchain/rnode
 ```
 ## Deverloper guide
 
-For getting started with development of RChain please refer to the [Developer guide](DEVELOPER.md)
+For getting started with development on CasperLabs please refer to the [Developer guide](DEVELOPER.md)
 
 ## Caveats and filing issues
 
 ### Caveats
-During this pre-release phase of the RChain software, there are some [known issues](https://rchain.atlassian.net/wiki/spaces/CORE/pages/428376244/RChain+software+unresolved+bugs+and+known+issues).
-
+During this pre-release phase of the CasperLabs software, there are some [known issues]. (https://casperlabs.atlassian.net/browse/EE-16?filter=-6)
 ### Filing Issues
 
 TBD
