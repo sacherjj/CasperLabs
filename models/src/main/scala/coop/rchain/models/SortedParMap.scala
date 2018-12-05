@@ -7,6 +7,7 @@ import monix.eval.Coeval
 import scala.collection.GenTraversableOnce
 import scala.collection.immutable.HashMap
 
+//TODO
 final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)] {
 
   // TODO: Merge `sortedList` and `sortedMap` into one VectorMap once available

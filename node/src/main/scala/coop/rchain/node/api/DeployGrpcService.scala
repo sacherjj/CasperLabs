@@ -44,12 +44,16 @@ private[api] object DeployGrpcService {
 
       // TODO: Handle error case
       override def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
-        defer(BlockAPI.getListeningNameDataResponse[F](request.depth, request.name.get))
+        // TODO check the CasperMessage.proto
+        //defer(BlockAPI.getListeningNameDataResponse[F](request.depth, request.name.get))
+        defer(BlockAPI.getListeningNameDataResponse[F](request.depth, ???))
 
       override def listenForContinuationAtName(
           request: ContinuationAtNameQuery
       ): Task[ListeningNameContinuationResponse] =
-        defer(BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.names))
+        //TODO Check CasperMessage.proto
+//        defer(BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.names))
+        defer(BlockAPI.getListeningNameContinuationResponse[F](request.depth, ???))
 
       override def showMainChain(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
         Observable

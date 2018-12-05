@@ -7,6 +7,7 @@ import monix.eval.Coeval
 import scala.collection.GenSet
 import scala.collection.immutable.HashSet
 
+//TODO
 //Enforce ordering and uniqueness.
 // - uniqueness is handled by using HashSet.
 // - ordering comes from sorting the elements prior to serializing.

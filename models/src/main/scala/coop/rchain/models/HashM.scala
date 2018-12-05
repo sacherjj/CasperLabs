@@ -24,7 +24,7 @@ import scala.util.hashing.MurmurHash3
 trait HashM[A] {
   def hash[F[_]: Sync](value: A): F[Int]
 }
-
+//TODO
 object HashM extends HashMDerivation {
 
   def apply[A](implicit ev: HashM[A]): HashM[A] = ev

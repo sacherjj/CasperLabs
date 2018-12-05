@@ -283,11 +283,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(run)
 
-  val repl = new Subcommand("repl") {
-    descr("Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
-  }
-  addSubcommand(repl)
-
   val eval = new Subcommand("eval") {
     descr(
       "Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort."

@@ -390,7 +390,6 @@ object Configuration {
   private def subcommand(options: commandline.Options): Command =
     options.subcommand match {
       case Some(options.eval)        => Eval(options.eval.fileNames())
-      case Some(options.repl)        => Repl
       case Some(options.diagnostics) => Diagnostics
       case Some(options.deploy)      =>
         //TODO: change the defaults before main net

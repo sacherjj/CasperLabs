@@ -66,7 +66,6 @@ object Main {
 
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
-      case Repl        => new ReplRuntime().replProgram[Task].as(())
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
       case Deploy(address, phlo, phloPrice, nonce, location) =>
         DeployRuntime.deployFileProgram[Task](address, phlo, phloPrice, nonce, location)
@@ -114,13 +113,4 @@ object Main {
         log.error(s"Failed! Reason: '$error")
     }
   }
-
-  implicit private def consoleIO: ConsoleIO[Task] = {
-    val console = new ConsoleReader()
-    console.setHistoryEnabled(true)
-    console.setPrompt("rholang $ ".green)
-    console.addCompleter(new StringsCompleter(ReplRuntime.keywords.asJava))
-    effects.consoleIO(console)
-  }
-
 }

@@ -69,8 +69,6 @@ package object effects {
     new TcpTransportLayer(port, cert, key, maxMessageSize, folder)
   }
 
-  def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
-
   def rpConnections: Task[ConnectionsCell[Task]] =
     Cell.mvarCell[Task, Connections](Connections.empty)
 

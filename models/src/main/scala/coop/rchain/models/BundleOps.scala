@@ -2,6 +2,7 @@ package coop.rchain.models
 
 import cats.Show
 
+//TODO
 object BundleOps {
   implicit class BundleEnhance(b: Bundle) {
     def merge(other: Bundle): Bundle =

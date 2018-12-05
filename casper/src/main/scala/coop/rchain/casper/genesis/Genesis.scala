@@ -134,7 +134,7 @@ object Genesis {
               path =>
                 Log[F].warn(
                   s"Specified bonds file $path does not exist. Falling back on generating random validators."
-              )
+                )
             )
           )(_ => ().pure[F])
       walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))

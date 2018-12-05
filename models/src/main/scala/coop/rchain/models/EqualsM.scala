@@ -11,6 +11,7 @@ import monix.eval.Coeval
 import scala.Function.tupled
 import scala.collection.immutable.BitSet
 
+//TODO
 /**
   * A typeclass for computing Scala's default `equals` for case classes in a stacksafe manner.
   *

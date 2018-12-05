@@ -19,6 +19,7 @@ import scala.collection.immutable.{BitSet, HashSet}
 trait Pretty[A] {
   def pretty(value: A, indentLevel: Int): String
 }
+//TODO
 
 object Pretty extends PrettyInstances {
 

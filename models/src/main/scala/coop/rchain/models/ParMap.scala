@@ -7,6 +7,7 @@ import monix.eval.Coeval
 import scala.collection.immutable.BitSet
 import coop.rchain.models.rholang.implicits._
 
+//TODO
 case class ParMap(
     ps: SortedParMap,
     connectiveUsed: Boolean,

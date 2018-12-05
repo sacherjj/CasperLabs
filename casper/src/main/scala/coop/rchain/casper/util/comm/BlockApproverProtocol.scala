@@ -39,8 +39,7 @@ class BlockApproverProtocol(
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[
-      F[_]: Capture: Monad: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def unapprovedBlockPacketHandler[F[_]: Capture: Monad: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       u: UnapprovedBlock
   ): F[Option[Packet]] =

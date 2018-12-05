@@ -8,6 +8,7 @@ import monix.eval.Coeval
 import scalapb.compiler.{DescriptorPimps, GeneratorParams, Types}
 import scalapb.WireType
 
+//TODO
 object ProtoM extends DescriptorPimps {
 
   def params: GeneratorParams = ??? //required by DescriptorPimps, but we don't use it transitively
