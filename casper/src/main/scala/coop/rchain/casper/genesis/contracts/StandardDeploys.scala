@@ -2,9 +2,7 @@ package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.casper.protocol.{Deploy, DeployData}
 import coop.rchain.casper.util.ProtoUtil.stringToByteString
-import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.collection.{Either, ListOps}
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.{BasicWalletFaucet, MakeMint}
 import coop.rchain.rholang.proofofstake.MakePoS
@@ -13,19 +11,26 @@ import coop.rchain.rholang.wallet.{BasicWallet, WalletCheck}
 
 object StandardDeploys {
   private def toDeploy(
-      compiledSource: CompiledRholangSource,
+      //TODO Replace to a more narrow type in the future
+      compiledSource: Any,
       user: String,
       timestamp: Long
   ): Deploy = {
     val deployData = DeployData(
       user = stringToByteString(user),
       timestamp = timestamp,
-      term = compiledSource.code,
-      phloLimit = accounting.MAX_VALUE
+      term = {
+        //TODO compiledSource.term
+        ???
+      },
+      phloLimit = Int.MaxValue
     )
 
     Deploy(
-      term = Some(compiledSource.term),
+      term = Some({
+        //TODO compiledSource.term
+        ???
+      }),
       raw = Some(deployData)
     )
   }

@@ -1,12 +1,12 @@
 package coop.rchain.casper
 
+import cats.Applicative
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
-import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
@@ -21,14 +21,13 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared._
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
-import coop.rchain.shared.AttemptOps._
-import coop.rchain.catscontrib.TaskContrib._
 
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
 import scala.concurrent.SyncVar
 
-class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
+class MultiParentCasperImpl[
+    F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
     runtimeManager: RuntimeManager,
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
@@ -239,7 +238,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
               b =>
                 Capture[F].capture {
                   b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result -= _))
-                }
+              }
             )
     } yield result.toSeq
 
@@ -306,11 +305,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     _blockDag.get
   }
 
-  def storageContents(hash: StateHash): F[String] =
-    runtimeManager
-      .storageRepr(hash)
-      .getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!")
-      .pure[F]
+  def storageContents(hash: StateHash): F[String] = ???
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     (equivocationsTracker
@@ -340,7 +335,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                                           dag,
                                           emptyStateHash,
                                           runtimeManager
-                                        )
+                                      )
                                     )
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
                                _ => Validate.bondsCache[F](b, runtimeManager)
@@ -351,7 +346,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                                               .neglectedInvalidBlock[F](
                                                 b,
                                                 invalidBlockTracker.toSet
-                                              )
+                                            )
                                         )
       postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
                                                .traverse(
@@ -362,7 +357,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                                                        b,
                                                        dag,
                                                        genesis
-                                                     )
+                                                   )
                                                )
       blockBufferDependencyDag <- blockBufferDependencyDagState.get
       postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(

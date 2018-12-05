@@ -8,6 +8,7 @@ import cats.effect.Sync
 import cats.instances.list._
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
+import cats.syntax.monad._
 import cats.syntax.functor._
 import cats.syntax.traverse._
 

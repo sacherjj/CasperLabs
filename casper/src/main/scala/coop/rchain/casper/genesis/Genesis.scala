@@ -9,23 +9,20 @@ import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, stringToByteString, unsignedBlockProto}
-import coop.rchain.casper.util.{EventConverter, Sorting}
-import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
+import coop.rchain.casper.util.Sorting
+import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.{EventConverter, Sorting}
+import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.execution.Scheduler
 
+import scala.concurrent.duration.Duration
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
-import coop.rchain.casper.util.Sorting.byteArrayOrdering
-import coop.rchain.rholang.interpreter.accounting
-
-import scala.concurrent.duration.Duration
 
 object Genesis {
 
@@ -137,7 +134,7 @@ object Genesis {
               path =>
                 Log[F].warn(
                   s"Specified bonds file $path does not exist. Falling back on generating random validators."
-                )
+              )
             )
           )(_ => ().pure[F])
       walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))

@@ -1,8 +1,5 @@
 package coop.rchain.casper.util.rholang
 
-import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rspace.ReplayException
-
 sealed trait DeployStatus { self =>
   def isFailed: Boolean = self match {
     case _: Failed => true
@@ -26,8 +23,8 @@ final case class InternalErrors(errors: Vector[Throwable])                      
 object DeployStatus {
   def fromErrors(errors: Vector[Throwable]): DeployStatus = {
     val (userErrors, internalErrors) = errors.partition {
-      case _: InterpreterError => true
-      case _                   => false
+      case _ => true
+      case _ => false
     }
 
     internalErrors

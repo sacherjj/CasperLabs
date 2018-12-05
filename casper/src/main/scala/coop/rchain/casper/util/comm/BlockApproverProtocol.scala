@@ -5,7 +5,6 @@ import cats.implicits._
 import cats.kernel.Eq
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ValidatorIdentity
-import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
@@ -42,7 +41,8 @@ class BlockApproverProtocol(
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Capture: Monad: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def unapprovedBlockPacketHandler[
+      F[_]: Capture: Monad: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       u: UnapprovedBlock
   ): F[Option[Packet]] =
@@ -120,26 +120,10 @@ object BlockApproverProtocol {
       _ <- (blockBonds == bonds)
             .either(())
             .or("Block bonds don't match expected.")
-      validators = blockBonds.toSeq.map(b => ProofOfStakeValidator(b._1.toByteArray, b._2))
-      posParams  = ProofOfStakeParams(minimumBond, maximumBond, validators)
-      faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
-      genesisBlessedContracts = Genesis
-        .defaultBlessedTerms(timestamp, posParams, wallets, faucetCode)
-        .toSet
-      blockDeploys          = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
-      genesisBlessedTerms   = genesisBlessedContracts.flatMap(_.term)
-      genesisBlessedDeploys = genesisBlessedContracts.flatMap(_.raw)
-      _ <- blockDeploys
-            .forall(
-              d =>
-                genesisBlessedTerms.contains(d.deploy.term.get) && genesisBlessedDeploys
-                  .exists(dd => deployDataEq.eqv(dd, d.deploy.raw.get))
-            )
-            .either(())
-            .or("Candidate deploys do not match expected deploys.")
-      _ <- (blockDeploys.size == genesisBlessedContracts.size)
-            .either(())
-            .or("Mismatch between number of candidate deploys and expected number of deploys.")
+      validators   = blockBonds.toSeq.map(b => ProofOfStakeValidator(b._1.toByteArray, b._2))
+      posParams    = ProofOfStakeParams(minimumBond, maximumBond, validators)
+      faucetCode   = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
+      blockDeploys = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
       stateHash <- runtimeManager
                     .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
                     .runSyncUnsafe(Duration.Inf)
