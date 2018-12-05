@@ -36,7 +36,7 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
       .forAddress(host, port)
       .maxInboundMessageSize(maxMessageSize)
       .usePlaintext()
-      .build
+      .build()
 
   private val stub = CasperMessageGrpcMonix.stub(channel)
 

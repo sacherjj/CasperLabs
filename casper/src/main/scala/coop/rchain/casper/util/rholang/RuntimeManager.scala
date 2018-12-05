@@ -11,7 +11,6 @@ import monix.execution.Scheduler
 
 import scala.collection.immutable
 import scala.concurrent.SyncVar
-import scala.util.{Failure, Success, Try}
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
 class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {

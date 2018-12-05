@@ -2,7 +2,6 @@ package coop.rchain.casper.util.comm
 
 import cats.Monad
 import cats.implicits._
-import cats.kernel.Eq
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.contracts._
@@ -13,15 +12,14 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
-import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
 import monix.execution.Scheduler
 
-import scala.util.Try
 import scala.concurrent.duration.Duration
+import scala.util.Try
 
 /**
   * Validator side of the protocol defined in

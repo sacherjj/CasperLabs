@@ -26,8 +26,7 @@ import scala.collection.immutable.HashSet
 import scala.collection.mutable
 import scala.concurrent.SyncVar
 
-class MultiParentCasperImpl[
-    F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
+class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
     runtimeManager: RuntimeManager,
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
@@ -238,7 +237,7 @@ class MultiParentCasperImpl[
               b =>
                 Capture[F].capture {
                   b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result -= _))
-              }
+                }
             )
     } yield result.toSeq
 
@@ -335,7 +334,7 @@ class MultiParentCasperImpl[
                                           dag,
                                           emptyStateHash,
                                           runtimeManager
-                                      )
+                                        )
                                     )
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
                                _ => Validate.bondsCache[F](b, runtimeManager)
@@ -346,7 +345,7 @@ class MultiParentCasperImpl[
                                               .neglectedInvalidBlock[F](
                                                 b,
                                                 invalidBlockTracker.toSet
-                                            )
+                                              )
                                         )
       postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
                                                .traverse(
@@ -357,7 +356,7 @@ class MultiParentCasperImpl[
                                                        b,
                                                        dag,
                                                        genesis
-                                                   )
+                                                     )
                                                )
       blockBufferDependencyDag <- blockBufferDependencyDagState.get
       postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(

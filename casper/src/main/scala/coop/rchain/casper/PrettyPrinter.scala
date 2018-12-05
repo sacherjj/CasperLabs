@@ -6,10 +6,10 @@ import coop.rchain.casper.protocol._
 import scalapb.GeneratedMessage
 import coop.rchain.crypto.codec._
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPP}
 
 object PrettyPrinter {
-  private val rpp = RholangPP()
+  //TODO Rholang pretty printer
+  private val rpp = ???
 
   def buildStringNoLimit(b: ByteString): String = Base16.encode(b.toByteArray)
 
@@ -49,7 +49,7 @@ object PrettyPrinter {
     limit(Base16.encode(b.toByteArray), 10)
 
   private def buildString(par: Option[Par]): String =
-    par.map(p => limit(rpp.buildString(p), 25)).getOrElse("")
+    par.map(p => limit(rpp, 25)).getOrElse("")
 
   private def buildString(d: Deploy): String =
     s"Deploy #${d.raw.fold(0L)(_.timestamp)} -- ${buildString(d.term)}"

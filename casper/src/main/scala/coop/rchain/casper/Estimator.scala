@@ -1,18 +1,16 @@
 package coop.rchain.casper
 
-import cats.{Foldable, Id, Monad}
 import cats.implicits._
-import cats.mtl.implicits._
+import cats.{Id, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{parentHashes, weightFromValidatorByDag}
+import coop.rchain.casper.util.DagOperations
+import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
+import coop.rchain.catscontrib.ListContrib
 
 import scala.annotation.tailrec
 import scala.collection.immutable.{Map, Set}
-import coop.rchain.catscontrib.ListContrib
-import coop.rchain.shared.StreamT
 
 object Estimator {
   type BlockHash = ByteString
