@@ -159,8 +159,7 @@ lazy val models = (project in file("models"))
       scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
-      coop.rchain.scalapb.StacksafeScalapbGenerator
-        .gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
       grpcmonix.generators
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
