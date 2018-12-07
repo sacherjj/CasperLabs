@@ -1,3 +1,0 @@
-for(@wide <- @"myWide") {
-  wide //execute wide processes
-}

@@ -1,4 +1,0 @@
-new chan in {
-  for (_ <- chan) { Nil } | chan!(Nil)
-}
-

@@ -131,7 +131,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
           InterpreterUtil.mkTerm(t).right.get,
           System.currentTimeMillis(),
           accounting.MAX_VALUE
-        )
+      )
     )
     val (_, firstDeploy) =
       runtimeManager

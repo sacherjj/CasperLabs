@@ -1,6 +1,4 @@
 import Dependencies._
-//import BNFC._
-//import Rholang._
 import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
 
@@ -48,11 +46,6 @@ lazy val coverageSettings = Seq(
   ).mkString(";")
 )
 
-lazy val compilerSettings = CompilerSettings.options 
-//++ Seq(
-//  crossScalaVersions := Seq("2.11.12", scalaVersion.value)
-//)
-
 // Before starting sbt export YOURKIT_AGENT set to the profiling agent appropriate
 // for your OS (https://www.yourkit.com/docs/java/help/agent.jsp)
 lazy val profilerSettings = Seq(
@@ -63,7 +56,7 @@ lazy val profilerSettings = Seq(
   javaOptions in reStart ++= (javaOptions in run).value
 )
 
-lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSettings ++ profilerSettings
+lazy val commonSettings = projectSettings ++ coverageSettings ++ CompilerSettings.options ++ profilerSettings
 
 lazy val shared = (project in file("shared"))
   .settings(commonSettings: _*)
@@ -83,7 +76,6 @@ lazy val shared = (project in file("shared"))
 
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
-//  .settings(rholangSettings: _*)
   .settings(
     name := "casper",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
@@ -91,17 +83,13 @@ lazy val casper = (project in file("casper"))
       catsMtl,
       monix
     )
-//    rholangProtoBuildAssembly := (rholangProtoBuild / Compile / incrementalAssembly).value
   )
   .dependsOn(
     blockStorage % "compile->compile;test->test",
     comm         % "compile->compile;test->test",
     shared       % "compile->compile;test->test",
     crypto,
-    models,
-//    rspace,
-//    rholang      % "compile->compile;test->test",
-//    rholangProtoBuild
+    models
   )
 
 lazy val comm = (project in file("comm"))
@@ -165,7 +153,6 @@ lazy val models = (project in file("models"))
     )
   )
   .dependsOn(crypto)
-//  .dependsOn(rspace)
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -233,8 +220,10 @@ lazy val node = (project in file("node"))
     version in Docker := version.value +
       git.gitHeadCommit.value.map("-git" + _.take(8)).getOrElse(""),
     dockerAliases ++=
-      sys.env.get("DRONE_BUILD_NUMBER")
-        .toSeq.map(num => dockerAlias.value.withTag(Some(s"DRONE-${num}"))),
+      sys.env
+        .get("DRONE_BUILD_NUMBER")
+        .toSeq
+        .map(num => dockerAlias.value.withTag(Some(s"DRONE-${num}"))),
     dockerUpdateLatest := sys.env.get("DRONE").isEmpty,
     dockerBaseImage := "openjdk:11-jre-slim",
     dockerCommands := {
@@ -251,19 +240,11 @@ lazy val node = (project in file("node"))
         ExecCmd("CMD", "run")
       )
     },
-//    mappings in Docker ++= {
-//      val base = (defaultLinuxInstallLocation in Docker).value
-//      directory((baseDirectory in rholang).value / "examples")
-//        .map { case (f, p) => f -> s"$base/$p" }
-//    },
     /* Packaging */
     linuxPackageMappings ++= {
       val file = baseDirectory.value / "rnode.service"
-//      val rholangExamples = directory((baseDirectory in rholang).value / "examples")
-//        .map { case (f, p) => (f, s"/usr/share/rnode/$p") }
       Seq(
         packageMapping(file -> "/lib/systemd/system/rnode.service")
-//        packageMapping(rholangExamples: _*)
       )
     },
     /* Debian */
@@ -291,93 +272,7 @@ lazy val node = (project in file("node"))
     )
   )
   .dependsOn(casper, comm, crypto)
-//  .dependsOn(casper, comm, crypto, rholang)
 
-//lazy val regex = (project in file("regex"))
-//  .settings(commonSettings: _*)
-//  .settings(libraryDependencies ++= commonDependencies)
-//
-//lazy val rholang = (project in file("rholang"))
-//  .settings(commonSettings: _*)
-//  .settings(bnfcSettings: _*)
-//  .settings(
-//    name := "rholang",
-//    scalacOptions ++= Seq(
-//      "-language:existentials",
-//      "-language:higherKinds",
-//      "-Yno-adapted-args",
-//      "-Xfatal-warnings",
-//      "-Xlint:_,-missing-interpolator" // disable "possible missing interpolator" warning
-//    ),
-//    publishArtifact in (Compile, packageDoc) := false,
-//    publishArtifact in packageDoc := false,
-//    sources in (Compile,doc) := Seq.empty,
-//    libraryDependencies ++= commonDependencies ++ Seq(
-//      catsMtl,
-//      catsEffect,
-//      monix,
-//      scallop,
-//      lightningj
-//    ),
-//    mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
-//    coverageExcludedFiles := Seq(
-//      (javaSource in Compile).value,
-//      (bnfcGrammarDir in BNFCConfig).value,
-//      (bnfcOutputDir in BNFCConfig).value,
-//      baseDirectory.value / "src" / "main" / "k",
-//      baseDirectory.value / "src" / "main" / "rbl"
-//    ).map(_.getPath ++ "/.*").mkString(";"),
-//    //constrain the resource usage so that we hit SOE-s and OOME-s more quickly should they happen
-//    javaOptions in Test ++= Seq("-Xss240k", "-XX:MaxJavaStackTraceDepth=10000", "-Xmx128m")
-//  )
-//  .dependsOn(models % "compile->compile;test->test", rspace % "compile->compile;test->test", crypto)
-//
-//lazy val rholangCLI = (project in file("rholang-cli"))
-//  .settings(commonSettings: _*)
-//  .settings(
-//    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI")
-//  )
-//  .dependsOn(rholang)
-//
-//lazy val rholangProtoBuildJar = Def.task(
-//  (assemblyOutputPath in (assembly)).value
-//)
-//lazy val incrementalAssembly2 = Def.taskDyn(
-//  if (jarOutDated((rholangProtoBuildJar).value, (Compile / scalaSource).value))
-//    (assembly)
-//  else
-//    rholangProtoBuildJar
-//)
-//lazy val incrementalAssembly = taskKey[File]("Only assemble if sources are newer than jar")
-//lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
-//  .settings(commonSettings: _*)
-//  .settings(
-//    name := "rholang-proto-build",
-//    incrementalAssembly in Compile := incrementalAssembly2.value
-//  )
-//  .dependsOn(rholang)
-//
-//lazy val roscalaMacros = (project in file("roscala/macros"))
-//  .settings(commonSettings: _*)
-//  .settings(
-//    libraryDependencies ++= commonDependencies ++ Seq(
-//      "org.scala-lang" % "scala-reflect" % scalaVersion.value
-//    )
-//  )
-//
-//lazy val roscala = (project in file("roscala"))
-//  .settings(commonSettings: _*)
-//  .settings(
-//    name := "Rosette",
-//    mainClass in assembly := Some("coop.rchain.rosette.Main"),
-//    assemblyJarName in assembly := "rosette.jar",
-//    inThisBuild(
-//      List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full))
-//    ),
-//    libraryDependencies ++= commonDependencies
-//  )
-//  .dependsOn(roscalaMacros)
-//
 lazy val blockStorage = (project in file("block-storage"))
   .settings(commonSettings: _*)
   .settings(
@@ -391,95 +286,6 @@ lazy val blockStorage = (project in file("block-storage"))
     )
   )
   .dependsOn(shared, models)
-//
-//lazy val rspace = (project in file("rspace"))
-//  .configs(IntegrationTest extend Test)
-//  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
-//  .settings(commonSettings: _*)
-//  .settings(
-//    scalacOptions ++= Seq(
-//      "-Xfatal-warnings"
-//    ),
-//    Defaults.itSettings,
-//    name := "rspace",
-//    version := "0.2.1-SNAPSHOT",
-//
-//    libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
-//      lmdbjava,
-//      catsCore,
-//      scodecCore,
-//      scodecCats,
-//      scodecBits,
-//      guava
-//    ),
-//    /* Tutorial */
-//    tutTargetDirectory := (baseDirectory in Compile).value / ".." / "docs" / "rspace",
-//    /* Publishing Settings */
-//    scmInfo := Some(
-//      ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")
-//    ),
-//    git.remoteRepo := scmInfo.value.get.connection,
-//    useGpg := true,
-//    pomIncludeRepository := { _ =>
-//      false
-//    },
-//    publishMavenStyle := true,
-//    publishTo := {
-//      val nexus = "https://oss.sonatype.org/"
-//      if (isSnapshot.value)
-//        Some("snapshots" at nexus + "content/repositories/snapshots")
-//      else
-//        Some("releases" at nexus + "service/local/staging/deploy/maven2")
-//    },
-//    publishArtifact in Test := false,
-//    licenses := Seq("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
-//    homepage := Some(url("https://www.rchain.coop")),
-//    developers := List(
-//      Developer(
-//        id = "guardbotmk3",
-//        name = "Kyle Butt",
-//        email = "kyle@pyrofex.net",
-//        url = url("https://www.pyrofex.net")
-//      ),
-//      Developer(
-//        id = "ys-pyrofex",
-//        name = "Yaraslau Levashkevich",
-//        email = "yaraslau@pyrofex.net",
-//        url = url("https://www.pyrofex.net")
-//      ),
-//      Developer(
-//        id = "KentShikama",
-//        name = "Kent Shikama",
-//        email = "kent@kentshikama.com",
-//        url = url("https://www.rchain.coop")
-//      ),
-//      Developer(
-//        id = "henrytill",
-//        name = "Henry Till",
-//        email = "henrytill@gmail.com",
-//        url = url("https://www.pyrofex.net")
-//      )
-//    )
-//  )
-//  .dependsOn(shared, crypto)
-//
-//lazy val rspaceBench = (project in file("rspace-bench"))
-//  .settings(
-//    commonSettings,
-//    libraryDependencies ++= commonDependencies,
-//    libraryDependencies += "com.esotericsoftware" % "kryo" % "4.0.2",
-//    dependencyOverrides ++= Seq(
-//      "org.ow2.asm" % "asm" % "5.0.4"
-//    ),
-//    sourceDirectory in Jmh := (sourceDirectory in Test).value,
-//    classDirectory in Jmh := (classDirectory in Test).value,
-//    dependencyClasspath in Jmh := (dependencyClasspath in Test).value,
-//    // rewire tasks, so that 'jmh:run' automatically invokes 'jmh:compile' (otherwise a clean 'jmh:run' would fail),
-//    compile in Jmh := (compile in Jmh).dependsOn(compile in Test).value,
-//    run in Jmh := (run in Jmh).dependsOn(Keys.compile in Jmh).evaluated
-//  )
-//  .enablePlugins(JmhPlugin)
-//  .dependsOn(rspace % "test->test", rholang, models % "test->test")
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
@@ -490,11 +296,5 @@ lazy val rchain = (project in file("."))
     crypto,
     models,
     node,
-//    regex,
-//    rholang,
-//    rholangCLI,
-//    roscala,
-//    rspace,
-//    rspaceBench,
     shared
   )
