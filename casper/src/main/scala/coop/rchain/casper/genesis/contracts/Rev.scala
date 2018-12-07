@@ -1,6 +1,5 @@
 package coop.rchain.casper.genesis.contracts
 
-import coop.rchain.casper.protocol.Par
 import coop.rchain.casper.util.rholang.InterpreterUtil
 
 class Rev[A](
@@ -26,8 +25,6 @@ class Rev[A](
     } else {
       wallets.map(rhoCode).mkString(" |\n")
     }
-
-  final val term: Par = InterpreterUtil.mkTerm(code).right.get
 }
 
 class PreWalletRev(

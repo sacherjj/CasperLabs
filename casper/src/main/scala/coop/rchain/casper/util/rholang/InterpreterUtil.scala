@@ -18,8 +18,8 @@ object InterpreterUtil {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  // this may be need to ask compiler to compile the code
-  def mkTerm(rho: String): Either[Throwable, Par] = ???
+  // TODO this may be need to ask compiler to compile the code
+  def mkTerm(rho: String): Either[Throwable, String] = ???
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys

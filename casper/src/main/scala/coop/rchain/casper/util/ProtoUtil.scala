@@ -450,9 +450,8 @@ object ProtoUtil {
 
   def basicDeploy[F[_]: Monad: Time](id: Int): F[Deploy] =
     for {
-      d    <- basicDeployData[F](id)
-      term = InterpreterUtil.mkTerm(d.term).right.get
-    } yield Deploy(term = Some(term), raw = Some(d))
+      d <- basicDeployData[F](id)
+    } yield Deploy(raw = Some(d))
 
   //Todo: it is for testing
   def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
@@ -467,29 +466,27 @@ object ProtoUtil {
     )
 
   def compiledSourceDeploy(
-      source: Par,
       timestamp: Long,
       phloLimit: Long
   ): Deploy = ???
 
-  def termDeploy(term: Par, timestamp: Long, phloLimit: Long): Deploy =
+  def termDeploy(timestamp: Long, phloLimit: Long): Deploy =
     Deploy(
-      term = Some(term),
       raw = Some(
         DeployData(
           user = ByteString.EMPTY,
           timestamp = timestamp,
-          term = term.toProtoString,
+          //TODO raw Par previously
+          term = ???.toString,
           phloLimit = phloLimit
         )
       )
     )
 
-  def termDeployNow(term: Par): Deploy =
-    termDeploy(term, System.currentTimeMillis(), Integer.MAX_VALUE)
+  def termDeployNow(): Deploy =
+    termDeploy(System.currentTimeMillis(), Integer.MAX_VALUE)
 
   def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
-    term = InterpreterUtil.mkTerm(dd.term).toOption,
     raw = Some(dd)
   )
 

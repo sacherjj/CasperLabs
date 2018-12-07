@@ -165,10 +165,9 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
     InterpreterUtil.mkTerm(d.term) match {
-      case Right(term) =>
+      case Right(_) =>
         deploy(
           Deploy(
-            term = Some(term),
             raw = Some(d)
           )
         ).as(Right(()))

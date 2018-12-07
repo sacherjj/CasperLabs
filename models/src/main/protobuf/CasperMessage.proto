@@ -68,19 +68,16 @@ message BlocksQuery {
     int32 depth = 1;
 }
 
-message Par{
-    // todo this should be replaced with the compiled WASM
-    string code = 1;
-}
-
 message DataAtNameQuery {
     int32 depth = 1;
-    Par name = 2;
+    //TODO
+    //Par name = 2;
 }
 
 message ContinuationAtNameQuery {
     int32 depth = 1;
-    repeated Par names = 2;
+    //TODO
+//    repeated Par names = 2;
 }
 
 message DeployServiceResponse {
@@ -99,7 +96,7 @@ message BlockQueryResponse {
 
 message DataWithBlockInfo {
     //TODO
-    repeated Par postBlockData = 1;
+//    repeated Par postBlockData = 1;
     BlockInfoWithoutTuplespace block = 2;
 }
 
@@ -250,7 +247,7 @@ message RChainState {
 
 message Deploy {
     //TODO
-    Par        term  = 1; //wasm
+//    Par        term  = 1; //wasm
     DeployData raw = 2;
 }
 
