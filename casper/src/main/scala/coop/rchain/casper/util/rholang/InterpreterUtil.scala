@@ -107,23 +107,14 @@ object InterpreterUtil {
             Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *> Right(
               none[StateHash]
             ).leftCast[BlockException].pure[F]
-          case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
-            Log[F].warn(
-              s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
-            ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
           case UnknownFailure =>
             Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
               .leftCast[BlockException]
               .pure[F]
         }
-      case Left((None, status)) =>
-        status match {
-          //TODO Formerly, ReplayException
-          case UnusedCommEvent(ex: Throwable) =>
-            Log[F].warn(s"Found unused comm event ${ex.getMessage}") *> Right(none[StateHash])
-              .leftCast[BlockException]
-              .pure[F]
-        }
+      case Left((None, _)) =>
+        //TODO Log error
+        ???
       case Right(computedStateHash) =>
         if (tsHash.contains(computedStateHash)) {
           // state hash in block matches computed hash!

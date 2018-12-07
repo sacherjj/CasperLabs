@@ -407,9 +407,7 @@ object Configuration {
       case Some(options.showBlocks) =>
         import options.showBlocks._
         ShowBlocks(depth.getOrElse(1))
-      case Some(options.run)        => Run
-      case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
-      case Some(options.contAtName) => ContAtName(options.contAtName.name())
+      case Some(options.run) => Run
       case Some(options.bondingDeployGen) =>
         import options.bondingDeployGen._
         BondingDeployGen(bondKey(), ethAddr(), amount(), privateKey(), publicKey())

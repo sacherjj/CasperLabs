@@ -149,10 +149,6 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state is missing."))
       } yield false
-    } else if (b.body.get.deploys.flatMap(_.log).exists(_.eventInstance == EventInstance.Empty)) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"one of block comm reduction events is empty."))
-      } yield false
     } else {
       true.pure[F]
     }

@@ -67,8 +67,6 @@ object Main {
       case Propose           => DeployRuntime.propose[Task]()
       case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
-      case DataAtName(name)  => DeployRuntime.listenForDataAtHash[Task](name)
-      case ContAtName(names) => DeployRuntime.listenForContinuationAtHash[Task](names)
       case Run               => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
         BondingUtil.bondingDeploy[Task](bondKey, ethAddress, amount, secKey, pubKey)

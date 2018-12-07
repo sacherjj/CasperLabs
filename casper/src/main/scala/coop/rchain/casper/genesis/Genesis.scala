@@ -71,9 +71,8 @@ object Genesis {
 
     val blockDeploys =
       processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
-    val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
 
-    val body = Body(state = stateWithContracts, deploys = sortedDeploys)
+    val body = Body(state = stateWithContracts, deploys = blockDeploys)
 
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 

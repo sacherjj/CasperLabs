@@ -269,7 +269,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                      processedDeploys.partition(_.status.isInternalError)
                    internalErrors.toList
                      .traverse {
-                       case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
+                       case InternalProcessedDeploy(deploy, _, InternalErrors(errors)) =>
                          val errorsMessage = errors.map(_.getMessage).mkString("\n")
                          Log[F].error(
                            s"Internal error encountered while processing deploy ${PrettyPrinter

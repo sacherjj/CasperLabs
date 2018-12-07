@@ -17,10 +17,6 @@ trait DeployService[F[_]] {
   def showBlock(q: BlockQuery): F[Either[Throwable, String]]
   def showBlocks(q: BlocksQuery): F[Either[Throwable, String]]
   def addBlock(b: BlockMessage): F[Either[Throwable, String]]
-  def listenForDataAtName(request: DataAtNameQuery): F[ListeningNameDataResponse]
-  def listenForContinuationAtName(
-      request: ContinuationAtNameQuery
-  ): F[ListeningNameContinuationResponse]
 }
 
 object DeployService {
@@ -83,14 +79,6 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
       if (response.success) Right(response.message)
       else Left(new RuntimeException(response.message))
     }
-
-  def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
-    stub.listenForDataAtName(request)
-
-  def listenForContinuationAtName(
-      request: ContinuationAtNameQuery
-  ): Task[ListeningNameContinuationResponse] =
-    stub.listenForContinuationAtName(request)
 
   override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)

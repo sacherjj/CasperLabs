@@ -70,18 +70,6 @@ object BlockAPI {
       DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
-  // TODO: this should be deleted
-  def getDataAtHashResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      depth: Int,
-      hash: BlockHash
-  )(implicit scheduler: Scheduler): F[ListeningNameDataResponse] = ???
-
-  // TODO: this may be deleted, because we will not have the abstract of Continuation
-  def getListeningNameContinuationResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      depth: Int,
-      listeningNames: Seq[BlockHash]
-  )(implicit scheduler: Scheduler): F[ListeningNameContinuationResponse] = ???
-
   private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[IndexedSeq[BlockMessage]] =

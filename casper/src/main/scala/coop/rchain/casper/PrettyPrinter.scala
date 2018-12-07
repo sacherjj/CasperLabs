@@ -7,8 +7,6 @@ import scalapb.GeneratedMessage
 import coop.rchain.crypto.codec._
 
 object PrettyPrinter {
-  //TODO Rholang pretty printer
-  private val rpp = ???
 
   def buildStringNoLimit(b: ByteString): String = Base16.encode(b.toByteArray)
 
