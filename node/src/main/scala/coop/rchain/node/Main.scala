@@ -62,7 +62,8 @@ object Main {
         conf.server.maxMessageSize
       )
 
-    implicit val time: Time[Task] = effects.time
+    implicit val time: Time[Task]           = effects.time
+    implicit val consoleIO: ConsoleIO[Task] = (str: String) => Task(println(str))
 
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
@@ -89,7 +90,7 @@ object Main {
           replService.close()
           diagnosticsService.close()
           deployService.close()
-        }
+      }
     )
   }
 
