@@ -46,7 +46,7 @@ private[api] object DeployGrpcService {
       override def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
         // TODO check the CasperMessage.proto
         //defer(BlockAPI.getListeningNameDataResponse[F](request.depth, request.name.get))
-        defer(BlockAPI.getListeningNameDataResponse[F](request.depth, ???))
+        defer(BlockAPI.getDataAtHashResponse[F](request.depth, ???))
 
       override def listenForContinuationAtName(
           request: ContinuationAtNameQuery

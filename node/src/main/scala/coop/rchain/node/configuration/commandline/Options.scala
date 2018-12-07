@@ -2,7 +2,7 @@ package coop.rchain.node.configuration.commandline
 
 import java.nio.file.Path
 
-import coop.rchain.casper.util.comm.ListenAtName.{Name, PrivName, PubName}
+import coop.rchain.casper.util.comm.ListenAtHash.{Hash, PrivHash, PubHash}
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.BuildInfo
 import coop.rchain.shared.StoreType
@@ -59,10 +59,10 @@ object Converter {
   }
 
   implicit val nameProviderConverter =
-    nameConverter[Name](names => PubName(names.head), names => PrivName(names.head), ArgType.SINGLE)
+    nameConverter[Hash](names => PubHash(names.head), names => PrivHash(names.head), ArgType.SINGLE)
 
   implicit val namesProviderConverter =
-    nameConverter[List[Name]](_.map(PubName), _.map(PrivName), ArgType.LIST)
+    nameConverter[List[Hash]](_.map(PubHash), _.map(PrivHash), ArgType.LIST)
 
   implicit val finiteDurationConverter: ValueConverter[FiniteDuration] =
     new ValueConverter[FiniteDuration] {
@@ -384,10 +384,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
 
   val dataAtName =
-    listenAtName[Name]("listen-data-at-name", "Listen for data at the specified name")
+    listenAtName[Hash]("listen-data-at-name", "Listen for data at the specified name")
 
   val contAtName =
-    listenAtName[List[Name]]("listen-cont-at-name", "Listen for continuation at the specified name")
+    listenAtName[List[Hash]]("listen-cont-at-name", "Listen for continuation at the specified name")
 
   addSubcommand(dataAtName)
   addSubcommand(contAtName)

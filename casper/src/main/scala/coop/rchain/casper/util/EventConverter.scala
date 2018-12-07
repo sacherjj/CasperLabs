@@ -4,13 +4,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{CommEvent, ConsumeEvent, Event, ProduceEvent}
 import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
 import coop.rchain.casper.util.rholang.RspaceEvent
-import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.trace.{
-  COMM => RspaceComm,
-  Consume => RspaceConsume,
-  Event => RspaceEvent,
-  Produce => RspaceProduce
-}
 
 import scala.collection.immutable.Seq
 

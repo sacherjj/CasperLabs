@@ -13,7 +13,7 @@ import scala.concurrent.SyncVar
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
 class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
 
-  private def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__")(
+  def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__")(
       implicit scheduler: Scheduler
   ): Seq[Par] = captureResults(start, deploy, Par())
 
@@ -65,5 +65,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 }
 
 object RuntimeManager {
+  def fromRuntime(activeRuntime: Runtime): RuntimeManager = ???
+
   type StateHash = ByteString
 }

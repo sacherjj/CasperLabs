@@ -32,7 +32,6 @@ object Runtime {
       _       <- ConsoleIO[F].println(showGarbageCollectors(gc))
       threads <- DiagnosticsService[F].threads
       _       <- ConsoleIO[F].println(showThreads(threads))
-      _       <- ConsoleIO[F].close
     } yield ()
 
     for {

@@ -11,11 +11,11 @@ import cats.implicits._
 
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.comm.ListenAtName._
+import coop.rchain.casper.util.comm.ListenAtHash._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.ski._
-import coop.rchain.models.Par
+import coop.rchain.casper.protocol.Par
 import coop.rchain.shared.Time
 
 object DeployRuntime {
@@ -33,25 +33,13 @@ object DeployRuntime {
   def showBlocks[F[_]: Monad: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
 
-  def listenForDataAtName[F[_]: Sync: DeployService: Time: Capture](
-      name: Id[Name]
-  ): F[Unit] =
-    gracefulExit {
-      listenAtNameUntilChanges(name) { par: Par =>
-        val request = DataAtNameQuery(Int.MaxValue, Some(par))
-        DeployService[F].listenForDataAtName(request) map (_.blockResults)
-      }.map(kp(Right("")))
-    }
+  def listenForDataAtHash[F[_]: Sync: DeployService: Time: Capture](
+      name: Id[Hash]
+  ): F[Unit] = ???
 
-  def listenForContinuationAtName[F[_]: Sync: Time: DeployService: Capture](
-      names: List[Name]
-  ): F[Unit] =
-    gracefulExit {
-      listenAtNameUntilChanges(names) { pars: List[Par] =>
-        val request = ContinuationAtNameQuery(Int.MaxValue, pars)
-        DeployService[F].listenForContinuationAtName(request) map (_.blockResults)
-      }.map(kp(Right("")))
-    }
+  def listenForContinuationAtHash[F[_]: Sync: Time: DeployService: Capture](
+      names: List[Hash]
+  ): F[Unit] = ???
 
   //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Sync: DeployService](

@@ -23,5 +23,7 @@ class NOPConsoleIO[F[_]: Applicative] extends ConsoleIO[F] {
 
 object ForTrans {
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](implicit C: ConsoleIO[F]): ConsoleIO[T[F, ?]] =
-    (str: String) => MonadTrans[T].liftM(ConsoleIO[F].println(str))
+    new ConsoleIO[T[F, ?]] {
+      def println(str: String): T[F, Unit] = MonadTrans[T].liftM(ConsoleIO[F].println(str))
+    }
 }
