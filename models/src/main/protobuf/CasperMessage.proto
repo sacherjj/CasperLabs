@@ -72,16 +72,19 @@ message BlocksQuery {
     int32 depth = 1;
 }
 
+message Par{
+    // todo this should be replaced with the compiled WASM
+    string code = 1;
+}
+
 message DataAtNameQuery {
     int32 depth = 1;
-    //TODO
-//    Par name = 2;
+    Par name = 2;
 }
 
 message ContinuationAtNameQuery {
     int32 depth = 1;
-    //TODO
-//    repeated Par names = 2;
+    repeated Par names = 2;
 }
 
 message DeployServiceResponse {
@@ -112,7 +115,7 @@ message ListeningNameContinuationResponse {
 
 message DataWithBlockInfo {
     //TODO
-//    repeated Par postBlockData = 1;
+    repeated Par postBlockData = 1;
     BlockInfoWithoutTuplespace block = 2;
 }
 
@@ -236,7 +239,7 @@ message Header {
 message ProcessedDeploy {
     Deploy deploy = 1;
     //TODO
-//    PCost cost = 2;
+    double cost = 2;
     repeated Event log = 3; //the new terms and comm. rule reductions from this deploy
     bool errored = 4; //true if deploy encountered a user error
 }
@@ -264,7 +267,7 @@ message RChainState {
 
 message Deploy {
     //TODO
-    //  Par          term  = 1; //rholang term to deploy
+    Par        term  = 1; //wasm
     DeployData raw = 2;
 }
 

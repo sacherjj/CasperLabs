@@ -4,8 +4,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.models.Expr.ExprInstance.GString
-import coop.rchain.models._
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -17,7 +15,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 
   private def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__")(
       implicit scheduler: Scheduler
-  ): Seq[Par] = captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
+  ): Seq[Par] = captureResults(start, deploy, Par())
 
   private def captureResults(start: StateHash, deploy: Deploy, name: Par)(
       implicit scheduler: Scheduler
@@ -56,27 +54,13 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     toBondSeq(bondsPar.head)
   }
 
-  private def toBondSeq(bondsMap: Par): Seq[Bond] =
-    bondsMap.exprs.head.getEMapBody.ps.map {
-      case (validator: Par, bond: Par) =>
-        assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
-        assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
-        val validatorName = validator.exprs.head.getGByteArray
-        val stakeAmount   = bond.exprs.head.getETupleBody.ps.head.exprs.head.getGInt
-        Bond(validatorName, stakeAmount)
-    }.toList
+  // it should be needed, because casper need the infor about bond, there are some function provides to query these bond infor
+  private def toBondSeq(bondsMap: Par): Seq[Bond] = ???
 
   def getData(hash: ByteString, channel: Par)(
       implicit scheduler: Scheduler
   ): Seq[Par] =
     ???
-
-  def getContinuation(
-      hash: ByteString,
-      channels: immutable.Seq[Par]
-  )(
-      implicit scheduler: Scheduler
-  ): Seq[(Seq[BindPattern], Par)] = ???
 
 }
 

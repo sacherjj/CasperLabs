@@ -28,24 +28,14 @@ object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  // Todo: there should be some initial contracts like Mint, POS or something else
   def defaultBlessedTerms(
       timestamp: Long,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String
   ): List[Deploy] =
-    List(
-      StandardDeploys.listOps,
-      StandardDeploys.either,
-      StandardDeploys.nonNegativeNumber,
-      StandardDeploys.makeMint,
-      StandardDeploys.makePoS,
-      StandardDeploys.basicWallet,
-      StandardDeploys.basicWalletFaucet,
-      StandardDeploys.walletCheck,
-      StandardDeploys.systemInstances,
-      StandardDeploys.rev(wallets, faucetCode, posParams)
-    )
+    List()
 
   def withContracts(
       initial: BlockMessage,

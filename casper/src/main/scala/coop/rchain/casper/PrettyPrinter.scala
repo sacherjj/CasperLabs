@@ -5,7 +5,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import scalapb.GeneratedMessage
 import coop.rchain.crypto.codec._
-import coop.rchain.models.Par
 
 object PrettyPrinter {
   //TODO Rholang pretty printer
@@ -48,11 +47,8 @@ object PrettyPrinter {
   def buildString(b: ByteString): String =
     limit(Base16.encode(b.toByteArray), 10)
 
-  private def buildString(par: Option[Par]): String =
-    par.map(p => limit(rpp, 25)).getOrElse("")
-
   private def buildString(d: Deploy): String =
-    s"Deploy #${d.raw.fold(0L)(_.timestamp)} -- ${buildString(d.term)}"
+    s"Deploy #${d.raw.fold(0L)(_.timestamp)}}"
 
   private def buildString(r: RChainState): String =
     buildString(r.postStateHash)

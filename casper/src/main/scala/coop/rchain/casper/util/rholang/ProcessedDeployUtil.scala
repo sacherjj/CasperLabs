@@ -2,13 +2,14 @@ package coop.rchain.casper.util.rholang
 
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper.protocol._
-import coop.rchain.models.PCost
-import coop.rchain.rspace.trace
+
+// todo(abner) I should know more about what diffenrence bettwen rspace and our architecture
+sealed trait RspaceEvent
 
 case class InternalProcessedDeploy(
     deploy: Deploy,
-    cost: PCost,
-    log: Seq[trace.Event],
+    cost: Double,
+    log: Seq[RspaceEvent],
     status: DeployStatus
 )
 
@@ -17,7 +18,7 @@ object ProcessedDeployUtil {
   def toInternal(pd: ProcessedDeploy): Option[InternalProcessedDeploy] =
     for {
       d <- pd.deploy
-      c <- pd.cost
+      c = 1.0
       l = pd.log.map(EventConverter.toRspaceEvent)
       s = if (pd.errored) UnknownFailure else Succeeded
     } yield InternalProcessedDeploy(d, c, l, s)
@@ -26,7 +27,6 @@ object ProcessedDeployUtil {
     case InternalProcessedDeploy(deploy, cost, log, status) =>
       ProcessedDeploy(
         deploy = Some(deploy),
-        cost = Some(cost),
         log = log.map(EventConverter.toCasperEvent),
         errored = status.isFailed
       )
