@@ -10,6 +10,11 @@ import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.protocol.CasperMessageGrpcMonix
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.discovery.NodeDiscovery
+import coop.rchain.comm.rp.Connect.ConnectionsCell
+import coop.rchain.node.diagnostics
+import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics}
+import coop.rchain.node.model.diagnostics.DiagnosticsGrpcMonix
 import coop.rchain.shared._
 import io.grpc.Server
 import io.grpc.netty.NettyServerBuilder
@@ -39,7 +44,29 @@ object GrpcServer {
 
   def apply(server: Server): GrpcServer = new GrpcServer(server)
 
-  def acquireExternalServer[F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def acquireInternalServer(
+      port: Int,
+      maxMessageSize: Int,
+      grpcExecutor: Scheduler
+  )(
+      implicit nodeDiscovery: NodeDiscovery[Task],
+      jvmMetrics: JvmMetrics[Task],
+      nodeMetrics: NodeMetrics[Task],
+      connectionsCell: ConnectionsCell[Task]
+  ): Task[GrpcServer] =
+    Task.delay {
+      GrpcServer(
+        NettyServerBuilder
+          .forPort(port)
+          .executor(grpcExecutor)
+          .maxMessageSize(maxMessageSize)
+          .addService(DiagnosticsGrpcMonix.bindService(diagnostics.grpc, grpcExecutor))
+          .build
+      )
+    }
+
+  def acquireExternalServer[
+      F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler

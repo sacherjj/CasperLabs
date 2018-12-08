@@ -77,6 +77,7 @@ class NodeRuntime private[node] (
 
   case class Servers(
       grpcServerExternal: GrpcServer,
+      grpcServerInternal: GrpcServer,
       httpServer: Fiber[Task, Unit]
   )
 
@@ -98,6 +99,15 @@ class NodeRuntime private[node] (
                                conf.server.maxMessageSize,
                                grpcScheduler
                              )
+
+      grpcServerInternal <- GrpcServer
+                             .acquireInternalServer(
+                               conf.grpcServer.portInternal,
+                               conf.server.maxMessageSize,
+                               grpcScheduler
+                             )
+                             .toEffect
+
       prometheusReporter = new NewPrometheusReporter()
       prometheusService  = NewPrometheusReporter.service(prometheusReporter)
 
@@ -115,7 +125,7 @@ class NodeRuntime private[node] (
             Kamon.addReporter(new JmxReporter())
             Kamon.addReporter(new ZipkinReporter())
           }.toEffect
-    } yield Servers(grpcServerExternal, httpServerFiber)
+    } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
@@ -127,6 +137,7 @@ class NodeRuntime private[node] (
     (for {
       _   <- log.info("Shutting down gRPC servers...")
       _   <- servers.grpcServerExternal.stop
+      _   <- servers.grpcServerInternal.stop
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- peerNodeAsk.ask
       msg = ProtocolHelper.disconnect(loc)
@@ -136,7 +147,7 @@ class NodeRuntime private[node] (
       _   <- servers.httpServer.cancel
       _   <- log.info("Shutting down interpreter runtime ...")
 // TODO Resources cleaning
-      //      _   <- runtime.close()
+//            _   <- runtime.close()
       _ <- log.info("Shutting down Casper runtime ...")
 // TODO Resources cleaning
       //      _   <- casperRuntime.close()
@@ -222,6 +233,10 @@ class NodeRuntime private[node] (
       _       <- servers.grpcServerExternal.start.toEffect
       _ <- Log[Effect].info(
             s"gRPC external server started at $host:${servers.grpcServerExternal.port}"
+          )
+      _ <- servers.grpcServerInternal.start.toEffect
+      _ <- Log[Effect].info(
+            s"gRPC internal server started at $host:${servers.grpcServerInternal.port}"
           )
       _ <- startReportJvmMetrics.toEffect
 
