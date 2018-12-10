@@ -2,7 +2,6 @@ package coop.rchain.casper.util
 
 import cats.effect.{Resource, Sync}
 import cats.implicits._
-
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
@@ -10,10 +9,12 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.shared.PathOps.RichPath
-
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
+import cats.Id
+import coop.rchain.smartcontracts.SmartContractsApi
+import monix.eval.Task
 import monix.execution.Scheduler
 
 object BondingUtil {
@@ -91,16 +92,17 @@ object BondingUtil {
 
   // is it smaller than the actual size?
   // can you sen my screen?
-  def makeRuntimeResource[F[_]: Sync](
+  def makeSmartContractsApiResource[F[_]: Sync](
       runtimeDirResource: Resource[F, Path]
-  )(implicit scheduler: Scheduler): Resource[F, Runtime] = ???
+  )(implicit scheduler: Scheduler): Resource[F, SmartContractsApi[Task]] = ???
 
   def makeRuntimeManagerResource[F[_]: Sync](
-      runtimeResource: Resource[F, Runtime]
+      smartContractsApiResource: Resource[F, SmartContractsApi[Task]]
   )(implicit scheduler: Scheduler): Resource[F, RuntimeManager] =
-    runtimeResource.flatMap(
-      activeRuntime =>
-        Resource.make(RuntimeManager.fromRuntime(activeRuntime).pure[F])(_ => Sync[F].unit)
+    smartContractsApiResource.flatMap(
+      smartContractsApi =>
+        Resource
+          .make(RuntimeManager.fromSmartContractApi(smartContractsApi).pure[F])(_ => Sync[F].unit)
     )
 
   def bondingDeploy[F[_]: Sync](

@@ -4,7 +4,7 @@ import cats.data.EitherT
 import cats.effect.concurrent.Ref
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Applicative, Monad}
+import cats.{Applicative, Id, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
@@ -26,6 +26,7 @@ import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.shared.{Log, LogSource, Time}
+import coop.rchain.smartcontracts.SmartContractsApi
 import monix.eval.Task
 import monix.execution.Scheduler
 

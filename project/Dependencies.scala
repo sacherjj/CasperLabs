@@ -84,6 +84,8 @@ object Dependencies {
   )
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8")
+  private val macroParadise = compilerPlugin(
+    "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
   private val testing = Seq(scalactic, scalatest, scalacheck)
 
@@ -108,5 +110,5 @@ object Dependencies {
     http4sDependencies ++ circeDependencies
 
   val commonDependencies: Seq[ModuleID] =
-    logging ++ testing :+ kindProjector
+    logging ++ testing :+ kindProjector :+ macroParadise
 }

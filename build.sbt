@@ -115,7 +115,7 @@ lazy val comm = (project in file("comm"))
       grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared, crypto, models)
+  .dependsOn(crypto, smartContracts)
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
@@ -271,7 +271,7 @@ lazy val node = (project in file("node"))
       "openssl"
     )
   )
-  .dependsOn(casper, comm, crypto)
+  .dependsOn(casper, comm, crypto, smartContracts)
 
 lazy val blockStorage = (project in file("block-storage"))
   .settings(commonSettings: _*)
@@ -284,6 +284,15 @@ lazy val blockStorage = (project in file("block-storage"))
       catsEffect,
       catsMtl
     )
+  )
+  .dependsOn(shared, models)
+
+lazy val smartContracts = (project in file("smart-contracts"))
+  .settings(commonSettings: _*)
+  .settings(
+    name := "smart-contracts",
+    version := "0.0.1-SNAPSHOT",
+    libraryDependencies ++= commonDependencies
   )
   .dependsOn(shared, models)
 

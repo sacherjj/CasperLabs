@@ -1,5 +1,6 @@
 package coop.rchain.casper
 
+import cats.Id
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString

@@ -13,6 +13,7 @@ import coop.rchain.casper.util.rholang.InterpreterUtil._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.models.PCost
+import coop.rchain.models.ipc.InternalProcessedDeploy
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
