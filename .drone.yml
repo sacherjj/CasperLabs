@@ -82,9 +82,9 @@ pipeline:
     when:
       event: [ push, tag ]
 
-#  notify:
-#    image: plugins/slack
-#    channel: alerts
-#    secrets: [ slack_webhook ]
-#    when:
-#      status: [ failure ]
+  notify:
+    image: plugins/slack
+    channel: alerts
+    secrets: [ slack_webhook ]
+    when:
+      status: [ failure ]
