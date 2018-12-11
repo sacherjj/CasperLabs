@@ -637,7 +637,7 @@ class InterpreterUtilTest
           InterpreterUtil.mkTerm(s).right.get,
           System.currentTimeMillis(),
           accounting.MAX_VALUE
-      )
+        )
     )
 
     val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
@@ -700,7 +700,7 @@ class InterpreterUtilTest
               InterpreterUtil.mkTerm(s).right.get,
               System.currentTimeMillis(),
               accounting.MAX_VALUE
-          )
+            )
         )
     val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
       .use { runtimeManager =>
@@ -759,7 +759,7 @@ class InterpreterUtilTest
             InterpreterUtil.mkTerm(s).right.get,
             System.currentTimeMillis(),
             accounting.MAX_VALUE
-        )
+          )
       )
     val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
       .use { runtimeManager =>
@@ -809,7 +809,7 @@ class InterpreterUtilTest
               InterpreterUtil.mkTerm(s).right.get,
               System.currentTimeMillis(),
               accounting.MAX_VALUE
-          )
+            )
         )
       val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
