@@ -11,21 +11,21 @@ branches:
 # additional volumes, as in package step, you need to specify all volumes.
 
 __buildenv: &buildenv
-  image: rchain/buildenv:latest
+  image: casperlabs/buildenv:latest
 
 __sbtenv: &sbtenv
   <<: *buildenv
   environment:
     - _JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G
   volumes:
-    - /var/cache/rchain-build/.sbt:/root/.sbt
-    - /var/cache/rchain-build/.ivy2:/root/.ivy2
+    - /var/cache/cl-build/.sbt:/root/.sbt
+    - /var/cache/cl-build/.ivy2:/root/.ivy2
 
 # Build definition
 
 clone:
   git-clone:
-    image: rchain/buildenv:latest
+    image: casperlabs/buildenv:latest
     commands: |
       set -ex
       git clone -b ${DRONE_TAG:-$DRONE_BRANCH} $DRONE_REMOTE_URL .
@@ -62,8 +62,8 @@ pipeline:
       - mkdir -p /artifacts/${DRONE_BRANCH}
       - cp node/target/rnode_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
     volumes:
-      - /var/cache/rchain-build/.sbt:/root/.sbt
-      - /var/cache/rchain-build/.ivy2:/root/.ivy2
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
       - /var/run/docker.sock:/var/run/docker.sock
       - /artifacts/:/artifacts/
     when:
@@ -76,8 +76,8 @@ pipeline:
       - mkdir -p /artifacts/${DRONE_BRANCH}
       - cp node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm /artifacts/${DRONE_BRANCH}
     volumes:
-      - /var/cache/rchain-build/.sbt:/root/.sbt
-      - /var/cache/rchain-build/.ivy2:/root/.ivy2
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
       - /artifacts/:/artifacts/
     when:
       event: [ push, tag ]
