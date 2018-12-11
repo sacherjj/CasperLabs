@@ -47,7 +47,7 @@ object DeployRuntime {
             //TODO: allow user to specify their public key
             d = DeployData()
               .withTimestamp(timestamp)
-              .withTerm(ByteString.copyFromUtf8(file))
+              .withSessionCode(ByteString.copyFromUtf8(file))
               .withFrom(purseAddress)
               .withPhloLimit(phloLimit)
               .withPhloPrice(phloPrice)
@@ -66,7 +66,7 @@ object DeployRuntime {
       id <- Sync[F].delay { scala.util.Random.nextInt(100) }
       d  <- ProtoUtil.basicDeployData[F](id)
       _ <- Sync[F].delay {
-            println(s"Sending the following to Casper: ${d.term}")
+            println(s"Sending the following to Casper: ${d.sessionCode}")
           }
       response <- DeployService[F].deploy(d)
       msg      = response.fold(processError(_).getMessage, "Response: " + _)

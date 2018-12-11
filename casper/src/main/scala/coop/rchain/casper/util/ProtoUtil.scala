@@ -461,7 +461,7 @@ object ProtoUtil {
     DeployData(
       user = ByteString.EMPTY,
       timestamp = timestamp,
-      term = ByteString.copyFromUtf8(source),
+      sessionCode = ByteString.copyFromUtf8(source),
       phloLimit = phlos
     )
 
@@ -477,7 +477,7 @@ object ProtoUtil {
           user = ByteString.EMPTY,
           timestamp = timestamp,
           //TODO raw Par previously
-          term = ByteString.EMPTY,
+          sessionCode = ByteString.EMPTY,
           phloLimit = phloLimit
         )
       )
