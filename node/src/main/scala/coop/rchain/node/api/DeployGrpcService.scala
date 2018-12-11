@@ -42,15 +42,6 @@ private[api] object DeployGrpcService {
           .fromTask(defer(BlockAPI.showBlocks[F](request.depth)))
           .flatMap(Observable.fromIterable)
 
-      // TODO: Handle error case
-      override def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
-        defer(BlockAPI.getListeningNameDataResponse[F](request.depth, request.name.get))
-
-      override def listenForContinuationAtName(
-          request: ContinuationAtNameQuery
-      ): Task[ListeningNameContinuationResponse] =
-        defer(BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.names))
-
       override def showMainChain(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
         Observable
           .fromTask(defer(BlockAPI.showMainChain[F](request.depth)))

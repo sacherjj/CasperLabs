@@ -1,4 +1,0 @@
-new typo in {
-  for (x <- typpo) { print(x) } |
-  typo!("Hello world")
-}

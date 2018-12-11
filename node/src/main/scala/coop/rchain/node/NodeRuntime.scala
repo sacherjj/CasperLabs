@@ -31,7 +31,6 @@ import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
-import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
 
 import kamon._
@@ -100,11 +99,11 @@ class NodeRuntime private[node] (
                                conf.server.maxMessageSize,
                                grpcScheduler
                              )
+
       grpcServerInternal <- GrpcServer
                              .acquireInternalServer(
                                conf.grpcServer.portInternal,
                                conf.server.maxMessageSize,
-                               runtime,
                                grpcScheduler
                              )
                              .toEffect
@@ -147,9 +146,7 @@ class NodeRuntime private[node] (
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
       _   <- log.info("Shutting down interpreter runtime ...")
-      _   <- runtime.close()
       _   <- log.info("Shutting down Casper runtime ...")
-      _   <- casperRuntime.close()
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
@@ -327,14 +324,18 @@ class NodeRuntime private[node] (
       blockMap,
       Metrics.eitherT(Monad[Task], metrics)
     )
-    _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    runtime = Runtime.create(storagePath, storageSize, storeType)(rspaceScheduler)
-    _ <- Runtime
-          .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-          .toEffect
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)(rspaceScheduler)
-    runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
+    _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
+    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
+    // TODO
+    runtime = ???
+    //    runtime = Runtime.create(storagePath, storageSize, storeType)(rspaceScheduler)
+//    _ <- Runtime
+//          .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+//          .toEffect
+//    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)(rspaceScheduler)
+    casperRuntime = ???
+//    runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
+    runtimeManager = ???
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
                               labEff,

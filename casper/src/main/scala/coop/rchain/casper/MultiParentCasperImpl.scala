@@ -1,12 +1,12 @@
 package coop.rchain.casper
 
+import cats.Applicative
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
-import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
@@ -21,8 +21,6 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared._
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
-import coop.rchain.shared.AttemptOps._
-import coop.rchain.catscontrib.TaskContrib._
 
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
@@ -166,18 +164,11 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield ()
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
-    InterpreterUtil.mkTerm(d.term) match {
-      case Right(term) =>
-        deploy(
-          Deploy(
-            term = Some(term),
-            raw = Some(d)
-          )
-        ).as(Right(()))
-
-      case Left(err) =>
-        Applicative[F].pure(Left(new Exception(s"Error in parsing term: \n$err")))
-    }
+    deploy(
+      Deploy(
+        raw = Some(d)
+      )
+    ).as(Right(()))
 
   def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
     for {
@@ -271,7 +262,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                      processedDeploys.partition(_.status.isInternalError)
                    internalErrors.toList
                      .traverse {
-                       case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
+                       case InternalProcessedDeploy(deploy, _, InternalErrors(errors)) =>
                          val errorsMessage = errors.map(_.getMessage).mkString("\n")
                          Log[F].error(
                            s"Internal error encountered while processing deploy ${PrettyPrinter
@@ -306,11 +297,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     _blockDag.get
   }
 
-  def storageContents(hash: StateHash): F[String] =
-    runtimeManager
-      .storageRepr(hash)
-      .getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!")
-      .pure[F]
+  def storageContents(hash: StateHash): F[String] = ???
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     (equivocationsTracker

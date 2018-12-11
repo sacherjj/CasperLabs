@@ -9,9 +9,6 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.{BlockDag, BlockException, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.Interpreter
-import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
 import monix.execution.Scheduler
 
@@ -20,9 +17,6 @@ import scala.concurrent.duration._
 object InterpreterUtil {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
-
-  def mkTerm(rho: String): Either[Throwable, Par] =
-    Interpreter.buildNormalizedTerm(rho).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
@@ -110,22 +104,14 @@ object InterpreterUtil {
             Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *> Right(
               none[StateHash]
             ).leftCast[BlockException].pure[F]
-          case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
-            Log[F].warn(
-              s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
-            ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
           case UnknownFailure =>
             Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
               .leftCast[BlockException]
               .pure[F]
         }
-      case Left((None, status)) =>
-        status match {
-          case UnusedCommEvent(ex: ReplayException) =>
-            Log[F].warn(s"Found unused comm event ${ex.getMessage}") *> Right(none[StateHash])
-              .leftCast[BlockException]
-              .pure[F]
-        }
+      case Left((None, _)) =>
+        //TODO Log error
+        ???
       case Right(computedStateHash) =>
         if (tsHash.contains(computedStateHash)) {
           // state hash in block matches computed hash!

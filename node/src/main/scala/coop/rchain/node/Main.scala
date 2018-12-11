@@ -43,12 +43,6 @@ object Main {
   }
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
-    implicit val replService: GrpcReplClient =
-      new GrpcReplClient(
-        conf.grpcServer.host,
-        conf.grpcServer.portInternal,
-        conf.server.maxMessageSize
-      )
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
         conf.grpcServer.host,
@@ -62,11 +56,10 @@ object Main {
         conf.server.maxMessageSize
       )
 
-    implicit val time: Time[Task] = effects.time
+    implicit val time: Time[Task]           = effects.time
+    implicit val consoleIO: ConsoleIO[Task] = (str: String) => Task(println(str))
 
     val program = conf.command match {
-      case Eval(files) => new ReplRuntime().evalProgram[Task](files)
-      case Repl        => new ReplRuntime().replProgram[Task].as(())
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
       case Deploy(address, phlo, phloPrice, nonce, location) =>
         DeployRuntime.deployFileProgram[Task](address, phlo, phloPrice, nonce, location)
@@ -74,11 +67,9 @@ object Main {
       case Propose           => DeployRuntime.propose[Task]()
       case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
-      case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
-      case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
       case Run               => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
-        BondingUtil.writeIssuanceBasedRhoFiles[Task](bondKey, ethAddress, amount, secKey, pubKey)
+        BondingUtil.bondingDeploy[Task](bondKey, ethAddress, amount, secKey, pubKey)
       case FaucetBondingDeployGen(amount, sigAlgorithm, secKey, pubKey) =>
         BondingUtil.writeFaucetBasedRhoFiles[Task](amount, sigAlgorithm, secKey, pubKey)
       case _ => conf.printHelp()
@@ -87,7 +78,6 @@ object Main {
     program.doOnFinish(
       _ =>
         Task.delay {
-          replService.close()
           diagnosticsService.close()
           deployService.close()
         }
@@ -114,13 +104,4 @@ object Main {
         log.error(s"Failed! Reason: '$error")
     }
   }
-
-  implicit private def consoleIO: ConsoleIO[Task] = {
-    val console = new ConsoleReader()
-    console.setHistoryEnabled(true)
-    console.setPrompt("rholang $ ".green)
-    console.addCompleter(new StringsCompleter(ReplRuntime.keywords.asJava))
-    effects.consoleIO(console)
-  }
-
 }

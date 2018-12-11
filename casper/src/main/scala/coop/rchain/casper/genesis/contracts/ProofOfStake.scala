@@ -1,6 +1,4 @@
 package coop.rchain.casper.genesis.contracts
-
-import coop.rchain.casper.util.Sorting
 import coop.rchain.crypto.codec.Base16
 
 //TODO: include other fields relevent to PoS (e.g. rewards channel)
@@ -17,7 +15,7 @@ case class ProofOfStakeParams(
 
 object ProofOfStake {
   def initialBondsCode(validators: Seq[ProofOfStakeValidator]): String = {
-    import Sorting.byteArrayOrdering
+    import coop.rchain.casper.util.Sorting.byteArrayOrdering
     val sortedValidators = validators.sortBy(_.id)
     val mapEntries = sortedValidators.iterator.zipWithIndex
       .map {

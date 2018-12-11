@@ -14,19 +14,7 @@ object Wallet {
     *          on the blockchain.
     * @return  Rholang code to add the wallet to the blockchain.
     */
-  def rhoCode(w: Wallet): String = s"""
-    |new purseCh, walletCh in {
-    |  @revMint!("makePurse", ${w.initRevBalance}, *purseCh) |
-    |  for(@purse <- purseCh) {
-    |    @BasicWallet!(purse, "${w.algorithm}", "${w.pk}", *walletCh) |
-    |    for(@maybeWallet <- walletCh) {
-    |      match maybeWallet {
-    |        [wallet] => { ${rhoPublicName(w)}!!(wallet) }
-    |        _        => { ${rhoPublicName(w)}!("Error in wallet creation!") }
-    |      }
-    |    }
-    |  }
-    |}""".stripMargin
+  def rhoCode(w: Wallet): String = ???
 
   def fromLine(line: String): Either[String, Wallet] = line.split(" ").filter(_.nonEmpty) match {
     case Array(algorithm, pk, initRevBalanceStr) =>

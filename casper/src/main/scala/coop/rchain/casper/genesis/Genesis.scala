@@ -9,46 +9,33 @@ import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, stringToByteString, unsignedBlockProto}
-import coop.rchain.casper.util.{EventConverter, Sorting}
-import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
+import coop.rchain.casper.util.Sorting
+import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.{EventConverter, Sorting}
+import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.execution.Scheduler
 
+import scala.concurrent.duration.Duration
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
-import coop.rchain.casper.util.Sorting.byteArrayOrdering
-import coop.rchain.rholang.interpreter.accounting
-
-import scala.concurrent.duration.Duration
 
 object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  // Todo: there should be some initial contracts like Mint, POS or something else
   def defaultBlessedTerms(
       timestamp: Long,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String
   ): List[Deploy] =
-    List(
-      StandardDeploys.listOps,
-      StandardDeploys.either,
-      StandardDeploys.nonNegativeNumber,
-      StandardDeploys.makeMint,
-      StandardDeploys.makePoS,
-      StandardDeploys.basicWallet,
-      StandardDeploys.basicWalletFaucet,
-      StandardDeploys.walletCheck,
-      StandardDeploys.systemInstances,
-      StandardDeploys.rev(wallets, faucetCode, posParams)
-    )
+    List()
 
   def withContracts(
       initial: BlockMessage,
@@ -84,9 +71,8 @@ object Genesis {
 
     val blockDeploys =
       processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
-    val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
 
-    val body = Body(state = stateWithContracts, deploys = sortedDeploys)
+    val body = Body(state = stateWithContracts, deploys = blockDeploys)
 
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
