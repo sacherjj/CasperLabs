@@ -46,7 +46,7 @@ pipeline:
   compile:
     <<: *sbtenv
     commands:
-      - sbt compile test:compile it:compile doc
+      - sbt bnfc:generate compile test:compile it:compile doc
 #      - sbt rholang/bnfc:generate compile test:compile it:compile doc
 
 #  run-unit-tests:
@@ -83,9 +83,9 @@ pipeline:
     when:
       event: [ push, tag ]
 
-  notify:
-    image: plugins/slack
-    channel: alerts
-    secrets: [ slack_webhook ]
-    when:
-      status: [ failure ]
+#  notify:
+#    image: plugins/slack
+#    channel: alerts
+#    secrets: [ slack_webhook ]
+#    when:
+#      status: [ failure ]
