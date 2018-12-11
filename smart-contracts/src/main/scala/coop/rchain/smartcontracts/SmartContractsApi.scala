@@ -10,7 +10,6 @@ import coop.rchain.models.{Failed, InternalProcessedDeploy}
 import coop.rchain.shared.StoreType
 import simulacrum.typeclass
 
-//TODO: Flatbuffer/Protobuf/gRPC?
 @typeclass trait SmartContractsApi[F[_]] {
   def newEval(
       terms: Seq[Deploy],
