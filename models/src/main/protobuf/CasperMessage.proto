@@ -37,7 +37,7 @@ service DeployService {
 
 message DeployData {
     bytes user = 1; //public key
-    string term = 2; //rholang source code to deploy (will be parsed into `Par`)
+    bytes term = 2; //source code
     int64 timestamp = 3; //millisecond timestamp
     bytes sig = 4; //signature of (hash(term) + timestamp) using private key
     string sigAlgorithm = 5; // name of the algorithm used to sign
@@ -66,18 +66,6 @@ message BlockQuery {
 
 message BlocksQuery {
     int32 depth = 1;
-}
-
-message DataAtNameQuery {
-    int32 depth = 1;
-    //TODO
-    //Par name = 2;
-}
-
-message ContinuationAtNameQuery {
-    int32 depth = 1;
-    //TODO
-//    repeated Par names = 2;
 }
 
 message DeployServiceResponse {
@@ -247,7 +235,7 @@ message RChainState {
 
 message Deploy {
     //TODO
-//    Par        term  = 1; //wasm
+    bytes term  = 1; //wasm
     DeployData raw = 2;
 }
 

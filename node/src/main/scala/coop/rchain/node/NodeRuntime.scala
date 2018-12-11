@@ -146,14 +146,10 @@ class NodeRuntime private[node] (
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
       _   <- log.info("Shutting down interpreter runtime ...")
-// TODO Resources cleaning
-//            _   <- runtime.close()
-      _ <- log.info("Shutting down Casper runtime ...")
-// TODO Resources cleaning
-      //      _   <- casperRuntime.close()
-      _ <- log.info("Bringing BlockStore down ...")
-      _ <- blockStore.close().value
-      _ <- log.info("Goodbye.")
+      _   <- log.info("Shutting down Casper runtime ...")
+      _   <- log.info("Bringing BlockStore down ...")
+      _   <- blockStore.close().value
+      _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
   def startReportJvmMetrics(

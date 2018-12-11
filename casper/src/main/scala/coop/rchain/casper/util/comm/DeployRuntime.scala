@@ -3,6 +3,7 @@ package coop.rchain.casper.util.comm
 import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.Catscontrib._
@@ -46,7 +47,7 @@ object DeployRuntime {
             //TODO: allow user to specify their public key
             d = DeployData()
               .withTimestamp(timestamp)
-              .withTerm(code)
+              .withTerm(ByteString.copyFromUtf8(file))
               .withFrom(purseAddress)
               .withPhloLimit(phloLimit)
               .withPhloPrice(phloPrice)

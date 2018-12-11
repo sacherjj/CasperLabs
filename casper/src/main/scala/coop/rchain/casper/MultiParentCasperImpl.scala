@@ -164,17 +164,11 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield ()
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
-    InterpreterUtil.mkTerm(d.term) match {
-      case Right(_) =>
-        deploy(
-          Deploy(
-            raw = Some(d)
-          )
-        ).as(Right(()))
-
-      case Left(err) =>
-        Applicative[F].pure(Left(new Exception(s"Error in parsing term: \n$err")))
-    }
+    deploy(
+      Deploy(
+        raw = Some(d)
+      )
+    ).as(Right(()))
 
   def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
     for {
