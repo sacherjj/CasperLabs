@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+package io.casperlabs.ipc;
+
+message Deploy {
+    bytes address = 1; // length 20 bytes
+    int64 timestamp = 2;
+    bytes session_code = 3;
+    bytes payment_code = 4;
+    int64 gas_limit = 5;
+    int64 gas_price = 6;
+    int64 nonce = 7;
+    string sig_algorithm = 8; // name of the algorithm used for signing
+    bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
+}
+ 
+// Describes operation that are allowed to do on a value under a key.
+message Op {
+    oneof op_instance {
+        ReadOp read = 1;
+        WriteOp write = 2;
+        AddOp add = 3;
+        NoOp noop = 4;
+    }
+}
+message ReadOp {}
+message WriteOp {}
+message AddOp {}
+message NoOp {}
+ 
+message Key {
+    oneof key_instance {
+        KeyAddress account = 1; // hash of the key of the account, length 20 bytes
+        KeyHash hash = 2; // hash of the key of the contract, length 32 bytes
+        KeyURef uref = 3; // length 32 bytes TODO: more bytes?
+    }
+}
+message KeyAccount {
+    bytes account = 1;
+}
+message KeyHash {
+    bytes key = 1;
+}
+message KeyURef {
+    bytes uref = 1;
+}
+
+// oneof cannot contain `repeated` label
+message IntList {
+    repeated int32 list = 1;
+}
+
+// Things to store under the key in the global state.
+message Value {
+    oneof value_instance {
+        int32 integer = 1;
+        bytes byte_arr = 2;
+        IntList int_list = 3;
+        string string_val = 4;
+        Account account = 5;
+        Contract contract = 6;
+    }
+}
+ 
+message Account {
+    bytes pub_key = 1; // Should have 32 elements
+    int64 nonce = 2;
+    repeated Key known_urefs = 3;
+}
+message Contract {
+    bytes body = 1;
+}
+ 
+ 
+// Final transformation to the value under the key.
+// It's the outcome of applying all `op`s
+message Transform {
+    oneof transform_instance {
+        TransformIdentity identity = 1;
+        TransformAdd add = 2;
+        TransformWrite write = 3;
+    }
+}
+ 
+message TransformIdentity {}
+message TransformAdd {
+    int32 value = 1;
+}
+message TransformWrite {
+    Value value = 1;
+}
+ 
+// Models key value pair of (key, op) entry.
+// Required b/c protobuff doesn't support maps natively
+message OpEntry {
+    Key key = 1;
+    Op operation = 2;
+}
+ 
+message TransformEntry {
+    Key key = 1;
+    Transform transform = 2;
+}
+ 
+// Returned by ExecutionEngine to consensus layer.
+// (Map[Key, Op], Map[Key, Transform]) pair, describes how the deploy modifies the global state.
+// op_map and transform_map should be of equal lengths
+message ExecutionEffect {
+    repeated OpEntry op_map = 1;
+    repeated TransformEntry transform_map = 2;
+}
+ 
+//TODO: be more specific about errors
+message DeployError {
+    oneof deploy_errors {
+        OutOfGasError gasErr = 1;
+        WasmError wasmErr = 2;
+	InvalidSignature signatureError = 3;
+    }
+}
+message OutOfGasError {}
+message InvalidSignature {}
+message WasmError {
+    string message = 1;
+}
+ 
+message DeployResult {
+    oneof result {
+        ExecutionEffect effects = 1;
+        DeployError error = 2;
+    }
+}
+ 
+// Map of effects to execute
+// Sent from the consensus layer to Execute Engine.
+// Contains a set of transformations that are safe to apply in parallel, because of their commutative nature.
+message CommutativeEffects {
+    repeated TransformEntry effects = 1;
+}
+ 
+message Done {}
+//TODO: be more specific about errors
+message PostEffectsError {}
+ 
+message PostEffectsResult {
+    oneof result {
+        Done success = 1;
+        PostEffectsError error = 2;
+    }
+}
+ 
+// Definition of the service.
+// ExecutionEngine implements server part while Consensus implements client part.
+service ExecutionEngineService {
+    rpc SendDeploy (Deploy) returns (DeployResult) {}
+    rpc ExecuteEffects (CommutativeEffects) returns (PostEffectsResult) {}
+}
