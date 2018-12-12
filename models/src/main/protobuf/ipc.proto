@@ -35,7 +35,7 @@ message Key {
         KeyURef uref = 3; // length 32 bytes TODO: more bytes?
     }
 }
-message KeyAccount {
+message KeyAddress {
     bytes account = 1;
 }
 message KeyHash {
