@@ -14,6 +14,7 @@ impl ipc_grpc::ExecutionEngineService for Engine {
         o: ::grpc::RequestOptions,
         p: ipc::Deploy,
     ) -> grpc::SingleResponse<ipc::DeployResult> {
+        // TODO: should be replaced with the calls to the engine (self)
         grpc::SingleResponse::completed(DeployResult::new())
     }
 
@@ -22,6 +23,7 @@ impl ipc_grpc::ExecutionEngineService for Engine {
         o: ::grpc::RequestOptions,
         p: ipc::CommutativeEffects,
     ) -> grpc::SingleResponse<ipc::PostEffectsResult> {
+        // TODO: should be replaced with the calls to the engine (self)
         grpc::SingleResponse::completed(ipc::PostEffectsResult::new())
     }
 }
@@ -35,8 +37,6 @@ pub fn new(socket: &str, e: Engine) -> grpc::ServerBuilder {
     let mut server = grpc::ServerBuilder::new_plain();
     server.http.set_unix_addr(socket.to_owned());
     server.http.set_cpu_pool_threads(1);
-    server.add_service(ipc_grpc::ExecutionEngineServiceServer::new_service_def(
-        Engine {},
-    ));
+    server.add_service(ipc_grpc::ExecutionEngineServiceServer::new_service_def(e));
     server
 }
