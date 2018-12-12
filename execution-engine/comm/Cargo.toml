@@ -1,0 +1,11 @@
+[package]
+name = "engine_comm"
+version = "0.1.0"
+authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+
+[dependencies]
+protobuf = "2"
+grpc = "0.6.1"
+protoc-rust-grpc = "0.6.1"
+futures = "0.1.8"
+futures-cpupool = "0.1.8"
