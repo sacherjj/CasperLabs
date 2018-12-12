@@ -4,7 +4,7 @@ use protoc_rust_grpc::{run, Args};
 
 fn main() {
     run(Args {
-        out_dir: "src/",
+        out_dir: "src/engine_server",
         input: &["../../models/src/main/protobuf/ipc.proto"],
         includes: &["../../models/src/main/protobuf"],
         rust_protobuf: true, // also generate protobuf messages, not just services,
