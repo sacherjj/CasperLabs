@@ -10,3 +10,11 @@ protoc-rust-grpc = "0.6.1"
 futures = "0.1.8"
 futures-cpupool = "0.1.8"
 execution-engine = { path = "../engine" }
+
+[[bin]]
+name = "grpc-protoc"
+path = "src/protoc/main.rs"
+
+[[bin]]
+name = "engine-grpc-server"
+path = "src/main.rs"

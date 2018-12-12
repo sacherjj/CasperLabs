@@ -506,7 +506,7 @@ pub enum Op_oneof_op_instance {
     read(ReadOp),
     write(WriteOp),
     add(AddOp),
-    noop(NoOpOp),
+    noop(NoOp),
 }
 
 impl Op {
@@ -661,7 +661,7 @@ impl Op {
         }
     }
 
-    // .io.casperlabs.ipc.NoOpOp noop = 4;
+    // .io.casperlabs.ipc.NoOp noop = 4;
 
     pub fn clear_noop(&mut self) {
         self.op_instance = ::std::option::Option::None;
@@ -675,15 +675,15 @@ impl Op {
     }
 
     // Param is passed by value, moved
-    pub fn set_noop(&mut self, v: NoOpOp) {
+    pub fn set_noop(&mut self, v: NoOp) {
         self.op_instance = ::std::option::Option::Some(Op_oneof_op_instance::noop(v))
     }
 
     // Mutable pointer to the field.
-    pub fn mut_noop(&mut self) -> &mut NoOpOp {
+    pub fn mut_noop(&mut self) -> &mut NoOp {
         if let ::std::option::Option::Some(Op_oneof_op_instance::noop(_)) = self.op_instance {
         } else {
-            self.op_instance = ::std::option::Option::Some(Op_oneof_op_instance::noop(NoOpOp::new()));
+            self.op_instance = ::std::option::Option::Some(Op_oneof_op_instance::noop(NoOp::new()));
         }
         match self.op_instance {
             ::std::option::Option::Some(Op_oneof_op_instance::noop(ref mut v)) => v,
@@ -692,21 +692,21 @@ impl Op {
     }
 
     // Take field
-    pub fn take_noop(&mut self) -> NoOpOp {
+    pub fn take_noop(&mut self) -> NoOp {
         if self.has_noop() {
             match self.op_instance.take() {
                 ::std::option::Option::Some(Op_oneof_op_instance::noop(v)) => v,
                 _ => panic!(),
             }
         } else {
-            NoOpOp::new()
+            NoOp::new()
         }
     }
 
-    pub fn get_noop(&self) -> &NoOpOp {
+    pub fn get_noop(&self) -> &NoOp {
         match self.op_instance {
             ::std::option::Option::Some(Op_oneof_op_instance::noop(ref v)) => v,
-            _ => NoOpOp::default_instance(),
+            _ => NoOp::default_instance(),
         }
     }
 }
@@ -883,7 +883,7 @@ impl ::protobuf::Message for Op {
                     Op::has_add,
                     Op::get_add,
                 ));
-                fields.push(::protobuf::reflect::accessor::make_singular_message_accessor::<_, NoOpOp>(
+                fields.push(::protobuf::reflect::accessor::make_singular_message_accessor::<_, NoOp>(
                     "noop",
                     Op::has_noop,
                     Op::get_noop,
@@ -1291,19 +1291,19 @@ impl ::protobuf::reflect::ProtobufValue for AddOp {
 }
 
 #[derive(PartialEq,Clone,Default)]
-pub struct NoOpOp {
+pub struct NoOp {
     // special fields
     pub unknown_fields: ::protobuf::UnknownFields,
     pub cached_size: ::protobuf::CachedSize,
 }
 
-impl NoOpOp {
-    pub fn new() -> NoOpOp {
+impl NoOp {
+    pub fn new() -> NoOp {
         ::std::default::Default::default()
     }
 }
 
-impl ::protobuf::Message for NoOpOp {
+impl ::protobuf::Message for NoOp {
     fn is_initialized(&self) -> bool {
         true
     }
@@ -1360,8 +1360,8 @@ impl ::protobuf::Message for NoOpOp {
         Self::descriptor_static()
     }
 
-    fn new() -> NoOpOp {
-        NoOpOp::new()
+    fn new() -> NoOp {
+        NoOp::new()
     }
 
     fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -1372,8 +1372,8 @@ impl ::protobuf::Message for NoOpOp {
         unsafe {
             descriptor.get(|| {
                 let fields = ::std::vec::Vec::new();
-                ::protobuf::reflect::MessageDescriptor::new::<NoOpOp>(
-                    "NoOpOp",
+                ::protobuf::reflect::MessageDescriptor::new::<NoOp>(
+                    "NoOp",
                     fields,
                     file_descriptor_proto()
                 )
@@ -1381,30 +1381,30 @@ impl ::protobuf::Message for NoOpOp {
         }
     }
 
-    fn default_instance() -> &'static NoOpOp {
-        static mut instance: ::protobuf::lazy::Lazy<NoOpOp> = ::protobuf::lazy::Lazy {
+    fn default_instance() -> &'static NoOp {
+        static mut instance: ::protobuf::lazy::Lazy<NoOp> = ::protobuf::lazy::Lazy {
             lock: ::protobuf::lazy::ONCE_INIT,
-            ptr: 0 as *const NoOpOp,
+            ptr: 0 as *const NoOp,
         };
         unsafe {
-            instance.get(NoOpOp::new)
+            instance.get(NoOp::new)
         }
     }
 }
 
-impl ::protobuf::Clear for NoOpOp {
+impl ::protobuf::Clear for NoOp {
     fn clear(&mut self) {
         self.unknown_fields.clear();
     }
 }
 
-impl ::std::fmt::Debug for NoOpOp {
+impl ::std::fmt::Debug for NoOp {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for NoOpOp {
+impl ::protobuf::reflect::ProtobufValue for NoOp {
     fn as_ref(&self) -> ::protobuf::reflect::ProtobufValueRef {
         ::protobuf::reflect::ProtobufValueRef::Message(self)
     }
@@ -6439,14 +6439,14 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \n\tgas_limit\x18\x05\x20\x01(\x03R\x08gasLimit\x12\x1b\n\tgas_price\x18\
     \x06\x20\x01(\x03R\x08gasPrice\x12\x14\n\x05nonce\x18\x07\x20\x01(\x03R\
     \x05nonce\x12\x1d\n\ndeploy_sig\x18\x08\x20\x01(\x0cR\tdeploySig\x12\x1f\
-    \n\x0bpayment_sig\x18\t\x20\x01(\x0cR\npaymentSig\"\xd7\x01\n\x02Op\x12/\
+    \n\x0bpayment_sig\x18\t\x20\x01(\x0cR\npaymentSig\"\xd5\x01\n\x02Op\x12/\
     \n\x04read\x18\x01\x20\x01(\x0b2\x19.io.casperlabs.ipc.ReadOpH\0R\x04rea\
     d\x122\n\x05write\x18\x02\x20\x01(\x0b2\x1a.io.casperlabs.ipc.WriteOpH\0\
     R\x05write\x12,\n\x03add\x18\x03\x20\x01(\x0b2\x18.io.casperlabs.ipc.Add\
-    OpH\0R\x03add\x12/\n\x04noop\x18\x04\x20\x01(\x0b2\x19.io.casperlabs.ipc\
-    .NoOpOpH\0R\x04noopB\r\n\x0bop_instance\"\x08\n\x06ReadOp\"\t\n\x07Write\
-    Op\"\x07\n\x05AddOp\"\x08\n\x06NoOpOp\"\xb4\x01\n\x03Key\x129\n\x07accou\
-    nt\x18\x01\x20\x01(\x0b2\x1d.io.casperlabs.ipc.KeyAccountH\0R\x07account\
+    OpH\0R\x03add\x12-\n\x04noop\x18\x04\x20\x01(\x0b2\x17.io.casperlabs.ipc\
+    .NoOpH\0R\x04noopB\r\n\x0bop_instance\"\x08\n\x06ReadOp\"\t\n\x07WriteOp\
+    \"\x07\n\x05AddOp\"\x06\n\x04NoOp\"\xb4\x01\n\x03Key\x129\n\x07account\
+    \x18\x01\x20\x01(\x0b2\x1d.io.casperlabs.ipc.KeyAccountH\0R\x07account\
     \x120\n\x04hash\x18\x02\x20\x01(\x0b2\x1a.io.casperlabs.ipc.KeyHashH\0R\
     \x04hash\x120\n\x04uref\x18\x03\x20\x01(\x0b2\x1a.io.casperlabs.ipc.KeyU\
     RefH\0R\x04urefB\x0e\n\x0ckey_instance\"&\n\nKeyAccount\x12\x18\n\x07acc\
