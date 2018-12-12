@@ -92,13 +92,10 @@ class NodeRuntime private[node] (
     */
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   val main: Effect[Unit] = for {
-    // 1. fetch local peer node
     local <- conf.fetchLocalPeerNode(id).toEffect
 
-    // 2. set up configurations
     defaultTimeout = conf.server.defaultTimeout.millis
 
-    // 3. create instances of typeclasses
     initPeer             = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     rpConfState          = effects.rpConfState(rpConf(local, initPeer))
     rpConfAsk            = effects.rpConfAsk(rpConfState)
@@ -140,10 +137,6 @@ class NodeRuntime private[node] (
     oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
     // TODO Replace the RuntimeManager to SmartContractsApi
     smartContractsApi = SmartContractsApi.noOpApi[Task](storagePath, storageSize, storeType)
-    //    runtime = Runtime.create(storagePath, storageSize, storeType)(rspaceScheduler)
-    //    _ <- Runtime
-    //          .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-    //          .toEffect
     casperSmartContractsApi = SmartContractsApi
       .noOpApi[Task](casperStoragePath, storageSize, storeType)
     runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
@@ -173,7 +166,6 @@ class NodeRuntime private[node] (
     nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
     jvmMetrics      = diagnostics.jvmMetrics[Task]
 
-    // 4. run the node program.
     program = nodeProgram[Task](smartContractsApi, casperSmartContractsApi)(
       Monad[Task],
       time,
