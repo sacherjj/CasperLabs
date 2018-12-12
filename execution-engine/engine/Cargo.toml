@@ -1,0 +1,5 @@
+[package]
+name = "execution-engine"
+version = "0.1.0"
+authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+
