@@ -10,6 +10,7 @@ protoc-rust-grpc = "0.6.1"
 futures = "0.1.8"
 futures-cpupool = "0.1.8"
 execution-engine = { path = "../engine" }
+clap = "2.32.0"
 
 [[bin]]
 name = "grpc-protoc"
