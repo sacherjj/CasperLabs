@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.rholang
 
-import cats.Monad
 import cats.implicits._
+import cats.{Id, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.protocol._
@@ -9,10 +9,11 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.{BlockDag, BlockException, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models._
 import coop.rchain.shared.{Log, LogSource}
 import monix.execution.Scheduler
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.Duration
 
 object InterpreterUtil {
 
@@ -154,7 +155,8 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager,
       time: Option[Long]
   )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] = {
-    val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
+    val parentTuplespaces =
+      parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     parentTuplespaces match {
       //no parents to base off of, so use default

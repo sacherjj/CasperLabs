@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import cats.Applicative
+import cats.{Applicative, Id}
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
@@ -18,6 +18,7 @@ import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.{InternalErrors, InternalProcessedDeploy}
 import coop.rchain.shared._
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
@@ -259,7 +260,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
 
                  case Right((preStateHash, postStateHash, processedDeploys)) =>
                    val (internalErrors, persistableDeploys) =
-                     processedDeploys.partition(_.status.isInternalError)
+                     processedDeploys.partition(_.result.isInternalError)
                    internalErrors.toList
                      .traverse {
                        case InternalProcessedDeploy(deploy, _, InternalErrors(errors)) =>

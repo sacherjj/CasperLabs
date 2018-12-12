@@ -8,6 +8,8 @@ import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.syntax.applicative._
 import cats.syntax.apply._
+import cats.syntax.monad._
+import cats.syntax.flatMap._
 import cats.syntax.functor._
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
@@ -33,6 +35,7 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 
+import coop.rchain.smartcontracts.SmartContractsApi
 import kamon._
 import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
@@ -61,7 +64,7 @@ class NodeRuntime private[node] (
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  implicit def eiterTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
+  implicit def eitherTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
 
   import ApplicativeError_._
@@ -81,7 +84,109 @@ class NodeRuntime private[node] (
       httpServer: Fiber[Task, Unit]
   )
 
-  def acquireServers(runtime: Runtime)(
+  /**
+    * Main node entry. It will:
+    * 1. set up configurations
+    * 2. create instances of typeclasses
+    * 3. run the node program.
+    */
+  // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
+  val main: Effect[Unit] = for {
+    local <- conf.fetchLocalPeerNode(id).toEffect
+
+    defaultTimeout = conf.server.defaultTimeout.millis
+
+    initPeer             = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+    rpConfState          = effects.rpConfState(rpConf(local, initPeer))
+    rpConfAsk            = effects.rpConfAsk(rpConfState)
+    peerNodeAsk          = effects.peerNodeAsk(rpConfState)
+    rpConnections        <- effects.rpConnections.toEffect
+    kademliaConnections  <- CachedConnections[Task, KademliaConnTag].toEffect
+    tcpConnections       <- CachedConnections[Task, TcpConnTag].toEffect
+    time                 = effects.time
+    timerTask            = Task.timer
+    metrics              = diagnostics.metrics[Task]
+    multiParentCasperRef <- MultiParentCasperRef.of[Effect]
+    lab                  <- LastApprovedBlock.of[Task].toEffect
+    labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
+    transport = effects.tcpTransportLayer(
+      port,
+      conf.tls.certificate,
+      conf.tls.key,
+      conf.server.maxMessageSize,
+      conf.server.dataDir.resolve("tmp").resolve("comm")
+    )(grpcScheduler, log, tcpConnections)
+    kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
+      grpcScheduler,
+      peerNodeAsk,
+      metrics,
+      log,
+      kademliaConnections
+    )
+    nodeDiscovery <- effects
+                      .nodeDiscovery(id, defaultTimeout)(initPeer)(log, time, metrics, kademliaRPC)
+                      .toEffect
+    // TODO: This change is temporary until itegulov's BlockStore implementation is in
+    blockMap <- Ref.of[Effect, Map[BlockHash, BlockMessage]](Map.empty[BlockHash, BlockMessage])
+    blockStore = InMemBlockStore.create[Effect](
+      syncEffect,
+      blockMap,
+      Metrics.eitherT(Monad[Task], metrics)
+    )
+    _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
+    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
+    // TODO Replace the RuntimeManager to SmartContractsApi
+    smartContractsApi = SmartContractsApi.noOpApi[Task](storagePath, storageSize, storeType)
+    casperSmartContractsApi = SmartContractsApi
+      .noOpApi[Task](casperStoragePath, storageSize, storeType)
+    runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
+    casperPacketHandler <- CasperPacketHandler
+                            .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
+                              labEff,
+                              Metrics.eitherT(Monad[Task], metrics),
+                              blockStore,
+                              Cell.eitherTCell(Monad[Task], rpConnections),
+                              NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
+                              TransportLayer.eitherTTransportLayer(Monad[Task], log, transport),
+                              ErrorHandler[Effect],
+                              eitherTrpConfAsk(rpConfAsk),
+                              oracle,
+                              Capture[Effect],
+                              Sync[Effect],
+                              Time.eitherTTime(Monad[Task], time),
+                              Log.eitherTLog(Monad[Task], log),
+                              multiParentCasperRef,
+                              scheduler
+                            )
+    packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
+      Applicative[Effect],
+      Log.eitherTLog(Monad[Task], log),
+      ErrorHandler[Effect]
+    )
+    nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
+    jvmMetrics      = diagnostics.jvmMetrics[Task]
+
+    program = nodeProgram[Task](smartContractsApi, casperSmartContractsApi)(
+      Monad[Task],
+      time,
+      rpConfState,
+      rpConfAsk,
+      peerNodeAsk,
+      metrics,
+      transport,
+      nodeDiscovery,
+      rpConnections,
+      blockStore,
+      oracle,
+      packetHandler,
+      multiParentCasperRef,
+      nodeCoreMetrics,
+      jvmMetrics
+    )
+    _ <- handleUnrecoverableErrors(program)
+  } yield ()
+
+  private def acquireServers()(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -128,7 +233,11 @@ class NodeRuntime private[node] (
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
-  def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
+  private def clearResources[F[_]: Monad](
+      servers: Servers,
+      smartContractsApi: SmartContractsApi[F],
+      casperSmartContractsApi: SmartContractsApi[F]
+  )(
       implicit
       transport: TransportLayer[Task],
       blockStore: BlockStore[Effect],
@@ -146,13 +255,15 @@ class NodeRuntime private[node] (
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
       _   <- log.info("Shutting down interpreter runtime ...")
+      _   <- Task.delay(smartContractsApi.close())
       _   <- log.info("Shutting down Casper runtime ...")
+      _   <- Task.delay(casperSmartContractsApi.close())
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
-  def startReportJvmMetrics(
+  private def startReportJvmMetrics(
       implicit metrics: Metrics[Task],
       jvmMetrics: JvmMetrics[Task]
   ): Task[Unit] =
@@ -163,16 +274,25 @@ class NodeRuntime private[node] (
       )
     }
 
-  def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
+  private def addShutdownHook[F[_]: Monad](
+      servers: Servers,
+      smartContractsApi: SmartContractsApi[F],
+      casperSmartContractsApi: SmartContractsApi[F]
+  )(
       implicit transport: TransportLayer[Task],
       blockStore: BlockStore[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Task[Unit] =
-    Task.delay(sys.addShutdownHook(clearResources(servers, runtime, casperRuntime)))
+    Task.delay(
+      sys.addShutdownHook(clearResources(servers, smartContractsApi, casperSmartContractsApi))
+    )
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  private def nodeProgram(runtime: Runtime, casperRuntime: Runtime)(
+  private def nodeProgram[F[_]: Monad](
+      smartContractsApi: SmartContractsApi[F],
+      casperSmartContractsApi: SmartContractsApi[F]
+  )(
       implicit
       time: Time[Task],
       rpConfState: RPConfState[Task],
@@ -224,8 +344,8 @@ class NodeRuntime private[node] (
       _       <- info
       local   <- peerNodeAsk.ask.toEffect
       host    = local.endpoint.host
-      servers <- acquireServers(runtime)
-      _       <- addShutdownHook(servers, runtime, casperRuntime).toEffect
+      servers <- acquireServers()
+      _       <- addShutdownHook(servers, smartContractsApi, casperSmartContractsApi).toEffect
       _       <- servers.grpcServerExternal.start.toEffect
       _ <- Log[Effect].info(
             s"gRPC external server started at $host:${servers.grpcServerExternal.port}"
@@ -271,117 +391,6 @@ class NodeRuntime private[node] (
 
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
     RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
-
-  /**
-    * Main node entry. It will:
-    * 1. set up configurations
-    * 2. create instances of typeclasses
-    * 3. run the node program.
-    */
-  // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
-  val main: Effect[Unit] = for {
-    // 1. fetch local peer node
-    local <- conf.fetchLocalPeerNode(id).toEffect
-
-    // 2. set up configurations
-    defaultTimeout = conf.server.defaultTimeout.millis
-
-    // 3. create instances of typeclasses
-    initPeer             = if (conf.server.standalone) None else Some(conf.server.bootstrap)
-    rpConfState          = effects.rpConfState(rpConf(local, initPeer))
-    rpConfAsk            = effects.rpConfAsk(rpConfState)
-    peerNodeAsk          = effects.peerNodeAsk(rpConfState)
-    rpConnections        <- effects.rpConnections.toEffect
-    kademliaConnections  <- CachedConnections[Task, KademliaConnTag].toEffect
-    tcpConnections       <- CachedConnections[Task, TcpConnTag].toEffect
-    time                 = effects.time
-    timerTask            = Task.timer
-    metrics              = diagnostics.metrics[Task]
-    multiParentCasperRef <- MultiParentCasperRef.of[Effect]
-    lab                  <- LastApprovedBlock.of[Task].toEffect
-    labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
-    transport = effects.tcpTransportLayer(
-      port,
-      conf.tls.certificate,
-      conf.tls.key,
-      conf.server.maxMessageSize,
-      conf.server.dataDir.resolve("tmp").resolve("comm")
-    )(grpcScheduler, log, tcpConnections)
-    kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
-      grpcScheduler,
-      peerNodeAsk,
-      metrics,
-      log,
-      kademliaConnections
-    )
-    nodeDiscovery <- effects
-                      .nodeDiscovery(id, defaultTimeout)(initPeer)(log, time, metrics, kademliaRPC)
-                      .toEffect
-    // TODO: This change is temporary until itegulov's BlockStore implementation is in
-    blockMap <- Ref.of[Effect, Map[BlockHash, BlockMessage]](Map.empty[BlockHash, BlockMessage])
-    blockStore = InMemBlockStore.create[Effect](
-      syncEffect,
-      blockMap,
-      Metrics.eitherT(Monad[Task], metrics)
-    )
-    _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    // TODO
-    runtime = ???
-    //    runtime = Runtime.create(storagePath, storageSize, storeType)(rspaceScheduler)
-//    _ <- Runtime
-//          .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-//          .toEffect
-//    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)(rspaceScheduler)
-    casperRuntime = ???
-//    runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
-    runtimeManager = ???
-    casperPacketHandler <- CasperPacketHandler
-                            .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
-                              labEff,
-                              Metrics.eitherT(Monad[Task], metrics),
-                              blockStore,
-                              Cell.eitherTCell(Monad[Task], rpConnections),
-                              NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
-                              TransportLayer.eitherTTransportLayer(Monad[Task], log, transport),
-                              ErrorHandler[Effect],
-                              eiterTrpConfAsk(rpConfAsk),
-                              oracle,
-                              Capture[Effect],
-                              Sync[Effect],
-                              Time.eitherTTime(Monad[Task], time),
-                              Log.eitherTLog(Monad[Task], log),
-                              multiParentCasperRef,
-                              scheduler
-                            )
-    packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
-      Applicative[Effect],
-      Log.eitherTLog(Monad[Task], log),
-      ErrorHandler[Effect]
-    )
-    nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
-    jvmMetrics      = diagnostics.jvmMetrics[Task]
-
-    // 4. run the node program.
-    program = nodeProgram(runtime, casperRuntime)(
-      time,
-      rpConfState,
-      rpConfAsk,
-      peerNodeAsk,
-      metrics,
-      transport,
-      nodeDiscovery,
-      rpConnections,
-      blockStore,
-      oracle,
-      packetHandler,
-      multiParentCasperRef,
-      nodeCoreMetrics,
-      jvmMetrics
-    )
-    _ <- handleUnrecoverableErrors(program)
-  } yield ()
-
 }
 
 object NodeRuntime {

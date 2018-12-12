@@ -1,8 +1,8 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import scalapb.GeneratedMessage
 import coop.rchain.crypto.codec._
 

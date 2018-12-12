@@ -1,12 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import coop.rchain.casper.protocol._
-
-case class InternalProcessedDeploy(
-    deploy: Deploy,
-    cost: Double,
-    status: DeployStatus
-)
+import coop.rchain.models.{InternalProcessedDeploy, Succeeded, UnknownFailure}
 
 object ProcessedDeployUtil {
   def toInternal(pd: ProcessedDeploy): Option[InternalProcessedDeploy] =

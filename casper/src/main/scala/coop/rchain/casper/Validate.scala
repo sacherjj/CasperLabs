@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import cats.effect.Sync
-import cats.{Applicative, Monad}
+import cats.{Applicative, Id, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore

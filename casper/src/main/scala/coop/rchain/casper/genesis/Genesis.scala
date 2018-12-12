@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Applicative, Foldable, Monad}
+import cats.{Applicative, Foldable, Id, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
@@ -70,7 +70,7 @@ object Genesis {
     val timestamp = initial.header.get.timestamp
 
     val blockDeploys =
-      processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
+      processedDeploys.filterNot(_.result.isFailed).map(ProcessedDeployUtil.fromInternal)
 
     val body = Body(state = stateWithContracts, deploys = blockDeploys)
 
