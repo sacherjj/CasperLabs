@@ -24,7 +24,7 @@ TBD
 #### Installing Homebrew - https://brew.sh
 TBD
 
-## Deverloper guide
+## Developer guide
 
 TBD
 
