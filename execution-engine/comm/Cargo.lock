@@ -81,12 +81,17 @@ dependencies = [
 name = "engine_comm"
 version = "0.1.0"
 dependencies = [
+ "execution-engine 0.1.0",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-cpupool 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "grpc 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "protoc-rust-grpc 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "execution-engine"
+version = "0.1.0"
 
 [[package]]
 name = "fuchsia-zircon"
