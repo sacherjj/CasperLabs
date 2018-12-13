@@ -26,6 +26,8 @@ fn main() {
     let server_builder = engine_server::new(socket, engine_state);
     let _server = server_builder.build().expect("Start server");
 
+    println!("Server is listening on socket: {}", socket);
+
     // loop idefinitely
     loop {
         std::thread::park();
