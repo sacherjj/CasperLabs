@@ -1,21 +1,35 @@
 pub mod ipc;
 pub mod ipc_grpc;
 
-use execution_engine::engine::Engine;
+use execution_engine::engine::EngineState;
 use ipc::DeployResult;
+use ipc_grpc::ExecutionEngineService;
+use std::marker::{Send, Sync};
 
 // Idea is that Engine will represent the core of the execution engine project.
 // It will act as an entry point for execution of Wasm binaries.
 // Proto definitions should be translated into domain objects when Engine's API is invoked.
 // This way core won't depend on comm (outer layer) leading to cleaner design.
-impl ipc_grpc::ExecutionEngineService for Engine {
+impl<T> ipc_grpc::ExecutionEngineService for EngineState<T> {
     fn send_deploy(
         &self,
         o: ::grpc::RequestOptions,
         p: ipc::Deploy,
     ) -> grpc::SingleResponse<ipc::DeployResult> {
-        // TODO: should be replaced with the calls to the engine (self)
-        grpc::SingleResponse::completed(DeployResult::new())
+        match self.run_deploy(&p.session_code) {
+            Ok(_) => {
+                let mut res = DeployResult::new();
+                res.set_effects(ipc::ExecutionEffect::new());
+                grpc::SingleResponse::completed(res)
+            }
+            Err(_) => {
+                let mut res = DeployResult::new();
+                let mut err = ipc::DeployError::new();
+                err.set_wasmErr(ipc::WasmError::new());
+                res.set_error(err);
+                grpc::SingleResponse::completed(res)
+            }
+        }
     }
 
     fn execute_effects(
@@ -28,7 +42,10 @@ impl ipc_grpc::ExecutionEngineService for Engine {
     }
 }
 
-pub fn new(socket: &str, e: Engine) -> grpc::ServerBuilder {
+pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
+    socket: &str,
+    e: E,
+) -> grpc::ServerBuilder {
     let socket_path = std::path::Path::new(socket);
     if socket_path.exists() {
         std::fs::remove_file(socket_path).expect("Remove old socket file.");

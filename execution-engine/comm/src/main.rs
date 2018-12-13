@@ -7,7 +7,8 @@ pub mod engine_server;
 
 use clap::{App, Arg};
 use engine_server::*;
-use execution_engine::engine::Engine;
+use execution_engine::engine::EngineState;
+use std::sync::{Arc, Mutex};
 
 fn main() {
     let matches = App::new("Execution engine server")
@@ -21,7 +22,8 @@ fn main() {
         std::fs::remove_file(socket_path).expect("Remove old socket file.");
     }
 
-    let server_builder = engine_server::new(socket, Engine::new());
+    let engine_state: EngineState<Vec<u8>> = EngineState::new(Vec::new());
+    let server_builder = engine_server::new(socket, engine_state);
     let _server = server_builder.build().expect("Start server");
 
     // loop idefinitely
