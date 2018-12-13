@@ -1,4 +1,4 @@
-//scalapackage coop.rchain.rholang.proofofstake
+//scalapackage io.casperlabs.rholang.proofofstake
 
 //requires MakePoS, MakeMint, TestSet, ListOps, Either
 

@@ -179,8 +179,8 @@ lazy val node = (project in file("node"))
       grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
-    buildInfoPackage := "coop.rchain.node",
-    mainClass in assembly := Some("coop.rchain.node.Main"),
+    buildInfoPackage := "io.casperlabs.node",
+    mainClass in assembly := Some("io.casperlabs.node.Main"),
     assemblyMergeStrategy in assembly := {
       case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.first
       case x =>

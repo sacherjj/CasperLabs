@@ -1,4 +1,4 @@
-//scalapackage coop.rchain.rholang.wallet
+//scalapackage io.casperlabs.rholang.wallet
 
 // WalletCheck: holds funds until a public key with the given hash is presented,
 //     then creates a wallet with that public key and those funds.
