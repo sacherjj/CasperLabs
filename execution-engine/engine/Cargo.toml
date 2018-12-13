@@ -2,3 +2,8 @@
 name = "execution-engine"
 version = "0.1.0"
 authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+
+[dependencies]
+wasm-prep = { path = "../wasm-prep" }
+parity-wasm = "0.31"
+pwasm-utils = "0.6"
