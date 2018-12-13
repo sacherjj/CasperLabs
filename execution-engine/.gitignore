@@ -4,5 +4,5 @@ comm/src/engine_server/ipc_grpc.rs
 
 # ignore Cargo.lock in libraries
 engine/Cargo.lock
-
+wasm_prep/Cargo.lock
 
