@@ -2,6 +2,7 @@ extern crate clap;
 extern crate execution_engine;
 extern crate grpc;
 extern crate protobuf;
+extern crate storage;
 
 pub mod engine_server;
 
@@ -22,7 +23,7 @@ fn main() {
         std::fs::remove_file(socket_path).expect("Remove old socket file.");
     }
 
-    let engine_state: EngineState<Vec<u8>> = EngineState::new(Vec::new());
+    let engine_state = EngineState::new(storage::InMemGS::new());
     let server_builder = engine_server::new(socket, engine_state);
     let _server = server_builder.build().expect("Start server");
 

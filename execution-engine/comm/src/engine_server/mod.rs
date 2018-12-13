@@ -5,18 +5,21 @@ use execution_engine::engine::EngineState;
 use ipc::DeployResult;
 use ipc_grpc::ExecutionEngineService;
 use std::marker::{Send, Sync};
+use storage::{GlobalState, TrackingCopy};
 
 // Idea is that Engine will represent the core of the execution engine project.
 // It will act as an entry point for execution of Wasm binaries.
 // Proto definitions should be translated into domain objects when Engine's API is invoked.
 // This way core won't depend on comm (outer layer) leading to cleaner design.
-impl<T> ipc_grpc::ExecutionEngineService for EngineState<T> {
+impl<T: TrackingCopy, G: GlobalState<T>> ipc_grpc::ExecutionEngineService for EngineState<T, G> {
     fn send_deploy(
         &self,
         o: ::grpc::RequestOptions,
         p: ipc::Deploy,
     ) -> grpc::SingleResponse<ipc::DeployResult> {
-        match self.run_deploy(&p.session_code) {
+        let mut addr = [0u8; 20];
+        addr.copy_from_slice(&p.address);
+        match self.run_deploy(&p.session_code, addr) {
             Ok(_) => {
                 let mut res = DeployResult::new();
                 res.set_effects(ipc::ExecutionEffect::new());

@@ -1,9 +1,12 @@
 [package]
 name = "execution-engine"
 version = "0.1.0"
-authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 
 [dependencies]
-wasm-prep = { path = "../wasm-prep" }
+wasmi = "0.4.2"
 parity-wasm = "0.31"
 pwasm-utils = "0.6"
+storage = { path = "../storage" }
+common = { path = "../common", features = ["std"] }
+wasm-prep = { path = "../wasm-prep" }
