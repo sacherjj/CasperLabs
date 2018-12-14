@@ -22,20 +22,20 @@ impl BytesRepr for Key {
             Account(addr) => {
                 let mut result = Vec::with_capacity(25);
                 result.push(ACCOUNT_ID);
-                result.extend((20u32).to_bytes());
+                result.append(&mut (20u32).to_bytes());
                 result.extend(addr);
                 result
             }
             Hash(hash) => {
                 let mut result = Vec::with_capacity(37);
                 result.push(HASH_ID);
-                result.extend(hash.to_bytes());
+                result.append(&mut hash.to_bytes());
                 result
             }
             URef(rf) => {
                 let mut result = Vec::with_capacity(37);
                 result.push(UREF_ID);
-                result.extend(rf.to_bytes());
+                result.append(&mut rf.to_bytes());
                 result
             }
         }

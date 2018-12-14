@@ -85,10 +85,10 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         deserialize(&bytes).map_err(|e| e.into())
     }
 
-    fn name_from_mem(&mut self, name_ptr: u32, name_size: u32) -> Result<String, Trap> {
+    fn string_from_mem(&mut self, ptr: u32, size: u32) -> Result<String, Trap> {
         let bytes = self
             .memory
-            .get(name_ptr, name_size as usize)
+            .get(ptr, size as usize)
             .map_err(|e| Error::Interpreter(e))?;
         deserialize(&bytes).map_err(|e| Error::BytesRepr(e).into())
     }
@@ -106,8 +106,8 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         main_export.push_str("call");
     }
 
-    fn function_from_name(&mut self, name_ptr: u32, name_size: u32) -> Result<Vec<u8>, Trap> {
-        let name = self.name_from_mem(name_ptr, name_size)?;
+    fn get_function_by_name(&mut self, name_ptr: u32, name_size: u32) -> Result<Vec<u8>, Trap> {
+        let name = self.string_from_mem(name_ptr, name_size)?;
 
         let has_name: bool = self
             .module
@@ -117,6 +117,9 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
         if has_name {
             let mut module = self.module.clone();
+            //We only want the function exported under `name` to be callable;
+            //`optimize` removes all code that is not reachable from the exports
+            //listed in the second argument.
             let _ = pwasm_utils::optimize(&mut module, vec![&name]).unwrap();
             Self::rename_export_to_call(&mut module, name);
 
@@ -138,6 +141,9 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         Ok((key, value))
     }
 
+    //Load the i-th argument invoked as part of a `sub_call` into
+    //the runtime buffer so that a subsequent `get_arg` can return it
+    //to the caller.
     pub fn load_arg(&mut self, i: usize) -> Result<usize, Trap> {
         if i < self.args.len() {
             self.host_buf = self.args[i].clone();
@@ -153,10 +159,16 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
             .map_err(|e| Error::Interpreter(e).into())
     }
 
+    //Return a some bytes from the memory and terminate the current `sub_call`.
+    //Note that the return type is `Trap`, indicating that this function will
+    //always kill the current wasm instance.
     pub fn ret(&mut self, value_ptr: u32, value_size: usize) -> Trap {
         let mem_get = self.memory.get(value_ptr, value_size);
         match mem_get {
             Ok(buf) => {
+                //Set the result field in the runtime and return
+                //the proper element of the `Error` enum indicating
+                //that the reason for exiting the module was a call to ret.
                 self.result = buf;
                 Error::Ret.into()
             }
@@ -193,7 +205,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         //args(1) = size of name in wasm memory
         let name_ptr: u32 = args.nth_checked(0)?;
         let name_size: u32 = args.nth_checked(1)?;
-        let fn_bytes = self.function_from_name(name_ptr, name_size)?;
+        let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
         self.host_buf = fn_bytes;
         Ok(self.host_buf.len())
     }
@@ -369,7 +381,7 @@ impl RuntimeModuleImportResolver {
     }
 }
 
-impl<'a> ModuleImportResolver for RuntimeModuleImportResolver {
+impl ModuleImportResolver for RuntimeModuleImportResolver {
     fn resolve_func(
         &self,
         field_name: &str,

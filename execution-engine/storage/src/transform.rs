@@ -41,7 +41,7 @@ impl Add for Transform {
             (Add(i), Add(j)) => Add(i + j),
             (Write(v), Add(j)) => match v {
                 Value::Int32(i) => Write(Value::Int32(i + j)),
-                other => Write(other),
+                _ => panic!("Attempted to add an integer to a non-integer!"),
             },
         }
     }

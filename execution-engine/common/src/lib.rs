@@ -86,6 +86,8 @@ pub mod ext {
         let (key_ptr, key_size, _bytes) = to_ptr(key);
         let (value_ptr, value_size, _bytes2) = to_ptr(value);
         unsafe {
+            //Could panic if the value under the key cannot be added to
+            //the given value in memory
             ext_ffi::add(key_ptr, key_size, value_ptr, value_size);
         }
     }
