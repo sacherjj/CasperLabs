@@ -1,11 +1,11 @@
 syntax = "proto3";
-package coop.rchain.comm.protocol.routing;
+package io.casperlabs.comm.protocol.routing;
 
 import "scalapb/scalapb.proto";
 import "CasperMessage.proto";
 
 option (scalapb.options) = {
-  package_name: "coop.rchain.comm.protocol.routing"
+  package_name: "io.casperlabs.comm.protocol.routing"
   flat_package: true
 };
 

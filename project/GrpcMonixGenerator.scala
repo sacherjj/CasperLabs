@@ -360,7 +360,7 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
       .add(
         "import _root_.io.grpc.{ CallOptions, Channel, MethodDescriptor, ServerServiceDefinition }"
       )
-      .add("import _root_.coop.rchain.grpcmonix.GrpcMonix._")
+      .add("import _root_.io.casperlabs.grpcmonix.GrpcMonix._")
       .add("import _root_.io.grpc.stub.{ AbstractStub, ClientCalls, ServerCalls, StreamObserver }")
       .add("import _root_.monix.eval.Task")
       .add("import _root_.monix.execution.{ Cancelable, Scheduler }")

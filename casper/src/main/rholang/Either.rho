@@ -1,4 +1,4 @@
-//scalapackage coop.rchain.rholang.collection
+//scalapackage io.casperlabs.rholang.collection
 
 //Requires ListOps
 //Represents Either[A, B] as ("Left", A) or ("Right", B)
