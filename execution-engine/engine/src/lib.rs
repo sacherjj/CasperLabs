@@ -8,3 +8,4 @@ extern crate wasmi;
 
 pub mod engine;
 pub mod execution;
+pub mod argsparser;

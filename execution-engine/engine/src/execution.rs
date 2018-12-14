@@ -9,6 +9,7 @@ use wasmi::{
     RuntimeArgs, RuntimeValue, Signature, Trap, ValueType,
 };
 
+use argsparser::Args;
 use parity_wasm::elements::{Error as ParityWasmError, Module};
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -153,7 +154,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         }
     }
 
-    fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+    pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &self.host_buf)
             .map_err(|e| Error::Interpreter(e).into())
@@ -195,43 +196,30 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         Ok(self.host_buf.len())
     }
 
-    pub fn set_mem(&mut self, args: RuntimeArgs) -> Result<(), Trap> {
-        let dest_ptr: u32 = args.nth_checked(0)?;
-        self.set_mem_from_buf(dest_ptr)
-    }
-
-    pub fn serialize_function(&mut self, args: RuntimeArgs) -> Result<usize, Trap> {
-        //args(0) = pointer to name in wasm memory
-        //args(1) = size of name in wasm memory
-        let name_ptr: u32 = args.nth_checked(0)?;
-        let name_size: u32 = args.nth_checked(1)?;
+    pub fn serialize_function(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
         let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
         self.host_buf = fn_bytes;
         Ok(self.host_buf.len())
     }
 
-    pub fn write(&mut self, args: RuntimeArgs) -> Result<(), Trap> {
-        //args(0) = pointer to key in wasm memory
-        //args(1) = size of key
-        //args(2) = pointer to value
-        //args(3) = size of value
-        let key_ptr: u32 = args.nth_checked(0)?;
-        let key_size: u32 = args.nth_checked(1)?;
-        let value_ptr: u32 = args.nth_checked(2)?;
-        let value_size: u32 = args.nth_checked(3)?;
+    pub fn write(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        value_ptr: u32,
+        value_size: u32,
+    ) -> Result<(), Trap> {
         let (key, value) = self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)?;
         self.state.write(key, value).map_err(|e| e.into())
     }
 
-    pub fn add(&mut self, args: RuntimeArgs) -> Result<(), Trap> {
-        //args(0) = pointer to key in wasm memory
-        //args(1) = size of key
-        //args(2) = pointer to value
-        //args(3) = size of value
-        let key_ptr: u32 = args.nth_checked(0)?;
-        let key_size: u32 = args.nth_checked(1)?;
-        let value_ptr: u32 = args.nth_checked(2)?;
-        let value_size: u32 = args.nth_checked(3)?;
+    pub fn add(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        value_ptr: u32,
+        value_size: u32,
+    ) -> Result<(), Trap> {
         let (key, value) = self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)?;
         self.state.add(key, value).map_err(|e| e.into())
     }
@@ -241,11 +229,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         self.state.read(key).map_err(|e| e.into())
     }
 
-    pub fn read_value(&mut self, args: RuntimeArgs) -> Result<usize, Trap> {
-        //args(0) = pointer to key in wasm memory
-        //args(1) = size of key in wasm memory
-        let key_ptr: u32 = args.nth_checked(0)?;
-        let key_size: u32 = args.nth_checked(1)?;
+    pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
         let value_bytes = {
             let value = self.value_from_key(key_ptr, key_size)?;
             value.to_bytes()
@@ -254,9 +238,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         Ok(self.host_buf.len())
     }
 
-    pub fn new_uref(&mut self, args: RuntimeArgs) -> Result<(), Trap> {
-        //args(0) = pointer to key destination in wasm memory
-        let key_ptr: u32 = args.nth_checked(0)?;
+    pub fn new_uref(&mut self, key_ptr: u32) -> Result<(), Trap> {
         let key = self.state.new_uref();
         self.known_urefs.insert(key);
         self.memory
@@ -286,63 +268,91 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
     ) -> Result<Option<RuntimeValue>, Trap> {
         match index {
             READ_FUNC_INDEX => {
-                let size = self.read_value(args)?;
+                //args(0) = pointer to key in wasm memory
+                //args(1) = size of key in wasm memory
+                let (key_ptr, key_size) = Args::parse(args)?;
+                let size = self.read_value(key_ptr, key_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             SER_FN_FUNC_INDEX => {
-                let size = self.serialize_function(args)?;
+                //args(0) = pointer to name in wasm memory
+                //args(1) = size of name in wasm memory
+                let (name_ptr, name_size) = Args::parse(args)?;
+                let size = self.serialize_function(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             WRITE_FUNC_INDEX => {
-                let _ = self.write(args)?;
+                //args(0) = pointer to key in wasm memory
+                //args(1) = size of key
+                //args(2) = pointer to value
+                //args(3) = size of value
+                let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
+                let _ = self.write(key_ptr, key_size, value_ptr, value_size)?;
                 Ok(None)
             }
 
             ADD_FUNC_INDEX => {
-                let _ = self.add(args)?;
+                //args(0) = pointer to key in wasm memory
+                //args(1) = size of key
+                //args(2) = pointer to value
+                //args(3) = size of value
+                let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
+                let _ = self.add(key_ptr, key_size, value_ptr, value_size)?;
                 Ok(None)
             }
 
             NEW_FUNC_INDEX => {
-                let _ = self.new_uref(args)?;
+                //args(0) = pointer to key destination in wasm memory
+                let key_ptr = Args::parse(args)?;
+                let _ = self.new_uref(key_ptr)?;
                 Ok(None)
             }
 
             GET_READ_FUNC_INDEX => {
-                let _ = self.set_mem(args)?;
+                //args(0) = pointer to destination in wasm memory
+                let dest_ptr = Args::parse(args)?;
+                let _ = self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             GET_FN_FUNC_INDEX => {
-                let _ = self.set_mem(args)?;
+                //args(0) = pointer to destination in wasm memory
+                let dest_ptr = Args::parse(args)?;
+                let _ = self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             LOAD_ARG_FUNC_INDEX => {
-                let i: u32 = args.nth_checked(0)?;
-                let size = self.load_arg(i as usize)?;
+                //args(0) = index of host runtime arg to load
+                let i = Args::parse(args)?;
+                let size = self.load_arg(i)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             GET_ARG_FUNC_INDEX => {
-                let _ = self.set_mem(args)?;
+                //args(0) = pointer to destination in wasm memory
+                let dest_ptr = Args::parse(args)?;
+                let _ = self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             RET_FUNC_INDEX => {
-                let value_ptr: u32 = args.nth_checked(0)?;
-                let value_size: u32 = args.nth_checked(1)?;
+                //args(0) = pointer to value
+                //args(1) = size of value
+                let (value_ptr, value_size): (u32, u32) = Args::parse(args)?;
 
                 Err(self.ret(value_ptr, value_size as usize))
             }
 
             CALL_CONTRACT_FUNC_INDEX => {
-                let fn_ptr: u32 = args.nth_checked(0)?;
-                let fn_size: u32 = args.nth_checked(1)?;
-                let args_ptr: u32 = args.nth_checked(2)?;
-                let args_size: u32 = args.nth_checked(3)?;
+                //args(0) = pointer to serialized function in wasm memory
+                //args(1) = size of function
+                //args(2) = pointer to function arguments in wasm memory
+                //args(3) = size of arguments
+                let (fn_ptr, fn_size, args_ptr, args_size): (u32, u32, u32, u32) =
+                    Args::parse(args)?;
 
                 let size =
                     self.call_contract(fn_ptr, fn_size as usize, args_ptr, args_size as usize)?;
@@ -350,7 +360,9 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
             }
 
             GET_CALL_RESULT_FUNC_INDEX => {
-                let _ = self.set_mem(args)?;
+                //args(0) = pointer to destination in wasm memory
+                let dest_ptr = Args::parse(args)?;
+                let _ = self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
@@ -508,6 +520,9 @@ fn sub_call<T: TrackingCopy>(
         Ok(_) => Ok(runtime.result),
         Err(e) => {
             if let Some(host_error) = e.as_host_error() {
+                //If the "error" was in fact a trap caused by calling `ret` then
+                //this is normal operation and we should return the value captured
+                //in the Runtime result field.
                 if let Error::Ret = host_error.downcast_ref::<Error>().unwrap() {
                     return Ok(runtime.result);
                 }
