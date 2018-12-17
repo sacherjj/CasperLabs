@@ -29,6 +29,8 @@ mod ext_ffi {
             fn_size: usize,
             args_ptr: *const u8,
             args_size: usize,
+            refs_ptr: *const u8,
+            refs_size: usize,
         ) -> usize;
         pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
     }
@@ -116,22 +118,22 @@ pub mod ext {
     //Note that the function is wrapped up in a new module and re-exported under the name
     //"call". `fn_bytes_by_name` is meant to be used when storing a contract on-chain at
     //an unforgable reference.
-    pub fn fn_by_name(name: &String) -> Value {
-        let fn_bytes = fn_bytes_by_name(name);
-        Value::Contract(fn_bytes)
+    pub fn fn_by_name(name: &String, known_urefs: Vec<Key>) -> Value {
+        let bytes = fn_bytes_by_name(name);
+        Value::Contract { bytes, known_urefs }
     }
 
     //Gets the serialized bytes of an exported function (see `fn_by_name`), then
     //computes the hash of those bytes to produce a key where the contract is then
     //stored in the global state. This key is returned.
-    pub fn store_function(name: &String) -> Key {
-        let fn_bytes = fn_bytes_by_name(name);
+    pub fn store_function(name: &String, known_urefs: Vec<Key>) -> Key {
+        let bytes = fn_bytes_by_name(name);
         let mut hasher = VarBlake2b::new(32).unwrap();
-        hasher.input(&fn_bytes);
+        hasher.input(&bytes);
         let mut fn_hash = [0u8; 32];
         hasher.variable_result(|hash| fn_hash.clone_from_slice(hash));
         let key = Key::Hash(fn_hash);
-        let value = Value::Contract(fn_bytes);
+        let value = Value::Contract { bytes, known_urefs };
         write(&key, &value);
         key
     }
@@ -166,10 +168,13 @@ pub mod ext {
     //execution. The value returned from the contract call (see `ret` above) is
     //returned from this function.
     pub fn call_contract<T: BytesRepr>(contract: &Value, args: &Vec<Vec<u8>>) -> T {
-        if let Value::Contract(c) = contract {
-            let (fn_ptr, fn_size, _bytes) = to_ptr(c);
+        if let Value::Contract { bytes, known_urefs } = contract {
+            let (fn_ptr, fn_size, _bytes1) = to_ptr(bytes);
             let (args_ptr, args_size, _bytes2) = to_ptr(args);
-            let res_size = unsafe { ext_ffi::call_contract(fn_ptr, fn_size, args_ptr, args_size) };
+            let (refs_ptr, refs_size, _bytes3) = to_ptr(known_urefs);
+            let res_size = unsafe {
+                ext_ffi::call_contract(fn_ptr, fn_size, args_ptr, args_size, refs_ptr, refs_size)
+            };
             let res_ptr = alloc_bytes(res_size);
             let res_bytes = unsafe {
                 ext_ffi::get_call_result(res_ptr);

@@ -183,15 +183,19 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         fn_size: usize,
         args_ptr: u32,
         args_size: usize,
+        refs_ptr: u32,
+        refs_size: usize,
     ) -> Result<usize, Error> {
         let fn_bytes = self.memory.get(fn_ptr, fn_size)?;
         let args_bytes = self.memory.get(args_ptr, args_size)?;
+        let refs_bytes = self.memory.get(refs_ptr, refs_size)?;
 
         let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
+        let refs: Vec<Key> = deserialize(&refs_bytes)?;
         let serialized_module: Vec<u8> = deserialize(&fn_bytes)?;
         let module = parity_wasm::deserialize_buffer(&serialized_module)?;
 
-        let result = sub_call(module, args, self)?;
+        let result = sub_call(module, args, refs, self)?;
         self.host_buf = result;
         Ok(self.host_buf.len())
     }
@@ -351,11 +355,25 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
                 //args(1) = size of function
                 //args(2) = pointer to function arguments in wasm memory
                 //args(3) = size of arguments
-                let (fn_ptr, fn_size, args_ptr, args_size): (u32, u32, u32, u32) =
-                    Args::parse(args)?;
+                //args(4) = pointer to function's known urefs in wasm memory
+                //args(5) = size of urefs
+                let (fn_ptr, fn_size, args_ptr, args_size, refs_ptr, refs_size): (
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                ) = Args::parse(args)?;
 
-                let size =
-                    self.call_contract(fn_ptr, fn_size as usize, args_ptr, args_size as usize)?;
+                let size = self.call_contract(
+                    fn_ptr,
+                    fn_size as usize,
+                    args_ptr,
+                    args_size as usize,
+                    refs_ptr,
+                    refs_size as usize,
+                )?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -441,7 +459,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 RET_FUNC_INDEX,
             ),
             "call_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
                 CALL_CONTRACT_FUNC_INDEX,
             ),
             "get_call_result" => FuncInstance::alloc_host(
@@ -500,10 +518,14 @@ fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), 
 fn sub_call<T: TrackingCopy>(
     parity_module: Module,
     args: Vec<Vec<u8>>,
+    refs: Vec<Key>,
     current_runtime: &mut Runtime<T>,
 ) -> Result<Vec<u8>, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
-    let known_urefs: HashSet<Key> = HashSet::new();
+    let mut known_urefs: HashSet<Key> = HashSet::new();
+    for r in refs.into_iter() {
+        known_urefs.insert(r);
+    }
     let mut runtime = Runtime {
         args,
         memory,
