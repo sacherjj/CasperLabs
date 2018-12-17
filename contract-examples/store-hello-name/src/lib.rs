@@ -23,5 +23,5 @@ pub extern "C" fn hello_name_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let export_name = String::from("hello_name_ext");
-    let hash = store_function(&export_name);
+    let _hash = store_function(&export_name);
 }
