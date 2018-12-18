@@ -33,15 +33,14 @@ import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
-import io.casperlabs.rholang.interpreter.Runtime
-import io.casperlabs.shared.Cell
+import io.casperlabs.shared.{Cell, StoreType, Time}
 import io.casperlabs.shared.PathOps.RichPath
 import monix.execution.Scheduler
 
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
-import io.casperlabs.shared.{Cell, Time}
+import io.casperlabs.smartcontracts.SmartContractsApi
 import monix.eval.Task
 
 class HashSetCasperTestNode[F[_]](
@@ -69,8 +68,12 @@ class HashSetCasperTestNode[F[_]](
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
-  val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
-  val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
+  val smartContractsApi =
+    SmartContractsApi.noOpApi[Task](storageDirectory, storageSize, StoreType.LMDB)
+  val casperSmartContractsApi = SmartContractsApi
+    .noOpApi[Task](storageDirectory, storageSize, StoreType.LMDB)
+
+  val runtimeManager                 = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
@@ -123,10 +126,8 @@ class HashSetCasperTestNode[F[_]](
     dir.recursivelyDelete()
   }
 
-  def tearDownNode(): Unit = {
-    activeRuntime.close().unsafeRunSync
+  def tearDownNode(): Unit =
     blockStore.close()
-  }
 }
 
 object HashSetCasperTestNode {

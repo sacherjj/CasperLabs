@@ -61,8 +61,9 @@ object DeployRuntime {
               .withNonce(nonce)
         }
         .flatMap(DeployService[F].deploy)
-        .handleError(ex =>
-          Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex)))
+        .handleError(
+          ex => Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex))
+        )
     )
   }
 

@@ -1,14 +1,13 @@
 package io.casperlabs.blockstorage
 
 import scala.language.higherKinds
-
 import cats._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.casper.protocol.{BlockMessage, Header}
-import io.casperlabs.rspace.Context
 import io.casperlabs.shared.PathOps._
 import BlockGen.blockHashElementsGen
+import coop.rchain.blockstorage.Context
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks

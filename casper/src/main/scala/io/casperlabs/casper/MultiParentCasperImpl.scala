@@ -167,6 +167,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
     deploy(
       Deploy(
+        sessionCode = d.sessionCode,
         raw = Some(d)
       )
     ).as(Right(()))
@@ -298,7 +299,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     _blockDag.get
   }
 
-  def storageContents(hash: StateHash): F[String] = ???
+  def storageContents(hash: StateHash): F[String] = """""".pure[F]
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     (equivocationsTracker

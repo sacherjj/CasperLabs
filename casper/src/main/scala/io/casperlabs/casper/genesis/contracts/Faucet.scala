@@ -9,7 +9,7 @@ package io.casperlabs.casper.genesis.contracts
   */
 object Faucet {
   //TODO: use registry instead of public names
-  def basicWalletFaucet(mintName: String): String = ???
+  def basicWalletFaucet(mintName: String): String = mintName
 
-  val noopFaucet: String => String = ???
+  val noopFaucet: String => String = identity
 }

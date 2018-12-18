@@ -441,7 +441,9 @@ object ProtoUtil {
     Time[F].currentMillis.map(
       now =>
         DeployData()
+          .withUser(ByteString.EMPTY)
           .withTimestamp(now)
+          .withSessionCode(ByteString.EMPTY)
           .withGasLimit(Integer.MAX_VALUE)
     )
 
@@ -456,6 +458,7 @@ object ProtoUtil {
 
   def sourceDeploy(source: String, timestamp: Long, gasLimit: Long): DeployData =
     DeployData(
+      user = ByteString.EMPTY,
       timestamp = timestamp,
       sessionCode = ByteString.copyFromUtf8(source),
       gasLimit = gasLimit
@@ -466,18 +469,20 @@ object ProtoUtil {
       phloLimit: Long
   ): Deploy = ???
 
-  def termDeploy(timestamp: Long, gasLimit: Long): Deploy =
+  def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): Deploy =
     Deploy(
       raw = Some(
         DeployData(
+          user = ByteString.EMPTY,
           timestamp = timestamp,
+          sessionCode = sessionCode,
           gasLimit = gasLimit
         )
       )
     )
 
-  def termDeployNow(): Deploy =
-    termDeploy(System.currentTimeMillis(), Integer.MAX_VALUE)
+  def termDeployNow(sessionCode: ByteString): Deploy =
+    sourceDeploy(sessionCode, System.currentTimeMillis(), Integer.MAX_VALUE)
 
   def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
     raw = Some(dd)
