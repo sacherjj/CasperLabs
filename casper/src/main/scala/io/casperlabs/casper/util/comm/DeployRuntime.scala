@@ -1,8 +1,10 @@
 package io.casperlabs.casper.util.comm
 
-import cats.Monad
+import java.nio.file.{Files, Paths}
+
 import cats.effect.Sync
 import cats.implicits._
+import cats.{Apply, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
@@ -10,7 +12,6 @@ import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.shared.Time
 
 import scala.concurrent.duration._
-import scala.io.Source
 import scala.language.higherKinds
 import scala.util._
 
@@ -29,33 +30,41 @@ object DeployRuntime {
   def showBlocks[F[_]: Monad: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
 
-  //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Sync: DeployService](
       purseAddress: String,
-      phloLimit: Long,
-      phloPrice: Long,
-      nonce: Int,
-      file: String
-  ): F[Unit] =
+      gasLimit: Long,
+      gasPrice: Long,
+      nonce: Long,
+      sessionsCodeFile: String,
+      paymentCodeFile: String
+  ): F[Unit] = {
+    def readFile(filename: String) =
+      Sync[F].fromTry(
+        Try(ByteString.copyFrom(Files.readAllBytes(Paths.get(filename))))
+      )
+
     gracefulExit(
-      Sync[F].delay(Try(Source.fromFile(file).mkString).toEither).flatMap {
-        case Left(ex) =>
-          Sync[F].delay(Left(new RuntimeException(s"Error with given file: \n${ex.getMessage}")))
-        case Right(code) =>
-          for {
-            timestamp <- Sync[F].delay(System.currentTimeMillis())
+      Apply[F]
+        .map2(
+          readFile(sessionsCodeFile),
+          readFile(paymentCodeFile)
+        ) {
+          case (sessionCode, paymentCode) =>
             //TODO: allow user to specify their public key
-            d = DeployData()
-              .withTimestamp(timestamp)
-              .withSessionCode(ByteString.copyFromUtf8(file))
-              .withFrom(purseAddress)
-              .withPhloLimit(phloLimit)
-              .withPhloPrice(phloPrice)
+            DeployData()
+              .withTimestamp(System.currentTimeMillis())
+              .withSessionCode(sessionCode)
+              .withPaymentCode(paymentCode)
+              .withAddress(ByteString.copyFromUtf8(purseAddress))
+              .withGasLimit(gasLimit)
+              .withGasPrice(gasPrice)
               .withNonce(nonce)
-            response <- DeployService[F].deploy(d)
-          } yield response.map(r => s"Response: $r")
-      }
+        }
+        .flatMap(DeployService[F].deploy)
+        .handleError(ex =>
+          Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex)))
     )
+  }
 
   //Simulates user requests by randomly deploying things to Casper.
   def deployDemoProgram[F[_]: Monad: Sync: Time: DeployService]: F[Unit] =
@@ -66,7 +75,9 @@ object DeployRuntime {
       id <- Sync[F].delay { scala.util.Random.nextInt(100) }
       d  <- ProtoUtil.basicDeployData[F](id)
       _ <- Sync[F].delay {
-            println(s"Sending the following to Casper: ${d.sessionCode}")
+            println(
+              s"Sending the demo deploy to Casper."
+            )
           }
       response <- DeployService[F].deploy(d)
       msg      = response.fold(processError(_).getMessage, "Response: " + _)

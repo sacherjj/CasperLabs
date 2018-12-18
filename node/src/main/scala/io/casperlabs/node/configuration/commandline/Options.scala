@@ -298,11 +298,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = true
     )
 
-    val nonce = opt[Int](
+    val nonce = opt[Long](
       descr = "This allows you to overwrite your own pending transactions that use the same nonce."
     )
 
-    val location = trailArg[String](required = true)
+    val session = opt[String](required = true, descr = "Path to the file with session code")
+    val payment = opt[String](required = true, descr = "Path to the file with payment code")
+
   }
   addSubcommand(deploy)
 
