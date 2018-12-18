@@ -836,22 +836,6 @@ object HashSetCasperTest {
     MultiParentCasper[Id].storageContents(tsHash)
   }
 
-  def deployAndQuery(
-      node: HashSetCasperTestNode[Id],
-      dd: DeployData,
-      query: Deploy
-  ): (BlockStatus, Any) = {
-    val Created(block) = node.casperEff.deploy(dd) *> node.casperEff.createBlock
-    val blockStatus    = node.casperEff.addBlock(block)
-    val queryResult = node.runtimeManager
-      .captureResults(
-        ProtoUtil.postStateHash(block),
-        query
-      )
-
-    (blockStatus, queryResult)
-  }
-
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 

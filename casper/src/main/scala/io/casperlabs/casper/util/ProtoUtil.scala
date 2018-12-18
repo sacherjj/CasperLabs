@@ -4,16 +4,14 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import io.casperlabs.blockstorage.BlockStore
-import io.casperlabs.casper.{BlockDag, PrettyPrinter}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{DeployData, _}
-import io.casperlabs.casper.util.rholang.InterpreterUtil
 import io.casperlabs.casper.util.implicits._
+import io.casperlabs.casper.{BlockDag, PrettyPrinter}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.shared.Time
-import java.nio.charset.StandardCharsets
 
 import scala.collection.immutable
 
@@ -445,7 +443,7 @@ object ProtoUtil {
         DeployData()
           .withUser(ByteString.EMPTY)
           .withTimestamp(now)
-          .withSessionCode(ByteString.copyFromUtf8(s"@${id}!($id)"))
+          .withSessionCode(ByteString.EMPTY)
           .withPhloLimit(Integer.MAX_VALUE)
     )
 

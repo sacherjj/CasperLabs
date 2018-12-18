@@ -1,4 +1,4 @@
-package coop.rchain.models
+package io.casperlabs.models
 
 import com.typesafe.scalalogging.Logger
 import monix.eval.Coeval
