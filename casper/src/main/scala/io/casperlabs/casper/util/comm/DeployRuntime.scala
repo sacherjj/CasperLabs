@@ -43,29 +43,24 @@ object DeployRuntime {
         Try(ByteString.copyFrom(Files.readAllBytes(Paths.get(filename))))
       )
 
-    val readFilesEffect = Apply[F].map2(
-      readFile(sessionsCodeFile),
-      readFile(paymentCodeFile)
-    )((_, _))
-
     gracefulExit(
-      readFilesEffect
-        .flatMap {
+      Apply[F]
+        .map2(
+          readFile(sessionsCodeFile),
+          readFile(paymentCodeFile)
+        ) {
           case (sessionCode, paymentCode) =>
-            for {
-              timestamp <- Sync[F].delay(System.currentTimeMillis())
-              //TODO: allow user to specify their public key
-              d = DeployData()
-                .withTimestamp(timestamp)
-                .withSessionCode(sessionCode)
-                .withPaymentCode(paymentCode)
-                .withAddress(ByteString.copyFromUtf8(purseAddress))
-                .withGasLimit(gasLimit)
-                .withGasPrice(gasPrice)
-                .withNonce(nonce)
-              response <- DeployService[F].deploy(d)
-            } yield response.map(r => s"Response: $r")
+            //TODO: allow user to specify their public key
+            DeployData()
+              .withTimestamp(System.currentTimeMillis())
+              .withSessionCode(sessionCode)
+              .withPaymentCode(paymentCode)
+              .withAddress(ByteString.copyFromUtf8(purseAddress))
+              .withGasLimit(gasLimit)
+              .withGasPrice(gasPrice)
+              .withNonce(nonce)
         }
+        .flatMap(DeployService[F].deploy(_).map(_.map(s => s"Result: $s")))
         .handleError(ex =>
           Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex)))
     )
