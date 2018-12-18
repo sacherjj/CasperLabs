@@ -1,8 +1,10 @@
 package io.casperlabs.casper.util.comm
 
-import cats.Monad
+import java.nio.file.{Files, Paths}
+
 import cats.effect.Sync
 import cats.implicits._
+import cats.{Apply, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
@@ -10,7 +12,6 @@ import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.shared.Time
 
 import scala.concurrent.duration._
-import scala.io.Source
 import scala.language.higherKinds
 import scala.util._
 
@@ -32,30 +33,56 @@ object DeployRuntime {
   //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Sync: DeployService](
       purseAddress: String,
-      phloLimit: Long,
-      phloPrice: Long,
-      nonce: Int,
-      file: String
-  ): F[Unit] =
+      gasLimit: Long,
+      gasPrice: Long,
+      nonce: Long,
+      sessionsCodeFile: String,
+      paymentCodeFile: String
+  ): F[Unit] = {
+    import cats.syntax.either._
+    def readFile(filename: String) =
+      Sync[F].delay(
+        Try(ByteString.copyFrom(Files.readAllBytes(Paths.get(filename)))).toEither.leftMap(
+          ex =>
+            new RuntimeException(
+              s"Error with reading given file: $filename, reason: ${ex.getMessage}"
+            )
+        )
+      )
+
+    val readFilesEffect = Apply[F].map2(
+      readFile(sessionsCodeFile),
+      readFile(paymentCodeFile)
+    ) {
+      case (Left(sessionsReadEx), Left(paymentReadEx)) =>
+        Left(new RuntimeException(s"${sessionsReadEx.getMessage}\n${paymentReadEx.getMessage}"))
+      case (sessionReadResult, paymentReadResult) =>
+        sessionReadResult.flatMap(
+          sessionCode => paymentReadResult.map(paymentCode => (sessionCode, paymentCode))
+        )
+    }
+
     gracefulExit(
-      Sync[F].delay(Try(Source.fromFile(file).mkString).toEither).flatMap {
+      readFilesEffect.flatMap {
         case Left(ex) =>
-          Sync[F].delay(Left(new RuntimeException(s"Error with given file: \n${ex.getMessage}")))
-        case Right(code) =>
+          Sync[F].delay(ex.asLeft[String])
+        case Right((sessionCode, paymentCode)) =>
           for {
             timestamp <- Sync[F].delay(System.currentTimeMillis())
             //TODO: allow user to specify their public key
             d = DeployData()
               .withTimestamp(timestamp)
-              .withSessionCode(ByteString.copyFromUtf8(file))
-              .withFrom(purseAddress)
-              .withPhloLimit(phloLimit)
-              .withPhloPrice(phloPrice)
+              .withSessionCode(sessionCode)
+              .withPaymentCode(paymentCode)
+              .withAddress(ByteString.copyFromUtf8(purseAddress))
+              .withGasLimit(gasLimit)
+              .withGasPrice(gasPrice)
               .withNonce(nonce)
             response <- DeployService[F].deploy(d)
           } yield response.map(r => s"Response: $r")
       }
     )
+  }
 
   //Simulates user requests by randomly deploying things to Casper.
   def deployDemoProgram[F[_]: Monad: Sync: Time: DeployService]: F[Unit] =
@@ -66,7 +93,9 @@ object DeployRuntime {
       id <- Sync[F].delay { scala.util.Random.nextInt(100) }
       d  <- ProtoUtil.basicDeployData[F](id)
       _ <- Sync[F].delay {
-            println(s"Sending the following to Casper: ${d.sessionCode}")
+            println(
+              s"Sending the following to Casper:\nSession code:${d.sessionCode}\nPayment code: ${d.paymentCode}"
+            )
           }
       response <- DeployService[F].deploy(d)
       msg      = response.fold(processError(_).getMessage, "Response: " + _)

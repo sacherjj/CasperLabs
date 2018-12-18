@@ -4,16 +4,14 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import io.casperlabs.blockstorage.BlockStore
-import io.casperlabs.casper.{BlockDag, PrettyPrinter}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{DeployData, _}
-import io.casperlabs.casper.util.rholang.InterpreterUtil
 import io.casperlabs.casper.util.implicits._
+import io.casperlabs.casper.{BlockDag, PrettyPrinter}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.shared.Time
-import java.nio.charset.StandardCharsets
 
 import scala.collection.immutable
 
@@ -443,9 +441,8 @@ object ProtoUtil {
     Time[F].currentMillis.map(
       now =>
         DeployData()
-          .withUser(ByteString.EMPTY)
           .withTimestamp(now)
-          .withPhloLimit(Integer.MAX_VALUE)
+          .withGasLimit(Integer.MAX_VALUE)
     )
 
   def basicDeploy[F[_]: Monad: Time](id: Int): F[Deploy] =
@@ -457,12 +454,11 @@ object ProtoUtil {
   def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
     basicDeploy[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
 
-  def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
+  def sourceDeploy(source: String, timestamp: Long, gasLimit: Long): DeployData =
     DeployData(
-      user = ByteString.EMPTY,
       timestamp = timestamp,
       sessionCode = ByteString.copyFromUtf8(source),
-      phloLimit = phlos
+      gasLimit = gasLimit
     )
 
   def compiledSourceDeploy(
@@ -470,15 +466,12 @@ object ProtoUtil {
       phloLimit: Long
   ): Deploy = ???
 
-  def termDeploy(timestamp: Long, phloLimit: Long): Deploy =
+  def termDeploy(timestamp: Long, gasLimit: Long): Deploy =
     Deploy(
       raw = Some(
         DeployData(
-          user = ByteString.EMPTY,
           timestamp = timestamp,
-          //TODO raw Par previously
-          sessionCode = ByteString.EMPTY,
-          phloLimit = phloLimit
+          gasLimit = gasLimit
         )
       )
     )

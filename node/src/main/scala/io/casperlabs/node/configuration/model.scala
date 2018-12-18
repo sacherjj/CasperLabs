@@ -44,8 +44,9 @@ case class Deploy(
     address: String,
     phloLimit: Long,
     phloPrice: Long,
-    nonce: Int,
-    location: String
+    nonce: Long,
+    sessionCodeLocation: String,
+    paymentCodeLocation: String
 ) extends Command
 case object DeployDemo             extends Command
 case object Propose                extends Command
