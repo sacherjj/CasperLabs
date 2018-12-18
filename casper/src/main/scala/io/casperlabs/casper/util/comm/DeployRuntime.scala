@@ -60,7 +60,7 @@ object DeployRuntime {
               .withGasPrice(gasPrice)
               .withNonce(nonce)
         }
-        .flatMap(DeployService[F].deploy(_).map(_.map(s => s"Result: $s")))
+        .flatMap(DeployService[F].deploy)
         .handleError(ex =>
           Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex)))
     )
