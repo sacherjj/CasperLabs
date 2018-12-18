@@ -33,6 +33,8 @@ mod ext_ffi {
             refs_size: usize,
         ) -> usize;
         pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
+        pub fn load_uref(i: u32) -> usize; //TODO: replace with human-readable identifier
+        pub fn get_uref(dest: *mut u8); //can only be called after `load_uref`
     }
 }
 
@@ -50,7 +52,12 @@ pub mod ext {
     use crate::value::Value;
 
     fn alloc_bytes(n: usize) -> *mut u8 {
-        Global.alloc_array(n).unwrap().as_ptr()
+        if n == 0 {
+            //cannot allocate with size 0
+            0 as *mut u8
+        } else {
+            Global.alloc_array(n).unwrap().as_ptr()
+        }
     }
 
     fn to_ptr<T: BytesRepr>(t: &T) -> (*const u8, usize, Vec<u8>) {
@@ -150,6 +157,20 @@ pub mod ext {
         };
         //TODO: better error handling (i.e. pass the `Result` on)
         deserialize(arg_bytes).unwrap()
+    }
+
+    //Return the i-th unforgable reference known by the current module.
+    //This either comes from the known_urefs of the account or contract,
+    //depending on whether the current module is a sub-call or not.
+    pub fn get_uref<T: BytesRepr>(i: u32) -> T {
+        let uref_size = unsafe { ext_ffi::load_uref(i) };
+        let dest_ptr = alloc_bytes(uref_size);
+        let uref_bytes = unsafe {
+            ext_ffi::get_uref(dest_ptr);
+            core::slice::from_raw_parts(dest_ptr, uref_size)
+        };
+        //TODO: better error handling (i.e. pass the `Result` on)
+        deserialize(uref_bytes).unwrap()
     }
 
     //Return `t` to the host, terminating the currently running module.

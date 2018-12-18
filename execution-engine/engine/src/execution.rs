@@ -154,6 +154,15 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         }
     }
 
+    //Load the i-th uref into the runtime buffer so that a call
+    //to `get_uref` can return it to the caller.
+    pub fn load_uref(&mut self, i: usize) -> Result<usize, Trap> {
+        //FIX-ME: obviously travsersing the set in an arbitary order is bad.
+        //This will make more sense when we use human-readable names and a Map.
+        self.host_buf = self.known_urefs.iter().nth(i).unwrap().to_bytes();
+        Ok(self.host_buf.len())
+    }
+
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &self.host_buf)
@@ -263,6 +272,8 @@ const GET_ARG_FUNC_INDEX: usize = 8;
 const RET_FUNC_INDEX: usize = 9;
 const GET_CALL_RESULT_FUNC_INDEX: usize = 10;
 const CALL_CONTRACT_FUNC_INDEX: usize = 11;
+const LOAD_UREF_FUNC_INDEX: usize = 12;
+const GET_UREF_FUNC_INDEX: usize = 13;
 
 impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
     fn invoke_index(
@@ -384,6 +395,20 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
                 Ok(None)
             }
 
+            LOAD_UREF_FUNC_INDEX => {
+                //args(0) = index of host runtime arg to load
+                let i = Args::parse(args)?;
+                let size = self.load_uref(i)?;
+                Ok(Some(RuntimeValue::I32(size as i32)))
+            }
+
+            GET_UREF_FUNC_INDEX => {
+                //args(0) = pointer to destination in wasm memory
+                let dest_ptr = Args::parse(args)?;
+                let _ = self.set_mem_from_buf(dest_ptr)?;
+                Ok(None)
+            }
+
             _ => panic!("unknown function index"),
         }
     }
@@ -465,6 +490,14 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "get_call_result" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
                 GET_CALL_RESULT_FUNC_INDEX,
+            ),
+            "load_uref" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
+                LOAD_UREF_FUNC_INDEX,
+            ),
+            "get_uref" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                GET_UREF_FUNC_INDEX,
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(
