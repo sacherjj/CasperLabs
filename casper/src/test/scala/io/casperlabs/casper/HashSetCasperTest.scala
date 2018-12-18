@@ -773,7 +773,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     import node._
     implicit val timeEff = new LogicalTime[Id]
 
-    val deployData = ProtoUtil.basicDeployData[Id](0).withPhloLimit(1)
+    val deployData = ProtoUtil.basicDeployData[Id](0).withGasLimit(1)
     node.casperEff.deploy(deployData)
 
     val Created(block) = MultiParentCasper[Id].createBlock
@@ -785,7 +785,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     import node._
     implicit val timeEff = new LogicalTime[Id]
 
-    val deployData = ProtoUtil.basicDeployData[Id](0).withPhloLimit(100)
+    val deployData = ProtoUtil.basicDeployData[Id](0).withGasLimit(100)
     node.casperEff.deploy(deployData)
 
     val Created(block) = MultiParentCasper[Id].createBlock

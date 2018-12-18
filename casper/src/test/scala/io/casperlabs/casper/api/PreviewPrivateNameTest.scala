@@ -33,25 +33,25 @@ class PreviewPrivateNameTest extends FlatSpec with Matchers {
     // [Unforgeable(0xb5630d1bfb836635126ee7f2770873937933679e38146b1ddfbfcc14d7d8a787), bundle+ {   Unforgeable(0x00) }]
     // 2018-11-15T18:54:25.454Z
     previewId(myNodePk, 1542308065454L) should equal(
-      "b5630d1bfb836635126ee7f2770873937933679e38146b1ddfbfcc14d7d8a787"
+      "6f592abcfd696351044ebceace3d06d4fb4c6504382ef290fb017cb8fd5d7c10"
     )
   }
 
   "previewPrivateNames" should "work for another timestamp" in {
     previewId(myNodePk, 1542315551822L) should equal(
-      "d472acf9c61e276e460de567a2b709bc9b97ff6135a812abcbaa60106d2744f9"
+      "7f8b81b50c17f1e21c5689983cc3f4d214bac76ba04f7e9a6651da42fa895806"
     )
   }
 
   "previewPrivateNames" should "handle empty user (public key)" in {
     previewId("", 1542308065454L) should equal(
-      "a249b81b82572b32e9a8adc9d708be08bc85fdf19e4aca3c316e51d30b97c993"
+      "cbf1d22609f426cfcf6acd17893940cc07dbeabf35748db4e34bbd7d9e5d859e"
     )
   }
 
   "previewPrivateNames" should "work for more than one name" in {
     previewId(myNodePk, 1542308065454L, 1) should equal(
-      "cdaba23ba96f28c7f443a84086e260b839cc33068d0f685648ba2ae08fd7f9da"
+      "ff72d22d741d42b97159c3cca222d5c96d7b77a43090a1e339cb2a8b242cfc4b"
     )
   }
 }
