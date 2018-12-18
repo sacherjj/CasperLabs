@@ -398,8 +398,9 @@ object Configuration {
           from.getOrElse("0x"),
           phloLimit(),
           phloPrice(),
-          nonce.getOrElse(0),
-          location()
+          nonce.getOrElse(0L),
+          session(),
+          payment()
         )
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose

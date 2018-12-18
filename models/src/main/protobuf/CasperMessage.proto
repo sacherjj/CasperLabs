@@ -36,15 +36,16 @@ service DeployService {
 }
 
 message DeployData {
-    bytes user = 1; //public key
-    bytes sessionCode = 2; //source code
-    int64 timestamp = 3; //millisecond timestamp
-    bytes sig = 4; //signature of (hash(term) + timestamp) using private key
-    string sigAlgorithm = 5; // name of the algorithm used to sign
-    string from = 6; //wallet address which will be used to pay for the deployment
-    int64 phloPrice = 7; //phlo price
-    int64 phloLimit = 8; //phlo limit for the deployment
-    int32 nonce = 9; //nonce for transaction made against `from` wallet
+    bytes address = 1; // length 20 bytes
+    int64 timestamp = 2;
+    bytes session_code = 3;
+    bytes payment_code = 4;
+    int64 gas_limit = 5;
+    int64 gas_price = 6;
+    int64 nonce = 7;
+    string sig_algorithm = 8; // name of the algorithm used for signing
+    bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
+    bytes user = 10; //public key
 }
 
 message BlockRequest {
@@ -84,7 +85,7 @@ message BlockQueryResponse {
 
 message DataWithBlockInfo {
     //TODO
-//    repeated Par postBlockData = 1;
+    //    repeated Par postBlockData = 1;
     BlockInfoWithoutTuplespace block = 2;
 }
 
@@ -95,8 +96,8 @@ message ContinuationsWithBlockInfo {
 
 message WaitingContinuationInfo {
     //TODO
-//    repeated BindPattern postBlockPatterns = 1;
-//    Par postBlockContinuation = 2;
+    //    repeated BindPattern postBlockPatterns = 1;
+    //    Par postBlockContinuation = 2;
 }
 
 message BlockInfoWithoutTuplespace {

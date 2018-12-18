@@ -444,7 +444,7 @@ object ProtoUtil {
           .withUser(ByteString.EMPTY)
           .withTimestamp(now)
           .withSessionCode(ByteString.EMPTY)
-          .withPhloLimit(Integer.MAX_VALUE)
+          .withGasLimit(Integer.MAX_VALUE)
     )
 
   def basicDeploy[F[_]: Monad: Time](id: Int): F[Deploy] =
@@ -456,12 +456,12 @@ object ProtoUtil {
   def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
     basicDeploy[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
 
-  def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
+  def sourceDeploy(source: String, timestamp: Long, gasLimit: Long): DeployData =
     DeployData(
       user = ByteString.EMPTY,
       timestamp = timestamp,
       sessionCode = ByteString.copyFromUtf8(source),
-      phloLimit = phlos
+      gasLimit = gasLimit
     )
 
   def compiledSourceDeploy(
@@ -469,15 +469,14 @@ object ProtoUtil {
       phloLimit: Long
   ): Deploy = ???
 
-  def sourceDeploy(sessionCode: ByteString, timestamp: Long, phloLimit: Long): Deploy =
+  def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): Deploy =
     Deploy(
       raw = Some(
         DeployData(
           user = ByteString.EMPTY,
           timestamp = timestamp,
-          //TODO raw Par previously
           sessionCode = sessionCode,
-          phloLimit = phloLimit
+          gasLimit = gasLimit
         )
       )
     )
