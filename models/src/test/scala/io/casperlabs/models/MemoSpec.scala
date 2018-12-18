@@ -1,4 +1,5 @@
 package io.casperlabs.models
+import coop.rchain.models.Memo
 import monix.eval.Coeval
 import org.scalatest.{FlatSpec, Matchers}
 

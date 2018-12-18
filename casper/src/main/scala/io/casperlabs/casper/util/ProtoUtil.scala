@@ -445,6 +445,7 @@ object ProtoUtil {
         DeployData()
           .withUser(ByteString.EMPTY)
           .withTimestamp(now)
+          .withSessionCode(ByteString.copyFromUtf8(s"@${id}!($id)"))
           .withPhloLimit(Integer.MAX_VALUE)
     )
 
@@ -470,21 +471,21 @@ object ProtoUtil {
       phloLimit: Long
   ): Deploy = ???
 
-  def termDeploy(timestamp: Long, phloLimit: Long): Deploy =
+  def sourceDeploy(sessionCode: ByteString, timestamp: Long, phloLimit: Long): Deploy =
     Deploy(
       raw = Some(
         DeployData(
           user = ByteString.EMPTY,
           timestamp = timestamp,
           //TODO raw Par previously
-          sessionCode = ByteString.EMPTY,
+          sessionCode = sessionCode,
           phloLimit = phloLimit
         )
       )
     )
 
-  def termDeployNow(): Deploy =
-    termDeploy(System.currentTimeMillis(), Integer.MAX_VALUE)
+  def termDeployNow(sessionCode: ByteString): Deploy =
+    sourceDeploy(sessionCode, System.currentTimeMillis(), Integer.MAX_VALUE)
 
   def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
     raw = Some(dd)

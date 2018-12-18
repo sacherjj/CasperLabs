@@ -6,7 +6,6 @@ import io.casperlabs.casper.protocol.DeployData
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b512Random
-import io.casperlabs.models.{GPrivate}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 
 import org.scalatest.{FlatSpec, Matchers}

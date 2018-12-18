@@ -17,7 +17,6 @@ import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.rholang.interpreter.accounting
 import io.casperlabs.shared.Time
 
 import com.google.protobuf.ByteString
@@ -46,7 +45,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
       "for(_ <- @1){ @2!(2) }"
-    ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+    ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
 
     implicit val logEff = new LogStub[Effect]
     def testProgram(

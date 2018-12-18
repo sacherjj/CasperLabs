@@ -22,7 +22,7 @@ object BondingUtil {
   def bondingStatusOut(ethAddress: String): String        = s"${ethAddress}_bondingOut"
   def transferStatusOut(ethAddress: String): String       = s"${ethAddress}_transferOut"
 
-  def bondingForwarderDeploy(bondKey: String, ethAddress: String): String = ???
+  def bondingForwarderDeploy(bondKey: String, ethAddress: String): String = """"""
 
   def unlockDeploy[F[_]: Sync](ethAddress: String, pubKey: String, secKey: String)(
       implicit runtimeManager: RuntimeManager,
@@ -68,14 +68,14 @@ object BondingUtil {
       transferStatusOut: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] = ???
+  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] = """""".pure[F]
 
   def faucetBondDeploy[F[_]: Sync](
       amount: Long,
       sigAlgorithm: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] = ???
+  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] = """""".pure[F]
 
   def writeFile[F[_]: Sync](name: String, content: String): F[Unit] = {
     val file =

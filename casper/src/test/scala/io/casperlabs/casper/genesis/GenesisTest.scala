@@ -15,13 +15,14 @@ import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import io.casperlabs.rholang.interpreter.Runtime
-import io.casperlabs.rholang.interpreter.storage.StoragePrinter
 import io.casperlabs.shared.PathOps.RichPath
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
-
 import java.nio.file.Path
+
+import io.casperlabs.shared.StoreType
+import io.casperlabs.smartcontracts.SmartContractsApi
+import monix.eval.Task
 
 class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
   import GenesisTest._
@@ -161,19 +162,6 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
           bonds.contains(_)
         ) should be(true)
   }
-
-  it should "parse the wallets file and include it in the genesis state" in withRawGenResources {
-    (runtime: Runtime, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
-      val walletsFile = genesisPath.resolve("wallets.txt").toString
-      printWallets(walletsFile)
-
-      val runtimeManager  = RuntimeManager.fromRuntime(runtime)
-      val _               = fromInputFiles()(runtimeManager, genesisPath, log, time)
-      val storageContents = StoragePrinter.prettyPrint(runtime.space.store)
-
-      walletAddresses.forall(storageContents contains _._1) should be(true)
-  }
-
 }
 
 object GenesisTest {
@@ -212,24 +200,31 @@ object GenesisTest {
         deployTimestamp
       )
 
-  def withRawGenResources(body: (Runtime, Path, LogStub[Id], LogicalTime[Id]) => Unit): Unit = {
+  def withRawGenResources(
+      body: (SmartContractsApi[Task], Path, LogStub[Id], LogicalTime[Id]) => Unit
+  ): Unit = {
     val storePath = storageLocation
-    val runtime   = Runtime.create(storePath, storageSize)
-    val gp        = genesisPath
-    val log       = new LogStub[Id]
-    val time      = new LogicalTime[Id]
+    val casperSmartContractsApi = SmartContractsApi
+      .noOpApi[Task](storePath, storageSize, StoreType.LMDB)
+    val gp   = genesisPath
+    val log  = new LogStub[Id]
+    val time = new LogicalTime[Id]
 
-    body(runtime, genesisPath, log, time)
+    body(casperSmartContractsApi, genesisPath, log, time)
 
-    runtime.close().unsafeRunSync
     storePath.recursivelyDelete()
     gp.recursivelyDelete()
   }
 
   def withGenResources(body: (RuntimeManager, Path, LogStub[Id], LogicalTime[Id]) => Unit): Unit =
     withRawGenResources {
-      (runtime: Runtime, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
-        val runtimeManager = RuntimeManager.fromRuntime(runtime)
+      (
+          smartContractsApi: SmartContractsApi[Task],
+          genesisPath: Path,
+          log: LogStub[Id],
+          time: LogicalTime[Id]
+      ) =>
+        val runtimeManager = RuntimeManager.fromSmartContractApi(smartContractsApi)
         body(runtimeManager, genesisPath, log, time)
     }
 }

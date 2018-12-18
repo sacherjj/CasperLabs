@@ -7,12 +7,12 @@ import io.casperlabs.shared.PathOps._
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import BlockGen._
 import cats.effect.Sync
+import coop.rchain.blockstorage.Context
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.metrics.Metrics.MetricsNOP
-import io.casperlabs.rspace.Context
 import io.casperlabs.shared
 import monix.eval.Task
 import monix.execution.Scheduler

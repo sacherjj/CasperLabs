@@ -26,7 +26,13 @@ class RuntimeManager private (
   ): Task[(StateHash, Seq[InternalProcessedDeploy])] =
     smartContractsApi.newEval(terms, hash, time)
 
-  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = ???
+  // todo this should be complemented
+  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = Seq()
+
+  def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__")(
+      implicit scheduler: Scheduler
+  ) = ???
+
 }
 
 object RuntimeManager {
