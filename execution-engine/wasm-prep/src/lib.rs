@@ -45,23 +45,20 @@ fn validate_imports(module: &Module) -> Result<(), String> {
                             elements::External::Function(_) => {
                                 if !ALLOWED_IMPORTS.contains(&entry.field()) {
                                     return Err(format!("'{}' is not supported by the runtime",  entry.field()))
-
                                 }
                             },
                             elements::External::Memory(m) => {
                                 if entry.field() == "memory" {
                                     has_imported_memory_properly_named  = true;
-
                                 }
-
                                 let max = if let Some(max)  = m.limits().maximum() {
                                     max
                                 } else  {
                                     return Err(String::from("There is a limit to Wasm memory. This program does not limit memory"))
                                 };
 
-                                if max > 16 {
-                                    return Err(format!("Wasm runtime has 1Mb limit (16 pages) on max contract memory. This program specific {}", max))
+                                if max > 305 {
+                                    return Err(format!("Wasm runtime has 10Mb limit (305 pages each 64KiB) on max contract memory. This program specific {}", max))
                                 }
                             },
                             elements::External::Global(_) => {
@@ -70,9 +67,9 @@ fn validate_imports(module: &Module) -> Result<(), String> {
                             _ => { continue; }
                         }
                     }
-                    if !has_imported_memory_properly_named {
-                        return Err(String::from("No imported memory from env::memory."))
-                    }
+                }
+                if !has_imported_memory_properly_named {
+                    return Err(String::from("No imported memory from env::memory."))
                 }
             }
             _ => { continue; }

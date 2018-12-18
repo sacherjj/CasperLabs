@@ -9,7 +9,6 @@ pub mod engine_server;
 use clap::{App, Arg};
 use engine_server::*;
 use execution_engine::engine::EngineState;
-use std::sync::{Arc, Mutex};
 
 fn main() {
     let matches = App::new("Execution engine server")
