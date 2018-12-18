@@ -30,7 +30,6 @@ object DeployRuntime {
   def showBlocks[F[_]: Monad: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
 
-  //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Sync: DeployService](
       purseAddress: String,
       gasLimit: Long,
@@ -39,48 +38,36 @@ object DeployRuntime {
       sessionsCodeFile: String,
       paymentCodeFile: String
   ): F[Unit] = {
-    import cats.syntax.either._
     def readFile(filename: String) =
-      Sync[F].delay(
-        Try(ByteString.copyFrom(Files.readAllBytes(Paths.get(filename)))).toEither.leftMap(
-          ex =>
-            new RuntimeException(
-              s"Error with reading given file: $filename, reason: ${ex.getMessage}"
-            )
-        )
+      Sync[F].fromTry(
+        Try(ByteString.copyFrom(Files.readAllBytes(Paths.get(filename))))
       )
 
     val readFilesEffect = Apply[F].map2(
       readFile(sessionsCodeFile),
       readFile(paymentCodeFile)
-    ) {
-      case (Left(sessionsReadEx), Left(paymentReadEx)) =>
-        Left(new RuntimeException(s"${sessionsReadEx.getMessage}\n${paymentReadEx.getMessage}"))
-      case (sessionReadResult, paymentReadResult) =>
-        sessionReadResult.flatMap(
-          sessionCode => paymentReadResult.map(paymentCode => (sessionCode, paymentCode))
-        )
-    }
+    )((_, _))
 
     gracefulExit(
-      readFilesEffect.flatMap {
-        case Left(ex) =>
-          Sync[F].delay(ex.asLeft[String])
-        case Right((sessionCode, paymentCode)) =>
-          for {
-            timestamp <- Sync[F].delay(System.currentTimeMillis())
-            //TODO: allow user to specify their public key
-            d = DeployData()
-              .withTimestamp(timestamp)
-              .withSessionCode(sessionCode)
-              .withPaymentCode(paymentCode)
-              .withAddress(ByteString.copyFromUtf8(purseAddress))
-              .withGasLimit(gasLimit)
-              .withGasPrice(gasPrice)
-              .withNonce(nonce)
-            response <- DeployService[F].deploy(d)
-          } yield response.map(r => s"Response: $r")
-      }
+      readFilesEffect
+        .flatMap {
+          case (sessionCode, paymentCode) =>
+            for {
+              timestamp <- Sync[F].delay(System.currentTimeMillis())
+              //TODO: allow user to specify their public key
+              d = DeployData()
+                .withTimestamp(timestamp)
+                .withSessionCode(sessionCode)
+                .withPaymentCode(paymentCode)
+                .withAddress(ByteString.copyFromUtf8(purseAddress))
+                .withGasLimit(gasLimit)
+                .withGasPrice(gasPrice)
+                .withNonce(nonce)
+              response <- DeployService[F].deploy(d)
+            } yield response.map(r => s"Response: $r")
+        }
+        .handleError(ex =>
+          Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex)))
     )
   }
 
@@ -94,7 +81,7 @@ object DeployRuntime {
       d  <- ProtoUtil.basicDeployData[F](id)
       _ <- Sync[F].delay {
             println(
-              s"Sending the following to Casper:\nSession code:${d.sessionCode}\nPayment code: ${d.paymentCode}"
+              s"Sending the demo deploy to Casper."
             )
           }
       response <- DeployService[F].deploy(d)
