@@ -1,12 +1,17 @@
 extern crate clap;
 extern crate storage;
 extern crate execution_engine;
+extern crate common;
 
 use clap::{App, Arg};
 use std::io::prelude::*;
 use std::fs::File;
 use execution_engine::engine::EngineState;
 use std::iter::Iterator;
+use storage::{TrackingCopy, GlobalState};
+use common::key::Key;
+use common::value;
+use storage::transform::Transform;
 
 
 #[derive(Debug)]
@@ -45,7 +50,7 @@ fn main() {
             .collect()
     };
 
-    let address: [u8; 20] = {
+    let account_addr: [u8; 20] = {
         let mut addr =  [0u8; 20];
         matches.value_of("address")
             .map(|addr| addr.as_bytes())
@@ -54,11 +59,23 @@ fn main() {
         addr
     };
 
-    let engine_state = EngineState::new(storage::InMemGS::new());
-
+    let mut gs = storage::InMemGS::new();
+    prepare_gs(account_addr, &mut gs);
+    let engine_state = EngineState::new(gs);
     for ref wasm_bytes in wasm_files.into_iter() {
-        let result = engine_state.run_deploy(&wasm_bytes.bytes, address);
-        println!("Result for file {}: {:?}", wasm_bytes.path, result);
+        let result = engine_state.run_deploy(&wasm_bytes.bytes, account_addr);
+        match result {
+            Ok(_) => println!("Result for file {}: Success!", wasm_bytes.path),
+            Err(_) => println!("Result for file {}: {:?}", wasm_bytes.path, result)
+        }
     }
 
+}
+
+// To run, contracts need an existing account.
+// This function puts artifical entry to in the GlobalState.
+fn prepare_gs<T: TrackingCopy, G: GlobalState<T>>(account_addr: [u8;20], gs: &mut G) {
+    let account = value::Account::new([0u8; 32], 0, Vec::new());
+    let transform = Transform::Write(value::Value::Acct(account));
+    gs.apply(Key::Account(account_addr), transform).unwrap();
 }
