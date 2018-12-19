@@ -52,12 +52,12 @@ fn main() {
     };
 
     let account_addr: [u8; 20] = {
-        let mut addr =  [0u8; 20];
+        let mut address =  [0u8; 20];
         matches.value_of("address")
             .map(|addr| addr.as_bytes())
-            .map(|bytes| addr.copy_from_slice(bytes))
+            .map(|bytes| address.copy_from_slice(bytes))
             .expect("Error when parsing address");
-        addr
+        address
     };
 
     let mut gs = storage::InMemGS::new();
