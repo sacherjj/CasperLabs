@@ -4,10 +4,8 @@ use parity_wasm::elements::Module;
 use storage::{ExecutionEffect, GlobalState, TrackingCopy};
 use wasm_prep::process;
 
-// TODO placeholder for execution engine
 pub struct EngineState<T: TrackingCopy, G: GlobalState<T>> {
-    // In Michael's PoC state is an instance of TrackingCopy.
-    // It tracks the "state" of the blockchain (or is an interface to it).
+    // Tracks the "state" of the blockchain (or is an interface to it).
     // I think it should be constrained with a lifetime parameter.
     state: G,
     phantom: PhantomData<T>, //necessary to make the compiler not complain that I don't use T, even though G uses it.
