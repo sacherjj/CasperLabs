@@ -154,13 +154,15 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         }
     }
 
-    //Load the i-th uref into the runtime buffer so that a call
-    //to `get_uref` can return it to the caller.
-    pub fn load_uref(&mut self, i: usize) -> Result<usize, Trap> {
+    //Load the ith uref into the wasm memory
+    pub fn get_uref(&mut self, i: usize, dest_ptr: u32) -> Result<(), Trap> {
         //FIX-ME: obviously travsersing the set in an arbitary order is bad.
         //This will make more sense when we use human-readable names and a Map.
-        self.host_buf = self.known_urefs.iter().nth(i).unwrap().to_bytes();
-        Ok(self.host_buf.len())
+        let uref_bytes = self.known_urefs.iter().nth(i).unwrap().to_bytes();
+        
+        self.memory
+            .set(dest_ptr, &uref_bytes)
+            .map_err(|e| Error::Interpreter(e).into())
     }
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
@@ -260,6 +262,10 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
     }
 }
 
+fn as_usize(u: u32) -> usize {
+    u as usize
+}
+
 const WRITE_FUNC_INDEX: usize = 0;
 const READ_FUNC_INDEX: usize = 1;
 const ADD_FUNC_INDEX: usize = 2;
@@ -272,8 +278,7 @@ const GET_ARG_FUNC_INDEX: usize = 8;
 const RET_FUNC_INDEX: usize = 9;
 const GET_CALL_RESULT_FUNC_INDEX: usize = 10;
 const CALL_CONTRACT_FUNC_INDEX: usize = 11;
-const LOAD_UREF_FUNC_INDEX: usize = 12;
-const GET_UREF_FUNC_INDEX: usize = 13;
+const GET_UREF_FUNC_INDEX: usize = 12;
 
 impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
     fn invoke_index(
@@ -368,22 +373,16 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
                 //args(3) = size of arguments
                 //args(4) = pointer to function's known urefs in wasm memory
                 //args(5) = size of urefs
-                let (fn_ptr, fn_size, args_ptr, args_size, refs_ptr, refs_size): (
-                    u32,
-                    u32,
-                    u32,
-                    u32,
-                    u32,
-                    u32,
-                ) = Args::parse(args)?;
+                let (fn_ptr, fn_size, args_ptr, args_size, refs_ptr, refs_size) =
+                    Args::parse(args)?;
 
                 let size = self.call_contract(
                     fn_ptr,
-                    fn_size as usize,
+                    as_usize(fn_size),
                     args_ptr,
-                    args_size as usize,
+                    as_usize(args_size),
                     refs_ptr,
-                    refs_size as usize,
+                    as_usize(refs_size),
                 )?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
@@ -395,17 +394,11 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
                 Ok(None)
             }
 
-            LOAD_UREF_FUNC_INDEX => {
-                //args(0) = index of host runtime arg to load
-                let i = Args::parse(args)?;
-                let size = self.load_uref(i)?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
-            }
-
             GET_UREF_FUNC_INDEX => {
-                //args(0) = pointer to destination in wasm memory
-                let dest_ptr = Args::parse(args)?;
-                let _ = self.set_mem_from_buf(dest_ptr)?;
+                //args(0) = index of host runtime arg to load
+                //args(1) = pointer to destination in wasm memory
+                let (i, dest_ptr) = Args::parse(args)?;
+                let _ = self.get_uref(as_usize(i), dest_ptr)?;
                 Ok(None)
             }
 
@@ -491,12 +484,8 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], None),
                 GET_CALL_RESULT_FUNC_INDEX,
             ),
-            "load_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
-                LOAD_UREF_FUNC_INDEX,
-            ),
             "get_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
+                Signature::new(&[ValueType::I32; 2][..], None),
                 GET_UREF_FUNC_INDEX,
             ),
             _ => {
@@ -555,10 +544,13 @@ fn sub_call<T: TrackingCopy>(
     current_runtime: &mut Runtime<T>,
 ) -> Result<Vec<u8>, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
-    let mut known_urefs: HashSet<Key> = HashSet::new();
-    for r in refs.into_iter() {
-        known_urefs.insert(r);
-    }
+    let known_urefs = {
+        let mut tmp: HashSet<Key> = HashSet::new();
+        for r in refs.into_iter() {
+            tmp.insert(r);
+        }
+        tmp
+    };
     let mut runtime = Runtime {
         args,
         memory,

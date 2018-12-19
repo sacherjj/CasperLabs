@@ -33,8 +33,7 @@ mod ext_ffi {
             refs_size: usize,
         ) -> usize;
         pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
-        pub fn load_uref(i: u32) -> usize; //TODO: replace with human-readable identifier
-        pub fn get_uref(dest: *mut u8); //can only be called after `load_uref`
+        pub fn get_uref(i: usize, dest: *mut u8);
     }
 }
 
@@ -162,12 +161,12 @@ pub mod ext {
     //Return the i-th unforgable reference known by the current module.
     //This either comes from the known_urefs of the account or contract,
     //depending on whether the current module is a sub-call or not.
-    pub fn get_uref<T: BytesRepr>(i: u32) -> T {
-        let uref_size = unsafe { ext_ffi::load_uref(i) };
-        let dest_ptr = alloc_bytes(uref_size);
+    pub fn get_uref(i: usize) -> Key {
+        //TODO: replace i with human-readable identifier
+        let dest_ptr = alloc_bytes(UREF_SIZE);
         let uref_bytes = unsafe {
-            ext_ffi::get_uref(dest_ptr);
-            core::slice::from_raw_parts(dest_ptr, uref_size)
+            ext_ffi::get_uref(i, dest_ptr);
+            core::slice::from_raw_parts(dest_ptr, UREF_SIZE)
         };
         //TODO: better error handling (i.e. pass the `Result` on)
         deserialize(uref_bytes).unwrap()
