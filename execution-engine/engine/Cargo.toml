@@ -16,3 +16,8 @@ clap = "2.32.0"
 [[bin]]
 name = "engine-standalone"
 path = "src/main.rs"
+
+[lib]
+name = "execution_engine"
+path = "src/lib.rs"
+
