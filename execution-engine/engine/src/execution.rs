@@ -1,6 +1,10 @@
+extern crate blake2;
+
+use self::blake2::digest::{Input, VariableOutput};
+use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, BytesRepr, Error as BytesReprError};
 use common::key::Key;
-use common::value::Value;
+use common::value::{Account, Value};
 use storage::{Error as StorageError, ExecutionEffect, GlobalState, TrackingCopy};
 use wasmi::memory_units::Pages;
 use wasmi::{
@@ -69,6 +73,8 @@ pub struct Runtime<'a, T: TrackingCopy + 'a> {
     module: Module,
     result: Vec<u8>,
     host_buf: Vec<u8>,
+    account: &'a Account,
+    fn_store_id: u32,
 }
 
 impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
@@ -159,7 +165,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         //FIX-ME: obviously travsersing the set in an arbitary order is bad.
         //This will make more sense when we use human-readable names and a Map.
         let uref_bytes = self.known_urefs.iter().nth(i).unwrap().to_bytes();
-        
+
         self.memory
             .set(dest_ptr, &uref_bytes)
             .map_err(|e| Error::Interpreter(e).into())
@@ -215,6 +221,24 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
         self.host_buf = fn_bytes;
         Ok(self.host_buf.len())
+    }
+
+    pub fn function_address(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+        let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
+        pre_hash_bytes.extend_from_slice(self.account.pub_key());
+        pre_hash_bytes.append(&mut self.account.nonce().to_bytes());
+        pre_hash_bytes.append(&mut self.fn_store_id.to_bytes());
+
+        self.fn_store_id += 1;
+
+        let mut hasher = VarBlake2b::new(32).unwrap();
+        hasher.input(&pre_hash_bytes);
+        let mut hash_bytes = [0; 32];
+        hasher.variable_result(|hash| hash_bytes.clone_from_slice(hash));
+
+        self.memory
+            .set(dest_ptr, &hash_bytes)
+            .map_err(|e| Error::Interpreter(e).into())
     }
 
     pub fn write(
@@ -279,6 +303,7 @@ const RET_FUNC_INDEX: usize = 9;
 const GET_CALL_RESULT_FUNC_INDEX: usize = 10;
 const CALL_CONTRACT_FUNC_INDEX: usize = 11;
 const GET_UREF_FUNC_INDEX: usize = 12;
+const FUNCTION_ADDRESS_FUNC_INDEX: usize = 13;
 
 impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
     fn invoke_index(
@@ -402,6 +427,12 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
                 Ok(None)
             }
 
+            FUNCTION_ADDRESS_FUNC_INDEX => {
+                let dest_ptr = Args::parse(args)?;
+                let _ = self.function_address(dest_ptr)?;
+                Ok(None)
+            }
+
             _ => panic!("unknown function index"),
         }
     }
@@ -488,6 +519,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], None),
                 GET_UREF_FUNC_INDEX,
             ),
+            "function_address" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FUNCTION_ADDRESS_FUNC_INDEX,
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",
@@ -559,6 +594,8 @@ fn sub_call<T: TrackingCopy>(
         module: parity_module,
         result: Vec::new(),
         host_buf: Vec::new(),
+        account: current_runtime.account,
+        fn_store_id: 0,
     };
 
     let result = instance.invoke_export("call", &[], &mut runtime);
@@ -599,6 +636,8 @@ pub fn exec<T: TrackingCopy, G: GlobalState<T>>(
         module: parity_module,
         result: Vec::new(),
         host_buf: Vec::new(),
+        account: &account,
+        fn_store_id: 0,
     };
     let _ = instance.invoke_export("call", &[], &mut runtime)?;
 

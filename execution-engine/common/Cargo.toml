@@ -9,6 +9,5 @@ default = []
 std = []
 
 [dependencies]
-blake2 = { version = "0.8", default-features = false }
 byteorder = { version = "1", default-features = false }
 wee_alloc = "0.4.2"

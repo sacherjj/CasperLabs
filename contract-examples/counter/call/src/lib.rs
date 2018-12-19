@@ -12,10 +12,10 @@ use common::key::Key;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    //This hash comes from the `_hash` output from `counter/define/src/lib.rs`
+    //This hash comes from blake2b256( [0;32] ++ [0;8] ++ [0;4] )
     let hash = Key::Hash([
-        37, 87, 142, 123, 78, 18, 45, 31, 105, 3, 20, 28, 46, 183, 76, 54, 138, 85, 222, 160, 68,
-        223, 250, 102, 192, 24, 98, 154, 222, 75, 239, 72,
+        94, 95, 50, 162, 218, 237, 110, 252, 109, 151, 87, 89, 218, 215, 97, 65, 124, 183, 21, 252,
+        197, 6, 112, 204, 31, 83, 118, 122, 225, 214, 26, 52,
     ]);
     let contract = read(&hash);
     let arg = String::from("inc").to_bytes();

@@ -170,4 +170,12 @@ impl Account {
     pub fn urefs(&self) -> &[Key] {
         &self.known_urefs
     }
+
+    pub fn pub_key(&self) -> &[u8] {
+        &self.public_key
+    }
+
+    pub fn nonce(&self) -> u64 {
+        self.nonce
+    }
 }

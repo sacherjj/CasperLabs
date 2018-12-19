@@ -21,6 +21,7 @@ mod ext_ffi {
         pub fn new_uref(key_ptr: *mut u8);
         pub fn serialize_function(name_ptr: *const u8, name_size: usize) -> usize;
         pub fn get_function(dest_ptr: *mut u8); //can only be called after `serialize_function`
+        pub fn function_address(dest_ptr: *mut u8);
         pub fn load_arg(i: u32) -> usize;
         pub fn get_arg(dest: *mut u8); //can only be called after `load_arg`
         pub fn ret(value_ptr: *const u8, value_size: usize) -> !;
@@ -38,14 +39,10 @@ mod ext_ffi {
 }
 
 pub mod ext {
-    extern crate blake2;
-
     use super::alloc::alloc::{Alloc, Global};
     use super::alloc::string::String;
     use super::alloc::vec::Vec;
     use super::ext_ffi;
-    use blake2::digest::{Input, VariableOutput};
-    use blake2::VarBlake2b;
     use crate::bytesrepr::{deserialize, BytesRepr};
     use crate::key::{Key, UREF_SIZE};
     use crate::value::Value;
@@ -130,14 +127,19 @@ pub mod ext {
     }
 
     //Gets the serialized bytes of an exported function (see `fn_by_name`), then
-    //computes the hash of those bytes to produce a key where the contract is then
+    //computes gets the address from the host to produce a key where the contract is then
     //stored in the global state. This key is returned.
     pub fn store_function(name: &String, known_urefs: Vec<Key>) -> Key {
         let bytes = fn_bytes_by_name(name);
-        let mut hasher = VarBlake2b::new(32).unwrap();
-        hasher.input(&bytes);
-        let mut fn_hash = [0u8; 32];
-        hasher.variable_result(|hash| fn_hash.clone_from_slice(hash));
+        let fn_hash = {
+            let mut tmp = [0u8; 32];
+            let addr_ptr = alloc_bytes(32);
+            unsafe {
+                ext_ffi::function_address(addr_ptr);
+                tmp.copy_from_slice(core::slice::from_raw_parts(addr_ptr, 32));
+            }
+            tmp
+        };
         let key = Key::Hash(fn_hash);
         let value = Value::Contract { bytes, known_urefs };
         write(&key, &value);
