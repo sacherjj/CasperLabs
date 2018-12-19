@@ -11,7 +11,7 @@ Global / conflictManager := ConflictManager.strict
 Global / dependencyOverrides := Dependencies.overrides
 
 lazy val projectSettings = Seq(
-  organization := "coop.rchain",
+  organization := "io.casperlabs",
   scalaVersion := "2.12.7",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
@@ -159,10 +159,10 @@ lazy val node = (project in file("node"))
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
     version := "0.7.1",
-    name := "rnode",
+    name := "node",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
-    packageSummary := "RChain Node",
-    packageDescription := "RChain Node - the RChain blockchain node server software.",
+    packageSummary := "CasperLabs Node",
+    packageDescription := "CasperLabs Node - the Casperlabs blockchain node server software.",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
@@ -254,8 +254,8 @@ lazy val node = (project in file("node"))
       "bash (>= 2.05a-11)"
     ),
     /* Redhat */
-    rpmVendor := "rchain.coop",
-    rpmUrl := Some("https://rchain.coop"),
+    rpmVendor := "casperlabs.io",
+    rpmUrl := Some("https://casperlabs.io"),
     rpmLicense := Some("Apache 2.0"),
     packageArchitecture in Rpm := "noarch",
     maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
@@ -296,7 +296,7 @@ lazy val smartContracts = (project in file("smart-contracts"))
   )
   .dependsOn(shared, models)
 
-lazy val rchain = (project in file("."))
+lazy val casperlabs = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(
     blockStorage,
@@ -305,5 +305,6 @@ lazy val rchain = (project in file("."))
     crypto,
     models,
     node,
-    shared
+    shared,
+    smartContracts
   )
