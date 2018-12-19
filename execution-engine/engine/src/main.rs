@@ -12,6 +12,7 @@ use storage::{TrackingCopy, GlobalState};
 use common::key::Key;
 use common::value;
 use storage::transform::Transform;
+use storage::ExecutionEffect;
 
 
 #[derive(Debug)]
@@ -61,11 +62,19 @@ fn main() {
 
     let mut gs = storage::InMemGS::new();
     prepare_gs(account_addr, &mut gs);
-    let engine_state = EngineState::new(gs);
-    for ref wasm_bytes in wasm_files.into_iter() {
+    let mut engine_state = EngineState::new(gs);
+
+    for wasm_bytes in wasm_files.iter() {
         let result = engine_state.run_deploy(&wasm_bytes.bytes, account_addr);
         match result {
-            Ok(_) => println!("Result for file {}: Success!", wasm_bytes.path),
+            Ok(ExecutionEffect::Success(_, transform_map)) => {
+                for (key, transformation) in transform_map.iter() {
+                    engine_state.apply_effect(*key, transformation.clone())
+                        .expect(&format!("Error when applying effects on {:?}", *key));
+                }
+                println!("Result for file {}: Success!", wasm_bytes.path);
+            },
+            Ok(ExecutionEffect::Error) => println!("Result for file {}: ExecutionEffect::Error.", wasm_bytes.path),
             Err(_) => println!("Result for file {}: {:?}", wasm_bytes.path, result)
         }
     }
