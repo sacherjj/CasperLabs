@@ -21,6 +21,7 @@ mod ext_ffi {
         pub fn new_uref(key_ptr: *mut u8);
         pub fn serialize_function(name_ptr: *const u8, name_size: usize) -> usize;
         pub fn get_function(dest_ptr: *mut u8); //can only be called after `serialize_function`
+        pub fn function_address(dest_ptr: *mut u8);
         pub fn load_arg(i: u32) -> usize;
         pub fn get_arg(dest: *mut u8); //can only be called after `load_arg`
         pub fn ret(value_ptr: *const u8, value_size: usize) -> !;
@@ -38,14 +39,10 @@ mod ext_ffi {
 }
 
 pub mod ext {
-    extern crate blake2;
-
     use super::alloc::alloc::{Alloc, Global};
     use super::alloc::string::String;
     use super::alloc::vec::Vec;
     use super::ext_ffi;
-    use blake2::digest::{Input, VariableOutput};
-    use blake2::VarBlake2b;
     use crate::bytesrepr::{deserialize, BytesRepr};
     use crate::key::{Key, UREF_SIZE};
     use crate::value::Value;
@@ -75,9 +72,9 @@ pub mod ext {
         let value_ptr = alloc_bytes(value_size);
         let value_bytes = unsafe {
             ext_ffi::get_read(value_ptr);
-            core::slice::from_raw_parts(value_ptr, value_size)
+            Vec::from_raw_parts(value_ptr, value_size, value_size)
         };
-        deserialize(value_bytes).unwrap()
+        deserialize(&value_bytes).unwrap()
     }
 
     //Write the value under the key in the global state
@@ -103,11 +100,11 @@ pub mod ext {
     //Returns a new unforgable reference Key
     pub fn new_uref() -> Key {
         let key_ptr = alloc_bytes(UREF_SIZE);
-        let slice = unsafe {
+        let bytes = unsafe {
             ext_ffi::new_uref(key_ptr);
-            core::slice::from_raw_parts(key_ptr, UREF_SIZE)
+            Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
         };
-        deserialize(slice).unwrap()
+        deserialize(&bytes).unwrap()
     }
 
     fn fn_bytes_by_name(name: &String) -> Vec<u8> {
@@ -130,14 +127,20 @@ pub mod ext {
     }
 
     //Gets the serialized bytes of an exported function (see `fn_by_name`), then
-    //computes the hash of those bytes to produce a key where the contract is then
+    //computes gets the address from the host to produce a key where the contract is then
     //stored in the global state. This key is returned.
     pub fn store_function(name: &String, known_urefs: Vec<Key>) -> Key {
         let bytes = fn_bytes_by_name(name);
-        let mut hasher = VarBlake2b::new(32).unwrap();
-        hasher.input(&bytes);
-        let mut fn_hash = [0u8; 32];
-        hasher.variable_result(|hash| fn_hash.clone_from_slice(hash));
+        let fn_hash = {
+            let mut tmp = [0u8; 32];
+            let addr_ptr = alloc_bytes(32);
+            let bytes = unsafe {
+                ext_ffi::function_address(addr_ptr);
+                Vec::from_raw_parts(addr_ptr, 32, 32)
+            };
+            tmp.copy_from_slice(&bytes);
+            tmp
+        };
         let key = Key::Hash(fn_hash);
         let value = Value::Contract { bytes, known_urefs };
         write(&key, &value);
@@ -152,10 +155,10 @@ pub mod ext {
         let dest_ptr = alloc_bytes(arg_size);
         let arg_bytes = unsafe {
             ext_ffi::get_arg(dest_ptr);
-            core::slice::from_raw_parts(dest_ptr, arg_size)
+            Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
         };
         //TODO: better error handling (i.e. pass the `Result` on)
-        deserialize(arg_bytes).unwrap()
+        deserialize(&arg_bytes).unwrap()
     }
 
     //Return the i-th unforgable reference known by the current module.
@@ -166,10 +169,10 @@ pub mod ext {
         let dest_ptr = alloc_bytes(UREF_SIZE);
         let uref_bytes = unsafe {
             ext_ffi::get_uref(i, dest_ptr);
-            core::slice::from_raw_parts(dest_ptr, UREF_SIZE)
+            Vec::from_raw_parts(dest_ptr, UREF_SIZE, UREF_SIZE)
         };
         //TODO: better error handling (i.e. pass the `Result` on)
-        deserialize(uref_bytes).unwrap()
+        deserialize(&uref_bytes).unwrap()
     }
 
     //Return `t` to the host, terminating the currently running module.
@@ -198,9 +201,9 @@ pub mod ext {
             let res_ptr = alloc_bytes(res_size);
             let res_bytes = unsafe {
                 ext_ffi::get_call_result(res_ptr);
-                core::slice::from_raw_parts(res_ptr, res_size)
+                Vec::from_raw_parts(res_ptr, res_size, res_size)
             };
-            deserialize(res_bytes).unwrap()
+            deserialize(&res_bytes).unwrap()
         } else {
             panic!("{:?} is not a contract!", contract);
         }

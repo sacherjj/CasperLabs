@@ -1,10 +1,10 @@
+use common::key::Key;
 use core::marker::PhantomData;
 use execution::{exec, Error as ExecutionError};
 use parity_wasm::elements::Module;
+use storage::transform::Transform;
 use storage::{ExecutionEffect, GlobalState, TrackingCopy};
 use wasm_prep::process;
-use common::key::Key;
-use storage::transform::Transform;
 
 pub struct EngineState<T: TrackingCopy, G: GlobalState<T>> {
     // Tracks the "state" of the blockchain (or is an interface to it).
@@ -18,7 +18,7 @@ pub enum Error {
     PreprocessingError { error: String },
     SignatureError { error: String },
     ExecError(ExecutionError),
-    StorageError(storage::Error)
+    StorageError(storage::Error),
 }
 
 impl From<storage::Error> for Error {
