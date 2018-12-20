@@ -274,7 +274,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val deploy = new Subcommand("deploy") {
     descr(
-      "Deploy a Rholang source file to Casper on an existing running node. " +
+      "Deploy a smart contract source file to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
         "on the configuration of the Casper instance."
     )
@@ -284,16 +284,16 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       validate = addressCheck
     )
 
-    val phloLimit =
+    val gasLimit =
       opt[Long](
         descr =
-          "The amount of phlo to use for the transaction (unused phlo is refunded). Must be positive integer.",
+          "The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
         validate = _ > 0,
         required = true
       )
 
-    val phloPrice = opt[Long](
-      descr = "The price of phlo for this transaction in units dust/phlo. Must be positive integer.",
+    val gasPrice = opt[Long](
+      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
       validate = _ > 0,
       required = true
     )

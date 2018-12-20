@@ -35,7 +35,7 @@ class LogsContainMessage:
 
 class NodeStarted(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'coop.rchain.node.NodeRuntime - Listening for traffic on rnode')
+        super().__init__(node, 'io.casperlabs.node.NodeRuntime - Listening for traffic on rnode')
 
 
 class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):

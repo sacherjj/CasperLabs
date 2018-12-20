@@ -38,8 +38,7 @@ case class Tls(
 )
 
 sealed trait Command
-case class Eval(files: List[String]) extends Command
-case object Diagnostics              extends Command
+case object Diagnostics extends Command
 case class Deploy(
     address: String,
     phloLimit: Long,

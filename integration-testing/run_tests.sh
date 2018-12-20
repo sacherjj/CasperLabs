@@ -6,9 +6,9 @@ if [[ -n $DRONE_BUILD_NUMBER ]]; then
 	tag=DRONE-$DRONE_BUILD_NUMBER
 fi
 
-export DEFAULT_IMAGE=rchain-integration-testing:$tag
+export DEFAULT_IMAGE=casperlabs-integration-testing:$tag
 
-sed "s/rnode:latest/rnode:$tag/" Dockerfile |\
+sed "s/io.casperlabs\/node:latest/io.casperlabs\/node:$tag/" Dockerfile |\
 	docker build -t $DEFAULT_IMAGE -f - .
 
 pipenv run py.test -v "$@"
