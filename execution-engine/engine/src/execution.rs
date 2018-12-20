@@ -527,7 +527,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",
                     field_name
-                )))
+                )));
             }
         };
         Ok(func_ref)
