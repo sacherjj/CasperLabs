@@ -1,8 +1,7 @@
 extern crate parity_wasm;
 extern crate pwasm_utils;
 
-use parity_wasm::elements;
-use elements::{deserialize_buffer, Error as ParityWasmError, Module};
+use parity_wasm::elements::{self, deserialize_buffer, Error as ParityWasmError, Module};
 use pwasm_utils::externalize_mem;
 use std::error::Error;
 
@@ -25,7 +24,6 @@ pub fn process(module_bytes: &[u8]) -> Result<Module, String> {
     // type annotation in closure needed
     let err_to_string = |err: ParityWasmError| err.description().to_owned();
     let module = deserialize_buffer(module_bytes).map_err(err_to_string)?;
-    // 1. check that wasm module adheres to the specification of our 
     let mut ext_mod = externalize_mem(module, None, 128);
     remove_memory_export(&mut ext_mod)?;
 	validate_imports(&ext_mod)?;
@@ -64,7 +62,7 @@ fn validate_imports(module: &Module) -> Result<(), String> {
                             elements::External::Global(_) => {
                                 return Err(String::from("No globals are provided with the runtime."))
                             },
-                            _ => { continue; }
+                            elements::External::Table(_) => { continue; }
                         }
                     }
                 }
