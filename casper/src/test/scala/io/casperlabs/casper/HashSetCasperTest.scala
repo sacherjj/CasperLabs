@@ -768,7 +768,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   // Todo this is blocked by ApprovedBlockReceivedHandler, and ApprovedBlockReceivedHandler is blocked by RuntimeManager.replayComputeState. Now there are no deploys in the body of BlockMessage
-  ignore should "fail when deploying with insufficient phlos" in {
+  ignore should "fail when deploying with insufficient gas" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Id]
@@ -780,7 +780,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     assert(block.body.get.deploys.head.errored)
   }
   // Todo this is blocked by ApprovedBlockReceivedHandler, and ApprovedBlockReceivedHandler is blocked by RuntimeManager.replayComputeState. Now there are no deploys in the body
-  ignore should "succeed if given enough phlos for deploy" in {
+  ignore should "succeed if given enough gas for deploy" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Id]

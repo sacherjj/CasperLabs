@@ -33,15 +33,17 @@ if TYPE_CHECKING:
     from threading import Event
 
 DEFAULT_IMAGE = os.environ.get(
-        "DEFAULT_IMAGE",
-        "rchain-integration-testing:latest")
+    "DEFAULT_IMAGE",
+    "casperlabs-integration-testing:latest")
 
-rnode_binary = '/opt/docker/bin/rnode'
+rnode_binary = '/opt/docker/bin/node'
 rnode_directory = "/var/lib/rnode"
 rnode_deploy_dir = "{}/deploy".format(rnode_directory)
 rnode_bonds_file = '{}/genesis/bonds.txt'.format(rnode_directory)
 rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
 rnode_key = '{}/node.key.pem'.format(rnode_directory)
+node_session_code = '{}/session.wasm'.format(rnode_directory)
+node_payment_code = '{}/payment.wasm'.format(rnode_directory)
 
 
 class InterruptedException(Exception):
@@ -156,7 +158,7 @@ class Node:
         self.background_logging.join()
 
     def deploy_contract(self, contract: str) -> Tuple[int, str]:
-        cmd = '{rnode_binary} deploy --from "0x1" --phlo-limit 1000000 --phlo-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'.format(
+        cmd = '{rnode_binary} deploy --from "0x1" --gas-limit 1000000 --gas-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'.format(
             rnode_binary=rnode_binary,
             rnode_deploy_dir=rnode_deploy_dir,
             contract=contract
@@ -213,12 +215,11 @@ class Node:
     def call_rnode(self, *node_args: str, stderr: bool = True) -> str:
         return self.shell_out(rnode_binary, *node_args, stderr=stderr)
 
-    def eval(self, rho_file_path: str) -> str:
-        return self.call_rnode('eval', rho_file_path)
-
-    def deploy(self, rho_file_path: str) -> str:
-        return self.call_rnode('deploy', '--from=0x1', '--phlo-limit=1000000', '--phlo-price=1', '--nonce=0',
-                               rho_file_path)
+    def deploy(self, session_code_file: str, payment_code_file: str) -> str:
+        return self.call_rnode('deploy', '--from=0x1', '--gas-limit=1000000',
+                               '--gas-price=1', '--nonce=0', '--session',
+                               session_code_file, '--payment',
+                               payment_code_file)
 
     def deploy_string(self, rholang_code: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)
@@ -231,13 +232,6 @@ class Node:
         output = self.call_rnode('propose', stderr=False)
         block_hash = extract_block_hash_from_propose_output(output)
         return block_hash
-
-    def repl(self, rholang_code: str, stderr: bool = False) -> str:
-        quoted_rholang_code = shlex.quote(rholang_code)
-        return self.shell_out('sh',
-                              '-c',
-                              'echo {quoted_rholang_code} | {rnode_binary} repl'.format(quoted_rholang_code=quoted_rholang_code,rnode_binary=rnode_binary),
-                              stderr=stderr)
 
     def generate_faucet_bonding_deploys(self, bond_amount: int, private_key: str, public_key: str) -> str:
         return self.call_rnode('generateFaucetBondingDeploys',
@@ -302,7 +296,7 @@ def make_node(
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
-    deploy_dir = make_tempdir("rchain-integration-test")
+    deploy_dir = make_tempdir("casperlabs-integration-test")
 
     hosts_allow_file_content = \
         "ALL:ALL" if allowed_peers is None else "\n".join("ALL: {}".format(peer) for peer in allowed_peers)
@@ -384,6 +378,8 @@ def make_bootstrap_node(
 ) -> Node:
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
+    session_code = get_absolute_path_for_mounting("session.wasm", mount_dir)
+    payment_code = get_absolute_path_for_mounting("payment.wasm", mount_dir)
 
     name = "{node_name}.{network_name}".format(
         node_name='bootstrap' if container_name is None else container_name,
@@ -403,7 +399,9 @@ def make_bootstrap_node(
 
     volumes = [
         "{}:{}".format(cert_file, rnode_certificate),
-        "{}:{}".format(key_file, rnode_key)
+        "{}:{}".format(key_file, rnode_key),
+        "{}:{}".format(session_code, node_session_code),
+        "{}:{}".format(payment_code, node_payment_code)
     ]
 
     container = make_node(

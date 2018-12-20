@@ -466,7 +466,7 @@ object ProtoUtil {
 
   def compiledSourceDeploy(
       timestamp: Long,
-      phloLimit: Long
+      gasLimit: Long
   ): Deploy = ???
 
   def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): Deploy =
