@@ -1,7 +1,7 @@
 use super::alloc::string::{self, String};
 use super::alloc::vec::Vec;
 use super::bytesrepr::{BytesRepr, Error};
-use super::key::Key;
+use super::key::{Key, UREF_SIZE};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Value {
@@ -10,7 +10,10 @@ pub enum Value {
     ListInt32(Vec<i32>),
     String(string::String),
     Acct(Account),
-    Contract(Vec<u8>),
+    Contract {
+        bytes: Vec<u8>,
+        known_urefs: Vec<Key>,
+    },
 }
 
 const INT32_ID: u8 = 0;
@@ -56,10 +59,17 @@ impl BytesRepr for Value {
                 result.append(&mut a.to_bytes());
                 result
             }
-            Contract(arr) => {
-                let mut result = Vec::with_capacity(5 + arr.len());
+            Contract { bytes, known_urefs } => {
+                let size: usize = 1 +              //size for ID
+                    4 +                            //size for length of bytes
+                    bytes.len() +                  //size for elements of bytes
+                    4 +                            //size for length of known_urefs
+                    UREF_SIZE * known_urefs.len(); //size for known_urefs elements
+
+                let mut result = Vec::with_capacity(size);
                 result.push(CONTRACT_ID);
-                result.append(&mut arr.to_bytes());
+                result.append(&mut bytes.to_bytes());
+                result.append(&mut known_urefs.to_bytes());
                 result
             }
         }
@@ -89,8 +99,9 @@ impl BytesRepr for Value {
                 Ok((Acct(a), rem))
             }
             CONTRACT_ID => {
-                let (arr, rem): (Vec<u8>, &[u8]) = BytesRepr::from_bytes(rest)?;
-                Ok((Contract(arr), rem))
+                let (bytes, rem1): (Vec<u8>, &[u8]) = BytesRepr::from_bytes(rest)?;
+                let (known_urefs, rem2): (Vec<Key>, &[u8]) = BytesRepr::from_bytes(rem1)?;
+                Ok((Contract { bytes, known_urefs }, rem2))
             }
             _ => Err(Error::FormattingError),
         }
@@ -135,7 +146,7 @@ impl Value {
             String(_) => String::from("String"),
             ByteArray(_) => String::from("ByteArray"),
             Acct(_) => String::from("Account"),
-            Contract(_) => String::from("Contract"),
+            Contract { .. } => String::from("Contract"),
         }
     }
 

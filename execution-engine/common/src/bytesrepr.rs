@@ -150,3 +150,13 @@ impl BytesRepr for String {
         Ok((string, rem))
     }
 }
+
+impl BytesRepr for () {
+    fn to_bytes(&self) -> Vec<u8> {
+        Vec::new()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        Ok(((), bytes))
+    }
+}

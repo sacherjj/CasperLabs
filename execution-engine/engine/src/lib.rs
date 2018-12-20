@@ -6,6 +6,6 @@ extern crate storage;
 extern crate wasm_prep;
 extern crate wasmi;
 
+pub mod argsparser;
 pub mod engine;
 pub mod execution;
-pub mod argsparser;

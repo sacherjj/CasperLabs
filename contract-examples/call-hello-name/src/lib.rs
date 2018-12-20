@@ -14,7 +14,8 @@ use common::key::Key;
 pub extern "C" fn call() {
     //This hash comes from the `_hash` output from `store_hello_name/src/lib.rs`
     let hash = Key::Hash([
-        143, 56, 101, 95, 235, 118, 21, 248, 41, 250, 70, 39, 125, 255, 70, 118, 145, 30, 234, 52, 199, 14, 138, 250, 95, 83, 37, 135, 126, 43, 65, 239
+        143, 56, 101, 95, 235, 118, 21, 248, 41, 250, 70, 39, 125, 255, 70, 118, 145, 30, 234, 52,
+        199, 14, 138, 250, 95, 83, 37, 135, 126, 43, 65, 239,
     ]);
     let contract = read(&hash);
     let arg = String::from("World");

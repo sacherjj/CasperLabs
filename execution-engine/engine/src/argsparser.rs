@@ -61,3 +61,41 @@ where
         Ok((a, b, c, d))
     }
 }
+
+impl<T1, T2, T3, T4, T5> Args for (T1, T2, T3, T4, T5)
+where
+    T1: FromRuntimeValue + Sized,
+    T2: FromRuntimeValue + Sized,
+    T3: FromRuntimeValue + Sized,
+    T4: FromRuntimeValue + Sized,
+    T5: FromRuntimeValue + Sized,
+{
+    fn parse(args: RuntimeArgs) -> Result<Self, Trap> {
+        let a: T1 = args.nth_checked(0)?;
+        let b: T2 = args.nth_checked(1)?;
+        let c: T3 = args.nth_checked(2)?;
+        let d: T4 = args.nth_checked(3)?;
+        let e: T5 = args.nth_checked(4)?;
+        Ok((a, b, c, d, e))
+    }
+}
+
+impl<T1, T2, T3, T4, T5, T6> Args for (T1, T2, T3, T4, T5, T6)
+where
+    T1: FromRuntimeValue + Sized,
+    T2: FromRuntimeValue + Sized,
+    T3: FromRuntimeValue + Sized,
+    T4: FromRuntimeValue + Sized,
+    T5: FromRuntimeValue + Sized,
+    T6: FromRuntimeValue + Sized,
+{
+    fn parse(args: RuntimeArgs) -> Result<Self, Trap> {
+        let a: T1 = args.nth_checked(0)?;
+        let b: T2 = args.nth_checked(1)?;
+        let c: T3 = args.nth_checked(2)?;
+        let d: T4 = args.nth_checked(3)?;
+        let e: T5 = args.nth_checked(4)?;
+        let f: T6 = args.nth_checked(5)?;
+        Ok((a, b, c, d, e, f))
+    }
+}

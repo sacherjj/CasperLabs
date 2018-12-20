@@ -140,9 +140,9 @@ impl TrackingCopy for InMemTC {
                     None => Err(Error::KeyNotFound { key: k }),
                     Some(curr) => match curr {
                         Value::Int32(j) => {
-                            let _ = self.store.insert(k, Value::Int32(i + j));
+                            let _ = self.store.insert(k, Value::Int32(j + i));
                             add(&mut self.ops, k, Op::Add);
-                            add(&mut self.fns, k, Transform::Add(j));
+                            add(&mut self.fns, k, Transform::Add(i));
                             Ok(())
                         }
                         other => Err(Error::TypeMismatch {
