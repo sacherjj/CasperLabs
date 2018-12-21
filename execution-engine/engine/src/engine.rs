@@ -15,10 +15,29 @@ pub struct EngineState<T: TrackingCopy, G: GlobalState<T>> {
 
 #[derive(Debug)]
 pub enum Error {
-    PreprocessingError { error: String },
-    SignatureError { error: String },
+    PreprocessingError(String),
+    SignatureError(String),
     ExecError(ExecutionError),
     StorageError(storage::Error),
+}
+
+impl From<wasm_prep::PreprocessingError> for Error {
+    fn from(error: wasm_prep::PreprocessingError) -> Self {
+        match error {
+            wasm_prep::PreprocessingError::InvalidImportsError(error) => {
+                Error::PreprocessingError(error)
+            }
+            wasm_prep::PreprocessingError::NoExportSection => {
+                Error::PreprocessingError(String::from("No export section found."))
+            }
+            wasm_prep::PreprocessingError::NoImportSection => {
+                Error::PreprocessingError(String::from("No import section found,"))
+            }
+            wasm_prep::PreprocessingError::DeserializeError(error) => {
+                Error::PreprocessingError(error)
+            }
+        }
+    }
 }
 
 impl From<storage::Error> for Error {
@@ -61,7 +80,7 @@ where
 
     //TODO: inject gas counter, limit stack size etc
     fn preprocess_module(&self, module_bytes: &[u8]) -> Result<Module, Error> {
-        process(module_bytes).map_err(|err_str| Error::PreprocessingError { error: err_str })
+        process(module_bytes).map_err(|err| err.into())
     }
 
     //TODO return proper error
