@@ -13,6 +13,7 @@ const ALLOWED_IMPORTS: &'static [&'static str] = &[
     "add",
     "new_uref",
     "serialize_function",
+    "function_address",
     "get_function",
     "load_arg",
     "get_arg",
