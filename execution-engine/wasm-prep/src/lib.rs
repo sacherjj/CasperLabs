@@ -37,8 +37,8 @@ use PreprocessingError::*;
 
 pub fn process(module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
     // type annotation in closure needed
-    let err_to_string = |err: ParityWasmError| err.description().to_owned();
-    let module = deserialize_buffer(module_bytes).map_err(err_to_string).map_err(|error| DeserializeError(error))?;
+    let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
+    let module = deserialize_buffer(module_bytes).map_err(from_parity_err)?;
     let mut ext_mod = externalize_mem(module, None, MEM_PAGES);
     remove_memory_export(&mut ext_mod)?;
 	validate_imports(&ext_mod)?;
