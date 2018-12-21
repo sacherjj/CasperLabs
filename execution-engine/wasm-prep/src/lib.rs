@@ -22,11 +22,15 @@ const ALLOWED_IMPORTS: &'static [&'static str] = &[
     "get_call_result"
 ];
 
+const MEM_PAGES: u32 = 128;
+const MAX_MEM_PAGES: u32 = 305; // 10mb
+
+
 pub fn process(module_bytes: &[u8]) -> Result<Module, String> {
     // type annotation in closure needed
     let err_to_string = |err: ParityWasmError| err.description().to_owned();
     let module = deserialize_buffer(module_bytes).map_err(err_to_string)?;
-    let mut ext_mod = externalize_mem(module, None, 128);
+    let mut ext_mod = externalize_mem(module, None, MEM_PAGES);
     remove_memory_export(&mut ext_mod)?;
 	validate_imports(&ext_mod)?;
     Ok(ext_mod)
@@ -58,7 +62,7 @@ fn validate_imports(module: &Module) -> Result<(), String> {
                                     .maximum()
                                     .ok_or(String::from("There is a limit to Wasm memory. This program does not limit memory"))
                                     .and_then(|max| {
-                                        if max > 305 {
+                                        if max > MAX_MEM_PAGES {
                                             Err(format!("Wasm runtime has 10Mb limit (305 pages each 64KiB) on max contract memory. This program specific {}", max))
                                         } else {
                                             Ok(has_imported_memory_properly_named)
