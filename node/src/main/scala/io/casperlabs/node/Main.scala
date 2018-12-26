@@ -3,9 +3,7 @@ package io.casperlabs.node
 import scala.collection.JavaConverters._
 import scala.tools.jline.console._
 import completer.StringsCompleter
-
 import cats.implicits._
-
 import io.casperlabs.casper.util.comm._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -16,7 +14,6 @@ import io.casperlabs.node.diagnostics.client.GrpcDiagnosticsService
 import io.casperlabs.node.effects._
 import io.casperlabs.shared._
 import io.casperlabs.shared.StringOps._
-
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -49,12 +46,6 @@ object Main {
         conf.grpcServer.portInternal,
         conf.server.maxMessageSize
       )
-    implicit val deployService: GrpcDeployService =
-      new GrpcDeployService(
-        conf.grpcServer.host,
-        conf.grpcServer.portExternal,
-        conf.server.maxMessageSize
-      )
     implicit val executionEngineService: GrpcExecutionEngineService =
       new GrpcExecutionEngineService(
         conf.grpcServer.socket,
@@ -66,20 +57,7 @@ object Main {
 
     val program = conf.command match {
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
-      case Deploy(address, gasLimit, gasPrice, nonce, sessionCodeLocation, paymentCodeLocation) =>
-        DeployRuntime.deployFileProgram[Task](
-          address,
-          gasLimit,
-          gasPrice,
-          nonce,
-          sessionCodeLocation,
-          paymentCodeLocation
-        )
-      case DeployDemo        => DeployRuntime.deployDemoProgram[Task]
-      case Propose           => DeployRuntime.propose[Task]()
-      case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
-      case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
-      case Run               => nodeProgram(conf)
+      case Run         => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
         BondingUtil.bondingDeploy[Task](bondKey, ethAddress, amount, secKey, pubKey)
       case FaucetBondingDeployGen(amount, sigAlgorithm, secKey, pubKey) =>
@@ -91,10 +69,9 @@ object Main {
       _ =>
         Task.delay {
           diagnosticsService.close()
-          deployService.close()
           executionEngineService.close()
           System.exit(1)
-        }
+      }
     )
   }
 

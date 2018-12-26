@@ -85,8 +85,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   import Converter._
   import Options.Flag
 
-  version(s"RChain Node ${BuildInfo.version}")
-  printedName = "rchain"
+  version(s"Casper Labs Node ${BuildInfo.version}")
+  printedName = "casperlabs"
 
   val profile = opt[String](
     name = "profile",
@@ -264,81 +264,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(eval)
 
-  val deployDemo = new Subcommand("deploy-demo") {
-    descr(
-      "Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals"
-    )
-  }
-  addSubcommand(deployDemo)
-
   val hexCheck: String => Boolean     = _.matches("[0-9a-fA-F]+")
   val addressCheck: String => Boolean = addr => addr.startsWith("0x") && hexCheck(addr.drop(2))
-
-  val deploy = new Subcommand("deploy") {
-    descr(
-      "Deploy a smart contract source file to Casper on an existing running node. " +
-        "The deploy will be packaged and sent as a block to the network depending " +
-        "on the configuration of the Casper instance."
-    )
-
-    val from = opt[String](
-      descr = "Purse address that will be used to pay for the deployment."
-    )
-
-    val gasLimit =
-      opt[Long](
-        descr =
-          "The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
-        validate = _ > 0,
-        required = true
-      )
-
-    val gasPrice = opt[Long](
-      descr = "The price of gas for this transaction in units dust/gas. Must be positive integer.",
-      validate = _ > 0,
-      required = true
-    )
-
-    val nonce = opt[Long](
-      descr = "This allows you to overwrite your own pending transactions that use the same nonce."
-    )
-
-    val session = opt[String](required = true, descr = "Path to the file with session code")
-    val payment = opt[String](required = true, descr = "Path to the file with payment code")
-
-  }
-  addSubcommand(deploy)
-
-  val showBlock = new Subcommand("show-block") {
-    descr(
-      "View properties of a block known by Casper on an existing running node." +
-        "Output includes: parent hashes, storage contents of the tuplespace."
-    )
-    val hash =
-      trailArg[String](name = "hash", required = true, descr = "the hash value of the block")
-  }
-  addSubcommand(showBlock)
-
-  val showBlocks = new Subcommand("show-blocks") {
-    descr(
-      "View list of blocks in the current Casper view on an existing running node."
-    )
-    val depth =
-      opt[Int](
-        name = "depth",
-        validate = _ > 0,
-        descr = "lists blocks to the given depth in terms of block height"
-      )
-
-  }
-  addSubcommand(showBlocks)
-
-  val propose = new Subcommand("propose") {
-    descr(
-      "Force Casper (on an existing running node) to propose a block based on its accumulated deploys."
-    )
-  }
-  addSubcommand(propose)
 
   val bondingDeployGen = new Subcommand("generateBondingDeploys") {
     descr(
