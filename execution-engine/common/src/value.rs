@@ -1,5 +1,5 @@
 use super::alloc::collections::btree_map::BTreeMap;
-use super::alloc::string::{self, String};
+use super::alloc::string::String;
 use super::alloc::vec::Vec;
 use super::bytesrepr::{Error, FromBytes, ToBytes};
 use super::key::{Key, UREF_SIZE};
@@ -9,7 +9,8 @@ pub enum Value {
     Int32(i32),
     ByteArray(Vec<u8>),
     ListInt32(Vec<i32>),
-    String(string::String),
+    String(String),
+    NamedKey(String, Key),
     Acct(Account),
     Contract {
         bytes: Vec<u8>,
@@ -23,6 +24,7 @@ const LISTINT32_ID: u8 = 2;
 const STRING_ID: u8 = 3;
 const ACCT_ID: u8 = 4;
 const CONTRACT_ID: u8 = 5;
+const NAMEDKEY_ID: u8 = 6;
 
 use self::Value::*;
 
@@ -35,7 +37,6 @@ impl ToBytes for Value {
                 result.append(&mut i.to_bytes());
                 result
             }
-
             ByteArray(arr) => {
                 let mut result = Vec::with_capacity(5 + arr.len());
                 result.push(BYTEARRAY_ID);
@@ -73,6 +74,17 @@ impl ToBytes for Value {
                 result.append(&mut known_urefs.to_bytes());
                 result
             }
+            NamedKey(n, k) => {
+                let size: usize = 1 + //size for ID
+              4 +                 //size for length of String
+              n.len() +           //size of String
+              UREF_SIZE; //size of urefs
+                let mut result = Vec::with_capacity(size);
+                result.push(NAMEDKEY_ID);
+                result.append(&mut n.to_bytes());
+                result.append(&mut k.to_bytes());
+                result
+            }
         }
     }
 }
@@ -105,6 +117,11 @@ impl FromBytes for Value {
                 let (known_urefs, rem2): (BTreeMap<String, Key>, &[u8]) =
                     FromBytes::from_bytes(rem1)?;
                 Ok((Contract { bytes, known_urefs }, rem2))
+            }
+            NAMEDKEY_ID => {
+                let (name, rem1): (String, &[u8]) = FromBytes::from_bytes(rest)?;
+                let (key, rem2): (Key, &[u8]) = FromBytes::from_bytes(rem1)?;
+                Ok((NamedKey(name, key), rem2))
             }
             _ => Err(Error::FormattingError),
         }
@@ -152,6 +169,7 @@ impl Value {
             ByteArray(_) => String::from("ByteArray"),
             Acct(_) => String::from("Account"),
             Contract { .. } => String::from("Contract"),
+            NamedKey(_, _) => String::from("NamedKey"),
         }
     }
 
@@ -170,6 +188,10 @@ impl Account {
             nonce,
             known_urefs,
         }
+    }
+
+    pub fn insert_urefs(&mut self, keys: &mut BTreeMap<String, Key>) {
+        self.known_urefs.append(keys);
     }
 
     pub fn urefs_lookup(&self) -> &BTreeMap<String, Key> {

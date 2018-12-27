@@ -4,7 +4,7 @@ extern crate wasmi;
 
 use self::wasmi::HostError;
 use rand::{FromEntropy, RngCore};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 
 pub mod op;
@@ -66,7 +66,7 @@ impl InMemGS {
 }
 
 impl GlobalState<InMemTC> for InMemGS {
-    fn apply(&mut self, k: Key, t: Transform) -> Result<(), Error> {
+    fn apply(&mut self, k: Key, mut t: Transform) -> Result<(), Error> {
         let maybe_curr = self.store.remove(&k);
         match maybe_curr {
             None => match t {
@@ -132,30 +132,28 @@ impl TrackingCopy for InMemTC {
         Ok(())
     }
     fn add(&mut self, k: Key, v: Value) -> Result<(), Error> {
-        let expected = "Int32".to_string();
-        match v {
-            Value::Int32(i) => {
-                let maybe_curr = self.store.remove(&k);
-                match maybe_curr {
-                    None => Err(Error::KeyNotFound { key: k }),
-                    Some(curr) => match curr {
-                        Value::Int32(j) => {
-                            let _ = self.store.insert(k, Value::Int32(j + i));
-                            add(&mut self.ops, k, Op::Add);
-                            add(&mut self.fns, k, Transform::Add(i));
-                            Ok(())
-                        }
-                        other => Err(Error::TypeMismatch {
-                            expected,
-                            found: other.type_string(),
-                        }),
-                    },
-                }
+        let maybe_curr = self.store.remove(&k);
+        match maybe_curr {
+            None => Err(Error::KeyNotFound { key: k }),
+            Some(curr) => {
+                let t = match v {
+                    Value::Int32(i) => Ok(Transform::AddInt32(i)),
+                    Value::NamedKey(n, k) => {
+                        let mut map = BTreeMap::new();
+                        map.insert(n, k);
+                        Ok(Transform::AddKeys(map))
+                    }
+                    other => Err(Error::TypeMismatch {
+                        expected: "Int32 or NamedKey".to_string(),
+                        found: other.type_string(),
+                    }),
+                }?;
+                let new_value = t.clone().apply(curr)?;
+                let _ = self.store.insert(k, new_value);
+                add(&mut self.ops, k, Op::Add);
+                add(&mut self.fns, k, t);
+                Ok(())
             }
-            other => Err(Error::TypeMismatch {
-                expected,
-                found: other.type_string(),
-            }),
         }
     }
     fn fail(&mut self) {
