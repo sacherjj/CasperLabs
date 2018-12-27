@@ -2,7 +2,7 @@ extern crate blake2;
 
 use self::blake2::digest::{Input, VariableOutput};
 use self::blake2::VarBlake2b;
-use common::bytesrepr::{deserialize, BytesRepr, Error as BytesReprError};
+use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
 use storage::{Error as StorageError, ExecutionEffect, GlobalState, TrackingCopy};
@@ -16,7 +16,7 @@ use wasmi::{
 use argsparser::Args;
 use parity_wasm::elements::{Error as ParityWasmError, Module};
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 
 #[derive(Debug)]
@@ -28,6 +28,7 @@ pub enum Error {
     ForgedReference(Key),
     NoImportedMemory,
     ArgIndexOutOfBounds(usize),
+    URefNotFound(String),
     FunctionNotFound(String),
     ParityWasm(ParityWasmError),
     Ret,
@@ -68,6 +69,9 @@ impl HostError for Error {}
 pub struct Runtime<'a, T: TrackingCopy + 'a> {
     args: Vec<Vec<u8>>,
     memory: MemoryRef,
+    //Enables look up of specific uref based on human-readable name
+    uref_lookup: &'a BTreeMap<String, Key>,
+    //Used to check uref is known before use (prevents forging urefs)
     known_urefs: HashSet<Key>,
     state: &'a mut T,
     module: Module,
@@ -160,11 +164,14 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         }
     }
 
-    //Load the ith uref into the wasm memory
-    pub fn get_uref(&mut self, i: usize, dest_ptr: u32) -> Result<(), Trap> {
-        //FIX-ME: obviously travsersing the set in an arbitary order is bad.
-        //This will make more sense when we use human-readable names and a Map.
-        let uref_bytes = self.known_urefs.iter().nth(i).unwrap().to_bytes();
+    //Load the uref known by the given name into the wasm memory
+    pub fn get_uref(&mut self, name_ptr: u32, name_size: u32, dest_ptr: u32) -> Result<(), Trap> {
+        let name = self.string_from_mem(name_ptr, name_size)?;
+        let uref = self
+            .uref_lookup
+            .get(&name)
+            .ok_or(Error::URefNotFound(name))?;
+        let uref_bytes = uref.to_bytes();
 
         self.memory
             .set(dest_ptr, &uref_bytes)
@@ -208,7 +215,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         let refs_bytes = self.memory.get(refs_ptr, refs_size)?;
 
         let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
-        let refs: Vec<Key> = deserialize(&refs_bytes)?;
+        let refs: BTreeMap<String, Key> = deserialize(&refs_bytes)?;
         let serialized_module: Vec<u8> = deserialize(&fn_bytes)?;
         let module = parity_wasm::deserialize_buffer(&serialized_module)?;
 
@@ -420,10 +427,11 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
             }
 
             GET_UREF_FUNC_INDEX => {
-                //args(0) = index of host runtime arg to load
-                //args(1) = pointer to destination in wasm memory
-                let (i, dest_ptr) = Args::parse(args)?;
-                let _ = self.get_uref(as_usize(i), dest_ptr)?;
+                //args(0) = pointer to uref name in wasm memory
+                //args(1) = size of uref name
+                //args(2) = pointer to destination in wasm memory
+                let (name_ptr, name_size, dest_ptr) = Args::parse(args)?;
+                let _ = self.get_uref(name_ptr, name_size, dest_ptr)?;
                 Ok(None)
             }
 
@@ -516,7 +524,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 GET_CALL_RESULT_FUNC_INDEX,
             ),
             "get_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], None),
+                Signature::new(&[ValueType::I32; 3][..], None),
                 GET_UREF_FUNC_INDEX,
             ),
             "function_address" => FuncInstance::alloc_host(
@@ -575,14 +583,14 @@ fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), 
 fn sub_call<T: TrackingCopy>(
     parity_module: Module,
     args: Vec<Vec<u8>>,
-    refs: Vec<Key>,
+    refs: BTreeMap<String, Key>,
     current_runtime: &mut Runtime<T>,
 ) -> Result<Vec<u8>, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let known_urefs = {
         let mut tmp: HashSet<Key> = HashSet::new();
-        for r in refs.into_iter() {
-            tmp.insert(r);
+        for r in refs.values() {
+            tmp.insert(*r);
         }
         tmp
     };
@@ -590,6 +598,7 @@ fn sub_call<T: TrackingCopy>(
         args,
         memory,
         state: current_runtime.state,
+        uref_lookup: &refs,
         known_urefs,
         module: parity_module,
         result: Vec::new(),
@@ -625,13 +634,14 @@ pub fn exec<T: TrackingCopy, G: GlobalState<T>>(
     let account = gs.get(&Key::Account(account_addr))?.as_account();
     let mut state = gs.tracking_copy();
     let mut known_urefs: HashSet<Key> = HashSet::new();
-    for r in account.urefs() {
+    for r in account.urefs_lookup().values() {
         known_urefs.insert(*r);
     }
     let mut runtime = Runtime {
         args: Vec::new(),
         memory,
         state: &mut state,
+        uref_lookup: account.urefs_lookup(),
         known_urefs,
         module: parity_module,
         result: Vec::new(),

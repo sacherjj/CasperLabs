@@ -7,6 +7,7 @@ use clap::{App, Arg};
 use common::key::Key;
 use common::value;
 use execution_engine::engine::EngineState;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter::Iterator;
@@ -95,7 +96,7 @@ fn main() {
 // To run, contracts need an existing account.
 // This function puts artifical entry to in the GlobalState.
 fn prepare_gs<T: TrackingCopy, G: GlobalState<T>>(account_addr: [u8; 20], gs: &mut G) {
-    let account = value::Account::new([0u8; 32], 0, Vec::new());
+    let account = value::Account::new([0u8; 32], 0, BTreeMap::new());
     let transform = Transform::Write(value::Value::Acct(account));
     gs.apply(Key::Account(account_addr), transform).unwrap();
 }
