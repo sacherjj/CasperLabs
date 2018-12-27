@@ -19,7 +19,8 @@ const ALLOWED_IMPORTS: &'static [&'static str] = &[
     "get_arg",
     "ret",
     "call_contract",
-    "get_call_result"
+    "get_call_result",
+    "get_uref",
 ];
 
 const MEM_PAGES: u32 = 128;
@@ -30,7 +31,7 @@ pub enum PreprocessingError {
     InvalidImportsError(String),
     NoExportSection,
     NoImportSection,
-    DeserializeError(String)
+    DeserializeError(String),
 }
 
 use PreprocessingError::*;
@@ -38,10 +39,12 @@ use PreprocessingError::*;
 pub fn process(module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
     // type annotation in closure needed
     let err_to_string = |err: ParityWasmError| err.description().to_owned();
-    let module = deserialize_buffer(module_bytes).map_err(err_to_string).map_err(|error| DeserializeError(error))?;
+    let module = deserialize_buffer(module_bytes)
+        .map_err(err_to_string)
+        .map_err(|error| DeserializeError(error))?;
     let mut ext_mod = externalize_mem(module, None, MEM_PAGES);
     remove_memory_export(&mut ext_mod)?;
-	validate_imports(&ext_mod)?;
+    validate_imports(&ext_mod)?;
     Ok(ext_mod)
 }
 
@@ -111,9 +114,7 @@ fn validate_imports(module: &Module) -> Result<(), PreprocessingError> {
 }
 
 fn remove_memory_export(module: &mut Module) -> Result<(), PreprocessingError> {
-    let exports = module
-        .export_section_mut()
-        .ok_or(NoExportSection)?;
+    let exports = module.export_section_mut().ok_or(NoExportSection)?;
     let entries = exports.entries_mut();
     let mem_pos = entries.iter().position(|e| e.field() == "memory");
     if let Some(mem_pos) = mem_pos {
