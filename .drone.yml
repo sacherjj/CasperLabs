@@ -54,8 +54,8 @@ pipeline:
       - cd execution-engine/engine
       - cargo build
 
-   compile-rust-comm:
-     image: rust:latest
+  compile-rust-comm:
+    image: rust:latest
     commands:
       - cd execution-engine/comm
       - cargo build
