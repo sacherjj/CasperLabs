@@ -1,5 +1,5 @@
 use super::alloc::vec::Vec;
-use super::bytesrepr::{BytesRepr, Error};
+use super::bytesrepr::{Error, FromBytes, ToBytes};
 
 #[repr(C)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
@@ -16,7 +16,7 @@ const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
 pub const UREF_SIZE: usize = 37;
 
-impl BytesRepr for Key {
+impl ToBytes for Key {
     fn to_bytes(&self) -> Vec<u8> {
         match self {
             Account(addr) => {
@@ -40,12 +40,13 @@ impl BytesRepr for Key {
             }
         }
     }
-
+}
+impl FromBytes for Key {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (id, rest): (u8, &[u8]) = BytesRepr::from_bytes(bytes)?;
+        let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
         match id {
             ACCOUNT_ID => {
-                let (addr, rem): (Vec<u8>, &[u8]) = BytesRepr::from_bytes(rest)?;
+                let (addr, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rest)?;
                 if addr.len() != 20 {
                     Err(Error::FormattingError)
                 } else {
@@ -55,11 +56,11 @@ impl BytesRepr for Key {
                 }
             }
             HASH_ID => {
-                let (hash, rem): ([u8; 32], &[u8]) = BytesRepr::from_bytes(rest)?;
+                let (hash, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((Hash(hash), rem))
             }
             UREF_ID => {
-                let (rf, rem): ([u8; 32], &[u8]) = BytesRepr::from_bytes(rest)?;
+                let (rf, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((URef(rf), rem))
             }
             _ => Err(Error::FormattingError),

@@ -34,16 +34,17 @@ mod ext_ffi {
             refs_size: usize,
         ) -> usize;
         pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
-        pub fn get_uref(i: usize, dest: *mut u8);
+        pub fn get_uref(name_ptr: *const u8, name_size: usize, dest: *mut u8);
     }
 }
 
 pub mod ext {
     use super::alloc::alloc::{Alloc, Global};
+    use super::alloc::collections::BTreeMap;
     use super::alloc::string::String;
     use super::alloc::vec::Vec;
     use super::ext_ffi;
-    use crate::bytesrepr::{deserialize, BytesRepr};
+    use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
     use crate::key::{Key, UREF_SIZE};
     use crate::value::Value;
 
@@ -56,7 +57,17 @@ pub mod ext {
         }
     }
 
-    fn to_ptr<T: BytesRepr>(t: &T) -> (*const u8, usize, Vec<u8>) {
+    // I don't know why I need a special version of to_ptr for
+    // &str, but the compiler complains if I try to use the polymorphic
+    // version with T = str.
+    fn str_ref_to_ptr(t: &str) -> (*const u8, usize, Vec<u8>) {
+        let bytes = t.to_bytes();
+        let ptr = bytes.as_ptr();
+        let size = bytes.len();
+        (ptr, size, bytes)
+    }
+
+    fn to_ptr<T: ToBytes>(t: &T) -> (*const u8, usize, Vec<u8>) {
         let bytes = t.to_bytes();
         let ptr = bytes.as_ptr();
         let size = bytes.len();
@@ -107,8 +118,8 @@ pub mod ext {
         deserialize(&bytes).unwrap()
     }
 
-    fn fn_bytes_by_name(name: &String) -> Vec<u8> {
-        let (name_ptr, name_size, _bytes) = to_ptr(name);
+    fn fn_bytes_by_name(name: &str) -> Vec<u8> {
+        let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
         let fn_size = unsafe { ext_ffi::serialize_function(name_ptr, name_size) };
         let fn_ptr = alloc_bytes(fn_size);
         unsafe {
@@ -121,7 +132,7 @@ pub mod ext {
     //Note that the function is wrapped up in a new module and re-exported under the name
     //"call". `fn_bytes_by_name` is meant to be used when storing a contract on-chain at
     //an unforgable reference.
-    pub fn fn_by_name(name: &String, known_urefs: Vec<Key>) -> Value {
+    pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Value {
         let bytes = fn_bytes_by_name(name);
         Value::Contract { bytes, known_urefs }
     }
@@ -129,7 +140,7 @@ pub mod ext {
     //Gets the serialized bytes of an exported function (see `fn_by_name`), then
     //computes gets the address from the host to produce a key where the contract is then
     //stored in the global state. This key is returned.
-    pub fn store_function(name: &String, known_urefs: Vec<Key>) -> Key {
+    pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Key {
         let bytes = fn_bytes_by_name(name);
         let fn_hash = {
             let mut tmp = [0u8; 32];
@@ -150,7 +161,7 @@ pub mod ext {
     //Return the i-th argument passed to the host for the current module
     //invokation. Note that this is only relevent to contracts stored on-chain
     //since a contract deployed directly is not invoked with any arguments.
-    pub fn get_arg<T: BytesRepr>(i: u32) -> T {
+    pub fn get_arg<T: FromBytes>(i: u32) -> T {
         let arg_size = unsafe { ext_ffi::load_arg(i) };
         let dest_ptr = alloc_bytes(arg_size);
         let arg_bytes = unsafe {
@@ -161,14 +172,14 @@ pub mod ext {
         deserialize(&arg_bytes).unwrap()
     }
 
-    //Return the i-th unforgable reference known by the current module.
+    //Return the unforgable reference known by the current module under the given name.
     //This either comes from the known_urefs of the account or contract,
     //depending on whether the current module is a sub-call or not.
-    pub fn get_uref(i: usize) -> Key {
-        //TODO: replace i with human-readable identifier
+    pub fn get_uref(name: &str) -> Key {
+        let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
         let dest_ptr = alloc_bytes(UREF_SIZE);
         let uref_bytes = unsafe {
-            ext_ffi::get_uref(i, dest_ptr);
+            ext_ffi::get_uref(name_ptr, name_size, dest_ptr);
             Vec::from_raw_parts(dest_ptr, UREF_SIZE, UREF_SIZE)
         };
         //TODO: better error handling (i.e. pass the `Result` on)
@@ -179,7 +190,7 @@ pub mod ext {
     //Note this function is only relevent to contracts stored on chain which
     //return a value to their caller. The return value of a directly deployed
     //contract is never looked at.
-    pub fn ret<T: BytesRepr>(t: &T) -> ! {
+    pub fn ret<T: ToBytes>(t: &T) -> ! {
         let (ptr, size, _bytes) = to_ptr(t);
         unsafe {
             ext_ffi::ret(ptr, size);
@@ -190,7 +201,7 @@ pub mod ext {
     //the host in order to have them available to the called contract during its
     //execution. The value returned from the contract call (see `ret` above) is
     //returned from this function.
-    pub fn call_contract<T: BytesRepr>(contract: &Value, args: &Vec<Vec<u8>>) -> T {
+    pub fn call_contract<T: FromBytes>(contract: &Value, args: &Vec<Vec<u8>>) -> T {
         if let Value::Contract { bytes, known_urefs } = contract {
             let (fn_ptr, fn_size, _bytes1) = to_ptr(bytes);
             let (args_ptr, args_size, _bytes2) = to_ptr(args);

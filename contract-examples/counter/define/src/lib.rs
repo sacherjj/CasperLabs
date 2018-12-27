@@ -1,8 +1,8 @@
 #![no_std]
 #![feature(alloc)]
 
-#[macro_use]
 extern crate alloc;
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 
 extern crate common;
@@ -25,7 +25,7 @@ fn get(uref: &Key) -> i32 {
 
 #[no_mangle]
 pub extern "C" fn counter_ext() {
-    let i_key: Key = get_uref(0);
+    let i_key: Key = get_uref("count");
     let method_name: String = get_arg(0);
     match method_name.as_str() {
         "inc" => inc(&i_key),
@@ -39,8 +39,13 @@ pub extern "C" fn counter_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let export_name = String::from("counter_ext");
     let counter_local_key = new_uref();
-    write(&counter_local_key, &Value::Int32(0));
-    let _hash = store_function(&export_name, vec![counter_local_key]);
+    write(&counter_local_key, &Value::Int32(0)); //initialize counter
+
+    //create map of references for stored contract
+    let mut counter_urefs: BTreeMap<String, Key> = BTreeMap::new();
+    let key_name = String::from("count");
+    counter_urefs.insert(key_name, counter_local_key);
+
+    let _hash = store_function("counter_ext", counter_urefs);
 }

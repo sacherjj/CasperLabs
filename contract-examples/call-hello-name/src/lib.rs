@@ -6,7 +6,7 @@ extern crate alloc;
 use alloc::string::String;
 
 extern crate common;
-use common::bytesrepr::BytesRepr;
+use common::bytesrepr::ToBytes;
 use common::ext::{call_contract, read};
 use common::key::Key;
 
@@ -18,7 +18,7 @@ pub extern "C" fn call() {
         197, 6, 112, 204, 31, 83, 118, 122, 225, 214, 26, 52,
     ]);
     let contract = read(&hash);
-    let arg = String::from("World");
+    let arg = "World";
     let args = vec![arg.to_bytes()];
     let result: String = call_contract(&contract, &args);
     assert_eq!("Hello, World", result);
