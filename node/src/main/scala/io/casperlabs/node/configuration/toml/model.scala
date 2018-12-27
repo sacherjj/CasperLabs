@@ -36,6 +36,7 @@ case class Server(
 case class GrpcServer(
     host: Option[String],
     port: Option[Int],
+    socket: Option[String],
     portInternal: Option[Int]
 )
 
