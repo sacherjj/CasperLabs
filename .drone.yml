@@ -48,6 +48,18 @@ pipeline:
     commands:
       - sbt compile test:compile doc
 
+  compile-rust-engine:
+    image: rust:latest
+    commands:
+      - cd execution-engine/engine
+      - cargo build
+
+   compile-rust-comm:
+     image: rust:latest
+    commands:
+      - cd execution-engine/comm
+      - cargo build
+
 #  run-unit-tests:
 #    <<: *sbtenv
 #    commands:
