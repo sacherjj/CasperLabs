@@ -11,7 +11,7 @@ branches:
 # additional volumes, as in package step, you need to specify all volumes.
 
 __buildenv: &buildenv
-  image: casperlabs/buildenv:latest
+  image: casperlabs/buildenv:0.0.1-8-g0620a67
 
 __sbtenv: &sbtenv
   <<: *buildenv
@@ -25,7 +25,7 @@ __sbtenv: &sbtenv
 
 clone:
   git-clone:
-    image: casperlabs/buildenv:latest
+    image: casperlabs/buildenv:0.0.1-8-g0620a67
     commands: |
       set -ex
       git clone -b ${DRONE_TAG:-$DRONE_BRANCH} $DRONE_REMOTE_URL .
@@ -49,13 +49,13 @@ pipeline:
       - sbt compile test:compile doc
 
   compile-rust-engine:
-    image: rust:latest
+    <<: *buildenv
     commands:
       - cd execution-engine/engine
       - cargo build
 
   compile-rust-comm:
-    image: rust:latest
+    <<: *buildenv
     commands:
       - cd execution-engine/comm
       - cargo run --bin grpc-protoc
