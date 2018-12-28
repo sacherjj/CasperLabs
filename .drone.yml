@@ -52,14 +52,14 @@ pipeline:
     <<: *buildenv
     commands:
       - cd execution-engine/engine
-      - cargo build
+      - ~/.cargo/bin/cargo build
 
   compile-rust-comm:
     <<: *buildenv
     commands:
       - cd execution-engine/comm
-      - cargo run --bin grpc-protoc
-      - cargo build
+      - ~/.cargo/bin/cargo run --bin grpc-protoc
+      - ~/.cargo/bin/cargo build
 
 #  run-unit-tests:
 #    <<: *sbtenv
