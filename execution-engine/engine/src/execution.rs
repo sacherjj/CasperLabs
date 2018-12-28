@@ -96,8 +96,8 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
             // gas charge overflow protection
             None => false,
             Some(val) if val > *self.gas_limit => false,
-            Some(_) => {
-                self.gas_counter = prev + 1;
+            Some(val) => {
+                self.gas_counter = val;
                 true
             }
         }
