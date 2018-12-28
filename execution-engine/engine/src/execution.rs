@@ -66,6 +66,7 @@ impl From<BytesReprError> for Error {
 
 impl HostError for Error {}
 
+//TODO: Factor out account, known_urefs, fn_store_id
 pub struct Runtime<'a, T: TrackingCopy + 'a> {
     args: Vec<Vec<u8>>,
     memory: MemoryRef,
