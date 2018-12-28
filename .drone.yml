@@ -48,6 +48,19 @@ pipeline:
     commands:
       - sbt compile test:compile doc
 
+  compile-rust-engine:
+    <<: *buildenv
+    commands:
+      - cd execution-engine/engine
+      - ~/.cargo/bin/cargo build
+
+  compile-rust-comm:
+    <<: *buildenv
+    commands:
+      - cd execution-engine/comm
+      - ~/.cargo/bin/cargo run --bin grpc-protoc
+      - ~/.cargo/bin/cargo build
+
 #  run-unit-tests:
 #    <<: *sbtenv
 #    commands:
