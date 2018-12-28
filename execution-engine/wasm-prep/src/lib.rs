@@ -1,12 +1,12 @@
-extern crate vm;
 extern crate parity_wasm;
 extern crate pwasm_utils;
+extern crate vm;
 
-use vm::wasm_costs::WasmCosts;
 use parity_wasm::elements::{self, deserialize_buffer, Error as ParityWasmError, Module};
 use pwasm_utils::{externalize_mem, inject_gas_counter, rules};
 use std::error::Error;
 use std::iter::Iterator;
+use vm::wasm_costs::WasmCosts;
 
 const ALLOWED_IMPORTS: &'static [&'static str] = &[
     "read_value",
@@ -47,7 +47,8 @@ pub fn process(module_bytes: &[u8], wasm_costs: &WasmCosts) -> Result<Module, Pr
     remove_memory_export(&mut ext_mod)?;
     validate_imports(&ext_mod)?;
     let gas_mod = inject_gas_counters(ext_mod, wasm_costs)?;
-    let module = pwasm_utils::stack_height::inject_limiter(gas_mod, wasm_costs.max_stack_height).map_err(|_| StackLimiterError)?;
+    let module = pwasm_utils::stack_height::inject_limiter(gas_mod, wasm_costs.max_stack_height)
+        .map_err(|_| StackLimiterError)?;
     Ok(module)
 }
 
