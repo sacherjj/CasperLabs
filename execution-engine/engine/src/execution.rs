@@ -31,6 +31,7 @@ pub enum Error {
     URefNotFound(String),
     FunctionNotFound(String),
     ParityWasm(ParityWasmError),
+    GasLimit,
     Ret,
 }
 
@@ -66,6 +67,7 @@ impl From<BytesReprError> for Error {
 
 impl HostError for Error {}
 
+//TODO: Factor out account, known_urefs, fn_store_id
 pub struct Runtime<'a, T: TrackingCopy + 'a> {
     args: Vec<Vec<u8>>,
     memory: MemoryRef,
@@ -79,9 +81,36 @@ pub struct Runtime<'a, T: TrackingCopy + 'a> {
     host_buf: Vec<u8>,
     account: &'a Account,
     fn_store_id: u32,
+    gas_counter: u64,
+    gas_limit: &'a u64,
 }
 
 impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
+    /// Charge specified amount of gas
+    ///
+    /// Returns false if gas limit exceeded and true if not.
+    /// Intuition about the return value sense is to aswer the question 'are we allowed to continue?'
+    fn charge_gas(&mut self, amount: u64) -> bool {
+        let prev = self.gas_counter;
+        match prev.checked_add(amount) {
+            // gas charge overflow protection
+            None => false,
+            Some(val) if val > *self.gas_limit => false,
+            Some(val) => {
+                self.gas_counter = val;
+                true
+            }
+        }
+    }
+
+    fn gas(&mut self, amount: u64) -> Result<(), Trap> {
+        if self.charge_gas(amount) {
+            Ok(())
+        } else {
+            Err(Error::GasLimit.into())
+        }
+    }
+
     fn effect(&self) -> ExecutionEffect {
         self.state.effect()
     }
@@ -311,6 +340,7 @@ const GET_CALL_RESULT_FUNC_INDEX: usize = 10;
 const CALL_CONTRACT_FUNC_INDEX: usize = 11;
 const GET_UREF_FUNC_INDEX: usize = 12;
 const FUNCTION_ADDRESS_FUNC_INDEX: usize = 13;
+const GAS_FUNC_INDEX: usize = 14;
 
 impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
     fn invoke_index(
@@ -441,6 +471,12 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
                 Ok(None)
             }
 
+            GAS_FUNC_INDEX => {
+                let gas: u32 = Args::parse(args)?;
+                let _ = self.gas(gas as u64)?;
+                Ok(None)
+            }
+
             _ => panic!("unknown function index"),
         }
     }
@@ -531,6 +567,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FUNCTION_ADDRESS_FUNC_INDEX,
             ),
+            "gas" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                GAS_FUNC_INDEX,
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",
@@ -605,6 +645,8 @@ fn sub_call<T: TrackingCopy>(
         host_buf: Vec::new(),
         account: current_runtime.account,
         fn_store_id: 0,
+        gas_counter: current_runtime.gas_counter,
+        gas_limit: current_runtime.gas_limit,
     };
 
     let result = instance.invoke_export("call", &[], &mut runtime);
@@ -628,6 +670,7 @@ fn sub_call<T: TrackingCopy>(
 pub fn exec<T: TrackingCopy, G: GlobalState<T>>(
     parity_module: Module,
     account_addr: [u8; 20],
+    gas_limit: &u64,
     gs: &G,
 ) -> Result<ExecutionEffect, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
@@ -648,8 +691,12 @@ pub fn exec<T: TrackingCopy, G: GlobalState<T>>(
         host_buf: Vec::new(),
         account: &account,
         fn_store_id: 0,
+        gas_counter: 0,
+        gas_limit: gas_limit,
     };
     let _ = instance.invoke_export("call", &[], &mut runtime)?;
 
+    println!("Gas count: {:?}", runtime.gas_counter);
+    println!("Gas left: {:?}", gas_limit - runtime.gas_counter);
     Ok(runtime.effect())
 }

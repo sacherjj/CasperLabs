@@ -19,7 +19,7 @@ impl<T: TrackingCopy, G: GlobalState<T>> ipc_grpc::ExecutionEngineService for En
     ) -> grpc::SingleResponse<ipc::DeployResult> {
         let mut addr = [0u8; 20];
         addr.copy_from_slice(&p.address);
-        match self.run_deploy(&p.session_code, addr) {
+        match self.run_deploy(&p.session_code, addr, &(p.gas_limit as u64)) {
             Ok(_) => {
                 let mut res = DeployResult::new();
                 res.set_effects(ipc::ExecutionEffect::new());

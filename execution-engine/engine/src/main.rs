@@ -18,6 +18,7 @@ struct Task {
 
 fn main() {
     let default_address = "12345678901234567890";
+    let default_gas_limit: &str = &std::u64::MAX.to_string();
     let matches = App::new("Execution engine standalone")
         .arg(
             Arg::with_name("address")
@@ -25,6 +26,14 @@ fn main() {
                 .long("address")
                 .default_value(default_address)
                 .value_name("BYTES")
+                .required(false)
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("gas-limit")
+                .short("l")
+                .long("gas-limit")
+                .default_value(default_gas_limit)
                 .required(false)
                 .takes_value(true),
         )
@@ -64,12 +73,17 @@ fn main() {
         address
     };
 
-    let gs = storage::InMemGS::new();
+    let gas_limit: u64 = matches
+        .value_of("gas-limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .expect("Provided gas limit value is not u64.");
+
+    let mut gs = storage::InMemGS::new();
     let mut engine_state = EngineState::new(gs);
     engine_state.with_mocked_account(account_addr);
 
     for wasm_bytes in wasm_files.iter() {
-        let result = engine_state.run_deploy(&wasm_bytes.bytes, account_addr);
+        let result = engine_state.run_deploy(&wasm_bytes.bytes, account_addr, &gas_limit);
         match result {
             Ok(ExecutionEffect::Success(_, transform_map)) => {
                 for (key, transformation) in transform_map.iter() {

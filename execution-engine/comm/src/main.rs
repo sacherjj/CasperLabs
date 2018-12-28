@@ -23,7 +23,7 @@ fn main() {
     }
 
     let mut engine_state = EngineState::new(storage::InMemGS::new());
-    engine_state.with_mocked_account([0u8;20]);
+    engine_state.with_mocked_account([0u8; 20]);
     let server_builder = engine_server::new(socket, engine_state);
     let _server = server_builder.build().expect("Start server");
 
