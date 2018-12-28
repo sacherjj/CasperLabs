@@ -35,9 +35,10 @@ object Configuration {
   private val profiles: Map[String, Profile] =
     Map(defaultProfile.name -> defaultProfile, dockerProfile.name -> dockerProfile)
 
-  private val DefaultPort                       = 40400
-  private val DefaultGrpcPortExternal           = 40401
-  private val DefaultGrpcSocketPath             = Paths.get(sys.props("user.home"), ".casperNode").toString
+  private val DefaultPort             = 40400
+  private val DefaultGrpcPortExternal = 40401
+  private val DefaultGrpcSocketPath =
+    Paths.get(sys.props("user.home"), ".casper-node.sock").toString
   private val DefaultGrpcPortInternal           = 40402
   private val DefaultHttPort                    = 40403
   private val DefaultKademliaPort               = 40404

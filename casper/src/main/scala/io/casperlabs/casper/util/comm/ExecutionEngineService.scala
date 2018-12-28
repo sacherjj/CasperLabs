@@ -54,16 +54,23 @@ class GrpcExecutionEngineService(addr: String, maxMessageSize: Int)
   }
   override def sendDeploy(deploy: Deploy): Task[Either[Throwable, ExecutionEffect]] =
     stub.sendDeploy(deploy).map { response =>
-      if (response.result.isEmpty) Left(new RuntimeException("empty response"))
-      else if (response.result.isError)
-        Left(new RuntimeException(response.result.error.get.toProtoString))
-      else Right(response.result.effects.get)
+      response.result match {
+        case DeployResult.Result.Empty           => Left(new RuntimeException("empty response"))
+        case DeployResult.Result.Effects(effect) => Right(effect)
+        case DeployResult.Result.Error(error)    => Left(new RuntimeException(error.toProtoString))
+      }
     }
+
   override def executeEffects(c: CommutativeEffects): Task[Either[Throwable, Done]] =
-    stub.executeEffects(c).map { response =>
-      if (response.result.isEmpty) Left(new RuntimeException("empty response"))
-      else if (response.result.isError)
-        Left(new RuntimeException(response.result.error.get.toProtoString))
-      else Right(response.result.success.get)
-    }
+    stub
+      .executeEffects(c)
+      .map(
+        response =>
+          response.result match {
+            case PostEffectsResult.Result.Empty      => Left(new RuntimeException("empty response"))
+            case PostEffectsResult.Result.Success(v) => Right(v)
+            case PostEffectsResult.Result.Error(effectsError) =>
+              Left(new RuntimeException(effectsError.toProtoString))
+          }
+      )
 }

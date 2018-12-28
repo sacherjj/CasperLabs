@@ -52,7 +52,7 @@ object Dependencies {
   val grpcNetty           = "io.grpc"                     % "grpc-netty"                % scalapb.compiler.Version.grpcJavaVersion
   val nettyAll            = "io.netty"                    %   "netty-all"                     % "4.1.22.Final"
   val nettyTransNativeEpoll = "io.netty"                  %   "netty-transport-native-epoll"  % "4.1.22.Final" classifier "linux-x86_64"
-	val nettyTransNativeKqueue = "io.netty"                 %   "netty-transport-native-kqueue" % "4.1.22.Final" classifier "osx-x86_64"
+  val nettyTransNativeKqueue = "io.netty"                 %   "netty-transport-native-kqueue" % "4.1.22.Final" classifier "osx-x86_64"
   val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.8.Final"
   val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier osClassifier
   val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier "linux-x86_64"
