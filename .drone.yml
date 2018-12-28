@@ -58,6 +58,7 @@ pipeline:
     image: rust:latest
     commands:
       - cd execution-engine/comm
+      - cargo run --bin grpc-protoc
       - cargo build
 
 #  run-unit-tests:
