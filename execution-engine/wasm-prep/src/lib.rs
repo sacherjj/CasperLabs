@@ -34,6 +34,7 @@ pub enum PreprocessingError {
     NoImportSection,
     DeserializeError(String),
     OperationForbiddenByGasRules,
+    StackLimiterError,
 }
 
 use PreprocessingError::*;
@@ -41,12 +42,13 @@ use PreprocessingError::*;
 pub fn process(module_bytes: &[u8], wasm_costs: &WasmCosts) -> Result<Module, PreprocessingError> {
     // type annotation in closure needed
     let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
-    let module = deserialize_buffer(module_bytes).map_err(from_parity_err)?;
-    let mut ext_mod = externalize_mem(module, None, MEM_PAGES);
+    let deserialized_module = deserialize_buffer(module_bytes).map_err(from_parity_err)?;
+    let mut ext_mod = externalize_mem(deserialized_module, None, MEM_PAGES);
     remove_memory_export(&mut ext_mod)?;
     validate_imports(&ext_mod)?;
-    ext_mod = inject_gas_counters(ext_mod, wasm_costs)?;
-    Ok(ext_mod)
+    let gas_mod = inject_gas_counters(ext_mod, wasm_costs)?;
+    let module = pwasm_utils::stack_height::inject_limiter(gas_mod, wasm_costs.max_stack_height).map_err(|_| StackLimiterError)?;
+    Ok(module)
 }
 
 fn gas_rules(wasm_costs: &WasmCosts) -> rules::Set {
