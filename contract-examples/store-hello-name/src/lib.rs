@@ -2,8 +2,8 @@
 #![feature(alloc)]
 
 extern crate alloc;
+use alloc::collections::BTreeMap;
 use alloc::string::String;
-use alloc::vec::Vec;
 
 extern crate common;
 use common::ext::{get_arg, ret, store_function};
@@ -23,6 +23,5 @@ pub extern "C" fn hello_name_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let export_name = String::from("hello_name_ext");
-    let _hash = store_function(&export_name, Vec::new());
+    let _hash = store_function("hello_name_ext", BTreeMap::new());
 }

@@ -3,10 +3,9 @@
 
 #[macro_use]
 extern crate alloc;
-use alloc::string::String;
 
 extern crate common;
-use common::bytesrepr::BytesRepr;
+use common::bytesrepr::ToBytes;
 use common::ext::{call_contract, read};
 use common::key::Key;
 
@@ -18,12 +17,12 @@ pub extern "C" fn call() {
         197, 6, 112, 204, 31, 83, 118, 122, 225, 214, 26, 52,
     ]);
     let contract = read(&hash);
-    let arg = String::from("inc").to_bytes();
-    let args = vec![arg];
+    let arg = "inc";
+    let args = vec![arg.to_bytes()];
     let _result: () = call_contract(&contract, &args);
     let value: i32 = {
-        let arg = String::from("get").to_bytes();
-        let args = vec![arg];
+        let arg = "get";
+        let args = vec![arg.to_bytes()];
         call_contract(&contract, &args)
     };
     assert_eq!(value, 1);

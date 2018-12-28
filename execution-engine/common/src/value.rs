@@ -1,6 +1,7 @@
+use super::alloc::collections::btree_map::BTreeMap;
 use super::alloc::string::{self, String};
 use super::alloc::vec::Vec;
-use super::bytesrepr::{BytesRepr, Error};
+use super::bytesrepr::{Error, FromBytes, ToBytes};
 use super::key::{Key, UREF_SIZE};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -12,7 +13,7 @@ pub enum Value {
     Acct(Account),
     Contract {
         bytes: Vec<u8>,
-        known_urefs: Vec<Key>,
+        known_urefs: BTreeMap<String, Key>,
     },
 }
 
@@ -25,7 +26,7 @@ const CONTRACT_ID: u8 = 5;
 
 use self::Value::*;
 
-impl BytesRepr for Value {
+impl ToBytes for Value {
     fn to_bytes(&self) -> Vec<u8> {
         match self {
             Int32(i) => {
@@ -74,33 +75,35 @@ impl BytesRepr for Value {
             }
         }
     }
-
+}
+impl FromBytes for Value {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (id, rest): (u8, &[u8]) = BytesRepr::from_bytes(bytes)?;
+        let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
         match id {
             INT32_ID => {
-                let (i, rem): (i32, &[u8]) = BytesRepr::from_bytes(rest)?;
+                let (i, rem): (i32, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((Int32(i), rem))
             }
             BYTEARRAY_ID => {
-                let (arr, rem): (Vec<u8>, &[u8]) = BytesRepr::from_bytes(rest)?;
+                let (arr, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((ByteArray(arr), rem))
             }
             LISTINT32_ID => {
-                let (arr, rem): (Vec<i32>, &[u8]) = BytesRepr::from_bytes(rest)?;
+                let (arr, rem): (Vec<i32>, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((ListInt32(arr), rem))
             }
             STRING_ID => {
-                let (s, rem): (String, &[u8]) = BytesRepr::from_bytes(rest)?;
+                let (s, rem): (String, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((String(s), rem))
             }
             ACCT_ID => {
-                let (a, rem): (Account, &[u8]) = BytesRepr::from_bytes(rest)?;
+                let (a, rem): (Account, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((Acct(a), rem))
             }
             CONTRACT_ID => {
-                let (bytes, rem1): (Vec<u8>, &[u8]) = BytesRepr::from_bytes(rest)?;
-                let (known_urefs, rem2): (Vec<Key>, &[u8]) = BytesRepr::from_bytes(rem1)?;
+                let (bytes, rem1): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rest)?;
+                let (known_urefs, rem2): (BTreeMap<String, Key>, &[u8]) =
+                    FromBytes::from_bytes(rem1)?;
                 Ok((Contract { bytes, known_urefs }, rem2))
             }
             _ => Err(Error::FormattingError),
@@ -112,10 +115,10 @@ impl BytesRepr for Value {
 pub struct Account {
     public_key: [u8; 32],
     nonce: u64,
-    known_urefs: Vec<Key>,
+    known_urefs: BTreeMap<String, Key>,
 }
 
-impl BytesRepr for Account {
+impl ToBytes for Account {
     fn to_bytes(&self) -> Vec<u8> {
         let mut result = Vec::new();
         result.extend(&self.public_key);
@@ -123,10 +126,12 @@ impl BytesRepr for Account {
         result.append(&mut self.known_urefs.to_bytes());
         result
     }
+}
+impl FromBytes for Account {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (public_key, rem1): ([u8; 32], &[u8]) = BytesRepr::from_bytes(bytes)?;
-        let (nonce, rem2): (u64, &[u8]) = BytesRepr::from_bytes(rem1)?;
-        let (known_urefs, rem3): (Vec<Key>, &[u8]) = BytesRepr::from_bytes(rem2)?;
+        let (public_key, rem1): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (nonce, rem2): (u64, &[u8]) = FromBytes::from_bytes(rem1)?;
+        let (known_urefs, rem3): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem2)?;
         Ok((
             Account {
                 public_key,
@@ -159,7 +164,7 @@ impl Value {
 }
 
 impl Account {
-    pub fn new(public_key: [u8; 32], nonce: u64, known_urefs: Vec<Key>) -> Account {
+    pub fn new(public_key: [u8; 32], nonce: u64, known_urefs: BTreeMap<String, Key>) -> Account {
         Account {
             public_key,
             nonce,
@@ -167,7 +172,7 @@ impl Account {
         }
     }
 
-    pub fn urefs(&self) -> &[Key] {
+    pub fn urefs_lookup(&self) -> &BTreeMap<String, Key> {
         &self.known_urefs
     }
 
