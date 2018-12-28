@@ -1,8 +1,10 @@
+extern crate common;
 extern crate parity_wasm;
 extern crate pwasm_utils;
 
+use common::wasm_costs::WasmCosts;
 use parity_wasm::elements::{self, deserialize_buffer, Error as ParityWasmError, Module};
-use pwasm_utils::externalize_mem;
+use pwasm_utils::{externalize_mem, inject_gas_counter, rules};
 use std::error::Error;
 use std::iter::Iterator;
 
@@ -30,19 +32,53 @@ pub enum PreprocessingError {
     InvalidImportsError(String),
     NoExportSection,
     NoImportSection,
-    DeserializeError(String)
+    DeserializeError(String),
+    OperationForbiddenByGasRules,
 }
 
 use PreprocessingError::*;
 
-pub fn process(module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
+pub fn process(module_bytes: &[u8], wasm_costs: &WasmCosts) -> Result<Module, PreprocessingError> {
     // type annotation in closure needed
     let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
     let module = deserialize_buffer(module_bytes).map_err(from_parity_err)?;
     let mut ext_mod = externalize_mem(module, None, MEM_PAGES);
     remove_memory_export(&mut ext_mod)?;
-	validate_imports(&ext_mod)?;
+    validate_imports(&ext_mod)?;
+    ext_mod = inject_gas_counters(ext_mod, wasm_costs)?;
     Ok(ext_mod)
+}
+
+fn gas_rules(wasm_costs: &WasmCosts) -> rules::Set {
+    rules::Set::new(wasm_costs.regular, {
+        let mut vals = ::std::collections::BTreeMap::new();
+        vals.insert(
+            rules::InstructionType::Load,
+            rules::Metering::Fixed(wasm_costs.mem as u32),
+        );
+        vals.insert(
+            rules::InstructionType::Store,
+            rules::Metering::Fixed(wasm_costs.mem as u32),
+        );
+        vals.insert(
+            rules::InstructionType::Div,
+            rules::Metering::Fixed(wasm_costs.div as u32),
+        );
+        vals.insert(
+            rules::InstructionType::Mul,
+            rules::Metering::Fixed(wasm_costs.mul as u32),
+        );
+        vals
+    })
+    .with_grow_cost(wasm_costs.grow_mem)
+    .with_forbidden_floats()
+}
+
+fn inject_gas_counters(
+    module: Module,
+    wasm_costs: &WasmCosts,
+) -> Result<Module, PreprocessingError> {
+    inject_gas_counter(module, &gas_rules(wasm_costs)).map_err(|_| OperationForbiddenByGasRules)
 }
 
 fn invalid_imports<E: AsRef<str>>(s: E) -> PreprocessingError {

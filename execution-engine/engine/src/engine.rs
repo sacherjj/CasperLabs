@@ -12,6 +12,7 @@ pub struct EngineState<T: TrackingCopy, G: GlobalState<T>> {
     // I think it should be constrained with a lifetime parameter.
     state: G,
     phantom: PhantomData<T>, //necessary to make the compiler not complain that I don't use T, even though G uses it.
+    wasm_costs: WasmCosts,
 }
 
 #[derive(Debug)]
@@ -37,6 +38,8 @@ impl From<wasm_prep::PreprocessingError> for Error {
             wasm_prep::PreprocessingError::DeserializeError(error) => {
                 Error::PreprocessingError(error)
             }
+            wasm_prep::PreprocessingError::OperationForbiddenByGasRules =>
+                Error::PreprocessingError(String::from("Encountered operation forbidden by gas rules. Consult instruction -> metering config map."))
         }
     }
 }
@@ -62,6 +65,7 @@ where
         EngineState {
             state,
             phantom: PhantomData,
+            wasm_costs: WasmCosts::new(),
         }
     }
     //TODO run_deploy should perform preprocessing and validation of the deploy.
@@ -70,9 +74,10 @@ where
         &self,
         module_bytes: &[u8],
         address: [u8; 20],
+        gas_limit: &u64,
     ) -> Result<ExecutionEffect, Error> {
-        let module = self.preprocess_module(module_bytes)?;
-        exec(module, address, &self.state).map_err(|e| e.into())
+        let module = self.preprocess_module(module_bytes, &self.wasm_costs)?;
+        exec(module, address, &gas_limit, &self.state).map_err(|e| e.into())
     }
 
     pub fn apply_effect(&mut self, key: Key, eff: Transform) -> Result<(), Error> {
@@ -80,8 +85,12 @@ where
     }
 
     //TODO: inject gas counter, limit stack size etc
-    fn preprocess_module(&self, module_bytes: &[u8]) -> Result<Module, Error> {
-        process(module_bytes).map_err(|err| err.into())
+    fn preprocess_module(
+        &self,
+        module_bytes: &[u8],
+        wasm_costs: &WasmCosts,
+    ) -> Result<Module, Error> {
+        process(module_bytes, wasm_costs).map_err(|err| err.into())
     }
 
     //TODO return proper error
