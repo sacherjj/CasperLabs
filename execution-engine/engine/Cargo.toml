@@ -11,6 +11,7 @@ pwasm-utils = "0.6"
 storage = { path = "../storage" }
 common = { path = "../common", features = ["std"] }
 wasm-prep = { path = "../wasm-prep" }
+vm = { path = "../vm" }
 clap = "2.32.0"
 
 

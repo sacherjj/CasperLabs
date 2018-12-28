@@ -99,7 +99,6 @@ dependencies = [
 name = "common"
 version = "0.1.0"
 dependencies = [
- "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "wee_alloc 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -169,10 +168,13 @@ dependencies = [
 name = "execution-engine"
 version = "0.1.0"
 dependencies = [
+ "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "common 0.1.0",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "pwasm-utils 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "storage 0.1.0",
+ "vm 0.1.0",
  "wasm-prep 0.1.0",
  "wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -976,6 +978,10 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "vm"
+version = "0.1.0"
+
+[[package]]
 name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -986,6 +992,7 @@ version = "0.1.0"
 dependencies = [
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "pwasm-utils 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "vm 0.1.0",
 ]
 
 [[package]]
