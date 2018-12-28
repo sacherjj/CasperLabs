@@ -124,6 +124,29 @@ impl<T: FromBytes> FromBytes for Vec<T> {
     }
 }
 
+impl<T: ToBytes> ToBytes for Option<T> {
+    fn to_bytes(&self) -> Vec<u8> {
+        let size: u32 = if let Some(_) = self { 1 } else { 0 };
+        let bytes = self.iter().flat_map(|t| t.to_bytes());
+        let mut result = size.to_bytes();
+        result.extend(bytes);
+        result
+    }
+}
+impl<T: FromBytes> FromBytes for Option<T> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (size, rest): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        match size {
+            0 => Ok((None, rest)),
+            1 => {
+                let (t, rem): (T, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((Some(t), rem))
+            }
+            _ => Err(Error::FormattingError),
+        }
+    }
+}
+
 impl ToBytes for [u8; 32] {
     fn to_bytes(&self) -> Vec<u8> {
         let mut result = Vec::with_capacity(36);

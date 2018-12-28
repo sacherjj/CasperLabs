@@ -23,6 +23,8 @@ const ALLOWED_IMPORTS: &'static [&'static str] = &[
     "call_contract",
     "get_call_result",
     "get_uref",
+    "has_uref_name",
+    "add_uref",
 ];
 
 const MEM_PAGES: u32 = 128;

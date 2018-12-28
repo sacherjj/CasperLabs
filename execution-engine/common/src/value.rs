@@ -10,6 +10,7 @@ pub enum Value {
     ByteArray(Vec<u8>),
     ListInt32(Vec<i32>),
     String(String),
+    ListString(Vec<String>),
     NamedKey(String, Key),
     Acct(Account),
     Contract {
@@ -25,6 +26,7 @@ const STRING_ID: u8 = 3;
 const ACCT_ID: u8 = 4;
 const CONTRACT_ID: u8 = 5;
 const NAMEDKEY_ID: u8 = 6;
+const LISTSTRING_ID: u8 = 7;
 
 use self::Value::*;
 
@@ -44,7 +46,7 @@ impl ToBytes for Value {
                 result
             }
             ListInt32(arr) => {
-                let mut result = Vec::with_capacity(5 + arr.len());
+                let mut result = Vec::with_capacity(5 + 4 * arr.len());
                 result.push(LISTINT32_ID);
                 result.append(&mut arr.to_bytes());
                 result
@@ -76,13 +78,19 @@ impl ToBytes for Value {
             }
             NamedKey(n, k) => {
                 let size: usize = 1 + //size for ID
-              4 +                 //size for length of String
-              n.len() +           //size of String
-              UREF_SIZE; //size of urefs
+                  4 +                 //size for length of String
+                  n.len() +           //size of String
+                  UREF_SIZE; //size of urefs
                 let mut result = Vec::with_capacity(size);
                 result.push(NAMEDKEY_ID);
                 result.append(&mut n.to_bytes());
                 result.append(&mut k.to_bytes());
+                result
+            }
+            ListString(arr) => {
+                let mut result = Vec::with_capacity(5 + arr.len());
+                result.push(LISTSTRING_ID);
+                result.append(&mut arr.to_bytes());
                 result
             }
         }
@@ -122,6 +130,10 @@ impl FromBytes for Value {
                 let (name, rem1): (String, &[u8]) = FromBytes::from_bytes(rest)?;
                 let (key, rem2): (Key, &[u8]) = FromBytes::from_bytes(rem1)?;
                 Ok((NamedKey(name, key), rem2))
+            }
+            LISTSTRING_ID => {
+                let (arr, rem): (Vec<String>, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((ListString(arr), rem))
             }
             _ => Err(Error::FormattingError),
         }
@@ -170,6 +182,7 @@ impl Value {
             Acct(_) => String::from("Account"),
             Contract { .. } => String::from("Contract"),
             NamedKey(_, _) => String::from("NamedKey"),
+            ListString(_) => String::from("List[String]"),
         }
     }
 
