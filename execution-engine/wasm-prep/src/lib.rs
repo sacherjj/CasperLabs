@@ -19,7 +19,7 @@ const ALLOWED_IMPORTS: &'static [&'static str] = &[
     "get_arg",
     "ret",
     "call_contract",
-    "get_call_result"
+    "get_call_result",
 ];
 
 const MEM_PAGES: u32 = 128;
@@ -111,9 +111,7 @@ fn validate_imports(module: &Module) -> Result<(), PreprocessingError> {
 }
 
 fn remove_memory_export(module: &mut Module) -> Result<(), PreprocessingError> {
-    let exports = module
-        .export_section_mut()
-        .ok_or(NoExportSection)?;
+    let exports = module.export_section_mut().ok_or(NoExportSection)?;
     let entries = exports.entries_mut();
     let mem_pos = entries.iter().position(|e| e.field() == "memory");
     if let Some(mem_pos) = mem_pos {
