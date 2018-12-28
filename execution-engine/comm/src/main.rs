@@ -22,7 +22,8 @@ fn main() {
         std::fs::remove_file(socket_path).expect("Remove old socket file.");
     }
 
-    let engine_state = EngineState::new(storage::InMemGS::new());
+    let mut engine_state = EngineState::new(storage::InMemGS::new());
+    engine_state.with_mocked_account([0u8;20]);
     let server_builder = engine_server::new(socket, engine_state);
     let _server = server_builder.build().expect("Start server");
 

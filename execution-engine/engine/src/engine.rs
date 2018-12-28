@@ -1,7 +1,9 @@
 use common::key::Key;
+use common::value;
 use core::marker::PhantomData;
 use execution::{exec, Error as ExecutionError};
 use parity_wasm::elements::Module;
+use std::collections::BTreeMap;
 use storage::transform::Transform;
 use storage::{ExecutionEffect, GlobalState, TrackingCopy};
 use wasm_prep::process;
@@ -57,12 +59,23 @@ where
     T: TrackingCopy,
     G: GlobalState<T>,
 {
+    // To run, contracts need an existing account.
+    // This function puts artifical entry in the GlobalState.
+    pub fn with_mocked_account(&mut self, account_addr: [u8; 20]) {
+        let account = value::Account::new([0u8; 32], 0, BTreeMap::new());
+        let transform = Transform::Write(value::Value::Acct(account));
+        self.state
+            .apply(Key::Account(account_addr), transform)
+            .expect("Creation of mocked account should be a success.");
+    }
+
     pub fn new(state: G) -> EngineState<T, G> {
         EngineState {
             state,
             phantom: PhantomData,
         }
     }
+
     //TODO run_deploy should perform preprocessing and validation of the deploy.
     //It should validate the signatures, ocaps etc.
     pub fn run_deploy(
