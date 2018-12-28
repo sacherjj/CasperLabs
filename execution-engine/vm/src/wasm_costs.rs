@@ -1,4 +1,3 @@
-// TODO: Consider moving to another module (like vm) once we have more things vm-specific
 // Taken (partially) from parity-ethereum
 #[derive(Debug)]
 pub struct WasmCosts {

@@ -3,6 +3,7 @@ extern crate core;
 extern crate parity_wasm;
 extern crate pwasm_utils;
 extern crate storage;
+extern crate vm;
 extern crate wasm_prep;
 extern crate wasmi;
 

@@ -1,8 +1,8 @@
-extern crate common;
+extern crate vm;
 extern crate parity_wasm;
 extern crate pwasm_utils;
 
-use common::wasm_costs::WasmCosts;
+use vm::wasm_costs::WasmCosts;
 use parity_wasm::elements::{self, deserialize_buffer, Error as ParityWasmError, Module};
 use pwasm_utils::{externalize_mem, inject_gas_counter, rules};
 use std::error::Error;
