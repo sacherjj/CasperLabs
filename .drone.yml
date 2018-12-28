@@ -11,7 +11,7 @@ branches:
 # additional volumes, as in package step, you need to specify all volumes.
 
 __buildenv: &buildenv
-  image: casperlabs/buildenv:0.0.1-8-g0620a67
+  image: casperlabs/buildenv:latest
 
 __sbtenv: &sbtenv
   <<: *buildenv
@@ -25,7 +25,7 @@ __sbtenv: &sbtenv
 
 clone:
   git-clone:
-    image: casperlabs/buildenv:0.0.1-8-g0620a67
+    image: casperlabs/buildenv:latest
     commands: |
       set -ex
       git clone -b ${DRONE_TAG:-$DRONE_BRANCH} $DRONE_REMOTE_URL .
