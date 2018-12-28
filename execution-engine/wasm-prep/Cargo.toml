@@ -6,3 +6,4 @@ authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mat
 [dependencies]
 parity-wasm = "0.31"
 pwasm-utils = "0.6"
+common = { path = "../common", features = ["std"] }
