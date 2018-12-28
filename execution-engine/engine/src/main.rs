@@ -4,16 +4,11 @@ extern crate execution_engine;
 extern crate storage;
 
 use clap::{App, Arg};
-use common::key::Key;
-use common::value;
 use execution_engine::engine::EngineState;
-use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter::Iterator;
-use storage::transform::Transform;
 use storage::ExecutionEffect;
-use storage::{GlobalState, TrackingCopy};
 
 #[derive(Debug)]
 struct Task {
@@ -69,9 +64,9 @@ fn main() {
         address
     };
 
-    let mut gs = storage::InMemGS::new();
-    prepare_gs(account_addr, &mut gs);
+    let gs = storage::InMemGS::new();
     let mut engine_state = EngineState::new(gs);
+    engine_state.with_mocked_account(account_addr);
 
     for wasm_bytes in wasm_files.iter() {
         let result = engine_state.run_deploy(&wasm_bytes.bytes, account_addr);
@@ -91,12 +86,4 @@ fn main() {
             Err(_) => println!("Result for file {}: {:?}", wasm_bytes.path, result),
         }
     }
-}
-
-// To run, contracts need an existing account.
-// This function puts artifical entry to in the GlobalState.
-fn prepare_gs<T: TrackingCopy, G: GlobalState<T>>(account_addr: [u8; 20], gs: &mut G) {
-    let account = value::Account::new([0u8; 32], 0, BTreeMap::new());
-    let transform = Transform::Write(value::Value::Acct(account));
-    gs.apply(Key::Account(account_addr), transform).unwrap();
 }
