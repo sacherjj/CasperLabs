@@ -1,6 +1,6 @@
 package io.casperlabs.node.configuration.updated
 import java.io.File
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import io.casperlabs.comm.PeerNode
 import simulacrum.typeclass
@@ -14,16 +14,19 @@ import io.casperlabs.shared.StoreType
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.io.Source
 import scala.util.Try
+import scala.collection.JavaConverters._
 
 @typeclass trait TomlReader[F] {
   def default: Either[String, F]
   def from(raw: String): Either[String, F]
-  def from(file: File): Either[String, F] = from(Source.fromFile(file).mkString)
+  def from(path: Path): Either[String, F] =
+    Try(Files.readAllLines(path).asScala.mkString("")).toEither
+      .leftMap(_.getMessage)
+      .flatMap(raw => from(raw))
 }
 
 object TomlReader {
   object Implicits {
-
     private implicit val bootstrapAddressCodec: Codec[PeerNode] =
       Codec {
         case (Value.Str(uri), _) =>
@@ -65,7 +68,9 @@ object TomlReader {
 
     implicit val runCommandToml = new TomlReader[Configuration.Run] {
       override def default: Either[String, Configuration.Run] =
-        parseRun(Source.fromResource("default-configuration.toml").mkString)
+        Try(Source.fromResource("default-configuration.toml").mkString).toEither
+          .leftMap(_.getMessage)
+          .flatMap(parseRun)
 
       override def from(raw: String): Either[String, Configuration.Run] =
         parseRun(raw)
@@ -73,7 +78,9 @@ object TomlReader {
 
     implicit val diagnosticsToml = new TomlReader[Configuration.Diagnostics] {
       override def default: Either[String, Configuration.Diagnostics] =
-        parseDiagnostics(Source.fromResource("default-configuration.toml").mkString)
+        Try(Source.fromResource("default-configuration.toml").mkString).toEither
+          .leftMap(_.getMessage)
+          .flatMap(parseDiagnostics)
 
       override def from(raw: String): Either[String, Configuration.Diagnostics] =
         parseDiagnostics(raw)

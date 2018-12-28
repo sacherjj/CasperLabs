@@ -1,0 +1,2 @@
+[diagnostics]
+grpc-host = "localhost"
