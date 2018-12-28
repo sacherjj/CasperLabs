@@ -38,8 +38,13 @@ impl From<wasm_prep::PreprocessingError> for Error {
             wasm_prep::PreprocessingError::DeserializeError(error) => {
                 Error::PreprocessingError(error)
             }
-            wasm_prep::PreprocessingError::OperationForbiddenByGasRules =>
+            wasm_prep::PreprocessingError::OperationForbiddenByGasRules => {
                 Error::PreprocessingError(String::from("Encountered operation forbidden by gas rules. Consult instruction -> metering config map."))
+            }
+            wasm_prep::PreprocessingError::StackLimiterError => {
+                Error::PreprocessingError(String::from("Wasm contract error: Stack limiter error."))
+
+            }
         }
     }
 }
