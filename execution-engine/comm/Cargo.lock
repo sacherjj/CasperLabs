@@ -99,7 +99,6 @@ dependencies = [
 name = "common"
 version = "0.1.0"
 dependencies = [
- "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "wee_alloc 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -169,6 +168,8 @@ dependencies = [
 name = "execution-engine"
 version = "0.1.0"
 dependencies = [
+ "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "common 0.1.0",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "pwasm-utils 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -984,6 +985,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "wasm-prep"
 version = "0.1.0"
 dependencies = [
+ "common 0.1.0",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "pwasm-utils 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

@@ -1,4 +1,5 @@
 use common::key::Key;
+use common::wasm_costs::WasmCosts;
 use core::marker::PhantomData;
 use execution::{exec, Error as ExecutionError};
 use parity_wasm::elements::Module;

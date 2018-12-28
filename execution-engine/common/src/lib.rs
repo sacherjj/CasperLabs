@@ -11,6 +11,7 @@ pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 pub mod bytesrepr;
 pub mod key;
 pub mod value;
+pub mod wasm_costs;
 
 mod ext_ffi {
     extern "C" {
