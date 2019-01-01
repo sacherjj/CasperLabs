@@ -143,7 +143,7 @@ private[configuration] object ConfigurationSoft {
 
   private[configuration] case class LmdbBlockStore(
       path: Option[Path],
-      mapSize: Option[Long],
+      blockStoreSize: Option[Long],
       maxDbs: Option[Int],
       maxReaders: Option[Int],
       useTls: Option[Boolean]
@@ -199,7 +199,7 @@ private[configuration] object ConfigurationSoft {
   private[configuration] def parse(args: Array[String]): Either[String, ConfigurationSoft] =
     for {
       default                <- tryDefault
-      cliConf                <- Options.parse(args)
+      cliConf                <- Options.parseConf(args)
       maybeRawTomlConfigFile = Options.tryReadConfigFile(args)
       maybeTomlConf          = maybeRawTomlConfigFile.map(_.flatMap(TomlReader.parse))
       result <- maybeTomlConf

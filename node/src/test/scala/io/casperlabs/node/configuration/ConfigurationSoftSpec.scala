@@ -68,7 +68,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     )
     val lmdb = LmdbBlockStore(
       path = Paths.get("test").some,
-      mapSize = 1L.some,
+      blockStoreSize = 1L.some,
       maxDbs = 1.some,
       maxReaders = 1.some,
       useTls = true.some
@@ -111,7 +111,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       |
       |[lmdb]
       |path = "test2"
-      |map-size = 2
+      |block-store-size = 2
       |max-dbs = 2
       |max-readers = 2
       |use-tls = false
@@ -206,7 +206,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     )
     val lmdb = LmdbBlockStore(
       path = Paths.get("test2").some,
-      mapSize = 2L.some,
+      blockStoreSize = 2L.some,
       maxDbs = 2.some,
       maxReaders = 2.some,
       useTls = false.some
@@ -261,7 +261,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     List("--casper-wallets-file", "test3"),
     List("--grpc-port-internal", "3"),
     List("--lmdb-block-store-size", "3"),
-    List("--lmdb-max-databases", "3"),
+    List("--lmdb-max-dbs", "3"),
     List("--lmdb-max-readers", "3"),
     List("--lmdb-path", "test3"),
     List("--lmdb-use-tls"),
@@ -337,7 +337,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     )
     val lmdb = LmdbBlockStore(
       path = Paths.get("test3").some,
-      mapSize = 3L.some,
+      blockStoreSize = 3L.some,
       maxDbs = 3.some,
       maxReaders = 3.some,
       useTls = true.some
@@ -390,6 +390,67 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
           .map(g => g.copy(host = "localhost".some, portExternal = 100.some))
       )
     c shouldEqual expected
+  }
+
+  test("Configuration.adjustPath should adjust path of data dir changed") {
+    val Some(updatedPath) = Configuration.adjustPath(
+      ConfigurationSoft(
+        Server(
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          Paths.get("another_test_dir").some,
+          None,
+          None
+        ).some,
+        None,
+        Tls(
+          None,
+          None,
+          None
+        ).some,
+        None,
+        None,
+        None
+      ),
+      Paths.get("default_test_dir/test").some,
+      ConfigurationSoft(
+        Server(
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          None,
+          Paths.get("default_test_dir").some,
+          None,
+          None
+        ).some,
+        None,
+        Tls(
+          None,
+          None,
+          None
+        ).some,
+        None,
+        None,
+        None
+      )
+    )
+    assert(updatedPath.endsWith("another_test_dir/test"))
   }
 
   def writeTestConfigFile(conf: String = rawConfigFile): Unit = Files.write(

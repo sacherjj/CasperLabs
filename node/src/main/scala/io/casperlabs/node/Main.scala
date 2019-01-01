@@ -17,21 +17,21 @@ object Main {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val log: Log[Task]       = effects.log
 
-  def main(args: Array[String]): Unit =
-    Configuration.printHelp.right.get.apply()
-//    implicit val scheduler: Scheduler = Scheduler.computation(
-//      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
-//      "node-runner",
-//      reporter = UncaughtExceptionLogger
-//    )
-//
-//    val exec: Task[Unit] =
-//      for {
-//        conf <- Task(Configuration.parse(args))
-//        _    <- conf.fold(log.error, mainProgram)
-//      } yield ()
-//
-//    exec.unsafeRunSync
+  def main(args: Array[String]): Unit = {
+    implicit val scheduler: Scheduler = Scheduler.computation(
+      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
+      "node-runner",
+      reporter = UncaughtExceptionLogger
+    )
+
+    val exec: Task[Unit] =
+      for {
+        conf <- Task(Configuration.parse(args))
+        _    <- conf.fold(errors => log.error(errors.mkString_("", "\n", "")), mainProgram)
+      } yield ()
+
+    exec.unsafeRunSync
+  }
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     implicit val diagnosticsService: GrpcDiagnosticsService =
@@ -46,7 +46,6 @@ object Main {
         conf.server.maxMessageSize
       )
 
-    implicit val time: Time[Task]           = effects.time
     implicit val consoleIO: ConsoleIO[Task] = (str: String) => Task(println(str))
 
     val program = conf.command match {

@@ -82,7 +82,7 @@ private[configuration] object Options {
   implicit def scallopOptionFlagToBoolean(so: ScallopOption[Flag]): ScallopOption[Boolean] =
     so.map(identity)
 
-  def parse(arguments: Seq[String]): Either[String, ConfigurationSoft] =
+  def parseConf(arguments: Seq[String]): Either[String, ConfigurationSoft] =
     Try {
       val options = Options(arguments, None)
       val server = ConfigurationSoft.Server(
@@ -134,7 +134,7 @@ private[configuration] object Options {
       val lmdb = ConfigurationSoft.LmdbBlockStore(
         options.run.lmdbPath,
         options.run.lmdbBlockStoreSize,
-        options.run.lmdbMaxDatabases,
+        options.run.lmdbMaxDbs,
         options.run.lmdbMaxReaders,
         options.run.lmdbUseTls
       )
@@ -156,6 +156,15 @@ private[configuration] object Options {
         Some(blockStorage)
       )
     }.toEither.leftMap(_.getMessage)
+
+  def parseCommand(args: Seq[String]): Either[String, Configuration.Command] =
+    Try {
+      val options = Options(args, None)
+      options.subcommand.fold(s"Command was not provided".asLeft[Configuration.Command]) {
+        case options.run         => Configuration.Command.Run.asRight[String]
+        case options.diagnostics => Configuration.Command.Run.asRight[String]
+      }
+    }.toEither.leftMap(_.getMessage).joinRight
 
   def tryReadConfigFile(args: Seq[String]): Option[Either[String, String]] =
     Options(args, None).configFile
@@ -356,11 +365,14 @@ private[configuration] final case class Options(
       )
 
     val lmdbBlockStoreSize =
-      opt[Long](required = false, descr = s"Casper BlockStore map size (in bytes).${l(_.mapSize)}")
+      opt[Long](
+        required = false,
+        descr = s"Casper BlockStore map size (in bytes).${l(_.blockStoreSize)}"
+      )
 
     val lmdbPath = opt[Path](descr = s"TODO.${l(_.path)}")
 
-    val lmdbMaxDatabases = opt[Int](descr = s"TODO.${l(_.maxDbs)}")
+    val lmdbMaxDbs = opt[Int](descr = s"TODO.${l(_.maxDbs)}")
 
     val lmdbMaxReaders = opt[Int](descr = s"TODO.${l(_.maxReaders)}")
 

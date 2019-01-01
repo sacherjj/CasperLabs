@@ -16,7 +16,7 @@ max-message-size = 1
 
 [lmdb]
 path = "test"
-map-size = 1
+block-store-size = 1
 max-dbs = 1
 max-readers = 1
 use-tls = true

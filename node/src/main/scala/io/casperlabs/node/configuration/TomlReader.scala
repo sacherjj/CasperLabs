@@ -27,7 +27,8 @@ private[configuration] object TomlReader {
   private implicit val pathCodec: Codec[Path] =
     Codec {
       case (Value.Str(uri), _) =>
-        Try(Paths.get(uri)).toEither.leftMap(_ => (Nil, s"Can't parse the path $uri"))
+        Try(Paths.get(uri.replace("$HOME", sys.props("user.home")))).toEither
+          .leftMap(_ => (Nil, s"Can't parse the path $uri"))
       case _ => Left((Nil, "A path must be a string"))
     }
   private implicit val boolCodec: Codec[Boolean] = Codec {
