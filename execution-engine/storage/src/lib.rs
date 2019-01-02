@@ -17,7 +17,7 @@ use self::utils::add;
 use common::key::Key;
 use common::value::Value;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     KeyNotFound { key: Key },
     TypeMismatch { expected: String, found: String },
@@ -66,7 +66,7 @@ impl InMemGS {
 }
 
 impl GlobalState<InMemTC> for InMemGS {
-    fn apply(&mut self, k: Key, mut t: Transform) -> Result<(), Error> {
+    fn apply(&mut self, k: Key, t: Transform) -> Result<(), Error> {
         let maybe_curr = self.store.remove(&k);
         match maybe_curr {
             None => match t {

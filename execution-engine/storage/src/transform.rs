@@ -10,17 +10,18 @@ pub enum Transform {
     Write(Value),
     AddInt32(i32),
     AddKeys(BTreeMap<String, Key>),
+    Failure(super::Error),
 }
 
 use self::Transform::*;
 
 impl Transform {
-    pub fn apply(&mut self, v: Value) -> Result<Value, super::Error> {
+    pub fn apply(self, v: Value) -> Result<Value, super::Error> {
         match self {
             Identity => Ok(v),
-            Write(w) => Ok(w.clone()),
+            Write(w) => Ok(w),
             AddInt32(i) => match v {
-                Value::Int32(j) => Ok(Value::Int32(*i + j)),
+                Value::Int32(j) => Ok(Value::Int32(i + j)),
                 other => {
                     let expected = String::from("Int32");
                     Err(super::Error::TypeMismatch {
@@ -29,16 +30,16 @@ impl Transform {
                     })
                 }
             },
-            AddKeys(keys) => match v {
+            AddKeys(mut keys) => match v {
                 Value::Contract {
                     mut known_urefs,
                     bytes,
                 } => {
-                    known_urefs.append(keys);
+                    known_urefs.append(&mut keys);
                     Ok(Value::Contract { bytes, known_urefs })
                 }
                 Value::Acct(mut a) => {
-                    a.insert_urefs(keys);
+                    a.insert_urefs(&mut keys);
                     Ok(Value::Acct(a))
                 }
                 other => {
@@ -49,6 +50,7 @@ impl Transform {
                     })
                 }
             },
+            Failure(error) => Err(error),
         }
     }
 }
@@ -60,22 +62,32 @@ impl Add for Transform {
         match (self, other) {
             (a, Identity) => a,
             (Identity, b) => b,
+            (a @ Failure(_), _) => a,
+            (_, b @ Failure(_)) => b,
             (_, b @ Write(_)) => b,
-            (Write(v), mut b) => {
+            (Write(v), b) => {
                 //second transform changes value being written
-                let new_value = b.apply(v).unwrap();
-                Write(new_value)
+                match b.apply(v) {
+                    Err(error) => Failure(error),
+                    Ok(new_value) => Write(new_value),
+                }
             }
             (AddInt32(i), b) => match b {
                 AddInt32(j) => AddInt32(i + j),
-                _ => panic!("Attempted to add an integer to a non-integer!"),
+                other => Failure(super::Error::TypeMismatch {
+                    expected: "AddInt32".to_owned(),
+                    found: format!("{:?}", other),
+                }),
             },
             (AddKeys(mut ks1), b) => match b {
                 AddKeys(mut ks2) => {
                     ks1.append(&mut ks2);
                     AddKeys(ks1)
                 }
-                _ => panic!("Attempted to add keys to non-keys!"),
+                other => Failure(super::Error::TypeMismatch {
+                    expected: "AddKeys".to_owned(),
+                    found: format!("{:?}", other),
+                }),
             },
         }
     }
