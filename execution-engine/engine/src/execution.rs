@@ -67,25 +67,39 @@ impl From<BytesReprError> for Error {
 
 impl HostError for Error {}
 
-//TODO: Factor out account, known_urefs, fn_store_id
-pub struct Runtime<'a, T: TrackingCopy + 'a> {
-    args: Vec<Vec<u8>>,
-    memory: MemoryRef,
+pub struct RuntimeContext<'a> {
     //Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
     //Used to check uref is known before use (prevents forging urefs)
     known_urefs: HashSet<Key>,
-    state: &'a mut T,
-    module: Module,
-    result: Vec<u8>,
-    host_buf: Vec<u8>,
     account: &'a Account,
     //Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
+}
+
+impl<'a> RuntimeContext<'a> {
+    pub fn insert_named_uref(&mut self, name: String, key: Key) {
+        self.insert_uref(key);
+        self.uref_lookup.insert(name, key);
+    }
+
+    pub fn insert_uref(&mut self, key: Key) {
+        self.known_urefs.insert(key);
+    }
+}
+
+pub struct Runtime<'a, T: TrackingCopy + 'a> {
+    args: Vec<Vec<u8>>,
+    memory: MemoryRef,
+    state: &'a mut T,
+    module: Module,
+    result: Vec<u8>,
+    host_buf: Vec<u8>,
     fn_store_id: u32,
     gas_counter: u64,
     gas_limit: &'a u64,
+    context: RuntimeContext<'a>,
 }
 
 impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
@@ -120,7 +134,15 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     fn key_from_mem(&mut self, key_ptr: u32, key_size: u32) -> Result<Key, Error> {
         let bytes = self.memory.get(key_ptr, key_size as usize)?;
-        deserialize(&bytes).map_err(|e| e.into())
+        let key = deserialize(&bytes)?;
+        match key {
+            uref @ Key::URef(_) => {
+                //TODO: check if uref was forged. If so then return Err(Error::ForgedReference(uref))
+                //      otherwise return Ok(uref).
+                Ok(uref)
+            }
+            other => Ok(other),
+        }
     }
 
     fn value_from_mem(&mut self, value_ptr: u32, value_size: u32) -> Result<Value, Error> {
@@ -200,6 +222,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
     pub fn get_uref(&mut self, name_ptr: u32, name_size: u32, dest_ptr: u32) -> Result<(), Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let uref = self
+            .context
             .uref_lookup
             .get(&name)
             .ok_or(Error::URefNotFound(name))?;
@@ -212,7 +235,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     pub fn has_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
-        if self.uref_lookup.contains_key(&name) {
+        if self.context.uref_lookup.contains_key(&name) {
             Ok(0)
         } else {
             Ok(1)
@@ -228,10 +251,9 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
     ) -> Result<(), Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let key = self.key_from_mem(key_ptr, key_size)?;
-        self.known_urefs.insert(key);
-        self.uref_lookup.insert(name.clone(), key);
+        self.context.insert_named_uref(name.clone(), key);
         self.state
-            .add(self.base_key, Value::NamedKey(name, key))
+            .add(self.context.base_key, Value::NamedKey(name, key))
             .map_err(|e| e.into())
     }
 
@@ -296,8 +318,8 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     pub fn function_address(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
-        pre_hash_bytes.extend_from_slice(self.account.pub_key());
-        pre_hash_bytes.append(&mut self.account.nonce().to_bytes());
+        pre_hash_bytes.extend_from_slice(self.context.account.pub_key());
+        pre_hash_bytes.append(&mut self.context.account.nonce().to_bytes());
         pre_hash_bytes.append(&mut self.fn_store_id.to_bytes());
 
         self.fn_store_id += 1;
@@ -350,7 +372,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     pub fn new_uref(&mut self, key_ptr: u32) -> Result<(), Trap> {
         let key = self.state.new_uref();
-        self.known_urefs.insert(key);
+        self.context.insert_uref(key);
         self.memory
             .set(key_ptr, &key.to_bytes())
             .map_err(|e| Error::Interpreter(e).into())
@@ -692,16 +714,18 @@ fn sub_call<T: TrackingCopy>(
         args,
         memory,
         state: current_runtime.state,
-        uref_lookup: refs,
-        known_urefs,
         module: parity_module,
         result: Vec::new(),
         host_buf: Vec::new(),
-        account: current_runtime.account,
-        base_key: key,
         fn_store_id: 0,
         gas_counter: current_runtime.gas_counter,
         gas_limit: current_runtime.gas_limit,
+        context: RuntimeContext {
+            uref_lookup: refs,
+            known_urefs,
+            account: current_runtime.context.account,
+            base_key: key,
+        },
     };
 
     let result = instance.invoke_export("call", &[], &mut runtime);
@@ -740,16 +764,18 @@ pub fn exec<T: TrackingCopy, G: GlobalState<T>>(
         args: Vec::new(),
         memory,
         state: &mut state,
-        uref_lookup: &mut account.urefs_lookup().clone(),
-        known_urefs,
         module: parity_module,
         result: Vec::new(),
         host_buf: Vec::new(),
-        account: &account,
-        base_key: acct_key,
         fn_store_id: 0,
         gas_counter: 0,
         gas_limit: gas_limit,
+        context: RuntimeContext {
+            uref_lookup: &mut account.urefs_lookup().clone(),
+            known_urefs,
+            account: &account,
+            base_key: acct_key,
+        },
     };
     let _ = instance.invoke_export("call", &[], &mut runtime)?;
 
