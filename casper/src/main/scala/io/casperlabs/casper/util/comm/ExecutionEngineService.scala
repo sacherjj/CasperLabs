@@ -10,16 +10,13 @@ import io.netty.channel.epoll.{Epoll, EpollDomainSocketChannel, EpollEventLoopGr
 import io.netty.channel.kqueue.{KQueueDomainSocketChannel, KQueueEventLoopGroup}
 import io.netty.channel.unix.DomainSocketAddress
 import monix.eval.Task
+import simulacrum.typeclass
 
 import scala.util.Either
 
-trait ExecutionEngineService[F[_]] {
+@typeclass trait ExecutionEngineService[F[_]] {
   def sendDeploy(deploy: Deploy): F[Either[Throwable, ExecutionEffect]]
   def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]]
-}
-
-object ExecutionEngineService {
-  def apply[F[_]](implicit ev: ExecutionEngineService[F]): ExecutionEngineService[F] = ev
 }
 
 class GrpcExecutionEngineService(addr: String, maxMessageSize: Int)

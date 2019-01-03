@@ -9,7 +9,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.{BlockQuery, BlocksQuery, DeployData}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.Catscontrib._
-import io.casperlabs.ipc.{CommutativeEffects, ExecutionEffect}
 import io.casperlabs.shared.Time
 
 import scala.concurrent.duration._
@@ -31,15 +30,7 @@ object DeployRuntime {
   def showBlocks[F[_]: Monad: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
 
-  def executeEffects[F[_]: Monad: Sync: ExecutionEngineService](c: CommutativeEffects): F[Unit] =
-    gracefulExit(ExecutionEngineService[F].executeEffects(c).map(_ => "success".asRight[Throwable]))
-
-  def handleDeployResult[F[_]: Monad: Sync: ExecutionEngineService](
-      r: ExecutionEffect
-  ): F[CommutativeEffects] =
-    CommutativeEffects(r.transformMap).pure[F]
-
-  def deployFileProgram[F[_]: Monad: Sync: ExecutionEngineService](
+  def deployFileProgram[F[_]: Monad: Sync: DeployService](
       purseAddress: String,
       gasLimit: Long,
       gasPrice: Long,
