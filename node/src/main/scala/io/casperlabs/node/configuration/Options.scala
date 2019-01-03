@@ -82,9 +82,12 @@ private[configuration] object Options {
   implicit def scallopOptionFlagToBoolean(so: ScallopOption[Flag]): ScallopOption[Boolean] =
     so.map(identity)
 
-  def parseConf(arguments: Seq[String]): Either[String, ConfigurationSoft] =
+  def parseConf(
+      arguments: Seq[String],
+      defaults: ConfigurationSoft
+  ): Either[String, ConfigurationSoft] =
     Try {
-      val options = Options(arguments, None)
+      val options = Options(arguments, defaults)
       val server = ConfigurationSoft.Server(
         options.run.serverHost,
         options.run.serverPort,
@@ -158,26 +161,32 @@ private[configuration] object Options {
       )
     }.toEither.leftMap(_.getMessage)
 
-  def parseCommand(args: Seq[String]): Either[String, Configuration.Command] =
+  def parseCommand(
+      args: Seq[String],
+      defaults: ConfigurationSoft
+  ): Either[String, Configuration.Command] =
     Try {
-      val options = Options(args, None)
+      val options = Options(args, defaults)
       options.subcommand.fold(s"Command was not provided".asLeft[Configuration.Command]) {
         case options.run         => Configuration.Command.Run.asRight[String]
         case options.diagnostics => Configuration.Command.Run.asRight[String]
       }
     }.toEither.leftMap(_.getMessage).joinRight
 
-  def tryReadConfigFile(args: Seq[String]): Option[Either[String, String]] =
-    Options(args, None).configFile
+  def tryReadConfigFile(
+      args: Seq[String],
+      defaults: ConfigurationSoft
+  ): Option[Either[String, String]] =
+    Options(args, defaults).configFile
       .map(p => Try(Source.fromFile(p.toFile).mkString).toEither.leftMap(_.getMessage))
       .toOption
 
-  def printHelp(defaults: ConfigurationSoft): Unit = Options(Seq.empty, Some(defaults)).printHelp()
+  def printHelp(defaults: ConfigurationSoft): Unit = Options(Seq.empty, defaults).printHelp()
 }
 
 private[configuration] final case class Options(
     arguments: Seq[String],
-    defaultsForHelpPrinting: Option[ConfigurationSoft]
+    defaultsForHelpPrinting: ConfigurationSoft
 ) extends ScallopConf(arguments) {
   import Converter._
   import Options.Flag
@@ -187,27 +196,41 @@ private[configuration] final case class Options(
 
   //TODO: Use Monocle lenses?
   def s[A](select: ConfigurationSoft.Server => Option[A]): String =
-    defaultsForHelpPrinting.flatMap(_.server.flatMap(select))
+    defaultsForHelpPrinting.server.flatMap(select)
 
   def g[A](select: ConfigurationSoft.GrpcServer => Option[A]): String =
-    defaultsForHelpPrinting.flatMap(_.grpc.flatMap(select))
+    defaultsForHelpPrinting.grpc.flatMap(select)
 
   def t[A](select: ConfigurationSoft.Tls => Option[A]): String =
-    defaultsForHelpPrinting.flatMap(_.tls.flatMap(select))
+    defaultsForHelpPrinting.tls.flatMap(select)
 
   def c[A](select: ConfigurationSoft.Casper => Option[A]): String =
-    defaultsForHelpPrinting.flatMap(_.casper.flatMap(select))
+    defaultsForHelpPrinting.casper.flatMap(select)
 
   def l[A](select: ConfigurationSoft.LmdbBlockStore => Option[A]): String =
-    defaultsForHelpPrinting.flatMap(_.lmdb.flatMap(select))
+    defaultsForHelpPrinting.lmdb.flatMap(select)
 
   def b[A](select: ConfigurationSoft.BlockDagFileStorage => Option[A]): String =
-    defaultsForHelpPrinting.flatMap(_.blockStorage.flatMap(select))
+    defaultsForHelpPrinting.blockStorage.flatMap(select)
 
   version(s"Casper Labs Node ${BuildInfo.version}")
   printedName = "casperlabs"
+  banner("""
+      |Configuration file --config-file can contain tables
+      |[server], [grpc], [lmdb], [casper] and [block-storage].
+      |
+      |CLI options match TOML keys, example:
+      |    --[prefix]-[key-name]=value i.e. --server-host=localhost
+      |
+      |    equals
+      |
+      |    [prefix]                    [server]
+      |    key-name = "value"          host = "localhost"
+      |
+      |CLI arguments will take precedence over TOML config file.
+    """.stripMargin)
 
-  val configFile = opt[Path](descr = "Path to the configuration file.")
+  val configFile = opt[Path](descr = "Path to the TOML configuration file.")
 
   val grpcPort =
     opt[Int](descr = s"Port used for external gRPC API.${g(_.portExternal)}")

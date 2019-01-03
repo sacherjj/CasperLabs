@@ -199,12 +199,12 @@ private[configuration] object ConfigurationSoft {
 
   private[configuration] def parse(args: Array[String]): Either[String, ConfigurationSoft] =
     for {
-      default                <- tryDefault
-      cliConf                <- Options.parseConf(args)
-      maybeRawTomlConfigFile = Options.tryReadConfigFile(args)
+      defaults               <- tryDefault
+      cliConf                <- Options.parseConf(args, defaults)
+      maybeRawTomlConfigFile = Options.tryReadConfigFile(args, defaults)
       maybeTomlConf          = maybeRawTomlConfigFile.map(_.flatMap(TomlReader.parse))
       result <- maybeTomlConf
-                 .map(_.map(tomlConf => cliConf.fallbackTo(tomlConf).fallbackTo(default)))
-                 .getOrElse(Right(cliConf.fallbackTo(default)))
+                 .map(_.map(tomlConf => cliConf.fallbackTo(tomlConf).fallbackTo(defaults)))
+                 .getOrElse(Right(cliConf.fallbackTo(defaults)))
     } yield result
 }

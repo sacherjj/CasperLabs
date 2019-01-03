@@ -58,16 +58,19 @@ object Configuration {
   }
 
   def printHelp: Either[String, () => Unit] =
-    ConfigurationSoft.tryDefault.map { defaultConf => () =>
-      Options.printHelp(defaultConf)
+    ConfigurationSoft.tryDefault.map {
+      defaultConf =>
+        { () =>
+          Options.printHelp(defaultConf)
+        }
     }
 
   def parse(args: Array[String]): ValidatedNec[String, Configuration] = {
     val either = for {
-      default  <- ConfigurationSoft.tryDefault
+      defaults <- ConfigurationSoft.tryDefault
       confSoft <- ConfigurationSoft.parse(args)
-      command  <- Options.parseCommand(args)
-    } yield parseToActual(command, default, confSoft)
+      command  <- Options.parseCommand(args, defaults)
+    } yield parseToActual(command, defaults, confSoft)
 
     either.fold(_.invalidNec[Configuration], identity)
   }
