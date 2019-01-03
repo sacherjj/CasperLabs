@@ -55,6 +55,11 @@ object Main {
         conf.grpcServer.portExternal,
         conf.server.maxMessageSize
       )
+    implicit val executionEngineService: GrpcExecutionEngineService =
+      new GrpcExecutionEngineService(
+        conf.grpcServer.socket,
+        conf.server.maxMessageSize
+      )
 
     implicit val time: Time[Task]           = effects.time
     implicit val consoleIO: ConsoleIO[Task] = (str: String) => Task(println(str))
@@ -87,6 +92,8 @@ object Main {
         Task.delay {
           diagnosticsService.close()
           deployService.close()
+          executionEngineService.close()
+          System.exit(1)
         }
     )
   }

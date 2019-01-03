@@ -35,8 +35,10 @@ object Configuration {
   private val profiles: Map[String, Profile] =
     Map(defaultProfile.name -> defaultProfile, dockerProfile.name -> dockerProfile)
 
-  private val DefaultPort                       = 40400
-  private val DefaultGrpcPortExternal           = 40401
+  private val DefaultPort             = 40400
+  private val DefaultGrpcPortExternal = 40401
+  private val DefaultGrpcSocketPath =
+    Paths.get(sys.props("user.home"), ".casper-node.sock").toString
   private val DefaultGrpcPortInternal           = 40402
   private val DefaultHttPort                    = 40403
   private val DefaultKademliaPort               = 40404
@@ -152,6 +154,7 @@ object Configuration {
           ),
           GrpcServer(
             options.grpcHost.getOrElse(DefaultGrpcHost),
+            options.grpcSocketPath.getOrElse(DefaultGrpcSocketPath),
             options.grpcPort.getOrElse(DefaultGrpcPortExternal),
             options.grpcPortInternal.getOrElse(DefaultGrpcPortInternal)
           ),
@@ -213,6 +216,8 @@ object Configuration {
     val grpcHost: String = get(_.grpcHost, _.grpcServer.flatMap(_.host), DefaultGrpcHost)
     val grpcPortExternal: Int =
       get(_.grpcPort, _.grpcServer.flatMap(_.port), DefaultGrpcPortExternal)
+    val grpcSocketPath: String =
+      get(_.grpcSocketPath, _.grpcServer.flatMap(_.socket), DefaultGrpcSocketPath)
     val grpcPortInternal: Int =
       get(_.grpcPortInternal, _.grpcServer.flatMap(_.portInternal), DefaultGrpcPortInternal)
 
@@ -339,6 +344,7 @@ object Configuration {
     )
     val grpcServer = GrpcServer(
       grpcHost,
+      grpcSocketPath,
       grpcPortExternal,
       grpcPortInternal
     )

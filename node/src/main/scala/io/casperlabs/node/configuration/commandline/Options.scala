@@ -101,6 +101,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val grpcPortInternal =
     opt[Int](descr = "Port used for internal gRPC API.")
 
+  val grpcSocketPath = opt[String](descr = "Socket path used for internal gRPC API.")
+
   val grpcHost =
     opt[String](descr = "Hostname or IP of node on which gRPC service is running.")
 
@@ -280,8 +282,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val from = opt[String](
-      descr = "Purse address that will be used to pay for the deployment.",
-      validate = addressCheck
+      descr = "Purse address that will be used to pay for the deployment."
     )
 
     val gasLimit =

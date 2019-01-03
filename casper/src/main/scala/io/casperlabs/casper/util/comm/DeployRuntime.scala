@@ -6,7 +6,7 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.{Apply, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.protocol.{BlockQuery, BlocksQuery, DeployData}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.shared.Time
@@ -61,9 +61,6 @@ object DeployRuntime {
               .withNonce(nonce)
         }
         .flatMap(DeployService[F].deploy)
-        .handleError(
-          ex => Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex))
-        )
     )
   }
 
