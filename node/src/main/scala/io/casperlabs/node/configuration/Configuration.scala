@@ -396,24 +396,7 @@ object Configuration {
   private def subcommand(options: commandline.Options): Command =
     options.subcommand match {
       case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy)      =>
-        //TODO: change the defaults before main net
-        import options.deploy._
-        Deploy(
-          from.getOrElse("0x"),
-          gasLimit(),
-          gasPrice(),
-          nonce.getOrElse(0L),
-          session(),
-          payment()
-        )
-      case Some(options.deployDemo) => DeployDemo
-      case Some(options.propose)    => Propose
-      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks) =>
-        import options.showBlocks._
-        ShowBlocks(depth.getOrElse(1))
-      case Some(options.run) => Run
+      case Some(options.run)         => Run
       case Some(options.bondingDeployGen) =>
         import options.bondingDeployGen._
         BondingDeployGen(bondKey(), ethAddr(), amount(), privateKey(), publicKey())

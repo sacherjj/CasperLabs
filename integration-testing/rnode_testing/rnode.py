@@ -8,7 +8,7 @@ from typing import Generator
 
 import pytest
 from docker.client import DockerClient
-
+from docker.errors import ContainerError
 import conftest
 from rnode_testing.common import (
     random_string,
@@ -23,7 +23,7 @@ from rnode_testing.wait import (
 from multiprocessing import Queue, Process
 from queue import Empty
 
-from typing import Dict, List, Tuple, Union, TYPE_CHECKING, Optional, Generator
+from typing import Dict, List, Tuple, Union, TYPE_CHECKING, Optional, Generator, Callable
 
 if TYPE_CHECKING:
     from conftest import KeyPair
@@ -42,8 +42,6 @@ rnode_deploy_dir = "{}/deploy".format(rnode_directory)
 rnode_bonds_file = '{}/genesis/bonds.txt'.format(rnode_directory)
 rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
 rnode_key = '{}/node.key.pem'.format(rnode_directory)
-node_session_code = '{}/session.wasm'.format(rnode_directory)
-node_payment_code = '{}/payment.wasm'.format(rnode_directory)
 
 
 class InterruptedException(Exception):
@@ -171,11 +169,17 @@ class Node:
     def show_blocks(self) -> Tuple[int, str]:
         return self.exec_run('{} show-blocks'.format(rnode_binary))
 
-    def show_blocks_with_depth(self, depth: int) -> Tuple[int, str]:
-        return self.exec_run(f'{rnode_binary} show-blocks --depth {depth}')
+    def show_blocks_with_depth(self, depth: int) -> str:
+        command = " ".join([
+            "--host",
+            self.name,
+            "show-blocks",
+            "--depth={}".format(depth)
+        ])
+        return self.invoke_client(command)
 
     def get_blocks_count(self, depth: int) -> int:
-        _, show_blocks_output = self.show_blocks_with_depth(depth)
+        show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
 
     def get_block(self, block_hash: str) -> str:
@@ -215,11 +219,55 @@ class Node:
     def call_rnode(self, *node_args: str, stderr: bool = True) -> str:
         return self.shell_out(rnode_binary, *node_args, stderr=stderr)
 
-    def deploy(self, session_code_file: str, payment_code_file: str) -> str:
-        return self.call_rnode('deploy', '--from=0x1', '--gas-limit=1000000',
-                               '--gas-price=1', '--nonce=0', '--session',
-                               session_code_file, '--payment',
-                               payment_code_file)
+    def invoke_client(self, command: str, volumes: Dict[str, Dict[str, str]]=None) -> str:
+        if volumes is None:
+            volumes = {}
+        try:
+            logging.info("COMMAND {}".format(command))
+            output = self.docker_client.containers.run(
+                image="io.casperlabs/client",
+                auto_remove=True,
+                name="client",
+                command=command,
+                network=self.network,
+                volumes=volumes
+            ).decode("utf-8")
+            logging.debug("OUTPUT {}".format(output))
+            return output
+        except ContainerError as err:
+            logging.warning("EXITED code={} command='{}' output='{}'".format(err.exit_status, err.command, err.stderr))
+            return err.stderr.decode("utf-8")
+
+    def deploy(self, session_code: str, payment_code:str="payment.wasm",
+               from_address:str="0x01", gas_limit:int=1000000,
+               gas_price:int=1, nonce:int=0) -> str:
+        session_code_full_path = os.path.join(os.getcwd(), "resources", session_code)
+        payment_code_full_path = os.path.join(os.getcwd(), "resources", payment_code)
+
+        command = " ".join([
+            "--host",
+            self.name,
+            "deploy",
+            "--from", from_address,
+            "--gas-limit", str(gas_limit),
+            "--gas-price", str(gas_price),
+            "--nonce", str(nonce),
+            "--session=/session.wasm",
+            "--payment=/payment.wasm"
+        ])
+
+        volumes = {
+            session_code_full_path: {
+                "bind": "/session.wasm",
+                "mode": "ro"
+            },
+            payment_code_full_path: {
+                "bind": "/payment.wasm",
+                "mode": "ro"
+            }
+        }
+
+        return self.invoke_client(command, volumes)
 
     def deploy_string(self, rholang_code: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)
@@ -229,9 +277,12 @@ class Node:
         ))
 
     def propose(self) -> str:
-        output = self.call_rnode('propose', stderr=False)
-        block_hash = extract_block_hash_from_propose_output(output)
-        return block_hash
+        command = " ".join([
+            "--host",
+            self.name,
+            "propose"
+        ])
+        return self.invoke_client(command)
 
     def generate_faucet_bonding_deploys(self, bond_amount: int, private_key: str, public_key: str) -> str:
         return self.call_rnode('generateFaucetBondingDeploys',
@@ -378,8 +429,6 @@ def make_bootstrap_node(
 ) -> Node:
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
-    session_code = get_absolute_path_for_mounting("session.wasm", mount_dir)
-    payment_code = get_absolute_path_for_mounting("payment.wasm", mount_dir)
 
     name = "{node_name}.{network_name}".format(
         node_name='bootstrap' if container_name is None else container_name,
@@ -399,9 +448,7 @@ def make_bootstrap_node(
 
     volumes = [
         "{}:{}".format(cert_file, rnode_certificate),
-        "{}:{}".format(key_file, rnode_key),
-        "{}:{}".format(session_code, node_session_code),
-        "{}:{}".format(payment_code, node_payment_code)
+        "{}:{}".format(key_file, rnode_key)
     ]
 
     container = make_node(

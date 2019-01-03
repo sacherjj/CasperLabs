@@ -1,37 +1,20 @@
-package io.casperlabs.casper.util.comm
-
+package io.casperlabs.client
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
 
-import scala.util.Either
-
-import io.casperlabs.casper.protocol._
-
 import com.google.protobuf.empty.Empty
+import io.casperlabs.casper.protocol._
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
-trait DeployService[F[_]] {
-  def deploy(d: DeployData): F[Either[Throwable, String]]
-  def createBlock(): F[Either[Throwable, String]] //create block and add to Casper internal state
-  def showBlock(q: BlockQuery): F[Either[Throwable, String]]
-  def showBlocks(q: BlocksQuery): F[Either[Throwable, String]]
-  def addBlock(b: BlockMessage): F[Either[Throwable, String]]
-}
-
-object DeployService {
-  def apply[F[_]](implicit ev: DeployService[F]): DeployService[F] = ev
-}
-
-class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
-    extends DeployService[Task]
-    with Closeable {
+class GrpcDeployService(host: String, port: Int) extends DeployService[Task] with Closeable {
+  private val DefaultMaxMessageSize = 256 * 1024 * 1024
 
   private val channel: ManagedChannel =
     ManagedChannelBuilder
       .forAddress(host, port)
-      .maxInboundMessageSize(maxMessageSize)
       .usePlaintext()
+      .maxInboundMessageSize(DefaultMaxMessageSize)
       .build()
 
   private val stub = CasperMessageGrpcMonix.stub(channel)
