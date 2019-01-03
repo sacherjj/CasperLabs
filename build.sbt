@@ -157,11 +157,13 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(crypto)
 
+val nodeAndClientVersion = "0.7.1"
+
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.7.1",
+    version := nodeAndClientVersion,
     name := "node",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "CasperLabs Node",
@@ -304,7 +306,7 @@ lazy val client = (project in file("client"))
   .settings(commonSettings: _*)
   .settings(
     name := "client",
-    version := "0.0.1-SNAPSHOT",
+    version := nodeAndClientVersion,
     libraryDependencies ++= commonDependencies ++ Seq(scallop, grpcNetty),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.client",
