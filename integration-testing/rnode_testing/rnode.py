@@ -170,22 +170,13 @@ class Node:
         return self.exec_run('{} show-blocks'.format(rnode_binary))
 
     def show_blocks_with_depth(self, depth: int) -> str:
-        def helper():
-            command = " ".join([
-                "--host",
-                self.name,
-                "show-blocks",
-                "--depth={}".format(depth)
-            ])
-            logging.info("COMMAND {}".format(command))
-            return self.docker_client.containers.run(
-                image="io.casperlabs/client",
-                auto_remove=True,
-                name="client",
-                command=command,
-                network=self.network
-            )
-        return self.invoke_client(helper)
+        command = " ".join([
+            "--host",
+            self.name,
+            "show-blocks",
+            "--depth={}".format(depth)
+        ])
+        return self.invoke_client(command)
 
     def get_blocks_count(self, depth: int) -> int:
         show_blocks_output = self.show_blocks_with_depth(depth)
@@ -228,54 +219,53 @@ class Node:
     def call_rnode(self, *node_args: str, stderr: bool = True) -> str:
         return self.shell_out(rnode_binary, *node_args, stderr=stderr)
 
-    @staticmethod
-    def invoke_client(run_client: Callable[[], bytes]) -> str:
+    def invoke_client(self, command: str, volumes: Dict[str, Dict[str, str]]=None) -> str:
+        if volumes is None:
+            volumes = {}
         try:
-            output = run_client().decode("utf-8")
+            logging.info("COMMAND {}".format(command))
+            output = self.docker_client.containers.run(
+                image="io.casperlabs/client",
+                auto_remove=True,
+                name="client",
+                command=command,
+                network=self.network,
+                volumes=volumes
+            ).decode("utf-8")
             logging.debug("OUTPUT {}".format(output))
             return output
         except ContainerError as err:
             logging.warning("EXITED code={} command='{}' output='{}'".format(err.exit_status, err.command, err.stderr))
             return err.stderr.decode("utf-8")
 
-    def deploy(self) -> str:
-        def helper():
-            session_code = os.path.join(os.getcwd(), "resources", "session.wasm")
-            payment_code = os.path.join(os.getcwd(), "resources", "payment.wasm")
+    def deploy(self, session_code: str, payment_code:str="payment.wasm") -> str:
+        session_code_full_path = os.path.join(os.getcwd(), "resources", session_code)
+        payment_code_full_path = os.path.join(os.getcwd(), "resources", payment_code)
 
-            command = " ".join([
-                "--host",
-                self.name,
-                "deploy",
-                "--from=0x01",
-                "--gas-limit=1000000",
-                "--gas-price=1",
-                "--nonce=0",
-                "--session=/session.wasm",
-                "--payment=/payment.wasm"
-            ])
+        command = " ".join([
+            "--host",
+            self.name,
+            "deploy",
+            "--from=0x01",
+            "--gas-limit=1000000",
+            "--gas-price=1",
+            "--nonce=0",
+            "--session=/session.wasm",
+            "--payment=/payment.wasm"
+        ])
 
-            logging.info("COMMAND {}".format(command))
+        volumes = {
+            session_code_full_path: {
+                "bind": "/session.wasm",
+                "mode": "ro"
+            },
+            payment_code_full_path: {
+                "bind": "/payment.wasm",
+                "mode": "ro"
+            }
+        }
 
-            return self.docker_client.containers.run(
-                image="io.casperlabs/client",
-                auto_remove=True,
-                name="client",
-                command=command,
-                network=self.network,
-                volumes={
-                    session_code: {
-                        "bind": "/session.wasm",
-                        "mode": "ro"
-                    },
-                    payment_code: {
-                        "bind": "/payment.wasm",
-                        "mode": "ro"
-                    }
-                }
-            )
-
-        return self.invoke_client(helper)
+        return self.invoke_client(command, volumes)
 
     def deploy_string(self, rholang_code: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)
@@ -285,21 +275,12 @@ class Node:
         ))
 
     def propose(self) -> str:
-        def helper():
-            command = " ".join([
-                "--host",
-                self.name,
-                "propose"
-            ])
-            logging.info("COMMAND {}".format(command))
-            return self.docker_client.containers.run(
-                image="io.casperlabs/client",
-                auto_remove=True,
-                name="client",
-                command=command,
-                network=self.network
-            )
-        return self.invoke_client(helper)
+        command = " ".join([
+            "--host",
+            self.name,
+            "propose"
+        ])
+        return self.invoke_client(command)
 
     def generate_faucet_bonding_deploys(self, bond_amount: int, private_key: str, public_key: str) -> str:
         return self.call_rnode('generateFaucetBondingDeploys',
