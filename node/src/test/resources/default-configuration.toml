@@ -29,8 +29,9 @@ block-metadata-crc-path = "test"
 checkpoints-dir-path = "test"
 latest-messages-log-max-size-factor = 1
 
-[grpc-server]
+[grpc]
 host = "test"
+socket = "test"
 port-external = 1
 port-internal = 1
 

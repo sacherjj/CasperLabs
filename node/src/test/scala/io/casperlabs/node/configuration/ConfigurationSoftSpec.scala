@@ -38,6 +38,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     )
     val grpcServer = GrpcServer(
       host = "test".some,
+      socket = Paths.get("test").some,
       portExternal = 1.some,
       portInternal = 1.some
     )
@@ -124,8 +125,9 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       |checkpoints-dir-path = "test2"
       |latest-messages-log-max-size-factor = 2
       |
-      |[grpc-server]
+      |[grpc]
       |host = "test2"
+      |socket = "test2"
       |port-external = 2
       |port-internal = 2
       |
@@ -176,6 +178,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     )
     val grpcServer = GrpcServer(
       host = "test2".some,
+      socket = Paths.get("test2").some,
       portExternal = 2.some,
       portInternal = 2.some
     )
@@ -260,6 +263,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     List("--casper-validator-sig-algorithm", "test3"),
     List("--casper-wallets-file", "test3"),
     List("--grpc-port-internal", "3"),
+    List("--grpc-socket", "test3"),
     List("--lmdb-block-store-size", "3"),
     List("--lmdb-max-dbs", "3"),
     List("--lmdb-max-readers", "3"),
@@ -307,6 +311,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     )
     val grpcServer = GrpcServer(
       host = "test3".some,
+      socket = Paths.get("test3").some,
       portExternal = 3.some,
       portInternal = 3.some
     )
@@ -379,14 +384,14 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
 
   test("ConfigurationSoft.parse should fallback field by field cliConf->confFile->default") {
     writeTestConfigFile("""
-        |[grpc-server]
+        |[grpc]
         |host = "localhost"
       """.stripMargin)
     val Right(c) =
       ConfigurationSoft.parse(Array("--config-file", configFilename, "--grpc-port=100", "run"))
     val expected =
       expectedFromResources.copy(
-        grpcServer = expectedFromResources.grpcServer
+        grpc = expectedFromResources.grpc
           .map(g => g.copy(host = "localhost".some, portExternal = 100.some))
       )
     c shouldEqual expected

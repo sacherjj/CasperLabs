@@ -12,7 +12,7 @@ import scala.util.Try
 
 private[configuration] case class ConfigurationSoft(
     server: Option[ConfigurationSoft.Server],
-    grpcServer: Option[ConfigurationSoft.GrpcServer],
+    grpc: Option[ConfigurationSoft.GrpcServer],
     tls: Option[ConfigurationSoft.Tls],
     casper: Option[ConfigurationSoft.Casper],
     lmdb: Option[ConfigurationSoft.LmdbBlockStore],
@@ -160,6 +160,7 @@ private[configuration] object ConfigurationSoft {
 
   private[configuration] case class GrpcServer(
       host: Option[String],
+      socket: Option[Path],
       portExternal: Option[Int],
       portInternal: Option[Int]
   )

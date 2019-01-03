@@ -39,6 +39,7 @@ object Configuration {
   )
   case class GrpcServer(
       host: String,
+      socket: Path,
       portExternal: Int,
       portInternal: Int
   )
@@ -113,9 +114,10 @@ object Configuration {
       confSoft: ConfigurationSoft
   ): ValidatedNec[String, Configuration.GrpcServer] =
     (
-      optToValidated(confSoft.grpcServer.flatMap(_.host), "GrpcServer.host"),
-      optToValidated(confSoft.grpcServer.flatMap(_.portExternal), "GrpcServer.portExternal"),
-      optToValidated(confSoft.grpcServer.flatMap(_.portInternal), "GrpcServer.portInternal")
+      optToValidated(confSoft.grpc.flatMap(_.host), "GrpcServer.host"),
+      optToValidated(confSoft.grpc.flatMap(_.socket), "GrpcServer.socket"),
+      optToValidated(confSoft.grpc.flatMap(_.portExternal), "GrpcServer.portExternal"),
+      optToValidated(confSoft.grpc.flatMap(_.portInternal), "GrpcServer.portInternal")
     ).mapN(Configuration.GrpcServer.apply)
 
   private def parseTls(

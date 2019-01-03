@@ -1,6 +1,7 @@
 package io.casperlabs.node
 
 import cats.implicits._
+import io.casperlabs.casper.util.comm.GrpcExecutionEngineService
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm._
@@ -65,7 +66,7 @@ object Main {
           diagnosticsService.close()
           executionEngineService.close()
           System.exit(1)
-      }
+        }
     )
   }
 

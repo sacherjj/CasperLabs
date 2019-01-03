@@ -103,6 +103,7 @@ private[configuration] object Options {
       )
       val grpcServer = ConfigurationSoft.GrpcServer(
         options.grpcHost,
+        options.run.grpcSocket,
         options.grpcPort,
         options.run.grpcPortInternal
       )
@@ -189,7 +190,7 @@ private[configuration] final case class Options(
     defaultsForHelpPrinting.flatMap(_.server.flatMap(select))
 
   def g[A](select: ConfigurationSoft.GrpcServer => Option[A]): String =
-    defaultsForHelpPrinting.flatMap(_.grpcServer.flatMap(select))
+    defaultsForHelpPrinting.flatMap(_.grpc.flatMap(select))
 
   def t[A](select: ConfigurationSoft.Tls => Option[A]): String =
     defaultsForHelpPrinting.flatMap(_.tls.flatMap(select))
@@ -228,6 +229,9 @@ private[configuration] final case class Options(
 
     val grpcPortInternal =
       opt[Int](descr = s"Port used for internal gRPC API.${g(_.portInternal)}")
+
+    val grpcSocket =
+      opt[Path](descr = s"Socket path used for internal gRPC API.${g(_.socket)}")
 
     val serverDynamicHostAddress =
       opt[Flag](descr = s"Host IP address changes dynamically.${s(_.dynamicHostAddress)}")

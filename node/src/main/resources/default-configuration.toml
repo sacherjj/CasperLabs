@@ -29,8 +29,9 @@ block-metadata-crc-path = "$HOME/.casperlabs/casper-block-dag-file-storage-block
 checkpoints-dir-path = "$HOME/.casperlabs/casper-block-dag-file-storage-checkpoints"
 latest-messages-log-max-size-factor = 10
 
-[grpc-server]
+[grpc]
 host = "localhost"
+socket = "$HOME/.casperlabs/.casper-node.sock"
 port-external = 40401
 port-internal = 40402
 
