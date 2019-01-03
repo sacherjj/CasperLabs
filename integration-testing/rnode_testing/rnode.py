@@ -238,7 +238,9 @@ class Node:
             logging.warning("EXITED code={} command='{}' output='{}'".format(err.exit_status, err.command, err.stderr))
             return err.stderr.decode("utf-8")
 
-    def deploy(self, session_code: str, payment_code:str="payment.wasm") -> str:
+    def deploy(self, session_code: str, payment_code:str="payment.wasm",
+               from_address:str="0x01", gas_limit:int=1000000,
+               gas_price:int=1, nonce:int=0) -> str:
         session_code_full_path = os.path.join(os.getcwd(), "resources", session_code)
         payment_code_full_path = os.path.join(os.getcwd(), "resources", payment_code)
 
@@ -246,10 +248,10 @@ class Node:
             "--host",
             self.name,
             "deploy",
-            "--from=0x01",
-            "--gas-limit=1000000",
-            "--gas-price=1",
-            "--nonce=0",
+            "--from", from_address,
+            "--gas-limit", str(gas_limit),
+            "--gas-price", str(gas_price),
+            "--nonce", str(nonce),
             "--session=/session.wasm",
             "--payment=/payment.wasm"
         ])
