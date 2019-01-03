@@ -85,3 +85,4 @@ execution-engine/engine/*.lock
 execution-engine/wasm-prep/*.lock
 contract-examples/*/*.lock
 contract-examples/counter/*/*.lock
+contract-examples/mailing-list/*/*.lock

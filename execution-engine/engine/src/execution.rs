@@ -67,22 +67,39 @@ impl From<BytesReprError> for Error {
 
 impl HostError for Error {}
 
-//TODO: Factor out account, known_urefs, fn_store_id
+pub struct RuntimeContext<'a> {
+    //Enables look up of specific uref based on human-readable name
+    uref_lookup: &'a mut BTreeMap<String, Key>,
+    //Used to check uref is known before use (prevents forging urefs)
+    known_urefs: HashSet<Key>,
+    account: &'a Account,
+    //Key pointing to the entity we are currently running
+    //(could point at an account or contract in the global state)
+    base_key: Key,
+}
+
+impl<'a> RuntimeContext<'a> {
+    pub fn insert_named_uref(&mut self, name: String, key: Key) {
+        self.insert_uref(key);
+        self.uref_lookup.insert(name, key);
+    }
+
+    pub fn insert_uref(&mut self, key: Key) {
+        self.known_urefs.insert(key);
+    }
+}
+
 pub struct Runtime<'a, T: TrackingCopy + 'a> {
     args: Vec<Vec<u8>>,
     memory: MemoryRef,
-    //Enables look up of specific uref based on human-readable name
-    uref_lookup: &'a BTreeMap<String, Key>,
-    //Used to check uref is known before use (prevents forging urefs)
-    known_urefs: HashSet<Key>,
     state: &'a mut T,
     module: Module,
     result: Vec<u8>,
     host_buf: Vec<u8>,
-    account: &'a Account,
     fn_store_id: u32,
     gas_counter: u64,
     gas_limit: &'a u64,
+    context: RuntimeContext<'a>,
 }
 
 impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
@@ -117,7 +134,15 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     fn key_from_mem(&mut self, key_ptr: u32, key_size: u32) -> Result<Key, Error> {
         let bytes = self.memory.get(key_ptr, key_size as usize)?;
-        deserialize(&bytes).map_err(|e| e.into())
+        let key = deserialize(&bytes)?;
+        match key {
+            uref @ Key::URef(_) => {
+                //TODO: check if uref was forged. If so then return Err(Error::ForgedReference(uref))
+                //      otherwise return Ok(uref).
+                Ok(uref)
+            }
+            other => Ok(other),
+        }
     }
 
     fn value_from_mem(&mut self, value_ptr: u32, value_size: u32) -> Result<Value, Error> {
@@ -197,6 +222,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
     pub fn get_uref(&mut self, name_ptr: u32, name_size: u32, dest_ptr: u32) -> Result<(), Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let uref = self
+            .context
             .uref_lookup
             .get(&name)
             .ok_or(Error::URefNotFound(name))?;
@@ -205,6 +231,30 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         self.memory
             .set(dest_ptr, &uref_bytes)
             .map_err(|e| Error::Interpreter(e).into())
+    }
+
+    pub fn has_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
+        let name = self.string_from_mem(name_ptr, name_size)?;
+        if self.context.uref_lookup.contains_key(&name) {
+            Ok(0)
+        } else {
+            Ok(1)
+        }
+    }
+
+    pub fn add_uref(
+        &mut self,
+        name_ptr: u32,
+        name_size: u32,
+        key_ptr: u32,
+        key_size: u32,
+    ) -> Result<(), Trap> {
+        let name = self.string_from_mem(name_ptr, name_size)?;
+        let key = self.key_from_mem(key_ptr, key_size)?;
+        self.context.insert_named_uref(name.clone(), key);
+        self.state
+            .add(self.context.base_key, Value::NamedKey(name, key))
+            .map_err(|e| e.into())
     }
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
@@ -232,23 +282,30 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     fn call_contract(
         &mut self,
-        fn_ptr: u32,
-        fn_size: usize,
+        key_ptr: u32,
+        key_size: usize,
         args_ptr: u32,
         args_size: usize,
-        refs_ptr: u32,
-        refs_size: usize,
     ) -> Result<usize, Error> {
-        let fn_bytes = self.memory.get(fn_ptr, fn_size)?;
+        let key_bytes = self.memory.get(key_ptr, key_size)?;
         let args_bytes = self.memory.get(args_ptr, args_size)?;
-        let refs_bytes = self.memory.get(refs_ptr, refs_size)?;
 
-        let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
-        let refs: BTreeMap<String, Key> = deserialize(&refs_bytes)?;
-        let serialized_module: Vec<u8> = deserialize(&fn_bytes)?;
-        let module = parity_wasm::deserialize_buffer(&serialized_module)?;
+        let key: Key = deserialize(&key_bytes)?;
+        let (args, module, mut refs) = {
+            if let Value::Contract { bytes, known_urefs } = self.state.read(key)? {
+                let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
+                let module = parity_wasm::deserialize_buffer(&bytes)?;
 
-        let result = sub_call(module, args, refs, self)?;
+                Ok((args, module, known_urefs.clone()))
+            } else {
+                Err(Error::FunctionNotFound(format!(
+                    "Value at {:?} is not a contract",
+                    key
+                )))
+            }
+        }?;
+
+        let result = sub_call(module, args, &mut refs, key, self)?;
         self.host_buf = result;
         Ok(self.host_buf.len())
     }
@@ -261,8 +318,8 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     pub fn function_address(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
-        pre_hash_bytes.extend_from_slice(self.account.pub_key());
-        pre_hash_bytes.append(&mut self.account.nonce().to_bytes());
+        pre_hash_bytes.extend_from_slice(self.context.account.pub_key());
+        pre_hash_bytes.append(&mut self.context.account.nonce().to_bytes());
         pre_hash_bytes.append(&mut self.fn_store_id.to_bytes());
 
         self.fn_store_id += 1;
@@ -315,7 +372,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     pub fn new_uref(&mut self, key_ptr: u32) -> Result<(), Trap> {
         let key = self.state.new_uref();
-        self.known_urefs.insert(key);
+        self.context.insert_uref(key);
         self.memory
             .set(key_ptr, &key.to_bytes())
             .map_err(|e| Error::Interpreter(e).into())
@@ -341,6 +398,8 @@ const CALL_CONTRACT_FUNC_INDEX: usize = 11;
 const GET_UREF_FUNC_INDEX: usize = 12;
 const FUNCTION_ADDRESS_FUNC_INDEX: usize = 13;
 const GAS_FUNC_INDEX: usize = 14;
+const HAS_UREF_FUNC_INDEX: usize = 15;
+const ADD_UREF_FUNC_INDEX: usize = 16;
 
 impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
     fn invoke_index(
@@ -429,23 +488,14 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
             }
 
             CALL_CONTRACT_FUNC_INDEX => {
-                //args(0) = pointer to serialized function in wasm memory
-                //args(1) = size of function
+                //args(0) = pointer to key where contract is at in global state
+                //args(1) = size of key
                 //args(2) = pointer to function arguments in wasm memory
                 //args(3) = size of arguments
-                //args(4) = pointer to function's known urefs in wasm memory
-                //args(5) = size of urefs
-                let (fn_ptr, fn_size, args_ptr, args_size, refs_ptr, refs_size) =
-                    Args::parse(args)?;
+                let (key_ptr, key_size, args_ptr, args_size) = Args::parse(args)?;
 
-                let size = self.call_contract(
-                    fn_ptr,
-                    as_usize(fn_size),
-                    args_ptr,
-                    as_usize(args_size),
-                    refs_ptr,
-                    as_usize(refs_size),
-                )?;
+                let size =
+                    self.call_contract(key_ptr, as_usize(key_size), args_ptr, as_usize(args_size))?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -462,6 +512,23 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
                 //args(2) = pointer to destination in wasm memory
                 let (name_ptr, name_size, dest_ptr) = Args::parse(args)?;
                 let _ = self.get_uref(name_ptr, name_size, dest_ptr)?;
+                Ok(None)
+            }
+
+            HAS_UREF_FUNC_INDEX => {
+                //args(0) = pointer to uref name in wasm memory
+                //args(1) = size of uref name
+                let (name_ptr, name_size) = Args::parse(args)?;
+                let result = self.has_uref(name_ptr, name_size)?;
+                Ok(Some(RuntimeValue::I32(result)))
+            }
+
+            ADD_UREF_FUNC_INDEX => {
+                //args(0) = pointer to uref name in wasm memory
+                //args(1) = size of uref name
+                //args(2) = pointer to destination in wasm memory
+                let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
+                let _ = self.add_uref(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(None)
             }
 
@@ -552,7 +619,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 RET_FUNC_INDEX,
             ),
             "call_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
                 CALL_CONTRACT_FUNC_INDEX,
             ),
             "get_call_result" => FuncInstance::alloc_host(
@@ -562,6 +629,14 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "get_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 3][..], None),
                 GET_UREF_FUNC_INDEX,
+            ),
+            "has_uref_name" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                HAS_UREF_FUNC_INDEX,
+            ),
+            "add_uref" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 4][..], None),
+                ADD_UREF_FUNC_INDEX,
             ),
             "function_address" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
@@ -623,7 +698,8 @@ fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), 
 fn sub_call<T: TrackingCopy>(
     parity_module: Module,
     args: Vec<Vec<u8>>,
-    refs: BTreeMap<String, Key>,
+    refs: &mut BTreeMap<String, Key>,
+    key: Key,
     current_runtime: &mut Runtime<T>,
 ) -> Result<Vec<u8>, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
@@ -638,15 +714,18 @@ fn sub_call<T: TrackingCopy>(
         args,
         memory,
         state: current_runtime.state,
-        uref_lookup: &refs,
-        known_urefs,
         module: parity_module,
         result: Vec::new(),
         host_buf: Vec::new(),
-        account: current_runtime.account,
         fn_store_id: 0,
         gas_counter: current_runtime.gas_counter,
         gas_limit: current_runtime.gas_limit,
+        context: RuntimeContext {
+            uref_lookup: refs,
+            known_urefs,
+            account: current_runtime.context.account,
+            base_key: key,
+        },
     };
 
     let result = instance.invoke_export("call", &[], &mut runtime);
@@ -674,7 +753,8 @@ pub fn exec<T: TrackingCopy, G: GlobalState<T>>(
     gs: &G,
 ) -> Result<ExecutionEffect, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
-    let account = gs.get(&Key::Account(account_addr))?.as_account();
+    let acct_key = Key::Account(account_addr);
+    let account = gs.get(&acct_key)?.as_account();
     let mut state = gs.tracking_copy();
     let mut known_urefs: HashSet<Key> = HashSet::new();
     for r in account.urefs_lookup().values() {
@@ -684,15 +764,18 @@ pub fn exec<T: TrackingCopy, G: GlobalState<T>>(
         args: Vec::new(),
         memory,
         state: &mut state,
-        uref_lookup: account.urefs_lookup(),
-        known_urefs,
         module: parity_module,
         result: Vec::new(),
         host_buf: Vec::new(),
-        account: &account,
         fn_store_id: 0,
         gas_counter: 0,
         gas_limit: gas_limit,
+        context: RuntimeContext {
+            uref_lookup: &mut account.urefs_lookup().clone(),
+            known_urefs,
+            account: &account,
+            base_key: acct_key,
+        },
     };
     let _ = instance.invoke_export("call", &[], &mut runtime)?;
 

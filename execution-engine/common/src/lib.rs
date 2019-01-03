@@ -26,15 +26,15 @@ mod ext_ffi {
         pub fn get_arg(dest: *mut u8); //can only be called after `load_arg`
         pub fn ret(value_ptr: *const u8, value_size: usize) -> !;
         pub fn call_contract(
-            fn_ptr: *const u8,
-            fn_size: usize,
+            key_ptr: *const u8,
+            key_size: usize,
             args_ptr: *const u8,
             args_size: usize,
-            refs_ptr: *const u8,
-            refs_size: usize,
         ) -> usize;
         pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
         pub fn get_uref(name_ptr: *const u8, name_size: usize, dest: *mut u8);
+        pub fn has_uref_name(name_ptr: *const u8, name_size: usize) -> i32;
+        pub fn add_uref(name_ptr: *const u8, name_size: usize, key_ptr: *const u8, key_size: usize);
     }
 }
 
@@ -186,6 +186,24 @@ pub mod ext {
         deserialize(&uref_bytes).unwrap()
     }
 
+    //Check if the given name corresponds to a known unforgable reference
+    pub fn has_uref(name: &str) -> bool {
+        let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+        let result = unsafe { ext_ffi::has_uref_name(name_ptr, name_size) };
+        if result == 0 {
+            true
+        } else {
+            false
+        }
+    }
+
+    //Add the given key to the known_urefs map under the given name
+    pub fn add_uref(name: &str, key: &Key) {
+        let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+        let (key_ptr, key_size, _bytes2) = to_ptr(key);
+        unsafe { ext_ffi::add_uref(name_ptr, name_size, key_ptr, key_size) };
+    }
+
     //Return `t` to the host, terminating the currently running module.
     //Note this function is only relevent to contracts stored on chain which
     //return a value to their caller. The return value of a directly deployed
@@ -201,23 +219,16 @@ pub mod ext {
     //the host in order to have them available to the called contract during its
     //execution. The value returned from the contract call (see `ret` above) is
     //returned from this function.
-    pub fn call_contract<T: FromBytes>(contract: &Value, args: &Vec<Vec<u8>>) -> T {
-        if let Value::Contract { bytes, known_urefs } = contract {
-            let (fn_ptr, fn_size, _bytes1) = to_ptr(bytes);
-            let (args_ptr, args_size, _bytes2) = to_ptr(args);
-            let (refs_ptr, refs_size, _bytes3) = to_ptr(known_urefs);
-            let res_size = unsafe {
-                ext_ffi::call_contract(fn_ptr, fn_size, args_ptr, args_size, refs_ptr, refs_size)
-            };
-            let res_ptr = alloc_bytes(res_size);
-            let res_bytes = unsafe {
-                ext_ffi::get_call_result(res_ptr);
-                Vec::from_raw_parts(res_ptr, res_size, res_size)
-            };
-            deserialize(&res_bytes).unwrap()
-        } else {
-            panic!("{:?} is not a contract!", contract);
-        }
+    pub fn call_contract<T: FromBytes>(contract_key: &Key, args: &Vec<Vec<u8>>) -> T {
+        let (key_ptr, key_size, _bytes1) = to_ptr(contract_key);
+        let (args_ptr, args_size, _bytes2) = to_ptr(args);
+        let res_size = unsafe { ext_ffi::call_contract(key_ptr, key_size, args_ptr, args_size) };
+        let res_ptr = alloc_bytes(res_size);
+        let res_bytes = unsafe {
+            ext_ffi::get_call_result(res_ptr);
+            Vec::from_raw_parts(res_ptr, res_size, res_size)
+        };
+        deserialize(&res_bytes).unwrap()
     }
 }
 

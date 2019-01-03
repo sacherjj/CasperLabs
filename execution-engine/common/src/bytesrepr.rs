@@ -124,6 +124,38 @@ impl<T: FromBytes> FromBytes for Vec<T> {
     }
 }
 
+impl<T: ToBytes> ToBytes for Option<T> {
+    fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            Some(v) => {
+                let mut value = v.to_bytes();
+                let mut result = Vec::with_capacity(4 + value.len());
+                result.append(&mut 1u32.to_bytes());
+                result.append(&mut value);
+                result
+            }
+            //if the Option is empty then there
+            //is no value to serialize, but we still
+            //indicate the number of elements that need
+            //to be deserialized.
+            None => 0u32.to_bytes(),
+        }
+    }
+}
+impl<T: FromBytes> FromBytes for Option<T> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (size, rest): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        match size {
+            0 => Ok((None, rest)),
+            1 => {
+                let (t, rem): (T, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((Some(t), rem))
+            }
+            _ => Err(Error::FormattingError),
+        }
+    }
+}
+
 impl ToBytes for [u8; 32] {
     fn to_bytes(&self) -> Vec<u8> {
         let mut result = Vec::with_capacity(36);

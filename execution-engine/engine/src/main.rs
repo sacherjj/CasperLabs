@@ -78,7 +78,7 @@ fn main() {
         .and_then(|v| v.parse::<u64>().ok())
         .expect("Provided gas limit value is not u64.");
 
-    let mut gs = storage::InMemGS::new();
+    let gs = storage::InMemGS::new();
     let mut engine_state = EngineState::new(gs);
     engine_state.with_mocked_account(account_addr);
 
