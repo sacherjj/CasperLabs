@@ -16,7 +16,7 @@ private[configuration] case class ConfigurationSoft(
     tls: Option[ConfigurationSoft.Tls],
     casper: Option[ConfigurationSoft.Casper],
     lmdb: Option[ConfigurationSoft.LmdbBlockStore],
-    blockStorage: Option[ConfigurationSoft.BlockDagFileStorage]
+    blockstorage: Option[ConfigurationSoft.BlockDagFileStorage]
 ) {
   def fallbackTo(other: ConfigurationSoft): ConfigurationSoft = {
     val genConf = Generic[ConfigurationSoft]

@@ -117,7 +117,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       |max-readers = 2
       |use-tls = false
       |
-      |[block-storage]
+      |[blockstorage]
       |latest-messages-log-path = "test2"
       |latest-messages-crc-path = "test2"
       |block-metadata-log-path = "test2"
@@ -238,12 +238,12 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     List("--config-file", configFilename),
     List("--server-max-message-size", "3"),
     List("run"),
-    List("--block-storage-block-metadata-crc-path", "test3"),
-    List("--block-storage-block-metadata-log-path", "test3"),
-    List("--block-storage-checkpoints-dir-path", "test3"),
-    List("--block-storage-latest-messages-crc-path", "test3"),
-    List("--block-storage-latest-messages-log-max-size-factor", "3"),
-    List("--block-storage-latest-messages-log-path", "test3"),
+    List("--blockstorage-block-metadata-crc-path", "test3"),
+    List("--blockstorage-block-metadata-log-path", "test3"),
+    List("--blockstorage-checkpoints-dir-path", "test3"),
+    List("--blockstorage-latest-messages-crc-path", "test3"),
+    List("--blockstorage-latest-messages-log-max-size-factor", "3"),
+    List("--blockstorage-latest-messages-log-path", "test3"),
     List("--casper-bonds-file", "test3"),
     List("--casper-deploy-timestamp", "3"),
     List("--casper-duration", "3seconds"),

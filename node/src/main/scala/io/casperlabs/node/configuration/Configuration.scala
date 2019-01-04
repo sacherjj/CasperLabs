@@ -203,27 +203,27 @@ object Configuration {
   ): ValidatedNec[String, BlockDagFileStorage.Config] =
     (
       optToValidated(
-        adjustPath(confSoft, confSoft.blockStorage.flatMap(_.latestMessagesLogPath), default),
+        adjustPath(confSoft, confSoft.blockstorage.flatMap(_.latestMessagesLogPath), default),
         "BlockDagFileStorage.latestMessagesLogPath"
       ),
       optToValidated(
-        adjustPath(confSoft, confSoft.blockStorage.flatMap(_.latestMessagesCrcPath), default),
+        adjustPath(confSoft, confSoft.blockstorage.flatMap(_.latestMessagesCrcPath), default),
         "BlockDagFileStorage.latestMessagesCrcPath"
       ),
       optToValidated(
-        adjustPath(confSoft, confSoft.blockStorage.flatMap(_.blockMetadataLogPath), default),
+        adjustPath(confSoft, confSoft.blockstorage.flatMap(_.blockMetadataLogPath), default),
         "BlockDagFileStorage.blockMetadataLogPath"
       ),
       optToValidated(
-        adjustPath(confSoft, confSoft.blockStorage.flatMap(_.blockMetadataCrcPath), default),
+        adjustPath(confSoft, confSoft.blockstorage.flatMap(_.blockMetadataCrcPath), default),
         "BlockDagFileStorage.blockMetadataCrcPath"
       ),
       optToValidated(
-        adjustPath(confSoft, confSoft.blockStorage.flatMap(_.checkpointsDirPath), default),
+        adjustPath(confSoft, confSoft.blockstorage.flatMap(_.checkpointsDirPath), default),
         "BlockDagFileStorage.checkpointsDirPath"
       ),
       optToValidated(
-        confSoft.blockStorage.flatMap(_.latestMessagesLogMaxSizeFactor),
+        confSoft.blockstorage.flatMap(_.latestMessagesLogMaxSizeFactor),
         "BlockDagFileStorage.latestMessagesLogMaxSizeFactor"
       )
     ).mapN(BlockDagFileStorage.Config.apply)

@@ -143,13 +143,13 @@ private[configuration] object Options {
         options.run.lmdbUseTls
       )
 
-      val blockStorage = ConfigurationSoft.BlockDagFileStorage(
-        options.run.blockStorageLatestMessagesLogPath,
-        options.run.blockStorageLatestMessagesCrcPath,
-        options.run.blockStorageBlockMetadataLogPath,
-        options.run.blockStorageBlockMetadataCrcPath,
-        options.run.blockStorageCheckpointsDirPath,
-        options.run.blockStorageLatestMessagesLogMaxSizeFactor
+      val blockstorage = ConfigurationSoft.BlockDagFileStorage(
+        options.run.blockstorageLatestMessagesLogPath,
+        options.run.blockstorageLatestMessagesCrcPath,
+        options.run.blockstorageBlockMetadataLogPath,
+        options.run.blockstorageBlockMetadataCrcPath,
+        options.run.blockstorageCheckpointsDirPath,
+        options.run.blockstorageLatestMessagesLogMaxSizeFactor
       )
       ConfigurationSoft(
         Some(server),
@@ -157,7 +157,7 @@ private[configuration] object Options {
         Some(tls),
         Some(casper),
         Some(lmdb),
-        Some(blockStorage)
+        Some(blockstorage)
       )
     }.toEither.leftMap(_.getMessage)
 
@@ -211,7 +211,7 @@ private[configuration] final case class Options(
     defaultsForHelpPrinting.lmdb.flatMap(select)
 
   def b[A](select: ConfigurationSoft.BlockDagFileStorage => Option[A]): String =
-    defaultsForHelpPrinting.blockStorage.flatMap(select)
+    defaultsForHelpPrinting.blockstorage.flatMap(select)
 
   version(s"Casper Labs Node ${BuildInfo.version}")
   printedName = "casperlabs"
@@ -428,17 +428,17 @@ private[configuration] final case class Options(
     val casperShardId = opt[String](
       descr = s"Identifier of the shard this node is connected to.${c(_.shardId)}"
     )
-    val blockStorageLatestMessagesLogPath = opt[Path](descr = s"TODO.${b(_.latestMessagesLogPath)}")
+    val blockstorageLatestMessagesLogPath = opt[Path](descr = s"TODO.${b(_.latestMessagesLogPath)}")
 
-    val blockStorageLatestMessagesCrcPath = opt[Path](descr = s"TODO.${b(_.latestMessagesCrcPath)}")
+    val blockstorageLatestMessagesCrcPath = opt[Path](descr = s"TODO.${b(_.latestMessagesCrcPath)}")
 
-    val blockStorageBlockMetadataLogPath = opt[Path](descr = s"TODO.${b(_.blockMetadataLogPath)}")
+    val blockstorageBlockMetadataLogPath = opt[Path](descr = s"TODO.${b(_.blockMetadataLogPath)}")
 
-    val blockStorageBlockMetadataCrcPath = opt[Path](descr = s"TODO.${b(_.blockMetadataCrcPath)}")
+    val blockstorageBlockMetadataCrcPath = opt[Path](descr = s"TODO.${b(_.blockMetadataCrcPath)}")
 
-    val blockStorageCheckpointsDirPath = opt[Path](descr = s"TODO.${b(_.checkpointsDirPath)}")
+    val blockstorageCheckpointsDirPath = opt[Path](descr = s"TODO.${b(_.checkpointsDirPath)}")
 
-    val blockStorageLatestMessagesLogMaxSizeFactor =
+    val blockstorageLatestMessagesLogMaxSizeFactor =
       opt[Int](descr = s"TODO.${b(_.latestMessagesLogMaxSizeFactor)}")
 
   }

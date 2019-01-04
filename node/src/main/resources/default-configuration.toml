@@ -21,7 +21,7 @@ max-dbs = 1
 max-readers = 126
 use-tls = false
 
-[block-storage]
+[blockstorage]
 latest-messages-log-path = "$HOME/.casperlabs/casper-block-dag-file-storage-latest-messages-log"
 latest-messages-crc-path = "$HOME/.casperlabs/casper-block-dag-file-storage-latest-messages-crc"
 block-metadata-log-path = "$HOME/.casperlabs/casper-block-dag-file-storage-block-metadata-log"

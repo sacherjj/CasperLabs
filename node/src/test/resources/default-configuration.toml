@@ -21,7 +21,7 @@ max-dbs = 1
 max-readers = 1
 use-tls = true
 
-[block-storage]
+[blockstorage]
 latest-messages-log-path = "test"
 latest-messages-crc-path = "test"
 block-metadata-log-path = "test"
