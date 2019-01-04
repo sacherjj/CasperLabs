@@ -87,6 +87,31 @@ impl<'a> RuntimeContext<'a> {
     pub fn insert_uref(&mut self, key: Key) {
         self.known_urefs.insert(key);
     }
+
+    pub fn validate_key(&self, key: &Key) -> Result<(), Error> {
+        match key {
+            uref @ Key::URef(_) => {
+                if self.known_urefs.contains(uref) {
+                    Ok(())
+                } else {
+                    Err(Error::ForgedReference(*uref))
+                }
+            }
+
+            _ => Ok(()),
+        }
+    }
+
+    pub fn deserialize_key(&self, bytes: &[u8]) -> Result<Key, Error> {
+        let key: Key = deserialize(bytes)?;
+        self.validate_key(&key).map(|_| key)
+    }
+
+    pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
+        let keys: Vec<Key> = deserialize(bytes)?;
+        let _ = keys.iter().try_fold((), |_, k| self.validate_key(k))?;
+        Ok(keys)
+    }
 }
 
 pub struct Runtime<'a, T: TrackingCopy + 'a> {
@@ -134,17 +159,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     fn key_from_mem(&mut self, key_ptr: u32, key_size: u32) -> Result<Key, Error> {
         let bytes = self.memory.get(key_ptr, key_size as usize)?;
-        let key = deserialize(&bytes)?;
-        match key {
-            uref @ Key::URef(_) => {
-                if self.context.known_urefs.contains(&uref) {
-                    Ok(uref)
-                } else {
-                    Err(Error::ForgedReference(uref))
-                }
-            }
-            other => Ok(other),
-        }
+        self.context.deserialize_key(&bytes)
     }
 
     fn value_from_mem(&mut self, value_ptr: u32, value_size: u32) -> Result<Value, Error> {
@@ -281,7 +296,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
             .map_err(|e| Error::Interpreter(e))
             .and_then(|x| {
                 let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
-                let urefs: Vec<Key> = deserialize(&urefs_bytes)?;
+                let urefs = self.context.deserialize_keys(&urefs_bytes)?;
                 Ok((x, urefs))
             });
         match mem_get {
@@ -309,7 +324,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         let args_bytes = self.memory.get(args_ptr, args_size)?;
         let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
 
-        let key: Key = deserialize(&key_bytes)?;
+        let key = self.context.deserialize_key(&key_bytes)?;
         let (args, module, mut refs) = {
             if let Value::Contract { bytes, known_urefs } = self.state.read(key)? {
                 let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
@@ -324,7 +339,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
             }
         }?;
 
-        let extra_urefs: Vec<Key> = deserialize(&urefs_bytes)?;
+        let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
         let result = sub_call(module, args, &mut refs, key, self, extra_urefs)?;
         self.host_buf = result;
         Ok(self.host_buf.len())
