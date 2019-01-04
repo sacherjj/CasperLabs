@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate alloc;
 use alloc::string::String;
+use alloc::vec::Vec;
 
 extern crate common;
 use common::bytesrepr::ToBytes;
@@ -21,7 +22,7 @@ pub extern "C" fn call() {
     let method = "sub";
     let name = "CasperLabs";
     let args = vec![method.to_bytes(), name.to_bytes()];
-    let maybe_sub_key: Option<Key> = call_contract(&hash, &args);
+    let maybe_sub_key: Option<Key> = call_contract(&hash, &args, &Vec::new());
     let sub_key = maybe_sub_key.unwrap();
 
     let key_name = "mail_feed";
@@ -31,7 +32,7 @@ pub extern "C" fn call() {
     let method = "pub";
     let message = "Hello, World!";
     let args = vec![method.to_bytes(), message.to_bytes()];
-    let _result: () = call_contract(&hash, &args);
+    let _result: () = call_contract(&hash, &args, &Vec::new());
 
     let messages = read(&sub_key);
 

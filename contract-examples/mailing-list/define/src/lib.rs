@@ -56,10 +56,13 @@ fn publish(msg: String) {
 pub extern "C" fn mailing_list_ext() {
     let method_name: String = get_arg(0);
     match method_name.as_str() {
-        "sub" => {
-            let result = sub(get_arg(1));
-            ret(&result);
-        }
+        "sub" => match sub(get_arg(1)) {
+            Some(key) => {
+                let extra_urefs = vec![key];
+                ret(&Some(key), &extra_urefs);
+            }
+            none => ret(&none, &Vec::new()),
+        },
         //Note that this is totally insecure. In reality
         //the pub method would be only available under an
         //unforgable reference because otherwise anyone could
