@@ -1,5 +1,7 @@
 package io.casperlabs.casper.util.comm
 
+import java.nio.file.Paths
+
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
@@ -49,6 +51,12 @@ class CasperPacketHandlerSpec extends WordSpec {
     val scheduler         = Scheduler.io("test")
     val runtimeDir        = BlockStoreTestFixture.dbDir
     val storageSize: Long = 1024L * 1024
+    val socket            = Paths.get(runtimeDir.toString, ".casper-node.sock").toString
+    implicit val executionEngineService: GrpcExecutionEngineService =
+      new GrpcExecutionEngineService(
+        socket,
+        4 * 1024 * 1024
+      )
     val casperSmartContractsApi = SmartContractsApi
       .noOpApi[Task](runtimeDir, storageSize, StoreType.LMDB)
     val runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)

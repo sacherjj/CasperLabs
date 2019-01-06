@@ -25,8 +25,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
       hash: StateHash,
       terms: Seq[(Deploy, ExecutionEffect)],
       time: Option[Long] = None
-  ): Task[(StateHash, Seq[InternalProcessedDeploy])] =
-    smartContractsApi.newEval(terms, hash, time)
+  ): Task[(StateHash, Seq[InternalProcessedDeploy])] = smartContractsApi.newEval(terms, hash, time)
 
   // todo this should be complemented
   def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = Seq()

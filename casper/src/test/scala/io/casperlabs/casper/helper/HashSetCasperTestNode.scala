@@ -1,6 +1,6 @@
 package io.casperlabs.casper.helper
 
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 
 import cats.{Applicative, ApplicativeError, Id, Monad, Traverse}
 import cats.data.EitherT
@@ -18,7 +18,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerImpl,
   CasperPacketHandlerInternal
 }
-import io.casperlabs.casper.util.comm.TransportLayerTestImpl
+import io.casperlabs.casper.util.comm.{GrpcExecutionEngineService, TransportLayerTestImpl}
 import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager, SmartContractsApi}
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -67,6 +67,8 @@ class HashSetCasperTestNode[F[_]](
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
+  val socket                          = Paths.get(sys.props("user.home"), ".casper-node.sock").toString
+  implicit val executionEngineService = new GrpcExecutionEngineService(socket, 4 * 1024 * 1024)
   val smartContractsApi =
     SmartContractsApi.noOpApi[Task](storageDirectory, storageSize, StoreType.LMDB)
   val casperSmartContractsApi = SmartContractsApi

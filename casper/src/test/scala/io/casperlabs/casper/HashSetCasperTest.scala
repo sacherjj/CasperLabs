@@ -1,6 +1,6 @@
 package io.casperlabs.casper
 
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 
 import cats.Id
 import cats.data.EitherT
@@ -11,6 +11,7 @@ import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.helper.{BlockStoreTestFixture, BlockUtil, HashSetCasperTestNode}
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.util.comm.GrpcExecutionEngineService
 import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
 import io.casperlabs.casper.util.rholang.{RuntimeManager, SmartContractsApi}
 import io.casperlabs.catscontrib.Capture._
@@ -849,9 +850,11 @@ object HashSetCasperTest {
       faucetCode: String => String,
       deployTimestamp: Long
   ): BlockMessage = {
-    val initial           = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
-    val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-    val storageSize: Long = 1024L * 1024
+    val initial                         = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
+    val storageDirectory                = Files.createTempDirectory(s"hash-set-casper-test-genesis")
+    val storageSize: Long               = 1024L * 1024
+    val socket                          = Paths.get(storageDirectory.toString, ".casper-node.sock").toString
+    implicit val executionEngineService = new GrpcExecutionEngineService(socket, 4 * 1024 * 1024)
     val casperSmartContractsApi = SmartContractsApi
       .noOpApi[Task](storageDirectory, storageSize, StoreType.LMDB)
     val runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)

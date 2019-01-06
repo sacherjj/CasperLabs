@@ -1,6 +1,6 @@
 package io.casperlabs.casper
 import java.io.File
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
 import cats.Applicative
 import cats.effect.ExitCase.Error
@@ -35,14 +35,16 @@ object Resources {
       prefix: String,
       storageSize: Long = 1024 * 1024,
       storeType: StoreType = StoreType.LMDB,
-      socket: String,
-      maxMessageSize: Int
+      maxMessageSize: Int = 4 * 1024 * 1024
   )(implicit scheduler: Scheduler): Resource[Task, SmartContractsApi[Task]] =
     mkTempDir[Task](prefix)
       .flatMap { tmpDir =>
         Resource.make[Task, SmartContractsApi[Task]](Task.delay {
           implicit val executionEngineService: GrpcExecutionEngineService =
-            new GrpcExecutionEngineService(socket, maxMessageSize)
+            new GrpcExecutionEngineService(
+              Paths.get(tmpDir.toString, ".casper-node.sock").toString,
+              maxMessageSize
+            )
           SmartContractsApi
             .noOpApi[Task](tmpDir, storageSize, StoreType.LMDB)
         })(rt => rt.close())
