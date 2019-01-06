@@ -15,6 +15,7 @@ import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.shared._
+import monix.eval.Task
 import monix.execution.Scheduler
 
 trait Casper[F[_], A] {
@@ -35,7 +36,7 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def lastFinalizedBlock: F[BlockMessage]
   def storageContents(hash: ByteString): F[String]
   // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
-  def getRuntimeManager: F[Option[RuntimeManager]]
+  def getRuntimeManager: F[Option[RuntimeManager[Task]]]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -45,7 +46,7 @@ object MultiParentCasper extends MultiParentCasperInstances {
 sealed abstract class MultiParentCasperInstances {
 
   def hashSetCasper[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String

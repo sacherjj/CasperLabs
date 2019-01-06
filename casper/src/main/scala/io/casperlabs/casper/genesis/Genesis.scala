@@ -17,7 +17,9 @@ import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.ipc.ExecutionEffect
 import io.casperlabs.shared.{Log, LogSource, Time}
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.concurrent.duration.Duration
@@ -43,7 +45,7 @@ object Genesis {
       wallets: Seq[PreWallet],
       faucetCode: String => String,
       startHash: StateHash,
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       timestamp: Long
   )(implicit scheduler: Scheduler): BlockMessage =
     withContracts(
@@ -57,10 +59,12 @@ object Genesis {
       blessedTerms: List[Deploy],
       initial: BlockMessage,
       startHash: StateHash,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   )(implicit scheduler: Scheduler): BlockMessage = {
     val (stateHash, processedDeploys) =
-      runtimeManager.computeState(startHash, blessedTerms).runSyncUnsafe(Duration.Inf)
+      runtimeManager
+        .computeState(startHash, blessedTerms.map((_, ExecutionEffect())))
+        .runSyncUnsafe(Duration.Inf)
 
     val stateWithContracts = for {
       bd <- initial.body
@@ -112,7 +116,7 @@ object Genesis {
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean,
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       shardId: String,
       deployTimestamp: Option[Long]
   )(implicit scheduler: Scheduler): F[BlockMessage] =

@@ -6,8 +6,9 @@ import cats.Applicative
 import cats.effect.ExitCase.Error
 import cats.effect.{ContextShift, Resource, Sync}
 import com.typesafe.scalalogging.Logger
+import io.casperlabs.casper.util.comm.GrpcExecutionEngineService
+import io.casperlabs.casper.util.rholang.SmartContractsApi
 import io.casperlabs.shared.StoreType
-import io.casperlabs.smartcontracts.SmartContractsApi
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -33,11 +34,15 @@ object Resources {
   def mkRuntime(
       prefix: String,
       storageSize: Long = 1024 * 1024,
-      storeType: StoreType = StoreType.LMDB
+      storeType: StoreType = StoreType.LMDB,
+      socket: String,
+      maxMessageSize: Int
   )(implicit scheduler: Scheduler): Resource[Task, SmartContractsApi[Task]] =
     mkTempDir[Task](prefix)
       .flatMap { tmpDir =>
         Resource.make[Task, SmartContractsApi[Task]](Task.delay {
+          implicit val executionEngineService: GrpcExecutionEngineService =
+            new GrpcExecutionEngineService(socket, maxMessageSize)
           SmartContractsApi
             .noOpApi[Task](tmpDir, storageSize, StoreType.LMDB)
         })(rt => rt.close())

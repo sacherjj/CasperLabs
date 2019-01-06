@@ -18,7 +18,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   StandaloneCasperHandler
 }
 import io.casperlabs.casper.util.comm.CasperPacketHandlerSpec._
-import io.casperlabs.casper.util.rholang.RuntimeManager
+import io.casperlabs.casper.util.rholang.{RuntimeManager, SmartContractsApi}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.{ApplicativeError_, Capture}
 import io.casperlabs.comm.protocol.routing.Packet
@@ -39,7 +39,6 @@ import monix.execution.Scheduler.Implicits.global
 import monix.execution.schedulers.TestScheduler
 import org.scalatest.{Ignore, WordSpec}
 import io.casperlabs.casper.util.TestTime
-import io.casperlabs.smartcontracts.SmartContractsApi
 
 import scala.concurrent.duration._
 

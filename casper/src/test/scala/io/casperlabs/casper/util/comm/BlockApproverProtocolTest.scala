@@ -5,14 +5,13 @@ import io.casperlabs.casper.HashSetCasperTest
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.rholang.RuntimeManager
+import io.casperlabs.casper.util.rholang.{RuntimeManager, SmartContractsApi}
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.transport
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.shared.StoreType
-import io.casperlabs.smartcontracts.SmartContractsApi
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 

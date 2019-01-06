@@ -1,16 +1,19 @@
 package io.casperlabs.casper.util.rholang
 
+import cats.Monad
 import cats.implicits._
-import cats.{Id, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStore}
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.comm.ExecutionEngineService
+import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.casper.{BlockDag, BlockException, PrettyPrinter}
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.ipc.ExecutionEffect
 import io.casperlabs.models._
 import io.casperlabs.shared.{Log, LogSource}
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.concurrent.duration.Duration
@@ -24,7 +27,7 @@ object InterpreterUtil {
   def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       dag: BlockDag,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   )(
       implicit scheduler: Scheduler
   ): F[Either[BlockException, Option[StateHash]]] = {
@@ -53,7 +56,7 @@ object InterpreterUtil {
   }
 
   private def processPossiblePreStateHash[F[_]: Monad: Log: BlockStore](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
@@ -82,7 +85,7 @@ object InterpreterUtil {
     }
 
   private def processPreStateHash[F[_]: Monad: Log: BlockStore](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
@@ -130,9 +133,9 @@ object InterpreterUtil {
 
   def computeDeploysCheckpoint[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
-      deploys: Seq[Deploy],
+      deploysWithEffect: Seq[(Deploy, ExecutionEffect)],
       dag: BlockDag,
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       time: Option[Long] = None
   )(
       implicit scheduler: Scheduler
@@ -143,7 +146,9 @@ object InterpreterUtil {
       possiblePreStateHash match {
         case Right(preStateHash) =>
           val (postStateHash, processedDeploys) =
-            runtimeManager.computeState(preStateHash, deploys, time).runSyncUnsafe(Duration.Inf)
+            runtimeManager
+              .computeState(preStateHash, deploysWithEffect, time)
+              .runSyncUnsafe(Duration.Inf)
           Right(preStateHash, postStateHash, processedDeploys)
         case Left(err) =>
           Left(err)
@@ -152,7 +157,7 @@ object InterpreterUtil {
   private def computeParentsPostState[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
       dag: BlockDag,
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       time: Option[Long]
   )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces =
@@ -204,19 +209,25 @@ object InterpreterUtil {
     }
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore: ExecutionEngineService](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   )(
       implicit scheduler: Scheduler
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
 
-      deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
-
+      deploys: Seq[Deploy] = ProtoUtil.deploys(b).flatMap(_.deploy)
+      deploysWithEffect: Seq[(Deploy, ExecutionEffect)] = deploys.flatMap(
+        d =>
+          runtimeManager.sendDeploy(d.getRaw).runSyncUnsafe() match {
+            case Left(_)       => None
+            case Right(effect) => Some(d, effect)
+          }
+      )
       _ = assert(
         parents.nonEmpty || (parents.isEmpty && b == genesis),
         "Received a different genesis block."
@@ -224,7 +235,7 @@ object InterpreterUtil {
 
       result <- computeDeploysCheckpoint[F](
                  parents,
-                 deploys,
+                 deploysWithEffect,
                  dag,
                  runtimeManager
                )

@@ -16,6 +16,7 @@ import io.casperlabs.catscontrib.Capture
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.shared._
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.util.{Failure, Success, Try}
@@ -557,7 +558,7 @@ object Validate {
       block: BlockMessage,
       dag: BlockDag,
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil
@@ -598,7 +599,7 @@ object Validate {
     }
   }
 
-  def bondsCache[F[_]: Applicative: Log](b: BlockMessage, runtimeManager: RuntimeManager)(
+  def bondsCache[F[_]: Applicative: Log](b: BlockMessage, runtimeManager: RuntimeManager[Task])(
       implicit scheduler: Scheduler
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)

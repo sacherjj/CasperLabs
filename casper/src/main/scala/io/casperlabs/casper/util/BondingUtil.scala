@@ -3,7 +3,7 @@ package io.casperlabs.casper.util
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.casper.util.rholang.RuntimeManager
+import io.casperlabs.casper.util.rholang.{RuntimeManager, SmartContractsApi}
 import io.casperlabs.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.{Blake2b256, Keccak256}
@@ -13,7 +13,6 @@ import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
 import cats.Id
-import io.casperlabs.smartcontracts.SmartContractsApi
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -25,7 +24,7 @@ object BondingUtil {
   def bondingForwarderDeploy(bondKey: String, ethAddress: String): String = """"""
 
   def unlockDeploy[F[_]: Sync](ethAddress: String, pubKey: String, secKey: String)(
-      implicit runtimeManager: RuntimeManager,
+      implicit runtimeManager: RuntimeManager[Task],
       scheduler: Scheduler
   ): F[String] =
     preWalletUnlockDeploy(ethAddress, pubKey, Base16.decode(secKey), s"${ethAddress}_unlockOut")
@@ -36,7 +35,7 @@ object BondingUtil {
       pubKey: String,
       secKey: String
   )(
-      implicit runtimeManager: RuntimeManager,
+      implicit runtimeManager: RuntimeManager[Task],
       scheduler: Scheduler
   ): F[String] =
     issuanceWalletTransferDeploy(
@@ -53,13 +52,13 @@ object BondingUtil {
       pubKey: String,
       secKey: Array[Byte],
       statusOut: String
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] = ???
+  )(implicit runtimeManager: RuntimeManager[Task], scheduler: Scheduler): F[String] = ???
 
   def walletTransferSigData[F[_]: Sync](
       nonce: Int,
       amount: Long,
       destination: String
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[Array[Byte]] = ???
+  )(implicit runtimeManager: RuntimeManager[Task], scheduler: Scheduler): F[Array[Byte]] = ???
 
   def issuanceWalletTransferDeploy[F[_]: Sync](
       nonce: Int,
@@ -68,14 +67,14 @@ object BondingUtil {
       transferStatusOut: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] = """""".pure[F]
+  )(implicit runtimeManager: RuntimeManager[Task], scheduler: Scheduler): F[String] = """""".pure[F]
 
   def faucetBondDeploy[F[_]: Sync](
       amount: Long,
       sigAlgorithm: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] = """""".pure[F]
+  )(implicit runtimeManager: RuntimeManager[Task], scheduler: Scheduler): F[String] = """""".pure[F]
 
   def writeFile[F[_]: Sync](name: String, content: String): F[Unit] = {
     val file =
@@ -98,7 +97,7 @@ object BondingUtil {
 
   def makeRuntimeManagerResource[F[_]: Sync](
       smartContractsApiResource: Resource[F, SmartContractsApi[Task]]
-  )(implicit scheduler: Scheduler): Resource[F, RuntimeManager] =
+  )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[Task]] =
     smartContractsApiResource.flatMap(
       smartContractsApi =>
         Resource

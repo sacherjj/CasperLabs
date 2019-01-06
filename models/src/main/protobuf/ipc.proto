@@ -1,19 +1,8 @@
 syntax = "proto3";
 
 package io.casperlabs.ipc;
+import "CasperMessage.proto";
 
-message Deploy {
-    bytes address = 1; // length 20 bytes
-    int64 timestamp = 2;
-    bytes session_code = 3;
-    bytes payment_code = 4;
-    int64 gas_limit = 5;
-    int64 gas_price = 6;
-    int64 nonce = 7;
-    string sig_algorithm = 8; // name of the algorithm used for signing
-    bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
-}
- 
 // Describes operation that are allowed to do on a value under a key.
 message Op {
     oneof op_instance {
@@ -152,6 +141,6 @@ message PostEffectsResult {
 // Definition of the service.
 // ExecutionEngine implements server part while Consensus implements client part.
 service ExecutionEngineService {
-    rpc SendDeploy (Deploy) returns (DeployResult) {}
+    rpc SendDeploy (io.casperlabs.casper.protocol.DeployData) returns (DeployResult) {}
     rpc ExecuteEffects (CommutativeEffects) returns (PostEffectsResult) {}
 }

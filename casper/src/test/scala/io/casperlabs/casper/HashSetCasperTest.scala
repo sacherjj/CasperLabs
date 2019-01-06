@@ -12,7 +12,7 @@ import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.helper.{BlockStoreTestFixture, BlockUtil, HashSetCasperTestNode}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
-import io.casperlabs.casper.util.rholang.RuntimeManager
+import io.casperlabs.casper.util.rholang.{RuntimeManager, SmartContractsApi}
 import io.casperlabs.catscontrib.Capture._
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.catscontrib.effect.implicits._
@@ -24,7 +24,6 @@ import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.StoreType
-import io.casperlabs.smartcontracts.SmartContractsApi
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global

@@ -19,7 +19,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerInternal
 }
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager, SmartContractsApi}
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.effect.implicits._
@@ -40,7 +40,6 @@ import monix.execution.Scheduler
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
-import io.casperlabs.smartcontracts.SmartContractsApi
 import monix.eval.Task
 
 class HashSetCasperTestNode[F[_]](

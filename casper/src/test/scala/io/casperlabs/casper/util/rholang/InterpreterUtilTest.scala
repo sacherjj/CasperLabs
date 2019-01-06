@@ -34,7 +34,7 @@ class InterpreterUtilTest
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   ): (StateHash, Seq[ProcessedDeploy]) = {
     val Right((preStateHash, postStateHash, processedDeploys)) =
       InterpreterUtil
@@ -607,7 +607,7 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-            )
+          )
         )
     val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
       .use { runtimeManager =>
@@ -658,7 +658,7 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-            )
+          )
         )
       val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
@@ -716,7 +716,7 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-            )
+          )
         )
 
       val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
