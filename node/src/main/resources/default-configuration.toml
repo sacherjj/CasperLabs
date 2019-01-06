@@ -6,7 +6,7 @@ kademlia-port = 40404
 dynamic-host-address = false
 no-upnp = false
 default-timeout = 2000
-bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
+bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
 standalone = false
 map-size = 1073741824
 store-type = "lmdb"
@@ -54,7 +54,7 @@ minimum-bond = 1
 maximum-bond = 9223372036854775807
 has-faucet = false
 required-sigs = 0
-shard-id = "rchain"
+shard-id = "casperlabs"
 approve-genesis = false
 approve-genesis-interval = "5seconds"
 approve-genesis-duration = "5minutes"

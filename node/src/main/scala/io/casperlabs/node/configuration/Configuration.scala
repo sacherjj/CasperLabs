@@ -57,13 +57,12 @@ object Configuration {
     final case object Run         extends Command
   }
 
-  def printHelp: Either[String, () => Unit] =
-    ConfigurationSoft.tryDefault.map {
-      defaultConf =>
-        { () =>
-          Options.printHelp(defaultConf)
-        }
-    }
+//  def printHelp: Either[String, () => Unit] =
+//    ConfigurationSoft.tryDefault.map { defaultConf =>
+//      { () =>
+//        Options.printHelp(defaultConf)
+//      }
+//    }
 
   def parse(args: Array[String]): ValidatedNec[String, Configuration] = {
     val either = for {
@@ -245,10 +244,7 @@ object Configuration {
   ): Option[String] =
     for {
       defaultDataDir <- default.server.flatMap(_.dataDir)
-      _              = println(defaultDataDir.toAbsolutePath.toString)
       dataDir        <- conf.server.flatMap(_.dataDir)
-      _              = println(dataDir.toAbsolutePath.toString)
       path           <- pathToCheck
-      _              = println(path)
     } yield path.replace(defaultDataDir.toAbsolutePath.toString, dataDir.toAbsolutePath.toString)
 }

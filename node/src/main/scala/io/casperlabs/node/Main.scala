@@ -52,12 +52,6 @@ object Main {
     val program = conf.command match {
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
       case Run         => nodeProgram(conf)
-      case _ =>
-        Task
-          .fromEither[String, () => Unit](
-            e => new RuntimeException(s"Couldn't print help. Reason: $e")
-          )(Configuration.printHelp)
-          .map(_.apply())
     }
 
     program.doOnFinish(

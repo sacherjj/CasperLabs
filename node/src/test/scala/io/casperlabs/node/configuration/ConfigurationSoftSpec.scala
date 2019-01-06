@@ -238,16 +238,9 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     List("--config-file", configFilename),
     List("--server-max-message-size", "3"),
     List("run"),
-    List("--blockstorage-block-metadata-crc-path", "test3"),
-    List("--blockstorage-block-metadata-log-path", "test3"),
-    List("--blockstorage-checkpoints-dir-path", "test3"),
-    List("--blockstorage-latest-messages-crc-path", "test3"),
-    List("--blockstorage-latest-messages-log-max-size-factor", "3"),
-    List("--blockstorage-latest-messages-log-path", "test3"),
     List("--casper-bonds-file", "test3"),
     List("--casper-deploy-timestamp", "3"),
     List("--casper-duration", "3seconds"),
-    List("--casper-genesis-path", "test3"),
     List("--casper-genesis-validator"),
     List("--casper-has-faucet"),
     List("--casper-interval", "3seconds"),
@@ -265,10 +258,6 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     List("--grpc-port-internal", "3"),
     List("--grpc-socket", "test3"),
     List("--lmdb-block-store-size", "3"),
-    List("--lmdb-max-dbs", "3"),
-    List("--lmdb-max-readers", "3"),
-    List("--lmdb-path", "test3"),
-    List("--lmdb-use-tls"),
     List(
       "--server-bootstrap",
       "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.253?protocol=3&discovery=3"
@@ -323,7 +312,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       bondsFile = "test3".some,
       knownValidatorsFile = "test3".some,
       numValidators = 3.some,
-      genesisPath = Paths.get("test3").some,
+      genesisPath = Paths.get("test2").some,
       walletsFile = "test3".some,
       minimumBond = 3L.some,
       maximumBond = 3L.some,
@@ -341,19 +330,19 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       secureRandomNonBlocking = true.some
     )
     val lmdb = LmdbBlockStore(
-      path = Paths.get("test3").some,
+      path = Paths.get("test2").some,
       blockStoreSize = 3L.some,
-      maxDbs = 3.some,
-      maxReaders = 3.some,
-      useTls = true.some
+      maxDbs = 2.some,
+      maxReaders = 2.some,
+      useTls = false.some
     )
     val blockStorage = BlockDagFileStorage(
-      latestMessagesLogPath = Paths.get("test3").some,
-      latestMessagesCrcPath = Paths.get("test3").some,
-      blockMetadataLogPath = Paths.get("test3").some,
-      blockMetadataCrcPath = Paths.get("test3").some,
-      checkpointsDirPath = Paths.get("test3").some,
-      latestMessagesLogMaxSizeFactor = 3.some
+      latestMessagesLogPath = Paths.get("test2").some,
+      latestMessagesCrcPath = Paths.get("test2").some,
+      blockMetadataLogPath = Paths.get("test2").some,
+      blockMetadataCrcPath = Paths.get("test2").some,
+      checkpointsDirPath = Paths.get("test2").some,
+      latestMessagesLogMaxSizeFactor = 2.some
     )
     ConfigurationSoft(
       server.some,

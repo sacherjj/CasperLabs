@@ -135,7 +135,7 @@ class Node:
 
     def get_rnode_address(self) -> str:
         log_content = self.logs()
-        m = re.search("Listening for traffic on (rnode://.+@{name}\\?protocol=\\d+&discovery=\\d+)\\.$".format(name=self.container.name),
+        m = re.search("Listening for traffic on (casperlabs://.+@{name}\\?protocol=\\d+&discovery=\\d+)\\.$".format(name=self.container.name),
                       log_content,
                       re.MULTILINE | re.DOTALL)
         if m is None:
@@ -236,7 +236,10 @@ class Node:
             return output
         except ContainerError as err:
             logging.warning("EXITED code={} command='{}' output='{}'".format(err.exit_status, err.command, err.stderr))
-            return err.stderr.decode("utf-8")
+            if err.stderr is not None:
+                return err.stderr.decode("utf-8")
+            else:
+                return ""
 
     def deploy(self, session_code: str, payment_code:str="payment.wasm",
                from_address:str="0x01", gas_limit:int=1000000,
@@ -435,12 +438,12 @@ def make_bootstrap_node(
         network_name=network,
     )
     container_command_options = {
-        "--port":                   40400,
-        "--standalone":             "",
-        "--validator-private-key":  key_pair.private_key,
-        "--validator-public-key":   key_pair.public_key,
-        "--has-faucet":             "",
-        "--host":                   name,
+        "--server-port":                   40400,
+        "--server-standalone":             "",
+        "--casper-validator-private-key":  key_pair.private_key,
+        "--casper-validator-public-key":   key_pair.public_key,
+        "--casper-has-faucet":             "",
+        "--server-host":                   name,
     }
 
     if cli_options is not None:
@@ -490,10 +493,10 @@ def make_peer(
     bootstrap_address = bootstrap.get_rnode_address()
 
     container_command_options = {
-        "--bootstrap":              bootstrap_address,
-        "--validator-private-key":  key_pair.private_key,
-        "--validator-public-key":   key_pair.public_key,
-        "--host":                   name,
+        "--server-bootstrap":       bootstrap_address,
+        "--casper-validator-private-key":  key_pair.private_key,
+        "--casper-validator-public-key":   key_pair.public_key,
+        "--casper-host":                   name,
     }
 
     container = make_node(
@@ -578,7 +581,7 @@ def create_peer_nodes(
 
 @contextlib.contextmanager
 def docker_network(docker_client: "DockerClient") -> Generator[str, None, None]:
-    network_name = "rchain-{}".format(random_string(5).lower())
+    network_name = "casperlabs-{}".format(random_string(5).lower())
     docker_client.networks.create(network_name, driver="bridge")
     try:
         yield network_name
