@@ -4,7 +4,6 @@ import java.io.Closeable
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
-import io.casperlabs.casper.protocol.DeployData
 import io.casperlabs.ipc._
 import io.grpc.ManagedChannel
 import io.grpc.netty.NettyChannelBuilder
@@ -17,7 +16,7 @@ import simulacrum.typeclass
 import scala.util.Either
 
 @typeclass trait ExecutionEngineService[F[_]] {
-  def sendDeploy(deploy: DeployData): F[Either[Throwable, ExecutionEffect]]
+  def sendDeploy(deploy: Deploy): F[Either[Throwable, ExecutionEffect]]
   def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]]
 }
 
@@ -51,7 +50,7 @@ class GrpcExecutionEngineService(addr: Path, maxMessageSize: Int)
       channel.awaitTermination(10, TimeUnit.SECONDS)
     }
   }
-  override def sendDeploy(deploy: DeployData): Task[Either[Throwable, ExecutionEffect]] =
+  override def sendDeploy(deploy: Deploy): Task[Either[Throwable, ExecutionEffect]] =
     stub.sendDeploy(deploy).map { response =>
       response.result match {
         case DeployResult.Result.Empty           => Left(new RuntimeException("empty response"))

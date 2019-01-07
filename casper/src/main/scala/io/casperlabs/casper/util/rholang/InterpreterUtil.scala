@@ -223,9 +223,15 @@ object InterpreterUtil {
       deploys: Seq[Deploy] = ProtoUtil.deploys(b).flatMap(_.deploy)
       deploysWithEffect: Seq[(Deploy, ExecutionEffect)] = deploys.flatMap(
         d =>
-          runtimeManager.sendDeploy(d.getRaw).runSyncUnsafe() match {
-            case Left(_)       => None
-            case Right(effect) => Some(d, effect)
+          d.raw match {
+            case Some(r) =>
+              runtimeManager
+                .sendDeploy(ProtoUtil.deployDataToEEDeploy(r))
+                .runSyncUnsafe() match {
+                case Left(_)       => None
+                case Right(effect) => Some(d, effect)
+              }
+            case None => Some(d, ExecutionEffect())
           }
       )
       _ = assert(

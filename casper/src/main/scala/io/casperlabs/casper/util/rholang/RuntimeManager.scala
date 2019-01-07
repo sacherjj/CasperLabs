@@ -4,6 +4,7 @@ import cats.effect.Concurrent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
+import io.casperlabs.ipc.{Deploy => IPCDeploy}
 import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.ipc.{CommutativeEffects, ExecutionEffect}
 import io.casperlabs.models._
@@ -30,7 +31,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
   // todo this should be complemented
   def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = Seq()
 
-  def sendDeploy(d: DeployData): F[Either[Throwable, ExecutionEffect]] =
+  def sendDeploy(d: IPCDeploy): F[Either[Throwable, ExecutionEffect]] =
     ToAbstractContext[F].fromTask(smartContractsApi.sendDeploy(d))
 }
 

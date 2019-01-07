@@ -7,7 +7,8 @@ import cats.syntax.applicative._
 import cats.syntax.either._
 import cats.syntax.functor._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.{Bond, Deploy, DeployData}
+import io.casperlabs.casper.protocol.{Bond, Deploy}
+import io.casperlabs.ipc.{Deploy => EEDeploy}
 import io.casperlabs.casper.util.comm.ExecutionEngineService
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.ipc.{CommutativeEffects, ExecutionEffect}
@@ -16,7 +17,7 @@ import io.casperlabs.shared.StoreType
 import simulacrum.typeclass
 
 @typeclass trait SmartContractsApi[F[_]] {
-  def sendDeploy(d: DeployData): F[Either[Throwable, ExecutionEffect]]
+  def sendDeploy(d: EEDeploy): F[Either[Throwable, ExecutionEffect]]
 
   def newEval(
       terms: Seq[(Deploy, ExecutionEffect)],
@@ -73,7 +74,7 @@ object SmartContractsApi {
       override def computeBonds(hash: ByteString): F[Bond] =
         Bond().pure
 
-      override def sendDeploy(d: DeployData): F[Either[Throwable, ExecutionEffect]] =
+      override def sendDeploy(d: EEDeploy): F[Either[Throwable, ExecutionEffect]] =
         ExecutionEngineService[F].sendDeploy(d)
     }
 }

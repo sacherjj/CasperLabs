@@ -12,6 +12,7 @@ import io.casperlabs.casper.{BlockDag, PrettyPrinter}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.shared.Time
+import io.casperlabs.ipc.{Deploy => EEDeploy}
 
 import scala.collection.immutable
 
@@ -486,6 +487,18 @@ object ProtoUtil {
 
   def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
     raw = Some(dd)
+  )
+
+  def deployDataToEEDeploy(dd: DeployData): EEDeploy = EEDeploy(
+    address = dd.address,
+    timestamp = dd.timestamp,
+    sessionCode = dd.sessionCode,
+    paymentCode = dd.paymentCode,
+    gasLimit = dd.gasLimit,
+    gasPrice = dd.gasPrice,
+    nonce = dd.nonce,
+    sigAlgorithm = dd.sigAlgorithm,
+    signature = dd.signature
   )
 
   /**

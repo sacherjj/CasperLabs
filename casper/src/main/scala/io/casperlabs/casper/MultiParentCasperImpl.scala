@@ -170,7 +170,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] = {
     val res: Either[Throwable, ExecutionEffect] = runtimeManager
-      .sendDeploy(d)
+      .sendDeploy(ProtoUtil.deployDataToEEDeploy(d))
       .runSyncUnsafe(Duration.Inf)
     res match {
       case Right(effects: ExecutionEffect) =>
