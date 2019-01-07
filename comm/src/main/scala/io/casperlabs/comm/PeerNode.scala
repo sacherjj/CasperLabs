@@ -29,7 +29,7 @@ final case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
   override def toString: String = toAddress
 
   val toAddress: String =
-    s"rnode://$sKey@${endpoint.host}?protocol=${endpoint.tcpPort}&discovery=${endpoint.udpPort}"
+    s"casperlabs://$sKey@${endpoint.host}?protocol=${endpoint.tcpPort}&discovery=${endpoint.udpPort}"
 
 }
 

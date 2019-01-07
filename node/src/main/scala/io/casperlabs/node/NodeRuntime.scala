@@ -1,7 +1,6 @@
 package io.casperlabs.node
 
 import scala.concurrent.duration._
-
 import cats._
 import cats.data._
 import cats.effect._
@@ -30,11 +29,10 @@ import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api._
-import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.configuration.{Configuration, ConfigurationSoft}
 import io.casperlabs.node.diagnostics._
 import io.casperlabs.p2p.effects._
 import io.casperlabs.shared._
-
 import io.casperlabs.smartcontracts.SmartContractsApi
 import kamon._
 import kamon.zipkin.ZipkinReporter
@@ -92,7 +90,15 @@ class NodeRuntime private[node] (
     */
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   val main: Effect[Unit] = for {
-    local <- conf.fetchLocalPeerNode(id).toEffect
+    local <- WhoAmI
+              .fetchLocalPeerNode[Task](
+                conf.server.host,
+                conf.server.port,
+                conf.server.kademliaPort,
+                conf.server.noUpnp,
+                id
+              )
+              .toEffect
 
     defaultTimeout = conf.server.defaultTimeout.millis
 
@@ -317,8 +323,9 @@ class NodeRuntime private[node] (
     val dynamicIpCheck: Task[Unit] =
       if (conf.server.dynamicHostAddress)
         for {
-          local    <- peerNodeAsk.ask
-          newLocal <- conf.checkLocalPeerNode(local)
+          local <- peerNodeAsk.ask
+          newLocal <- WhoAmI
+                       .checkLocalPeerNode[Task](conf.server.port, conf.server.kademliaPort, local)
           _ <- newLocal.fold(Task.unit) { pn =>
                 Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
               }

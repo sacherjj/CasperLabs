@@ -1,6 +1,7 @@
 package io.casperlabs.casper.util.comm
 
 import java.io.Closeable
+import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
 import io.casperlabs.ipc._
@@ -19,7 +20,7 @@ import scala.util.Either
   def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]]
 }
 
-class GrpcExecutionEngineService(addr: String, maxMessageSize: Int)
+class GrpcExecutionEngineService(addr: Path, maxMessageSize: Int)
     extends ExecutionEngineService[Task]
     with Closeable {
 
@@ -31,7 +32,7 @@ class GrpcExecutionEngineService(addr: String, maxMessageSize: Int)
 
   private val channel: ManagedChannel =
     NettyChannelBuilder
-      .forAddress(new DomainSocketAddress(addr))
+      .forAddress(new DomainSocketAddress(addr.toFile))
       .channelType(channelType)
       .maxInboundMessageSize(maxMessageSize)
       .eventLoopGroup(eventLoopGroup)

@@ -1,21 +1,20 @@
-package io.casperlabs.node.configuration.toml
+package io.casperlabs.node.configuration
 
-import java.io.File
 import java.nio.file.{Path, Paths}
 
-import scala.io.Source
-import scala.util.Try
-import cats.syntax.either._
 import io.casperlabs.comm.PeerNode
-import io.casperlabs.shared.Resources._
+import cats.syntax.either._
 import toml._
 import toml.Codecs._
+import toml.Toml._
+import cats.syntax.either._
+import io.casperlabs.shared.StoreType
+import toml.util.RecordToMap
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.util.Try
 
-object TomlConfiguration {
-  import error._
-
+private[configuration] object TomlReader {
   private implicit val bootstrapAddressCodec: Codec[PeerNode] =
     Codec {
       case (Value.Str(uri), _) =>
@@ -28,7 +27,8 @@ object TomlConfiguration {
   private implicit val pathCodec: Codec[Path] =
     Codec {
       case (Value.Str(uri), _) =>
-        Try(Paths.get(uri)).toEither.leftMap(_ => (Nil, s"Can't parse the path $uri"))
+        Try(Paths.get(uri.replace("$HOME", sys.props("user.home")))).toEither
+          .leftMap(_ => (Nil, s"Can't parse the path $uri"))
       case _ => Left((Nil, "A path must be a string"))
     }
   private implicit val boolCodec: Codec[Boolean] = Codec {
@@ -36,7 +36,6 @@ object TomlConfiguration {
     case (value, _) =>
       Left((List.empty, s"Bool expected, $value provided"))
   }
-
   private implicit val finiteDurationCodec: Codec[FiniteDuration] = Codec {
     case (Value.Str(value), _) =>
       Duration(value) match {
@@ -46,26 +45,32 @@ object TomlConfiguration {
     case (value, _) =>
       Either.left((Nil, s"Failed to parse $value as FiniteDuration."))
   }
+  private implicit val storeTypeCodec: Codec[StoreType] = Codec {
+    case (Value.Str(value), _) =>
+      StoreType
+        .from(value)
+        .map(Right(_))
+        .getOrElse(Left(Nil, s"Failed to parse $value as StoreType"))
+    case (value, _) =>
+      Left(Nil, s"Failed to parse $value as StoreType")
+  }
 
-  def from(toml: String): Either[TomlConfigurationError, Configuration] =
-    Toml.parse(toml) match {
-      case Left(error) => Either.left(ConfigurationParseError(error))
-      case Right(ast)  => from(ast)
-    }
-
-  def from(ast: Value.Tbl): Either[TomlConfigurationError, Configuration] =
-    Toml.parseAs[Configuration](rewriteKeysToCamelCase(ast)) match {
-      case Left((_, error)) => Either.left(ConfigurationAstError(error))
-      case Right(root)      => Either.right(root)
-    }
-
-  def from(file: File): Either[TomlConfigurationError, Configuration] =
-    if (file.exists())
-      withResource(Source.fromFile(file))(f => from(f.mkString))
-    else Either.left(ConfigurationFileNotFound(file.getAbsolutePath))
+  def parse(raw: String): Either[String, ConfigurationSoft] =
+    Toml
+      .parse(raw)
+      .map(rewriteKeysToCamelCase)
+      .flatMap(
+        table => {
+          Toml
+            .parseAs[ConfigurationSoft](table)
+            .leftMap {
+              case (address, message) =>
+                s"$message at $address"
+            }
+        }
+      )
 
   private def rewriteKeysToCamelCase(tbl: Value.Tbl): Value.Tbl = {
-
     def rewriteTbl(t: Value.Tbl): Value.Tbl =
       Value.Tbl(
         t.values.map {
@@ -98,12 +103,4 @@ object TomlConfiguration {
 
     loop(name.toList).mkString
   }
-
-}
-
-object error {
-  sealed trait TomlConfigurationError
-  final case class ConfigurationParseError(error: String)  extends TomlConfigurationError
-  final case class ConfigurationAstError(error: String)    extends TomlConfigurationError
-  final case class ConfigurationFileNotFound(path: String) extends TomlConfigurationError
 }
