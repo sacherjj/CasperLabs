@@ -2,8 +2,12 @@ package io.casperlabs.node.configuration
 import java.nio.file.{Path, Paths}
 
 import cats.data.Validated._
-import cats.data._
-import cats.implicits._
+import cats.data.ValidatedNel
+import cats.syntax.validated._
+import cats.syntax.either._
+import cats.instances.invariant._
+import cats.instances.list._
+import cats.syntax.apply._
 import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.PeerNode
@@ -57,21 +61,21 @@ object Configuration {
     final case object Run         extends Command
   }
 
-  def parse(args: Array[String]): ValidatedNec[String, Configuration] = {
+  def parse(args: Array[String]): ValidatedNel[String, Configuration] = {
     val either = for {
       defaults <- ConfigurationSoft.tryDefault
       confSoft <- ConfigurationSoft.parse(args)
       command  <- Options.parseCommand(args, defaults)
     } yield parseToActual(command, defaults, confSoft)
 
-    either.fold(_.invalidNec[Configuration], identity)
+    either.fold(_.invalidNel[Configuration], identity)
   }
 
   private def parseToActual(
       command: Command,
       default: ConfigurationSoft,
       confSoft: ConfigurationSoft
-  ): ValidatedNec[String, Configuration] =
+  ): ValidatedNel[String, Configuration] =
     (
       parseServer(confSoft),
       parseGrpcServer(confSoft),
@@ -86,9 +90,9 @@ object Configuration {
 
   private def parseServer(
       confSoft: ConfigurationSoft
-  ): ValidatedNec[String, Configuration.Server] =
+  ): ValidatedNel[String, Configuration.Server] =
     (
-      confSoft.server.flatMap(_.host).validNec[String],
+      confSoft.server.flatMap(_.host).validNel[String],
       optToValidated(confSoft.server.flatMap(_.port), "Server.port"),
       optToValidated(confSoft.server.flatMap(_.httpPort), "Server.httpPort"),
       optToValidated(confSoft.server.flatMap(_.kademliaPort), "Server.kademliaPort"),
@@ -107,7 +111,7 @@ object Configuration {
 
   private def parseGrpcServer(
       confSoft: ConfigurationSoft
-  ): ValidatedNec[String, Configuration.GrpcServer] =
+  ): ValidatedNel[String, Configuration.GrpcServer] =
     (
       optToValidated(confSoft.grpc.flatMap(_.host), "GrpcServer.host"),
       optToValidated(confSoft.grpc.flatMap(_.socket), "GrpcServer.socket"),
@@ -118,7 +122,7 @@ object Configuration {
   private def parseTls(
       default: ConfigurationSoft,
       confSoft: ConfigurationSoft
-  ): ValidatedNec[String, Configuration.Tls] =
+  ): ValidatedNel[String, Configuration.Tls] =
     (
       optToValidated(confSoft.tls.flatMap(_.certificate), "Default Tls.certificate"),
       optToValidated(confSoft.tls.flatMap(_.key), "Default Tls.key"),
@@ -144,21 +148,21 @@ object Configuration {
   private def parseCasper(
       default: ConfigurationSoft,
       confSoft: ConfigurationSoft
-  ): ValidatedNec[String, CasperConf] =
+  ): ValidatedNel[String, CasperConf] =
     (
-      confSoft.casper.flatMap(_.publicKey).validNec[String],
+      confSoft.casper.flatMap(_.publicKey).validNel[String],
       confSoft.casper
         .flatMap(_.privateKey)
         .map(_.asLeft[Path])
         .orElse(confSoft.casper.flatMap(_.privateKeyPath).map(_.asRight[String]))
-        .validNec[String],
+        .validNel[String],
       optToValidated(confSoft.casper.flatMap(_.sigAlgorithm), "Casper.sigAlgorithm"),
-      adjustPathAsString(confSoft, confSoft.casper.flatMap(_.bondsFile), default).validNec[String],
-      confSoft.casper.flatMap(_.knownValidatorsFile).validNec[String],
+      adjustPathAsString(confSoft, confSoft.casper.flatMap(_.bondsFile), default).validNel[String],
+      confSoft.casper.flatMap(_.knownValidatorsFile).validNel[String],
       optToValidated(confSoft.casper.flatMap(_.numValidators), "Casper.numValidators"),
       optToValidated(confSoft.casper.flatMap(_.genesisPath), "Casper.genesisPath"),
       adjustPathAsString(confSoft, confSoft.casper.flatMap(_.walletsFile), default)
-        .validNec[String],
+        .validNel[String],
       optToValidated(confSoft.casper.flatMap(_.minimumBond), "Casper.minimumBond"),
       optToValidated(confSoft.casper.flatMap(_.maximumBond), "Casper.maximumBond"),
       optToValidated(confSoft.casper.flatMap(_.hasFaucet), "Casper.hasFaucet"),
@@ -174,13 +178,13 @@ object Configuration {
         confSoft.casper.flatMap(_.approveGenesisDuration),
         "Casper.approveGenesisDuration"
       ),
-      confSoft.casper.flatMap(_.deployTimestamp).validNec[String]
+      confSoft.casper.flatMap(_.deployTimestamp).validNel[String]
     ).mapN(CasperConf.apply)
 
   private def parseBlockStorage(
       default: ConfigurationSoft,
       confSoft: ConfigurationSoft
-  ): ValidatedNec[String, LMDBBlockStore.Config] =
+  ): ValidatedNel[String, LMDBBlockStore.Config] =
     (
       optToValidated(adjustPath(confSoft, confSoft.lmdb.flatMap(_.path), default), "Lmdb.path"),
       optToValidated(confSoft.lmdb.flatMap(_.blockStoreSize), "Lmdb.blockStoreSize"),
@@ -192,7 +196,7 @@ object Configuration {
   private def parseBlockDagStorage(
       default: ConfigurationSoft,
       confSoft: ConfigurationSoft
-  ): ValidatedNec[String, BlockDagFileStorage.Config] =
+  ): ValidatedNel[String, BlockDagFileStorage.Config] =
     (
       optToValidated(
         adjustPath(confSoft, confSoft.blockstorage.flatMap(_.latestMessagesLogPath), default),
@@ -220,8 +224,8 @@ object Configuration {
       )
     ).mapN(BlockDagFileStorage.Config.apply)
 
-  private def optToValidated[A](opt: Option[A], fieldName: String): ValidatedNec[String, A] =
-    opt.fold(s"$fieldName is not defined".invalidNec[A])(_.validNec[String])
+  private def optToValidated[A](opt: Option[A], fieldName: String): ValidatedNel[String, A] =
+    opt.fold(s"$fieldName is not defined".invalidNel[A])(_.validNel[String])
 
   private[configuration] def adjustPath(
       conf: ConfigurationSoft,
