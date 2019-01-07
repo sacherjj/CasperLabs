@@ -101,22 +101,37 @@ impl FromBytes for u64 {
     }
 }
 
-impl<T: ToBytes> ToBytes for Vec<T> {
+impl FromBytes for Vec<u8> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (size, rest): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let mut result: Vec<u8> = Vec::with_capacity(size as usize);
+        let mut stream = rest;
+        for _ in 0..size {
+            let (t, rem): (u8, &[u8]) = FromBytes::from_bytes(stream)?;
+            result.push(t);
+            stream = rem;
+        }
+        Ok((result, stream))
+    }
+}
+
+impl ToBytes for Vec<u8> {
     fn to_bytes(&self) -> Vec<u8> {
         let size = self.len() as u32;
-        let bytes = self.iter().flat_map(|t| t.to_bytes());
-        let mut result = size.to_bytes();
-        result.extend(bytes);
+        let mut result: Vec<u8> = Vec::with_capacity(4 + size as usize);
+        result.extend(size.to_bytes());
+        result.extend(self);
         result
     }
 }
-impl<T: FromBytes> FromBytes for Vec<T> {
+
+impl FromBytes for Vec<i32> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (size, rest): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let mut result: Vec<T> = Vec::with_capacity(size as usize);
+        let mut result: Vec<i32> = Vec::with_capacity(4 * size as usize);
         let mut stream = rest;
         for _ in 0..size {
-            let (t, rem): (T, &[u8]) = FromBytes::from_bytes(stream)?;
+            let (t, rem): (i32, &[u8]) = FromBytes::from_bytes(stream)?;
             result.push(t);
             stream = rem;
         }
@@ -156,6 +171,66 @@ impl<T: FromBytes> FromBytes for Option<T> {
     }
 }
 
+impl ToBytes for Vec<i32> {
+    fn to_bytes(&self) -> Vec<u8> {
+        let size = self.len() as u32;
+        let mut result: Vec<u8> = Vec::with_capacity(4 + 4 * size as usize);
+        result.extend(size.to_bytes());
+        result.extend(self.iter().flat_map(|e| e.to_bytes()));
+        result
+    }
+}
+
+impl FromBytes for Vec<Vec<u8>> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (length, rest): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let mut result: Vec<Vec<u8>> = Vec::with_capacity(length as usize);
+        let mut stream = rest;
+        for _ in 0..length {
+            let (v, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(stream)?;
+            result.push(v);
+            stream = rem;
+        }
+        Ok((result, stream))
+    }
+}
+
+impl ToBytes for Vec<Vec<u8>> {
+    fn to_bytes(&self) -> Vec<u8> {
+        let size = self.len() as u32;
+        let mut result: Vec<u8> = Vec::with_capacity(4 + size as usize);
+        result.extend_from_slice(&size.to_bytes());
+        for n in 0..size {
+            result.extend_from_slice(&self[n as usize].to_bytes());
+        }
+        result
+    }
+}
+
+impl FromBytes for Vec<String> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (size, rest): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let mut result: Vec<String> = Vec::with_capacity(size as usize);
+        let mut stream = rest;
+        for _ in 0..size {
+            let (s, rem): (String, &[u8]) = FromBytes::from_bytes(stream)?;
+            result.push(s);
+            stream = rem;
+        }
+        Ok((result, stream))
+    }
+}
+
+impl ToBytes for Vec<String> {
+    fn to_bytes(&self) -> Vec<u8> {
+        let size = self.len() as u32;
+        let mut result = Vec::with_capacity(4);
+        result.extend(size.to_bytes());
+        let bytes = self.iter().flat_map(|s| s.to_bytes());
+        result.extend(bytes);
+        result
+    }
+}
 impl ToBytes for [u8; 32] {
     fn to_bytes(&self) -> Vec<u8> {
         let mut result = Vec::with_capacity(36);
