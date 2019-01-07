@@ -420,68 +420,6 @@ final class Configuration(
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def printHelp(): Task[Unit] = Task.delay(options.printHelp())
-
-  def fetchLocalPeerNode(
-      id: NodeIdentifier
-  )(implicit log: Log[Task]): Task[PeerNode] =
-    for {
-      externalAddress <- retriveExternalAddress
-      host            <- fetchHost(externalAddress)
-      peerNode        = PeerNode.from(id, host, server.port, server.kademliaPort)
-    } yield peerNode
-
-  def checkLocalPeerNode(
-      peerNode: PeerNode
-  )(implicit log: Log[Task]): Task[Option[PeerNode]] =
-    for {
-      r      <- checkAll()
-      (_, a) = r
-      host <- if (a == peerNode.endpoint.host) Task.now(Option.empty[String])
-             else log.info(s"external IP address has changed to $a").map(kp(Some(a)))
-    } yield host.map(h => PeerNode.from(peerNode.id, h, server.port, server.kademliaPort))
-
-  private def fetchHost(externalAddress: Option[String])(implicit log: Log[Task]): Task[String] =
-    server.host match {
-      case Some(h) => Task.pure(h)
-      case None    => whoAmI(externalAddress)
-    }
-
-  private def retriveExternalAddress(implicit log: Log[Task]): Task[Option[String]] =
-    if (server.noUpnp) None.pure[Task]
-    else UPnP.assurePortForwarding[Task](List(server.port))
-
-  private def check(source: String, from: String): Task[(String, Option[String])] =
-    IpChecker.checkFrom[Task](from).map((source, _))
-
-  private def checkNext(
-      prev: (String, Option[String]),
-      next: => Task[(String, Option[String])]
-  ): Task[(String, Option[String])] =
-    prev._2.fold(next)(_ => Task.pure(prev))
-
-  private def upnpIpCheck(externalAddress: Option[String]): Task[(String, Option[String])] =
-    Task.delay(("UPnP", externalAddress.map(InetAddress.getByName(_).getHostAddress)))
-
-  private def checkAll(externalAddress: Option[String] = None): Task[(String, String)] =
-    for {
-      r1 <- check("AmazonAWS service", "http://checkip.amazonaws.com")
-      r2 <- checkNext(r1, check("WhatIsMyIP service", "http://bot.whatismyipaddress.com"))
-      r3 <- checkNext(r2, upnpIpCheck(externalAddress))
-      r4 <- checkNext(r3, Task.pure("failed to guess", Some("localhost")))
-    } yield {
-      val (s, Some(a)) = r4
-      (s, a)
-    }
-
-  private def whoAmI(externalAddress: Option[String])(
-      implicit log: Log[Task]
-  ): Task[String] =
-    for {
-      _      <- log.info("flag --host was not provided, guessing your external IP address")
-      r      <- checkAll(externalAddress)
-      (s, a) = r
-      _      <- log.info(s"guessed $a from source: $s")
-    } yield a
 }
 
 case class Profile(name: String, dataDir: (() => Path, String))
