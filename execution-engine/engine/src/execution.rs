@@ -79,6 +79,19 @@ pub struct RuntimeContext<'a> {
 }
 
 impl<'a> RuntimeContext<'a> {
+    pub fn new(
+        uref_lookup: &'a mut BTreeMap<String, Key>,
+        account: &'a Account,
+        base_key: Key,
+    ) -> Self {
+        RuntimeContext {
+            uref_lookup,
+            known_urefs: HashSet::new(),
+            account,
+            base_key,
+        }
+    }
+
     pub fn insert_named_uref(&mut self, name: String, key: Key) {
         self.insert_uref(key);
         self.uref_lookup.insert(name, key);
@@ -128,6 +141,27 @@ pub struct Runtime<'a, T: TrackingCopy + 'a> {
 }
 
 impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
+    pub fn new(
+        memory: MemoryRef,
+        state: &'a mut T,
+        module: Module,
+        gas_limit: &'a u64,
+        context: RuntimeContext<'a>,
+    ) -> Self {
+        Runtime {
+            args: Vec::new(),
+            memory,
+            state,
+            module,
+            result: Vec::new(),
+            host_buf: Vec::new(),
+            fn_store_id: 0,
+            gas_counter: 0,
+            gas_limit,
+            context,
+        }
+    }
+
     /// Charge specified amount of gas
     ///
     /// Returns false if gas limit exceeded and true if not.

@@ -28,7 +28,7 @@ const ALLOWED_IMPORTS: &'static [&'static str] = &[
 ];
 
 const MEM_PAGES: u32 = 128;
-const MAX_MEM_PAGES: u32 = 305; // 10mb
+pub const MAX_MEM_PAGES: u32 = 305; // 10mb
 
 #[derive(Debug)]
 pub enum PreprocessingError {
