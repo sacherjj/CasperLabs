@@ -18,13 +18,10 @@ use wasm_prep::MAX_MEM_PAGES;
 use wasmi::memory_units::Pages;
 use wasmi::{MemoryInstance, MemoryRef};
 
-#[allow(dead_code)]
 struct MockEnv {
-    addr: [u8; 20],
     key: Key,
     account: value::Account,
     uref_lookup: BTreeMap<String, Key>,
-    gs: InMemGS,
     tc: InMemTC,
     gas_limit: u64,
     memory: MemoryRef,
@@ -40,11 +37,9 @@ impl MockEnv {
             .expect("Mocked memory should be able to be created.");
 
         MockEnv {
-            addr,
             key,
             account,
             uref_lookup,
-            gs,
             tc,
             gas_limit,
             memory,
