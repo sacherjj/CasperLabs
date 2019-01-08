@@ -13,7 +13,7 @@ use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
 use std::collections::BTreeMap;
 use storage::transform::Transform;
-use storage::{GlobalState, InMemGS, InMemTC};
+use storage::{GlobalState, InMemGS, InMemTC, TrackingCopy};
 use wasm_prep::MAX_MEM_PAGES;
 use wasmi::memory_units::Pages;
 use wasmi::{MemoryInstance, MemoryRef};
@@ -56,6 +56,52 @@ impl MockEnv {
             context,
         )
     }
+
+    pub fn memory_manager(&self) -> WasmMemoryManager {
+        WasmMemoryManager::new(self.memory.clone())
+    }
+}
+
+struct WasmMemoryManager {
+    memory: MemoryRef,
+    offset: usize,
+}
+
+impl WasmMemoryManager {
+    pub fn new(memory: MemoryRef) -> Self {
+        WasmMemoryManager { memory, offset: 0 }
+    }
+
+    pub fn write<T: ToBytes>(&mut self, t: T) -> Result<(u32, usize), wasmi::Error> {
+        let bytes = t.to_bytes();
+        let ptr = self.offset as u32;
+
+        match self.memory.set(ptr, &bytes) {
+            Ok(_) => {
+                let len = bytes.len();
+                self.offset += len;
+                Ok((ptr, len))
+            }
+
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn new_uref<'a, T: TrackingCopy + 'a>(
+        &mut self,
+        runtime: &mut Runtime<'a, T>,
+    ) -> Result<(u32, usize), wasmi::Trap> {
+        let ptr = self.offset as u32;
+
+        match runtime.new_uref(ptr) {
+            Ok(_) => {
+                self.offset += UREF_SIZE;
+                Ok((ptr, UREF_SIZE))
+            }
+
+            Err(e) => Err(e),
+        }
+    }
 }
 
 fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
@@ -92,47 +138,54 @@ fn mock_module() -> Module {
     module().build()
 }
 
+fn gs_write<'a, T: TrackingCopy>(
+    runtime: &mut Runtime<'a, T>,
+    key: (u32, usize),
+    value: (u32, usize),
+) -> Result<(), wasmi::Trap> {
+    runtime.write(key.0, key.1 as u32, value.0, value.1 as u32)
+}
+
 #[test]
 fn valid_uref() {
     let mut env = MockEnv::new([0u8; 20], 0);
-    let memory = env.memory.clone();
+    let mut memory = env.memory_manager();
     let mut runtime = env.runtime();
 
-    let uref_size = UREF_SIZE as u32;
-    let uref_ptr: u32 = 0;
-    let value_ptr = uref_ptr + uref_size + 1;
-    let value = value::Value::Int32(42).to_bytes();
-    let _ = runtime
-        .new_uref(uref_ptr)
+    //create a valid uref in wasm memory via new_uref
+    let uref = memory
+        .new_uref(&mut runtime)
         .expect("call to new_uref should succeed");
-    let _ = memory
-        .set(value_ptr, &value)
+
+    //write arbitrary value to wasm memory to allow call to write
+    let value = memory
+        .write(value::Value::Int32(42))
         .expect("writing value to wasm memory should succeed");
-    let _ = runtime
-        .write(uref_ptr, uref_size, value_ptr, value.len() as u32)
-        .expect("writing using valid uref should succeed");
+
+    //Use uref as the key to perform an action on the global state.
+    //This should succeed because the uref is valid.
+    let _ = gs_write(&mut runtime, uref, value).expect("writing using valid uref should succeed");
 }
 
 #[test]
 fn forged_uref() {
     let mut env = MockEnv::new([0u8; 20], 0);
-    let memory = env.memory.clone();
+    let mut memory = env.memory_manager();
     let mut runtime = env.runtime();
 
-    let uref_ptr: u32 = 0;
-    let uref = Key::URef([231u8; 32]).to_bytes();
-    let uref_size = uref.len() as u32;
-    let value_ptr = uref_ptr + uref_size + 1;
-    let value = value::Value::Int32(42).to_bytes();
-    let _ = memory
-        .set(uref_ptr, &uref)
-        .expect("writing uref to wasm memory should succeed");
-    let _ = memory
-        .set(value_ptr, &value)
+    //create a forged uref
+    let uref = memory
+        .write(Key::URef([231u8; 32]))
+        .expect("writing key to wasm memory should succeed");
+
+    //write arbitrary value to wasm memory to allow call to write
+    let value = memory
+        .write(value::Value::Int32(42))
         .expect("writing value to wasm memory should succeed");
-    let trap = runtime
-        .write(uref_ptr, uref_size, value_ptr, value.len() as u32)
-        .expect_err("use of forged key should fail");
+
+    //Use uref as the key to perform an action on the global state.
+    //This should fail because the uref was forged
+    let trap = gs_write(&mut runtime, uref, value).expect_err("use of forged key should fail");
 
     assert_eq!(format!("{:?}", trap).contains("ForgedReference"), true);
 }
