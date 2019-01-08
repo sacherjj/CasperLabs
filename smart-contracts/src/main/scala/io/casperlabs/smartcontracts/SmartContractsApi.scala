@@ -67,8 +67,10 @@ object SmartContractsApi {
           time: Option[Long] = None
       ): F[Either[(Option[Deploy], Failed), ByteString]] =
         ByteString.EMPTY.asRight[(Option[Deploy], Failed)].pure
+
       override def close(): F[Unit] =
         ().pure
+
       override def computeBonds(hash: ByteString): F[Bond] =
         Bond().pure
 
