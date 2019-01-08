@@ -151,8 +151,6 @@ class NodeRuntime private[node] (
       _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
       oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
       // TODO Replace the RuntimeManager to SmartContractsApi
-      smartContractsApi = SmartContractsApi
-        .noOpApi[Task](storagePath, storageSize, storeType)
       casperSmartContractsApi = SmartContractsApi
         .noOpApi[Task](casperStoragePath, storageSize, storeType)
       runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
@@ -182,7 +180,7 @@ class NodeRuntime private[node] (
       nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
       jvmMetrics      = diagnostics.jvmMetrics[Task]
 
-      program = nodeProgram[Task](smartContractsApi, casperSmartContractsApi)(
+      program = nodeProgram[Task](casperSmartContractsApi)(
         Monad[Task],
         time,
         rpConfState,
@@ -252,7 +250,6 @@ class NodeRuntime private[node] (
 
   private def clearResources[F[_]: Monad](
       servers: Servers,
-      smartContractsApi: SmartContractsApi[F],
       casperSmartContractsApi: SmartContractsApi[F]
   )(
       implicit
@@ -271,8 +268,6 @@ class NodeRuntime private[node] (
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
-      _   <- log.info("Shutting down interpreter runtime ...")
-      _   <- Task.delay(smartContractsApi.close())
       _   <- log.info("Shutting down Casper runtime ...")
       _   <- Task.delay(casperSmartContractsApi.close())
       _   <- log.info("Bringing BlockStore down ...")
@@ -293,7 +288,6 @@ class NodeRuntime private[node] (
 
   private def addShutdownHook[F[_]: Monad](
       servers: Servers,
-      smartContractsApi: SmartContractsApi[F],
       casperSmartContractsApi: SmartContractsApi[F]
   )(
       implicit transport: TransportLayer[Task],
@@ -301,13 +295,12 @@ class NodeRuntime private[node] (
       peerNodeAsk: PeerNodeAsk[Task]
   ): Task[Unit] =
     Task.delay(
-      sys.addShutdownHook(clearResources(servers, smartContractsApi, casperSmartContractsApi))
+      sys.addShutdownHook(clearResources(servers, casperSmartContractsApi))
     )
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
   private def nodeProgram[F[_]: Monad](
-      smartContractsApi: SmartContractsApi[F],
       casperSmartContractsApi: SmartContractsApi[F]
   )(
       implicit
@@ -363,7 +356,7 @@ class NodeRuntime private[node] (
       local   <- peerNodeAsk.ask.toEffect
       host    = local.endpoint.host
       servers <- acquireServers()
-      _       <- addShutdownHook(servers, smartContractsApi, casperSmartContractsApi).toEffect
+      _       <- addShutdownHook(servers, casperSmartContractsApi).toEffect
       _       <- servers.grpcServerExternal.start.toEffect
       _ <- Log[Effect].info(
             s"gRPC external server started at $host:${servers.grpcServerExternal.port}"
