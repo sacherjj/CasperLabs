@@ -101,7 +101,7 @@ impl<'a> RuntimeContext<'a> {
         self.known_urefs.insert(key);
     }
 
-    pub fn validate_key(&self, key: &Key) -> Result<(), Error> {
+    fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
             uref @ Key::URef(_) => {
                 if self.known_urefs.contains(uref) {
@@ -786,6 +786,8 @@ fn sub_call<T: TrackingCopy>(
     refs: &mut BTreeMap<String, Key>,
     key: Key,
     current_runtime: &mut Runtime<T>,
+    //Unforgable references passed across the call boundary from caller to callee
+    //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
 ) -> Result<Vec<u8>, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
