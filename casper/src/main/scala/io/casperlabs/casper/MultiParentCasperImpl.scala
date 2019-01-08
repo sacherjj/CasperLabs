@@ -238,12 +238,12 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   // TODO: Optimize for large number of deploys accumulated over history
   private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[(Deploy, ExecutionEffect)]] =
     for {
-      result <- Capture[F].capture { deployAndEffectsHist.clone() }
+      result <- Sync[F].delay { deployAndEffectsHist.clone() }
       _ <- DagOperations
             .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
             .foreach(
               b =>
-                Capture[F].capture {
+                Sync[F].delay {
                   b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result.remove))
                 }
             )
