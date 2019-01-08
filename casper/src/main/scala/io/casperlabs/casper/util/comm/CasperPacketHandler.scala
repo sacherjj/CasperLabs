@@ -13,7 +13,7 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts.Wallet
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.rholang.{RuntimeManager, SmartContractsApi}
+import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.{Capture, MonadTrans}
 import io.casperlabs.comm.CommError.ErrorHandler

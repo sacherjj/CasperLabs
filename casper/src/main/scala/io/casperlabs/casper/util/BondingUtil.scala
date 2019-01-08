@@ -3,7 +3,7 @@ package io.casperlabs.casper.util
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.casper.util.rholang.{RuntimeManager, SmartContractsApi}
+import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.{Blake2b256, Keccak256}
@@ -13,6 +13,7 @@ import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
 import cats.Id
+import io.casperlabs.smartcontracts.SmartContractsApi
 import monix.eval.Task
 import monix.execution.Scheduler
 

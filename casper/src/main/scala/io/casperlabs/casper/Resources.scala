@@ -6,9 +6,9 @@ import cats.Applicative
 import cats.effect.ExitCase.Error
 import cats.effect.{ContextShift, Resource, Sync}
 import com.typesafe.scalalogging.Logger
-import io.casperlabs.casper.util.comm.GrpcExecutionEngineService
-import io.casperlabs.casper.util.rholang.SmartContractsApi
 import io.casperlabs.shared.StoreType
+import io.casperlabs.smartcontracts.GrpcExecutionEngineService
+import io.casperlabs.smartcontracts.SmartContractsApi
 import monix.eval.Task
 import monix.execution.Scheduler
 

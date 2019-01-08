@@ -1,4 +1,4 @@
-package io.casperlabs.casper.util.comm
+package io.casperlabs.smartcontracts
 
 import java.io.Closeable
 import java.nio.file.Path

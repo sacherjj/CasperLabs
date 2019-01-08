@@ -8,6 +8,7 @@ import io.casperlabs.ipc.{Deploy => IPCDeploy}
 import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.ipc.{CommutativeEffects, ExecutionEffect}
 import io.casperlabs.models._
+import io.casperlabs.smartcontracts.SmartContractsApi
 import monix.eval.Task
 import monix.execution.Scheduler
 

@@ -1,5 +1,4 @@
-package io.casperlabs.casper.util.rholang
-
+package io.casperlabs.smartcontracts
 import java.nio.file.Path
 
 import cats.Applicative
@@ -9,11 +8,10 @@ import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.{Bond, Deploy}
 import io.casperlabs.ipc.{Deploy => EEDeploy}
-import io.casperlabs.casper.util.comm.ExecutionEngineService
-import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.ipc.{CommutativeEffects, ExecutionEffect}
 import io.casperlabs.models.{Failed, InternalProcessedDeploy, Succeeded}
 import io.casperlabs.shared.StoreType
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import simulacrum.typeclass
 
 @typeclass trait SmartContractsApi[F[_]] {
@@ -23,7 +21,7 @@ import simulacrum.typeclass
       terms: Seq[(Deploy, ExecutionEffect)],
       initHash: ByteString,
       time: Option[Long] = None
-  ): F[(StateHash, Seq[InternalProcessedDeploy])]
+  ): F[(ByteString, Seq[InternalProcessedDeploy])]
 
   def replayEval(
       terms: Seq[InternalProcessedDeploy],
@@ -47,7 +45,7 @@ object SmartContractsApi {
           terms: Seq[(Deploy, ExecutionEffect)],
           initHash: ByteString,
           time: Option[Long] = None
-      ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
+      ): F[(ByteString, Seq[InternalProcessedDeploy])] = {
         // todo using maximum commutative rules
         val commutativeEffects = CommutativeEffects(terms.flatMap(_._2.transformMap))
         for {

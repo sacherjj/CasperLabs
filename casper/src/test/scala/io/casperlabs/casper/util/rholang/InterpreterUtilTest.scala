@@ -11,7 +11,6 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.comm.GrpcExecutionEngineService
 import io.casperlabs.casper.util.rholang.InterpreterUtil._
 import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
@@ -19,6 +18,7 @@ import io.casperlabs.ipc.ExecutionEffect
 import io.casperlabs.models.InternalProcessedDeploy
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
+import io.casperlabs.smartcontracts.GrpcExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}

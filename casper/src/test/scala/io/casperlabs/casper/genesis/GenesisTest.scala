@@ -11,8 +11,7 @@ import io.casperlabs.casper.BlockDag
 import io.casperlabs.casper.helper.BlockStoreFixture
 import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.comm.GrpcExecutionEngineService
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager, SmartContractsApi}
+import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
@@ -20,6 +19,7 @@ import io.casperlabs.shared.PathOps.RichPath
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import io.casperlabs.shared.StoreType
+import io.casperlabs.smartcontracts.{GrpcExecutionEngineService, SmartContractsApi}
 import monix.eval.Task
 
 class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {

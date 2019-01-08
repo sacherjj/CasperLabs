@@ -34,7 +34,7 @@ import io.casperlabs.node.configuration.{Configuration, ConfigurationSoft}
 import io.casperlabs.node.diagnostics._
 import io.casperlabs.p2p.effects._
 import io.casperlabs.shared._
-import io.casperlabs.smartcontracts.SmartContractsApi
+import io.casperlabs.smartcontracts.{GrpcExecutionEngineService, SmartContractsApi}
 import kamon._
 import kamon.zipkin.ZipkinReporter
 import monix.eval.Task

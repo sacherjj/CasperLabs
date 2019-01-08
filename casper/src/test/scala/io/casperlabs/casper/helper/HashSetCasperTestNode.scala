@@ -18,8 +18,8 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerImpl,
   CasperPacketHandlerInternal
 }
-import io.casperlabs.casper.util.comm.{GrpcExecutionEngineService, TransportLayerTestImpl}
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager, SmartContractsApi}
+import io.casperlabs.casper.util.comm.TransportLayerTestImpl
+import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.effect.implicits._
@@ -35,6 +35,7 @@ import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.{Cell, StoreType, Time}
 import io.casperlabs.shared.PathOps.RichPath
+import io.casperlabs.smartcontracts.{GrpcExecutionEngineService, SmartContractsApi}
 import monix.execution.Scheduler
 
 import scala.collection.mutable
