@@ -855,8 +855,8 @@ object HashSetCasperTest {
     val storageSize: Long               = 1024L * 1024
     val socket                          = Paths.get(storageDirectory.toString, ".casper-node.sock").toString
     implicit val executionEngineService = new GrpcExecutionEngineService(socket, 4 * 1024 * 1024)
-    val casperSmartContractsApi = SmartContractsApi
-      .noOpApi[Task](storageDirectory, storageSize, StoreType.LMDB)
+    val casperSmartContractsApi =
+      SmartContractsApi.of[Task](storageDirectory, storageSize, StoreType.LMDB)
     val runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
     val emptyStateHash = runtimeManager.emptyStateHash
     val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq

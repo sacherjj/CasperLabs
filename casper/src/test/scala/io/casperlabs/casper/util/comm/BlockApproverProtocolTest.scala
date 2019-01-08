@@ -81,8 +81,8 @@ object BlockApproverProtocolTest {
         4 * 1024 * 1024
       )
 
-    val casperSmartContractsApi = SmartContractsApi
-      .noOpApi[Task](runtimeDir, storageSize, StoreType.LMDB)
+    val casperSmartContractsApi =
+      SmartContractsApi.of[Task](runtimeDir, storageSize, StoreType.LMDB)
     val runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
 
     val deployTimestamp = 1L

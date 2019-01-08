@@ -45,8 +45,7 @@ object Resources {
               Paths.get(tmpDir.toString, ".casper-node.sock").toString,
               maxMessageSize
             )
-          SmartContractsApi
-            .noOpApi[Task](tmpDir, storageSize, StoreType.LMDB)
+          SmartContractsApi.of[Task](tmpDir, storageSize, StoreType.LMDB)
         })(rt => rt.close())
       }
 }

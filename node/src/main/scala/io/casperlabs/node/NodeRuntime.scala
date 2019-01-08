@@ -152,7 +152,7 @@ class NodeRuntime private[node] (
       oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
       // TODO Replace the RuntimeManager to SmartContractsApi
       casperSmartContractsApi = SmartContractsApi
-        .noOpApi[Task](casperStoragePath, storageSize, storeType)
+        .of[Task](casperStoragePath, storageSize, storeType)
       runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(

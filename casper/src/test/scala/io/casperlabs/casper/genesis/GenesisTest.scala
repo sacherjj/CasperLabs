@@ -233,11 +233,10 @@ object GenesisTest {
         socket,
         4 * 1024 * 1024
       )
-    val casperSmartContractsApi = SmartContractsApi
-      .noOpApi[Task](storePath, storageSize, StoreType.LMDB)
-    val gp   = genesisPath
-    val log  = new LogStub[Id]
-    val time = new LogicalTime[Id]
+    val casperSmartContractsApi = SmartContractsApi.of[Task](storePath, storageSize, StoreType.LMDB)
+    val gp                      = genesisPath
+    val log                     = new LogStub[Id]
+    val time                    = new LogicalTime[Id]
 
     body(casperSmartContractsApi, genesisPath, log, time)
 

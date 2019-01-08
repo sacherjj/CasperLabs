@@ -70,10 +70,9 @@ class HashSetCasperTestNode[F[_]](
 
   val socket                          = Paths.get(sys.props("user.home"), ".casper-node.sock").toString
   implicit val executionEngineService = new GrpcExecutionEngineService(socket, 4 * 1024 * 1024)
-  val smartContractsApi =
-    SmartContractsApi.noOpApi[Task](storageDirectory, storageSize, StoreType.LMDB)
-  val casperSmartContractsApi = SmartContractsApi
-    .noOpApi[Task](storageDirectory, storageSize, StoreType.LMDB)
+  val smartContractsApi               = SmartContractsApi.of[Task](storageDirectory, storageSize, StoreType.LMDB)
+  val casperSmartContractsApi =
+    SmartContractsApi.of[Task](storageDirectory, storageSize, StoreType.LMDB)
 
   val runtimeManager                 = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)

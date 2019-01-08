@@ -22,7 +22,7 @@ import simulacrum.typeclass
 }
 
 object SmartContractsApi {
-  def noOpApi[F[_]: Applicative: ExecutionEngineService](
+  def of[F[_]: Applicative: ExecutionEngineService](
       storagePath: Path,
       storageSize: Long,
       storeType: StoreType
