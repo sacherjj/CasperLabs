@@ -8,6 +8,7 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.{BlockDag, BlockException, PrettyPrinter}
+import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.ExecutionEffect
 import io.casperlabs.models._
@@ -131,7 +132,7 @@ object InterpreterUtil {
         }
     }
 
-  def computeDeploysCheckpoint[F[_]: Monad: BlockStore](
+  def computeDeploysCheckpoint[F[_]: Monad: BlockStore: ToAbstractContext](
       parents: Seq[BlockMessage],
       deploysWithEffect: Seq[(Deploy, ExecutionEffect)],
       dag: BlockDag,
@@ -142,17 +143,21 @@ object InterpreterUtil {
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, time)
-    } yield
-      possiblePreStateHash match {
-        case Right(preStateHash) =>
-          val (postStateHash, processedDeploys) =
-            runtimeManager
-              .computeState(preStateHash, deploysWithEffect, time)
-              .runSyncUnsafe(Duration.Inf)
-          Right(preStateHash, postStateHash, processedDeploys)
-        case Left(err) =>
-          Left(err)
-      }
+      res <- possiblePreStateHash match {
+              case Right(preStateHash) =>
+                ToAbstractContext[F]
+                  .fromTask(
+                    runtimeManager
+                      .computeState(preStateHash, deploysWithEffect, time)
+                  )
+                  .map {
+                    case (postStateHash, processedDeploy) =>
+                      Right(preStateHash, postStateHash, processedDeploy)
+                  }
+              case Left(err) =>
+                Left(err).pure[F]
+            }
+    } yield res
 
   private def computeParentsPostState[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
@@ -209,7 +214,7 @@ object InterpreterUtil {
     }
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore: ExecutionEngineService](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore: ExecutionEngineService: ToAbstractContext](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,

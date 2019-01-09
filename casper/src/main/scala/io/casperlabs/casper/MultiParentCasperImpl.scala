@@ -1,6 +1,6 @@
 package io.casperlabs.casper
 
-import cats.Applicative
+import cats.{Applicative, Monad}
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
@@ -13,7 +13,7 @@ import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.casper.util.rholang._
-import io.casperlabs.catscontrib.{Capture, ListContrib}
+import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
@@ -30,7 +30,7 @@ import scala.collection.mutable
 import scala.concurrent.SyncVar
 import scala.concurrent.duration.Duration
 
-class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
+class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext](
     runtimeManager: RuntimeManager[Task],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
@@ -168,22 +168,25 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield ()
 
-  def deploy(d: DeployData): F[Either[Throwable, Unit]] = {
-    val res: Either[Throwable, ExecutionEffect] = runtimeManager
-      .sendDeploy(ProtoUtil.deployDataToEEDeploy(d))
-      .runSyncUnsafe(Duration.Inf)
-    res match {
-      case Right(effects: ExecutionEffect) =>
-        addDeploy(
-          Deploy(
-            sessionCode = d.sessionCode,
-            raw = Some(d)
-          ),
-          effects
-        ).as(Right(()))
-      case Left(err) => new Throwable(s"Error in parsing term: \n$err").asLeft[Unit].pure[F]
-    }
-  }
+  def deploy(d: DeployData): F[Either[Throwable, Unit]] =
+    ToAbstractContext[F]
+      .fromTask(
+        runtimeManager
+          .sendDeploy(
+            ProtoUtil.deployDataToEEDeploy(d)
+          )
+      )
+      .flatMap {
+        case Right(effects: ExecutionEffect) =>
+          addDeploy(
+            Deploy(
+              sessionCode = d.sessionCode,
+              raw = Some(d)
+            ),
+            effects
+          ).as(Right(()))
+        case Left(err) => new Throwable(s"Error in parsing term: \n$err").asLeft[Unit].pure[F]
+      }
 
   def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
     for {

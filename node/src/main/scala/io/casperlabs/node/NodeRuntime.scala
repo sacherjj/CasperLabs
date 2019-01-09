@@ -158,6 +158,9 @@ class NodeRuntime private[node] (
         executionEngineService
       )
     runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
+    abs = new ToAbstractContext[Effect] {
+      def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
+    }
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
                               labEff,
@@ -174,6 +177,7 @@ class NodeRuntime private[node] (
                               Time.eitherTTime(Monad[Task], time),
                               Log.eitherTLog(Monad[Task], log),
                               multiParentCasperRef,
+                              abs,
                               scheduler
                             )
     packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
