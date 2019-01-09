@@ -1,9 +1,9 @@
 extern crate byteorder;
-extern crate serde;
 
+use super::serde::de;
+use super::serde::ser::{self, Serialize};
 use byteorder::{ByteOrder, LittleEndian};
 use core::fmt::{self, Display, Formatter};
-use serde::ser::{self, Serialize};
 
 use super::alloc::vec::Vec;
 
@@ -26,6 +26,12 @@ impl ser::Error for Error {
     }
 }
 
+impl de::Error for Error {
+    fn custom<T: Display>(_msg: T) -> Self {
+        Error::FormattingError
+    }
+}
+
 pub struct Serializer {
     output: Vec<u8>,
 }
@@ -36,6 +42,15 @@ impl Serializer {
         LittleEndian::write_u32(&mut buf, v);
         buf
     }
+}
+
+pub fn to_bytes<T>(t: &T) -> Result<Vec<u8>, Error>
+where
+    T: Serialize,
+{
+    let mut s = Serializer { output: Vec::new() };
+    t.serialize(&mut s)?;
+    Ok(s.output)
 }
 
 impl<'a> ser::Serializer for &'a mut Serializer {
@@ -158,7 +173,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        let bytes = Serializer::u32_bytes(0);
+        let bytes = [0u8; 1];
         self.output.extend_from_slice(&bytes);
 
         Ok(())
@@ -168,7 +183,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     where
         T: ?Sized + Serialize,
     {
-        let size_bytes = Serializer::u32_bytes(1);
+        let size_bytes = [1u8; 1];
         self.output.extend_from_slice(&size_bytes);
 
         value.serialize(self)
@@ -217,15 +232,17 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        let size = len.unwrap_or(0) as u32;
-        let size_bytes = Serializer::u32_bytes(size);
-        self.output.extend_from_slice(&size_bytes);
+        if let Some(n) = len {
+            let size = n as u32;
+            let size_bytes = Serializer::u32_bytes(size);
+            self.output.extend_from_slice(&size_bytes);
+        }
 
         Ok(self)
     }
 
-    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-        self.serialize_seq(Some(len))
+    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
+        self.serialize_seq(None)
     }
 
     fn serialize_tuple_struct(

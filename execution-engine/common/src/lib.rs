@@ -2,6 +2,7 @@
 #![feature(alloc, allocator_api, core_intrinsics, lang_items, alloc_error_handler)]
 
 extern crate alloc;
+extern crate serde;
 extern crate wee_alloc;
 
 #[cfg(not(feature = "std"))]
@@ -9,6 +10,7 @@ extern crate wee_alloc;
 pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 pub mod bytesrepr;
+pub mod de;
 pub mod key;
 pub mod ser;
 pub mod value;
