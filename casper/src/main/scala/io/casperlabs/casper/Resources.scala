@@ -40,12 +40,7 @@ object Resources {
     mkTempDir[Task](prefix)
       .flatMap { tmpDir =>
         Resource.make[Task, SmartContractsApi[Task]](Task.delay {
-          implicit val executionEngineService: GrpcExecutionEngineService =
-            new GrpcExecutionEngineService(
-              Paths.get(tmpDir.toString, ".casper-node.sock").toString,
-              maxMessageSize
-            )
-          SmartContractsApi.of[Task](tmpDir, storageSize, StoreType.LMDB)
+          SmartContractsApi.noOpApi()
         })(rt => rt.close())
       }
 }

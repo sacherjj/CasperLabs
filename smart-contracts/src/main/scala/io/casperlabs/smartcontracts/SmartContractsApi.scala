@@ -6,7 +6,7 @@ import cats.syntax.applicative._
 import cats.syntax.either._
 import cats.syntax.functor._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.{Bond, Deploy}
+import io.casperlabs.casper.protocol.{Bond, Deploy, DeployData}
 import io.casperlabs.ipc.{CommutativeEffects, Done, ExecutionEffect, Deploy => EEDeploy}
 import io.casperlabs.models.{Failed, InternalProcessedDeploy, Succeeded}
 import io.casperlabs.shared.StoreType
@@ -38,4 +38,16 @@ object SmartContractsApi {
       override def sendDeploy(d: EEDeploy): F[Either[Throwable, ExecutionEffect]] =
         ExecutionEngineService[F].sendDeploy(d)
     }
+
+  def noOpApi[F[_]: Applicative](): SmartContractsApi[F] =
+    new SmartContractsApi[F] {
+      override def sendDeploy(d: EEDeploy): F[Either[Throwable, ExecutionEffect]] =
+        ExecutionEffect().asRight[Throwable].pure
+
+      override def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]] =
+        Done().asRight[Throwable].pure
+
+      override def close(): F[Unit] = ().pure
+    }
+
 }

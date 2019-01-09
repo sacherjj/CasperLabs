@@ -49,18 +49,11 @@ import scala.concurrent.duration._
 @Ignore
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
-    val scheduler         = Scheduler.io("test")
-    val runtimeDir        = BlockStoreTestFixture.dbDir
-    val storageSize: Long = 1024L * 1024
-    val socket            = Paths.get(runtimeDir.toString, ".casper-node.sock").toString
-    implicit val executionEngineService: GrpcExecutionEngineService =
-      new GrpcExecutionEngineService(
-        socket,
-        4 * 1024 * 1024
-      )
-    val casperSmartContractsApi =
-      SmartContractsApi.of[Task](runtimeDir, storageSize, StoreType.LMDB)
-    val runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
+    val scheduler               = Scheduler.io("test")
+    val runtimeDir              = BlockStoreTestFixture.dbDir
+    val storageSize: Long       = 1024L * 1024
+    val casperSmartContractsApi = SmartContractsApi.noOpApi[Task]()
+    val runtimeManager          = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
 
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair

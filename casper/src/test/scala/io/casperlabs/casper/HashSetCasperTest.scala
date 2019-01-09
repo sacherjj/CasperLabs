@@ -850,16 +850,11 @@ object HashSetCasperTest {
       faucetCode: String => String,
       deployTimestamp: Long
   ): BlockMessage = {
-    val initial                         = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
-    val storageDirectory                = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-    val storageSize: Long               = 1024L * 1024
-    val socket                          = Paths.get(storageDirectory.toString, ".casper-node.sock").toString
-    implicit val executionEngineService = new GrpcExecutionEngineService(socket, 4 * 1024 * 1024)
-    val casperSmartContractsApi =
-      SmartContractsApi.of[Task](storageDirectory, storageSize, StoreType.LMDB)
-    val runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
-    val emptyStateHash = runtimeManager.emptyStateHash
-    val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+    val initial                 = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
+    val casperSmartContractsApi = SmartContractsApi.noOpApi[Task]()
+    val runtimeManager          = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
+    val emptyStateHash          = runtimeManager.emptyStateHash
+    val validators              = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val genesis = Genesis.withContracts(
       initial,
       ProofOfStakeParams(minimumBond, maximumBond, validators),

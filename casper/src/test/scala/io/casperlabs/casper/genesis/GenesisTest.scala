@@ -230,14 +230,8 @@ object GenesisTest {
   def withRawGenResources(
       body: (SmartContractsApi[Task], Path, LogStub[Id], LogicalTime[Id]) => Unit
   ): Unit = {
-    val storePath = storageLocation
-    val socket    = Paths.get(storageLocation.toString, ".casper-node.sock").toString
-    implicit val executionEngineService: GrpcExecutionEngineService =
-      new GrpcExecutionEngineService(
-        socket,
-        4 * 1024 * 1024
-      )
-    val casperSmartContractsApi = SmartContractsApi.of[Task](storePath, storageSize, StoreType.LMDB)
+    val storePath               = storageLocation
+    val casperSmartContractsApi = SmartContractsApi.noOpApi[Task]()
     val gp                      = genesisPath
     val log                     = new LogStub[Id]
     val time                    = new LogicalTime[Id]

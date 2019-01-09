@@ -71,19 +71,8 @@ object BlockApproverProtocolTest {
   ): (BlockApproverProtocol, HashSetCasperTestNode[Id]) = {
     import monix.execution.Scheduler.Implicits.global
 
-    val runtimeDir        = BlockStoreTestFixture.dbDir
-    val storageSize: Long = 1024L * 1024
-
-    val socket = Paths.get(runtimeDir.toString, ".casper-node.sock").toString
-    implicit val executionEngineService: GrpcExecutionEngineService =
-      new GrpcExecutionEngineService(
-        socket,
-        4 * 1024 * 1024
-      )
-
-    val casperSmartContractsApi =
-      SmartContractsApi.of[Task](runtimeDir, storageSize, StoreType.LMDB)
-    val runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
+    val casperSmartContractsApi = SmartContractsApi.noOpApi[Task]()
+    val runtimeManager          = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
 
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
