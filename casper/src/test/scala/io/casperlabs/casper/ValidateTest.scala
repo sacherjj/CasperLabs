@@ -20,10 +20,12 @@ import io.casperlabs.casper.protocol.Event.EventInstance
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
@@ -36,8 +38,11 @@ class ValidateTest
     with BlockGenerator
     with BlockStoreFixture {
   implicit val log = new LogStub[Id]
-  val initState    = IndexedBlockDag.empty.copy(currentId = -1)
-  val ed25519      = "ed25519"
+  implicit val absId = new ToAbstractContext[Id] {
+    def fromTask[A](fa: Task[A]): Id[A] = fa.runSyncUnsafe().pure[Id]
+  }
+  val initState = IndexedBlockDag.empty.copy(currentId = -1)
+  val ed25519   = "ed25519"
 
   override def beforeEach(): Unit = {
     log.reset()

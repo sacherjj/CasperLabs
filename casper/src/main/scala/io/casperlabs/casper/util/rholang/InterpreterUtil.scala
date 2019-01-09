@@ -240,20 +240,21 @@ object InterpreterUtil {
                           case (Right(acc), d) =>
                             d.raw match {
                               case Some(r) =>
-                                runtimeManager
-                                  .sendDeploy(
-                                    ProtoUtil
-                                      .deployDataToEEDeploy(r)
+                                ToAbstractContext[F]
+                                  .fromTask(
+                                    runtimeManager
+                                      .sendDeploy(
+                                        ProtoUtil
+                                          .deployDataToEEDeploy(r)
+                                      )
                                   )
-                                  .runSyncUnsafe() match {
-                                  case Left(e) =>
-                                    e.asLeft[Seq[(Deploy, ExecutionEffect)]]
-                                      .pure[F]
-                                  case Right(effect) =>
-                                    (acc :+ (d, effect))
-                                      .asRight[Throwable]
-                                      .pure[F]
-                                }
+                                  .map {
+                                    case Left(e) =>
+                                      e.asLeft[Seq[(Deploy, ExecutionEffect)]]
+                                    case Right(effect) =>
+                                      (acc :+ (d, effect))
+                                        .asRight[Throwable]
+                                  }
                               case None =>
                                 (acc :+ (d, ExecutionEffect()))
                                   .asRight[Throwable]
