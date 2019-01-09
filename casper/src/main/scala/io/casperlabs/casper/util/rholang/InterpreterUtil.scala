@@ -5,8 +5,8 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStore}
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
+import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.{BlockDag, BlockException, PrettyPrinter}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.ExecutionEffect
@@ -221,29 +221,51 @@ object InterpreterUtil {
       parents <- ProtoUtil.unsafeGetParents[F](b)
 
       deploys: Seq[Deploy] = ProtoUtil.deploys(b).flatMap(_.deploy)
-      deploysWithEffect: Seq[(Deploy, ExecutionEffect)] = deploys.flatMap(
-        d =>
-          d.raw match {
-            case Some(r) =>
-              runtimeManager
-                .sendDeploy(ProtoUtil.deployDataToEEDeploy(r))
-                .runSyncUnsafe() match {
-                case Left(_)       => None
-                case Right(effect) => Some(d, effect)
-              }
-            case None => Some(d, ExecutionEffect())
-          }
-      )
+      deploysEffect <- deploys.toList
+                        .foldM[F, Either[Throwable, Seq[(Deploy, ExecutionEffect)]]](
+                          Seq()
+                            .asRight[Throwable]
+                        ) {
+                          case (Left(e), _) =>
+                            e.asLeft[Seq[(Deploy, ExecutionEffect)]]
+                              .pure[F]
+                          case (Right(acc), d) =>
+                            d.raw match {
+                              case Some(r) =>
+                                runtimeManager
+                                  .sendDeploy(
+                                    ProtoUtil
+                                      .deployDataToEEDeploy(r)
+                                  )
+                                  .runSyncUnsafe() match {
+                                  case Left(e) =>
+                                    e.asLeft[Seq[(Deploy, ExecutionEffect)]]
+                                      .pure[F]
+                                  case Right(effect) =>
+                                    (acc :+ (d, effect))
+                                      .asRight[Throwable]
+                                      .pure[F]
+                                }
+                              case None =>
+                                (acc :+ (d, ExecutionEffect()))
+                                  .asRight[Throwable]
+                                  .pure[F]
+                            }
+                        }
       _ = assert(
         parents.nonEmpty || (parents.isEmpty && b == genesis),
         "Received a different genesis block."
       )
-
-      result <- computeDeploysCheckpoint[F](
-                 parents,
-                 deploysWithEffect,
-                 dag,
-                 runtimeManager
-               )
+      result <- deploysEffect match {
+                 case Left(e) =>
+                   e.asLeft[(StateHash, StateHash, Seq[InternalProcessedDeploy])].pure[F]
+                 case Right(d) =>
+                   computeDeploysCheckpoint[F](
+                     parents,
+                     d,
+                     dag,
+                     runtimeManager
+                   )
+               }
     } yield result
 }
