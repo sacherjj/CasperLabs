@@ -150,7 +150,7 @@ pub struct Account {
 impl ToBytes for Account {
     fn to_bytes(&self) -> Vec<u8> {
         let mut result = Vec::new();
-        result.extend(&self.public_key);
+        result.extend(&self.public_key.to_bytes());
         result.append(&mut self.nonce.to_bytes());
         result.append(&mut self.known_urefs.to_bytes());
         result
