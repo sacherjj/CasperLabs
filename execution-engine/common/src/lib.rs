@@ -10,6 +10,7 @@ pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 pub mod bytesrepr;
 pub mod key;
+pub mod ser;
 pub mod value;
 
 mod ext_ffi {
