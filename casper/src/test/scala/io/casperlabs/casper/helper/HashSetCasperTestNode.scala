@@ -5,7 +5,7 @@ import java.nio.file.{Files, Paths}
 import cats.{Applicative, ApplicativeError, Id, Monad, Traverse}
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
-import cats.effect.Sync
+import cats.effect.{Effect, Sync}
 import cats.implicits._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.blockstorage.{BlockMetadata, LMDBBlockStore}
@@ -24,7 +24,7 @@ import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.comm._
-import io.casperlabs.comm.CommError.ErrorHandler
+import io.casperlabs.comm.CommError.{CommErrT, ErrorHandler}
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.Connect
 import io.casperlabs.comm.rp.Connect._
@@ -53,7 +53,12 @@ class HashSetCasperTestNode[F[_]](
     implicit val errorHandlerEff: ErrorHandler[F],
     storageSize: Long,
     shardId: String = "rchain"
-)(implicit scheduler: Scheduler, syncF: Sync[F], captureF: Capture[F]) {
+)(
+    implicit scheduler: Scheduler,
+    syncF: Sync[F],
+    captureF: Capture[F],
+    val abF: ToAbstractContext[F]
+) {
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
 
@@ -134,6 +139,10 @@ class HashSetCasperTestNode[F[_]](
 object HashSetCasperTestNode {
   type Effect[A] = EitherT[Task, CommError, A]
 
+  implicit val absF = new ToAbstractContext[Effect] {
+    def fromTask[A](fa: Task[A]): Effect[A] = new MonadOps(fa).liftM[CommErrT]
+  }
+
   def standaloneF[F[_]](
       genesis: BlockMessage,
       sk: Array[Byte],
@@ -142,7 +151,8 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],
       syncF: Sync[F],
-      captureF: Capture[F]
+      captureF: Capture[F],
+      absF: ToAbstractContext[F]
   ): F[HashSetCasperTestNode[F]] = {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
@@ -166,6 +176,10 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Id] = {
     implicit val errorHandlerEff = errorHandler
+    implicit val absId = new ToAbstractContext[Id] {
+      def fromTask[A](fa: Task[A]): Id[A] = fa.runSyncUnsafe().pure[Id]
+    }
+
     standaloneF[Id](genesis, sk, storageSize)
   }
   def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
@@ -175,7 +189,8 @@ object HashSetCasperTestNode {
       scheduler,
       ApplicativeError_[Effect, CommError],
       syncEffectInstance,
-      Capture[Effect]
+      Capture[Effect],
+      ToAbstractContext[Effect]
     ).value.unsafeRunSync.right.get
 
   def networkF[F[_]](
@@ -186,7 +201,8 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],
       syncF: Sync[F],
-      captureF: Capture[F]
+      captureF: Capture[F],
+      absF: ToAbstractContext[F]
   ): F[IndexedSeq[HashSetCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
@@ -242,6 +258,10 @@ object HashSetCasperTestNode {
       storageSize: Long = 1024L * 1024 * 10
   )(implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode[Id]] = {
     implicit val errorHandlerEff = errorHandler
+    implicit val absId = new ToAbstractContext[Id] {
+      def fromTask[A](fa: Task[A]): Id[A] = fa.runSyncUnsafe().pure[Id]
+    }
+
     networkF[Id](sks, genesis, storageSize)
   }
   def networkEff(
@@ -253,7 +273,8 @@ object HashSetCasperTestNode {
       scheduler,
       ApplicativeError_[Effect, CommError],
       syncEffectInstance,
-      Capture[Effect]
+      Capture[Effect],
+      ToAbstractContext[Effect]
     )
 
   val appErrId = new ApplicativeError[Id, CommError] {

@@ -3,7 +3,8 @@ package io.casperlabs.casper.util.rholang
 import java.nio.file.{Files, Paths}
 
 import cats.mtl.implicits._
-import cats.{Id, Monad}
+import cats.{Applicative, Id, Monad}
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.BlockDag
@@ -14,6 +15,7 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.rholang.InterpreterUtil._
 import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
+import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.ipc.ExecutionEffect
 import io.casperlabs.models.InternalProcessedDeploy
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
@@ -33,7 +35,11 @@ class InterpreterUtilTest
   val initState: IndexedBlockDag = IndexedBlockDag.empty.copy(currentId = -1)
 
   implicit val logEff: LogStub[Id] = new LogStub[Id]
-  private val runtimeDir           = Files.createTempDirectory(s"interpreter-util-test")
+  implicit val absId = new ToAbstractContext[Id] {
+    def fromTask[A](fa: Task[A]): Id[A] = fa.runSyncUnsafe().pure[Id]
+  }
+
+  private val runtimeDir = Files.createTempDirectory(s"interpreter-util-test")
 
   private val socket = Paths.get(runtimeDir.toString, ".casper-node.sock").toString
   implicit val executionEngineService: GrpcExecutionEngineService =
@@ -439,6 +445,7 @@ class InterpreterUtilTest
       runtimeManager: RuntimeManager[Task],
       deploy: Deploy*
   ): Seq[InternalProcessedDeploy] = {
+
     val Right((_, _, result)) =
       computeDeploysCheckpoint[Id](
         Seq.empty,
