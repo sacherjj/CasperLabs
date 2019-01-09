@@ -44,13 +44,13 @@ impl Serializer {
     }
 }
 
-pub fn to_bytes<T>(t: &T) -> Result<Vec<u8>, Error>
+pub fn to_bytes<T>(t: &T) -> Vec<u8>
 where
-    T: Serialize,
+    T: Serialize + ?Sized,
 {
     let mut s = Serializer { output: Vec::new() };
-    t.serialize(&mut s)?;
-    Ok(s.output)
+    let _ = t.serialize(&mut s).expect("serialization cannot fail");
+    s.output
 }
 
 impl<'a> ser::Serializer for &'a mut Serializer {

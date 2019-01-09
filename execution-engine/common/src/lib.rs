@@ -1,6 +1,9 @@
 #![no_std]
 #![feature(alloc, allocator_api, core_intrinsics, lang_items, alloc_error_handler)]
 
+#[macro_use]
+extern crate serde_derive;
+
 extern crate alloc;
 extern crate serde;
 extern crate wee_alloc;
@@ -9,7 +12,6 @@ extern crate wee_alloc;
 #[global_allocator]
 pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-pub mod bytesrepr;
 pub mod de;
 pub mod key;
 pub mod ser;
@@ -47,8 +49,11 @@ pub mod ext {
     use super::alloc::string::String;
     use super::alloc::vec::Vec;
     use super::ext_ffi;
-    use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
+    use super::serde::de::DeserializeOwned;
+    use super::serde::Serialize;
+    use crate::de::from_bytes;
     use crate::key::{Key, UREF_SIZE};
+    use crate::ser::to_bytes;
     use crate::value::Value;
 
     fn alloc_bytes(n: usize) -> *mut u8 {
@@ -64,14 +69,14 @@ pub mod ext {
     // &str, but the compiler complains if I try to use the polymorphic
     // version with T = str.
     fn str_ref_to_ptr(t: &str) -> (*const u8, usize, Vec<u8>) {
-        let bytes = t.to_bytes();
+        let bytes = to_bytes(t);
         let ptr = bytes.as_ptr();
         let size = bytes.len();
         (ptr, size, bytes)
     }
 
-    fn to_ptr<T: ToBytes>(t: &T) -> (*const u8, usize, Vec<u8>) {
-        let bytes = t.to_bytes();
+    fn to_ptr<T: Serialize>(t: &T) -> (*const u8, usize, Vec<u8>) {
+        let bytes = to_bytes(t);
         let ptr = bytes.as_ptr();
         let size = bytes.len();
         (ptr, size, bytes)
@@ -88,7 +93,7 @@ pub mod ext {
             ext_ffi::get_read(value_ptr);
             Vec::from_raw_parts(value_ptr, value_size, value_size)
         };
-        deserialize(&value_bytes).unwrap()
+        from_bytes(&value_bytes).unwrap()
     }
 
     //Write the value under the key in the global state
@@ -118,7 +123,7 @@ pub mod ext {
             ext_ffi::new_uref(key_ptr);
             Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
         };
-        deserialize(&bytes).unwrap()
+        from_bytes(&bytes).unwrap()
     }
 
     fn fn_bytes_by_name(name: &str) -> Vec<u8> {
@@ -164,7 +169,7 @@ pub mod ext {
     //Return the i-th argument passed to the host for the current module
     //invokation. Note that this is only relevent to contracts stored on-chain
     //since a contract deployed directly is not invoked with any arguments.
-    pub fn get_arg<T: FromBytes>(i: u32) -> T {
+    pub fn get_arg<T: DeserializeOwned>(i: u32) -> T {
         let arg_size = unsafe { ext_ffi::load_arg(i) };
         let dest_ptr = alloc_bytes(arg_size);
         let arg_bytes = unsafe {
@@ -172,7 +177,7 @@ pub mod ext {
             Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
         };
         //TODO: better error handling (i.e. pass the `Result` on)
-        deserialize(&arg_bytes).unwrap()
+        from_bytes(&arg_bytes).unwrap()
     }
 
     //Return the unforgable reference known by the current module under the given name.
@@ -186,7 +191,7 @@ pub mod ext {
             Vec::from_raw_parts(dest_ptr, UREF_SIZE, UREF_SIZE)
         };
         //TODO: better error handling (i.e. pass the `Result` on)
-        deserialize(&uref_bytes).unwrap()
+        from_bytes(&uref_bytes).unwrap()
     }
 
     //Check if the given name corresponds to a known unforgable reference
@@ -211,7 +216,7 @@ pub mod ext {
     //Note this function is only relevent to contracts stored on chain which
     //return a value to their caller. The return value of a directly deployed
     //contract is never looked at.
-    pub fn ret<T: ToBytes>(t: &T) -> ! {
+    pub fn ret<T: Serialize>(t: &T) -> ! {
         let (ptr, size, _bytes) = to_ptr(t);
         unsafe {
             ext_ffi::ret(ptr, size);
@@ -222,7 +227,7 @@ pub mod ext {
     //the host in order to have them available to the called contract during its
     //execution. The value returned from the contract call (see `ret` above) is
     //returned from this function.
-    pub fn call_contract<T: FromBytes>(contract_key: &Key, args: &Vec<Vec<u8>>) -> T {
+    pub fn call_contract<T: DeserializeOwned>(contract_key: &Key, args: &Vec<Vec<u8>>) -> T {
         let (key_ptr, key_size, _bytes1) = to_ptr(contract_key);
         let (args_ptr, args_size, _bytes2) = to_ptr(args);
         let res_size = unsafe { ext_ffi::call_contract(key_ptr, key_size, args_ptr, args_size) };
@@ -231,7 +236,7 @@ pub mod ext {
             ext_ffi::get_call_result(res_ptr);
             Vec::from_raw_parts(res_ptr, res_size, res_size)
         };
-        deserialize(&res_bytes).unwrap()
+        from_bytes(&res_bytes).unwrap()
     }
 }
 

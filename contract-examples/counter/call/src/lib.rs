@@ -5,9 +5,9 @@
 extern crate alloc;
 
 extern crate common;
-use common::bytesrepr::ToBytes;
 use common::ext::call_contract;
 use common::key::Key;
+use common::ser::to_bytes;
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -17,11 +17,11 @@ pub extern "C" fn call() {
         197, 6, 112, 204, 31, 83, 118, 122, 225, 214, 26, 52,
     ]);
     let arg = "inc";
-    let args = vec![arg.to_bytes()];
+    let args = vec![to_bytes(arg)];
     let _result: () = call_contract(&hash, &args);
     let value: i32 = {
         let arg = "get";
-        let args = vec![arg.to_bytes()];
+        let args = vec![to_bytes(arg)];
         call_contract(&hash, &args)
     };
     assert_eq!(value, 1);

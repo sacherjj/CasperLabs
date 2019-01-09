@@ -1,7 +1,7 @@
 extern crate byteorder;
 
 use super::serde::de::{
-    self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor,
+    self, Deserialize, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor,
 };
 use byteorder::{ByteOrder, LittleEndian};
 use core::str::from_utf8;
@@ -40,6 +40,19 @@ impl<'de> Deserializer<'de> {
     pub fn take_sized_bytes(&mut self) -> Result<&[u8], Error> {
         let size = self.take_u32()?;
         self.take_bytes(size as usize)
+    }
+}
+
+pub fn from_bytes<'a, T>(bytes: &'a [u8]) -> Result<T, Error>
+where
+    T: Deserialize<'a>,
+{
+    let mut deserializer = Deserializer::from_bytes(bytes);
+    let t = T::deserialize(&mut deserializer)?;
+    if deserializer.input.is_empty() {
+        Ok(t)
+    } else {
+        Err(Error::LeftOverBytes)
     }
 }
 

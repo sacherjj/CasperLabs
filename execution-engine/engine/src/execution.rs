@@ -2,8 +2,9 @@ extern crate blake2;
 
 use self::blake2::digest::{Input, VariableOutput};
 use self::blake2::VarBlake2b;
-use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
+use common::de::from_bytes;
 use common::key::Key;
+use common::ser::{to_bytes, Error as BytesReprError};
 use common::value::{Account, Value};
 use storage::{Error as StorageError, ExecutionEffect, GlobalState, TrackingCopy};
 use wasmi::memory_units::Pages;
@@ -134,7 +135,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     fn key_from_mem(&mut self, key_ptr: u32, key_size: u32) -> Result<Key, Error> {
         let bytes = self.memory.get(key_ptr, key_size as usize)?;
-        let key = deserialize(&bytes)?;
+        let key = from_bytes(&bytes)?;
         match key {
             uref @ Key::URef(_) => {
                 //TODO: check if uref was forged. If so then return Err(Error::ForgedReference(uref))
@@ -147,7 +148,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     fn value_from_mem(&mut self, value_ptr: u32, value_size: u32) -> Result<Value, Error> {
         let bytes = self.memory.get(value_ptr, value_size as usize)?;
-        deserialize(&bytes).map_err(|e| e.into())
+        from_bytes(&bytes).map_err(|e| e.into())
     }
 
     fn string_from_mem(&mut self, ptr: u32, size: u32) -> Result<String, Trap> {
@@ -155,7 +156,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
             .memory
             .get(ptr, size as usize)
             .map_err(|e| Error::Interpreter(e))?;
-        deserialize(&bytes).map_err(|e| Error::BytesRepr(e).into())
+        from_bytes(&bytes).map_err(|e| Error::BytesRepr(e).into())
     }
 
     fn rename_export_to_call(module: &mut Module, name: String) {
@@ -226,7 +227,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
             .uref_lookup
             .get(&name)
             .ok_or(Error::URefNotFound(name))?;
-        let uref_bytes = uref.to_bytes();
+        let uref_bytes = to_bytes(uref);
 
         self.memory
             .set(dest_ptr, &uref_bytes)
@@ -290,10 +291,10 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         let key_bytes = self.memory.get(key_ptr, key_size)?;
         let args_bytes = self.memory.get(args_ptr, args_size)?;
 
-        let key: Key = deserialize(&key_bytes)?;
+        let key: Key = from_bytes(&key_bytes)?;
         let (args, module, mut refs) = {
             if let Value::Contract { bytes, known_urefs } = self.state.read(key)? {
-                let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
+                let args: Vec<Vec<u8>> = from_bytes(&args_bytes)?;
                 let module = parity_wasm::deserialize_buffer(&bytes)?;
 
                 Ok((args, module, known_urefs.clone()))
@@ -319,8 +320,8 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
     pub fn function_address(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
         pre_hash_bytes.extend_from_slice(self.context.account.pub_key());
-        pre_hash_bytes.append(&mut self.context.account.nonce().to_bytes());
-        pre_hash_bytes.append(&mut self.fn_store_id.to_bytes());
+        pre_hash_bytes.append(&mut to_bytes(&self.context.account.nonce()));
+        pre_hash_bytes.append(&mut to_bytes(&self.fn_store_id));
 
         self.fn_store_id += 1;
 
@@ -364,7 +365,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
     pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
         let value_bytes = {
             let value = self.value_from_key(key_ptr, key_size)?;
-            value.to_bytes()
+            to_bytes(value)
         };
         self.host_buf = value_bytes;
         Ok(self.host_buf.len())
@@ -374,7 +375,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         let key = self.state.new_uref();
         self.context.insert_uref(key);
         self.memory
-            .set(key_ptr, &key.to_bytes())
+            .set(key_ptr, &to_bytes(&key))
             .map_err(|e| Error::Interpreter(e).into())
     }
 }
