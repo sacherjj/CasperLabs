@@ -4,6 +4,8 @@ This module implements a communication layer for execution engine. It is using g
 
 ## How to build ##
 
-Go to the root directory of the project (where the `Cargo.toml` file is located) and run `cargo run`. This will take a `ipc.proto` file from `$root/models/src/main/protobuf` directory and generate `ipc.rs` and `ipc_grpc.rs` file that contain models and services respectively.
+First, you need to build protoc files. These are the definitions of the communication protocol. Go to the root directory of the project (where the `Cargo.toml` file is located) and run `cargo run --bin grpc-protoc`. This will take a `ipc.proto` file from `$root/models/src/main/protobuf` directory and generate `ipc.rs` and `ipc_grpc.rs` file that contain models and services respectively.
 
 `protoc-rust-grpc` requires that `protoc` is installed on the machine. 
+
+Now, we can run the server. Again, in the root directory of the `comm` project run `cargo run --bin engine-grpc-server <socket>` where `<socket>` is the path to the socket file used for communicating between client and the server.
