@@ -25,7 +25,7 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore](
+  def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore: ToAbstractContext](
       b: BlockMessage,
       dag: BlockDag,
       runtimeManager: RuntimeManager[Task]
@@ -56,7 +56,7 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def processPossiblePreStateHash[F[_]: Monad: Log: BlockStore](
+  private def processPossiblePreStateHash[F[_]: Monad: Log: BlockStore: ToAbstractContext](
       runtimeManager: RuntimeManager[Task],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
@@ -85,7 +85,7 @@ object InterpreterUtil {
         }
     }
 
-  private def processPreStateHash[F[_]: Monad: Log: BlockStore](
+  private def processPreStateHash[F[_]: Monad: Log: BlockStore: ToAbstractContext](
       runtimeManager: RuntimeManager[Task],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
@@ -93,44 +93,47 @@ object InterpreterUtil {
       possiblePreStateHash: Either[Throwable, StateHash],
       time: Option[Long]
   )(implicit scheduler: Scheduler): F[Either[BlockException, Option[StateHash]]] =
-    runtimeManager
-      .replayComputeState(preStateHash, internalDeploys, time)
-      .runSyncUnsafe(Duration.Inf) match {
-      case Left((Some(deploy), status)) =>
-        status match {
-          case InternalErrors(exs) =>
-            Left(
-              BlockException(
-                new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                  .buildString(deploy)}: ${exs.mkString("\n")}")
-              )
-            ).rightCast[Option[StateHash]].pure[F]
-          case UserErrors(errors: Vector[Throwable]) =>
-            Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *> Right(
-              none[StateHash]
-            ).leftCast[BlockException].pure[F]
-          case UnknownFailure =>
-            Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
+    ToAbstractContext[F]
+      .fromTask(
+        runtimeManager
+          .replayComputeState(preStateHash, internalDeploys, time)
+      )
+      .flatMap {
+        case Left((Some(deploy), status)) =>
+          status match {
+            case InternalErrors(exs) =>
+              Left(
+                BlockException(
+                  new Exception(s"Internal errors encountered while processing ${PrettyPrinter
+                    .buildString(deploy)}: ${exs.mkString("\n")}")
+                )
+              ).rightCast[Option[StateHash]].pure[F]
+            case UserErrors(errors: Vector[Throwable]) =>
+              Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *> Right(
+                none[StateHash]
+              ).leftCast[BlockException].pure[F]
+            case UnknownFailure =>
+              Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
+                .leftCast[BlockException]
+                .pure[F]
+          }
+        case Left((None, _)) =>
+          //TODO Log error
+          ???
+        case Right(computedStateHash) =>
+          if (tsHash.contains(computedStateHash)) {
+            // state hash in block matches computed hash!
+            Right(Option(computedStateHash))
               .leftCast[BlockException]
               .pure[F]
-        }
-      case Left((None, _)) =>
-        //TODO Log error
-        ???
-      case Right(computedStateHash) =>
-        if (tsHash.contains(computedStateHash)) {
-          // state hash in block matches computed hash!
-          Right(Option(computedStateHash))
-            .leftCast[BlockException]
-            .pure[F]
-        } else {
-          // state hash in block does not match computed hash -- invalid!
-          // return no state hash, do not update the state hash set
-          Log[F].warn(
-            s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
-          ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
-        }
-    }
+          } else {
+            // state hash in block does not match computed hash -- invalid!
+            // return no state hash, do not update the state hash set
+            Log[F].warn(
+              s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
+            ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
+          }
+      }
 
   def computeDeploysCheckpoint[F[_]: Monad: BlockStore: ToAbstractContext](
       parents: Seq[BlockMessage],

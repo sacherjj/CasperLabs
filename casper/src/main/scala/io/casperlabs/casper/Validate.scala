@@ -12,7 +12,7 @@ import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
-import io.casperlabs.catscontrib.Capture
+import io.casperlabs.catscontrib.{Capture, ToAbstractContext}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.shared._
@@ -554,7 +554,7 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Sync: Log: BlockStore](
+  def transactions[F[_]: Sync: Log: BlockStore: ToAbstractContext](
       block: BlockMessage,
       dag: BlockDag,
       emptyStateHash: StateHash,
