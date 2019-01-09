@@ -41,7 +41,7 @@ class InterpreterUtilTest
 
   private val runtimeDir = Files.createTempDirectory(s"interpreter-util-test")
 
-  private val socket = Paths.get(runtimeDir.toString, ".casper-node.sock").toString
+  private val socket = Paths.get(runtimeDir.toString, ".casper-node.sock")
   implicit val executionEngineService: GrpcExecutionEngineService =
     new GrpcExecutionEngineService(
       socket,
