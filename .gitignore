@@ -83,6 +83,7 @@ execution-engine/common/*.lock
 execution-engine/storage/*.lock
 execution-engine/engine/*.lock
 execution-engine/wasm-prep/*.lock
+execution-engine/tests/*.lock
 contract-examples/*/*.lock
 contract-examples/counter/*/*.lock
 contract-examples/mailing-list/*/*.lock
