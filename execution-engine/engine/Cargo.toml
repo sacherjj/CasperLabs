@@ -13,6 +13,7 @@ common = { path = "../common", features = ["std"] }
 wasm-prep = { path = "../wasm-prep" }
 vm = { path = "../vm" }
 clap = "2.32.0"
+parking_lot = "0.7.1"
 
 
 [[bin]]
