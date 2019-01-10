@@ -1,0 +1,10 @@
+[package]
+name = "tests"
+version = "0.1.0"
+authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+
+[dev-dependencies]
+common = { path = "../common", features = ["std"] }
+proptest = "0.8.7"
+serde = { version = "1.0", default-features = false, features = ["alloc"] }
+

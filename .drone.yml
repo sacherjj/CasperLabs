@@ -61,6 +61,12 @@ pipeline:
       - ~/.cargo/bin/cargo run --bin grpc-protoc
       - ~/.cargo/bin/cargo build
 
+  run-rust-tests:
+    <<: *buildenv
+    commands:
+      - cd execution-engine/tests
+      - ~/.cargo/bin/cargo test
+
 #  run-unit-tests:
 #    <<: *sbtenv
 #    commands:

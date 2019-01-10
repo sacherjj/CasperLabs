@@ -200,10 +200,10 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     fn serialize_unit_variant(
         self,
         _name: &'static str,
-        variant_index: u32,
-        _variant: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
-        self.serialize_u32(variant_index)
+        self.serialize_str(variant)
     }
 
     fn serialize_newtype_struct<T>(
@@ -250,18 +250,18 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         _name: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        self.serialize_seq(Some(len))
+        self.serialize_tuple(len)
     }
 
     fn serialize_tuple_variant(
         self,
         _name: &'static str,
-        variant_index: u32,
-        _variant: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        match self.serialize_u32(variant_index) {
-            Ok(_) => self.serialize_seq(Some(len)),
+        match self.serialize_str(variant) {
+            Ok(_) => self.serialize_tuple(len),
             Err(e) => Err(e),
         }
     }
@@ -281,11 +281,11 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     fn serialize_struct_variant(
         self,
         _name: &'static str,
-        variant_index: u32,
-        _variant: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        match self.serialize_u32(variant_index) {
+        match self.serialize_str(variant) {
             Ok(_) => self.serialize_seq(Some(len)),
             Err(e) => Err(e),
         }
