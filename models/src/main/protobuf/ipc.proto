@@ -49,6 +49,13 @@ message KeyURef {
 message IntList {
     repeated int32 list = 1;
 }
+message StringList {
+    repeated string list = 1;
+}
+message NamedKey {
+    string name = 1;
+    Key key = 2;
+}
 
 // Things to store under the key in the global state.
 message Value {
@@ -59,16 +66,19 @@ message Value {
         string string_val = 4;
         Account account = 5;
         Contract contract = 6;
+        StringList string_list = 7;
+        NamedKey named_key = 8;
     }
 }
  
 message Account {
     bytes pub_key = 1; // Should have 32 elements
     int64 nonce = 2;
-    repeated Key known_urefs = 3;
+    repeated NamedKey known_urefs = 3;
 }
 message Contract {
     bytes body = 1;
+    repeated NamedKey known_urefs = 2;
 }
  
  
@@ -77,19 +87,39 @@ message Contract {
 message Transform {
     oneof transform_instance {
         TransformIdentity identity = 1;
-        TransformAdd add = 2;
+        TransformAddInt32 add_i32 = 2;
         TransformWrite write = 3;
+        TransformAddKeys add_keys = 4;
+        TransformFailure failure = 5;
     }
 }
  
 message TransformIdentity {}
-message TransformAdd {
+message TransformAddInt32 {
     int32 value = 1;
+}
+message TransformAddKeys {
+    repeated NamedKey value = 1;
 }
 message TransformWrite {
     Value value = 1;
 }
+message TransformFailure {
+    StorageError error = 1;
+}
  
+//Errors which may occur while interacting with global state
+message StorageError {
+    oneof error_instance {
+        Key key_not_found = 1;
+        StorageTypeMismatch type_mismatch = 2;
+    }
+}
+message StorageTypeMismatch {
+    string expected = 1;
+    string found = 2;
+}
+
 // Models key value pair of (key, op) entry.
 // Required b/c protobuff doesn't support maps natively
 message OpEntry {

@@ -85,7 +85,7 @@ fn main() {
     for wasm_bytes in wasm_files.iter() {
         let result = engine_state.run_deploy(&wasm_bytes.bytes, account_addr, &gas_limit);
         match result {
-            Ok(ExecutionEffect::Success(_, transform_map)) => {
+            Ok(ExecutionEffect(_, transform_map)) => {
                 for (key, transformation) in transform_map.iter() {
                     engine_state
                         .apply_effect(*key, transformation.clone())
@@ -93,10 +93,6 @@ fn main() {
                 }
                 println!("Result for file {}: Success!", wasm_bytes.path);
             }
-            Ok(ExecutionEffect::Error) => println!(
-                "Result for file {}: ExecutionEffect::Error.",
-                wasm_bytes.path
-            ),
             Err(_) => println!("Result for file {}: {:?}", wasm_bytes.path, result),
         }
     }
