@@ -6,9 +6,8 @@ import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
-import io.casperlabs.ipc.{Deploy => IPCDeploy}
+import io.casperlabs.ipc.{CommutativeEffects, ExecutionEffect, Deploy => IPCDeploy}
 import io.casperlabs.catscontrib.ToAbstractContext
-import io.casperlabs.ipc.{CommutativeEffects, ExecutionEffect}
 import io.casperlabs.models._
 import cats.syntax.either._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, SmartContractsApi}
@@ -39,9 +38,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
         case Right(_) =>
           (hash, terms.map(it => InternalProcessedDeploy(it._1, 0, Succeeded)))
         case Left(err) =>
-          throw new IllegalArgumentException(
-            s"Failed to execute effects: $err"
-          )
+          (hash, terms.map(it => InternalProcessedDeploy(it._1, 0, DeployResult.fromErrors(err))))
       }
   }
 
