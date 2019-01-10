@@ -3,6 +3,7 @@ extern crate execution_engine;
 extern crate grpc;
 extern crate protobuf;
 extern crate storage;
+extern crate common;
 
 pub mod engine_server;
 
