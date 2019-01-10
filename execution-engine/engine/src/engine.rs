@@ -71,7 +71,7 @@ where
     // To run, contracts need an existing account.
     // This function puts artifical entry in the GlobalState.
     pub fn with_mocked_account(&mut self, account_addr: [u8; 20]) {
-        let account = value::Account::new([0u8; 32], 0, BTreeMap::new());
+        let account = value::Account::new([48u8; 32], 0, BTreeMap::new());
         let transform = Transform::Write(value::Value::Acct(account));
         self.state
             .apply(Key::Account(account_addr), transform)
