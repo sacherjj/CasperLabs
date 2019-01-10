@@ -72,6 +72,6 @@ class GrpcExecutionEngineService(addr: Path, maxMessageSize: Int)
             case PostEffectsResult.Result.Success(v) => Right(v)
             case PostEffectsResult.Result.Error(effectsError) =>
               Left(new SmartContractEngineError(effectsError.toProtoString))
-        }
+          }
       )
 }

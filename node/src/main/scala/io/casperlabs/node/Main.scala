@@ -63,7 +63,7 @@ object Main {
           diagnosticsService.close()
           executionEngineService.close()
           System.exit(1)
-      }
+        }
     )
   }
 
