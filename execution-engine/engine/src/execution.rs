@@ -32,7 +32,7 @@ pub enum Error {
     FunctionNotFound(String),
     ParityWasm(ParityWasmError),
     GasLimit,
-    Ret,
+    Ret(Vec<Key>),
 }
 
 impl fmt::Display for Error {
@@ -79,6 +79,19 @@ pub struct RuntimeContext<'a> {
 }
 
 impl<'a> RuntimeContext<'a> {
+    pub fn new(
+        uref_lookup: &'a mut BTreeMap<String, Key>,
+        account: &'a Account,
+        base_key: Key,
+    ) -> Self {
+        RuntimeContext {
+            uref_lookup,
+            known_urefs: HashSet::new(),
+            account,
+            base_key,
+        }
+    }
+
     pub fn insert_named_uref(&mut self, name: String, key: Key) {
         self.insert_uref(key);
         self.uref_lookup.insert(name, key);
@@ -86,6 +99,31 @@ impl<'a> RuntimeContext<'a> {
 
     pub fn insert_uref(&mut self, key: Key) {
         self.known_urefs.insert(key);
+    }
+
+    fn validate_key(&self, key: &Key) -> Result<(), Error> {
+        match key {
+            uref @ Key::URef(_) => {
+                if self.known_urefs.contains(uref) {
+                    Ok(())
+                } else {
+                    Err(Error::ForgedReference(*uref))
+                }
+            }
+
+            _ => Ok(()),
+        }
+    }
+
+    pub fn deserialize_key(&self, bytes: &[u8]) -> Result<Key, Error> {
+        let key: Key = deserialize(bytes)?;
+        self.validate_key(&key).map(|_| key)
+    }
+
+    pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
+        let keys: Vec<Key> = deserialize(bytes)?;
+        let _ = keys.iter().try_fold((), |_, k| self.validate_key(k))?;
+        Ok(keys)
     }
 }
 
@@ -103,6 +141,27 @@ pub struct Runtime<'a, T: TrackingCopy + 'a> {
 }
 
 impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
+    pub fn new(
+        memory: MemoryRef,
+        state: &'a mut T,
+        module: Module,
+        gas_limit: &'a u64,
+        context: RuntimeContext<'a>,
+    ) -> Self {
+        Runtime {
+            args: Vec::new(),
+            memory,
+            state,
+            module,
+            result: Vec::new(),
+            host_buf: Vec::new(),
+            fn_store_id: 0,
+            gas_counter: 0,
+            gas_limit,
+            context,
+        }
+    }
+
     /// Charge specified amount of gas
     ///
     /// Returns false if gas limit exceeded and true if not.
@@ -134,15 +193,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
 
     fn key_from_mem(&mut self, key_ptr: u32, key_size: u32) -> Result<Key, Error> {
         let bytes = self.memory.get(key_ptr, key_size as usize)?;
-        let key = deserialize(&bytes)?;
-        match key {
-            uref @ Key::URef(_) => {
-                //TODO: check if uref was forged. If so then return Err(Error::ForgedReference(uref))
-                //      otherwise return Ok(uref).
-                Ok(uref)
-            }
-            other => Ok(other),
-        }
+        self.context.deserialize_key(&bytes)
     }
 
     fn value_from_mem(&mut self, value_ptr: u32, value_size: u32) -> Result<Value, Error> {
@@ -266,17 +317,31 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
     //Return a some bytes from the memory and terminate the current `sub_call`.
     //Note that the return type is `Trap`, indicating that this function will
     //always kill the current wasm instance.
-    pub fn ret(&mut self, value_ptr: u32, value_size: usize) -> Trap {
-        let mem_get = self.memory.get(value_ptr, value_size);
+    pub fn ret(
+        &mut self,
+        value_ptr: u32,
+        value_size: usize,
+        extra_urefs_ptr: u32,
+        extra_urefs_size: usize,
+    ) -> Trap {
+        let mem_get = self
+            .memory
+            .get(value_ptr, value_size)
+            .map_err(|e| Error::Interpreter(e))
+            .and_then(|x| {
+                let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
+                let urefs = self.context.deserialize_keys(&urefs_bytes)?;
+                Ok((x, urefs))
+            });
         match mem_get {
-            Ok(buf) => {
+            Ok((buf, urefs)) => {
                 //Set the result field in the runtime and return
                 //the proper element of the `Error` enum indicating
                 //that the reason for exiting the module was a call to ret.
                 self.result = buf;
-                Error::Ret.into()
+                Error::Ret(urefs).into()
             }
-            Err(e) => Error::Interpreter(e).into(),
+            Err(e) => e.into(),
         }
     }
 
@@ -286,11 +351,14 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         key_size: usize,
         args_ptr: u32,
         args_size: usize,
+        extra_urefs_ptr: u32,
+        extra_urefs_size: usize,
     ) -> Result<usize, Error> {
         let key_bytes = self.memory.get(key_ptr, key_size)?;
         let args_bytes = self.memory.get(args_ptr, args_size)?;
+        let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
 
-        let key: Key = deserialize(&key_bytes)?;
+        let key = self.context.deserialize_key(&key_bytes)?;
         let (args, module, mut refs) = {
             if let Value::Contract { bytes, known_urefs } = self.state.read(key)? {
                 let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
@@ -305,7 +373,8 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
             }
         }?;
 
-        let result = sub_call(module, args, &mut refs, key, self)?;
+        let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
+        let result = sub_call(module, args, &mut refs, key, self, extra_urefs)?;
         self.host_buf = result;
         Ok(self.host_buf.len())
     }
@@ -482,9 +551,16 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
             RET_FUNC_INDEX => {
                 //args(0) = pointer to value
                 //args(1) = size of value
-                let (value_ptr, value_size): (u32, u32) = Args::parse(args)?;
+                //args(2) = pointer to extra returned urefs
+                //args(3) = size of extra urefs
+                let (value_ptr, value_size, extra_urefs_ptr, extra_urefs_size) = Args::parse(args)?;
 
-                Err(self.ret(value_ptr, value_size as usize))
+                Err(self.ret(
+                    value_ptr,
+                    as_usize(value_size),
+                    extra_urefs_ptr,
+                    as_usize(extra_urefs_size),
+                ))
             }
 
             CALL_CONTRACT_FUNC_INDEX => {
@@ -492,10 +568,19 @@ impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
                 //args(1) = size of key
                 //args(2) = pointer to function arguments in wasm memory
                 //args(3) = size of arguments
-                let (key_ptr, key_size, args_ptr, args_size) = Args::parse(args)?;
+                //args(4) = pointer to extra supplied urefs
+                //args(5) = size of extra urefs
+                let (key_ptr, key_size, args_ptr, args_size, extra_urefs_ptr, extra_urefs_size) =
+                    Args::parse(args)?;
 
-                let size =
-                    self.call_contract(key_ptr, as_usize(key_size), args_ptr, as_usize(args_size))?;
+                let size = self.call_contract(
+                    key_ptr,
+                    as_usize(key_size),
+                    args_ptr,
+                    as_usize(args_size),
+                    extra_urefs_ptr,
+                    as_usize(extra_urefs_size),
+                )?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -615,11 +700,11 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 GET_ARG_FUNC_INDEX,
             ),
             "ret" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], None),
+                Signature::new(&[ValueType::I32; 4][..], None),
                 RET_FUNC_INDEX,
             ),
             "call_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
                 CALL_CONTRACT_FUNC_INDEX,
             ),
             "get_call_result" => FuncInstance::alloc_host(
@@ -701,12 +786,18 @@ fn sub_call<T: TrackingCopy>(
     refs: &mut BTreeMap<String, Key>,
     key: Key,
     current_runtime: &mut Runtime<T>,
+    //Unforgable references passed across the call boundary from caller to callee
+    //(necessary if the contract takes a uref argument).
+    extra_urefs: Vec<Key>,
 ) -> Result<Vec<u8>, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let known_urefs = {
         let mut tmp: HashSet<Key> = HashSet::new();
         for r in refs.values() {
             tmp.insert(*r);
+        }
+        for r in extra_urefs.into_iter() {
+            tmp.insert(r);
         }
         tmp
     };
@@ -737,7 +828,11 @@ fn sub_call<T: TrackingCopy>(
                 //If the "error" was in fact a trap caused by calling `ret` then
                 //this is normal operation and we should return the value captured
                 //in the Runtime result field.
-                if let Error::Ret = host_error.downcast_ref::<Error>().unwrap() {
+                if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
+                    //insert extra urefs returned from call
+                    for r in ret_urefs.iter() {
+                        current_runtime.context.known_urefs.insert(*r);
+                    }
                     return Ok(runtime.result);
                 }
             }

@@ -4,6 +4,7 @@
 extern crate alloc;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
+use alloc::vec::Vec;
 
 extern crate common;
 use common::ext::*;
@@ -31,7 +32,7 @@ pub extern "C" fn counter_ext() {
         "inc" => inc(&i_key),
         "get" => {
             let result = get(&i_key);
-            ret(&result);
+            ret(&result, &Vec::new());
         }
         _ => panic!("Unknown method name!"),
     }

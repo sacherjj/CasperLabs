@@ -24,12 +24,21 @@ mod ext_ffi {
         pub fn function_address(dest_ptr: *mut u8);
         pub fn load_arg(i: u32) -> usize;
         pub fn get_arg(dest: *mut u8); //can only be called after `load_arg`
-        pub fn ret(value_ptr: *const u8, value_size: usize) -> !;
+        pub fn ret(
+            value_ptr: *const u8,
+            value_size: usize,
+            //extra urefs known by the current contract to make available to the caller
+            extra_urefs_ptr: *const u8,
+            extra_urefs_size: usize,
+        ) -> !;
         pub fn call_contract(
             key_ptr: *const u8,
             key_size: usize,
             args_ptr: *const u8,
             args_size: usize,
+            //extra urefs known by the caller to make available to the callee
+            extra_urefs_ptr: *const u8,
+            extra_urefs_size: usize,
         ) -> usize;
         pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
         pub fn get_uref(name_ptr: *const u8, name_size: usize, dest: *mut u8);
@@ -208,10 +217,11 @@ pub mod ext {
     //Note this function is only relevent to contracts stored on chain which
     //return a value to their caller. The return value of a directly deployed
     //contract is never looked at.
-    pub fn ret<T: ToBytes>(t: &T) -> ! {
+    pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<Key>) -> ! {
         let (ptr, size, _bytes) = to_ptr(t);
+        let (urefs_ptr, urefs_size, _bytes2) = to_ptr(extra_urefs);
         unsafe {
-            ext_ffi::ret(ptr, size);
+            ext_ffi::ret(ptr, size, urefs_ptr, urefs_size);
         }
     }
 
@@ -219,10 +229,19 @@ pub mod ext {
     //the host in order to have them available to the called contract during its
     //execution. The value returned from the contract call (see `ret` above) is
     //returned from this function.
-    pub fn call_contract<T: FromBytes>(contract_key: &Key, args: &Vec<Vec<u8>>) -> T {
+    pub fn call_contract<T: FromBytes>(
+        contract_key: &Key,
+        args: &Vec<Vec<u8>>,
+        extra_urefs: &Vec<Key>,
+    ) -> T {
         let (key_ptr, key_size, _bytes1) = to_ptr(contract_key);
         let (args_ptr, args_size, _bytes2) = to_ptr(args);
-        let res_size = unsafe { ext_ffi::call_contract(key_ptr, key_size, args_ptr, args_size) };
+        let (urefs_ptr, urefs_size, _bytes3) = to_ptr(extra_urefs);
+        let res_size = unsafe {
+            ext_ffi::call_contract(
+                key_ptr, key_size, args_ptr, args_size, urefs_ptr, urefs_size,
+            )
+        };
         let res_ptr = alloc_bytes(res_size);
         let res_bytes = unsafe {
             ext_ffi::get_call_result(res_ptr);

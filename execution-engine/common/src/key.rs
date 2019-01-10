@@ -67,3 +67,26 @@ impl FromBytes for Key {
         }
     }
 }
+
+impl FromBytes for Vec<Key> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (size, rest): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let mut result: Vec<Key> = Vec::with_capacity((size as usize) * UREF_SIZE);
+        let mut stream = rest;
+        for _ in 0..size {
+            let (t, rem): (Key, &[u8]) = FromBytes::from_bytes(stream)?;
+            result.push(t);
+            stream = rem;
+        }
+        Ok((result, stream))
+    }
+}
+impl ToBytes for Vec<Key> {
+    fn to_bytes(&self) -> Vec<u8> {
+        let size = self.len() as u32;
+        let mut result: Vec<u8> = Vec::with_capacity(4 + (size as usize) * UREF_SIZE);
+        result.extend(size.to_bytes());
+        result.extend(self.iter().flat_map(|k| k.to_bytes()));
+        result
+    }
+}

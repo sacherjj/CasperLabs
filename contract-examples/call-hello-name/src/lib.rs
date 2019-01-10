@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate alloc;
 use alloc::string::String;
+use alloc::vec::Vec;
 
 extern crate common;
 use common::bytesrepr::ToBytes;
@@ -18,6 +19,6 @@ pub extern "C" fn call() {
     ]);
     let arg = "World";
     let args = vec![arg.to_bytes()];
-    let result: String = call_contract(&hash, &args);
+    let result: String = call_contract(&hash, &args, &Vec::new());
     assert_eq!("Hello, World", result);
 }

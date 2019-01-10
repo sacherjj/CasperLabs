@@ -3,6 +3,7 @@
 
 #[macro_use]
 extern crate alloc;
+use alloc::vec::Vec;
 
 extern crate common;
 use common::bytesrepr::ToBytes;
@@ -17,11 +18,11 @@ pub extern "C" fn call() {
     ]);
     let arg = "inc";
     let args = vec![arg.to_bytes()];
-    let _result: () = call_contract(&hash, &args);
+    let _result: () = call_contract(&hash, &args, &Vec::new());
     let value: i32 = {
         let arg = "get";
         let args = vec![arg.to_bytes()];
-        call_contract(&hash, &args)
+        call_contract(&hash, &args, &Vec::new())
     };
     assert_eq!(value, 1);
 }
