@@ -113,14 +113,12 @@ message StorageError {
     oneof error_instance {
         Key key_not_found = 1;
         StorageTypeMismatch type_mismatch = 2;
-        UnknownStorageError unknown = 3;
     }
 }
 message StorageTypeMismatch {
     string expected = 1;
     string found = 2;
 }
-message UnknownStorageError {}
 
 // Models key value pair of (key, op) entry.
 // Required b/c protobuff doesn't support maps natively
@@ -137,16 +135,9 @@ message TransformEntry {
 // Returned by ExecutionEngine to consensus layer.
 // (Map[Key, Op], Map[Key, Transform]) pair, describes how the deploy modifies the global state.
 // op_map and transform_map should be of equal lengths
-message ExecutionEffectSuccess {
+message ExecutionEffect {
     repeated OpEntry op_map = 1;
     repeated TransformEntry transform_map = 2;
-}
-message ExecutionEffectError {}
-message ExecutionEffect {
-    oneof effect_instance {
-        ExecutionEffectSuccess success = 1;
-        ExecutionEffectError error = 2;
-    }
 }
  
 //TODO: be more specific about errors

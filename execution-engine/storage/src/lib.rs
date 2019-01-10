@@ -21,7 +21,6 @@ use common::value::Value;
 pub enum Error {
     KeyNotFound { key: Key },
     TypeMismatch { expected: String, found: String },
-    Unknown,
 }
 
 impl fmt::Display for Error {
@@ -39,17 +38,13 @@ pub trait GlobalState<T: TrackingCopy> {
 }
 
 #[derive(Debug)]
-pub enum ExecutionEffect {
-    Success(HashMap<Key, Op>, HashMap<Key, Transform>),
-    Error, //TODO: add better error reporting
-}
+pub struct ExecutionEffect(pub HashMap<Key, Op>, pub HashMap<Key, Transform>);
 
 pub trait TrackingCopy {
     fn new_uref(&mut self) -> Key;
     fn read(&mut self, k: Key) -> Result<&Value, Error>;
     fn write(&mut self, k: Key, v: Value) -> Result<(), Error>;
     fn add(&mut self, k: Key, v: Value) -> Result<(), Error>;
-    fn fail(&mut self);
     fn effect(&self) -> ExecutionEffect;
 }
 
@@ -94,7 +89,6 @@ impl GlobalState<InMemTC> for InMemGS {
             store: self.store.clone(), //TODO: make more efficient
             ops: HashMap::new(),
             fns: HashMap::new(),
-            failed: false,
             rng: rand::rngs::StdRng::from_entropy(),
         }
     }
@@ -104,7 +98,6 @@ pub struct InMemTC {
     store: HashMap<Key, Value>,
     ops: HashMap<Key, Op>,
     fns: HashMap<Key, Transform>,
-    failed: bool,
     rng: rand::rngs::StdRng,
 }
 
@@ -156,15 +149,8 @@ impl TrackingCopy for InMemTC {
             }
         }
     }
-    fn fail(&mut self) {
-        self.failed = true;
-    }
 
     fn effect(&self) -> ExecutionEffect {
-        if self.failed {
-            ExecutionEffect::Error
-        } else {
-            ExecutionEffect::Success(self.ops.clone(), self.fns.clone())
-        }
+        ExecutionEffect(self.ops.clone(), self.fns.clone())
     }
 }
