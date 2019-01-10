@@ -61,10 +61,13 @@ object Genesis {
       startHash: StateHash,
       runtimeManager: RuntimeManager[Task]
   )(implicit scheduler: Scheduler): BlockMessage = {
-    val (stateHash, processedDeploys) =
-      runtimeManager
-        .computeState(startHash, blessedTerms.map((_, ExecutionEffect())))
-        .runSyncUnsafe(Duration.Inf)
+    // todo when blessed contracts finished, this should be comment out.
+    //
+//    val (stateHash, processedDeploys) =
+//      runtimeManager
+//        .computeState(startHash, blessedTerms.map((_, ExecutionEffect())))
+//        .runSyncUnsafe(Duration.Inf)
+    val stateHash = ByteString.copyFromUtf8("test")
 
     val stateWithContracts = for {
       bd <- initial.body
@@ -73,8 +76,16 @@ object Genesis {
     val version   = initial.header.get.version
     val timestamp = initial.header.get.timestamp
 
-    val blockDeploys =
-      processedDeploys.filterNot(_.result.isFailed).map(ProcessedDeployUtil.fromInternal)
+    // todo when blessed contracts finished, this should be comment out.
+
+//    val blockDeploys =
+//      processedDeploys.filterNot(_.result.isFailed).map(ProcessedDeployUtil.fromInternal)
+
+    val blockDeploys = Seq(
+      ProcessedDeploy(
+        deploy = None,
+        errored = false
+      ))
 
     val body = Body(state = stateWithContracts, deploys = blockDeploys)
 
@@ -127,7 +138,7 @@ object Genesis {
               path =>
                 Log[F].warn(
                   s"Specified bonds file $path does not exist. Falling back on generating random validators."
-                )
+              )
             )
           )(_ => ().pure[F])
       walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
