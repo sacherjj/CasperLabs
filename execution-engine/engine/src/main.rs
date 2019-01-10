@@ -17,7 +17,7 @@ struct Task {
 }
 
 fn main() {
-    let default_address = "12345678901234567890";
+    let default_address = "00000000000000000000";
     let default_gas_limit: &str = &std::u64::MAX.to_string();
     let matches = App::new("Execution engine standalone")
         .arg(
@@ -64,7 +64,7 @@ fn main() {
     };
 
     let account_addr: [u8; 20] = {
-        let mut address = [0u8; 20];
+        let mut address = [48u8; 20];
         matches
             .value_of("address")
             .map(|addr| addr.as_bytes())
