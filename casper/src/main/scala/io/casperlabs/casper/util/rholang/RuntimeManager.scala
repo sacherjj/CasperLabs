@@ -36,9 +36,12 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
       .fromTask { executionEngineService.executeEffects(commutativeEffects) }
       .map {
         case Right(_) =>
-          (hash, terms.map(it => InternalProcessedDeploy(it._1, 0, Succeeded)))
+          (hash, terms.map { case (deploy, _) => InternalProcessedDeploy(deploy, 0, Succeeded) })
         case Left(err) =>
-          (hash, terms.map(it => InternalProcessedDeploy(it._1, 0, DeployResult.fromErrors(err))))
+          (hash, terms.map {
+            case (deploy, _) =>
+              InternalProcessedDeploy(deploy, 0, DeployResult.fromErrors(err))
+          })
       }
   }
 
