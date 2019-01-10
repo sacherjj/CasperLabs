@@ -24,7 +24,7 @@ import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.StoreType
-import io.casperlabs.smartcontracts.{GrpcExecutionEngineService, SmartContractsApi}
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -851,8 +851,8 @@ object HashSetCasperTest {
       deployTimestamp: Long
   ): BlockMessage = {
     val initial                 = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
-    val casperSmartContractsApi = SmartContractsApi.noOpApi[Task]()
-    val runtimeManager          = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
+    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+    val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
     val emptyStateHash          = runtimeManager.emptyStateHash
     val validators              = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val genesis = Genesis.withContracts(

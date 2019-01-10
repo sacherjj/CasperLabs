@@ -20,7 +20,7 @@ import io.casperlabs.shared.PathOps.RichPath
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import io.casperlabs.shared.StoreType
-import io.casperlabs.smartcontracts.{GrpcExecutionEngineService, SmartContractsApi}
+import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import monix.eval.Task
 
 class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
@@ -226,10 +226,10 @@ object GenesisTest {
       )
 
   def withRawGenResources(
-      body: (SmartContractsApi[Task], Path, LogStub[Id], LogicalTime[Id]) => Unit
+      body: (ExecutionEngineService[Task], Path, LogStub[Id], LogicalTime[Id]) => Unit
   ): Unit = {
     val storePath               = storageLocation
-    val casperSmartContractsApi = SmartContractsApi.noOpApi[Task]()
+    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
     val gp                      = genesisPath
     val log                     = new LogStub[Id]
     val time                    = new LogicalTime[Id]
@@ -245,12 +245,12 @@ object GenesisTest {
   ): Unit =
     withRawGenResources {
       (
-          smartContractsApi: SmartContractsApi[Task],
+          executionEngineService: ExecutionEngineService[Task],
           genesisPath: Path,
           log: LogStub[Id],
           time: LogicalTime[Id]
       ) =>
-        val runtimeManager = RuntimeManager.fromSmartContractApi(smartContractsApi)
+        val runtimeManager = RuntimeManager.fromExecutionEngineService(executionEngineService)
         body(runtimeManager, genesisPath, log, time)
     }
 }

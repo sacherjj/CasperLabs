@@ -14,7 +14,7 @@ import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.transport
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.shared.StoreType
-import io.casperlabs.smartcontracts.{GrpcExecutionEngineService, SmartContractsApi}
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -71,8 +71,8 @@ object BlockApproverProtocolTest {
   ): (BlockApproverProtocol, HashSetCasperTestNode[Id]) = {
     import monix.execution.Scheduler.Implicits.global
 
-    val casperSmartContractsApi = SmartContractsApi.noOpApi[Task]()
-    val runtimeManager          = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
+    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+    val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
 
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq

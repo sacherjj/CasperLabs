@@ -10,7 +10,7 @@ object Resources {
       prefix: String
   )(implicit scheduler: Scheduler): Resource[Task, RuntimeManager[Task]] =
     mkRuntime(prefix)
-      .flatMap { smartContractsApi =>
-        Resource.pure(RuntimeManager.fromSmartContractApi(smartContractsApi))
+      .flatMap { executionEngineService =>
+        Resource.pure(RuntimeManager.fromExecutionEngineService(executionEngineService))
       }
 }

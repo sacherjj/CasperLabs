@@ -34,7 +34,7 @@ import io.casperlabs.node.configuration.{Configuration, ConfigurationSoft}
 import io.casperlabs.node.diagnostics._
 import io.casperlabs.p2p.effects._
 import io.casperlabs.shared._
-import io.casperlabs.smartcontracts.{GrpcExecutionEngineService, SmartContractsApi}
+import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import kamon._
 import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
@@ -152,12 +152,7 @@ class NodeRuntime private[node] (
       conf.grpcServer.socket,
       conf.server.maxMessageSize
     )
-    casperSmartContractsApi = SmartContractsApi
-      .of[Task](casperStoragePath, storageSize, storeType)(
-        Applicative[Task],
-        executionEngineService
-      )
-    runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
+    runtimeManager = RuntimeManager.fromExecutionEngineService(executionEngineService)
     abs = new ToAbstractContext[Effect] {
       def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
     }
@@ -188,7 +183,7 @@ class NodeRuntime private[node] (
     nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
     jvmMetrics      = diagnostics.jvmMetrics[Task]
 
-    program = nodeProgram[Task](casperSmartContractsApi)(
+    program = nodeProgram[Task](executionEngineService)(
       Monad[Task],
       time,
       rpConfState,
@@ -257,7 +252,7 @@ class NodeRuntime private[node] (
 
   private def clearResources[F[_]: Monad](
       servers: Servers,
-      casperSmartContractsApi: SmartContractsApi[F]
+      executionEngineService: ExecutionEngineService[F]
   )(
       implicit
       transport: TransportLayer[Task],
@@ -275,8 +270,8 @@ class NodeRuntime private[node] (
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
-      _   <- log.info("Shutting down Casper runtime ...")
-      _   <- Task.delay(casperSmartContractsApi.close())
+      _   <- log.info("Shutting down executionEngine service...")
+      _   <- Task.delay(executionEngineService.close())
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
@@ -295,7 +290,7 @@ class NodeRuntime private[node] (
 
   private def addShutdownHook[F[_]: Monad](
       servers: Servers,
-      casperSmartContractsApi: SmartContractsApi[F]
+      casperSmartContractsApi: ExecutionEngineService[F]
   )(
       implicit transport: TransportLayer[Task],
       blockStore: BlockStore[Effect],
@@ -308,7 +303,7 @@ class NodeRuntime private[node] (
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
   private def nodeProgram[F[_]: Monad](
-      casperSmartContractsApi: SmartContractsApi[F]
+      executionEngineService: ExecutionEngineService[F]
   )(
       implicit
       time: Time[Task],
@@ -363,7 +358,7 @@ class NodeRuntime private[node] (
       local   <- peerNodeAsk.ask.toEffect
       host    = local.endpoint.host
       servers <- acquireServers()
-      _       <- addShutdownHook(servers, casperSmartContractsApi).toEffect
+      _       <- addShutdownHook(servers, executionEngineService).toEffect
       _       <- servers.grpcServerExternal.start.toEffect
       _ <- Log[Effect].info(
             s"gRPC external server started at $host:${servers.grpcServerExternal.port}"

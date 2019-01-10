@@ -4,6 +4,10 @@ import java.io.Closeable
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
+import cats.Applicative
+import cats.syntax.applicative._
+import cats.syntax.either._
+import cats.syntax.functor._
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
 import io.grpc.ManagedChannel
@@ -19,6 +23,7 @@ import scala.util.Either
 @typeclass trait ExecutionEngineService[F[_]] {
   def sendDeploy(deploy: Deploy): F[Either[Throwable, ExecutionEffect]]
   def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]]
+  def close(): Unit
 }
 
 class GrpcExecutionEngineService(addr: Path, maxMessageSize: Int)
@@ -74,4 +79,17 @@ class GrpcExecutionEngineService(addr: Path, maxMessageSize: Int)
               Left(new SmartContractEngineError(effectsError.toProtoString))
           }
       )
+}
+
+object ExecutionEngineService {
+  def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
+    new ExecutionEngineService[F] {
+      override def sendDeploy(d: Deploy): F[Either[Throwable, ExecutionEffect]] =
+        ExecutionEffect().asRight[Throwable].pure
+
+      override def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]] =
+        Done().asRight[Throwable].pure
+
+      override def close(): Unit = ()
+    }
 }

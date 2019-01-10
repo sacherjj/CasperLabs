@@ -10,12 +10,12 @@ import io.casperlabs.ipc.{CommutativeEffects, ExecutionEffect, Deploy => IPCDepl
 import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.models._
 import cats.syntax.either._
-import io.casperlabs.smartcontracts.{ExecutionEngineService, SmartContractsApi}
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 
 class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
-    val smartContractsApi: SmartContractsApi[Task],
+    val executionEngineService: ExecutionEngineService[Task],
     val emptyStateHash: StateHash
 ) {
   def replayComputeState(
@@ -33,7 +33,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
     // todo using maximum commutative rules
     val commutativeEffects = CommutativeEffects(terms.flatMap(_._2.transformMap))
     ToAbstractContext[F]
-      .fromTask { smartContractsApi.executeEffects(commutativeEffects) }
+      .fromTask { executionEngineService.executeEffects(commutativeEffects) }
       .map {
         case Right(_) =>
           (hash, terms.map(it => InternalProcessedDeploy(it._1, 0, Succeeded)))
@@ -46,13 +46,15 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
   def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = Seq()
 
   def sendDeploy(d: IPCDeploy): F[Either[Throwable, ExecutionEffect]] =
-    ToAbstractContext[F].fromTask(smartContractsApi.sendDeploy(d))
+    ToAbstractContext[F].fromTask(executionEngineService.sendDeploy(d))
 }
 
 object RuntimeManager {
   type StateHash = ByteString
 
-  def fromSmartContractApi(smartContractsApi: SmartContractsApi[Task]): RuntimeManager[Task] =
+  def fromExecutionEngineService(
+      executionEngineService: ExecutionEngineService[Task]
+  ): RuntimeManager[Task] =
     //TODO define 'emptyStateHash'
-    new RuntimeManager(smartContractsApi, ByteString.EMPTY)
+    new RuntimeManager(executionEngineService, ByteString.EMPTY)
 }

@@ -33,9 +33,9 @@ import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
-import io.casperlabs.shared.{Cell, StoreType, Time}
+import io.casperlabs.shared.Cell
 import io.casperlabs.shared.PathOps.RichPath
-import io.casperlabs.smartcontracts.{GrpcExecutionEngineService, SmartContractsApi}
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.execution.Scheduler
 
 import scala.collection.mutable
@@ -73,9 +73,9 @@ class HashSetCasperTestNode[F[_]](
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
-  val casperSmartContractsApi = SmartContractsApi.noOpApi[Task]()
+  val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
 
-  val runtimeManager                 = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
+  val runtimeManager                 = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")

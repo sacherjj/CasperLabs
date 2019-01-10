@@ -13,7 +13,7 @@ import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
 import cats.Id
-import io.casperlabs.smartcontracts.SmartContractsApi
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -92,17 +92,19 @@ object BondingUtil {
 
   // is it smaller than the actual size?
   // can you sen my screen?
-  def makeSmartContractsApiResource[F[_]: Sync](
+  def makeExecutionEngineServiceResource[F[_]: Sync](
       runtimeDirResource: Resource[F, Path]
-  )(implicit scheduler: Scheduler): Resource[F, SmartContractsApi[Task]] = ???
+  )(implicit scheduler: Scheduler): Resource[F, ExecutionEngineService[Task]] = ???
 
   def makeRuntimeManagerResource[F[_]: Sync](
-      smartContractsApiResource: Resource[F, SmartContractsApi[Task]]
+      executionEngineServiceResource: Resource[F, ExecutionEngineService[Task]]
   )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[Task]] =
-    smartContractsApiResource.flatMap(
-      smartContractsApi =>
+    executionEngineServiceResource.flatMap(
+      executionEngineService =>
         Resource
-          .make(RuntimeManager.fromSmartContractApi(smartContractsApi).pure[F])(_ => Sync[F].unit)
+          .make(RuntimeManager.fromExecutionEngineService(executionEngineService).pure[F])(
+            _ => Sync[F].unit
+          )
     )
 
   def bondingDeploy[F[_]: Sync](

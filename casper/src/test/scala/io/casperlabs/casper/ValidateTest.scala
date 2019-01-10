@@ -514,7 +514,7 @@ class ValidateTest
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long = 1024L * 1024
-      val runtimeManager    = RuntimeManager.fromSmartContractApi(???)
+      val runtimeManager    = RuntimeManager.fromExecutionEngineService(???)
       val _ = InterpreterUtil
         .validateBlockCheckpoint[Id](genesis, BlockDag.empty, runtimeManager)
 

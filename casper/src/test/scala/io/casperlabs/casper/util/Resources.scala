@@ -3,10 +3,11 @@ import java.io.File
 import java.nio.file.{Files, Path}
 
 import cats.Applicative
+import cats.implicits._
 import cats.effect.ExitCase.Error
 import cats.effect.Resource
 import com.typesafe.scalalogging.Logger
-import io.casperlabs.smartcontracts.SmartContractsApi
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -34,11 +35,11 @@ object Resources {
 
   def mkRuntime(
       prefix: String
-  )(implicit scheduler: Scheduler): Resource[Task, SmartContractsApi[Task]] =
+  )(implicit scheduler: Scheduler): Resource[Task, ExecutionEngineService[Task]] =
     mkTempDir[Task](prefix)
       .flatMap { tmpDir =>
-        Resource.make[Task, SmartContractsApi[Task]](Task.delay {
-          SmartContractsApi.noOpApi()
-        })(rt => rt.close())
+        Resource.make[Task, ExecutionEngineService[Task]](Task.delay {
+          ExecutionEngineService.noOpApi()
+        })(rt => rt.close().pure[Task])
       }
 }
