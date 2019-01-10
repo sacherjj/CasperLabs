@@ -25,9 +25,7 @@ import monix.eval.Task
 
 class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
   import GenesisTest._
-  implicit val absId = new ToAbstractContext[Id] {
-    def fromTask[A](fa: Task[A]): Id[A] = fa.runSyncUnsafe().pure[Id]
-  }
+  implicit val absId = ToAbstractContext.idToAbstractContext
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",

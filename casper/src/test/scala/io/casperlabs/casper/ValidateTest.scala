@@ -37,12 +37,10 @@ class ValidateTest
     with BeforeAndAfterEach
     with BlockGenerator
     with BlockStoreFixture {
-  implicit val log = new LogStub[Id]
-  implicit val absId = new ToAbstractContext[Id] {
-    def fromTask[A](fa: Task[A]): Id[A] = fa.runSyncUnsafe().pure[Id]
-  }
-  val initState = IndexedBlockDag.empty.copy(currentId = -1)
-  val ed25519   = "ed25519"
+  implicit val log   = new LogStub[Id]
+  implicit val absId = ToAbstractContext.idToAbstractContext
+  val initState      = IndexedBlockDag.empty.copy(currentId = -1)
+  val ed25519        = "ed25519"
 
   override def beforeEach(): Unit = {
     log.reset()

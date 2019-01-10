@@ -35,9 +35,7 @@ class InterpreterUtilTest
   val initState: IndexedBlockDag = IndexedBlockDag.empty.copy(currentId = -1)
 
   implicit val logEff: LogStub[Id] = new LogStub[Id]
-  implicit val absId = new ToAbstractContext[Id] {
-    def fromTask[A](fa: Task[A]): Id[A] = fa.runSyncUnsafe().pure[Id]
-  }
+  implicit val absId               = ToAbstractContext.idToAbstractContext
 
   private val runtimeDir = Files.createTempDirectory(s"interpreter-util-test")
 
@@ -631,7 +629,7 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-            )
+          )
         )
     val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
       .use { runtimeManager =>
@@ -687,7 +685,7 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-            )
+          )
         )
       val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
@@ -745,7 +743,7 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-            )
+          )
         )
 
       val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")

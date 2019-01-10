@@ -172,9 +172,7 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Id] = {
     implicit val errorHandlerEff = errorHandler
-    implicit val absId = new ToAbstractContext[Id] {
-      def fromTask[A](fa: Task[A]): Id[A] = fa.runSyncUnsafe().pure[Id]
-    }
+    implicit val absId           = ToAbstractContext.idToAbstractContext
 
     standaloneF[Id](genesis, sk, storageSize)
   }
@@ -254,9 +252,7 @@ object HashSetCasperTestNode {
       storageSize: Long = 1024L * 1024 * 10
   )(implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode[Id]] = {
     implicit val errorHandlerEff = errorHandler
-    implicit val absId = new ToAbstractContext[Id] {
-      def fromTask[A](fa: Task[A]): Id[A] = fa.runSyncUnsafe().pure[Id]
-    }
+    implicit val absId           = ToAbstractContext.idToAbstractContext
 
     networkF[Id](sks, genesis, storageSize)
   }
