@@ -27,10 +27,12 @@ impl<T: TrackingCopy, G: GlobalState<T>> ipc_grpc::ExecutionEngineService for En
                 grpc::SingleResponse::completed(res)
             }
             //TODO better error handling
-            Err(_) => {
+            Err(ee_error) => {
                 let mut res = DeployResult::new();
                 let mut err = ipc::DeployError::new();
-                err.set_wasmErr(ipc::WasmError::new());
+                let mut wasm_err = ipc::WasmError::new();
+                wasm_err.set_message(format!("{:?}", ee_error));
+                err.set_wasmErr(wasm_err);
                 res.set_error(err);
                 grpc::SingleResponse::completed(res)
             }
