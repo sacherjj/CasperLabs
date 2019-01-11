@@ -293,8 +293,9 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                          p.foldLeft(-1L) {
                            case (acc, b) => math.max(acc, blockNumber(b))
                          }
-
-                       val newBonds = runtimeManager.computeBonds(postStateHash)
+                       val newBonds = ProtoUtil.bonds(p.head)
+                       // TODO: bring back when global state includes the bonds
+                       //val newBonds = runtimeManager.computeBonds(postStateHash)
                        val postState = RChainState()
                          .withPreStateHash(preStateHash)
                          .withPostStateHash(postStateHash)
@@ -308,6 +309,17 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                        val block  = unsignedBlockProto(body, header, justifications, shardId)
                        CreateBlockStatus.created(block)
                      })
+                     .flatMap[CreateBlockStatus] {
+                       case status @ Created(block) =>
+                         val number     = block.body.get.state.get.blockNumber
+                         val transforms = r.flatMap(_._2.transformMap)
+                         val msgBody =
+                           transforms.map(t => s"${t.key} :: ${t.transform}").mkString("\n")
+                         Log[F]
+                           .info(s"Block #$number created with effects:\n$msgBody")
+                           .map(_ => status)
+                       case other => other.pure[F]
+                     }
                }
     } yield result
 
