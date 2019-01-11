@@ -313,8 +313,13 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                        case status @ Created(block) =>
                          val number     = block.body.get.state.get.blockNumber
                          val transforms = r.flatMap(_._2.transformMap)
-                         val msgBody =
-                           transforms.map(t => s"${t.key} :: ${t.transform}").mkString("\n")
+                         val msgBody = transforms
+                           .map(t => {
+                             val k    = PrettyPrinter.buildString(t.key.get)
+                             val tStr = PrettyPrinter.buildString(t.transform.get)
+                             s"$k :: $tStr"
+                           })
+                           .mkString("\n")
                          Log[F]
                            .info(s"Block #$number created with effects:\n$msgBody")
                            .map(_ => status)
