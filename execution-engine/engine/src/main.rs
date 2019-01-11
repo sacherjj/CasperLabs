@@ -79,8 +79,11 @@ fn main() {
         .expect("Provided gas limit value is not u64.");
 
     let gs = storage::InMemGS::new();
-    let mut engine_state = EngineState::new(gs);
-    engine_state.with_mocked_account(account_addr);
+    let engine_state = {
+        let state = EngineState::new(gs);
+        state.with_mocked_account(account_addr);
+        state
+    };
 
     for wasm_bytes in wasm_files.iter() {
         let result = engine_state.run_deploy(&wasm_bytes.bytes, account_addr, &gas_limit);
