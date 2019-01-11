@@ -145,7 +145,7 @@ message DeployError {
     oneof deploy_errors {
         OutOfGasError gasErr = 1;
         WasmError wasmErr = 2;
-	InvalidSignature signatureError = 3;
+        InvalidSignature signatureError = 3;
     }
 }
 message OutOfGasError {}
@@ -170,7 +170,9 @@ message CommutativeEffects {
  
 message Done {}
 //TODO: be more specific about errors
-message PostEffectsError {}
+message PostEffectsError {
+    string message = 1;
+}
  
 message PostEffectsResult {
     oneof result {

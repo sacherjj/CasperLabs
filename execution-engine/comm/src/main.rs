@@ -1,4 +1,5 @@
 extern crate clap;
+extern crate common;
 extern crate execution_engine;
 extern crate grpc;
 extern crate protobuf;

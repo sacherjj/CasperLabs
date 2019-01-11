@@ -3,6 +3,7 @@ use common::value;
 use core::marker::PhantomData;
 use execution::{exec, Error as ExecutionError};
 use parity_wasm::elements::Module;
+use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use storage::transform::Transform;
 use storage::{ExecutionEffect, GlobalState, TrackingCopy};
@@ -12,7 +13,7 @@ use wasm_prep::process;
 pub struct EngineState<T: TrackingCopy, G: GlobalState<T>> {
     // Tracks the "state" of the blockchain (or is an interface to it).
     // I think it should be constrained with a lifetime parameter.
-    state: G,
+    state: Mutex<G>,
     phantom: PhantomData<T>, //necessary to make the compiler not complain that I don't use T, even though G uses it.
     wasm_costs: WasmCosts,
 }
@@ -70,17 +71,18 @@ where
 {
     // To run, contracts need an existing account.
     // This function puts artifical entry in the GlobalState.
-    pub fn with_mocked_account(&mut self, account_addr: [u8; 20]) {
+    pub fn with_mocked_account(&self, account_addr: [u8; 20]) {
         let account = value::Account::new([48u8; 32], 0, BTreeMap::new());
         let transform = Transform::Write(value::Value::Acct(account));
         self.state
+            .lock()
             .apply(Key::Account(account_addr), transform)
             .expect("Creation of mocked account should be a success.");
     }
 
     pub fn new(state: G) -> EngineState<T, G> {
         EngineState {
-            state,
+            state: Mutex::new(state),
             phantom: PhantomData,
             wasm_costs: WasmCosts::new(),
         }
@@ -95,11 +97,11 @@ where
         gas_limit: &u64,
     ) -> Result<ExecutionEffect, Error> {
         let module = self.preprocess_module(module_bytes, &self.wasm_costs)?;
-        exec(module, address, &gas_limit, &self.state).map_err(|e| e.into())
+        exec(module, address, &gas_limit, &*self.state.lock()).map_err(|e| e.into())
     }
 
-    pub fn apply_effect(&mut self, key: Key, eff: Transform) -> Result<(), Error> {
-        self.state.apply(key, eff).map_err(|err| err.into())
+    pub fn apply_effect(&self, key: Key, eff: Transform) -> Result<(), Error> {
+        self.state.lock().apply(key, eff).map_err(|err| err.into())
     }
 
     //TODO: inject gas counter, limit stack size etc
