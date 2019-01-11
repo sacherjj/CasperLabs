@@ -170,7 +170,9 @@ message CommutativeEffects {
  
 message Done {}
 //TODO: be more specific about errors
-message PostEffectsError {}
+message PostEffectsError {
+    string message = 1;
+}
  
 message PostEffectsResult {
     oneof result {
