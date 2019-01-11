@@ -1,7 +1,8 @@
 package io.casperlabs.node
 
 import cats.implicits._
-import io.casperlabs.casper.util.comm.GrpcExecutionEngineService
+import io.casperlabs.casper.util.comm._
+import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm._
@@ -10,6 +11,8 @@ import io.casperlabs.node.configuration._
 import io.casperlabs.node.diagnostics.client.GrpcDiagnosticsService
 import io.casperlabs.node.effects._
 import io.casperlabs.shared._
+import io.casperlabs.shared.StringOps._
+import io.casperlabs.smartcontracts.GrpcExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 

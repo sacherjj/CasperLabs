@@ -1,6 +1,6 @@
 package io.casperlabs.casper
 
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 
 import cats.Id
 import cats.data.EitherT
@@ -24,7 +24,7 @@ import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.StoreType
-import io.casperlabs.smartcontracts.SmartContractsApi
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -850,14 +850,11 @@ object HashSetCasperTest {
       faucetCode: String => String,
       deployTimestamp: Long
   ): BlockMessage = {
-    val initial           = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
-    val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-    val storageSize: Long = 1024L * 1024
-    val casperSmartContractsApi = SmartContractsApi
-      .noOpApi[Task](storageDirectory, storageSize, StoreType.LMDB)
-    val runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
-    val emptyStateHash = runtimeManager.emptyStateHash
-    val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+    val initial                 = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
+    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+    val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
+    val emptyStateHash          = runtimeManager.emptyStateHash
+    val validators              = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val genesis = Genesis.withContracts(
       initial,
       ProofOfStakeParams(minimumBond, maximumBond, validators),

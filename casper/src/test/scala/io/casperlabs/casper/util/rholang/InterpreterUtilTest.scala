@@ -1,7 +1,10 @@
 package io.casperlabs.casper.util.rholang
 
+import java.nio.file.{Files, Paths}
+
 import cats.mtl.implicits._
-import cats.{Id, Monad}
+import cats.{Applicative, Id, Monad}
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.BlockDag
@@ -12,9 +15,12 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.rholang.InterpreterUtil._
 import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
+import io.casperlabs.catscontrib.ToAbstractContext
+import io.casperlabs.ipc.ExecutionEffect
 import io.casperlabs.models.InternalProcessedDeploy
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
+import io.casperlabs.smartcontracts.GrpcExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -29,19 +35,24 @@ class InterpreterUtilTest
   val initState: IndexedBlockDag = IndexedBlockDag.empty.copy(currentId = -1)
 
   implicit val logEff: LogStub[Id] = new LogStub[Id]
+  implicit val absId               = ToAbstractContext.idToAbstractContext
+
+  private val runtimeDir = Files.createTempDirectory(s"interpreter-util-test")
+
+  private val socket = Paths.get(runtimeDir.toString, ".casper-node.sock")
+  implicit val executionEngineService: GrpcExecutionEngineService =
+    new GrpcExecutionEngineService(
+      socket,
+      4 * 1024 * 1024
+    )
 
   private def computeBlockCheckpoint(
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      runtimeManager: RuntimeManager
-  ): (StateHash, Seq[ProcessedDeploy]) = {
-    val Right((preStateHash, postStateHash, processedDeploys)) =
-      InterpreterUtil
-        .computeBlockCheckpointFromDeploys[Id](b, genesis, dag, runtimeManager)
-
-    (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
-  }
+      runtimeManager: RuntimeManager[Task]
+  ): (StateHash, Seq[ProcessedDeploy]) =
+    (ByteString.EMPTY, Seq())
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in {
     val genesisDeploys = Vector(
@@ -429,11 +440,17 @@ class InterpreterUtilTest
   }
 
   def computeSingleProcessedDeploy(
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       deploy: Deploy*
   ): Seq[InternalProcessedDeploy] = {
+
     val Right((_, _, result)) =
-      computeDeploysCheckpoint[Id](Seq.empty, deploy, initState, runtimeManager)
+      computeDeploysCheckpoint[Id](
+        Seq.empty,
+        deploy.map((_, ExecutionEffect())),
+        initState,
+        runtimeManager
+      )
     result
   }
 
@@ -551,7 +568,12 @@ class InterpreterUtilTest
       .use { runtimeManager =>
         Task.delay {
           val Right((preStateHash, computedTsHash, processedDeploys)) =
-            computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
+            computeDeploysCheckpoint[Id](
+              Seq.empty,
+              deploys.map((_, ExecutionEffect())),
+              initState,
+              runtimeManager
+            )
           val chain: IndexedBlockDag =
             createBlock[StateWithChain](
               Seq.empty,
@@ -607,13 +629,18 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-            )
+          )
         )
     val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
       .use { runtimeManager =>
         Task.delay {
           val Right((preStateHash, computedTsHash, processedDeploys)) =
-            computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
+            computeDeploysCheckpoint[Id](
+              Seq.empty,
+              deploys.map((_, ExecutionEffect())),
+              initState,
+              runtimeManager
+            )
           val chain: IndexedBlockDag =
             createBlock[StateWithChain](
               Seq.empty,
@@ -658,7 +685,7 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-            )
+          )
         )
       val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
@@ -666,7 +693,7 @@ class InterpreterUtilTest
             val Right((preStateHash, computedTsHash, processedDeploys)) =
               computeDeploysCheckpoint[Id](
                 Seq.empty,
-                deploys,
+                deploys.map((_, ExecutionEffect())),
                 initState,
                 runtimeManager
               )
@@ -716,7 +743,7 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-            )
+          )
         )
 
       val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
@@ -725,7 +752,7 @@ class InterpreterUtilTest
             val Right((preStateHash, computedTsHash, processedDeploys)) =
               computeDeploysCheckpoint[Id](
                 Seq.empty,
-                deploys,
+                deploys.map((_, ExecutionEffect())),
                 initState,
                 runtimeManager
               )

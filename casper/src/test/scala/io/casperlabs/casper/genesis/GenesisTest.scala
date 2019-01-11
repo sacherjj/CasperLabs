@@ -1,9 +1,10 @@
 package io.casperlabs.casper.genesis
 
 import java.io.PrintWriter
-import java.nio.file.Files
+import java.nio.file.{Files, Path, Paths}
 
 import cats.Id
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.catscontrib.TaskContrib._
@@ -18,14 +19,13 @@ import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.shared.PathOps.RichPath
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
-import java.nio.file.Path
-
 import io.casperlabs.shared.StoreType
-import io.casperlabs.smartcontracts.SmartContractsApi
+import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import monix.eval.Task
 
 class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
   import GenesisTest._
+  implicit val absId = ToAbstractContext.idToAbstractContext
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
@@ -62,7 +62,12 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
   }
 
   "Genesis.fromInputFiles" should "generate random validators when no bonds file is given" in withGenResources {
-    (runtimeManager: RuntimeManager, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+    (
+        runtimeManager: RuntimeManager[Task],
+        genesisPath: Path,
+        log: LogStub[Id],
+        time: LogicalTime[Id]
+    ) =>
       val _ = fromInputFiles()(runtimeManager, genesisPath, log, time)
 
       log.warns.find(_.contains("bonds")) should be(None)
@@ -71,7 +76,12 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
   }
 
   it should "generate random validators, with a warning, when bonds file does not exist" in withGenResources {
-    (runtimeManager: RuntimeManager, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+    (
+        runtimeManager: RuntimeManager[Task],
+        genesisPath: Path,
+        log: LogStub[Id],
+        time: LogicalTime[Id]
+    ) =>
       val _ = fromInputFiles(maybeBondsPath = Some("not/a/real/file"))(
         runtimeManager,
         genesisPath,
@@ -86,7 +96,12 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
   }
 
   it should "generate random validators, with a warning, when bonds file cannot be parsed" in withGenResources {
-    (runtimeManager: RuntimeManager, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+    (
+        runtimeManager: RuntimeManager[Task],
+        genesisPath: Path,
+        log: LogStub[Id],
+        time: LogicalTime[Id]
+    ) =>
       val badBondsFile = genesisPath.resolve("misformatted.txt").toString
 
       val pw = new PrintWriter(badBondsFile)
@@ -103,7 +118,12 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
   }
 
   it should "create a genesis block with the right bonds when a proper bonds file is given" in withGenResources {
-    (runtimeManager: RuntimeManager, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+    (
+        runtimeManager: RuntimeManager[Task],
+        genesisPath: Path,
+        log: LogStub[Id],
+        time: LogicalTime[Id]
+    ) =>
       val bondsFile = genesisPath.resolve("givenBonds.txt").toString
       printBonds(bondsFile)
 
@@ -124,7 +144,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
   it should "create a valid genesis block" in withStore { implicit store =>
     withGenResources {
       (
-          runtimeManager: RuntimeManager,
+          runtimeManager: RuntimeManager[Task],
           genesisPath: Path,
           log: LogStub[Id],
           time: LogicalTime[Id]
@@ -146,7 +166,12 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
   }
 
   it should "detect an existing bonds file in the default location" in withGenResources {
-    (runtimeManager: RuntimeManager, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+    (
+        runtimeManager: RuntimeManager[Task],
+        genesisPath: Path,
+        log: LogStub[Id],
+        time: LogicalTime[Id]
+    ) =>
       val bondsFile = genesisPath.resolve("bonds.txt").toString
       printBonds(bondsFile)
 
@@ -181,7 +206,7 @@ object GenesisTest {
       shardId: String = rchainShardId,
       deployTimestamp: Option[Long] = Some(System.currentTimeMillis())
   )(
-      implicit runtimeManager: RuntimeManager,
+      implicit runtimeManager: RuntimeManager[Task],
       genesisPath: Path,
       log: LogStub[Id],
       time: LogicalTime[Id]
@@ -201,14 +226,13 @@ object GenesisTest {
       )
 
   def withRawGenResources(
-      body: (SmartContractsApi[Task], Path, LogStub[Id], LogicalTime[Id]) => Unit
+      body: (ExecutionEngineService[Task], Path, LogStub[Id], LogicalTime[Id]) => Unit
   ): Unit = {
-    val storePath = storageLocation
-    val casperSmartContractsApi = SmartContractsApi
-      .noOpApi[Task](storePath, storageSize, StoreType.LMDB)
-    val gp   = genesisPath
-    val log  = new LogStub[Id]
-    val time = new LogicalTime[Id]
+    val storePath               = storageLocation
+    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+    val gp                      = genesisPath
+    val log                     = new LogStub[Id]
+    val time                    = new LogicalTime[Id]
 
     body(casperSmartContractsApi, genesisPath, log, time)
 
@@ -216,15 +240,17 @@ object GenesisTest {
     gp.recursivelyDelete()
   }
 
-  def withGenResources(body: (RuntimeManager, Path, LogStub[Id], LogicalTime[Id]) => Unit): Unit =
+  def withGenResources(
+      body: (RuntimeManager[Task], Path, LogStub[Id], LogicalTime[Id]) => Unit
+  ): Unit =
     withRawGenResources {
       (
-          smartContractsApi: SmartContractsApi[Task],
+          executionEngineService: ExecutionEngineService[Task],
           genesisPath: Path,
           log: LogStub[Id],
           time: LogicalTime[Id]
       ) =>
-        val runtimeManager = RuntimeManager.fromSmartContractApi(smartContractsApi)
+        val runtimeManager = RuntimeManager.fromExecutionEngineService(executionEngineService)
         body(runtimeManager, genesisPath, log, time)
     }
 }

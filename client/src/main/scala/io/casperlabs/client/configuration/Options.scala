@@ -19,8 +19,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = true
     )
 
-  val hexCheck: String => Boolean     = _.matches("[0-9a-fA-F]+")
-  val addressCheck: String => Boolean = addr => addr.startsWith("0x") && hexCheck(addr.drop(2))
+  val hexCheck: String => Boolean = _.matches("[0-9a-fA-F]+")
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile
 
@@ -33,8 +32,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val from = opt[String](
       descr = "Purse address that will be used to pay for the deployment.",
-      validate = addressCheck,
-      default = Option("0x")
+      default = Option("00")
     )
 
     val gasLimit =

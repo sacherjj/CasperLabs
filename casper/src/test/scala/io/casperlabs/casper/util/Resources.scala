@@ -1,18 +1,21 @@
-package io.casperlabs.casper
+package io.casperlabs.casper.util
 import java.io.File
 import java.nio.file.{Files, Path}
 
 import cats.Applicative
+import cats.implicits._
 import cats.effect.ExitCase.Error
-import cats.effect.{ContextShift, Resource, Sync}
+import cats.effect.Resource
 import com.typesafe.scalalogging.Logger
-import io.casperlabs.shared.StoreType
-import io.casperlabs.smartcontracts.SmartContractsApi
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.reflect.io.Directory
 
+/**
+  * Create by hzzhenglu on 2019-01-10
+  */
 object Resources {
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
@@ -31,15 +34,12 @@ object Resources {
     )
 
   def mkRuntime(
-      prefix: String,
-      storageSize: Long = 1024 * 1024,
-      storeType: StoreType = StoreType.LMDB
-  )(implicit scheduler: Scheduler): Resource[Task, SmartContractsApi[Task]] =
+      prefix: String
+  )(implicit scheduler: Scheduler): Resource[Task, ExecutionEngineService[Task]] =
     mkTempDir[Task](prefix)
       .flatMap { tmpDir =>
-        Resource.make[Task, SmartContractsApi[Task]](Task.delay {
-          SmartContractsApi
-            .noOpApi[Task](tmpDir, storageSize, StoreType.LMDB)
-        })(rt => rt.close())
+        Resource.make[Task, ExecutionEngineService[Task]](Task.delay {
+          ExecutionEngineService.noOpApi()
+        })(rt => rt.close().pure[Task])
       }
 }

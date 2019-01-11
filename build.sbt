@@ -297,7 +297,12 @@ lazy val smartContracts = (project in file("smart-contracts"))
   .settings(
     name := "smart-contracts",
     version := "0.0.1-SNAPSHOT",
-    libraryDependencies ++= commonDependencies
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
+      nettyAll,
+      grpcNetty,
+      nettyTransNativeEpoll,
+      nettyTransNativeKqueue
+    )
   )
   .dependsOn(shared, models)
 

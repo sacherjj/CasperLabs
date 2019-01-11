@@ -13,7 +13,7 @@ message Deploy {
     string sig_algorithm = 8; // name of the algorithm used for signing
     bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
 }
- 
+
 // Describes operation that are allowed to do on a value under a key.
 message Op {
     oneof op_instance {

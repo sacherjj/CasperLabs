@@ -2,8 +2,9 @@ package io.casperlabs.catscontrib
 
 import cats._
 import cats.data._
-
+import cats.implicits._
 import monix.eval.Task
+import monix.execution.Scheduler
 
 trait Taskable[F[_]] {
   def toTask[A](fa: F[A]): Task[A]
@@ -33,4 +34,21 @@ sealed trait TaskableInstances0 {
           }
 
     }
+}
+
+trait ToAbstractContext[F[_]] {
+  def fromTask[A](fa: Task[A]): F[A]
+}
+
+object ToAbstractContext {
+  def apply[F[_]](implicit ev: ToAbstractContext[F]): ToAbstractContext[F] = ev
+  implicit val taskToAbstractContext: ToAbstractContext[Task] = new ToAbstractContext[Task] {
+    def fromTask[A](fa: Task[A]): Task[A] = fa
+  }
+
+  def idToAbstractContext(implicit scheduler: Scheduler): ToAbstractContext[Id] =
+    new ToAbstractContext[Id] {
+      def fromTask[A](fa: Task[A]): Id[A] = fa.runSyncUnsafe().pure[Id]
+    }
+
 }

@@ -1,6 +1,6 @@
 package io.casperlabs.casper
 
-import cats.{Applicative, Id}
+import cats.{Applicative, Monad}
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
@@ -13,22 +13,25 @@ import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.casper.util.rholang._
-import io.casperlabs.catscontrib.{Capture, ListContrib}
+import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.ipc.ExecutionEffect
 import io.casperlabs.models.{InternalErrors, InternalProcessedDeploy}
 import io.casperlabs.shared._
+import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
 
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
 import scala.concurrent.SyncVar
+import scala.concurrent.duration.Duration
 
-class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
-    runtimeManager: RuntimeManager,
+class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext](
+    runtimeManager: RuntimeManager[Task],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     initialDag: BlockDag,
@@ -54,7 +57,8 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private val blockBufferDependencyDagState =
     new AtomicMonadState[F, DoublyLinkedDag[BlockHash]](AtomicAny(BlockDependencyDag.empty))
 
-  private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
+  private val deployAndEffectsHist: mutable.HashMap[Deploy, ExecutionEffect] =
+    new mutable.HashMap[Deploy, ExecutionEffect]()
 
   // Used to keep track of when other validators detect the equivocation consisting of the base block
   // at the sequence number identified by the (validator, base equivocation sequence number) pair of
@@ -156,21 +160,33 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   def contains(b: BlockMessage): F[Boolean] =
     BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
 
-  def deploy(deploy: Deploy): F[Unit] =
+  def addDeploy(deploy: Deploy, effects: ExecutionEffect): F[Unit] =
     for {
       _ <- Sync[F].delay {
-            deployHist += deploy
+            deployAndEffectsHist.put(deploy, effects)
           }
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield ()
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
-    deploy(
-      Deploy(
-        sessionCode = d.sessionCode,
-        raw = Some(d)
+    ToAbstractContext[F]
+      .fromTask(
+        runtimeManager
+          .sendDeploy(
+            ProtoUtil.deployDataToEEDeploy(d)
+          )
       )
-    ).as(Right(()))
+      .flatMap {
+        case Right(effects: ExecutionEffect) =>
+          addDeploy(
+            Deploy(
+              sessionCode = d.sessionCode,
+              raw = Some(d)
+            ),
+            effects
+          ).as(Right(()))
+        case Left(err) => new Throwable(s"Error in parsing term: \n$err").asLeft[Unit].pure[F]
+      }
 
   def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
     for {
@@ -223,15 +239,15 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield blockMessage
 
   // TODO: Optimize for large number of deploys accumulated over history
-  private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
+  private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[(Deploy, ExecutionEffect)]] =
     for {
-      result <- Capture[F].capture { deployHist.clone() }
+      result <- Sync[F].delay { deployAndEffectsHist.clone() }
       _ <- DagOperations
             .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
             .foreach(
               b =>
-                Capture[F].capture {
-                  b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result -= _))
+                Sync[F].delay {
+                  b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result.remove))
                 }
             )
     } yield result.toSeq
@@ -239,7 +255,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private def createProposal(
       dag: BlockDag,
       p: Seq[BlockMessage],
-      r: Seq[Deploy],
+      r: Seq[(Deploy, ExecutionEffect)],
       justifications: Seq[Justification]
   ): F[CreateBlockStatus] =
     for {
@@ -579,7 +595,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       }
     )
 
-  def getRuntimeManager: F[Option[RuntimeManager]] = Applicative[F].pure(Some(runtimeManager))
+  def getRuntimeManager: F[Option[RuntimeManager[Task]]] = Applicative[F].pure(Some(runtimeManager))
 
   def fetchDependencies: F[Unit] =
     for {

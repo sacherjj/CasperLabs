@@ -19,6 +19,7 @@ import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.shared._
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.concurrent.duration.Duration
@@ -31,7 +32,7 @@ import scala.util.Try
 class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
-    runtimeManager: RuntimeManager,
+    runtimeManager: RuntimeManager[Task],
     bonds: Map[Array[Byte], Long],
     wallets: Seq[PreWallet],
     minimumBond: Long,
@@ -99,7 +100,7 @@ object BlockApproverProtocol {
     getBlockApproval(candidate, validatorId)
 
   def validateCandidate(
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
       timestamp: Long,

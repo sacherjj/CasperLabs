@@ -1,16 +1,20 @@
 package io.casperlabs.casper.util.rholang
 
+import cats.Monad
 import cats.implicits._
-import cats.{Id, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStore}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.{BlockDag, BlockException, PrettyPrinter}
+import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.ipc.ExecutionEffect
 import io.casperlabs.models._
 import io.casperlabs.shared.{Log, LogSource}
+import io.casperlabs.smartcontracts.ExecutionEngineService
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.concurrent.duration.Duration
@@ -21,10 +25,10 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore](
+  def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore: ToAbstractContext](
       b: BlockMessage,
       dag: BlockDag,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   )(
       implicit scheduler: Scheduler
   ): F[Either[BlockException, Option[StateHash]]] = {
@@ -52,8 +56,8 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def processPossiblePreStateHash[F[_]: Monad: Log: BlockStore](
-      runtimeManager: RuntimeManager,
+  private def processPossiblePreStateHash[F[_]: Monad: Log: BlockStore: ToAbstractContext](
+      runtimeManager: RuntimeManager[Task],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
@@ -81,78 +85,87 @@ object InterpreterUtil {
         }
     }
 
-  private def processPreStateHash[F[_]: Monad: Log: BlockStore](
-      runtimeManager: RuntimeManager,
+  private def processPreStateHash[F[_]: Monad: Log: BlockStore: ToAbstractContext](
+      runtimeManager: RuntimeManager[Task],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       time: Option[Long]
   )(implicit scheduler: Scheduler): F[Either[BlockException, Option[StateHash]]] =
-    runtimeManager
-      .replayComputeState(preStateHash, internalDeploys, time)
-      .runSyncUnsafe(Duration.Inf) match {
-      case Left((Some(deploy), status)) =>
-        status match {
-          case InternalErrors(exs) =>
-            Left(
-              BlockException(
-                new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                  .buildString(deploy)}: ${exs.mkString("\n")}")
-              )
-            ).rightCast[Option[StateHash]].pure[F]
-          case UserErrors(errors: Vector[Throwable]) =>
-            Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *> Right(
-              none[StateHash]
-            ).leftCast[BlockException].pure[F]
-          case UnknownFailure =>
-            Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
+    ToAbstractContext[F]
+      .fromTask(
+        runtimeManager
+          .replayComputeState(preStateHash, internalDeploys, time)
+      )
+      .flatMap {
+        case Left((Some(deploy), status)) =>
+          status match {
+            case InternalErrors(exs) =>
+              Left(
+                BlockException(
+                  new Exception(s"Internal errors encountered while processing ${PrettyPrinter
+                    .buildString(deploy)}: ${exs.mkString("\n")}")
+                )
+              ).rightCast[Option[StateHash]].pure[F]
+            case UserErrors(errors: Vector[Throwable]) =>
+              Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *> Right(
+                none[StateHash]
+              ).leftCast[BlockException].pure[F]
+            case UnknownFailure =>
+              Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
+                .leftCast[BlockException]
+                .pure[F]
+          }
+        case Left((None, _)) =>
+          //TODO Log error
+          ???
+        case Right(computedStateHash) =>
+          if (tsHash.contains(computedStateHash)) {
+            // state hash in block matches computed hash!
+            Right(Option(computedStateHash))
               .leftCast[BlockException]
               .pure[F]
-        }
-      case Left((None, _)) =>
-        //TODO Log error
-        ???
-      case Right(computedStateHash) =>
-        if (tsHash.contains(computedStateHash)) {
-          // state hash in block matches computed hash!
-          Right(Option(computedStateHash))
-            .leftCast[BlockException]
-            .pure[F]
-        } else {
-          // state hash in block does not match computed hash -- invalid!
-          // return no state hash, do not update the state hash set
-          Log[F].warn(
-            s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
-          ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
-        }
-    }
+          } else {
+            // state hash in block does not match computed hash -- invalid!
+            // return no state hash, do not update the state hash set
+            Log[F].warn(
+              s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
+            ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
+          }
+      }
 
-  def computeDeploysCheckpoint[F[_]: Monad: BlockStore](
+  def computeDeploysCheckpoint[F[_]: Monad: BlockStore: ToAbstractContext](
       parents: Seq[BlockMessage],
-      deploys: Seq[Deploy],
+      deploysWithEffect: Seq[(Deploy, ExecutionEffect)],
       dag: BlockDag,
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       time: Option[Long] = None
   )(
       implicit scheduler: Scheduler
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, time)
-    } yield
-      possiblePreStateHash match {
-        case Right(preStateHash) =>
-          val (postStateHash, processedDeploys) =
-            runtimeManager.computeState(preStateHash, deploys, time).runSyncUnsafe(Duration.Inf)
-          Right(preStateHash, postStateHash, processedDeploys)
-        case Left(err) =>
-          Left(err)
-      }
+      res <- possiblePreStateHash match {
+              case Right(preStateHash) =>
+                ToAbstractContext[F]
+                  .fromTask(
+                    runtimeManager
+                      .computeState(preStateHash, deploysWithEffect, time)
+                  )
+                  .map {
+                    case (postStateHash, processedDeploy) =>
+                      Right(preStateHash, postStateHash, processedDeploy)
+                  }
+              case Left(err) =>
+                Left(err).pure[F]
+            }
+    } yield res
 
   private def computeParentsPostState[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
       dag: BlockDag,
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       time: Option[Long]
   )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces =
@@ -204,29 +217,64 @@ object InterpreterUtil {
     }
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore: ExecutionEngineService: ToAbstractContext](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   )(
       implicit scheduler: Scheduler
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
 
-      deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
-
+      deploys: Seq[Deploy] = ProtoUtil.deploys(b).flatMap(_.deploy)
+      deploysEffect <- deploys.toList
+                        .foldM[F, Either[Throwable, Seq[(Deploy, ExecutionEffect)]]](
+                          Seq()
+                            .asRight[Throwable]
+                        ) {
+                          case (Left(e), _) =>
+                            e.asLeft[Seq[(Deploy, ExecutionEffect)]]
+                              .pure[F]
+                          case (Right(acc), d) =>
+                            d.raw match {
+                              case Some(r) =>
+                                ToAbstractContext[F]
+                                  .fromTask(
+                                    runtimeManager
+                                      .sendDeploy(
+                                        ProtoUtil
+                                          .deployDataToEEDeploy(r)
+                                      )
+                                  )
+                                  .map {
+                                    case Left(e) =>
+                                      e.asLeft[Seq[(Deploy, ExecutionEffect)]]
+                                    case Right(effect) =>
+                                      (acc :+ (d, effect))
+                                        .asRight[Throwable]
+                                  }
+                              case None =>
+                                (acc :+ (d, ExecutionEffect()))
+                                  .asRight[Throwable]
+                                  .pure[F]
+                            }
+                        }
       _ = assert(
         parents.nonEmpty || (parents.isEmpty && b == genesis),
         "Received a different genesis block."
       )
-
-      result <- computeDeploysCheckpoint[F](
-                 parents,
-                 deploys,
-                 dag,
-                 runtimeManager
-               )
+      result <- deploysEffect match {
+                 case Left(e) =>
+                   e.asLeft[(StateHash, StateHash, Seq[InternalProcessedDeploy])].pure[F]
+                 case Right(d) =>
+                   computeDeploysCheckpoint[F](
+                     parents,
+                     d,
+                     dag,
+                     runtimeManager
+                   )
+               }
     } yield result
 }

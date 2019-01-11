@@ -20,10 +20,12 @@ import io.casperlabs.casper.protocol.Event.EventInstance
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
@@ -35,9 +37,10 @@ class ValidateTest
     with BeforeAndAfterEach
     with BlockGenerator
     with BlockStoreFixture {
-  implicit val log = new LogStub[Id]
-  val initState    = IndexedBlockDag.empty.copy(currentId = -1)
-  val ed25519      = "ed25519"
+  implicit val log   = new LogStub[Id]
+  implicit val absId = ToAbstractContext.idToAbstractContext
+  val initState      = IndexedBlockDag.empty.copy(currentId = -1)
+  val ed25519        = "ed25519"
 
   override def beforeEach(): Unit = {
     log.reset()
@@ -511,7 +514,7 @@ class ValidateTest
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long = 1024L * 1024
-      val runtimeManager    = RuntimeManager.fromSmartContractApi(???)
+      val runtimeManager    = RuntimeManager.fromExecutionEngineService(???)
       val _ = InterpreterUtil
         .validateBlockCheckpoint[Id](genesis, BlockDag.empty, runtimeManager)
 

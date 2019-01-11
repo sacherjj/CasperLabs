@@ -1,5 +1,7 @@
 package io.casperlabs.casper.util.comm
 
+import java.nio.file.Paths
+
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
@@ -39,7 +41,7 @@ import monix.execution.Scheduler.Implicits.global
 import monix.execution.schedulers.TestScheduler
 import org.scalatest.{Ignore, WordSpec}
 import io.casperlabs.casper.util.TestTime
-import io.casperlabs.smartcontracts.SmartContractsApi
+import io.casperlabs.smartcontracts.ExecutionEngineService
 
 import scala.concurrent.duration._
 
@@ -47,12 +49,11 @@ import scala.concurrent.duration._
 @Ignore
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
-    val scheduler         = Scheduler.io("test")
-    val runtimeDir        = BlockStoreTestFixture.dbDir
-    val storageSize: Long = 1024L * 1024
-    val casperSmartContractsApi = SmartContractsApi
-      .noOpApi[Task](runtimeDir, storageSize, StoreType.LMDB)
-    val runtimeManager = RuntimeManager.fromSmartContractApi(casperSmartContractsApi)
+    val scheduler               = Scheduler.io("test")
+    val runtimeDir              = BlockStoreTestFixture.dbDir
+    val storageSize: Long       = 1024L * 1024
+    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+    val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
 
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair

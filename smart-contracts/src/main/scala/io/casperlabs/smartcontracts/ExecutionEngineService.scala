@@ -1,10 +1,15 @@
-package io.casperlabs.casper.util.comm
+package io.casperlabs.smartcontracts
 
 import java.io.Closeable
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
+import cats.Applicative
+import cats.syntax.applicative._
+import cats.syntax.either._
+import cats.syntax.functor._
 import io.casperlabs.ipc._
+import io.casperlabs.models.SmartContractEngineError
 import io.grpc.ManagedChannel
 import io.grpc.netty.NettyChannelBuilder
 import io.netty.channel.epoll.{Epoll, EpollDomainSocketChannel, EpollEventLoopGroup}
@@ -18,6 +23,7 @@ import scala.util.Either
 @typeclass trait ExecutionEngineService[F[_]] {
   def sendDeploy(deploy: Deploy): F[Either[Throwable, ExecutionEffect]]
   def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]]
+  def close(): Unit
 }
 
 class GrpcExecutionEngineService(addr: Path, maxMessageSize: Int)
@@ -53,9 +59,10 @@ class GrpcExecutionEngineService(addr: Path, maxMessageSize: Int)
   override def sendDeploy(deploy: Deploy): Task[Either[Throwable, ExecutionEffect]] =
     stub.sendDeploy(deploy).map { response =>
       response.result match {
-        case DeployResult.Result.Empty           => Left(new RuntimeException("empty response"))
+        case DeployResult.Result.Empty           => Left(new SmartContractEngineError("empty response"))
         case DeployResult.Result.Effects(effect) => Right(effect)
-        case DeployResult.Result.Error(error)    => Left(new RuntimeException(error.toProtoString))
+        case DeployResult.Result.Error(error) =>
+          Left(new SmartContractEngineError(error.toProtoString))
       }
     }
 
@@ -65,10 +72,24 @@ class GrpcExecutionEngineService(addr: Path, maxMessageSize: Int)
       .map(
         response =>
           response.result match {
-            case PostEffectsResult.Result.Empty      => Left(new RuntimeException("empty response"))
+            case PostEffectsResult.Result.Empty =>
+              Left(new SmartContractEngineError("empty response"))
             case PostEffectsResult.Result.Success(v) => Right(v)
             case PostEffectsResult.Result.Error(effectsError) =>
-              Left(new RuntimeException(effectsError.toProtoString))
+              Left(new SmartContractEngineError(effectsError.toProtoString))
           }
       )
+}
+
+object ExecutionEngineService {
+  def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
+    new ExecutionEngineService[F] {
+      override def sendDeploy(d: Deploy): F[Either[Throwable, ExecutionEffect]] =
+        ExecutionEffect().asRight[Throwable].pure
+
+      override def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]] =
+        Done().asRight[Throwable].pure
+
+      override def close(): Unit = ()
+    }
 }
