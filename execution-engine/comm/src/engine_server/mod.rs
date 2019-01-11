@@ -74,10 +74,12 @@ impl<T: TrackingCopy, G: GlobalState<T>> ipc_grpc::ExecutionEngineService for En
     }
 }
 
+/// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> storage::transform::Transform {
     storage::transform::Transform::Write(v)
 }
 
+/// Transforms ipc::Transform into domain transform::Transform.
 fn ipc_transform_to_transform(tr: &ipc::Transform) -> storage::transform::Transform {
     if tr.has_identity() {
         storage::transform::Transform::Identity
@@ -135,6 +137,7 @@ fn ipc_transform_to_transform(tr: &ipc::Transform) -> storage::transform::Transf
     }
 }
 
+/// Transforms domain storage::transform::Transform into gRPC Transform.
 fn transform_to_ipc(tr: &storage::transform::Transform) -> ipc::Transform {
     let mut t = ipc::Transform::new();
     match tr {
@@ -225,6 +228,7 @@ fn transform_to_ipc(tr: &storage::transform::Transform) -> ipc::Transform {
     t
 }
 
+// Helper method for turning gRPC Vec of NamedKey to domain BTreeMap.
 fn ipc_vec_to_urefs_map(vec: &[ipc::NamedKey]) -> BTreeMap<String, common::key::Key> {
     let mut tree: BTreeMap<String, common::key::Key> = BTreeMap::new();
     let _ = vec
@@ -246,6 +250,7 @@ fn urefs_map_to_ipc_vec(urefs: &BTreeMap<String, common::key::Key>) -> Vec<ipc::
         .collect()
 }
 
+/// Transforms domain Key into gRPC Key.
 fn key_to_ipc(key: &common::key::Key) -> ipc::Key {
     let mut k = ipc::Key::new();
     match key {
@@ -268,6 +273,7 @@ fn key_to_ipc(key: &common::key::Key) -> ipc::Key {
     k
 }
 
+/// Transforms gRPC Key into domain Key.
 fn ipc_to_key(ipc_key: &ipc::Key) -> common::key::Key {
     if ipc_key.has_account() {
         let mut arr = [0u8; 20];
@@ -302,6 +308,7 @@ fn op_to_ipc(op: storage::op::Op) -> ipc::Op {
     ipc_op
 }
 
+/// Transforms gRPC TransformEntry into domain tuple of (Key, Transform).
 fn transform_entry_to_key_transform(
     te: &ipc::TransformEntry,
 ) -> (common::key::Key, storage::transform::Transform) {
@@ -318,6 +325,7 @@ fn transform_entry_to_key_transform(
     }
 }
 
+/// Transforms domain ExecutionEffect into gRPC ExecutionEffect.
 fn execution_effect_to_ipc(ee: storage::ExecutionEffect) -> ipc::ExecutionEffect {
     let mut eff = ipc::ExecutionEffect::new();
     let ipc_ops: Vec<ipc::OpEntry> =
