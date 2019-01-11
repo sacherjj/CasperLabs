@@ -233,9 +233,9 @@ fn transform_to_ipc(tr: &storage::transform::Transform) -> ipc::Transform {
 // Helper method for turning gRPC Vec of NamedKey to domain BTreeMap.
 fn ipc_vec_to_urefs_map(vec: &[ipc::NamedKey]) -> BTreeMap<String, common::key::Key> {
     let mut tree: BTreeMap<String, common::key::Key> = BTreeMap::new();
-    let _ = vec
-        .iter()
-        .map(|nk| tree.insert(nk.get_name().to_string(), ipc_to_key(nk.get_key())));
+    for nk in vec {
+      let _ = tree.insert(nk.get_name().to_string(), ipc_to_key(nk.get_key()));
+    }
     tree
 }
 
