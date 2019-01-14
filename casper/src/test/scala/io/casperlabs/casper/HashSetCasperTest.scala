@@ -562,13 +562,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
    *
    */
   ignore should "ask peers for blocks it is missing and add them" in effectTest {
-    val deployDatasFs = Vector(
-      "@2!(2)",
-      "@1!(1)"
-    ).zipWithIndex
-      .map(
-        d => () => ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, Long.MaxValue)
-      )
+    //TODO: figure out a way to get wasm into deploys for tests
+    val deployDatasFs = Vector.empty[() => DeployData]
+
     def deploy(node: HashSetCasperTestNode[Effect], dd: DeployData): Effect[BlockMessage] =
       for {
         createBlockResult1    <- node.casperEff.deploy(dd) *> node.casperEff.createBlock

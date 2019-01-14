@@ -110,7 +110,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       _ <- attempt match {
             case MissingBlocks => ().pure[F]
             case _ =>
-              Capture[F].capture { blockBuffer -= b } *> dependencyDagState.modify(
+              Sync[F].delay { blockBuffer -= b } *> dependencyDagState.modify(
                 dependencyDag => DoublyLinkedDagOperations.remove(dependencyDag, b.blockHash)
               )
           }
@@ -310,7 +310,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                }
     } yield result
 
-  def blockDag: F[BlockDag] = Capture[F].capture {
+  def blockDag: F[BlockDag] = Sync[F].delay {
     _blockDag.get
   }
 
@@ -335,7 +335,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private def attemptAdd(b: BlockMessage): F[BlockStatus] =
     for {
       _                    <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
-      dag                  <- Capture[F].capture { _blockDag.get }
+      dag                  <- Sync[F].delay { _blockDag.get }
       postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
@@ -387,9 +387,9 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
           s"Added ${PrettyPrinter.buildString(block.blockHash)}"
         )
       case MissingBlocks =>
-        Capture[F].capture { blockBuffer += block } *> fetchMissingDependencies(block)
+        Sync[F].delay { blockBuffer += block } *> fetchMissingDependencies(block)
       case AdmissibleEquivocation =>
-        Capture[F].capture {
+        Sync[F].delay {
           val baseEquivocationBlockSeqNum = block.seqNum - 1
           if (equivocationsTracker.exists {
                 case EquivocationRecord(validator, seqNum, _) =>
@@ -484,7 +484,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
             s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
           )
       // TODO: Slash block for status except InvalidUnslashableBlock
-      _ <- Capture[F].capture(invalidBlockTracker += block.blockHash) *> addToState(block)
+      _ <- Sync[F].delay(invalidBlockTracker += block.blockHash) *> addToState(block)
     } yield ()
 
   private def addToState(block: BlockMessage): F[Unit] =
