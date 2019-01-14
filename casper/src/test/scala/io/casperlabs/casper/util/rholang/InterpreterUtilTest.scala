@@ -629,7 +629,7 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-          )
+            )
         )
     val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
       .use { runtimeManager =>
@@ -685,7 +685,7 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-          )
+            )
         )
       val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
         .use { runtimeManager =>
@@ -743,7 +743,7 @@ class InterpreterUtilTest
               ByteString.copyFromUtf8(s),
               System.currentTimeMillis(),
               Integer.MAX_VALUE
-          )
+            )
         )
 
       val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
