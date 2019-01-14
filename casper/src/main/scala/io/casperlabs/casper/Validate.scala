@@ -560,19 +560,21 @@ object Validate {
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager[Task]
   )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
-    for {
-      maybeStateHash <- InterpreterUtil
-                         .validateBlockCheckpoint[F](
-                           block,
-                           dag,
-                           runtimeManager
-                         )
-    } yield
-      maybeStateHash match {
-        case Left(ex)       => Left(ex)
-        case Right(Some(_)) => Right(Valid)
-        case Right(None)    => Left(InvalidTransaction)
-      }
+    Sync[F].pure[Either[BlockStatus, ValidBlock]](Right(Valid))
+  // TODO: bring this back when validation works again
+  // for {
+  //   maybeStateHash <- InterpreterUtil
+  //                      .validateBlockCheckpoint[F](
+  //                        block,
+  //                        dag,
+  //                        runtimeManager
+  //                      )
+  // } yield
+  //   maybeStateHash match {
+  //     case Left(ex)       => Left(ex)
+  //     case Right(Some(_)) => Right(Valid)
+  //     case Right(None)    => Left(InvalidTransaction)
+  //   }
 
   /**
     * If block contains an invalid justification block B and the creator of B is still bonded,
@@ -603,28 +605,30 @@ object Validate {
       implicit scheduler: Scheduler
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
-    ProtoUtil.tuplespace(b) match {
-      case Some(tuplespaceHash) =>
-        Try(runtimeManager.computeBonds(tuplespaceHash)) match {
-          case Success(computedBonds) =>
-            if (bonds.toSet == computedBonds.toSet) {
-              Applicative[F].pure(Right(Valid))
-            } else {
-              for {
-                _ <- Log[F].warn(
-                      "Bonds in proof of stake contract do not match block's bond cache."
-                    )
-              } yield Left(InvalidBondsCache)
-            }
-          case Failure(ex: Throwable) =>
-            for {
-              _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
-            } yield Left(InvalidBondsCache)
-        }
-      case None =>
-        for {
-          _ <- Log[F].warn(s"Block ${PrettyPrinter.buildString(b)} is missing a tuplespace hash.")
-        } yield Left(InvalidBondsCache)
-    }
+    Applicative[F].pure[Either[InvalidBlock, ValidBlock]](Right(Valid))
+    // TODO: bring back when global state includes the bonds
+    // ProtoUtil.tuplespace(b) match {
+    //   case Some(tuplespaceHash) =>
+    //     Try(runtimeManager.computeBonds(tuplespaceHash)) match {
+    //       case Success(computedBonds) =>
+    //         if (bonds.toSet == computedBonds.toSet) {
+    //           Applicative[F].pure(Right(Valid))
+    //         } else {
+    //           for {
+    //             _ <- Log[F].warn(
+    //                   "Bonds in proof of stake contract do not match block's bond cache."
+    //                 )
+    //           } yield Left(InvalidBondsCache)
+    //         }
+    //       case Failure(ex: Throwable) =>
+    //         for {
+    //           _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
+    //         } yield Left(InvalidBondsCache)
+    //     }
+    //   case None =>
+    //     for {
+    //       _ <- Log[F].warn(s"Block ${PrettyPrinter.buildString(b)} is missing a tuplespace hash.")
+    //     } yield Left(InvalidBondsCache)
+    // }
   }
 }

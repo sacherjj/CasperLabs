@@ -15,7 +15,7 @@ use storage::{GlobalState, TrackingCopy};
 impl<T: TrackingCopy, G: GlobalState<T>> ipc_grpc::ExecutionEngineService for EngineState<T, G> {
     fn send_deploy(
         &self,
-        o: ::grpc::RequestOptions,
+        _o: ::grpc::RequestOptions,
         p: ipc::Deploy,
     ) -> grpc::SingleResponse<ipc::DeployResult> {
         let mut addr = [0u8; 20];
@@ -41,7 +41,7 @@ impl<T: TrackingCopy, G: GlobalState<T>> ipc_grpc::ExecutionEngineService for En
 
     fn execute_effects(
         &self,
-        o: ::grpc::RequestOptions,
+        _o: ::grpc::RequestOptions,
         p: ipc::CommutativeEffects,
     ) -> grpc::SingleResponse<ipc::PostEffectsResult> {
         let r: Result<(), execution_engine::engine::Error> = p
@@ -109,9 +109,8 @@ fn ipc_transform_to_transform(tr: &ipc::Transform) -> storage::transform::Transf
             let v: Vec<u8> = Vec::from(v.get_byte_arr());
             transform_write(common::value::Value::ByteArray(v))
         } else if v.has_int_list() {
-            transform_write(common::value::Value::ListInt32(
-                v.get_int_list().list.clone(),
-            ))
+            let list = v.get_int_list().list.clone();
+            transform_write(common::value::Value::ListInt32(list))
         } else if v.has_string_val() {
             transform_write(common::value::Value::String(v.get_string_val().to_string()))
         } else if v.has_account() {
@@ -120,7 +119,7 @@ fn ipc_transform_to_transform(tr: &ipc::Transform) -> storage::transform::Transf
             let account = common::value::Account::new(
                 pub_key,
                 v.get_account().nonce as u64,
-                ipc_vec_to_urefs_map(&v.get_account().known_urefs.to_vec())
+                ipc_vec_to_urefs_map(&v.get_account().known_urefs.to_vec()),
             );
             transform_write(common::value::Value::Acct(account))
         } else if v.has_contract() {
@@ -131,8 +130,16 @@ fn ipc_transform_to_transform(tr: &ipc::Transform) -> storage::transform::Transf
                 bytes: contr_body,
                 known_urefs: known_urefs,
             })
+        } else if v.has_string_list() {
+            let list = v.get_string_list().list.to_vec();
+            transform_write(common::value::Value::ListString(list))
+        } else if v.has_named_key() {
+            let nk = v.get_named_key();
+            let name = nk.get_name().to_string();
+            let key = ipc_to_key(nk.get_key());
+            transform_write(common::value::Value::NamedKey(name, key))
         } else {
-            panic!("TransformEntry couldn't be parsed to known Transform.")
+            panic!("TransformEntry write contained unknown value: {:?}", v)
         }
     } else {
         panic!("TransformEntry couldn't be parsed to known Transform.")
@@ -213,15 +220,15 @@ fn transform_to_ipc(tr: &storage::transform::Transform) -> ipc::Transform {
             let mut fail = ipc::TransformFailure::new();
             let mut stor_err = ipc::StorageError::new();
             match f {
-                storage::Error::KeyNotFound{key} => {
+                storage::Error::KeyNotFound { key } => {
                     stor_err.set_key_not_found(key_to_ipc(key));
-                },
-                storage::Error::TypeMismatch{expected, found} => {
+                }
+                storage::Error::TypeMismatch { expected, found } => {
                     let mut type_miss = ipc::StorageTypeMismatch::new();
                     type_miss.set_expected(expected.to_string());
                     type_miss.set_found(found.to_string());
                     stor_err.set_type_mismatch(type_miss);
-                },
+                }
             };
             fail.set_error(stor_err);
             t.set_failure(fail);
@@ -233,9 +240,9 @@ fn transform_to_ipc(tr: &storage::transform::Transform) -> ipc::Transform {
 // Helper method for turning gRPC Vec of NamedKey to domain BTreeMap.
 fn ipc_vec_to_urefs_map(vec: &[ipc::NamedKey]) -> BTreeMap<String, common::key::Key> {
     let mut tree: BTreeMap<String, common::key::Key> = BTreeMap::new();
-    let _ = vec
-        .iter()
-        .map(|nk| tree.insert(nk.get_name().to_string(), ipc_to_key(nk.get_key())));
+    for nk in vec {
+        let _ = tree.insert(nk.get_name().to_string(), ipc_to_key(nk.get_key()));
+    }
     tree
 }
 
@@ -323,7 +330,7 @@ fn transform_entry_to_key_transform(
             panic!("No transform field in TransformEntry")
         }
     } else {
-        panic!("No key field  in TransformEntry")
+        panic!("No key field in TransformEntry")
     }
 }
 
@@ -367,7 +374,7 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     }
 
     let mut server = grpc::ServerBuilder::new_plain();
-    server.http.set_unix_addr(socket.to_owned());
+    server.http.set_unix_addr(socket.to_owned()).unwrap();
     server.http.set_cpu_pool_threads(1);
     server.add_service(ipc_grpc::ExecutionEngineServiceServer::new_service_def(e));
     server
