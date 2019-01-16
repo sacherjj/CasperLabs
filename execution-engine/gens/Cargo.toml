@@ -1,0 +1,9 @@
+[package]
+name = "gens"
+version = "0.1.0"
+authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+edition = "2018"
+
+[dependencies]
+proptest = "0.8.7"
+common = { path = "../common", features = ["std"] }
