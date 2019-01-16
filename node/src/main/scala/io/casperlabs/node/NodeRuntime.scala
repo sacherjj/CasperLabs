@@ -1,36 +1,32 @@
 package io.casperlabs.node
 
-import scala.concurrent.duration._
-
 import cats._
 import cats.data._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.syntax.applicative._
 import cats.syntax.apply._
-import cats.syntax.monad._
-import cats.syntax.flatMap._
 import cats.syntax.functor._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{BlockStore, InMemBlockStore}
-import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.casper.util.rholang.RuntimeManager
-import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
-import io.casperlabs.comm._
 import io.casperlabs.comm.CommError.ErrorHandler
+import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
-import io.casperlabs.comm.rp._
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
+import io.casperlabs.comm.rp._
 import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api._
-import io.casperlabs.node.configuration.{Configuration, ConfigurationSoft}
+import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics._
 import io.casperlabs.p2p.effects._
 import io.casperlabs.shared._
@@ -40,6 +36,8 @@ import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
+
+import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
     conf: Configuration,
@@ -51,15 +49,6 @@ class NodeRuntime private[node] (
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
   private[this] val grpcScheduler =
     Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
-  private[this] val availableProcessors = java.lang.Runtime.getRuntime.availableProcessors()
-  // TODO: make it configurable
-  // TODO: fine tune this
-  private[this] val rspaceScheduler = Scheduler.forkJoin(
-    name = "rspace",
-    parallelism = availableProcessors * 2,
-    maxThreads = availableProcessors * 2,
-    reporter = UncaughtExceptionLogger
-  )
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -68,13 +57,8 @@ class NodeRuntime private[node] (
 
   import ApplicativeError_._
 
-  /** Configuration */
   private val port              = conf.server.port
   private val kademliaPort      = conf.server.kademliaPort
-  private val storagePath       = conf.server.dataDir.resolve("rspace")
-  private val casperStoragePath = storagePath.resolve("casper")
-  private val storageSize       = conf.server.mapSize
-  private val storeType         = conf.server.storeType
   private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
   case class Servers(
@@ -83,12 +67,6 @@ class NodeRuntime private[node] (
       httpServer: Fiber[Task, Unit]
   )
 
-  /**
-    * Main node entry. It will:
-    * 1. set up configurations
-    * 2. create instances of typeclasses
-    * 3. run the node program.
-    */
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   val main: Effect[Unit] = for {
     local <- WhoAmI
@@ -111,7 +89,6 @@ class NodeRuntime private[node] (
     kademliaConnections  <- CachedConnections[Task, KademliaConnTag].toEffect
     tcpConnections       <- CachedConnections[Task, TcpConnTag].toEffect
     time                 = effects.time
-    timerTask            = Task.timer
     metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
@@ -147,7 +124,6 @@ class NodeRuntime private[node] (
     )
     _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    // TODO Replace the RuntimeManager to SmartContractsApi
     executionEngineService = new GrpcExecutionEngineService(
       conf.grpcServer.socket,
       conf.server.maxMessageSize
@@ -383,7 +359,7 @@ class NodeRuntime private[node] (
 
   /**
     * Handles unrecoverable errors in program. Those are errors that should not happen in properly
-    * configured enviornment and they mean immediate termination of the program
+    * configured environment and they mean immediate termination of the program
     */
   private def handleUnrecoverableErrors(prog: Effect[Unit]): Effect[Unit] =
     EitherT[Task, CommError, Unit](

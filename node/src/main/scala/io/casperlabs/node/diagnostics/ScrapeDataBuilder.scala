@@ -4,11 +4,9 @@ import java.lang.StringBuilder
 import java.text.{DecimalFormat, DecimalFormatSymbols}
 import java.util.Locale
 
-import kamon.Environment
-import kamon.metric.{MetricDistribution, MetricValue}
-import kamon.metric.MeasurementUnit
-import kamon.metric.MeasurementUnit.{information, none, time}
 import kamon.metric.MeasurementUnit.Dimension._
+import kamon.metric.MeasurementUnit.{information, none, time}
+import kamon.metric.{MeasurementUnit, MetricDistribution, MetricValue}
 
 class ScrapeDataBuilder(
     prometheusConfig: NewPrometheusReporter.Configuration,
@@ -21,7 +19,7 @@ class ScrapeDataBuilder(
   import builder.append
 
   def build(): String =
-    builder.toString()
+    builder.toString
 
   def appendCounters(counters: Seq[MetricValue]): ScrapeDataBuilder = {
     counters.groupBy(_.name).foreach(appendValueMetric("counter", alwaysIncreasing = true))

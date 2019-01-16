@@ -3,11 +3,9 @@ import java.nio.file.{Path, Paths}
 
 import cats.data.Validated._
 import cats.data.ValidatedNel
-import cats.syntax.validated._
-import cats.syntax.either._
-import cats.instances.invariant._
-import cats.instances.list._
 import cats.syntax.apply._
+import cats.syntax.either._
+import cats.syntax.validated._
 import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.PeerNode

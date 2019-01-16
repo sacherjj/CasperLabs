@@ -2,9 +2,9 @@ package io.casperlabs.node
 
 import java.nio.file.Path
 
+import cats.Applicative
 import cats.effect.Timer
 import cats.mtl._
-
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
 import io.casperlabs.comm._
@@ -14,15 +14,12 @@ import io.casperlabs.comm.rp._
 import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
-
 import monix.eval._
 import monix.execution._
 import monix.execution.atomic.AtomicAny
+
 import scala.concurrent.duration._
 import scala.io.Source
-import scala.tools.jline.console._
-
-import cats.Applicative
 
 package object effects {
 
