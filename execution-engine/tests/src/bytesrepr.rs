@@ -1,71 +1,7 @@
-#[macro_use]
-extern crate proptest;
-extern crate common;
-
 use common::bytesrepr::*;
-use common::key::*;
-use common::value::*;
-use proptest::collection::{btree_map, vec};
+use proptest::collection::vec;
 use proptest::prelude::*;
-use std::collections::BTreeMap;
-
-fn u8_slice_20() -> impl Strategy<Value = [u8; 20]> {
-    vec(any::<u8>(), 20).prop_map(|b| {
-        let mut res = [0u8; 20];
-        res.clone_from_slice(b.as_slice());
-        res
-    })
-}
-
-fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
-    vec(any::<u8>(), 32).prop_map(|b| {
-        let mut res = [0u8; 32];
-        res.clone_from_slice(b.as_slice());
-        res
-    })
-}
-
-fn uref_map_arb(depth: usize) -> impl Strategy<Value = BTreeMap<String, Key>> {
-    btree_map("\\PC*", key_arb(), depth)
-}
-
-fn key_arb() -> impl Strategy<Value = Key> {
-    prop_oneof![
-        u8_slice_20().prop_map(|b| Key::Account(b)),
-        u8_slice_32().prop_map(|b| Key::Hash(b)),
-        u8_slice_32().prop_map(|b| Key::URef(b))
-    ]
-}
-
-fn account_arb() -> impl Strategy<Value = common::value::Account> {
-    u8_slice_32().prop_flat_map(|b| {
-        any::<u64>().prop_flat_map(move |u64arb| {
-            uref_map_arb(3).prop_map(move |urefs| common::value::Account::new(b, u64arb, urefs))
-        })
-    })
-}
-
-fn contract_arb() -> impl Strategy<Value = common::value::Value> {
-    uref_map_arb(20).prop_flat_map(|urefs| {
-        vec(any::<u8>(), 1..1000).prop_map(move |body| Value::Contract {
-            bytes: body,
-            known_urefs: urefs.clone(),
-        })
-    })
-}
-
-fn value_arb() -> impl Strategy<Value = common::value::Value> {
-    prop_oneof![
-        (any::<i32>().prop_map(|i| Value::Int32(i))),
-        (vec(any::<u8>(), 1..1000).prop_map(|b| Value::ByteArray(b))),
-        (vec(any::<i32>(), 1..1000).prop_map(|b| Value::ListInt32(b))),
-        ("\\PC*".prop_map(|s| Value::String(s))),
-        (vec(any::<String>(), 1..500).prop_map(|s| Value::ListString(s))),
-        ("\\PC*", key_arb()).prop_map(|(n, k)| Value::NamedKey(n, k)),
-        account_arb().prop_map(|acc| Value::Acct(acc)),
-        contract_arb()
-    ]
-}
+use gens::gens::*;
 
 fn test_serialization_roundtrip<T: ToBytes + FromBytes + PartialEq + std::fmt::Debug>(
     el: &T,
@@ -81,6 +17,7 @@ fn test_serialization_roundtrip<T: ToBytes + FromBytes + PartialEq + std::fmt::D
 }
 
 proptest! {
+
     #[test]
     fn test_u8(u in any::<u8>()) {
         assert!(test_serialization_roundtrip(&u));

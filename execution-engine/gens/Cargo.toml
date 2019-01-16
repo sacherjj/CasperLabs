@@ -1,10 +1,9 @@
 [package]
-name = "tests"
+name = "gens"
 version = "0.1.0"
 authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+edition = "2018"
 
 [dependencies]
-common = { path = "../common", features = ["std"] }
-gens = { path = "../gens" }
 proptest = "0.8.7"
-
+common = { path = "../common", features = ["std"] }
