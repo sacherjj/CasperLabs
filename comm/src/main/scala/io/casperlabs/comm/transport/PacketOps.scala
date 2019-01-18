@@ -4,6 +4,7 @@ import io.casperlabs.comm.{CommError, PeerNode}, CommError._
 import io.casperlabs.comm.protocol.routing._
 import java.nio.file._
 import com.google.protobuf.CodedOutputStream
+import io.casperlabs.shared.GracefulClose._
 import java.io._
 import cats._, cats.data._, cats.implicits._
 import cats.effect.Sync
@@ -21,9 +22,6 @@ object PacketOps {
                  case Right(packet) => gracefullyClose(fin) *> Right(packet).pure[F]
                }
     } yield resErr
-
-  def gracefullyClose[F[_]: Sync](closable: AutoCloseable): F[Either[Throwable, Unit]] =
-    Sync[F].delay(closable.close).attempt
 
   implicit class RichPacket(packet: Packet) {
     def store[F[_]: Sync](folder: Path): F[CommErr[Path]] =

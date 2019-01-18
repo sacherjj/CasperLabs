@@ -6,7 +6,7 @@ import io.casperlabs.comm.CommError._
 import io.casperlabs.comm._
 import io.casperlabs.comm.protocol.routing._
 import com.google.protobuf.ByteString
-import io.casperlabs.comm.transport.PacketType
+import io.casperlabs.comm.transport.{Blob, PacketType}
 import com.google.protobuf.ByteString
 
 object ProtocolHelper {
@@ -79,4 +79,11 @@ object ProtocolHelper {
       Left(UnknownProtocolError(s"Was expecting Disconnect, got ${proto.message}"))
     )(Right(_))
 
+  def blob(sender: PeerNode, typeId: String, content: Array[Byte]): Blob =
+    Blob(
+      sender,
+      Packet()
+        .withTypeId(typeId)
+        .withContent(ProtocolHelper.toProtocolBytes(content))
+    )
 }

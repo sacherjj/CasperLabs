@@ -1,16 +1,23 @@
 package io.casperlabs.comm.transport
 
+import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
 
+import io.casperlabs.comm.PeerNode
 import io.casperlabs.comm.protocol.routing.Protocol
-
 import monix.execution.Callback
 
 trait ServerMessage
 // TODO rename to AksMesage and TellMesssage
 final case class Ask(msg: Protocol, handle: SenderHandle) extends ServerMessage
 final case class Tell(msg: Protocol)                      extends ServerMessage
-final case class StreamMessage(blob: Blob)                extends ServerMessage
+final case class StreamMessage(
+    sender: PeerNode,
+    typeId: String,
+    path: Path,
+    compressed: Boolean,
+    contentLength: Int
+) extends ServerMessage
 
 trait SenderHandle {
   def reply(msg: CommunicationResponse): Unit
