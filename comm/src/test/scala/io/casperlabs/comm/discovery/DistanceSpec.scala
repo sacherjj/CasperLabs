@@ -1,12 +1,10 @@
 package io.casperlabs.comm.discovery
 
-import org.scalatest._
-
 import cats._
-import io.casperlabs.comm.protocol.routing._
-import io.casperlabs.catscontrib.Capture
 import io.casperlabs.comm._
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.shared.TestOutlaws._
+import org.scalatest._
 
 object b {
   val rand                   = new scala.util.Random(System.currentTimeMillis)
@@ -29,10 +27,6 @@ class DistanceSpec extends FlatSpec with Matchers {
         pingHandler: PeerNode => Id[Unit],
         lookupHandler: (PeerNode, Array[Byte]) => Id[Seq[PeerNode]]
     ): Id[Unit] = ()
-  }
-  implicit val capture: Capture[Id] = new Capture[Id] {
-    def capture[A](a: => A): Id[A]       = a
-    def unsafeUncapture[A](fa: Id[A]): A = fa
   }
 
   "A PeerNode of width n bytes" should "have distance to itself equal to 8n" in {

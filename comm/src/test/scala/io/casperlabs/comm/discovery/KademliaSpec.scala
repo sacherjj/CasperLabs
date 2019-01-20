@@ -7,6 +7,7 @@ import cats.Id
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.catscontrib._, Catscontrib._
 import io.casperlabs.comm._
+import io.casperlabs.shared.TestOutlaws._
 
 import org.scalatest._
 

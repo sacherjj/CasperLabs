@@ -17,6 +17,7 @@ import io.casperlabs.shared.StoreType
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
+import io.casperlabs.shared.TestOutlaws._
 
 class BlockApproverProtocolTest extends FlatSpec with Matchers {
   import BlockApproverProtocolTest._

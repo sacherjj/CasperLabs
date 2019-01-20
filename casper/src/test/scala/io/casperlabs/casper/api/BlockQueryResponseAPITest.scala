@@ -14,7 +14,7 @@ import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.catscontrib.Capture._
-
+import io.casperlabs.shared.TestOutlaws._
 import scala.collection.immutable.HashMap
 
 class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFixture {

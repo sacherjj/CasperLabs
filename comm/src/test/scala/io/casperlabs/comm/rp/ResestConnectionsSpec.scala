@@ -14,6 +14,7 @@ import io.casperlabs.comm.rp.ProtocolHelper._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.{LogicalTime, TransportLayerStub}
 import io.casperlabs.shared._
+import io.casperlabs.shared.TestOutlaws._
 
 import org.scalatest._
 

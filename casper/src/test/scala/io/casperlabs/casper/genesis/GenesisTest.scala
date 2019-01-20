@@ -22,6 +22,7 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import io.casperlabs.shared.StoreType
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import monix.eval.Task
+import io.casperlabs.shared.TestOutlaws._
 
 class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
   import GenesisTest._

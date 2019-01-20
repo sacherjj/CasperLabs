@@ -42,6 +42,7 @@ import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
 import monix.eval.Task
+import io.casperlabs.shared.TestOutlaws._
 
 class HashSetCasperTestNode[F[_]](
     name: String,
