@@ -28,7 +28,8 @@ class DistanceSpec extends FlatSpec with Matchers {
     def receive(
         pingHandler: PeerNode => Id[Unit],
         lookupHandler: (PeerNode, Array[Byte]) => Id[Seq[PeerNode]]
-    ): Id[Unit] = ()
+    ): Id[Unit]              = ()
+    def shutdown(): Id[Unit] = ()
   }
   implicit val capture: Capture[Id] = new Capture[Id] {
     def capture[A](a: => A): Id[A]       = a
