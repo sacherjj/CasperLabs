@@ -133,8 +133,7 @@ lazy val crypto = (project in file("crypto"))
       secp256k1Java,
       scodecBits
     ),
-    fork := true,
-    doctestTestFramework := DoctestTestFramework.ScalaTest
+    fork := true
   )
   .dependsOn(shared)
 
