@@ -108,8 +108,12 @@ object Configuration {
       optToValidated(confSoft.server.flatMap(_.maxMessageSize), "Server.maxMessageSize"),
       optToValidated(confSoft.server.flatMap(_.chunkSize), "Server.chunkSize")
     ).mapN(Configuration.Server.apply).map { server =>
+      // Do not exceed HTTP2 RFC 7540
+      val maxMessageSize = Math.min(server.maxMessageSize, 16 * 1024 * 1024)
+      val chunkSize      = Math.min(server.chunkSize, maxMessageSize)
       server.copy(
-        maxMessageSize = Math.min(server.maxMessageSize, 16 * 1024 * 1024) // Do not exceed HTTP2 RFC 7540
+        maxMessageSize = maxMessageSize,
+        chunkSize = chunkSize
       )
     }
 
