@@ -3,20 +3,17 @@ package io.casperlabs.node
 import java.io.File
 import java.security.cert.X509Certificate
 
-import scala.util._
-
 import cats.data.EitherT.{leftT, rightT}
 import cats.syntax.applicativeError._
 import cats.syntax.either._
-
 import io.casperlabs.comm._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.CertificateHelper
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared.Log
-
 import monix.eval.Task
-import monix.execution.Scheduler
+
+import scala.util._
 
 object NodeEnvironment {
 

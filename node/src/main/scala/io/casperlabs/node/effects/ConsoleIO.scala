@@ -1,7 +1,9 @@
 package io.casperlabs.node.effects
 
-import io.casperlabs.catscontrib._, Catscontrib._
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
+import io.casperlabs.catscontrib._
 
 trait ConsoleIO[F[_]] {
   def println(str: String): F[Unit]

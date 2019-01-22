@@ -1,17 +1,16 @@
 package io.casperlabs.node.api
 
 import cats.effect.Sync
-import cats.implicits._
+import com.google.protobuf.empty.Empty
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.casper.protocol.{DeployData, DeployServiceResponse, _}
+import io.casperlabs.catscontrib.Catscontrib._
+import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.Taskable
 import io.casperlabs.shared._
-import io.casperlabs.catscontrib.TaskContrib._
-import com.google.protobuf.empty.Empty
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
