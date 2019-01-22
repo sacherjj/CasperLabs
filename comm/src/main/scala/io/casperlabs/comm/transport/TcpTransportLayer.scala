@@ -123,31 +123,6 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
-  def chunkIt(blob: Blob): Task[Iterator[Chunk]] =
-    Task.delay {
-      val raw      = blob.packet.content.toByteArray
-      val kb500    = 1024 * 500
-      val compress = raw.length > kb500
-      val content  = if (compress) raw.compress else raw
-
-      def header: Chunk =
-        Chunk().withHeader(
-          ChunkHeader()
-            .withCompressed(compress)
-            .withContentLength(raw.length)
-            .withSender(ProtocolHelper.node(blob.sender))
-            .withTypeId(blob.packet.typeId)
-        )
-      val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
-      val chunkSize = maxMessageSize - buffer
-      def data: Iterator[Chunk] =
-        content.sliding(chunkSize, chunkSize).map { data =>
-          Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
-        }
-
-      Iterator(header) ++ data
-    }
-
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
     streamObservable.stream(peers.toList, blob) *> log.info(s"stream to $peers blob")
 
@@ -168,7 +143,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
             case p if p.isNoResponse => Right(None)
             case TLResponse.Payload.InternalServerError(ise) =>
               Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
-          }
+        }
       )
 
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
@@ -210,7 +185,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
         case Right(packet) =>
           withClient(peer, enforce = false) { stub =>
             val blob = Blob(sender, packet)
-            stub.stream(Observable.fromIterator(chunkIt(blob)))
+            stub.stream(Observable.fromIterator(Task(Chunker.chunkIt(blob, maxMessageSize))))
           }.attempt
             .flatMap {
               case Left(error) => log.error(s"Error while streaming packet, error: $error")
@@ -218,10 +193,10 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
             }
         case Left(error) => log.error(s"Error while streaming packet, error: $error")
       } >>=
-        (kp(Task.delay {
+        kp(Task.delay {
           if (path.toFile.exists)
             path.toFile.delete
-        }))
+        })
   }
 
   private def initQueue(
@@ -247,8 +222,13 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
           case Left(e)         => handle.failWith(e)
           case Right(response) => handle.reply(response)
         }.void
-      case StreamMessage(blob) => handleStreamed(blob).attemptAndLog
-      case _                   => Task.unit // sender timeout
+      case msg: StreamMessage =>
+        StreamHandler.restore(msg) >>= {
+          case Left(ex) =>
+            Log[Task].error("Could not restore data from file while handling stream", ex)
+          case Right(blob) => handleStreamed(blob)
+        }
+      case _ => Task.unit // sender timeout
     }
 
     cell.modify { s =>
@@ -258,8 +238,12 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
       for {
         server <- initQueue(s.server) {
                    Task.delay {
-                     new TcpServerObservable(port, serverSslContext, maxMessageSize)
-                       .mapParallelUnordered(parallelism)(dispatchInternal)
+                     new TcpServerObservable(
+                       port,
+                       serverSslContext,
+                       maxMessageSize,
+                       tempFolder = tempFolder
+                     ).mapParallelUnordered(parallelism)(dispatchInternal)
                        .subscribe()(queueScheduler)
                    }
 
