@@ -61,8 +61,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deploy = ProtoUtil.basicDeployData[Id](0)
     MultiParentCasper[Id].deploy(deploy)
 
-    logEff.infos.size should be(1)
-    logEff.infos.head.contains("Received Deploy") should be(true)
+    logEff.infos.size should be(2)
+    logEff.infos.exists(_.contains("Received Deploy")) should be(true)
     node.tearDown()
   }
 
