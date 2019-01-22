@@ -13,6 +13,7 @@ store-type = "lmdb"
 data-dir = "$HOME/.casperlabs"
 max-num-of-connections = 500
 max-message-size = 4194304
+chunk-size = 1048576
 
 [lmdb]
 path = "$HOME/.casperlabs/casper-block-store"

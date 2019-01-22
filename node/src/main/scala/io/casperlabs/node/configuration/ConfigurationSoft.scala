@@ -138,7 +138,8 @@ private[configuration] object ConfigurationSoft {
       storeType: Option[StoreType],
       dataDir: Option[Path],
       maxNumOfConnections: Option[Int],
-      maxMessageSize: Option[Int]
+      maxMessageSize: Option[Int],
+      chunkSize: Option[Int]
   )
 
   private[configuration] case class LmdbBlockStore(

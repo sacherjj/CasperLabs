@@ -37,7 +37,8 @@ object Configuration {
       mapSize: Long,
       storeType: StoreType,
       maxNumOfConnections: Int,
-      maxMessageSize: Int
+      maxMessageSize: Int,
+      chunkSize: Int
   )
   case class GrpcServer(
       host: String,
@@ -104,7 +105,8 @@ object Configuration {
       optToValidated(confSoft.server.flatMap(_.mapSize), "Server.mapSize"),
       optToValidated(confSoft.server.flatMap(_.storeType), "Server.storeType"),
       optToValidated(confSoft.server.flatMap(_.maxNumOfConnections), "Server.maxNumOfConnections"),
-      optToValidated(confSoft.server.flatMap(_.maxMessageSize), "Server.maxMessageSize")
+      optToValidated(confSoft.server.flatMap(_.maxMessageSize), "Server.maxMessageSize"),
+      optToValidated(confSoft.server.flatMap(_.chunkSize), "Server.chunkSize")
     ).mapN(Configuration.Server.apply).map { server =>
       server.copy(
         maxMessageSize = Math.min(server.maxMessageSize, 16 * 1024 * 1024) // Do not exceed HTTP2 RFC 7540

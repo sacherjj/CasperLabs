@@ -30,6 +30,7 @@ class TcpTransportLayer(
     cert: String,
     key: String,
     maxMessageSize: Int,
+    chunkSize: Int,
     tempFolder: Path,
     clientQueueSize: Int
 )(
@@ -200,7 +201,7 @@ class TcpTransportLayer(
           case Right(packet) =>
             withClient(toStream.peerNode, enforce = false) { stub =>
               val blob = Blob(toStream.sender, packet)
-              stub.stream(Observable.fromIterator(Task(Chunker.chunkIt(blob, maxMessageSize))))
+              stub.stream(Observable.fromIterator(Task(Chunker.chunkIt(blob, chunkSize))))
             }.attempt
               .flatMap {
                 case Left(error) =>

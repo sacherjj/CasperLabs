@@ -102,7 +102,8 @@ private[configuration] object Options {
         options.run.serverStoreType,
         options.run.serverDataDir,
         options.run.serverMaxNumOfConnections,
-        options.serverMaxMessageSize
+        options.serverMaxMessageSize,
+        options.serverChunkSize
       )
       val grpcServer = ConfigurationSoft.GrpcServer(
         options.grpcHost,
@@ -235,6 +236,12 @@ private[configuration] final case class Options(
     opt[Int](
       descr =
         s"Int. Maximum size of message that can be sent via transport layer.${s(_.maxMessageSize)}"
+    )
+
+  val serverChunkSize =
+    opt[Int](
+      descr =
+        s"Int. Size of chunks to split larger payloads into when streamed via transport layer.${s(_.chunkSize)}"
     )
 
   val diagnostics = new Subcommand("diagnostics") {
