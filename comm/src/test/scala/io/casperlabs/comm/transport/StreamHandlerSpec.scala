@@ -95,7 +95,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     val packet  = Packet(BlockMessage.id, ByteString.copyFrom(content))
     val sender  = peerNode("sender")
     val blob    = Blob(sender, packet)
-    Observable.fromIterator(Chunker.chunkIt(blob, messageSize))
+    Observable.fromIterator(Task(Chunker.chunkIt(blob, messageSize)))
   }
 
   private def peerNode(name: String): PeerNode =

@@ -143,7 +143,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
             case p if p.isNoResponse => Right(None)
             case TLResponse.Payload.InternalServerError(ise) =>
               Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
-          }
+        }
       )
 
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
@@ -185,7 +185,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
         case Right(packet) =>
           withClient(peer, enforce = false) { stub =>
             val blob = Blob(sender, packet)
-            stub.stream(Observable.fromIterator(Chunker.chunkIt(blob, maxMessageSize)))
+            stub.stream(Observable.fromIterator(Task(Chunker.chunkIt(blob, maxMessageSize))))
           }.attempt
             .flatMap {
               case Left(error) => log.error(s"Error while streaming packet, error: $error")
