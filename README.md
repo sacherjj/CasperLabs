@@ -26,7 +26,7 @@ TBD
 
 ## Developer guide
 
-TBD
+For building of CasperLabs, please refer to the [Developer guide](DEVELOPER.md)
 
 ### Caveats
 
