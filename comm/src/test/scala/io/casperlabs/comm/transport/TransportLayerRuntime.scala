@@ -1,21 +1,20 @@
 package io.casperlabs.comm.transport
 
-import java.util.concurrent.atomic.AtomicInteger
+import java.net.ServerSocket
 
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.Random
-
 import cats._
 import cats.effect.Timer
 import cats.effect.concurrent.MVar
 import cats.implicits._
-
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm._
 import io.casperlabs.comm.protocol.routing.Protocol
 import io.casperlabs.comm.CommError.CommErr
 import io.casperlabs.comm.rp.ProtocolHelper
+import io.casperlabs.shared.Resources
 
 abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
 
@@ -27,20 +26,24 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
 
   def extract[A](fa: F[A]): A
 
-  private val nextPort = new AtomicInteger((Random.nextInt(100) + 400 + 1) * 100)
+  private def getFreePort: Int =
+    Resources.withResource(new ServerSocket(0)) { s =>
+      s.setReuseAddress(true)
+      s.getLocalPort
+    }
 
   def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
     for {
-      e1 <- createEnvironment(nextPort.incrementAndGet())
-      e2 <- createEnvironment(nextPort.incrementAndGet())
+      e1 <- createEnvironment(getFreePort)
+      e2 <- createEnvironment(getFreePort)
       r  <- block(e1, e2)
     } yield r
 
   def threeNodesEnvironment[A](block: (E, E, E) => F[A]): F[A] =
     for {
-      e1 <- createEnvironment(nextPort.incrementAndGet())
-      e2 <- createEnvironment(nextPort.incrementAndGet())
-      e3 <- createEnvironment(nextPort.incrementAndGet())
+      e1 <- createEnvironment(getFreePort)
+      e2 <- createEnvironment(getFreePort)
+      e3 <- createEnvironment(getFreePort)
       r  <- block(e1, e2, e3)
     } yield r
 
