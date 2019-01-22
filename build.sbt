@@ -118,7 +118,7 @@ lazy val comm = (project in file("comm"))
       grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(crypto, smartContracts)
+  .dependsOn(shared % "compile->compile;test->test", crypto, smartContracts)
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)

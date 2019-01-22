@@ -15,7 +15,7 @@ import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.Time
-
+import io.casperlabs.shared.TestOutlaws._
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
 

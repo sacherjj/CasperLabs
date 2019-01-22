@@ -2,6 +2,7 @@ package io.casperlabs.comm.rp
 
 import Connect._
 import org.scalatest._
+import io.casperlabs.shared.TestOutlaws._
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm._, CommError._
 import io.casperlabs.p2p.effects._

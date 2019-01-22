@@ -12,6 +12,7 @@ import io.casperlabs.catscontrib._, Catscontrib._, ski._
 import io.casperlabs.shared._
 import io.casperlabs.comm.transport._
 import io.casperlabs.comm.rp.ProtocolHelper._
+import io.casperlabs.shared.TestOutlaws._
 
 class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 

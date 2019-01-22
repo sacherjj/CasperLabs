@@ -5,6 +5,7 @@ import scala.concurrent.duration._
 import cats._
 
 import io.casperlabs.catscontrib._
+import io.casperlabs.shared.TestOutlaws._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm._
 import io.casperlabs.comm.CommError._

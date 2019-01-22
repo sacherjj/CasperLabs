@@ -31,7 +31,7 @@ import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.casper.scalatestcontrib._
-
+import io.casperlabs.shared.TestOutlaws._
 import scala.collection.immutable
 
 class HashSetCasperTest extends FlatSpec with Matchers {
