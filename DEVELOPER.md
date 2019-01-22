@@ -143,7 +143,7 @@ For a more convenient experience, you can share a folder on your Mac with the vi
 
 ### Communication
 
-The [comm](comm) subproject contains code for network related operations for RChain.
+The [comm](comm) subproject contains code for network related operations.
 
 ```
 TBD
