@@ -57,9 +57,9 @@ class NodeRuntime private[node] (
 
   import ApplicativeError_._
 
-  private val port              = conf.server.port
-  private val kademliaPort      = conf.server.kademliaPort
-  private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
+  private val port           = conf.server.port
+  private val kademliaPort   = conf.server.kademliaPort
+  private val defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
   case class Servers(
       grpcServerExternal: GrpcServer,
