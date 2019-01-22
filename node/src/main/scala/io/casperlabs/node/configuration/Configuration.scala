@@ -105,7 +105,11 @@ object Configuration {
       optToValidated(confSoft.server.flatMap(_.storeType), "Server.storeType"),
       optToValidated(confSoft.server.flatMap(_.maxNumOfConnections), "Server.maxNumOfConnections"),
       optToValidated(confSoft.server.flatMap(_.maxMessageSize), "Server.maxMessageSize")
-    ).mapN(Configuration.Server.apply)
+    ).mapN(Configuration.Server.apply).map { server =>
+      server.copy(
+        maxMessageSize = Math.min(server.maxMessageSize, 16 * 1024 * 1024) // Do not exceed HTTP2 RFC 7540
+      )
+    }
 
   private def parseGrpcServer(
       confSoft: ConfigurationSoft
