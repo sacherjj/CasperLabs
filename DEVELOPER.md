@@ -1,21 +1,45 @@
 ## Building and running
 
-TBD
-
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Prerequisites
-* Java Development Kit (JDK), version 8. We recommend using the OpenJDK
+* Java Development Kit (JDK), version 10. We recommend using the OpenJDK
 * [sbt](https://www.scala-sbt.org/download.html)
+* [rust](https://www.rust-lang.org/tools/install)
+* [protoc](https://github.com/protocolbuffers/protobuf/releases)
+
+#### CasperLabs Development Environment on Ubuntu and Debian
+Java:
+```console
+dev@dev:~$ sudo apt install openjdk-11-jdk -y
+...
+
+dev@dev:~/CasperLabs$ java -version
+openjdk version "10.0.2" 2018-07-17
+OpenJDK Runtime Environment (build 10.0.2+13-Ubuntu-1ubuntu0.18.04.4)
+OpenJDK 64-Bit Server VM (build 10.0.2+13-Ubuntu-1ubuntu0.18.04.4, mixed mode)
+```
+
+sbt:
+```console
+dev@dev:~/CasperLabs$ echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
+dev@dev:~/CasperLabs$ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+dev@dev:~/CasperLabs$ sudo apt-get update
+dev@dev:~/CasperLabs$ sudo apt-get install sbt -y
+
+dev@dev:~$ sbt sbtVersion
+[info] Loading project definition from /home/dev/project
+[info] Set current project to dev (in build file:/home/dev/)
+[info] 1.2.8
+```
+
+rust:
+
+
 
 #### Development environment on macOS
 
 TBD
-
-#### Development environment on Ubuntu and Debian
-```
-TBD
-```
 
 #### Development environment on Fedora
 ```
@@ -34,11 +58,14 @@ TBD
 ```
 
 #### Building and running
-TBD
+Once the above prerequistes are installed, you are ready to build. 
 
-Example
-```
-TBD
+Node and Client - Run from the root directory:
+```console
+dev@dev:~/CasperLabs$ sbt node/universal:stage client/universal:stage
+[output] 
+...
+[success] Total time: 6 s, completed Jan 22, 2019, 11:21:00 PM
 ```
 
 ## Information for developers
@@ -48,26 +75,26 @@ Assure prerequisites shown above are met.
 
 When working in a single project, scope all `sbt` commands to that project. The most effective way is to maintain a running `sbt` instance, invoked from the project root:
 ```
-$ sbt
-[info] Loading settings from plugins.sbt ...
-[info] Loading global plugins from /home/kirkwood/.sbt/1.0/plugins
-[info] Loading settings from plugins.sbt,protoc.sbt ...
-[info] Loading project definition from /home/kirkwood/src/rchain/project
-[info] Loading settings from build.sbt ...
-[info] Set current project to rchain (in build file:/home/kirkwood/src/rchain/)
-[info] sbt server started at local:///home/kirkwood/.sbt/1.0/server/e6a65c30ec6e52272d3a/sock
-sbt:rchain> project rspace
-[info] Set current project to rspace (in build file:/home/kirkwood/src/rchain/)
-sbt:rspace> compile
-[... compiling rspace ...]
+dev@dev:~/CasperLabs$ sbt
+[info] Loading settings for project casperlabs-build from plugins.sbt ...
+[info] Loading project definition from /home/dev/CasperLabs/project
+[info] Loading settings for project casperlabs from build.sbt ...
+[info] Set current project to casperlabs (in build file:/home/dev/CasperLabs/)
+[info] sbt server started at local:///home/dev/.sbt/1.0/server/0415e009bb0a13209                                                                                                                                                             cb0/sock
+sbt:casperlabs> project node
+[info] Set current project to node (in build file:/home/dev/CasperLabs/)
+sbt:node> stage
+...
+[info] Done packaging.
+[success] Total time: 113 s, completed Jan 22, 2019, 10:53:37 PM
 ```
 but single-line commands work, too:
 ```
-$ sbt "project rspace" clean compile test
+$ sbt "project node" clean compile test
 ```
 or
 ```
-$ sbt rspace/clean rspace/compile rspace/test
+$ sbt node/clean node/compile node/test
 ```
 
 ### Building
