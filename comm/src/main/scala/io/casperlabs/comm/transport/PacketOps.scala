@@ -1,22 +1,17 @@
 package io.casperlabs.comm.transport
 
-import io.casperlabs.comm.{CommError, PeerNode}
-import CommError._
-import io.casperlabs.comm.protocol.routing._
-import java.nio.file._
-
-import com.google.protobuf.CodedOutputStream
-import io.casperlabs.shared.GracefulClose._
 import java.io._
+import java.nio.file._
 import java.text.SimpleDateFormat
+import java.util.Date
 
-import cats._
-import cats.data._
-import cats.implicits._
 import cats.effect.Sync
-import java.util.{Date, UUID}
-
+import cats.implicits._
+import io.casperlabs.comm.CommError
+import io.casperlabs.comm.CommError._
+import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.shared.GracefulClose._
 
 import scala.util.Random
 
@@ -60,14 +55,15 @@ object PacketOps {
   def createPacketFile[F[_]: Sync](folder: Path, postfix: String): F[PacketFile] =
     for {
       _        <- Sync[F].delay(folder.toFile.mkdirs())
-      fileName <- Sync[F].delay(timestamp + postfix)
+      t        <- timestamp
+      fileName = t + postfix
       file     <- Sync[F].delay(folder.resolve(fileName))
       fos      <- Sync[F].delay(new FileOutputStream(file.toFile))
     } yield PacketFile(file, fos)
 
   private val TS_FORMAT = "yyyyMMddHHmmss"
 
-  private def timestamp: String = {
+  private def timestamp[F[_]: Sync]: F[String] = Sync[F].delay {
     val dateFormat = new SimpleDateFormat(TS_FORMAT)
     val bytes      = Array.ofDim[Byte](4)
     Random.nextBytes(bytes)
