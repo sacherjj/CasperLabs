@@ -55,6 +55,7 @@ package object effects {
       certPath: Path,
       keyPath: Path,
       maxMessageSize: Int,
+      chunkSize: Int,
       folder: Path
   )(
       implicit scheduler: Scheduler,
@@ -63,7 +64,7 @@ package object effects {
   ): TcpTransportLayer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-    new TcpTransportLayer(port, cert, key, maxMessageSize, folder, 100)
+    new TcpTransportLayer(port, cert, key, maxMessageSize, chunkSize, folder, 100)
   }
 
   def rpConnections: Task[ConnectionsCell[Task]] =

@@ -13,6 +13,7 @@ store-type = "lmdb"
 data-dir = "test"
 max-num-of-connections = 1
 max-message-size = 1
+chunk-size = 1
 
 [lmdb]
 path = "test"

@@ -34,7 +34,8 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       storeType = StoreType.LMDB.some,
       dataDir = Paths.get("test").some,
       maxNumOfConnections = 1.some,
-      maxMessageSize = 1.some
+      maxMessageSize = 1.some,
+      chunkSize = 1.some
     )
     val grpcServer = GrpcServer(
       host = "test".some,
@@ -109,6 +110,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       |data-dir = "test2"
       |max-num-of-connections = 2
       |max-message-size = 2
+      |chunk-size = 2
       |
       |[lmdb]
       |path = "test2"
@@ -174,7 +176,8 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       storeType = StoreType.InMem.some,
       dataDir = Paths.get("test2").some,
       maxNumOfConnections = 2.some,
-      maxMessageSize = 2.some
+      maxMessageSize = 2.some,
+      chunkSize = 2.some
     )
     val grpcServer = GrpcServer(
       host = "test2".some,
@@ -237,6 +240,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     List("--grpc-port", "3"),
     List("--config-file", configFilename),
     List("--server-max-message-size", "3"),
+    List("--server-chunk-size", "3"),
     List("run"),
     List("--casper-bonds-file", "test3"),
     List("--casper-deploy-timestamp", "3"),
@@ -296,7 +300,8 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       storeType = StoreType.Mixed.some,
       dataDir = Paths.get("test3").some,
       maxNumOfConnections = 3.some,
-      maxMessageSize = 3.some
+      maxMessageSize = 3.some,
+      chunkSize = 3.some
     )
     val grpcServer = GrpcServer(
       host = "test3".some,
@@ -403,6 +408,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
           None,
           Paths.get("another_test_dir").some,
           None,
+          None,
           None
         ).some,
         None,
@@ -430,6 +436,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
           None,
           None,
           Paths.get("default_test_dir").some,
+          None,
           None,
           None
         ).some,

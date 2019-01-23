@@ -37,7 +37,8 @@ object Configuration {
       mapSize: Long,
       storeType: StoreType,
       maxNumOfConnections: Int,
-      maxMessageSize: Int
+      maxMessageSize: Int,
+      chunkSize: Int
   )
   case class GrpcServer(
       host: String,
@@ -104,8 +105,17 @@ object Configuration {
       optToValidated(confSoft.server.flatMap(_.mapSize), "Server.mapSize"),
       optToValidated(confSoft.server.flatMap(_.storeType), "Server.storeType"),
       optToValidated(confSoft.server.flatMap(_.maxNumOfConnections), "Server.maxNumOfConnections"),
-      optToValidated(confSoft.server.flatMap(_.maxMessageSize), "Server.maxMessageSize")
-    ).mapN(Configuration.Server.apply)
+      optToValidated(confSoft.server.flatMap(_.maxMessageSize), "Server.maxMessageSize"),
+      optToValidated(confSoft.server.flatMap(_.chunkSize), "Server.chunkSize")
+    ).mapN(Configuration.Server.apply).map { server =>
+      // Do not exceed HTTP2 RFC 7540
+      val maxMessageSize = Math.min(server.maxMessageSize, 16 * 1024 * 1024)
+      val chunkSize      = Math.min(server.chunkSize, maxMessageSize)
+      server.copy(
+        maxMessageSize = maxMessageSize,
+        chunkSize = chunkSize
+      )
+    }
 
   private def parseGrpcServer(
       confSoft: ConfigurationSoft

@@ -92,7 +92,7 @@ object StreamHandler {
               logger.error(s"Was unable to delete file ${msg.sender} ${msg.path}", ex).as(res)
             case Right(_) => res.pure[Task]
           }
-    )
+      )
 
   private def fetchContent(path: Path): Task[Array[Byte]] = Task.delay(Files.readAllBytes(path))
   private def decompressContent(
