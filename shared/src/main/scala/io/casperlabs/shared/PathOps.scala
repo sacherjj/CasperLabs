@@ -1,7 +1,7 @@
 package io.casperlabs.shared
 
-import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file._
+import java.nio.file.attribute.BasicFileAttributes
 
 import cats.effect.Sync
 
@@ -46,15 +46,16 @@ object PathOps {
       import java.io.File
       import java.util.Comparator
 
-      import scala.collection.JavaConverters._
-
       import cats.implicits._
+
+      import scala.collection.JavaConverters._
 
       def deleteFile(file: File): F[Unit] =
         for {
-          deleted <- Sync[F].delay(file.delete)
-          _ <- if (deleted) Log[F].info(s"Deleted file ${file.getAbsolutePath}")
-              else Log[F].warn(s"Can't delete file ${file.getAbsolutePath}")
+          _ <- Sync[F]
+                .delay(file.delete)
+                .ifM(Log[F].info(s"Deleted file ${file.getAbsolutePath}"),
+                     Log[F].warn(s"Can't delete file ${file.getAbsolutePath}"))
         } yield ()
 
       def getFiles: F[List[Path]] = Sync[F].delay(
@@ -79,7 +80,7 @@ object PathOps {
                 Log[F].warn(s"Can't delete file or directory $path: No such file")
               case Left(t) =>
                 Log[F].error(s"Can't delete file or directory $path: ${t.getMessage}", t)
-              case _ => ().pure[F]
+              case Right(_) => ().pure[F]
             }
       } yield ()
     }
