@@ -1,45 +1,252 @@
-## Building and running
-
-TBD
+## Developer's Guide to Building and Running CasperLabs
 
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Prerequisites
-* Java Development Kit (JDK), version 8. We recommend using the OpenJDK
+* [OpenJDK](https://openjdk.java.net) Java Development Kit (JDK), version 10. We recommend using the OpenJDK
 * [sbt](https://www.scala-sbt.org/download.html)
+* [rust](https://www.rust-lang.org/tools/install)
+* [protoc](https://github.com/protocolbuffers/protobuf/releases)
 
-#### Development environment on macOS
+### CasperLabs Development Environment on Ubuntu and Debian
+<details>
+  <summary>Click to expand!</summary>
+  
+  Java:
+  ```console
+  dev@dev:~$ sudo apt install openjdk-11-jdk -y
+  ...
 
-TBD
+  dev@dev:~/CasperLabs$ java -version
+  openjdk version "10.0.2" 2018-07-17
+  OpenJDK Runtime Environment (build 10.0.2+13-Ubuntu-1ubuntu0.18.04.4)
+  OpenJDK 64-Bit Server VM (build 10.0.2+13-Ubuntu-1ubuntu0.18.04.4, mixed mode)
+  ```
 
-#### Development environment on Ubuntu and Debian
+  sbt:
+  ```console
+  dev@dev:~/CasperLabs$ echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
+  dev@dev:~/CasperLabs$ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+  dev@dev:~/CasperLabs$ sudo apt-get update
+  dev@dev:~/CasperLabs$ sudo apt-get install sbt -y
+
+  dev@dev:~$ sbt sbtVersion
+  [info] Loading project definition from /home/dev/project
+  [info] Set current project to dev (in build file:/home/dev/)
+  [info] 1.2.8
+  ```
+
+  rust:
+  ```console
+  dev@dev:~$ curl https://sh.rustup.rs -sSf | sh
+  ...
+  1) Proceed with installation (default)
+  2) Customize installation
+  3) Cancel installation
+  >1
+  ...
+  Rust is installed now. Great!
+
+  To get started you need Cargo's bin directory ($HOME/.cargo/bin) in your PATH
+  environment variable. Next time you log in this will be done automatically.
+
+  To configure your current shell run source $HOME/.cargo/env
+
+  dev@dev:~$ source $HOME/.cargo/env
+
+  dev@dev:~$ rustup update
+  info: syncing channel updates for 'stable-x86_64-unknown-linux-gnu'
+  info: checking for self-updates
+
+    stable-x86_64-unknown-linux-gnu unchanged - rustc 1.32.0 (9fda7c223 2019-01-16)
+
+  dev@dev:~$ rustup toolchain install nightly
+  info: syncing channel updates for 'nightly-x86_64-unknown-linux-gnu'
+  info: latest update on 2019-01-23, rust version 1.33.0-nightly (4c2be9c97 2019-01-22)
+  ...
+
+    nightly-x86_64-unknown-linux-gnu installed - rustc 1.33.0-nightly (4c2be9c97 2019-01-22)
+
+  dev@dev:~$ rustup target add wasm32-unknown-unknown --toolchain nightly
+  info: downloading component 'rust-std' for 'wasm32-unknown-unknown'
+   10.0 MiB /  10.0 MiB (100 %)   2.6 MiB/s ETA:   0 s
+  info: installing component 'rust-std' for 'wasm32-unknown-unknown'
+  ```
+
+  protoc:
+  ```console
+  dev@dev:~$ PROTOC_VERSION=3.6.1
+  dev@dev:~$ PROTOC_ZIP=protoc-$PROTOC_VERSION-linux-x86_64.zip
+  dev@dev:~$ curl -OL https://github.com/google/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP
+    % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                   Dload  Upload   Total   Spent    Left  Speed
+  100   164    0   164    0     0    301      0 --:--:-- --:--:-- --:--:--   300
+  100   619    0   619    0     0    923      0 --:--:-- --:--:-- --:--:--   923
+  100 1390k  100 1390k    0     0   973k      0  0:00:01  0:00:01 --:--:-- 3029k
+  dev@dev:~$ sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
+  Archive:  protoc-3.6.1-linux-x86_64.zip
+    inflating: /usr/local/bin/protoc
+  dev@dev:~$ rm -f $PROTOC_ZIP
+
+  dev@dev:~$ protoc --version
+  libprotoc 3.6.1
+  ```
+</details>
+
+### CasperLabs Development Environment on macOS
+<details>
+  <summary>Click to expand!</summary>
+
+  Brew:
+  On a Mac, Homebrew is helpful for installing software. Install it here: 
+  ```console
+  dev@dev:~$ /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+  ```
+  Cask is an extension of Brew:
+  ```console
+  dev@dev:~$ brew tap caskroom/cask
+  ```
+  
+  Java:
+  ```console
+  dev@dev:~$ brew cask install java10
+  
+  dev@dev:~$ java -version
+  ```
+
+  sbt:
+  ```console
+  dev@dev:~$ brew install sbt@1
+  ```
+  
+  Rust:
+  ```console
+  dev@dev:~$ brew install rustup
+  ...
+  
+  dev@dev:~$rustup-init
+  Welcome to Rust!
+
+  This will download and install the official compiler for the Rust programming 
+  language, and its package manager, Cargo.
+
+  It will add the cargo, rustc, rustup and other commands to Cargo's bin 
+  directory, located at:
+
+    /Users/dev/.cargo/bin
+
+  This path will then be added to your PATH environment variable by modifying the
+  profile file located at:
+
+    /Users/dev/.profile
+
+  You can uninstall at any time with rustup self uninstall and these changes will
+  be reverted.
+
+
+  Rust is installed now. Great!
+
+  To get started you need Cargo's bin directory ($HOME/.cargo/bin) in your PATH 
+  environment variable. Next time you log in this will be done automatically.
+
+  To configure your current shell run source $HOME/.cargo/env
+  
+  dev@dev:~$ source $HOME/.cargo/env
+  
+  dev@dev:~$ rustup update
+  ...
+  
+  dev@dev:~$ rustup toolchain install nightly
+  ...
+  
+  dev@dev:~$ rustup target add wasm32-unknown-unknown --toolchain nightly
+  ...
+  ```
+  
+  protoc:
+  ```console
+  dev@dev:~$ brew install protobuf
+  ...
+  
+  dev@dev:~$ protoc --version
+  ```
+</details>
+
+### CasperLabs Development Environment on Fedora
 ```
 TBD
 ```
 
-#### Development environment on Fedora
-```
-TBD
-```
-
-#### Development environment on ArchLinux
+### CasperLabs Development Environment on ArchLinux
 You can use `pacaur` or other AUR installer instead of [`trizen`](https://github.com/trizen/trizen).
 ```
 TBD
 ```
 
-#### <a name="build-bnfc-with-stack"></a> Building BNFC with [`stack`](https://docs.haskellstack.org)
+Once the above prerequistes are installed for your environment, you are ready to build.
+
+### How to build components
+#### Build proto defitnitions:
+This is required only when the `ipc.proto` file changes (but this is true when you run it for the first time).
+  1. Go to Execution Engine root directory. This is `execution-engine` directory in the node's root dir.
+  2. Go to comm project directory (`cd comm`).
+  3. Run: `cargo run --bin grpc-protoc`
+  
+#### Build Wasm contracts:
+  1. Go to contract that interests you in the `contracts-example` directory.
+  2. To compile Rust contract to Wasm, in the root dir of the contract (where Cargo.toml is defined) you need to run: `cargo build --        release --target wasm32-unknown-unknown`. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory.      We will use this file when deploying a contract. For the purposes of "Hello World" demo we use `store-hello-world` and `call-hello-      name` contracts.
+  3. If `cargo build --release ...`  doesn't work try `cargo +nightly build ...`
+
+#### Building node:
+  1. Go to node's root directory (it's where `build.sbt` file is located).
+  2. Run `sbt -mem 5000 node/universal:stage`
+
+#### Building node's client:
+  1. Go to node's root directory (it's where `build.sbt` file is located).
+  2. Run `sbt -mem 5000 client/universal:stage`
+
+#### Building Execution Engine:
+  1. Go to Execution Engine root directory. This is `execution-engine` directory in the node's root dir.
+  2. Go to comm project directory (`cd comm`)
+  3. Run `cargo build`
+  
+### Running components
+For ease of use node assumes a default directory that is `~/.casperlabs/` First you have to create a hidden directory.
+
+#### Run the node
+In the root of the node (where build.sbt lives).
+
+If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
+
 ```
-TBD
+./node/target/universal/stage/bin/node run --casper-validator-private-key <private key from bonds.txt file> --casper-validator-public-key <public key from bonds.txt file> -s
 ```
 
-#### Building and running
-TBD
+#### Run the Execution Engine
+In the root of th EE (`execution-engine/comm/`), run:
 
-Example
 ```
-TBD
+cargo run --bin engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
+
+.caspernode.sock is default socket file used for IPC communication.
+
+### Deploying data
+In the root of the node, run:
+
+```
+./client/target/universal/stage/bin/client --host 127.0.0.1 --port 40401 deploy --from 00000000000000000000 --gas-limit 100000000 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
+```
+
+At the moment, payment wasm file is not used so use the same file as for the `--session`.
+
+After deploying contract it's not yet executed (its effects are not applied to the global state), so you have to `propose` a block. Run:
+
+```
+./client/target/universal/stage/bin/client --host 127.0.0.1 --port 40401 propose
+```
+
+For the demo purposes we have to propose contracts separately because second contract (`call-hello-name`) won't see the changes (in practice it won't be able to call `store-hello-world` contract) from the previous deploy.
 
 ## Information for developers
 Assure prerequisites shown above are met.
@@ -48,26 +255,26 @@ Assure prerequisites shown above are met.
 
 When working in a single project, scope all `sbt` commands to that project. The most effective way is to maintain a running `sbt` instance, invoked from the project root:
 ```
-$ sbt
-[info] Loading settings from plugins.sbt ...
-[info] Loading global plugins from /home/kirkwood/.sbt/1.0/plugins
-[info] Loading settings from plugins.sbt,protoc.sbt ...
-[info] Loading project definition from /home/kirkwood/src/rchain/project
-[info] Loading settings from build.sbt ...
-[info] Set current project to rchain (in build file:/home/kirkwood/src/rchain/)
-[info] sbt server started at local:///home/kirkwood/.sbt/1.0/server/e6a65c30ec6e52272d3a/sock
-sbt:rchain> project rspace
-[info] Set current project to rspace (in build file:/home/kirkwood/src/rchain/)
-sbt:rspace> compile
-[... compiling rspace ...]
+dev@dev:~/CasperLabs$ sbt
+[info] Loading settings for project casperlabs-build from plugins.sbt ...
+[info] Loading project definition from /home/dev/CasperLabs/project
+[info] Loading settings for project casperlabs from build.sbt ...
+[info] Set current project to casperlabs (in build file:/home/dev/CasperLabs/)
+[info] sbt server started at local:///home/dev/.sbt/1.0/server/0415e009bb0a13209                                                                                                                                                             cb0/sock
+sbt:casperlabs> project node
+[info] Set current project to node (in build file:/home/dev/CasperLabs/)
+sbt:node> stage
+...
+[info] Done packaging.
+[success] Total time: 113 s, completed Jan 22, 2019, 10:53:37 PM
 ```
 but single-line commands work, too:
 ```
-$ sbt "project rspace" clean compile test
+$ sbt "project node" clean compile test
 ```
 or
 ```
-$ sbt rspace/clean rspace/compile rspace/test
+$ sbt node/clean node/compile node/test
 ```
 
 ### Building
