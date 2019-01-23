@@ -2,13 +2,13 @@ package io.casperlabs.comm.transport
 
 import java.io.FileOutputStream
 import java.nio.file.{Files, Path}
-import java.util.UUID
 
 import cats.data._
 import cats.implicits._
 import io.casperlabs.comm.PeerNode
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.ProtocolHelper
+import io.casperlabs.comm.transport.PacketOps._
 import io.casperlabs.shared.Compression._
 import io.casperlabs.shared.GracefulClose._
 import io.casperlabs.shared._
@@ -28,7 +28,7 @@ object StreamHandler {
   def handleStream(
       folder: Path,
       stream: Observable[Chunk]
-  )(implicit logger: Log[Task]): Task[Either[Throwable, StreamMessage]] =
+  ): Task[Either[Throwable, StreamMessage]] =
     init(folder)
       .bracket { initStmd =>
         (collect(initStmd, stream) >>= toResult).value
@@ -38,10 +38,9 @@ object StreamHandler {
 
   private def init(folder: Path): Task[Streamed] =
     for {
-      _        <- Task.delay(folder.toFile.mkdirs())
-      fileName <- Task.delay(UUID.randomUUID.toString + "_packet_streamed.bts")
-      file     <- Task.delay(folder.resolve(fileName))
-      fos      <- Task.delay(new FileOutputStream(file.toFile))
+      packetFile <- createPacketFile[Task](folder, "_packet_streamed.bts")
+      file       = packetFile.file
+      fos        = packetFile.fos
     } yield Streamed(fos = fos, path = file)
 
   private def collect(

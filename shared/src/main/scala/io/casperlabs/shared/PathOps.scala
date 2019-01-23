@@ -4,6 +4,7 @@ import java.nio.file._
 import java.nio.file.attribute.BasicFileAttributes
 
 import cats.effect.Sync
+import cats.implicits._
 
 object PathOps {
 
@@ -42,7 +43,29 @@ object PathOps {
     }
 
   implicit class PathDelete(path: Path) {
-    def delete[F[_]: Sync: Log]()(implicit logSource: LogSource): F[Unit] = {
+    def deleteSingleFile[F[_]: Sync: Log]()(implicit logSource: LogSource): F[Unit] = {
+
+      def delete(): F[Unit] =
+        for {
+          result <- Sync[F].delay(path.toFile.delete).attempt
+          _ <- result match {
+                case Left(t) =>
+                  Log[F].error(s"Can't delete file $path: ${t.getMessage}", t)
+                case Right(false) =>
+                  Log[F].warn(s"Can't delete file $path.")
+                case Right(true) =>
+                  Log[F].debug(s"Deleted file $path")
+              }
+        } yield ()
+
+      for {
+        _ <- Sync[F]
+              .delay(path.toFile.exists)
+              .ifM(delete(), Log[F].warn(s"Can't delete file $path. File not found."))
+      } yield ()
+    }
+
+    def deleteDirectory[F[_]: Sync: Log]()(implicit logSource: LogSource): F[Unit] = {
       import java.io.File
       import java.util.Comparator
 
@@ -54,8 +77,10 @@ object PathOps {
         for {
           _ <- Sync[F]
                 .delay(file.delete)
-                .ifM(Log[F].info(s"Deleted file ${file.getAbsolutePath}"),
-                     Log[F].warn(s"Can't delete file ${file.getAbsolutePath}"))
+                .ifM(
+                  Log[F].info(s"Deleted file ${file.getAbsolutePath}"),
+                  Log[F].warn(s"Can't delete file ${file.getAbsolutePath}")
+                )
         } yield ()
 
       def getFiles: F[List[Path]] = Sync[F].delay(

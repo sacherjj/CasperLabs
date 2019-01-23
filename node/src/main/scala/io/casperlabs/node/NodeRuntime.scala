@@ -95,7 +95,7 @@ class NodeRuntime private[node] (
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
     commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
-    _                    <- commTmpFolder.delete[Task]().toEffect
+    _                    <- commTmpFolder.deleteDirectory[Task]().toEffect
     transport = effects.tcpTransportLayer(
       port,
       conf.tls.certificate,
