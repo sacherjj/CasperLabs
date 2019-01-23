@@ -168,6 +168,7 @@ __Note__ Successfully building from source requires attending to all of the prer
   
   dev@dev:~$ protoc --version
   ```
+</details>
 
 ### CasperLabs Development Environment on Fedora
 ```
