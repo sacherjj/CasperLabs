@@ -9,85 +9,89 @@ __Note__ Successfully building from source requires attending to all of the prer
 * [protoc](https://github.com/protocolbuffers/protobuf/releases)
 
 #### CasperLabs Development Environment on Ubuntu and Debian
-Java:
-```console
-dev@dev:~$ sudo apt install openjdk-11-jdk -y
-...
-
-dev@dev:~/CasperLabs$ java -version
-openjdk version "10.0.2" 2018-07-17
-OpenJDK Runtime Environment (build 10.0.2+13-Ubuntu-1ubuntu0.18.04.4)
-OpenJDK 64-Bit Server VM (build 10.0.2+13-Ubuntu-1ubuntu0.18.04.4, mixed mode)
-```
-
-sbt:
-```console
-dev@dev:~/CasperLabs$ echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
-dev@dev:~/CasperLabs$ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
-dev@dev:~/CasperLabs$ sudo apt-get update
-dev@dev:~/CasperLabs$ sudo apt-get install sbt -y
-
-dev@dev:~$ sbt sbtVersion
-[info] Loading project definition from /home/dev/project
-[info] Set current project to dev (in build file:/home/dev/)
-[info] 1.2.8
-```
-
-rust:
-```console
-dev@dev:~$ curl https://sh.rustup.rs -sSf | sh
-...
-1) Proceed with installation (default)
-2) Customize installation
-3) Cancel installation
->1
-...
-Rust is installed now. Great!
-
-To get started you need Cargo's bin directory ($HOME/.cargo/bin) in your PATH
-environment variable. Next time you log in this will be done automatically.
-
-To configure your current shell run source $HOME/.cargo/env
-
-dev@dev:~$ source $HOME/.cargo/env
-
-dev@dev:~$ rustup update
-info: syncing channel updates for 'stable-x86_64-unknown-linux-gnu'
-info: checking for self-updates
-
-  stable-x86_64-unknown-linux-gnu unchanged - rustc 1.32.0 (9fda7c223 2019-01-16)
+<details>
+  <summary>Click to expand!</summary>
   
-dev@dev:~$ rustup toolchain install nightly
-info: syncing channel updates for 'nightly-x86_64-unknown-linux-gnu'
-info: latest update on 2019-01-23, rust version 1.33.0-nightly (4c2be9c97 2019-01-22)
-...
+  Java:
+  ```console
+  dev@dev:~$ sudo apt install openjdk-11-jdk -y
+  ...
 
-  nightly-x86_64-unknown-linux-gnu installed - rustc 1.33.0-nightly (4c2be9c97 2019-01-22)
-  
-dev@dev:~$ rustup target add wasm32-unknown-unknown --toolchain nightly
-info: downloading component 'rust-std' for 'wasm32-unknown-unknown'
- 10.0 MiB /  10.0 MiB (100 %)   2.6 MiB/s ETA:   0 s
-info: installing component 'rust-std' for 'wasm32-unknown-unknown'
-```
+  dev@dev:~/CasperLabs$ java -version
+  openjdk version "10.0.2" 2018-07-17
+  OpenJDK Runtime Environment (build 10.0.2+13-Ubuntu-1ubuntu0.18.04.4)
+  OpenJDK 64-Bit Server VM (build 10.0.2+13-Ubuntu-1ubuntu0.18.04.4, mixed mode)
+  ```
 
-protoc:
-```console
-dev@dev:~$ PROTOC_VERSION=3.6.1
-dev@dev:~$ PROTOC_ZIP=protoc-$PROTOC_VERSION-linux-x86_64.zip
-dev@dev:~$ curl -OL https://github.com/google/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-100   164    0   164    0     0    301      0 --:--:-- --:--:-- --:--:--   300
-100   619    0   619    0     0    923      0 --:--:-- --:--:-- --:--:--   923
-100 1390k  100 1390k    0     0   973k      0  0:00:01  0:00:01 --:--:-- 3029k
-dev@dev:~$ sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
-Archive:  protoc-3.6.1-linux-x86_64.zip
-  inflating: /usr/local/bin/protoc
-dev@dev:~$ rm -f $PROTOC_ZIP
+  sbt:
+  ```console
+  dev@dev:~/CasperLabs$ echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
+  dev@dev:~/CasperLabs$ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+  dev@dev:~/CasperLabs$ sudo apt-get update
+  dev@dev:~/CasperLabs$ sudo apt-get install sbt -y
 
-dev@dev:~$ protoc --version
-libprotoc 3.6.1
-```
+  dev@dev:~$ sbt sbtVersion
+  [info] Loading project definition from /home/dev/project
+  [info] Set current project to dev (in build file:/home/dev/)
+  [info] 1.2.8
+  ```
+
+  rust:
+  ```console
+  dev@dev:~$ curl https://sh.rustup.rs -sSf | sh
+  ...
+  1) Proceed with installation (default)
+  2) Customize installation
+  3) Cancel installation
+  >1
+  ...
+  Rust is installed now. Great!
+
+  To get started you need Cargo's bin directory ($HOME/.cargo/bin) in your PATH
+  environment variable. Next time you log in this will be done automatically.
+
+  To configure your current shell run source $HOME/.cargo/env
+
+  dev@dev:~$ source $HOME/.cargo/env
+
+  dev@dev:~$ rustup update
+  info: syncing channel updates for 'stable-x86_64-unknown-linux-gnu'
+  info: checking for self-updates
+
+    stable-x86_64-unknown-linux-gnu unchanged - rustc 1.32.0 (9fda7c223 2019-01-16)
+
+  dev@dev:~$ rustup toolchain install nightly
+  info: syncing channel updates for 'nightly-x86_64-unknown-linux-gnu'
+  info: latest update on 2019-01-23, rust version 1.33.0-nightly (4c2be9c97 2019-01-22)
+  ...
+
+    nightly-x86_64-unknown-linux-gnu installed - rustc 1.33.0-nightly (4c2be9c97 2019-01-22)
+
+  dev@dev:~$ rustup target add wasm32-unknown-unknown --toolchain nightly
+  info: downloading component 'rust-std' for 'wasm32-unknown-unknown'
+   10.0 MiB /  10.0 MiB (100 %)   2.6 MiB/s ETA:   0 s
+  info: installing component 'rust-std' for 'wasm32-unknown-unknown'
+  ```
+
+  protoc:
+  ```console
+  dev@dev:~$ PROTOC_VERSION=3.6.1
+  dev@dev:~$ PROTOC_ZIP=protoc-$PROTOC_VERSION-linux-x86_64.zip
+  dev@dev:~$ curl -OL https://github.com/google/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP
+    % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                   Dload  Upload   Total   Spent    Left  Speed
+  100   164    0   164    0     0    301      0 --:--:-- --:--:-- --:--:--   300
+  100   619    0   619    0     0    923      0 --:--:-- --:--:-- --:--:--   923
+  100 1390k  100 1390k    0     0   973k      0  0:00:01  0:00:01 --:--:-- 3029k
+  dev@dev:~$ sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
+  Archive:  protoc-3.6.1-linux-x86_64.zip
+    inflating: /usr/local/bin/protoc
+  dev@dev:~$ rm -f $PROTOC_ZIP
+
+  dev@dev:~$ protoc --version
+  libprotoc 3.6.1
+  ```
+</details>
 
 #### CasperLabs Development Environment on macOS
 
