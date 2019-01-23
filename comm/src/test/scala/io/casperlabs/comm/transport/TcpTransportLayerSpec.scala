@@ -43,13 +43,15 @@ class TcpTransportLayerSpec
 
   def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] =
     CachedConnections[Task, TcpConnTag].map { implicit cache =>
-      new TcpTransportLayer(env.port,
-                            env.cert,
-                            env.key,
-                            maxMessageSize,
-                            maxMessageSize,
-                            tempFolder,
-                            100)
+      new TcpTransportLayer(
+        env.port,
+        env.cert,
+        env.key,
+        maxMessageSize,
+        maxMessageSize,
+        tempFolder,
+        100
+      )
     }
 
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)
