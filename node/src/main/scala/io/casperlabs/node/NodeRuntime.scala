@@ -29,6 +29,7 @@ import io.casperlabs.node.api._
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics._
 import io.casperlabs.p2p.effects._
+import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import kamon._
@@ -93,12 +94,14 @@ class NodeRuntime private[node] (
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
+    commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
+    _                    <- commTmpFolder.delete[Task]().toEffect
     transport = effects.tcpTransportLayer(
       port,
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize,
-      conf.server.dataDir.resolve("tmp").resolve("comm")
+      commTmpFolder
     )(grpcScheduler, log, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,

@@ -18,6 +18,7 @@ import io.grpc._
 import io.grpc.netty._
 import io.netty.handler.ssl._
 import monix.eval._
+import io.casperlabs.shared.PathOps._
 import monix.execution._
 import monix.reactive._
 
@@ -152,7 +153,7 @@ class TcpTransportLayer(
             case p if p.isNoResponse => Right(None)
             case TLResponse.Payload.InternalServerError(ise) =>
               Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
-          }
+        }
       )
 
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
@@ -173,26 +174,6 @@ class TcpTransportLayer(
         case Some(p) => Left(internalCommunicationError(s"Was expecting no message. Response: $p"))
         case _       => Right(())
       })
-
-  private def deleteFile(path: Path): Task[Unit] = {
-    def delete(): Task[Unit] =
-      for {
-        result <- Task.delay(path.toFile.delete).attempt
-        _ <- result match {
-              case Left(t) =>
-                log.error(s"Can't delete file $path: ${t.getMessage}", t)
-              case Right(false) =>
-                log.warn(s"Can't delete file $path.")
-              case Right(true) =>
-                log.debug(s"Deleted file $path")
-            }
-      } yield ()
-
-    for {
-      exists <- Task.delay(path.toFile.exists)
-      _      <- exists.fold(delete(), log.warn(s"Can't delete file $path. File not found."))
-    } yield ()
-  }
 
   private def innerBroadcast(
       peers: Seq[PeerNode],
@@ -226,15 +207,15 @@ class TcpTransportLayer(
                   log.error(s"Error while streaming packet, error: $error") *> delay(
                     handle(retryCount - 1)
                   )
-                case Right(_) => deleteFile(toStream.path)
+                case Right(_) => toStream.path.delete[Task]()
               }
           case Left(error) =>
             log.error(s"Error while streaming packet, error: $error") >>= kp(
-              deleteFile(toStream.path)
+              toStream.path.delete[Task]()
             )
         } else
         log.debug(s"Giving up on streaming packet ${toStream.path} to ${toStream.peerNode}") >>= kp(
-          deleteFile(toStream.path)
+          toStream.path.delete[Task]()
         )
 
     handle(3)
