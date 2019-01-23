@@ -3,7 +3,7 @@ package io.casperlabs.node.diagnostics
 import java.time.Duration
 
 import com.typesafe.config.{Config, ConfigUtil}
-import io.casperlabs.node.Ok
+import scala.collection.JavaConverters._
 import kamon._
 import kamon.metric._
 import monix.eval.Task
@@ -88,8 +88,14 @@ object NewPrometheusReporter {
         .map(k => (k, customBuckets.getDoubleList(ConfigUtil.quoteString(k)).asScala))
         .toMap
   }
+  import cats.effect.Sync
+  import org.http4s.HttpRoutes
 
-  def service(reporter: NewPrometheusReporter) = HttpRoutes.of[Task] {
-    case GET -> Root => Ok(reporter.scrapeData())
+  def service[F[_]: Sync](reporter: NewPrometheusReporter): HttpRoutes[F] = {
+    val dsl = org.http4s.dsl.Http4sDsl[F]
+    import dsl._
+    HttpRoutes.of[F] {
+      case GET -> Root => Ok(Sync[F].delay(reporter.scrapeData()))
+    }
   }
 }
