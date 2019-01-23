@@ -1,4 +1,4 @@
-## Building and running
+## Developer's Guide to Building and Running CasperLabs
 
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
@@ -8,7 +8,7 @@ __Note__ Successfully building from source requires attending to all of the prer
 * [rust](https://www.rust-lang.org/tools/install)
 * [protoc](https://github.com/protocolbuffers/protobuf/releases)
 
-#### CasperLabs Development Environment on Ubuntu and Debian
+### CasperLabs Development Environment on Ubuntu and Debian
 <details>
   <summary>Click to expand!</summary>
   
@@ -93,16 +93,16 @@ __Note__ Successfully building from source requires attending to all of the prer
   ```
 </details>
 
-#### CasperLabs Development Environment on macOS
+### CasperLabs Development Environment on macOS
 
 TBD
 
-#### CasperLabs Development Environment on Fedora
+### CasperLabs Development Environment on Fedora
 ```
 TBD
 ```
 
-#### CasperLabs Development Environment on ArchLinux
+### CasperLabs Development Environment on ArchLinux
 You can use `pacaur` or other AUR installer instead of [`trizen`](https://github.com/trizen/trizen).
 ```
 TBD
@@ -110,30 +110,68 @@ TBD
 
 Once the above prerequistes are installed for your environment, you are ready to build.
 
-#### How to build components
-##### Build proto defitnitions:
-  1. This is required only when the ipc.proto file changes (but this is true when you run it for the first time).
-  2. Go to Execution Engine root directory. This is execution-engine directory in the node's root dir.
-  3. Go to comm project directory (cd comm).
-  4. Run: cargo run --bin grpc-protoc
+### How to build components
+#### Build proto defitnitions:
+This is required only when the `ipc.proto` file changes (but this is true when you run it for the first time).
+  1. Go to Execution Engine root directory. This is `execution-engine` directory in the node's root dir.
+  2. Go to comm project directory (`cd comm`).
+  3. Run: `cargo run --bin grpc-protoc`
   
-##### Build Wasm contracts:
-  1. Go to contract that interests you in the contracts-example directory.
-  2. To compile Rust contract to Wasm, in the root dir of the contract (where Cargo.toml is defined) you need to run: cargo build --          release --target wasm32-unknown-unknown. This puts *.wasm file in the <root>/target/wasm32-unknown-unknown/release/ directory. We        will use this file when deploying a contract. For the purposes of "Hello World" demo we use store-hello-world and call-hello-name        contracts.
-  3. If cargo build --release ... doesn't work try cargo +nightly build ...
+#### Build Wasm contracts:
+  1. Go to contract that interests you in the `contracts-example` directory.
+  2. To compile Rust contract to Wasm, in the root dir of the contract (where Cargo.toml is defined) you need to run: `cargo build --        release --target wasm32-unknown-unknown`. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory.      We will use this file when deploying a contract. For the purposes of "Hello World" demo we use `store-hello-world` and `call-hello-      name` contracts.
+  3. If `cargo build --release ...`  doesn't work try `cargo +nightly build ...`
 
-##### Building node:
-  1. Go to node's root directory (it's where build.sbt file is located).
-  2. Run sbt -mem 5000 node/universal:stage
+#### Building node:
+  1. Go to node's root directory (it's where `build.sbt` file is located).
+  2. Run `sbt -mem 5000 node/universal:stage`
 
-##### Building node's client:
-  1. Go to node's root directory (it's where build.sbt file is located).
-  2. Run sbt -mem 5000 client/universal:stage
+#### Building node's client:
+  1. Go to node's root directory (it's where `build.sbt` file is located).
+  2. Run `sbt -mem 5000 client/universal:stage`
 
-##### Building Execution Engine:
-  1. Go to Execution Engine root directory. This is execution-engine directory in the node's root dir.
-  2. Go to comm project directory (cd comm)
-  3. Run cargo build
+#### Building Execution Engine:
+  1. Go to Execution Engine root directory. This is `execution-engine` directory in the node's root dir.
+  2. Go to comm project directory (`cd comm`)
+  3. Run `cargo build`
+  
+### Running components
+For ease of use node assumes a default directory that is `~/.casperlabs/` First you have to create a hidden directory.
+
+#### Run the node
+In the root of the node (where build.sbt lives).
+
+If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
+
+```
+./node/target/universal/stage/bin/node run --casper-validator-private-key <private key from bonds.txt file> --casper-validator-public-key <public key from bonds.txt file> -s
+```
+
+#### Run the Execution Engine
+In the root of th EE (`execution-engine/comm/`), run:
+
+```
+cargo run --bin engine-grpc-server ~/.casperlabs/.casper-node.sock
+```
+
+.caspernode.sock is default socket file used for IPC communication.
+
+### Deploying data
+In the root of the node, run:
+
+```
+./client/target/universal/stage/bin/client --host 127.0.0.1 --port 40401 deploy --from 00000000000000000000 --gas-limit 100000000 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
+```
+
+At the moment, payment wasm file is not used so use the same file as for the `--session`.
+
+After deploying contract it's not yet executed (its effects are not applied to the global state), so you have to `propose` a block. Run:
+
+```
+./client/target/universal/stage/bin/client --host 127.0.0.1 --port 40401 propose
+```
+
+For the demo purposes we have to propose contracts separately because second contract (`call-hello-name`) won't see the changes (in practice it won't be able to call `store-hello-world` contract) from the previous deploy.
 
 ## Information for developers
 Assure prerequisites shown above are met.
