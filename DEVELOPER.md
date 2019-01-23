@@ -3,7 +3,7 @@
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Prerequisites
-* Java Development Kit (JDK), version 10. We recommend using the OpenJDK
+* [OpenJDK](https://openjdk.java.net)Java Development Kit (JDK), version 10. We recommend using the OpenJDK
 * [sbt](https://www.scala-sbt.org/download.html)
 * [rust](https://www.rust-lang.org/tools/install)
 * [protoc](https://github.com/protocolbuffers/protobuf/releases)
@@ -34,8 +34,41 @@ dev@dev:~$ sbt sbtVersion
 ```
 
 rust:
+```console
+dev@dev:~$ curl https://sh.rustup.rs -sSf | sh
+...
+1) Proceed with installation (default)
+2) Customize installation
+3) Cancel installation
+>1
+...
+Rust is installed now. Great!
 
+To get started you need Cargo's bin directory ($HOME/.cargo/bin) in your PATH
+environment variable. Next time you log in this will be done automatically.
 
+To configure your current shell run source $HOME/.cargo/env
+
+dev@dev:~$ source $HOME/.cargo/env
+
+dev@dev:~$ rustup update
+info: syncing channel updates for 'stable-x86_64-unknown-linux-gnu'
+info: checking for self-updates
+
+  stable-x86_64-unknown-linux-gnu unchanged - rustc 1.32.0 (9fda7c223 2019-01-16)
+  
+dev@dev:~$ rustup toolchain install nightly
+info: syncing channel updates for 'nightly-x86_64-unknown-linux-gnu'
+info: latest update on 2019-01-23, rust version 1.33.0-nightly (4c2be9c97 2019-01-22)
+...
+
+  nightly-x86_64-unknown-linux-gnu installed - rustc 1.33.0-nightly (4c2be9c97 2019-01-22)
+  
+dev@dev:~$ rustup target add wasm32-unknown-unknown --toolchain nightly
+info: downloading component 'rust-std' for 'wasm32-unknown-unknown'
+ 10.0 MiB /  10.0 MiB (100 %)   2.6 MiB/s ETA:   0 s
+info: installing component 'rust-std' for 'wasm32-unknown-unknown'
+```
 
 #### Development environment on macOS
 
