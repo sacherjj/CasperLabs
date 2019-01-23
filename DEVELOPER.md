@@ -70,22 +70,36 @@ info: downloading component 'rust-std' for 'wasm32-unknown-unknown'
 info: installing component 'rust-std' for 'wasm32-unknown-unknown'
 ```
 
-#### Development environment on macOS
+protoc:
+```console
+dev@dev:~$ PROTOC_VERSION=3.6.1
+dev@dev:~$ PROTOC_ZIP=protoc-$PROTOC_VERSION-linux-x86_64.zip
+dev@dev:~$ curl -OL https://github.com/google/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   164    0   164    0     0    301      0 --:--:-- --:--:-- --:--:--   300
+100   619    0   619    0     0    923      0 --:--:-- --:--:-- --:--:--   923
+100 1390k  100 1390k    0     0   973k      0  0:00:01  0:00:01 --:--:-- 3029k
+dev@dev:~$ sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
+Archive:  protoc-3.6.1-linux-x86_64.zip
+  inflating: /usr/local/bin/protoc
+dev@dev:~$ rm -f $PROTOC_ZIP
+
+dev@dev:~$ protoc --version
+libprotoc 3.6.1
+```
+
+#### CasperLabs Development Environment on macOS
 
 TBD
 
-#### Development environment on Fedora
+#### CasperLabs Development Environment on Fedora
 ```
 TBD
 ```
 
-#### Development environment on ArchLinux
+#### CasperLabs Development Environment on ArchLinux
 You can use `pacaur` or other AUR installer instead of [`trizen`](https://github.com/trizen/trizen).
-```
-TBD
-```
-
-#### <a name="build-bnfc-with-stack"></a> Building BNFC with [`stack`](https://docs.haskellstack.org)
 ```
 TBD
 ```
