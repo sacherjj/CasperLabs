@@ -109,7 +109,9 @@ __Note__ Successfully building from source requires attending to all of the prer
   
   Java:
   ```console
-  WIP
+  dev@dev:~$ brew cask install java10
+  
+  dev@dev:~$ java -version
   ```
 
   sbt:
