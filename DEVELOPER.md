@@ -3,7 +3,7 @@
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Prerequisites
-* [OpenJDK](https://openjdk.java.net)Java Development Kit (JDK), version 10. We recommend using the OpenJDK
+* [OpenJDK](https://openjdk.java.net) Java Development Kit (JDK), version 10. We recommend using the OpenJDK
 * [sbt](https://www.scala-sbt.org/download.html)
 * [rust](https://www.rust-lang.org/tools/install)
 * [protoc](https://github.com/protocolbuffers/protobuf/releases)
