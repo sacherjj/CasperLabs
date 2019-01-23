@@ -108,16 +108,32 @@ You can use `pacaur` or other AUR installer instead of [`trizen`](https://github
 TBD
 ```
 
-#### Building and running
-Once the above prerequistes are installed, you are ready to build. 
+Once the above prerequistes are installed for your environment, you are ready to build.
 
-Node and Client - Run from the root directory:
-```console
-dev@dev:~/CasperLabs$ sbt node/universal:stage client/universal:stage
-[output] 
-...
-[success] Total time: 6 s, completed Jan 22, 2019, 11:21:00 PM
-```
+#### How to build components
+##### Build proto defitnitions:
+  1. This is required only when the ipc.proto file changes (but this is true when you run it for the first time).
+  2. Go to Execution Engine root directory. This is execution-engine directory in the node's root dir.
+  3. Go to comm project directory (cd comm).
+  4. Run: cargo run --bin grpc-protoc
+  
+##### Build Wasm contracts:
+  1. Go to contract that interests you in the contracts-example directory.
+  2. To compile Rust contract to Wasm, in the root dir of the contract (where Cargo.toml is defined) you need to run: cargo build --          release --target wasm32-unknown-unknown. This puts *.wasm file in the <root>/target/wasm32-unknown-unknown/release/ directory. We        will use this file when deploying a contract. For the purposes of "Hello World" demo we use store-hello-world and call-hello-name        contracts.
+  3. If cargo build --release ... doesn't work try cargo +nightly build ...
+
+##### Building node:
+  1. Go to node's root directory (it's where build.sbt file is located).
+  2. Run sbt -mem 5000 node/universal:stage
+
+##### Building node's client:
+  1. Go to node's root directory (it's where build.sbt file is located).
+  2. Run sbt -mem 5000 client/universal:stage
+
+##### Building Execution Engine:
+  1. Go to Execution Engine root directory. This is execution-engine directory in the node's root dir.
+  2. Go to comm project directory (cd comm)
+  3. Run cargo build
 
 ## Information for developers
 Assure prerequisites shown above are met.
