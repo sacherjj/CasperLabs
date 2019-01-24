@@ -3,7 +3,6 @@ package io.casperlabs.casper
 import cats.{Id, Monad}
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.api.BlockAPI
@@ -28,7 +27,8 @@ class ManyValidatorsTest
     with BlockStoreTestFixture {
   "Show blocks" should "be processed quickly for a node with 300 validators" in {
     val blockDagStorageDir = BlockDagStorageTestFixture.dir
-    val blockDagStorage    = BlockDagStorageTestFixture.create(blockDagStorageDir)
+    val blockStoreDir      = BlockStoreTestFixture.dbDir
+    val blockDagStorage    = BlockDagStorageTestFixture.create(blockDagStorageDir, blockStoreDir)
     val bonds              = Seq.fill(300)(ByteString.copyFromUtf8(Random.nextString(10))).map(Bond(_, 10))
     val v1                 = bonds(0).validator
 
@@ -51,7 +51,7 @@ class ManyValidatorsTest
       blockDagStorageDir.resolve("checksum"),
       initialLatestMessages
     )
-    val newBlockDagStorage = BlockDagStorageTestFixture.create(blockDagStorageDir)
+    val newBlockDagStorage = BlockDagStorageTestFixture.create(blockDagStorageDir, blockStoreDir)
 
     implicit val casperEffect: MultiParentCasper[Id] =
       NoOpsCasperEffect[Id](

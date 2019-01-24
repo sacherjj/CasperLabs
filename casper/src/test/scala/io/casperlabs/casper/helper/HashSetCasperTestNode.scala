@@ -1,14 +1,14 @@
 package io.casperlabs.casper.helper
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import cats.{Applicative, ApplicativeError, Id, Monad, Traverse}
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
-import cats.effect.{Effect, Sync}
+import cats.effect.{Concurrent, Effect, Sync}
 import cats.implicits._
 import io.casperlabs.catscontrib.ski._
-import io.casperlabs.blockstorage.{BlockMetadata, LMDBBlockStore}
+import io.casperlabs.blockstorage._
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol._
@@ -36,12 +36,12 @@ import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.Cell
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
-import monix.eval.Task
 
 class HashSetCasperTestNode[F[_]](
     name: String,
@@ -52,14 +52,17 @@ class HashSetCasperTestNode[F[_]](
     logicalTime: LogicalTime[F],
     implicit val errorHandlerEff: ErrorHandler[F],
     storageSize: Long,
-    blockDagDir: Path,
+    val blockDagDir: Path,
+    val blockStoreDir: Path,
     shardId: String = "casperlabs"
 )(
     implicit scheduler: Scheduler,
     syncF: Sync[F],
     captureF: Capture[F],
     concurrentF: Concurrent[F],
-    blockDagStorage: BlockDagStorage[F],
+    val blockStore: BlockStore[F],
+    val blockDagStorage: BlockDagStorage[F],
+    val metricEff: Metrics[F],
     val abF: ToAbstractContext[F]
 ) {
 
@@ -69,10 +72,6 @@ class HashSetCasperTestNode[F[_]](
   implicit val timeEff           = logicalTime
   implicit val connectionsCell   = Cell.unsafe[F, Connections](Connect.Connections.empty)
   implicit val transportLayerEff = tle
-  implicit val metricEff         = new Metrics.MetricsNOP[F]
-  val blockStoreDir              = BlockStoreTestFixture.dbDir
-  implicit val blockStore =
-    LMDBBlockStore.create[F](LMDBBlockStore.Config(path = blockStoreDir, mapSize = storageSize))
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
@@ -156,13 +155,22 @@ object HashSetCasperTestNode {
       new TransportLayerTestImpl[F](identity, Map.empty[PeerNode, Ref[F, mutable.Queue[Protocol]]])
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
     implicit val log                = new Log.NOPLog[F]()
+    implicit val metricEff          = new Metrics.MetricsNOP[F]
 
-    val blockDagDir = BlockDagStorageTestFixture.dir
+    val blockDagDir   = BlockDagStorageTestFixture.dir
+    val blockStoreDir = BlockStoreTestFixture.dbDir
+    implicit val blockStore =
+      LMDBBlockStore.create[F](
+        LMDBBlockStore.Config(path = blockStoreDir, mapSize = storageSize)
+      )
     for {
       blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                           BlockDagFileStorage.Config(
-                            blockDagDir.resolve("data"),
-                            blockDagDir.resolve("crc")
+                            blockDagDir.resolve("latest-messages-data"),
+                            blockDagDir.resolve("latest-messages-crc"),
+                            blockDagDir.resolve("block-metadata-data"),
+                            blockDagDir.resolve("block-metadata-crc"),
+                            blockDagDir.resolve("checkpoints")
                           ),
                           genesis
                         )
@@ -176,8 +184,9 @@ object HashSetCasperTestNode {
         errorHandler,
         storageSize,
         blockDagDir,
+        blockStoreDir,
         "rchain"
-      )(scheduler, syncF, captureF, concurrentF, blockDagStorage)
+      )(scheduler, syncF, captureF, concurrentF, blockStore, blockDagStorage, metricEff)
       result <- node.initialize.map(_ => node)
     } yield result
   }
@@ -229,15 +238,24 @@ object HashSetCasperTestNode {
         .toList
         .traverse {
           case ((n, p), sk) =>
-            val tle          = new TransportLayerTestImpl[F](p, msgQueues)
-            implicit val log = new Log.NOPLog[F]()
+            val tle                = new TransportLayerTestImpl[F](p, msgQueues)
+            implicit val log       = new Log.NOPLog[F]()
+            implicit val metricEff = new Metrics.MetricsNOP[F]
 
-            val blockDagDir = BlockDagStorageTestFixture.dir
+            val blockDagDir   = BlockDagStorageTestFixture.dir
+            val blockStoreDir = BlockStoreTestFixture.dbDir
+            implicit val blockStore =
+              LMDBBlockStore.create[F](
+                LMDBBlockStore.Config(path = blockStoreDir, mapSize = storageSize)
+              )
             for {
               blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                                   BlockDagFileStorage.Config(
-                                    blockDagDir.resolve("data"),
-                                    blockDagDir.resolve("crc")
+                                    blockDagDir.resolve("latest-messages-data"),
+                                    blockDagDir.resolve("latest-messages-crc"),
+                                    blockDagDir.resolve("block-metadata-data"),
+                                    blockDagDir.resolve("block-metadata-crc"),
+                                    blockDagDir.resolve("checkpoints")
                                   ),
                                   genesis
                                 )
@@ -251,8 +269,9 @@ object HashSetCasperTestNode {
                 errorHandler,
                 storageSize,
                 blockDagDir,
+                blockStoreDir,
                 "rchain"
-              )(scheduler, syncF, captureF, concurrentF, blockDagStorage)
+              )(scheduler, syncF, captureF, concurrentF, blockStore, blockDagStorage, metricEff)
             } yield node
         }
         .map(_.toVector)

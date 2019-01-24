@@ -32,8 +32,8 @@ final class InMemBlockDagStorage[F[_]: Monad](
       dataLookup.contains(blockHash).pure[F]
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
       topoSortVector.drop(startBlockNumber.toInt).pure[F]
-    def topoSortTail(tailLength: Long): F[Vector[Vector[BlockHash]]] =
-      topoSortVector.takeRight(tailLength.toInt).pure[F]
+    def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
+      topoSortVector.takeRight(tailLength).pure[F]
     def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
       topoSort(startBlockNumber).map { topologicalSorting =>
         val order = topologicalSorting.flatten.zipWithIndex.toMap
