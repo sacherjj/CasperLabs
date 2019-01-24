@@ -7,7 +7,7 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper._
-import io.casperlabs.casper.helper.{BlockStoreFixture, NoOpsCasperEffect}
+import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockStoreFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
@@ -17,9 +17,12 @@ import io.casperlabs.catscontrib.Capture._
 import io.casperlabs.shared.TestOutlaws._
 import scala.collection.immutable.HashMap
 
-class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFixture {
+class BlockQueryResponseAPITest
+    extends FlatSpec
+    with Matchers
+    with BlockStoreFixture
+    with BlockDagStorageFixture {
   implicit val timeEff = new LogicalTime[Id]
-
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 

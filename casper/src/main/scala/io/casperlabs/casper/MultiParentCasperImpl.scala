@@ -30,11 +30,10 @@ import scala.collection.mutable
 import scala.concurrent.SyncVar
 import scala.concurrent.duration.Duration
 
-class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext](
+class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext: BlockDagStorage](
     runtimeManager: RuntimeManager[Task],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
-    initialDag: BlockDag,
     postGenesisStateHash: StateHash,
     shardId: String
 )(implicit scheduler: Scheduler)
@@ -48,13 +47,11 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   //TODO: Extract hardcoded version
   private val version = 1L
 
-  private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(initialDag)
-
   private val emptyStateHash = runtimeManager.emptyStateHash
 
   private val blockBuffer: mutable.HashSet[BlockMessage] =
     new mutable.HashSet[BlockMessage]()
-  private val dependencyDagState =
+  private val blockBufferDependencyDagState =
     new AtomicMonadState[F, DoublyLinkedDag[BlockHash]](AtomicAny(BlockDependencyDag.empty))
 
   private val deployAndEffectsHist: mutable.HashMap[Deploy, ExecutionEffect] =
@@ -110,8 +107,9 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       _ <- attempt match {
             case MissingBlocks => ().pure[F]
             case _ =>
-              Sync[F].delay { blockBuffer -= b } *> dependencyDagState.modify(
-                dependencyDag => DoublyLinkedDagOperations.remove(dependencyDag, b.blockHash)
+              Capture[F].capture { blockBuffer -= b } *> blockBufferDependencyDagState.modify(
+                blockBufferDependencyDag =>
+                  DoublyLinkedDagOperations.remove(blockBufferDependencyDag, b.blockHash)
               )
           }
       _ <- attempt match {
@@ -130,14 +128,13 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield attempt
 
   private def updateLastFinalizedBlock(
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       lastFinalizedBlockHash: BlockHash
   ): F[BlockHash] =
     for {
-      childrenHashes <- dag.childMap
-                         .getOrElse(lastFinalizedBlockHash, Set.empty[BlockHash])
-                         .toList
-                         .pure[F]
+      childrenHashes <- dag
+                         .children(lastFinalizedBlockHash)
+                         .map(_.getOrElse(Set.empty[BlockHash]).toList)
       maybeFinalizedChild <- ListContrib.findM(
                               childrenHashes,
                               (blockHash: BlockHash) =>
@@ -151,7 +148,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield newFinalizedBlock
 
   private def isGreaterThanFaultToleranceThreshold(
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       blockHash: BlockHash
   ): F[Boolean] = {
     val faultTolerance = SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
@@ -193,7 +190,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
         case Left(err) => new Throwable(s"Error in parsing term: \n$err").asLeft[Unit].pure[F]
       }
 
-  def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
     for {
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
       rankedEstimates        <- Estimator.tips[F](dag, lastFinalizedBlockHash)
@@ -230,9 +227,9 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
-        signedBlock = proposal.map(
-          signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
-        )
+        signedBlock <- proposal.flatMap(
+                        signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
+                      )
       } yield signedBlock
     case None => CreateBlockStatus.readOnlyMode.pure[F]
   }
@@ -244,7 +241,10 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield blockMessage
 
   // TODO: Optimize for large number of deploys accumulated over history
-  private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[(Deploy, ExecutionEffect)]] =
+  private def remDeploys(
+      dag: BlockDagRepresentation[F],
+      p: Seq[BlockMessage]
+  ): F[Seq[(Deploy, ExecutionEffect)]] =
     for {
       result <- Sync[F].delay { deployAndEffectsHist.clone() }
       _ <- DagOperations
@@ -337,6 +337,9 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     _blockDag.get
   }
 
+  def blockDag: F[BlockDagRepresentation[F]] =
+    BlockDagStorage[F].getRepresentation
+
   def storageContents(hash: StateHash): F[String] = """""".pure[F]
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
@@ -358,7 +361,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private def attemptAdd(b: BlockMessage): F[BlockStatus] =
     for {
       _                    <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
-      dag                  <- Sync[F].delay { _blockDag.get }
+      dag                  <- blockDag
       postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
@@ -391,11 +394,11 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                                                        genesis
                                                      )
                                                )
-      dependencyDag <- dependencyDagState.get
+      blockBufferDependencyDag <- blockBufferDependencyDagState.get
       postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                       _ =>
                                         EquivocationDetector
-                                          .checkEquivocations[F](dependencyDag, b, dag)
+                                          .checkEquivocations[F](blockBufferDependencyDag, b, dag)
                                     )
       status = postEquivocationCheckStatus.joinRight.merge
       _      <- addEffects(status, b)

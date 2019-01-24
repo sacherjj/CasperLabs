@@ -4,9 +4,9 @@ import cats.data.EitherT
 import cats.effect.concurrent.Ref
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Applicative, Id, Monad}
+import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
@@ -37,7 +37,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
   def apply[F[_]](implicit ev: CasperPacketHandler[F]): CasperPacketHandler[F] = ev
 
-  def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Sync: Time: Log: MultiParentCasperRef: ToAbstractContext](
+  def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Sync: Time: Log: MultiParentCasperRef: ToAbstractContext: BlockDagStorage](
       conf: CasperConf,
       delay: FiniteDuration,
       runtimeManager: RuntimeManager[Task],
@@ -156,7 +156,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     *
     * When in this state node can't handle any other message type so it will return `F[None]`
     **/
-  private[comm] class GenesisValidatorHandler[F[_]: Capture: Sync: ConnectionsCell: NodeDiscovery: TransportLayer: Log: Time: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: ToAbstractContext](
+  private[comm] class GenesisValidatorHandler[F[_]: Capture: Sync: ConnectionsCell: NodeDiscovery: TransportLayer: Log: Time: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: ToAbstractContext: BlockDagStorage](
       runtimeManager: RuntimeManager[Task],
       validatorId: ValidatorIdentity,
       shardId: String,
@@ -243,7 +243,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   }
 
   object StandaloneCasperHandler {
-    def approveBlockInterval[F[_]: Sync: Capture: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: ToAbstractContext](
+    def approveBlockInterval[F[_]: Sync: Capture: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: ToAbstractContext: BlockDagStorage](
         interval: FiniteDuration,
         shardId: String,
         runtimeManager: RuntimeManager[Task],
@@ -285,7 +285,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
     * `F[None]` to all other message types.
     **/
-  private[comm] class BootstrapCasperHandler[F[_]: Sync: Capture: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: ToAbstractContext](
+  private[comm] class BootstrapCasperHandler[F[_]: Sync: Capture: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: ToAbstractContext: BlockDagStorage](
       runtimeManager: RuntimeManager[Task],
       shardId: String,
       validatorId: Option[ValidatorIdentity],
@@ -512,7 +512,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       Try(NoApprovedBlockAvailable.parseFrom(msg.content.toByteArray)).toOption
     else None
 
-  private def onApprovedBlockTransition[F[_]: Sync: Time: ErrorHandler: SafetyOracle: RPConfAsk: TransportLayer: Capture: ConnectionsCell: Log: BlockStore: LastApprovedBlock: ToAbstractContext](
+  private def onApprovedBlockTransition[F[_]: Sync: Time: ErrorHandler: SafetyOracle: RPConfAsk: TransportLayer: Capture: ConnectionsCell: Log: BlockStore: LastApprovedBlock: ToAbstractContext: BlockDagStorage](
       b: ApprovedBlock,
       validators: Set[ByteString],
       runtimeManager: RuntimeManager[Task],

@@ -402,11 +402,6 @@ private[configuration] final case class Options(
         descr = s"Number. Casper BlockStore map size (in bytes).${l(_.blockStoreSize)}"
       )
 
-    val casperValidatorPublicKey = opt[String](
-      descr = "String. Base16 encoding of the public key to use for signing a proposed blocks. " +
-        s"Can be inferred from the private key for some signature algorithms.${c(_.publicKey)}"
-    )
-
     val casperValidatorPrivateKey = opt[String](
       descr = "String. Base16 encoding of the private key to use for signing a proposed blocks. " +
         s"It is not recommended to use in production since private key could be revealed through the process table.${c(_.privateKey)}"

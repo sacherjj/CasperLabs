@@ -1,11 +1,9 @@
 package io.casperlabs.casper.util.comm
 
-import java.nio.file.Paths
-
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.InMemBlockStore
+import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.genesis.contracts.Faucet
@@ -95,12 +93,15 @@ class CasperPacketHandlerSpec extends WordSpec {
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
     implicit val blockStore = InMemBlockStore.create[Task]
-    implicit val casperRef  = MultiParentCasperRef.unsafe[Task](None)
+    implicit val blockDagStorage = InMemBlockDagStorage
+      .create[Task]
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+    implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(
-          blockDag: BlockDag,
+          blockDag: BlockDagRepresentation[Task],
           estimateBlockHash: BlockHash
-      ): Float = 1.0f
+      ): Task[Float] = Task.pure(1.0f)
     }
   }
 

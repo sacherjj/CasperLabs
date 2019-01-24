@@ -1,11 +1,9 @@
 package io.casperlabs.casper.api
 
-import cats.{Applicative, Id}
+import cats.Id
 import cats.effect.Sync
-import cats.implicits._
-import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper._
@@ -16,25 +14,26 @@ import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
-import io.casperlabs.shared.Time
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseAPITest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with BlockStoreTestFixture {
+    with BlockStoreTestFixture
+    with BlockDagStorageTestFixture {
 
   implicit val syncId: Sync[Id] = io.casperlabs.catscontrib.effect.implicits.syncId
 
-  val initState = IndexedBlockDag.empty.withOffset(1L)
-  val v1        = ByteString.copyFromUtf8("Validator One")
-  val v2        = ByteString.copyFromUtf8("Validator Two")
-  val v3        = ByteString.copyFromUtf8("Validator Three")
-  val v1Bond    = Bond(v1, 25)
-  val v2Bond    = Bond(v2, 20)
-  val v3Bond    = Bond(v3, 15)
-  val bonds     = Seq(v1Bond, v2Bond, v3Bond)
+  implicit val indexedBlockDagStorage = IndexedBlockDagStorage.createWithId(blockDagStorage)
+
+  val v1     = ByteString.copyFromUtf8("Validator One")
+  val v2     = ByteString.copyFromUtf8("Validator Two")
+  val v3     = ByteString.copyFromUtf8("Validator Three")
+  val v1Bond = Bond(v1, 25)
+  val v2Bond = Bond(v2, 20)
+  val v3Bond = Bond(v3, 15)
+  val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
   implicit def timeState[A]: Time[StateWithChain] =
     Time.stateTTime[IndexedBlockDag, Id](syncId, timeEff)

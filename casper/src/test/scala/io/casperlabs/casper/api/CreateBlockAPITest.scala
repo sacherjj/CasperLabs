@@ -1,11 +1,9 @@
 package io.casperlabs.casper.api
 
 import scala.concurrent.duration._
-
 import cats.Monad
 import cats.data.EitherT
 import cats.implicits._
-
 import io.casperlabs.casper._
 import io.casperlabs.casper.helper.HashSetCasperTestNode
 import io.casperlabs.casper.protocol._
@@ -18,8 +16,8 @@ import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.shared.Time
-
 import com.google.protobuf.ByteString
+import io.casperlabs.blockstorage.BlockDagRepresentation
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
@@ -78,11 +76,12 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
 
-  def addBlock(b: BlockMessage): F[BlockStatus]             = underlying.addBlock(b)
-  def contains(b: BlockMessage): F[Boolean]                 = underlying.contains(b)
-  def deploy(d: DeployData): F[Either[Throwable, Unit]]     = underlying.deploy(d)
-  def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] = underlying.estimator(dag)
-  def blockDag: F[BlockDag]                                 = underlying.blockDag
+  def addBlock(b: BlockMessage): F[BlockStatus]         = underlying.addBlock(b)
+  def contains(b: BlockMessage): F[Boolean]             = underlying.contains(b)
+  def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
+    underlying.estimator(dag)
+  def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
   def lastFinalizedBlock: F[BlockMessage]                = underlying.lastFinalizedBlock

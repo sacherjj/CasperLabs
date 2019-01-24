@@ -1,8 +1,10 @@
 package io.casperlabs.casper
 
-import cats.Id
+import cats.{Id, Monad}
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.helper.BlockDagStorageTestFixture
+import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.helper.BlockGenerator._
@@ -10,6 +12,7 @@ import io.casperlabs.casper.helper._
 import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.Time
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
@@ -24,35 +27,37 @@ class ManyValidatorsTest
     with BlockGenerator
     with BlockStoreTestFixture {
   "Show blocks" should "be processed quickly for a node with 300 validators" in {
-    val initState = IndexedBlockDag.empty.withOffset(1L)
-    val bonds     = Seq.fill(300)(ByteString.copyFromUtf8(Random.nextString(10))).map(Bond(_, 10))
-    val v1        = bonds(0).validator
+    val blockDagStorageDir = BlockDagStorageTestFixture.dir
+    val blockDagStorage    = BlockDagStorageTestFixture.create(blockDagStorageDir)
+    val bonds              = Seq.fill(300)(ByteString.copyFromUtf8(Random.nextString(10))).map(Bond(_, 10))
+    val v1                 = bonds(0).validator
 
-    val createChain =
-      for {
-        genesis <- createBlock[StateWithChain](Seq(), ByteString.EMPTY, bonds)
-        b <- createBlock[StateWithChain](Seq(genesis.blockHash), v1, bonds, bonds.map {
-              case Bond(validator, _) => validator -> genesis.blockHash
-            }.toMap)
-      } yield b
+    val genesis = createBlock[Id](Seq(), ByteString.EMPTY, bonds)(
+      Monad[Id],
+      Time[Id],
+      BlockStore[Id],
+      blockDagStorage
+    )
+    val b = createBlock[Id](Seq(genesis.blockHash), v1, bonds, bonds.map {
+      case Bond(validator, _) => validator -> genesis.blockHash
+    }.toMap)(Monad[Id], Time[Id], BlockStore[Id], blockDagStorage)
 
-    val initialChain: IndexedBlockDag = createChain.runS(initState)
-    val genesis                       = initialChain.idToBlocks(1)
-    val n1                            = initialChain.idToBlocks(2)
-    val otherLatestMessages           = bonds.map { case Bond(validator, _) => validator -> n1 }
-    val chain =
-      initialChain.copy(
-        dag = initialChain.dag.copy(
-          latestMessages = initialChain.latestMessages ++ otherLatestMessages
-        )
-      )
+    blockDagStorage.close()
+
+    val initialLatestMessages =
+      bonds.map { case Bond(validator, _) => validator -> b }.toMap
+    BlockDagStorageTestFixture.writeInitialLatestMessages(
+      blockDagStorageDir.resolve("data"),
+      blockDagStorageDir.resolve("checksum"),
+      initialLatestMessages
+    )
+    val newBlockDagStorage = BlockDagStorageTestFixture.create(blockDagStorageDir)
 
     implicit val casperEffect: MultiParentCasper[Id] =
       NoOpsCasperEffect[Id](
         HashMap.empty[BlockHash, BlockMessage],
-        Estimator.tips[Id](chain, genesis.blockHash),
-        chain
-      )(syncId, blockStore)
+        Estimator.tips[Id](newBlockDagStorage.getRepresentation, genesis.blockHash).toIndexedSeq
+      )(syncId, blockStore, newBlockDagStorage)
     implicit val logEff = new LogStub[Id]
     implicit val casperRef = {
       val tmp = MultiParentCasperRef.of[Id]
