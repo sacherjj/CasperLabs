@@ -35,10 +35,10 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       nextId            = currentId + 1
       dag               <- underlying.getRepresentation
       nextCreatorSeqNum <- dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
-      newPostState      = body.postState.get.withBlockNumber(nextId)
+      newPostState      = body.getState.withBlockNumber(nextId)
       newPostStateHash  = Blake2b256.hash(newPostState.toByteArray)
       modifiedBlock = block
-        .withBody(body.withPostState(newPostState))
+        .withBody(body.withState(newPostState))
         .withHeader(header.withPostStateHash(ByteString.copyFrom(newPostStateHash)))
         .withSeqNum(nextCreatorSeqNum)
       _ <- underlying.insert(modifiedBlock)
@@ -46,6 +46,13 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       _ <- currentIdRef.set(nextId)
       _ <- lock.release
     } yield modifiedBlock
+  def inject(index: Int, block: BlockMessage): F[Unit] =
+    for {
+      _ <- lock.acquire
+      _ <- idToBlocksRef.update(_.updated(index, block))
+      _ <- underlying.insert(block)
+      _ <- lock.release
+    } yield ()
   def checkpoint(): F[Unit] = underlying.checkpoint()
   def clear(): F[Unit] =
     for {
@@ -69,13 +76,16 @@ final class IndexedBlockDagStorage[F[_]: Monad](
 object IndexedBlockDagStorage {
   def apply[F[_]](implicit B: IndexedBlockDagStorage[F]): IndexedBlockDagStorage[F] = B
 
-  def createWithId(underlying: BlockDagStorage[Id]): IndexedBlockDagStorage[Id] = {
-    import io.casperlabs.catscontrib.effect.implicits._
-    new IndexedBlockDagStorage[Id](
-      Semaphore[Id](1),
-      underlying,
-      Ref.of[Id, Map[Int, BlockMessage]](Map.empty),
-      Ref.of[Id, Int](-1)
-    )
-  }
+  def create[F[_]: Concurrent](underlying: BlockDagStorage[F]): F[IndexedBlockDagStorage[F]] =
+    for {
+      semaphore  <- Semaphore[F](1)
+      idToBlocks <- Ref.of[F, Map[Int, BlockMessage]](Map.empty)
+      currentId  <- Ref.of[F, Int](-1)
+    } yield
+      new IndexedBlockDagStorage[F](
+        semaphore,
+        underlying,
+        idToBlocks,
+        currentId
+      )
 }
