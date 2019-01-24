@@ -191,11 +191,11 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
 }
 
 object GenesisTest {
-  val storageSize     = 1024L * 1024
-  def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime")
-  def genesisPath     = Files.createTempDirectory(s"casper-genesis-test")
-  val numValidators   = 5
-  val rchainShardId   = "rchain"
+  val storageSize       = 1024L * 1024
+  def storageLocation   = Files.createTempDirectory(s"casper-genesis-test-runtime")
+  def genesisPath       = Files.createTempDirectory(s"casper-genesis-test")
+  val numValidators     = 5
+  val casperlabsShardId = "casperlabs"
 
   def fromInputFiles(
       maybeBondsPath: Option[String] = None,
@@ -204,7 +204,7 @@ object GenesisTest {
       minimumBond: Long = 1L,
       maximumBond: Long = Long.MaxValue,
       faucet: Boolean = false,
-      shardId: String = rchainShardId,
+      shardId: String = casperlabsShardId,
       deployTimestamp: Option[Long] = Some(System.currentTimeMillis())
   )(
       implicit runtimeManager: RuntimeManager[Task],

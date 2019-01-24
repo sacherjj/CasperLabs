@@ -360,7 +360,7 @@ class NodeRuntime private[node] (
           )
       _       <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
       _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
-      address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
+      address = s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
       _       <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
     } yield ()

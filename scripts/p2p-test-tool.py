@@ -4,7 +4,7 @@
 # python3.6 -m pip install docker argparse pexpect requests
 # Return code of 0 is success on test and 1 is fail.
 # Example below shows how to boot network with 3 nodes, including bootstrap, and run specific test
-# ./p2p-test-tool.py -b -m 2048m -i rchain/rnode:dev -T propose -t
+# ./p2p-test-tool.py -b -m 2048m -i io.casperlabs/node:dev -T propose -t
 from pexpect import replwrap
 import subprocess
 import argparse
@@ -42,7 +42,7 @@ parser.add_argument("-d", "--deploy-demo",
 parser.add_argument("-i", "--image",
                     dest='image',
                     type=str,
-                    default="coop.rchain/rnode:latest",
+                    default="io.casperlabs/node:latest",
                     help="source repo for docker image")
 parser.add_argument("-l", "--logs",
                     action='store_true',
@@ -55,12 +55,12 @@ parser.add_argument("-m", "--memory",
 parser.add_argument("-n", "--network",
                     dest='network',
                     type=str,
-                    default="rchain.coop",
+                    default="casperlabs.io",
                     help="set docker network name")
 parser.add_argument("--peer-command",
                     dest='peer_command',
                     type=str,
-                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop?protocol=40400&discovery=40404",
+                    default="run --bootstrap casperlabs://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.casperlabs.io?protocol=40400&discovery=40404",
                     help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peer_amount',
@@ -90,11 +90,11 @@ parser.add_argument("--repl-load-repetitions",
                     type=int,
                     default=50,
                     help="set repl load repetition peer_amount for loops")
-parser.add_argument("--rnode-directory",
-                    dest='rnode_directory',
+parser.add_argument("--casperlabs-directory",
+                    dest='casperlabs_directory',
                     type=str,
-                    default="/var/lib/rnode",
-                    help="rnode container root directory on each container")
+                    default="/var/lib/casperlabs",
+                    help="casperlabs container root directory on each container")
 parser.add_argument("-r", "--remove",
                     action='store_true',
                     help="forcibly remove all container resources associated to network name")
@@ -120,7 +120,7 @@ parser.add_argument("--thread-pool-size",
                     dest='thread_pool_size',
                     type=int,
                     default="100",
-                    help="set maximum number of threads used by rnode")
+                    help="set maximum number of threads used by casperlabs")
 # Print -h/help if no args
 if len(sys.argv)==1:
     parser.print_help(sys.stderr)
@@ -129,11 +129,11 @@ if len(sys.argv)==1:
 # Define globals
 args = parser.parse_args()
 client = docker.from_env()
-RNODE_CMD = '/opt/docker/bin/rnode'
+CASPERLABSNODE_CMD = '/opt/docker/bin/casperlabs'
 # bonds_file = f'/tmp/bonds.{args.network}' alternate when dynamic bonds.txt creation/manpiulation file works
 src_bonds_file = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt'
-bonds_file = f'/tmp/rnode_{args.network}_bonds.txt'
-container_bonds_file = f'{args.rnode_directory}/genesis/bonds.txt'
+bonds_file = f'/tmp/casperlabs_{args.network}_bonds.txt'
+container_bonds_file = f'{args.casperlabs_directory}/genesis/bonds.txt'
 
 
 def main():
@@ -246,7 +246,7 @@ def run_tests():
 
 
 def deploy_demo():
-    cmd = f"{RNODE_CMD} deploy-demo"
+    cmd = f"{CASPERLABSNODE_CMD} deploy-demo"
     for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
         try:
             r = container.exec_run(cmd=cmd, user='root', detach=True)
@@ -257,13 +257,13 @@ def deploy_demo():
 
 
 def test_node_eval_of_rholang_files(container):
-    print(f"Running eval rho file tests of /usr/share/rnode/examples/ on container {container.name}.")
+    print(f"Running eval rho file tests of /usr/share/casperlabs/examples/ on container {container.name}.")
     cmd = f"ls /opt/docker/examples/*.rho"
     try:
         r = container.exec_run(['sh', '-c', cmd])
         for file_path in r.output.decode('utf-8').splitlines():
             print(file_path)
-            eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} eval {file_path}'])
+            eval_r = container.exec_run(['sh', '-c', f'{CASPERLABSNODE_CMD} eval {file_path}'])
             for line in eval_r.output.decode('utf-8').splitlines():
                 if 'ERROR' in line.upper():
                     print(line)
@@ -281,14 +281,14 @@ def test_propose(container):
         print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
         # Deploy example contracts using 3 random example files
-        cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do echo "running deploy with ${i}"; /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 ${i}; done'
+        cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do echo "running deploy with ${i}"; /opt/docker/bin/casperlabs deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 ${i}; done'
         try:
             r = container.exec_run(['sh', '-c', cmd])
             for line in r.output.decode('utf-8').splitlines():
                 print(line)
 
             # Propose blocks from example contracts
-            cmd = "/opt/docker/bin/rnode propose"
+            cmd = "/opt/docker/bin/casperlabs propose"
             print("Propose to blockchain previously deployed smart contracts.")
 
             r = container.exec_run(['sh', '-c', cmd])
@@ -315,21 +315,21 @@ def test_propose(container):
     for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
             #Check logs for warnings(WARN) or errors(ERROR) on CASPER    
             for line in container.logs().decode('utf-8').splitlines():
-                if "WARN" in line and "coop.rchain.casper" in line and not "wallets" in line:
+                if "WARN" in line and "io.casperlabs.casper" in line and not "wallets" in line:
                     print(f"{container.name}: {line}")
                     retval = 1
-                if "ERROR" in line and "coop.rchain.casper" in line:
+                if "ERROR" in line and "io.casperlabs.casper" in line:
                     print(f"{container.name}: {line}")
                     retval = 1
 
     return retval
 
-class rnode:
-    binary='/opt/docker/bin/rnode'
+class casperlabs:
+    binary='/opt/docker/bin/casperlabs'
 
     @staticmethod
     def deploy_cmd(f):
-        return rnode.binary + f' deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 {f}'
+        return casperlabs.binary + f' deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 {f}'
 
     propose_cmd = binary + " propose"
 
@@ -373,11 +373,11 @@ def test_casper_propose_and_deploy(test_container):
     try:
         run_cmd(sed_cmd)
 
-        run_cmd(rnode.deploy_cmd(hello_rho))
+        run_cmd(casperlabs.deploy_cmd(hello_rho))
 
         print("Propose to blockchain previously deployed smart contracts.")
 
-        run_cmd(rnode.propose_cmd)
+        run_cmd(casperlabs.propose_cmd)
 
         print("Allow for logs to fill out from last propose if needed")
     except Exception as e:
@@ -499,7 +499,7 @@ def check_network_convergence(container):
 
 def test_performance():
     # Infinite loop for performance testing via metrics.
-    # Only run parent script "-p 1" so it runs only on one peer, peer0.rchain.coop.
+    # Only run parent script "-p 1" so it runs only on one peer, peer0.casperlabs.io.
     print("=====================================================================================")
     print("Preparing to run infinite deploy/propose loop for stress/performance testing and metric collection.")
     print("You will have to cancel or Ctrl-C to exit script.")
@@ -508,7 +508,7 @@ def test_performance():
     print("=====================================================================================")
     print("Grab metrics on peer0 container via:")
     print("sudo docker exec -it peer0.{args.network} bash -c 'curl 127.0.0.1:40403'")
-    print("sudo docker exec -it peer0.{args.network} bash -c './bin/rnode diagnostics'")
+    print("sudo docker exec -it peer0.{args.network} bash -c './bin/casperlabs diagnostics'")
     print("=====================================================================================")
     print("Quick and dirty comparative script. Shows metric lines changed and the values.")
     print("Run last command to see changes from start /tmp/1")
@@ -522,14 +522,14 @@ def test_performance():
                 print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
                 # Deploy example contracts using 3 random example files
-                cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 ${i}; done'
+                cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/casperlabs deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 ${i}; done'
                 try: 
                     r = container.exec_run(['sh', '-c', cmd])
                     for line in r.output.decode('utf-8').splitlines():
                         print(line)
 
                     # Propose blocks from example contracts
-                    cmd = "/opt/docker/bin/rnode propose"
+                    cmd = "/opt/docker/bin/casperlabs propose"
                     print("Propose to blockchain previously deployed smart contracts.")
 
                     r = container.exec_run(['sh', '-c', cmd])
@@ -576,8 +576,8 @@ def generate_validator_private_key():
 
     # import ecdsa # secp256k1 suppport
 
-    # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
-    # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
+    # Using pre-generated validator key pairs by casperlabs. We do this because warning below  with python generated keys
+    # WARN  io.casperlabs.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
     f=open('scripts/demo-validator-private-public-key-pairs.txt')
     lines=f.readlines()
     line_number = random.randint(1,295)
@@ -613,7 +613,7 @@ def create_bootstrap_node():
 
     validator_private_key, validator_public_key = generate_validator_private_key()
 
-    # Create key/cert pem files to be loaded into rnode volume
+    # Create key/cert pem files to be loaded into casperlabs volume
     bootstrap_node_demo_key=(
         "-----BEGIN PRIVATE KEY-----\n"
         "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgYcybGU15SCs2x+5I\n"
@@ -634,8 +634,8 @@ def create_bootstrap_node():
         "VkEqI2rycmgp03DXsStJ7IGdBQ==\n"
         "-----END CERTIFICATE-----\n"
     )
-    tmp_file_key = '/tmp/rnode_{args.network}_node.key.pem'
-    tmp_file_cert = '/tmp/rnode_{args.network}_node.certificate.pem'
+    tmp_file_key = '/tmp/casperlabs_{args.network}_node.key.pem'
+    tmp_file_cert = '/tmp/casperlabs_{args.network}_node.certificate.pem'
     with open(tmp_file_key, 'w') as f:
         f.write(bootstrap_node_demo_key)
     with open(tmp_file_cert, 'w') as f:
@@ -654,17 +654,17 @@ def create_bootstrap_node():
         mem_limit=args.memory, \
         network=args.network, \
         volumes=[
-                f"{bootstrap_node['volume'].name}:{args.rnode_directory}", \
+                f"{bootstrap_node['volume'].name}:{args.casperlabs_directory}", \
                 f"{bonds_file}:{container_bonds_file}", \
-                f"{tmp_file_cert}:{args.rnode_directory}/node.certificate.pem", \
-                f"{tmp_file_key}:{args.rnode_directory}/node.key.pem"
+                f"{tmp_file_cert}:{args.casperlabs_directory}/node.certificate.pem", \
+                f"{tmp_file_key}:{args.casperlabs_directory}/node.key.pem"
         ],
         # # Alternate volume mount
         # volumes={
-        #         tmp_file_cert: {'bind': f'{args.rnode_directory}/node.certificate.pem', 'mode': 'rw'}, \
-        #         tmp_file_key: {'bind': f'{args.rnode_directory}/node.key.pem', 'mode': 'rw'}, \
+        #         tmp_file_cert: {'bind': f'{args.casperlabs_directory}/node.certificate.pem', 'mode': 'rw'}, \
+        #         tmp_file_key: {'bind': f'{args.casperlabs_directory}/node.key.pem', 'mode': 'rw'}, \
         #         bonds_file: {'bind': container_bonds_file, 'mode': 'rw'}, \
-        #         bootstrap_node['volume'].name: {'bind': args.rnode_directory, 'mode': 'rw'} \
+        #         bootstrap_node['volume'].name: {'bind': args.casperlabs_directory, 'mode': 'rw'} \
         # }, \
         command=f"{args.bootstrap_command} --thread-pool-size {args.thread_pool_size} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {bootstrap_node['name']}", \
         hostname=bootstrap_node['name'])
@@ -695,7 +695,7 @@ def create_peer_nodes():
             network=args.network, \
             volumes=[
                 f"{bonds_file}:{container_bonds_file}", \
-                f"{peer_node[i]['volume'].name}:{args.rnode_directory}"
+                f"{peer_node[i]['volume'].name}:{args.casperlabs_directory}"
             ], \
             command=f"{args.peer_command} --thread-pool-size {args.thread_pool_size} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
             hostname=peer_node[i]['name'])
@@ -737,7 +737,7 @@ def test_repl_load(container):
             repl_node[i]['name'] = f"repl{i}.{args.network}"
             repl_node[i]['volume'] = client.volumes.create()
 
-            cmd = (f"sudo docker run -u root -it -v {repl_node[i]['volume'].name}:{args.rnode_directory} "
+            cmd = (f"sudo docker run -u root -it -v {repl_node[i]['volume'].name}:{args.casperlabs_directory} "
                    f"--cpuset-cpus={args.cpuset_cpus} --memory={args.memory} --name {repl_node[i]['name']} "
                    f"--network {args.network} {args.image} "
                    f"--grpc-host {container.name} repl")

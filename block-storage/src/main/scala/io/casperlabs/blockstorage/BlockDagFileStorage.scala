@@ -201,7 +201,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       newCrcBytes <- newCrc.bytes
       _ <- Sync[F].delay {
             val tmpCrc =
-              Files.createTempFile("rchain-block-dag-file-storage-latest-messages-", "-crc")
+              Files.createTempFile("casperlabs-block-dag-file-storage-latest-messages-", "-crc")
             Files.write(tmpCrc, newCrcBytes)
             Files.move(tmpCrc, latestMessagesCrcFilePath, StandardCopyOption.REPLACE_EXISTING)
           }
@@ -229,9 +229,11 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       latestMessages                <- latestMessagesRef.get
       latestMessagesLogOutputStream <- latestMessagesLogOutputStreamRef.get
       _                             = latestMessagesLogOutputStream.close()
-      tmpSquashedData               <- createTmpFile("rchain-block-dag-store-latest-messages-", "-squashed-data")
-      tmpSquashedCrc                <- createTmpFile("rchain-block-dag-store-latest-messages-", "-squashed-crc")
-      dataByteBuffer                = ByteBuffer.allocate(64 * latestMessages.size)
+      tmpSquashedData <- createTmpFile("casperlabs-block-dag-store-latest-messages-",
+                                       "-squashed-data")
+      tmpSquashedCrc <- createTmpFile("casperlabs-block-dag-store-latest-messages-",
+                                      "-squashed-crc")
+      dataByteBuffer = ByteBuffer.allocate(64 * latestMessages.size)
       _ <- latestMessages.toList.traverse_ {
             case (validator, blockHash) =>
               Sync[F].delay {
@@ -269,7 +271,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
     for {
       newCrcBytes <- newCrc.bytes
       _ <- Sync[F].delay {
-            val tmpCrc = Files.createTempFile("rchain-block-dag-file-storage-data-lookup-", "-crc")
+            val tmpCrc =
+              Files.createTempFile("casperlabs-block-dag-file-storage-data-lookup-", "-crc")
             Files.write(tmpCrc, newCrcBytes)
             Files.move(tmpCrc, blockMetadataCrcPath, StandardCopyOption.REPLACE_EXISTING)
           }

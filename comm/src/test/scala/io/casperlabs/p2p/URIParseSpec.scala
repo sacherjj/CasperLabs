@@ -7,8 +7,8 @@ class URIParseSpec extends FlatSpec with Matchers {
   def badAddressError(s: String): Either[ParseError, PeerNode] =
     Left(ParseError(s"bad address: $s"))
 
-  "A well formed rnode URI" should "parse into a PeerNode" in {
-    val uri = "rnode://abcdef@localhost?protocol=12345&discovery=12346"
+  "A well formed casperlabs URI" should "parse into a PeerNode" in {
+    val uri = "casperlabs://abcdef@localhost?protocol=12345&discovery=12346"
     PeerNode.fromAddress(uri) should be(
       Right(
         PeerNode(
@@ -19,7 +19,7 @@ class URIParseSpec extends FlatSpec with Matchers {
     )
   }
 
-  "A non-rnode URI" should "parse as an error" in {
+  "A non-casperlabs URI" should "parse as an error" in {
     val uri = "http://foo.bar.baz/quux"
     PeerNode.fromAddress(uri) should be(badAddressError(uri))
   }
@@ -29,13 +29,13 @@ class URIParseSpec extends FlatSpec with Matchers {
     PeerNode.fromAddress(uri) should be(badAddressError(uri))
   }
 
-  "An rnode URI with non-integral port" should "parse as an error" in {
-    val uri = "rnode://abcde@localhost:smtp"
+  "An casperlabs URI with non-integral port" should "parse as an error" in {
+    val uri = "casperlabs://abcde@localhost:smtp"
     PeerNode.fromAddress(uri) should be(badAddressError(uri))
   }
 
-  "An rnode URI without a key" should "parse as an error" in {
-    val uri = "rnode://localhost?protocol=12345&discovery=12346"
+  "An casperlabs URI without a key" should "parse as an error" in {
+    val uri = "casperlabs://localhost?protocol=12345&discovery=12346"
     PeerNode.fromAddress(uri) should be(badAddressError(uri))
   }
 }

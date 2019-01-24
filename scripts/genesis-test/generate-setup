@@ -74,7 +74,6 @@ def parse_balance_range(s):
 
 parser = argparse.ArgumentParser(formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 # Genesis block parameters
-# https://rchain.atlassian.net/wiki/spaces/CORE/pages/514916539/Creating+the+genesis+block
 parser.add_argument(
         '--deploy-timestamp',
         type = check_in_range(min = 1),
@@ -88,7 +87,6 @@ parser.add_argument(
         type = check_in_range(min = 0),
         default = 100)
 # Genesis block approval parameters
-# https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
 parser.add_argument(
         '--required-sigs',
         type = check_in_range(min = 1),

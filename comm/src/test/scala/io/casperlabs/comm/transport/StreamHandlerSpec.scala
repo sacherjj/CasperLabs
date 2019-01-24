@@ -23,7 +23,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   var tempFolder: Path = null
 
   override def beforeEach(): Unit =
-    tempFolder = Files.createTempDirectory("rchain")
+    tempFolder = Files.createTempDirectory("casperlabs")
 
   override def afterEach(): Unit =
     tempFolder.toFile.delete()
@@ -70,7 +70,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       // given
       val stream = createStream()
       val nonExistingWithPersmission =
-        FileSystems.getDefault.getPath("~/.rchaintest/" + UUID.randomUUID.toString + "/")
+        FileSystems.getDefault.getPath("~/.casperlabstest/" + UUID.randomUUID.toString + "/")
       // when
       val msg: StreamMessage = handleStream(stream, folder = nonExistingWithPersmission)
       // then

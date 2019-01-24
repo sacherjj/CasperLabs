@@ -2,8 +2,8 @@ import os
 
 import pytest
 
-from rnode_testing.rnode import started_standalone_bootstrap_node
-from rnode_testing.wait import (
+from casperlabsnode_testing.casperlabsnode import started_standalone_bootstrap_node
+from casperlabsnode_testing.wait import (
     wait_for_approved_block_received_handler_state,
     wait_for_blocks_count_at_least
 )

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A quick and dirty conversion of exposed rnode prometheus metric counters to grafana json dashboard
+# A quick and dirty conversion of exposed casperlabsnode prometheus metric counters to grafana json dashboard
 
 header=$(cat <<-EOM
 {
@@ -94,8 +94,8 @@ footer=$(cat <<-EOM
     ]
   },
   "timezone": "",
-  "title": "RNode Counter Metrics(All)",
-  "uid": "rnode-metrics-all",
+  "title": "CasperLabsNode Counter Metrics(All)",
+  "uid": "casperlabsnode-metrics-all",
   "version": 3
 }
 EOM
