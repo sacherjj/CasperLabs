@@ -4,7 +4,7 @@ import cats.Monad
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
@@ -134,15 +134,15 @@ object Estimator {
           .foldLeftM(scoreMap) {
             case (acc, children) =>
               children.filter(scoreMap.contains).toList.foldLeftM(acc) {
-                case (acc2, cHash) =>
+                case (acc2, childHash) =>
                   for {
-                    blockMetadataOpt <- blockDag.lookup(cHash)
+                    blockMetadataOpt <- blockDag.lookup(childHash)
                     result = blockMetadataOpt match {
                       case Some(blockMetaData)
                           if blockMetaData.parents.size > 1 && blockMetaData.sender != validator =>
-                        val currScore       = acc2.getOrElse(cHash, 0L)
+                        val currScore       = acc2.getOrElse(childHash, 0L)
                         val validatorWeight = blockMetaData.weightMap.getOrElse(validator, 0L)
-                        acc2.updated(cHash, currScore + validatorWeight)
+                        acc2.updated(childHash, currScore + validatorWeight)
                       case _ => acc2
                     }
                   } yield result
