@@ -1,4 +1,4 @@
-package coop.rchain.casper
+package io.casperlabs.casper
 
 import cats.Applicative
 import cats.implicits._

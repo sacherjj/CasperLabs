@@ -5,7 +5,7 @@ import java.nio.file.Paths
 import cats.Id
 import io.casperlabs.casper.HashSetCasperTest
 import io.casperlabs.casper.genesis.contracts._
-import io.casperlabs.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode}
+import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib._

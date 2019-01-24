@@ -25,6 +25,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
+import coop.rchain.casper.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
@@ -109,11 +110,6 @@ class ValidateTest
 
       b.withBody(body.withState(newState)).withHeader(newHeader)
     }
-  }
-
-  implicit class AnyShouldF[F[_]: Monad, T](leftSideValue: F[T]) {
-    def shouldBeF(value: T): F[Assertion] =
-      leftSideValue.map(_ shouldBe value)
   }
 
   "Block signature validation" should "return false on unknown algorithms" in withStorage {
@@ -211,8 +207,8 @@ class ValidateTest
       for {
         _      <- createChain[Task](1)
         block  <- blockDagStorage.lookupByIdUnsafe(0)
-        _      = Validate.blockNumber[Task](block.withBlockNumber(1)) shouldBeF Left(InvalidBlockNumber)
-        _      = Validate.blockNumber[Task](block) shouldBeF Right(Valid)
+        _      <- Validate.blockNumber[Task](block.withBlockNumber(1)) shouldBeF Left(InvalidBlockNumber)
+        _      <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no parents") should be(true)
       } yield result

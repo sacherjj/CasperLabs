@@ -4,13 +4,14 @@ import cats.Id
 import cats.effect.Sync
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper._
+import io.casperlabs.casper.{genesis, _}
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
@@ -20,12 +21,7 @@ class BlocksResponseAPITest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with BlockStoreTestFixture
-    with BlockDagStorageTestFixture {
-
-  implicit val syncId: Sync[Id] = io.casperlabs.catscontrib.effect.implicits.syncId
-
-  implicit val indexedBlockDagStorage = IndexedBlockDagStorage.createWithId(blockDagStorage)
+    with BlockDagStorageFixture {
 
   val v1     = ByteString.copyFromUtf8("Validator One")
   val v2     = ByteString.copyFromUtf8("Validator Two")
@@ -35,107 +31,202 @@ class BlocksResponseAPITest
   val v3Bond = Bond(v3, 15)
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-  implicit def timeState[A]: Time[StateWithChain] =
-    Time.stateTTime[IndexedBlockDag, Id](syncId, timeEff)
+  "showMainChain" should "return only blocks in the main chain" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createBlock[Task](
+               Seq(genesis.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+             )
+        b3 <- createBlock[Task](
+               Seq(genesis.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+             )
+        b4 <- createBlock[Task](
+               Seq(b2.blockHash),
+               v3,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
+             )
+        b5 <- createBlock[Task](
+               Seq(b3.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
+             )
+        b6 <- createBlock[Task](
+               Seq(b4.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
+             )
+        b7 <- createBlock[Task](
+               Seq(b5.blockHash),
+               v3,
+               bonds,
+               HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+             )
+        b8 <- createBlock[Task](
+               Seq(b6.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+             )
+        dag  <- blockDagStorage.getRepresentation
+        tips <- Estimator.tips[Task](dag, genesis.blockHash)
+        casperEffect <- NoOpsCasperEffect[Task](
+                         HashMap.empty[BlockHash, BlockMessage],
+                         tips
+                       )
+        logEff            = new LogStub[Task]
+        casperRef         <- MultiParentCasperRef.of[Task]
+        _                 <- casperRef.set(casperEffect)
+        turanOracleEffect = SafetyOracle.turanOracle[Task]
+        blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
+                           Sync[Task],
+                           casperRef,
+                           logEff,
+                           turanOracleEffect,
+                           blockStore
+                         )
+      } yield blocksResponse.length should be(5)
+  }
 
-  val createChain =
+  "showBlocks" should "return all blocks" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createBlock[Task](
+               Seq(genesis.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+             )
+        b3 <- createBlock[Task](
+               Seq(genesis.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+             )
+        b4 <- createBlock[Task](
+               Seq(b2.blockHash),
+               v3,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
+             )
+        b5 <- createBlock[Task](
+               Seq(b3.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
+             )
+        b6 <- createBlock[Task](
+               Seq(b4.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
+             )
+        b7 <- createBlock[Task](
+               Seq(b5.blockHash),
+               v3,
+               bonds,
+               HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+             )
+        b8 <- createBlock[Task](
+               Seq(b6.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+             )
+        dag  <- blockDagStorage.getRepresentation
+        tips <- Estimator.tips[Task](dag, genesis.blockHash)
+        casperEffect <- NoOpsCasperEffect[Task](
+                         HashMap.empty[BlockHash, BlockMessage],
+                         tips
+                       )
+        logEff            = new LogStub[Task]
+        casperRef         <- MultiParentCasperRef.of[Task]
+        _                 <- casperRef.set(casperEffect)
+        turanOracleEffect = SafetyOracle.turanOracle[Task]
+        blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)(
+                           Sync[Task],
+                           casperRef,
+                           logEff,
+                           turanOracleEffect,
+                           blockStore
+                         )
+      } yield
+        blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
+  }
+
+  it should "return until depth" in withStorage { implicit blockStore => implicit blockDagStorage =>
     for {
-      genesis <- createBlock[StateWithChain](Seq(), ByteString.EMPTY, bonds)
-      b2 <- createBlock[StateWithChain](
+      genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+      b2 <- createBlock[Task](
              Seq(genesis.blockHash),
              v2,
              bonds,
              HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
            )
-      b3 <- createBlock[StateWithChain](
+      b3 <- createBlock[Task](
              Seq(genesis.blockHash),
              v1,
              bonds,
              HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
            )
-      b4 <- createBlock[StateWithChain](
+      b4 <- createBlock[Task](
              Seq(b2.blockHash),
              v3,
              bonds,
              HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
            )
-      b5 <- createBlock[StateWithChain](
+      b5 <- createBlock[Task](
              Seq(b3.blockHash),
              v2,
              bonds,
              HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
            )
-      b6 <- createBlock[StateWithChain](
+      b6 <- createBlock[Task](
              Seq(b4.blockHash),
              v1,
              bonds,
              HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
            )
-      b7 <- createBlock[StateWithChain](
+      b7 <- createBlock[Task](
              Seq(b5.blockHash),
              v3,
              bonds,
              HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
            )
-      b8 <- createBlock[StateWithChain](
+      b8 <- createBlock[Task](
              Seq(b6.blockHash),
              v2,
              bonds,
              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
            )
-    } yield b8
-
-  val chain: IndexedBlockDag = createChain.runS(initState)
-  val genesis                = chain.idToBlocks(1)
-
-  implicit val blockStoreEffect = BlockStore[Id]
-  implicit val casperEffect: MultiParentCasper[Id] =
-    NoOpsCasperEffect[Id](
-      HashMap.empty[BlockHash, BlockMessage],
-      Estimator.tips[Id](chain, genesis.blockHash),
-      chain
-    )(syncId, blockStoreEffect)
-  implicit val logEff = new LogStub[Id]
-  implicit val casperRef = {
-    val tmp = MultiParentCasperRef.of[Id]
-    tmp.set(casperEffect)
-    tmp
-  }
-  implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
-
-  "showMainChain" should "return only blocks in the main chain" in {
-    val blocksResponse =
-      BlockAPI.showMainChain[Id](Int.MaxValue)(
-        syncId,
-        casperRef,
-        logEff,
-        turanOracleEffect,
-        blockStore
-      )
-    blocksResponse.length should be(5)
-  }
-
-  "showBlocks" should "return all blocks" in {
-    val blocksResponse =
-      BlockAPI.showBlocks[Id](Int.MaxValue)(
-        syncId,
-        casperRef,
-        logEff,
-        turanOracleEffect,
-        blockStore
-      )
-    blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
-  }
-
-  it should "return until depth" in {
-    val blocksResponse =
-      BlockAPI.showBlocks[Id](2)(
-        syncId,
-        casperRef,
-        logEff,
-        turanOracleEffect,
-        blockStore
-      )
-    blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
+      dag  <- blockDagStorage.getRepresentation
+      tips <- Estimator.tips[Task](dag, genesis.blockHash)
+      casperEffect <- NoOpsCasperEffect[Task](
+                       HashMap.empty[BlockHash, BlockMessage],
+                       tips
+                     )
+      logEff            = new LogStub[Task]
+      casperRef         <- MultiParentCasperRef.of[Task]
+      _                 <- casperRef.set(casperEffect)
+      turanOracleEffect = SafetyOracle.turanOracle[Task]
+      blocksResponse <- BlockAPI.showBlocks[Task](2)(
+                         Sync[Task],
+                         casperRef,
+                         logEff,
+                         turanOracleEffect,
+                         blockStore
+                       )
+    } yield
+      blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
   }
 }

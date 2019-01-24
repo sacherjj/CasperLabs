@@ -3,6 +3,7 @@ package io.casperlabs.casper.helper
 import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Monad}
+import coop.rchain.casper.CreateBlockStatus
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData}
@@ -43,7 +44,7 @@ object NoOpsCasperEffect {
       estimatorFunc: IndexedSeq[BlockMessage] = Vector(BlockMessage())
   ): F[NoOpsCasperEffect[F]] =
     for {
-      _ <- Sync[F].delay { blockStore.map((BlockStore[F].put _).tupled) }
+      _ <- blockStore.toList.traverse_((BlockStore[F].put _).tupled)
     } yield new NoOpsCasperEffect[F](MutableMap(blockStore.toSeq: _*), estimatorFunc)
   def apply[F[_]: Sync: BlockStore: BlockDagStorage](): F[NoOpsCasperEffect[F]] =
     apply(Map.empty, Vector(BlockMessage()))
