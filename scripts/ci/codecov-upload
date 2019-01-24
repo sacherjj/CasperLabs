@@ -1,0 +1,6 @@
+#!/bin/bash
+set -e
+
+for d in block-storage casper crypto comm node shared smart-contracts; do
+	codecov -X gcov -s ./$d -c -F ${d//-}
+done

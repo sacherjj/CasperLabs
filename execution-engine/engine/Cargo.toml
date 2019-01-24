@@ -1,0 +1,26 @@
+[package]
+name = "execution-engine"
+version = "0.1.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+
+[dependencies]
+blake2 = "0.8"
+wasmi = "0.4.2"
+parity-wasm = "0.31"
+pwasm-utils = "0.6"
+storage = { path = "../storage" }
+common = { path = "../common", features = ["std"] }
+wasm-prep = { path = "../wasm-prep" }
+vm = { path = "../vm" }
+clap = "2.32.0"
+parking_lot = "0.7.1"
+
+
+[[bin]]
+name = "engine-standalone"
+path = "src/main.rs"
+
+[lib]
+name = "execution_engine"
+path = "src/lib.rs"
+

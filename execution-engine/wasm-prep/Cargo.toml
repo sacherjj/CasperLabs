@@ -1,0 +1,9 @@
+[package]
+name = "wasm-prep"
+version = "0.1.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+
+[dependencies]
+parity-wasm = "0.31"
+pwasm-utils = "0.6"
+vm = { path = "../vm" }

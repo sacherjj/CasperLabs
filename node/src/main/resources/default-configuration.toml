@@ -1,0 +1,62 @@
+[server]
+#host =
+port = 40400
+http-port = 40403
+kademlia-port = 40404
+dynamic-host-address = false
+no-upnp = false
+default-timeout = 2000
+bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
+standalone = false
+map-size = 1073741824
+store-type = "lmdb"
+data-dir = "$HOME/.casperlabs"
+max-num-of-connections = 500
+max-message-size = 4194304
+chunk-size = 1048576
+
+[lmdb]
+path = "$HOME/.casperlabs/casper-block-store"
+block-store-size = 1073741824
+max-dbs = 1
+max-readers = 126
+use-tls = false
+
+[blockstorage]
+latest-messages-log-path = "$HOME/.casperlabs/casper-block-dag-file-storage-latest-messages-log"
+latest-messages-crc-path = "$HOME/.casperlabs/casper-block-dag-file-storage-latest-messages-crc"
+block-metadata-log-path = "$HOME/.casperlabs/casper-block-dag-file-storage-block-metadata-log"
+block-metadata-crc-path = "$HOME/.casperlabs/casper-block-dag-file-storage-block-metadata-crc"
+checkpoints-dir-path = "$HOME/.casperlabs/casper-block-dag-file-storage-checkpoints"
+latest-messages-log-max-size-factor = 10
+
+[grpc]
+host = "localhost"
+socket = "$HOME/.casperlabs/.casper-node.sock"
+port-external = 40401
+port-internal = 40402
+
+[tls]
+certificate = "$HOME/.casperlabs/node.certificate.pem"
+key = "$HOME/.casperlabs/node.key.pem"
+secure-random-non-blocking = false
+
+[casper]
+#public-key =
+#private-key =
+#private-key-path = Option[Path]
+sig-algorithm = "ed25519"
+#bonds-file =
+#known-validators-file =
+num-validators = 5
+genesis-path = "$HOME/.casperlabs/genesis"
+#wallets-file =
+minimum-bond = 1
+maximum-bond = 9223372036854775807
+has-faucet = false
+required-sigs = 0
+shard-id = "casperlabs"
+approve-genesis = false
+approve-genesis-interval = "5seconds"
+approve-genesis-duration = "5minutes"
+#deploy-timestamp =
