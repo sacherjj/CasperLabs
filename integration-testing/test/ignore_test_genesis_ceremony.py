@@ -8,7 +8,7 @@ from typing import (
 import pytest
 
 import conftest
-from rnode_testing.rnode import docker_network_with_started_bootstrap
+from casperlabsnode_testing.casperlabsnode import docker_network_with_started_bootstrap
 
 if TYPE_CHECKING:
     from _pytest.fixtures import FixtureRequest

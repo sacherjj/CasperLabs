@@ -10,13 +10,13 @@ import pytest
 from docker.client import DockerClient
 from docker.errors import ContainerError
 import conftest
-from rnode_testing.common import (
+from casperlabsnode_testing.common import (
     random_string,
     make_tempfile,
     make_tempdir,
     TestingContext,
 )
-from rnode_testing.wait import (
+from casperlabsnode_testing.wait import (
     wait_for_node_started,
 )
 
@@ -36,19 +36,19 @@ DEFAULT_IMAGE = os.environ.get(
     "DEFAULT_IMAGE",
     "casperlabs-integration-testing:latest")
 
-rnode_binary = '/opt/docker/bin/node'
-rnode_directory = "/var/lib/rnode"
-rnode_deploy_dir = "{}/deploy".format(rnode_directory)
-rnode_bonds_file = '{}/genesis/bonds.txt'.format(rnode_directory)
-rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
-rnode_key = '{}/node.key.pem'.format(rnode_directory)
+casperlabsnode_binary = '/opt/docker/bin/node'
+casperlabsnode_directory = "/var/lib/casperlabsnode"
+casperlabsnode_deploy_dir = "{}/deploy".format(casperlabsnode_directory)
+casperlabsnode_bonds_file = '{}/genesis/bonds.txt'.format(casperlabsnode_directory)
+casperlabsnode_certificate = '{}/node.certificate.pem'.format(casperlabsnode_directory)
+casperlabsnode_key = '{}/node.key.pem'.format(casperlabsnode_directory)
 
 
 class InterruptedException(Exception):
     pass
 
 
-class RNodeAddressNotFoundError(Exception):
+class CasperLabsNodeAddressNotFoundError(Exception):
     pass
 
 
@@ -114,7 +114,7 @@ class Node:
                  network: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
-        self.remote_deploy_dir = rnode_deploy_dir
+        self.remote_deploy_dir = casperlabsnode_deploy_dir
         self.name = container.name
         self.docker_client = docker_client
         self.timeout = timeout
@@ -133,13 +133,13 @@ class Node:
     def logs(self) -> str:
         return self.container.logs().decode('utf-8')
 
-    def get_rnode_address(self) -> str:
+    def get_casperlabsnode_address(self) -> str:
         log_content = self.logs()
         m = re.search("Listening for traffic on (casperlabs://.+@{name}\\?protocol=\\d+&discovery=\\d+)\\.$".format(name=self.container.name),
                       log_content,
                       re.MULTILINE | re.DOTALL)
         if m is None:
-            raise RNodeAddressNotFoundError()
+            raise CasperLabsNodeAddressNotFoundError()
         address = m.group(1)
         return address
 
@@ -156,18 +156,18 @@ class Node:
         self.background_logging.join()
 
     def deploy_contract(self, contract: str) -> Tuple[int, str]:
-        cmd = '{rnode_binary} deploy --from "0x1" --gas-limit 1000000 --gas-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'.format(
-            rnode_binary=rnode_binary,
-            rnode_deploy_dir=rnode_deploy_dir,
+        cmd = '{casperlabsnode_binary} deploy --from "0x1" --gas-limit 1000000 --gas-price 1 --nonce 0 {casperlabsnode_deploy_dir}/{contract}'.format(
+            casperlabsnode_binary=casperlabsnode_binary,
+            casperlabsnode_deploy_dir=casperlabsnode_deploy_dir,
             contract=contract
         )
         return self.exec_run(cmd)
 
     def propose_contract(self) -> Tuple[int, str]:
-        return self.exec_run('{} propose'.format(rnode_binary))
+        return self.exec_run('{} propose'.format(casperlabsnode_binary))
 
     def show_blocks(self) -> Tuple[int, str]:
-        return self.exec_run('{} show-blocks'.format(rnode_binary))
+        return self.exec_run('{} show-blocks'.format(casperlabsnode_binary))
 
     def show_blocks_with_depth(self, depth: int) -> str:
         command = " ".join([
@@ -183,7 +183,7 @@ class Node:
         return extract_block_count_from_show_blocks(show_blocks_output)
 
     def get_block(self, block_hash: str) -> str:
-        return self.call_rnode('show-block', block_hash, stderr=False)
+        return self.call_casperlabsnode('show-block', block_hash, stderr=False)
 
     # deprecated, don't use, why? ask @adaszko
     def exec_run(self, cmd: Union[Tuple[str, ...], str], stderr=True) -> Tuple[int, str]:
@@ -216,8 +216,8 @@ class Node:
             raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
         return output
 
-    def call_rnode(self, *node_args: str, stderr: bool = True) -> str:
-        return self.shell_out(rnode_binary, *node_args, stderr=stderr)
+    def call_casperlabsnode(self, *node_args: str, stderr: bool = True) -> str:
+        return self.shell_out(casperlabsnode_binary, *node_args, stderr=stderr)
 
     def invoke_client(self, command: str, volumes: Dict[str, Dict[str, str]]=None) -> str:
         if volumes is None:
@@ -274,8 +274,8 @@ class Node:
 
     def deploy_string(self, rholang_code: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)
-        return self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
-            rnode_binary=rnode_binary,
+        return self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {casperlabsnode_binary} deploy --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
+            casperlabsnode_binary=casperlabsnode_binary,
             quoted_rholang=quoted_rholang,
         ))
 
@@ -288,7 +288,7 @@ class Node:
         return self.invoke_client(command)
 
     def generate_faucet_bonding_deploys(self, bond_amount: int, private_key: str, public_key: str) -> str:
-        return self.call_rnode('generateFaucetBondingDeploys',
+        return self.call_casperlabsnode('generateFaucetBondingDeploys',
             '--amount={}'.format(bond_amount),
             '--private-key={}'.format(private_key),
             '--public-key={}'.format(public_key),
@@ -369,8 +369,8 @@ def make_node(
     volumes = [
         "{}:/etc/hosts.allow".format(hosts_allow_file),
         "{}:/etc/hosts.deny".format(hosts_deny_file),
-        "{}:{}".format(bonds_file, rnode_bonds_file),
-        "{}:{}".format(deploy_dir, rnode_deploy_dir),
+        "{}:{}".format(bonds_file, casperlabsnode_bonds_file),
+        "{}:{}".format(deploy_dir, casperlabsnode_deploy_dir),
     ]
 
     container = docker_client.containers.run(
@@ -450,8 +450,8 @@ def make_bootstrap_node(
         container_command_options.update(cli_options)
 
     volumes = [
-        "{}:{}".format(cert_file, rnode_certificate),
-        "{}:{}".format(key_file, rnode_key)
+        "{}:{}".format(cert_file, casperlabsnode_certificate),
+        "{}:{}".format(key_file, casperlabsnode_key)
     ]
 
     container = make_node(
@@ -490,7 +490,7 @@ def make_peer(
     assert '_' not in name, 'Underscore is not allowed in host name'
     name = make_peer_name(network, name)
 
-    bootstrap_address = bootstrap.get_rnode_address()
+    bootstrap_address = bootstrap.get_casperlabsnode_address()
 
     container_command_options = {
         "--server-bootstrap":       bootstrap_address,

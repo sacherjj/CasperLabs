@@ -1,6 +1,6 @@
 #!/usr/bin/env python3.6
 """
-This is a simple script to boot a rchain p2p network using bootstrap/peer/bond named containers
+This is a simple script to boot a casperlabs p2p network using bootstrap/peer/bond named containers
 It deletes bootstrap/peer named containers before it creates them leaving other named containers
 
 Usage:
@@ -10,11 +10,11 @@ Options:
  -c --cpuset-cpus=C   set docker cpuset-cpus for all nodes. Allows limiting execution in specific CPUs
                       [default: 0]
  -i --image=I         source repo for docker image
-                      [default: coop.rchain/rnode:latest]
+                      [default: io.casperlabs/node:latest]
  -m --memory=M        set docker memory limit for all nodes
                       [default: 2048m]
  -n --network=N       set docker network name
-                      [default: rchain.coop]
+                      [default: io.casperlabs]
  -p --peers-amount=N  set total amount of peers for network
                       [default: 2]
  -r --remove          forcibly remove containers that start with bootstrap and peer associated to network name
@@ -32,7 +32,7 @@ Return code of 0 is success on test and 1 is fail.
 
 Example below shows how to boot network with 3 nodes, including bootstrap, and run specific test
 
-sudo ./boot-p2p.py -m 34360m -c 1 -p 3  --genesis --sigs 2 --bonds <bond_file_path> --wallet <wallet_file_path> --has-faucet  -i rchain-integration-testing:latest --remove
+sudo ./boot-p2p.py -m 34360m -c 1 -p 3  --genesis --sigs 2 --bonds <bond_file_path> --wallet <wallet_file_path> --has-faucet  -i casperlabs-integration-testing:latest --remove
 
 """
 # This requires Python 3.6 to be installed for f-string. Install dependencies via pip
@@ -65,7 +65,7 @@ def main(argv, cwd,
     if args.network not in networks:
         client.networks.create(args.network)
     if args.remove:
-        # only removes boostrap/peer.rchain.coop or .network nodes
+        # only removes boostrap/peer.casperlabs.io or .network nodes
         remove_resources_by_network(client.containers, args.network)
 
     image = DockerImage(client.containers,
@@ -195,12 +195,12 @@ class DockerImage(object):
         return self.__containers.run(**detail)
 
 
-class RNode(object):
-    directory = '/var/lib/rnode'
+class CasperLabsNode(object):
+    directory = '/var/lib/casperlabsnode'
 
 
-class BootstrapNode(RNode):
-    # Create key/cert pem files to be loaded into rnode volume
+class BootstrapNode(CasperLabsNode):
+    # Create key/cert pem files to be loaded into casperlabsnode volume
     bootstrap_node_demo_key = (
         "-----BEGIN PRIVATE KEY-----\n"
         "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgYcybGU15SCs2x+5I\n"
@@ -242,7 +242,7 @@ class BootstrapNode(RNode):
 
     @property
     def address(self):
-        return f'rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.{self.network}?protocol=40400&discovery=40404'
+        return f'casperlabs://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.{self.network}?protocol=40400&discovery=40404'
 
     def key_volumes(self, temp):
         tmp_file_key = temp / 'node.key.pem'
@@ -254,9 +254,9 @@ class BootstrapNode(RNode):
 
         volumes = {
             str(tmp_file_cert): {
-                "bind": f'{RNode.directory}/node.certificate.pem',
+                "bind": f'{CasperLabsNode.directory}/node.certificate.pem',
                 "mode": 'rw'},
-            str(tmp_file_key): {"bind": f'{RNode.directory}/node.key.pem',
+            str(tmp_file_key): {"bind": f'{CasperLabsNode.directory}/node.key.pem',
                                 "mode": 'rw'}
         }
 
@@ -274,8 +274,8 @@ class BootstrapNode(RNode):
 
     @classmethod
     def genesis(cls, sigs, bonds=None, wallets=None):
-        container_bonds_file = f'{RNode.directory}/genesis/bonds.txt'
-        container_wallets_file = f'{RNode.directory}/genesis/wallets.txt'
+        container_bonds_file = f'{CasperLabsNode.directory}/genesis/bonds.txt'
+        container_wallets_file = f'{CasperLabsNode.directory}/genesis/wallets.txt'
 
         command = []
         volumes = {}
@@ -290,7 +290,7 @@ class BootstrapNode(RNode):
         return command, volumes
 
 
-class PeerNode(RNode):
+class PeerNode(CasperLabsNode):
     def __init__(self, name_prefix, network, i, key_pair):
         name = f"{name_prefix}{i}.{network}"
         log.info(

@@ -8,8 +8,8 @@ import typing_extensions
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from rnode_testing.common import Network
-    from rnode_testing.rnode import Node
+    from casperlabsnode_testing.common import Network
+    from casperlabsnode_testing.casperlabsnode import Node
 
 
 class PredicateProtocol(typing_extensions.Protocol):
@@ -35,7 +35,7 @@ class LogsContainMessage:
 
 class NodeStarted(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'io.casperlabs.node.NodeRuntime - Listening for traffic on rnode')
+        super().__init__(node, 'io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabsnode')
 
 
 class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):

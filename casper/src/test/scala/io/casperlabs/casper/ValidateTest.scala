@@ -91,7 +91,7 @@ class ValidateTest
   def signedBlock(i: Int)(implicit chain: IndexedBlockDag, sk: Array[Byte]): BlockMessage = {
     val block = chain.idToBlocks(i)
     val pk    = Ed25519.toPublic(sk)
-    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", "rchain")
+    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", "casperlabs")
   }
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
@@ -360,11 +360,11 @@ class ValidateTest
           pk,
           sk,
           "ed25519",
-          "rchain"
+          "casperlabs"
         ),
         BlockMessage(),
         chain,
-        "rchain"
+        "casperlabs"
       ) should be(Left(InvalidBlockNumber))
       log.warns.size should be(1)
   }
@@ -532,7 +532,7 @@ class ValidateTest
     val (sk, pk) = Ed25519.newKeyPair
     val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
     val genesis =
-      ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "rchain")
+      ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "casperlabs")
 
     Validate.formatOfFields[Id](genesis) should be(true)
     Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
@@ -559,7 +559,7 @@ class ValidateTest
   "Block hash format validation" should "fail on invalid hash" in {
     val (sk, pk) = Ed25519.newKeyPair
     val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
-    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "rchain")
+    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "casperlabs")
     Validate.blockHash[Id](genesis) should be(Right(Valid))
     Validate.blockHash[Id](
       genesis.withBlockHash(ByteString.copyFromUtf8("123"))
@@ -569,7 +569,7 @@ class ValidateTest
   "Block deploy count validation" should "fail on invalid number of deploys" in {
     val (sk, pk) = Ed25519.newKeyPair
     val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
-    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "rchain")
+    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "casperlabs")
     Validate.deployCount[Id](genesis) should be(Right(Valid))
     Validate.deployCount[Id](
       genesis.withHeader(genesis.header.get.withDeployCount(100))
@@ -579,7 +579,7 @@ class ValidateTest
   "Block version validation" should "work" in {
     val (sk, pk) = Ed25519.newKeyPair
     val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
-    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "rchain")
+    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "casperlabs")
     Validate.version[Id](genesis, -1) should be(false)
     Validate.version[Id](genesis, 1) should be(true)
   }

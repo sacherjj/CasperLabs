@@ -53,7 +53,7 @@ class HashSetCasperTestNode[F[_]](
     logicalTime: LogicalTime[F],
     implicit val errorHandlerEff: ErrorHandler[F],
     storageSize: Long,
-    shardId: String = "rchain"
+    shardId: String = "casperlabs"
 )(
     implicit scheduler: Scheduler,
     syncF: Sync[F],

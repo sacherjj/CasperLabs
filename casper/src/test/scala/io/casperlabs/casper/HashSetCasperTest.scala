@@ -906,7 +906,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       validators(1),
       validatorKeys(1),
       "ed25519",
-      "rchain"
+      "casperlabs"
     )
   }
 }
@@ -940,7 +940,7 @@ object HashSetCasperTest {
       faucetCode: String => String,
       deployTimestamp: Long
   ): BlockMessage = {
-    val initial                 = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
+    val initial                 = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "casperlabs")
     val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
     val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
     val emptyStateHash          = runtimeManager.emptyStateHash

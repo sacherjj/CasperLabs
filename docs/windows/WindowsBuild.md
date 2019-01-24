@@ -1,4 +1,4 @@
-# RNode windows build
+# CasperLabsNode windows build
 ## Important
 During windows build you may see the following error: "java.util.regex.PatternSyntaxException: Unclosed group near index 9". This is an issue inside scalamft formatter, https://github.com/scalameta/sbt-scalafmt/issues/5
 To fix it just disable scalafmt: find "scalafmtOnCompile := true" line in the "build.sbt" file, and replace "true" with "false".
@@ -27,7 +27,7 @@ bnfc:generate
 ```
 ## 6. From sbt shell build node
 
-You can follow the rnode build instruction (see https://github.com/rchain/rchain/blob/master/node/README.md), but on windows it might be easier to work with stage build, with all jars in the same folder buy running:
+You can follow the casperlabsnode build instruction (see https://github.com/rchain/rchain/blob/master/node/README.md), but on windows it might be easier to work with stage build, with all jars in the same folder buy running:
 ```
 node/universal:stage
 ```
@@ -37,18 +37,18 @@ The build artifacts will be located in the node/target/universal/stage directory
 
 ## 7. Prepare certificates, keys, etc.
 Follow official user guide:
-https://rchain.atlassian.net/wiki/spaces/CORE/pages/428376065/User+guide+for+running+RNode#UserguideforrunningRNode-Bootstrapnode
+https://rchain.atlassian.net/wiki/spaces/CORE/pages/428376065/User+guide+for+running+CasperLabsNode#UserguideforrunningCasperLabsNode-Bootstrapnode
 
 ## 8. Prepare a command line or a .toml file
-See also [rnode.toml](rnode.toml) example
+See also [casperlabsnode.toml](casperlabsnode.toml) example
 
-## 9. Start RNode
-For easy start you can use rnode.bat start file generated during build. For example:
+## 9. Start CasperLabsNode
+For easy start you can use casperlabsnode.bat start file generated during build. For example:
 ```
-rnode.bat run --data-dir C:\RChain\data
+casperlabsnode.bat run --data-dir C:\RChain\data
 ```
 
-Sometimes the following errors could appear "invalid syntax" and "the command is too long" or "the path is too long". If you see those errors, open rnode.bat and find the very long line (usally 83) that starts with 
+Sometimes the following errors could appear "invalid syntax" and "the command is too long" or "the path is too long". If you see those errors, open casperlabsnode.bat and find the very long line (usally 83) that starts with 
 ```
 set "APP_CLASSPATH=...<<< many .jar files >>>" 
 ```

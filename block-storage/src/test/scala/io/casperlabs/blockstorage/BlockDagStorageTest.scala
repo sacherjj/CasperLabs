@@ -7,7 +7,7 @@ import io.casperlabs.shared.PathOps._
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import BlockGen._
 import cats.effect.Sync
-import coop.rchain.blockstorage.Context
+import io.casperlabs.blockstorage.Context
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
@@ -65,7 +65,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   import java.nio.file.{Files, Path}
 
-  private[this] def mkTmpDir(): Path = Files.createTempDirectory("rchain-dag-storage-test-")
+  private[this] def mkTmpDir(): Path = Files.createTempDirectory("casperlabs-dag-storage-test-")
 
   def withDagStorageLocation[R](f: (Path, BlockStore[Task]) => Task[R]): R = {
     val testProgram = Sync[Task].bracket {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 BASEPATH=$(cd `dirname $0`; pwd)
-RCHAINPATH=$(dirname ${BASEPATH})
+CASPERLABS_PATH=$(dirname ${BASEPATH})
 mkdir -p ${BASEPATH}/protobuf
 
 # create the Python environment
@@ -13,7 +13,7 @@ python3 -m venv ./.virtualenv
 
 # remove all the original protobuf files
 rm ${BASEPATH}/protobuf/*.proto
-cp ${RCHAINPATH}/models/src/main/protobuf/*.proto ${BASEPATH}/protobuf
+cp ${CASPERLABS_PATH}/models/src/main/protobuf/*.proto ${BASEPATH}/protobuf
 
 Regenerate(){
 filename=$(basename $@)
@@ -21,12 +21,12 @@ cat $@ | sed 's/import \"scalapb\/scalapb\.proto\"\;//g' | sed 's/\[(scalapb\.fi
 }
 
 # remove the scala code in the protofiles
-for file in ${RCHAINPATH}/models/src/main/protobuf/*.proto;
+for file in ${CASPERLABS_PATH}/models/src/main/protobuf/*.proto;
 do
 Regenerate ${file}
 done
 
-for file in ${RCHAINPATH}/comm/src/main/protobuf/coop/rchain/comm/protocol/*.proto
+for file in ${CASPERLABS_PATH}/comm/src/main/protobuf/io/casperlabs/comm/protocol/*.proto
 do
 Regenerate ${file}
 done

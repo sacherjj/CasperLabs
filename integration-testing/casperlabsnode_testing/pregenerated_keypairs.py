@@ -1,4 +1,4 @@
-from rnode_testing.common import KeyPair
+from casperlabsnode_testing.common import KeyPair
 
 
 PREGENERATED_KEYPAIRS = [
