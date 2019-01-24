@@ -20,7 +20,6 @@ import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.shared.{Log, LogSource}
 
-import scala.collection.immutable.HashSet
 import scala.ref.WeakReference
 import scala.util.matching.Regex
 import collection.JavaConverters._
@@ -259,6 +258,17 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       _ <- latestMessagesLogSizeRef.set(0)
     } yield ()
 
+  private def squashLatestMessagesDataFileIfNeeded(): F[Unit] =
+    for {
+      latestMessages        <- latestMessagesRef.get
+      latestMessagesLogSize <- latestMessagesLogSizeRef.get
+      result <- if (latestMessagesLogSize > latestMessages.size * latestMessagesLogMaxSizeFactor) {
+                 squashLatestMessagesDataFile()
+               } else {
+                 ().pure[F]
+               }
+    } yield result
+
   private def updateDataLookupFile(blockMetadata: BlockMetadata): F[Unit] =
     for {
       dataLookupCrc          <- blockMetadataCrcRef.get
@@ -295,45 +305,56 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
 
   def insert(block: BlockMessage): F[Unit] =
     for {
-      _                     <- lock.acquire
-      latestMessages        <- latestMessagesRef.get
-      latestMessagesLogSize <- latestMessagesLogSizeRef.get
-      _ <- if (latestMessagesLogSize > latestMessages.size * latestMessagesLogMaxSizeFactor) {
-            squashLatestMessagesDataFile()
+      _             <- lock.acquire
+      alreadyStored <- dataLookupRef.get.map(_.contains(block.blockHash))
+      _ <- if (alreadyStored) {
+            Log[F].warn(s"Block ${Base16.encode(block.blockHash.toByteArray)} is already stored")
           } else {
-            ().pure[F]
+            for {
+              _             <- squashLatestMessagesDataFileIfNeeded()
+              blockMetadata = BlockMetadata.fromBlock(block)
+              _             = assert(block.blockHash.size == 32)
+              _             <- dataLookupRef.update(_.updated(block.blockHash, blockMetadata))
+              _ <- childMapRef.update(
+                    childMap =>
+                      parentHashes(block)
+                        .foldLeft(childMap) {
+                          case (acc, p) =>
+                            val currChildren = acc.getOrElse(p, Set.empty[BlockHash])
+                            acc.updated(p, currChildren + block.blockHash)
+                        }
+                        .updated(block.blockHash, Set.empty[BlockHash])
+                  )
+              _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
+              //Block which contains newly bonded validators will not
+              //have those validators in its justification
+              newValidators = bonds(block)
+                .map(_.validator)
+                .toSet
+                .diff(block.justifications.map(_.validator).toSet)
+              newValidatorsWithSender <- if (block.sender.isEmpty) {
+                                          // Ignore empty sender for special cases such as genesis block
+                                          Log[F].warn(
+                                            s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                          ) *> newValidators.pure[F]
+                                        } else if (block.sender.size() == 32) {
+                                          (newValidators + block.sender).pure[F]
+                                        } else {
+                                          Sync[F].raiseError[Set[ByteString]](
+                                            BlockSenderIsMalformed(block)
+                                          )
+                                        }
+              _ <- latestMessagesRef.update { latestMessages =>
+                    newValidatorsWithSender.foldLeft(latestMessages) {
+                      //Update new validators with block in which
+                      //they were bonded (i.e. this block)
+                      case (acc, v) => acc.updated(v, block.blockHash)
+                    }
+                  }
+              _ <- updateLatestMessagesFile((newValidators + block.sender).toList, block.blockHash)
+              _ <- updateDataLookupFile(blockMetadata)
+            } yield ()
           }
-      blockMetadata = BlockMetadata.fromBlock(block)
-      _             <- dataLookupRef.update(_.updated(block.blockHash, blockMetadata))
-      _ <- childMapRef.update(
-            childMap =>
-              parentHashes(block)
-                .foldLeft(childMap) {
-                  case (acc, p) =>
-                    val currChildren = acc.getOrElse(p, Set.empty[BlockHash])
-                    acc.updated(p, currChildren + block.blockHash)
-                }
-                .updated(block.blockHash, Set.empty[BlockHash])
-          )
-      _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
-      //Block which contains newly bonded validators will not
-      //have those validators in its justification
-      newValidators = bonds(block)
-        .map(_.validator)
-        .toSet
-        .diff(block.justifications.map(_.validator).toSet)
-      _ <- latestMessagesRef.update { latestMessages =>
-            newValidators.foldLeft(
-              //update creator of the block
-              latestMessages.updated(block.sender, block.blockHash)
-            ) {
-              //Update new validators with block in which
-              //they were bonded (i.e. this block)
-              case (acc, v) => acc.updated(v, block.blockHash)
-            }
-          }
-      _ <- updateLatestMessagesFile((newValidators + block.sender).toList, block.blockHash)
-      _ <- updateDataLookupFile(blockMetadata)
       _ <- lock.release
     } yield ()
 
@@ -753,7 +774,8 @@ object BlockDagFileStorage {
                                             new FileOutputStream(
                                               config.latestMessagesLogPath.toFile,
                                               true
-                                            ))
+                                            )
+                                          )
       blockMetadataCrc      = Crc32.empty[F]()
       genesisByteString     = genesis.toByteString
       genesisData           = genesisByteString.size.toByteString.concat(genesisByteString).toByteArray
@@ -765,7 +787,8 @@ object BlockDagFileStorage {
                                            new FileOutputStream(
                                              config.blockMetadataLogPath.toFile,
                                              true
-                                           ))
+                                           )
+                                         )
       blockMetadataCrcRef <- Ref.of[F, Crc32[F]](blockMetadataCrc)
       checkPointsRef      <- Ref.of[F, List[Checkpoint]](List.empty)
       sortOffsetRef       <- Ref.of[F, Long](0L)
@@ -789,10 +812,4 @@ object BlockDagFileStorage {
         config.blockMetadataLogPath,
         config.blockMetadataCrcPath
       )
-
-  def createWithId(config: Config)(implicit blockStore: BlockStore[Id]): BlockDagFileStorage[Id] = {
-    import io.casperlabs.catscontrib.effect.implicits._
-    implicit val log = new Log.NOPLog[Id]()
-    BlockDagFileStorage.create[Id](config)
-  }
 }

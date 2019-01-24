@@ -2,10 +2,9 @@ package io.casperlabs.casper.helper
 
 import java.nio.file.{Files, Path, Paths}
 
-import cats.{Applicative, ApplicativeError, Id, Monad, Traverse}
 import cats.data.EitherT
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Effect, Sync}
+import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.blockstorage._
@@ -190,14 +189,6 @@ object HashSetCasperTestNode {
       result <- node.initialize.map(_ => node)
     } yield result
   }
-  def standalone(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
-      implicit scheduler: Scheduler
-  ): HashSetCasperTestNode[Id] = {
-    implicit val errorHandlerEff = errorHandler
-    implicit val absId           = ToAbstractContext.idToAbstractContext
-
-    standaloneF[Id](genesis, sk, storageSize)
-  }
   def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
@@ -294,16 +285,6 @@ object HashSetCasperTestNode {
               )
           }
     } yield nodes
-  }
-  def network(
-      sks: IndexedSeq[Array[Byte]],
-      genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024 * 10
-  )(implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode[Id]] = {
-    implicit val errorHandlerEff = errorHandler
-    implicit val absId           = ToAbstractContext.idToAbstractContext
-
-    networkF[Id](sks, genesis, storageSize)
   }
   def networkEff(
       sks: IndexedSeq[Array[Byte]],

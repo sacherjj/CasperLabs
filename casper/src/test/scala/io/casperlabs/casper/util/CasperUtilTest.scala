@@ -4,18 +4,24 @@ import ProtoUtil._
 import com.google.protobuf.ByteString
 import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.catscontrib._
-import Catscontrib._
-import cats._
+import cats.implicits._
+import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import cats.data._
 import cats.effect.Bracket
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
 import io.casperlabs.blockstorage.BlockStore
-import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.helper.BlockGenerator
+import io.casperlabs.casper.helper.BlockGenerator._
+import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import monix.eval.Task
+import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
+import io.casperlabs.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
+import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
+import io.casperlabs.shared.Time
 import monix.eval.Task
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
@@ -64,8 +70,8 @@ class CasperUtilTest
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "isInMainChain" should "classify complicated chains appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v1 = ByteString.copyFromUtf8("Validator One")
-      val v2 = ByteString.copyFromUtf8("Validator Two")
+      val v1 = generateValidator("Validator One")
+      val v2 = generateValidator("Validator Two")
 
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
@@ -123,22 +129,40 @@ class CasperUtilTest
         b10     <- createBlock[Task](Seq(b8.blockHash), deploys = Seq(deploys(4)))
 
         dag <- blockDagStorage.getRepresentation
-        mkRuntimeManager("casper-util-test").use { runtimeManager =>
-          _
-          <- conflicts[Task](b2, b3, genesis, dag) shouldBeF false
-          _
-          <- conflicts[Task](b4, b5, genesis, dag) shouldBeF true
-          _
-          <- conflicts[Task](b6, b6, genesis, dag) shouldBeF false
-          _
-          <- conflicts[Task](b6, b9, genesis, dag) shouldBeF false
-          _
-          <- conflicts[Task](b7, b8, genesis, dag) shouldBeF false
-          _
-          <- conflicts[Task](b7, b10, genesis, dag) shouldBeF false
-          result
-          <- conflicts[Task](b9, b10, genesis, dag) shouldBeF true
-        }
+        result <- mkRuntimeManager("casper-util-test").use { runtimeManager =>
+                   for {
+                     computeBlockCheckpointResult <- computeBlockCheckpoint(
+                                                      genesis,
+                                                      genesis,
+                                                      dag,
+                                                      runtimeManager
+                                                    )
+                     (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
+                     _ <- injectPostStateHash[Task](
+                           0,
+                           genesis,
+                           postGenStateHash,
+                           postGenProcessedDeploys
+                         )
+                     _ <- updateChainWithBlockStateUpdate[Task](1, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](2, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](3, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](4, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](5, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](6, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](7, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](8, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](9, genesis, runtimeManager)
+
+                     _      <- conflicts[Task](b2, b3, dag) shouldBeF false
+                     _      <- conflicts[Task](b4, b5, dag) shouldBeF true
+                     _      <- conflicts[Task](b6, b6, dag) shouldBeF false
+                     _      <- conflicts[Task](b6, b9, dag) shouldBeF false
+                     _      <- conflicts[Task](b7, b8, dag) shouldBeF false
+                     _      <- conflicts[Task](b7, b10, dag) shouldBeF false
+                     result <- conflicts[Task](b9, b10, dag) shouldBeF true
+                   } yield result
+                 }
       } yield result
   }
 }

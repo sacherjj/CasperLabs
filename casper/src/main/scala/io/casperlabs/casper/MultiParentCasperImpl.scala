@@ -5,7 +5,6 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.CreateBlockStatus
 import io.casperlabs.blockstorage.util.TopologicalSortUtil
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStore}
 import io.casperlabs.casper.protocol._
@@ -25,6 +24,8 @@ import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
+import coop.rchain.shared.AttemptOps._
+import coop.rchain.catscontrib.TaskContrib._
 
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
@@ -77,10 +78,11 @@ class MultiParentCasperImpl[
 
   def addBlock(b: BlockMessage): F[BlockStatus] =
     for {
-      _         <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
-      dag       = _blockDag.get
-      blockHash = b.blockHash
-      result <- if (dag.dataLookup.contains(blockHash) || blockBuffer.exists(
+      _              <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
+      dag            <- blockDag
+      blockHash      = b.blockHash
+      containsResult <- dag.contains(blockHash)
+      result <- if (containsResult || blockBuffer.exists(
                       _.blockHash == blockHash
                     )) {
                  Log[F]
@@ -222,7 +224,8 @@ class MultiParentCasperImpl[
         //which are bonded validators in the chosen parent. This is safe because
         //any latest message not from a bonded validator will not change the
         //final fork-choice.
-        justifications = toJustification(dag.latestMessages)
+        latestMessages <- dag.latestMessages
+        justifications = toJustification(latestMessages)
           .filter(j => bondedValidators.contains(j.validator))
         proposal <- if (r.nonEmpty || p.length > 1) {
                      createProposal(dag, p, r, justifications)
@@ -260,7 +263,7 @@ class MultiParentCasperImpl[
     } yield result.toSeq
 
   private def createProposal(
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage],
       r: Seq[(Deploy, ExecutionEffect)],
       justifications: Seq[Justification]
@@ -316,28 +319,8 @@ class MultiParentCasperImpl[
                        val block  = unsignedBlockProto(body, header, justifications, shardId)
                        CreateBlockStatus.created(block)
                      })
-                     .flatMap[CreateBlockStatus] {
-                       case status @ Created(block) =>
-                         val number     = block.body.get.state.get.blockNumber
-                         val transforms = r.flatMap(_._2.transformMap)
-                         val msgBody = transforms
-                           .map(t => {
-                             val k    = PrettyPrinter.buildString(t.key.get)
-                             val tStr = PrettyPrinter.buildString(t.transform.get)
-                             s"$k :: $tStr"
-                           })
-                           .mkString("\n")
-                         Log[F]
-                           .info(s"Block #$number created with effects:\n$msgBody")
-                           .map(_ => status)
-                       case other => other.pure[F]
-                     }
                }
     } yield result
-
-  def blockDag: F[BlockDag] = Sync[F].delay {
-    _blockDag.get
-  }
 
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
@@ -479,32 +462,30 @@ class MultiParentCasperImpl[
 
   private def fetchMissingDependencies(b: BlockMessage): F[Unit] =
     for {
-      missingParents <- parentHashes(b).toSet.pure[F]
+      dag            <- blockDag
+      missingParents = parentHashes(b).toSet
       missingJustifications = b.justifications
         .map(_.latestBlockHash)
         .toSet
       allDependencies = (missingParents union missingJustifications).toList
       missingDependencies <- allDependencies.filterA(
-                              blockHash => BlockStore[F].contains(blockHash).map(b => !b)
+                              blockHash =>
+                                dag
+                                  .lookup(blockHash)
+                                  .map(_.isEmpty && !blockBuffer.exists(_.blockHash == blockHash))
                             )
-      missingUnseenDependencies = missingDependencies.filterNot(
-        blockHash => blockBuffer.exists(_.blockHash == blockHash)
-      )
       _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
-      _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
     } yield ()
 
-  private def handleMissingDependency(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
+  private def handleMissingDependency(hash: BlockHash, parentBlock: BlockMessage): F[Unit] =
     for {
-      _ <- dependencyDagState.modify(
-            dependencyDag =>
+      _ <- blockBufferDependencyDagState.modify(
+            blockBufferDependencyDag =>
               DoublyLinkedDagOperations
-                .add[BlockHash](dependencyDag, hash, childBlock.blockHash)
+                .add[BlockHash](blockBufferDependencyDag, hash, parentBlock.blockHash)
           )
+      _ <- CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
     } yield ()
-
-  private def requestMissingDependency(hash: BlockHash) =
-    CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
 
   private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =
     for {
@@ -516,62 +497,15 @@ class MultiParentCasperImpl[
     } yield ()
 
   private def addToState(block: BlockMessage): F[Unit] =
-    BlockStore[F].put {
-      _blockDag.update(bd => {
-        val hash = block.blockHash
-
-        val updatedSort   = TopologicalSortUtil.update(bd.topoSort, bd.sortOffset, block)
-        val updatedLookup = bd.dataLookup.updated(block.blockHash, BlockMetadata.fromBlock(block))
-
-        //add current block as new child to each of its parents
-        val newChildMap = parentHashes(block).foldLeft(bd.childMap) {
-          case (acc, p) =>
-            val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
-            acc.updated(p, currChildren + hash)
-        }
-
-        //Block which contains newly bonded validators will not
-        //have those validators in its justification
-        val newValidators =
-          bonds(block).map(_.validator).toSet.diff(block.justifications.map(_.validator).toSet)
-        val newLatestMessages = newValidators.foldLeft(
-          //update creator of the block
-          bd.latestMessages.updated(block.sender, block)
-        ) {
-          //Update new validators with block in which
-          //they were bonded (i.e. this block)
-          case (acc, v) => acc.updated(v, block)
-        }
-
-        val lmJustifications = toLatestMessageHashes(block.justifications)
-        //ditto for latestMessagesOfLatestMessages
-        val newLatestLatestMessages = newValidators.foldLeft(
-          bd.latestMessagesOfLatestMessages.updated(block.sender, lmJustifications)
-        ) {
-          case (acc, v) => acc.updated(v, lmJustifications)
-        }
-
-        bd.copy(
-          //Assume that a non-equivocating validator must include
-          //its own latest message in the justification. Therefore,
-          //for a given validator the blocks are guaranteed to arrive in causal order.
-          // Even for a equivocating validator, we just update its latest message
-          // to whatever block we have fetched latest among the blocks that
-          // constitute the equivocation.
-          latestMessages = newLatestMessages,
-          latestMessagesOfLatestMessages = newLatestLatestMessages,
-          childMap = newChildMap,
-          dataLookup = updatedLookup,
-          topoSort = updatedSort
-        )
-      })
-      (block.blockHash, block)
-    }
+    for {
+      _ <- BlockStore[F].put(block.blockHash, block)
+      _ <- BlockDagStorage[F].insert(block)
+    } yield ()
 
   private def reAttemptBuffer: F[Unit] =
     for {
-      dependencyDag  <- dependencyDagState.get
-      dependencyFree = dependencyDag.dependencyFree
+      blockBufferDependencyDag <- blockBufferDependencyDagState.get
+      dependencyFree           = blockBufferDependencyDag.dependencyFree
       dependencyFreeBlocks = blockBuffer
         .filter(block => dependencyFree.contains(block.blockHash))
         .toList
@@ -584,14 +518,14 @@ class MultiParentCasperImpl[
             ().pure[F]
           } else {
             for {
-              _ <- removeAdded(dependencyDag, attempts)
+              _ <- removeAdded(blockBufferDependencyDag, attempts)
               _ <- reAttemptBuffer
             } yield ()
           }
     } yield ()
 
   private def removeAdded(
-      dependencyDag: DoublyLinkedDag[BlockHash],
+      blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       attempts: List[(BlockMessage, BlockStatus)]
   ): F[Unit] =
     for {
@@ -601,7 +535,7 @@ class MultiParentCasperImpl[
                          }
                          .pure[F]
       _ <- unsafeRemoveFromBlockBuffer(successfulAdds)
-      _ <- removeFromBlockBufferDependencyDag(dependencyDag, successfulAdds)
+      _ <- removeFromBlockBufferDependencyDag(blockBufferDependencyDag, successfulAdds)
     } yield ()
 
   private def unsafeRemoveFromBlockBuffer(
@@ -616,11 +550,11 @@ class MultiParentCasperImpl[
       .as(Unit)
 
   private def removeFromBlockBufferDependencyDag(
-      dependencyDag: DoublyLinkedDag[BlockHash],
+      blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       successfulAdds: List[(BlockMessage, BlockStatus)]
   ): F[Unit] =
-    dependencyDagState.set(
-      successfulAdds.foldLeft(dependencyDag) {
+    blockBufferDependencyDagState.set(
+      successfulAdds.foldLeft(blockBufferDependencyDag) {
         case (acc, successfulAdd) =>
           DoublyLinkedDagOperations.remove(acc, successfulAdd._1.blockHash)
       }
@@ -630,8 +564,8 @@ class MultiParentCasperImpl[
 
   def fetchDependencies: F[Unit] =
     for {
-      dependencyDag <- dependencyDagState.get
-      _ <- dependencyDag.dependencyFree.toList.traverse { hash =>
+      blockBufferDependencyDag <- blockBufferDependencyDagState.get
+      _ <- blockBufferDependencyDag.dependencyFree.toList.traverse { hash =>
             CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
           }
     } yield ()

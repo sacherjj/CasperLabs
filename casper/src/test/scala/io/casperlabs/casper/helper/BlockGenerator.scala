@@ -31,7 +31,6 @@ object BlockGenerator {
 
   def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage](
       id: Int,
-      genesis: BlockMessage,
       runtimeManager: RuntimeManager[F]
   ): F[BlockMessage] =
     for {

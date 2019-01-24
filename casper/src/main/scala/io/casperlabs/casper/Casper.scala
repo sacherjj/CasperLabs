@@ -22,6 +22,9 @@ import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.execution.atomic.AtomicAny
+
+import scala.concurrent.SyncVar
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[BlockStatus]
@@ -50,7 +53,8 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext: BlockDagStorage](
+  def hashSetCasper[
+      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext: BlockDagStorage](
       runtimeManager: RuntimeManager[Task],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
@@ -58,6 +62,8 @@ sealed abstract class MultiParentCasperInstances {
   )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] = {
     val genesisBonds = ProtoUtil.bonds(genesis)
     for {
+      // Initialize DAG storage with genesis block in case it is empty
+      _   <- BlockDagStorage[F].insert(genesis)
       dag <- BlockDagStorage[F].getRepresentation
       // TODO: bring back when validation is working again
       // maybePostGenesisStateHash <- InterpreterUtil
