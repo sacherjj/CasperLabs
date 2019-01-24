@@ -1,8 +1,8 @@
 package io.casperlabs.casper
 
 import cats.Monad
+import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import cats.syntax.option._
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata}
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.{Clique, DagOperations, ProtoUtil}

@@ -24,16 +24,15 @@ import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
-import coop.rchain.shared.AttemptOps._
-import coop.rchain.catscontrib.TaskContrib._
+import io.casperlabs.shared.AttemptOps._
+import io.casperlabs.catscontrib.TaskContrib._
 
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
 import scala.concurrent.SyncVar
 import scala.concurrent.duration.Duration
 
-class MultiParentCasperImpl[
-    F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext: BlockDagStorage](
+class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext: BlockDagStorage](
     runtimeManager: RuntimeManager[Task],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
@@ -258,7 +257,7 @@ class MultiParentCasperImpl[
               b =>
                 Sync[F].delay {
                   b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result.remove))
-              }
+                }
             )
     } yield result.toSeq
 
@@ -355,7 +354,7 @@ class MultiParentCasperImpl[
                                           dag,
                                           emptyStateHash,
                                           runtimeManager
-                                      )
+                                        )
                                     )
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
                                _ => Validate.bondsCache[F](b, runtimeManager)
@@ -366,7 +365,7 @@ class MultiParentCasperImpl[
                                               .neglectedInvalidBlock[F](
                                                 b,
                                                 invalidBlockTracker.toSet
-                                            )
+                                              )
                                         )
       postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
                                                .traverse(
@@ -377,7 +376,7 @@ class MultiParentCasperImpl[
                                                        b,
                                                        dag,
                                                        genesis
-                                                   )
+                                                     )
                                                )
       blockBufferDependencyDag <- blockBufferDependencyDagState.get
       postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(

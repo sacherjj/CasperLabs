@@ -7,7 +7,7 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockS
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
-import io.casperlabs.casper.{BlockDag, BlockException, PrettyPrinter}
+import io.casperlabs.casper.{BlockException, PrettyPrinter}
 import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.ExecutionEffect

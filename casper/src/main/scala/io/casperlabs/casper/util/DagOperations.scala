@@ -4,7 +4,6 @@ import cats.{Eval, Monad}
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
 import io.casperlabs.casper.protocol.BlockMessage
-import io.casperlabs.casper.BlockDag
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.util.MapHelper.updatedWith
 import io.casperlabs.catscontrib.ListContrib

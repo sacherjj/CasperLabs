@@ -18,6 +18,7 @@ import io.casperlabs.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, par
 import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.{Log, LogSource}
 
 import scala.ref.WeakReference

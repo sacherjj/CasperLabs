@@ -516,7 +516,7 @@ class InterpreterUtilTest
                 ByteString.copyFromUtf8(s),
                 System.currentTimeMillis(),
                 Integer.MAX_VALUE
-            )
+              )
           )
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
@@ -566,7 +566,7 @@ class InterpreterUtilTest
                 ByteString.copyFromUtf8(s),
                 System.currentTimeMillis(),
                 Integer.MAX_VALUE
-            )
+              )
           )
 
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
@@ -621,7 +621,7 @@ class InterpreterUtilTest
                 ByteString.copyFromUtf8(s),
                 System.currentTimeMillis(),
                 Integer.MAX_VALUE
-            )
+              )
           )
 
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>

@@ -3,7 +3,7 @@ package io.casperlabs.casper
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{BlockMessage, Bond, Justification}
