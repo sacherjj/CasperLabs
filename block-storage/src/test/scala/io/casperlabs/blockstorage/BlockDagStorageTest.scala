@@ -7,7 +7,7 @@ import io.casperlabs.shared.PathOps._
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import BlockGen._
 import cats.effect.Sync
-import Context
+import io.casperlabs.blockstorage.Context
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
