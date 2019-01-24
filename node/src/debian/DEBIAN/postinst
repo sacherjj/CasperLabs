@@ -2,7 +2,7 @@
 
 set -e
 
-USERNAME="rnode"
+USERNAME="casperlabsnode"
 DIRECTORY="/var/lib/${USERNAME}"
 SYSTEMD_SERVICE_FILE="/lib/systemd/system/${USERNAME}.service"
 
@@ -20,4 +20,4 @@ else
     chmod 0644 ${SYSTEMD_SERVICE_FILE}
 fi
 
-systemctl enable rnode.service
+systemctl enable casperlabsnode.service

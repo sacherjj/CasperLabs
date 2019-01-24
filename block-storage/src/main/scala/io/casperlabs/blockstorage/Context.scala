@@ -1,9 +1,4 @@
-package coop.rchain.blockstorage
-
-import java.nio.ByteBuffer
-import java.nio.file.Path
-
-import org.lmdbjava.{Env, EnvFlags, Txn}
+package io.casperlabs.blockstorage
 
 object Context {
 

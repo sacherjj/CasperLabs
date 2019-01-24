@@ -39,7 +39,7 @@ object PeerNode {
     PeerNode(id, Endpoint(host, protocol, discovery))
 
   def fromAddress(str: String): Either[CommError, PeerNode] = {
-    // TODO toInt, not URL, scheme not rnode, renameflag to discovery-port
+    // TODO toInt, not URL, scheme not casperlabs, renameflag to discovery-port
     val maybeUrl: Option[Url] = Try(Url.parse(str)).toOption
 
     val maybePeer = maybeUrl flatMap (
@@ -51,7 +51,7 @@ object PeerNode {
             discovery <- url.query.param("discovery").flatMap(v => Try(v.toInt).toOption)
             protocol  <- url.query.param("protocol").flatMap(v => Try(v.toInt).toOption)
           } yield from(NodeIdentifier(id), host.value, protocol, discovery)
-      )
+    )
 
     maybePeer.fold[Either[CommError, PeerNode]](Left(ParseError(s"bad address: $str")))(Right(_))
   }

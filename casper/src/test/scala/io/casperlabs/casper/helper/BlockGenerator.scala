@@ -57,7 +57,7 @@ trait BlockGenerator {
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
-      shardId: String = "rchain",
+      shardId: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY
   ): F[BlockMessage] =
     for {

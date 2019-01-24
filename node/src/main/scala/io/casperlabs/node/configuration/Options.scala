@@ -21,9 +21,9 @@ private[configuration] object Converter {
           PeerNode
             .fromAddress(uri)
             .map(u => Right(Some(u)))
-            .getOrElse(Left("can't parse the rnode bootstrap address"))
+            .getOrElse(Left("can't parse the casperlabs node bootstrap address"))
         case Nil => Right(None)
-        case _   => Left("provide the rnode bootstrap address")
+        case _   => Left("provide the casperlabs node bootstrap address")
       }
 
     val argType: ArgType.V = ArgType.SINGLE

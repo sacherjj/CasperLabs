@@ -53,7 +53,6 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             case ex: NotReadyException =>
               ex.printStackTrace()
               TxnOps.manuallyAbortTxn(txn)
-            // vide: rchain/rspace/src/main/scala/coop/rchain/rspace/LMDBOps.scala
           }
           txn.close()
         }

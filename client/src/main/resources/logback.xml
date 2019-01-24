@@ -13,14 +13,13 @@
   </appender>
 
   <appender name="FILE" class="ch.qos.logback.core.FileAppender">
-    <file>${rnode.data.dir}/rnode.log</file>
+    <file>${node.data.dir}/node.log</file>
     <append>false</append>
     <encoder>
       <pattern>%d{ISO8601, UTC} [%thread] %-5level %logger - %msg%n</pattern>
     </encoder>
   </appender>
 
-  <logger name="io.casperlabs.rspace" level="warn" />
   <logger name="org.http4s" level="warn" />
   <logger name="io.netty" level="warn" />
   <logger name="io.grpc" level="warn" />

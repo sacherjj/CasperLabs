@@ -1,10 +1,10 @@
-'''RChain node client
+'''CasperLabs node client
 
 Usage:
-  python RChain.py contract1.rho
-  python RChain.py -c 'new x in { x!(1 + 1) }'
+  python CasperLabs.py contract1.rho
+  python CasperLabs.py -c 'new x in { x!(1 + 1) }'
 
-We assume the RChain node is running and that it is listening on port
+We assume the CasperLabs node is running and that it is listening on port
 5000. Double-check that you see this message in the logs:
 
   Server started, listening on 50000
@@ -17,9 +17,6 @@ Storage Contents:
  for( x0 <= @{\"stdout\"} ) { Nil } |
  for( x0, x1 <= @{\"stderrAck\"} ) { Nil } |
  for( x0 <= @{\"stderr\"} ) { Nil }"
-
-Tested with rnode-assembly.jar from commit 8a357eed5dd Apr 12 2018.
-
 '''
 
 from __future__ import print_function

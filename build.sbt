@@ -164,7 +164,7 @@ lazy val node = (project in file("node"))
   .settings(
     version := nodeAndClientVersion,
     name := "node",
-    maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
+    maintainer := "CasperLabs, LLC. <info@casperlabs.io>",
     packageSummary := "CasperLabs Node",
     packageDescription := "CasperLabs Node - the Casperlabs blockchain node server software.",
     libraryDependencies ++=
@@ -199,7 +199,7 @@ lazy val node = (project in file("node"))
      *    initializes all useful variables (like $java_version).
      *
      * This won't work if someone passes -no-version-check command line
-     * argument to rnode. They most probably know what they're doing.
+     * argument to casperlabsnode. They most probably know what they're doing.
      *
      * https://unix.stackexchange.com/a/29742/124070
      * Thanks Gilles!
@@ -246,9 +246,9 @@ lazy val node = (project in file("node"))
     },
     /* Packaging */
     linuxPackageMappings ++= {
-      val file = baseDirectory.value / "rnode.service"
+      val file = baseDirectory.value / "casperlabsnode.service"
       Seq(
-        packageMapping(file -> "/lib/systemd/system/rnode.service")
+        packageMapping(file -> "/lib/systemd/system/casperlabsnode.service")
       )
     },
     /* Debian */
@@ -347,7 +347,7 @@ lazy val client = (project in file("client"))
      *    initializes all useful variables (like $java_version).
      *
      * This won't work if someone passes -no-version-check command line
-     * argument to rnode. They most probably know what they're doing.
+     * argument to casperlabsnode. They most probably know what they're doing.
      *
      * https://unix.stackexchange.com/a/29742/124070
      * Thanks Gilles!
