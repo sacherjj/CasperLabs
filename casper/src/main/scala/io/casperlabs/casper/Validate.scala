@@ -4,9 +4,8 @@ import cats.effect.Sync
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.protocol.Event.EventInstance
 import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.ProtoUtil.bonds
@@ -492,14 +491,9 @@ object Validate {
     val latestMessagesOfBlock = ProtoUtil.toLatestMessageHashes(b.justifications)
     dag.latestMessage(b.sender).map(_.get.justifications)
     for {
-      maybeLatestMessagesFromSenderView <- dag
-                                            .latestMessage(b.sender)
-                                            .map(
-                                              _.map(
-                                                bm =>
-                                                  ProtoUtil.toLatestMessageHashes(bm.justifications)
-                                              )
-                                            )
+      maybeLatestMessage <- dag.latestMessage(b.sender)
+      maybeLatestMessagesFromSenderView = maybeLatestMessage.map(bm =>
+        ProtoUtil.toLatestMessageHashes(bm.justifications))
       result <- maybeLatestMessagesFromSenderView match {
                  case Some(latestMessagesFromSenderView) =>
                    justificationRegressionsAux[F](
