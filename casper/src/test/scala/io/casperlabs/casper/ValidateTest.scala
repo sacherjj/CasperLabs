@@ -8,13 +8,13 @@ import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
-import io.casperlabs.casper.helper.{BlockGenerator, BlockStoreFixture, IndexedBlockDag}
+import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, BlockStoreFixture}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.protocol.Event.EventInstance
 import io.casperlabs.casper.protocol._
@@ -40,7 +40,6 @@ class ValidateTest
     with BlockDagStorageFixture {
   implicit val log   = new LogStub[Id]
   implicit val absId = ToAbstractContext.idToAbstractContext
-  val initState      = IndexedBlockDag.empty.copy(currentId = -1)
   val ed25519        = "ed25519"
 
   override def beforeEach(): Unit = {
@@ -686,11 +685,13 @@ class ValidateTest
       }
   }
 
-  "Block version validation" should "work" in {
-    val (sk, pk) = Ed25519.newKeyPair
-    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
-    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "casperlabs")
-    Validate.version[Id](genesis, -1) should be(false)
-    Validate.version[Id](genesis, 1) should be(true)
+  "Block version validation" should "work" in withIndexedBlockDagStorage {
+    implicit blockDagStorage =>
+      val (sk, pk) = Ed25519.newKeyPair
+      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val genesis =
+        ProtoUtil.signBlock(block, blockDagStorage.getRepresentation, pk, sk, "ed25519", "casperlabs")
+      Validate.version[Id](genesis, -1) should be(false)
+      Validate.version[Id](genesis, 1) should be(true)
   }
 }

@@ -715,7 +715,7 @@ object BlockDagFileStorage {
         config.blockMetadataCrcPath
       )
 
-  def createEmptyFromGenesis[F[_]: Monad: Concurrent: Sync: Log: BlockStore](
+  def createEmptyFromGenesis[F[_]: Monad: Concurrent: Sync: Log](
       config: Config,
       genesis: BlockMessage
   ): F[BlockDagFileStorage[F]] =
