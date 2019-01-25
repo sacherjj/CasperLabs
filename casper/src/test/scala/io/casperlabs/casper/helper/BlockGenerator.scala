@@ -22,15 +22,19 @@ import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.Time
-import io.casperlabs.shared.TestOutlaws._
+import io.casperlabs.smartcontracts.ExecutionEngineService
+import monix.eval.Task
+
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()(Capture.taskCapture)
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage](
+  def updateChainWithBlockStateUpdate[
+      F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: ToAbstractContext](
       id: Int,
+      genesis: BlockMessage,
       runtimeManager: RuntimeManager[F]
   ): F[BlockMessage] =
     for {
@@ -46,7 +50,7 @@ object BlockGenerator {
       _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
     } yield b
 
-  def computeBlockCheckpoint[F[_]: Sync: BlockStore](
+  def computeBlockCheckpoint[F[_]: Sync: BlockStore: ExecutionEngineService: ToAbstractContext](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],

@@ -22,7 +22,9 @@ import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
 import io.casperlabs.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.shared.Time
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
+
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 
@@ -33,6 +35,7 @@ class CasperUtilTest
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture {
+  implicit val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
   "isInMainChain" should "classify appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
@@ -154,13 +157,13 @@ class CasperUtilTest
                      _ <- updateChainWithBlockStateUpdate[Task](8, genesis, runtimeManager)
                      _ <- updateChainWithBlockStateUpdate[Task](9, genesis, runtimeManager)
 
-                     _      <- conflicts[Task](b2, b3, dag) shouldBeF false
-                     _      <- conflicts[Task](b4, b5, dag) shouldBeF true
-                     _      <- conflicts[Task](b6, b6, dag) shouldBeF false
-                     _      <- conflicts[Task](b6, b9, dag) shouldBeF false
-                     _      <- conflicts[Task](b7, b8, dag) shouldBeF false
-                     _      <- conflicts[Task](b7, b10, dag) shouldBeF false
-                     result <- conflicts[Task](b9, b10, dag) shouldBeF true
+                     _      <- conflicts[Task](b2, b3, genesis, dag) shouldBeF false
+                     _      <- conflicts[Task](b4, b5, genesis, dag) shouldBeF true
+                     _      <- conflicts[Task](b6, b6, genesis, dag) shouldBeF false
+                     _      <- conflicts[Task](b6, b9, genesis, dag) shouldBeF false
+                     _      <- conflicts[Task](b7, b8, genesis, dag) shouldBeF false
+                     _      <- conflicts[Task](b7, b10, genesis, dag) shouldBeF false
+                     result <- conflicts[Task](b9, b10, genesis, dag) shouldBeF true
                    } yield result
                  }
       } yield result

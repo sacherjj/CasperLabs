@@ -243,8 +243,8 @@ object GenesisTest {
       )
 
   def withRawGenResources(
-      body: (ExecutionEngineService[Task], Path, LogStub[Task], LogicalTime[Task]) => Unit
-  ): Unit = {
+      body: (ExecutionEngineService[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
+  ): Task[Unit] = {
     val storePath               = storageLocation
     val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
     val gp                      = genesisPath
@@ -253,14 +253,13 @@ object GenesisTest {
 
     for {
       result <- body(casperSmartContractsApi, genesisPath, log, time)
-      _      <- runtime.close()
       _      <- Sync[Task].delay { storePath.recursivelyDelete() }
       _      <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result
   }
 
   def withGenResources(
-      body: (RuntimeManager[Task], Path, LogStub[Task], LogicalTime[Task]) => Unit
+      body: (RuntimeManager[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] =
     withRawGenResources {
       (

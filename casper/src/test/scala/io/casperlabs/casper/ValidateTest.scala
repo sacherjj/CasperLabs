@@ -27,6 +27,7 @@ import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
@@ -213,22 +214,6 @@ class ValidateTest
         _      <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no parents") should be(true)
-      } yield result
-  }
-
-  it should "return false for non-sequential numbering" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        _     <- createChain[Task](2)
-        block <- blockDagStorage.lookupByIdUnsafe(1)
-        _ <- Validate.blockNumber[Task](block.withBlockNumber(17)) shouldBeF Left(
-              InvalidBlockNumber
-            )
-        _ <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
-        _ = log.warns.size should be(1)
-        result = log.warns.head.contains("is not one more than maximum parent number") should be(
-          true
-        )
       } yield result
   }
 
@@ -598,8 +583,7 @@ class ValidateTest
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long = 1024L * 1024
-      val activeRuntime     = Runtime.create(storageDirectory, storageSize)
-      val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
+      val runtimeManager    = RuntimeManager.fromExecutionEngineService(???)
       for {
         dag               <- blockDagStorage.getRepresentation
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
@@ -611,7 +595,6 @@ class ValidateTest
         result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
                    InvalidBondsCache
                  )
-        _ <- activeRuntime.close()
       } yield result
   }
 
@@ -640,9 +623,7 @@ class ValidateTest
         result <- Validate.formatOfFields[Task](
                    genesis.withBody(
                      genesis.body.get
-                       .withDeploys(
-                         genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty))))
-                       )
+                       .withDeploys(genesis.body.get.deploys)
                    )
                  ) shouldBeF false
       } yield result

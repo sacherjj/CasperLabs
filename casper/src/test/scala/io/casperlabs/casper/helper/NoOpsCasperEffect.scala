@@ -3,7 +3,6 @@ package io.casperlabs.casper.helper
 import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Monad}
-import coop.rchain.casper.CreateBlockStatus
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData}

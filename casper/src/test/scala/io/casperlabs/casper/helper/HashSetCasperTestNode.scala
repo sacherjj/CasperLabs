@@ -2,6 +2,7 @@ package io.casperlabs.casper.helper
 
 import java.nio.file.{Files, Path, Paths}
 
+import cats.{Applicative, ApplicativeError, Id, Monad}
 import cats.data.EitherT
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
@@ -185,7 +186,7 @@ object HashSetCasperTestNode {
         blockDagDir,
         blockStoreDir,
         "rchain"
-      )(scheduler, syncF, captureF, concurrentF, blockStore, blockDagStorage, metricEff)
+      )(scheduler, syncF, captureF, concurrentF, blockStore, blockDagStorage, metricEff, absF)
       result <- node.initialize.map(_ => node)
     } yield result
   }
@@ -262,7 +263,16 @@ object HashSetCasperTestNode {
                 blockDagDir,
                 blockStoreDir,
                 "rchain"
-              )(scheduler, syncF, captureF, concurrentF, blockStore, blockDagStorage, metricEff)
+              )(
+                scheduler,
+                syncF,
+                captureF,
+                concurrentF,
+                blockStore,
+                blockDagStorage,
+                metricEff,
+                absF
+              )
             } yield node
         }
         .map(_.toVector)

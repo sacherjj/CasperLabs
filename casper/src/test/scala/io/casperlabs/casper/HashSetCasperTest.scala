@@ -4,7 +4,7 @@ import java.nio.file.{Files, Paths}
 
 import cats.Id
 import cats.data.EitherT
-import cats.effect.{Effect, Sync}
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
@@ -148,7 +148,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   //Todo bring back this test once we implement the blocking function in RuntimeManager
-  ignore should "be able to create a chain of blocks from different deploys" in effect {
+  ignore should "be able to create a chain of blocks from different deploys" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node._
 
@@ -289,7 +289,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         ProtoUtil.sourceDeploy(
           "@1!(1) | for(@x <- @1){ @1!(x) }",
           System.currentTimeMillis(),
-          accounting.MAX_VALUE
+          Integer.MAX_VALUE
         ),
         deployData2
       )
@@ -346,7 +346,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 //    val bondingForwarderDeploy = ProtoUtil.sourceDeploy(
 //      BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
 //      System.currentTimeMillis(),
-//      accounting.MAX_VALUE
+//      Integer.MAX_VALUE
 //    )
 //    val transferStatusOut = BondingUtil.transferStatusOut(ethAddress)
 //    val bondingTransferDeploy =
@@ -422,12 +422,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       forwardDeploy = ProtoUtil.sourceDeploy(
         forwardCode,
         System.currentTimeMillis(),
-        accounting.MAX_VALUE
+        Integer.MAX_VALUE
       )
       bondingDeploy = ProtoUtil.sourceDeploy(
         bondingCode,
         forwardDeploy.timestamp + 1,
-        accounting.MAX_VALUE
+        Integer.MAX_VALUE
       )
 
       _                    <- nodes.head.casperEff.deploy(forwardDeploy)
@@ -486,14 +486,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   ignore should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
-      deployDatas <- (0 to 2).toList.traverse[Effect, DeployData](i =>
-                      ProtoUtil.basicDeployData[Effect](i))
+      deployDatas <- (0 to 2).toList
+                      .traverse[Effect, DeployData](i => ProtoUtil.basicDeployData[Effect](i))
       deployPrim0 = deployDatas(1)
         .withTimestamp(deployDatas(0).timestamp)
         .withUser(deployDatas(0).user) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
       createdBlockResult1 <- nodes(0).casperEff
                               .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-      Created(signedBlock1) = createBlockResult1
+      Created(signedBlock1) = createdBlockResult1
       _                     <- nodes(0).casperEff.addBlock(signedBlock1)
       _                     <- nodes(1).receive() // receive block1
 
@@ -549,7 +549,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         "@2!(2)"
       ).zipWithIndex
         .map(
-          d => ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
+          d => ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, Integer.MAX_VALUE)
         )
 
       createBlockResult1 <- nodes(0).casperEff
@@ -974,7 +974,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     implicit val timeEff = new LogicalTime[Effect]
 
     for {
-      deployData        <- ProtoUtil.basicDeployData[Effect](0).map(_.withPhloLimit(1))
+      deployData        <- ProtoUtil.basicDeployData[Effect](0).map(_.withGasLimit(1))
       _                 <- node.casperEff.deploy(deployData)
       createBlockResult <- MultiParentCasper[Effect].createBlock
       Created(block)    = createBlockResult
@@ -987,7 +987,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     implicit val timeEff = new LogicalTime[Effect]
 
     for {
-      deployData <- ProtoUtil.basicDeployData[Effect](0).map(_.withPhloLimit(100))
+      deployData <- ProtoUtil.basicDeployData[Effect](0).map(_.withGasLimit(100))
       _          <- node.casperEff.deploy(deployData)
 
       createBlockResult <- MultiParentCasper[Effect].createBlock
@@ -1044,22 +1044,6 @@ object HashSetCasperTest {
     val tsHash = ProtoUtil.postStateHash(block)
     MultiParentCasper[Effect].storageContents(tsHash)
   }
-
-  def deployAndQuery(
-      node: HashSetCasperTestNode[Effect],
-      dd: DeployData,
-      query: Deploy
-  ): Effect[(BlockStatus, Seq[Par])] =
-    for {
-      createBlockResult <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
-      Created(block)    = createBlockResult
-      blockStatus       <- node.casperEff.addBlock(block)
-      queryResult = node.runtimeManager
-        .captureResults(
-          ProtoUtil.postStateHash(block),
-          query
-        )
-    } yield (blockStatus, queryResult)
 
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap

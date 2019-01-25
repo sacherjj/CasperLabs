@@ -6,12 +6,10 @@ import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
 import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.rholang.RuntimeManager
-import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits._
+import io.casperlabs.catscontrib.Capture._
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.transport
 import io.casperlabs.crypto.signatures.Ed25519
-import io.casperlabs.shared.StoreType
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
