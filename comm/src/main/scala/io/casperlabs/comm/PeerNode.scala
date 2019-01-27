@@ -51,7 +51,7 @@ object PeerNode {
             discovery <- url.query.param("discovery").flatMap(v => Try(v.toInt).toOption)
             protocol  <- url.query.param("protocol").flatMap(v => Try(v.toInt).toOption)
           } yield from(NodeIdentifier(id), host.value, protocol, discovery)
-    )
+      )
 
     maybePeer.fold[Either[CommError, PeerNode]](Left(ParseError(s"bad address: $str")))(Right(_))
   }
