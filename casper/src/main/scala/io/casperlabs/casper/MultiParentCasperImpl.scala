@@ -6,7 +6,12 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.util.TopologicalSortUtil
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStore}
+import io.casperlabs.blockstorage.{
+  BlockDagRepresentation,
+  BlockDagStorage,
+  BlockMetadata,
+  BlockStore
+}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
@@ -110,7 +115,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       _ <- attempt match {
             case MissingBlocks => ().pure[F]
             case _ =>
-              Capture[F].capture { blockBuffer -= b } *> blockBufferDependencyDagState.modify(
+              Sync[F].delay { blockBuffer -= b } *> blockBufferDependencyDagState.modify(
                 blockBufferDependencyDag =>
                   DoublyLinkedDagOperations.remove(blockBufferDependencyDag, b.blockHash)
               )
@@ -153,14 +158,13 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private def isGreaterThanFaultToleranceThreshold(
       dag: BlockDagRepresentation[F],
       blockHash: BlockHash
-  ): F[Boolean] = {
-    val faultTolerance = SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
-    Log[F]
-      .info(
-        s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance."
-      )
-      .map(_ => faultTolerance > faultToleranceThreshold)
-  }
+  ): F[Boolean] =
+    for {
+      faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
+      _ <- Log[F].info(
+            s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance."
+          )
+    } yield faultTolerance > faultToleranceThreshold
 
   def contains(b: BlockMessage): F[Boolean] =
     BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
@@ -318,6 +322,22 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                        val block  = unsignedBlockProto(body, header, justifications, shardId)
                        CreateBlockStatus.created(block)
                      })
+                     .flatMap[CreateBlockStatus] {
+                       case status @ Created(block) =>
+                         val number     = block.body.get.state.get.blockNumber
+                         val transforms = r.flatMap(_._2.transformMap)
+                         val msgBody = transforms
+                           .map(t => {
+                             val k    = PrettyPrinter.buildString(t.key.get)
+                             val tStr = PrettyPrinter.buildString(t.transform.get)
+                             s"$k :: $tStr"
+                           })
+                           .mkString("\n")
+                         Log[F]
+                           .info(s"Block #$number created with effects:\n$msgBody")
+                           .map(_ => status)
+                       case other => other.pure[F]
+                     }
                }
     } yield result
 

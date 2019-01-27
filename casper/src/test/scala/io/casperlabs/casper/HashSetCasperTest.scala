@@ -65,8 +65,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       deploy <- ProtoUtil.basicDeployData[Effect](0)
       _      <- MultiParentCasper[Effect].deploy(deploy)
 
-      _      = logEff.infos.size should be(1)
-      result = logEff.infos.head.contains("Received Deploy") should be(true)
+      _      = logEff.infos.size should be(2)
+      result = logEff.infos.exists(_.contains("Received Deploy")) should be(true)
       _      = node.tearDown()
     } yield result
   }
@@ -132,16 +132,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       createBlockResult    <- MultiParentCasper[Effect].createBlock
       Created(signedBlock) = createBlockResult
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock)
-      logMessages = List(
-        "Received Deploy",
-        "Attempting to add Block",
-        "Added",
-        "Sent Block #1",
-        "New fork-choice tip is block"
-      )
-      // todo Once we bring back RuntimeManager.replayComputeState, this assertion should be bring back
-      //  _      = logEff.warns.isEmpty should be(true)
-      _      = logEff.infos.zip(logMessages).forall { case (a, b) => a.startsWith(b) } should be(true)
+//       todo Once we bring back RuntimeManager.replayComputeState, this assertion should be bring back
+//      _      = logEff.warns.isEmpty should be(true)
       dag    <- MultiParentCasper[Effect].blockDag
       result <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock)
       _      = node.tearDown()
@@ -182,7 +174,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "allow multiple deploys in a single block" in effect {
+  it should "allow multiple deploys in a single block" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node._
 

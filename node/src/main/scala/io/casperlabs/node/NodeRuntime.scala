@@ -1,7 +1,6 @@
 package io.casperlabs.node
 
 import scala.concurrent.duration._
-
 import cats._
 import cats.data._
 import cats.effect._
@@ -12,7 +11,7 @@ import cats.syntax.monad._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.{BlockStore, InMemBlockStore}
+import io.casperlabs.blockstorage.{BlockDagFileStorage, BlockStore, InMemBlockStore}
 import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.protocol.BlockMessage
@@ -34,6 +33,7 @@ import io.casperlabs.node.configuration.{Configuration, ConfigurationSoft}
 import io.casperlabs.node.diagnostics._
 import io.casperlabs.p2p.effects._
 import io.casperlabs.shared._
+import io.casperlabs.shared.PathOps._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import kamon._
 import kamon.zipkin.ZipkinReporter

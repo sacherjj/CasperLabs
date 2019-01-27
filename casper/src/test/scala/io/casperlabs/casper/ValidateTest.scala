@@ -596,13 +596,13 @@ class ValidateTest
   }
 
 //   todo(abner)  Once we have implement RuntimeManager, bring back this test
-  "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
+  "Field format validation" should "succeed on a valid block and fail on empty fields" ignore withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
       val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
+        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
         _       <- Validate.formatOfFields[Task](genesis) shouldBeF true
         _       <- Validate.formatOfFields[Task](genesis.withBlockHash(ByteString.EMPTY)) shouldBeF false
         _       <- Validate.formatOfFields[Task](genesis.clearHeader) shouldBeF false
@@ -620,9 +620,7 @@ class ValidateTest
         result <- Validate.formatOfFields[Task](
                    genesis.withBody(
                      genesis.body.get
-                       .withDeploys(
-                         genesis.body.get.deploys.map(_.withDeploy(Deploy()))
-                       )
+                       .withDeploys(genesis.body.get.deploys)
                    )
                  ) shouldBeF false
       } yield result
