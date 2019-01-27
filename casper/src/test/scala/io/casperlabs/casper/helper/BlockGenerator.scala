@@ -27,15 +27,15 @@ import monix.eval.Task
 
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
+import monix.execution.Scheduler.Implicits.global
 
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()(Capture.taskCapture)
 
-  def updateChainWithBlockStateUpdate[
-      F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: ToAbstractContext](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: ToAbstractContext](
       id: Int,
       genesis: BlockMessage,
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[Task]
   ): F[BlockMessage] =
     for {
       b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id)
@@ -54,7 +54,7 @@ object BlockGenerator {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[Task]
   ): F[(StateHash, Seq[ProcessedDeploy])] =
     for {
       result <- InterpreterUtil

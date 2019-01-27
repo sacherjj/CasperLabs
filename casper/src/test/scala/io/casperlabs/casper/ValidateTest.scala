@@ -2,19 +2,12 @@ package io.casperlabs.casper
 
 import java.nio.file.Files
 
-import cats.effect.Bracket
-import cats.{Id, Monad}
+import cats.Monad
 import cats.implicits._
-import cats.mtl.MonadState
-import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
-import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.genesis.Genesis
-import io.casperlabs.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, BlockStoreFixture}
+import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.protocol.Event.EventInstance
 import io.casperlabs.casper.protocol._
@@ -28,10 +21,12 @@ import io.casperlabs.shared.Time
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+import org.scalatest.{Assertion, BeforeAndAfterEach, FlatSpec, Matchers}
 
+import scala.concurrent.duration._
 import scala.collection.immutable.HashMap
 
 class ValidateTest
@@ -327,6 +322,7 @@ class ValidateTest
 
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
+      implicit val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
       val validators = Vector(
         generateValidator("Validator 1"),
         generateValidator("Validator 2"),
@@ -396,7 +392,8 @@ class ValidateTest
                        _ <- Validate.parents[Task](b8, b0, dag)
                        _ <- Validate.parents[Task](b9, b0, dag)
 
-                       _ = log.warns.size should be(3)
+                       // Todo Once we bring back RuntimeManger.replayComputeState, the size of warn should be changed back 3
+                       _ = log.warns.size should be(4)
                        result = log.warns.forall(
                          _.contains("block parents did not match estimate based on justification")
                        ) should be(
@@ -421,13 +418,13 @@ class ValidateTest
                         pk,
                         sk,
                         "ed25519",
-                        "casperlabs"
+                        "rchain"
                       )
         _ <- Validate.blockSummary[Task](
               signedBlock,
               BlockMessage(),
               dag,
-              "casperlabs"
+              "rchain"
             ) shouldBeF Left(InvalidBlockNumber)
         result = log.warns.size should be(1)
       } yield result
@@ -605,7 +602,7 @@ class ValidateTest
       val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
+        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
         _       <- Validate.formatOfFields[Task](genesis) shouldBeF true
         _       <- Validate.formatOfFields[Task](genesis.withBlockHash(ByteString.EMPTY)) shouldBeF false
         _       <- Validate.formatOfFields[Task](genesis.clearHeader) shouldBeF false
@@ -623,7 +620,9 @@ class ValidateTest
         result <- Validate.formatOfFields[Task](
                    genesis.withBody(
                      genesis.body.get
-                       .withDeploys(genesis.body.get.deploys)
+                       .withDeploys(
+                         genesis.body.get.deploys.map(_.withDeploy(Deploy()))
+                       )
                    )
                  ) shouldBeF false
       } yield result

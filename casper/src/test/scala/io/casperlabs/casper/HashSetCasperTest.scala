@@ -139,7 +139,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         "Sent Block #1",
         "New fork-choice tip is block"
       )
-      _      = logEff.warns.isEmpty should be(true)
+      // todo Once we bring back RuntimeManager.replayComputeState, this assertion should be bring back
+      //  _      = logEff.warns.isEmpty should be(true)
       _      = logEff.infos.zip(logMessages).forall { case (a, b) => a.startsWith(b) } should be(true)
       dag    <- MultiParentCasper[Effect].blockDag
       result <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock)
@@ -212,9 +213,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       Created(block) = createBlockResult
       invalidBlock   = block.withSig(ByteString.EMPTY)
       _              <- MultiParentCasper[Effect].addBlock(invalidBlock)
-
-      _ = logEff.warns.head.contains("Ignoring block") should be(true)
-      _ = node.tearDownNode()
+      _              = logEff.warns.count(_.contains("because block signature")) should be(1)
+      _              = node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>
                  blockStore.get(block.blockHash) shouldBeF None
                }
@@ -233,7 +233,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                           ].createBlock
       Created(signedBlock) = createBlockResult
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock)
-      _                    = logEff.warns.head.contains("Ignoring block") should be(true)
+      _                    = logEff.warns.count(_.contains("has 0 weight")) should be(1)
       _                    = node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>
                  blockStore.get(signedBlock.blockHash) shouldBeF None

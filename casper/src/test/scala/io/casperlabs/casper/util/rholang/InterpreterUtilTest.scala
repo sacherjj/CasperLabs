@@ -444,7 +444,7 @@ class InterpreterUtilTest
       }
     }
 
-  "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in withStorage {
+  "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" ignore withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val deploys = Vector(ByteString.EMPTY)
         .map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
