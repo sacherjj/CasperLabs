@@ -100,7 +100,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       _ <- Sync[F].delay(processingBlock.put(()))
     } yield result
 
-  def internalAddBlock(b: BlockMessage): F[BlockStatus] =
+  private def internalAddBlock(b: BlockMessage): F[BlockStatus] =
     for {
       validFormat  <- Validate.formatOfFields[F](b)
       validSig     <- Validate.blockSignature[F](b)
