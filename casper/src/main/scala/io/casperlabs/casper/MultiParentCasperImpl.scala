@@ -235,9 +235,12 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
-        signedBlock <- proposal.mapF(
-                        signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
-                      )
+        signedBlock <- proposal match {
+                        case Created(blockMessage) =>
+                          signBlock(blockMessage, dag, publicKey, privateKey, sigAlgorithm, shardId)
+                            .map(Created.apply)
+                        case _ => proposal.pure[F]
+                      }
       } yield signedBlock
     case None => CreateBlockStatus.readOnlyMode.pure[F]
   }
