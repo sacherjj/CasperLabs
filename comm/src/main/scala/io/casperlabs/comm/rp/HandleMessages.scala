@@ -54,7 +54,7 @@ object HandleMessages {
     for {
       _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
       _ <- TransportLayer[F].disconnect(sender)
-      _ <- ConnectionsCell[F].modify(_.removeConn[F](sender))
+      _ <- ConnectionsCell[F].flatModify(_.removeConn[F](sender))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
     } yield handledWithoutMessage
 
@@ -84,7 +84,7 @@ object HandleMessages {
 
     def handledHandshake(local: PeerNode): F[CommunicationResponse] =
       for {
-        _ <- ConnectionsCell[F].modify(_.addConn[F](peer))
+        _ <- ConnectionsCell[F].flatModify(_.addConn[F](peer))
         _ <- Log[F].info(s"Responded to protocol handshake request from $peer")
       } yield handledWithMessage(ProtocolHelper.protocolHandshakeResponse(local))
 

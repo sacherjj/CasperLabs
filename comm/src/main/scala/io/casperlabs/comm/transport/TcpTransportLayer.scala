@@ -40,7 +40,7 @@ class TcpTransportLayer(
 ) extends TransportLayer[Task] {
 
   private val DefaultSendTimeout = 5.seconds
-  private val connections        = connectionsCache(clientChannel)
+  private val cell               = connectionsCache(clientChannel)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -48,8 +48,6 @@ class TcpTransportLayer(
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
   private val streamObservable = new StreamObservable(clientQueueSize, tempFolder)
-
-  import connections.cell
 
   private lazy val serverSslContext: SslContext =
     try {
@@ -110,7 +108,7 @@ class TcpTransportLayer(
       f: TransportLayerStub => Task[A]
   ): Task[A] =
     for {
-      channel <- connections.connection(peer, enforce)
+      channel <- cell.connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
                  case Some(_) => disconnect(peer)
