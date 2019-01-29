@@ -53,13 +53,13 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext: BlockDagStorage](
+  def hashSetCasper[
+      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext: BlockDagStorage](
       runtimeManager: RuntimeManager[Task],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] = {
-    val genesisBonds = ProtoUtil.bonds(genesis)
+  )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] =
     for {
       // Initialize DAG storage with genesis block in case it is empty
       _   <- BlockDagStorage[F].insert(genesis)
@@ -91,5 +91,4 @@ sealed abstract class MultiParentCasperInstances {
         postGenesisStateHash,
         shardId
       )
-  }
 }
