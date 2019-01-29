@@ -494,9 +494,13 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                               blockHash =>
                                 dag
                                   .lookup(blockHash)
-                                  .map(_.isEmpty && !blockBuffer.exists(_.blockHash == blockHash))
+                                  .map(_.isEmpty)
                             )
+      missingUnseenDependencies = missingDependencies.filterNot(
+        blockHash => blockBuffer.exists(_.blockHash == blockHash)
+      )
       _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
+      _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
     } yield ()
 
   private def handleMissingDependency(hash: BlockHash, parentBlock: BlockMessage): F[Unit] =
@@ -508,6 +512,9 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
           )
       _ <- CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
     } yield ()
+
+  private def requestMissingDependency(hash: BlockHash) =
+    CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
 
   private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =
     for {
