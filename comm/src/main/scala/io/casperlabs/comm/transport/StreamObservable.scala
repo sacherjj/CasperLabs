@@ -13,7 +13,7 @@ import monix.reactive.observers.Subscriber
 
 import scala.concurrent.duration._
 
-case class StreamToPeers(peers: Seq[PeerNode], path: Path, sender: PeerNode)
+final case class StreamToPeers(peers: Seq[PeerNode], path: Path, sender: PeerNode)
 
 class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], scheduler: Scheduler)
     extends Observable[StreamToPeers] {
@@ -21,6 +21,7 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
   private val subject = buffer.LimitedBufferObservable.dropNew[StreamToPeers](bufferSize)
 
   def stream(peers: List[PeerNode], blob: Blob): Task[Unit] = {
+
     val storeBlob: Task[Option[Path]] =
       blob.packet.store[Task](folder) >>= {
         case Right(file) => Task.pure(Some(file))

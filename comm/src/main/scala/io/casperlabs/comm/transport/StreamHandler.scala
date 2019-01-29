@@ -16,7 +16,7 @@ import monix.eval.Task
 import monix.reactive.Observable
 
 object StreamHandler {
-  private case class Streamed(
+  private final case class Streamed(
       sender: Option[PeerNode] = None,
       typeId: Option[String] = None,
       contentLength: Option[Int] = None,

@@ -22,11 +22,9 @@ import io.casperlabs.shared.StoreType
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import cats.effect.Sync
 import monix.eval.Task
-import io.casperlabs.shared.TestOutlaws._
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   import GenesisTest._
-  implicit val absId = ToAbstractContext.idToAbstractContext
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",

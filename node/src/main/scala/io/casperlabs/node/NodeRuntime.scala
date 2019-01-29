@@ -2,7 +2,7 @@ package io.casperlabs.node
 
 import cats._
 import cats.data._
-import cats.effect.{Effect, _}
+import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.applicative._
 import cats.syntax.apply._

@@ -62,7 +62,12 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           conf.requiredSigs
         )
         gv <- Ref.of[F, CasperPacketHandlerInternal[F]](
-               new GenesisValidatorHandler(runtimeManager, validatorId.get, conf.shardId, bap)
+               new GenesisValidatorHandler(
+                 runtimeManager,
+                 validatorId.get,
+                 conf.shardId,
+                 bap
+               )
              )
       } yield new CasperPacketHandlerImpl[F](gv)
     } else if (conf.createGenesis) {
