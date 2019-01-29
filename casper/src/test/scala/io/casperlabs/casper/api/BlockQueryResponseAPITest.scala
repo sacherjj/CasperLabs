@@ -24,7 +24,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
-  val genesisHashString = "0000000000000000000000000000000000000000000000000000000000000000"
+  val genesisHashString = "0" * 64
   val version           = 1L
 
   def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
