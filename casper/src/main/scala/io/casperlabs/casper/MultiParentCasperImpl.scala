@@ -37,8 +37,8 @@ import scala.collection.mutable
 import scala.concurrent.SyncVar
 import scala.concurrent.duration.Duration
 
-class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext: BlockDagStorage](
-    runtimeManager: RuntimeManager[Task],
+class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+    runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -178,12 +178,9 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield ()
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
-    ToAbstractContext[F]
-      .fromTask(
-        runtimeManager
-          .sendDeploy(
-            ProtoUtil.deployDataToEEDeploy(d)
-          )
+    runtimeManager
+      .sendDeploy(
+        ProtoUtil.deployDataToEEDeploy(d)
       )
       .flatMap {
         case Right(effects: ExecutionEffect) =>
@@ -582,7 +579,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       }
     )
 
-  def getRuntimeManager: F[Option[RuntimeManager[Task]]] = Applicative[F].pure(Some(runtimeManager))
+  def getRuntimeManager: F[Option[RuntimeManager[F]]] = Applicative[F].pure(Some(runtimeManager))
 
   def fetchDependencies: F[Unit] =
     for {

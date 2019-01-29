@@ -75,7 +75,7 @@ class HashSetCasperTestNode[F[_]](
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
-  val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+  val casperSmartContractsApi = ExecutionEngineService.noOpApi[F]()
 
   val runtimeManager                 = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)

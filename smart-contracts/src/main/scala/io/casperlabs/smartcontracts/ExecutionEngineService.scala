@@ -4,10 +4,11 @@ import java.io.Closeable
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
-import cats.Applicative
+import cats.{Applicative, Monad}
 import cats.syntax.applicative._
 import cats.syntax.either._
 import cats.syntax.functor._
+import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
 import io.grpc.ManagedChannel
@@ -15,7 +16,6 @@ import io.grpc.netty.NettyChannelBuilder
 import io.netty.channel.epoll.{Epoll, EpollDomainSocketChannel, EpollEventLoopGroup}
 import io.netty.channel.kqueue.{KQueueDomainSocketChannel, KQueueEventLoopGroup}
 import io.netty.channel.unix.DomainSocketAddress
-import monix.eval.Task
 import simulacrum.typeclass
 
 import scala.util.Either
@@ -26,8 +26,8 @@ import scala.util.Either
   def close(): Unit
 }
 
-class GrpcExecutionEngineService(addr: Path, maxMessageSize: Int)
-    extends ExecutionEngineService[Task]
+class GrpcExecutionEngineService[F[_]: Monad: ToAbstractContext](addr: Path, maxMessageSize: Int)
+    extends ExecutionEngineService[F]
     with Closeable {
 
   private val channelType =
@@ -56,8 +56,8 @@ class GrpcExecutionEngineService(addr: Path, maxMessageSize: Int)
       channel.awaitTermination(10, TimeUnit.SECONDS)
     }
   }
-  override def sendDeploy(deploy: Deploy): Task[Either[Throwable, ExecutionEffect]] =
-    stub.sendDeploy(deploy).map { response =>
+  override def sendDeploy(deploy: Deploy): F[Either[Throwable, ExecutionEffect]] =
+    ToAbstractContext[F].fromTask(stub.sendDeploy(deploy)).map { response =>
       response.result match {
         case DeployResult.Result.Empty           => Left(new SmartContractEngineError("empty response"))
         case DeployResult.Result.Effects(effect) => Right(effect)
@@ -66,9 +66,9 @@ class GrpcExecutionEngineService(addr: Path, maxMessageSize: Int)
       }
     }
 
-  override def executeEffects(c: CommutativeEffects): Task[Either[Throwable, Done]] =
-    stub
-      .executeEffects(c)
+  override def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]] =
+    ToAbstractContext[F]
+      .fromTask(stub.executeEffects(c))
       .map(
         response =>
           response.result match {

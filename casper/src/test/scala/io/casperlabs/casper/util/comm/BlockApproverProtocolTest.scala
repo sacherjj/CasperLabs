@@ -32,7 +32,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
         import node._
 
         for {
-          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, unapproved)
+          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, unapproved, runtimeManager)
 
           _ = node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
           _ = node.logEff.warns.isEmpty should be(true)
@@ -55,8 +55,16 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
         import node._
 
         for {
-          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, differentUnapproved1)
-          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, differentUnapproved2)
+          _ <- approver.unapprovedBlockPacketHandler[Effect](
+                node.local,
+                differentUnapproved1,
+                runtimeManager
+              )
+          _ <- approver.unapprovedBlockPacketHandler[Effect](
+                node.local,
+                differentUnapproved2,
+                runtimeManager
+              )
 
           _      = node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
           queue  <- node.transportLayerEff.msgQueues(node.local).get
@@ -81,9 +89,6 @@ object BlockApproverProtocolTest {
   ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
-    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-    val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
-
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
 
@@ -102,7 +107,6 @@ object BlockApproverProtocolTest {
       new BlockApproverProtocol(
         node.validatorId,
         deployTimestamp,
-        runtimeManager,
         bonds,
         wallets,
         1L,

@@ -25,10 +25,10 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore: ToAbstractContext](
+  def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[Task]
+      runtimeManager: RuntimeManager[F]
   )(
       implicit scheduler: Scheduler
   ): F[Either[BlockException, Option[StateHash]]] = {
@@ -57,8 +57,8 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def processPossiblePreStateHash[F[_]: Monad: Log: BlockStore: ToAbstractContext](
-      runtimeManager: RuntimeManager[Task],
+  private def processPossiblePreStateHash[F[_]: Monad: Log: BlockStore](
+      runtimeManager: RuntimeManager[F],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
@@ -86,19 +86,16 @@ object InterpreterUtil {
         }
     }
 
-  private def processPreStateHash[F[_]: Monad: Log: BlockStore: ToAbstractContext](
-      runtimeManager: RuntimeManager[Task],
+  private def processPreStateHash[F[_]: Monad: Log: BlockStore](
+      runtimeManager: RuntimeManager[F],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       time: Option[Long]
-  )(implicit scheduler: Scheduler): F[Either[BlockException, Option[StateHash]]] =
-    ToAbstractContext[F]
-      .fromTask(
-        runtimeManager
-          .replayComputeState(preStateHash, internalDeploys, time)
-      )
+  ): F[Either[BlockException, Option[StateHash]]] =
+    runtimeManager
+      .replayComputeState(preStateHash, internalDeploys, time)
       .flatMap {
         case Left((Some(deploy), status)) =>
           status match {
@@ -136,11 +133,11 @@ object InterpreterUtil {
           }
       }
 
-  def computeDeploysCheckpoint[F[_]: Monad: BlockStore: ToAbstractContext](
+  def computeDeploysCheckpoint[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
       deploysWithEffect: Seq[(Deploy, ExecutionEffect)],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
       time: Option[Long] = None
   )(
       implicit scheduler: Scheduler
@@ -149,11 +146,8 @@ object InterpreterUtil {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, time)
       res <- possiblePreStateHash match {
               case Right(preStateHash) =>
-                ToAbstractContext[F]
-                  .fromTask(
-                    runtimeManager
-                      .computeState(preStateHash, deploysWithEffect, time)
-                  )
+                runtimeManager
+                  .computeState(preStateHash, deploysWithEffect, time)
                   .map {
                     case (postStateHash, processedDeploy) =>
                       Right(preStateHash, postStateHash, processedDeploy)
@@ -166,7 +160,7 @@ object InterpreterUtil {
   private def computeParentsPostState[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
       time: Option[Long]
   )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
@@ -203,10 +197,9 @@ object InterpreterUtil {
             _           = assert(maybeBlocks.forall(_.isDefined))
             blocks      = maybeBlocks.flatten
             deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
+            replayState <- runtimeManager.replayComputeState(initStateHash, deploys, time)
           } yield
-            runtimeManager
-              .replayComputeState(initStateHash, deploys, time)
-              .runSyncUnsafe(Duration.Inf) match {
+            replayState match {
               case result @ Right(_) => result.leftCast[Throwable]
               case Left((_, status)) =>
                 val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
@@ -220,11 +213,11 @@ object InterpreterUtil {
     }
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore: ExecutionEngineService: ToAbstractContext](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore: ExecutionEngineService](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[Task]
+      runtimeManager: RuntimeManager[F]
   )(
       implicit scheduler: Scheduler
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
@@ -243,13 +236,10 @@ object InterpreterUtil {
                           case (Right(acc), d) =>
                             d.raw match {
                               case Some(r) =>
-                                ToAbstractContext[F]
-                                  .fromTask(
-                                    runtimeManager
-                                      .sendDeploy(
-                                        ProtoUtil
-                                          .deployDataToEEDeploy(r)
-                                      )
+                                runtimeManager
+                                  .sendDeploy(
+                                    ProtoUtil
+                                      .deployDataToEEDeploy(r)
                                   )
                                   .map {
                                     case Left(e) =>

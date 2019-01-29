@@ -64,14 +64,13 @@ class CasperPacketHandlerSpec extends WordSpec {
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,
-      runtimeManager,
       bonds,
       Seq.empty,
       1L,
       Long.MaxValue,
       false,
       requiredSigs
-    )(scheduler)
+    )
     val local: PeerNode = peerNode("src", 40400)
     val shardId         = "test-shardId"
 

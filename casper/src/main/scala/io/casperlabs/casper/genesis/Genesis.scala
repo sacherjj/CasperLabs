@@ -39,15 +39,15 @@ object Genesis {
   ): List[Deploy] =
     List()
 
-  def withContracts(
+  def withContracts[F[_]](
       initial: BlockMessage,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String,
       startHash: StateHash,
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
       timestamp: Long
-  )(implicit scheduler: Scheduler): BlockMessage =
+  ): BlockMessage =
     withContracts(
       defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
       initial,
@@ -55,12 +55,12 @@ object Genesis {
       runtimeManager
     )
 
-  def withContracts(
+  def withContracts[F[_]](
       blessedTerms: List[Deploy],
       initial: BlockMessage,
       startHash: StateHash,
-      runtimeManager: RuntimeManager[Task]
-  )(implicit scheduler: Scheduler): BlockMessage = {
+      runtimeManager: RuntimeManager[F]
+  ): BlockMessage = {
     // todo when blessed contracts finished, this should be comment out.
     //
 //    val (stateHash, processedDeploys) =
@@ -128,10 +128,10 @@ object Genesis {
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean,
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
       shardId: String,
       deployTimestamp: Option[Long]
-  )(implicit scheduler: Scheduler): F[BlockMessage] =
+  ): F[BlockMessage] =
     for {
       bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
       _ <- bondsFile.fold[F[Unit]](
