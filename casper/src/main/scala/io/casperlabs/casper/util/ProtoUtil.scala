@@ -73,6 +73,7 @@ object ProtoUtil {
     } yield mainChain
   }
 
+  // TODO: instead of throwing Exception use MonadError.raiseError
   def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
       maybeBlock <- BlockStore[F].get(hash)
