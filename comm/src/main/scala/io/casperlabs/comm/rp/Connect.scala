@@ -118,7 +118,7 @@ object Connect {
       connections      <- ConnectionsCell[F].read
       tout             <- RPConfAsk[F].reader(_.defaultTimeout)
       peers            <- NodeDiscovery[F].peers.map(p => (p.toSet -- connections).toList)
-      responses        <- peers.traverse(peer => Sync[F].attempt(conn(peer, tout)))
+      responses        <- peers.traverse(conn(_, tout).attempt)
       peersAndResonses = peers.zip(responses)
       _ <- peersAndResonses.traverse {
             case (peer, Left(error)) =>
@@ -133,20 +133,17 @@ object Connect {
       timeout: FiniteDuration
   ): F[Unit] =
     for {
-      tss      <- Time[F].currentMillis
-      peerAddr = peer.toAddress
-      _        <- Log[F].debug(s"Connecting to $peerAddr")
-      _        <- Metrics[F].incrementCounter("connects")
-      _        <- Log[F].debug(s"Initialize protocol handshake to $peerAddr")
+      address  <- Sync[F].delay(peer.toAddress)
+      _        <- Log[F].debug(s"Connecting to $address")
+      _        <- Metrics[F].incrementCounter("connect")
+      _        <- Log[F].debug(s"Initialize protocol handshake to $address")
       local    <- RPConfAsk[F].reader(_.local)
       ph       = protocolHandshake(local)
-      phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
+      response <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
       _ <- Log[F].debug(
-            s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}."
+            s"Received protocol handshake response from ${ProtocolHelper.sender(response)}."
           )
-      _   <- ConnectionsCell[F].flatModify(_.addConn[F](peer))
-      tsf <- Time[F].currentMillis
-      _   <- Metrics[F].record("connect-time-ms", tsf - tss)
+      _ <- ConnectionsCell[F].flatModify(_.addConn[F](peer))
     } yield ()
 
 }
