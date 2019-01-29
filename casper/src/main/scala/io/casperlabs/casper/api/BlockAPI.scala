@@ -85,9 +85,7 @@ object BlockAPI {
   ): F[List[BlockInfoWithoutTuplespace]] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        dag         <- MultiParentCasper[F].blockDag
-        maxHeight   <- dag.topoSort(0L).map(_.length - 1) // TODO: Optimize calculating max height
-        startHeight = math.max(0, maxHeight - depth)
+        dag <- MultiParentCasper[F].blockDag
         flattenedBlockInfosUntilDepth <- getFlattenedBlockInfosUntilDepth[F](
                                           depth,
                                           dag
