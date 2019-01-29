@@ -75,6 +75,7 @@ final class InMemBlockDagStorage[F[_]: Monad: Sync](
       topoSort       <- topoSortRef.get
       _              <- lock.release
     } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
+
   override def insert(block: BlockMessage): F[Unit] =
     for {
       _ <- lock.acquire
@@ -91,7 +92,9 @@ final class InMemBlockDagStorage[F[_]: Monad: Sync](
       _ <- latestMessagesRef.update(_.updated(block.sender, block.blockHash))
       _ <- lock.release
     } yield ()
+
   override def checkpoint(): F[Unit] = ().pure[F]
+
   override def clear(): F[Unit] =
     for {
       _ <- lock.acquire
@@ -101,6 +104,7 @@ final class InMemBlockDagStorage[F[_]: Monad: Sync](
       _ <- latestMessagesRef.set(Map.empty)
       _ <- lock.release
     } yield ()
+
   override def close(): F[Unit] = ().pure[F]
 }
 
