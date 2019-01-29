@@ -25,7 +25,7 @@ import scala.ref.WeakReference
 import scala.util.matching.Regex
 import collection.JavaConverters._
 
-final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private (
+final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore] private (
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
@@ -737,7 +737,7 @@ object BlockDagFileStorage {
         config.blockMetadataCrcPath
       )
 
-  def createEmptyFromGenesis[F[_]: Monad: Concurrent: Sync: Log: BlockStore](
+  def createEmptyFromGenesis[F[_]: Concurrent: Log: BlockStore](
       config: Config,
       genesis: BlockMessage
   ): F[BlockDagFileStorage[F]] =
