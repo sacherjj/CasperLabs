@@ -620,7 +620,9 @@ class ValidateTest
         result <- Validate.formatOfFields[Task](
                    genesis.withBody(
                      genesis.body.get
-                       .withDeploys(genesis.body.get.deploys)
+                       .withDeploys(
+                         genesis.body.get.deploys
+                       )
                    )
                  ) shouldBeF false
       } yield result

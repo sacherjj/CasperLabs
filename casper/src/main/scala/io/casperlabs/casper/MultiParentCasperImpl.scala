@@ -1,8 +1,8 @@
 package io.casperlabs.casper
 
-import cats.{Applicative, Monad}
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
+import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.util.TopologicalSortUtil

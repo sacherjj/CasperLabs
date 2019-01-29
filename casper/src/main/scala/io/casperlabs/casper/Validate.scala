@@ -561,7 +561,7 @@ object Validate {
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager[F]
-  )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
+  ): F[Either[BlockStatus, ValidBlock]] =
     Sync[F].pure[Either[BlockStatus, ValidBlock]](Right(Valid))
   // TODO: bring this back when validation works again
   // for {

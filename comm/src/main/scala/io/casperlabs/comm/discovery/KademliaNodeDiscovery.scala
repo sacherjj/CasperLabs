@@ -2,18 +2,17 @@ package io.casperlabs.comm.discovery
 
 import scala.collection.mutable
 import scala.concurrent.duration._
-
 import cats._
 import cats.implicits._
-
 import io.casperlabs.catscontrib._
 import Catscontrib._
+import cats.effect.Sync
 import io.casperlabs.comm._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 
 object KademliaNodeDiscovery {
-  def create[F[_]: Monad: Capture: Log: Time: Metrics: KademliaRPC](
+  def create[F[_]: Monad: Sync: Log: Time: Metrics: KademliaRPC](
       id: NodeIdentifier,
       defaultTimeout: FiniteDuration
   )(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
@@ -24,7 +23,7 @@ object KademliaNodeDiscovery {
 
 }
 
-private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: KademliaRPC](
+private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Metrics: KademliaRPC](
     id: NodeIdentifier,
     timeout: FiniteDuration
 ) extends NodeDiscovery[F] {
@@ -43,7 +42,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: 
 
   private def lookupHandler(peer: PeerNode, id: Array[Byte]): F[Seq[PeerNode]] =
     for {
-      peers <- Capture[F].capture(table.lookup(id))
+      peers <- Sync[F].delay(table.lookup(id))
       _     <- Metrics[F].incrementCounter("lookup-recv-count")
       _     <- addNode(peer)
     } yield peers
@@ -103,6 +102,6 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: 
     find(table.peers.toSet, Set(), 0)
   }
 
-  def peers: F[Seq[PeerNode]] = Capture[F].capture(table.peers)
+  def peers: F[Seq[PeerNode]] = Sync[F].delay(table.peers)
 
 }

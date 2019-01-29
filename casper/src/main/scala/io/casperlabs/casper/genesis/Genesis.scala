@@ -3,26 +3,20 @@ package io.casperlabs.casper.genesis
 import java.io.{File, PrintWriter}
 import java.nio.file.Path
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.{Applicative, Foldable, Id, Monad}
+import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import io.casperlabs.casper.util.Sorting
-import io.casperlabs.casper.util.Sorting.byteArrayOrdering
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
-import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
-import io.casperlabs.ipc.ExecutionEffect
 import io.casperlabs.shared.{Log, LogSource, Time}
-import monix.eval.Task
-import monix.execution.Scheduler
 
-import scala.concurrent.duration.Duration
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
@@ -39,7 +33,7 @@ object Genesis {
   ): List[Deploy] =
     List()
 
-  def withContracts[F[_]](
+  def withContracts[F[_]: Concurrent](
       initial: BlockMessage,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
@@ -47,7 +41,7 @@ object Genesis {
       startHash: StateHash,
       runtimeManager: RuntimeManager[F],
       timestamp: Long
-  ): BlockMessage =
+  ): F[BlockMessage] =
     withContracts(
       defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
       initial,
@@ -55,45 +49,28 @@ object Genesis {
       runtimeManager
     )
 
-  def withContracts[F[_]](
+  def withContracts[F[_]: Concurrent](
       blessedTerms: List[Deploy],
       initial: BlockMessage,
       startHash: StateHash,
       runtimeManager: RuntimeManager[F]
-  ): BlockMessage = {
-    // todo when blessed contracts finished, this should be comment out.
-    //
-//    val (stateHash, processedDeploys) =
-//      runtimeManager
-//        .computeState(startHash, blessedTerms.map((_, ExecutionEffect())))
-//        .runSyncUnsafe(Duration.Inf)
-    val stateHash = ByteString.copyFromUtf8("test")
-
-    val stateWithContracts = for {
-      bd <- initial.body
-      ps <- bd.state
-    } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(stateHash)
-    val version   = initial.header.get.version
-    val timestamp = initial.header.get.timestamp
-
-    // todo when blessed contracts finished, this should be comment out.
-
-//    val blockDeploys =
-//      processedDeploys.filterNot(_.result.isFailed).map(ProcessedDeployUtil.fromInternal)
-
-    val blockDeploys = Seq(
-      ProcessedDeploy(
-        deploy = None,
-        errored = false
-      )
-    )
-
-    val body = Body(state = stateWithContracts, deploys = blockDeploys)
-
-    val header = blockHeader(body, List.empty[ByteString], version, timestamp)
-
-    unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
-  }
+  ): F[BlockMessage] =
+    runtimeManager
+      .computeState(startHash, Seq.empty)
+      .map {
+        case (stateHash, processedDeploys) =>
+          val stateWithContracts = for {
+            bd <- initial.body
+            ps <- bd.state
+          } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(stateHash)
+          val version   = initial.header.get.version
+          val timestamp = initial.header.get.timestamp
+          val blockDeploys =
+            processedDeploys.filterNot(_.result.isFailed).map(ProcessedDeployUtil.fromInternal)
+          val body   = Body(state = stateWithContracts, deploys = blockDeploys)
+          val header = blockHeader(body, List.empty[ByteString], version, timestamp)
+          unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+      }
 
   def withoutContracts(
       bonds: Map[Array[Byte], Long],
@@ -120,7 +97,7 @@ object Genesis {
   }
 
   //TODO: Decide on version number and shard identifier
-  def fromInputFiles[F[_]: Monad: Capture: Log: Time](
+  def fromInputFiles[F[_]: Concurrent: Log: Time](
       maybeBondsPath: Option[String],
       numValidators: Int,
       genesisPath: Path,
@@ -149,15 +126,15 @@ object Genesis {
       initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 1L, shardId = shardId)
       validators  = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
       faucetCode  = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
-      withContr = withContracts(
-        initial,
-        ProofOfStakeParams(minimumBond, maximumBond, validators),
-        wallets,
-        faucetCode,
-        runtimeManager.emptyStateHash,
-        runtimeManager,
-        timestamp
-      )
+      withContr <- withContracts(
+                    initial,
+                    ProofOfStakeParams(minimumBond, maximumBond, validators),
+                    wallets,
+                    faucetCode,
+                    runtimeManager.emptyStateHash,
+                    runtimeManager,
+                    timestamp
+                  )
     } yield withContr
 
   def toFile[F[_]: Applicative: Log](
@@ -181,13 +158,13 @@ object Genesis {
         } else none[File].pure[F]
     }
 
-  def getWallets[F[_]: Monad: Capture: Log](
+  def getWallets[F[_]: Sync: Log](
       walletsFile: Option[File],
       maybeWalletsPath: Option[String]
   ): F[Seq[PreWallet]] = {
     def walletFromFile(file: File): F[Seq[PreWallet]] =
       for {
-        maybeLines <- Capture[F].capture { Try(Source.fromFile(file).getLines().toList) }
+        maybeLines <- Sync[F].delay { Try(Source.fromFile(file).getLines().toList) }
         wallets <- maybeLines match {
                     case Success(lines) =>
                       lines
@@ -249,15 +226,15 @@ object Genesis {
           }
     }
 
-  def getBonds[F[_]: Monad: Capture: Log](
+  def getBonds[F[_]: Sync: Log](
       bondsFile: Option[File],
       numValidators: Int,
       genesisPath: Path
   ): F[Map[Array[Byte], Long]] =
     bondsFile match {
       case Some(file) =>
-        Capture[F]
-          .capture {
+        Sync[F]
+          .delay {
             Try {
               Source
                 .fromFile(file)
@@ -279,7 +256,7 @@ object Genesis {
       case None => newValidators[F](numValidators, genesisPath)
     }
 
-  private def newValidators[F[_]: Monad: Capture: Log](
+  private def newValidators[F[_]: Sync: Log](
       numValidators: Int,
       genesisPath: Path
   ): F[Map[Array[Byte], Long]] = {
@@ -288,7 +265,7 @@ object Genesis {
     val bonds        = pubKeys.zipWithIndex.toMap.mapValues(_.toLong + 1L)
     val genBondsFile = genesisPath.resolve(s"bonds.txt").toFile
 
-    val skFiles = Capture[F].capture {
+    val skFiles = Sync[F].delay {
       genesisPath.toFile.mkdir()
       keys.foreach { //create files showing the secret key for each public key
         case (sec, pub) =>
@@ -304,14 +281,14 @@ object Genesis {
     //create bonds file for editing/future use
     for {
       _       <- skFiles
-      printer <- Capture[F].capture { new PrintWriter(genBondsFile) }
+      printer <- Sync[F].delay { new PrintWriter(genBondsFile) }
       _ <- Foldable[List].foldM[F, (Array[Byte], Long), Unit](bonds.toList, ()) {
             case (_, (pub, stake)) =>
               val pk = Base16.encode(pub)
               Log[F].info(s"Created validator $pk with bond $stake") *>
-                Capture[F].capture { printer.println(s"$pk $stake") }
+                Sync[F].delay { printer.println(s"$pk $stake") }
           }
-      _ <- Capture[F].capture { printer.close() }
+      _ <- Sync[F].delay { printer.close() }
     } yield bonds
   }
 

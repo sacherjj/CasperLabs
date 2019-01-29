@@ -132,8 +132,16 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       createBlockResult    <- MultiParentCasper[Effect].createBlock
       Created(signedBlock) = createBlockResult
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock)
-//       todo Once we bring back RuntimeManager.replayComputeState, this assertion should be bring back
-//      _      = logEff.warns.isEmpty should be(true)
+      logMessages = List(
+        "Received Deploy",
+        "Attempting to add Block",
+        "Added",
+        "Sent Block #1",
+        "New fork-choice tip is block"
+      )
+      // todo Once we bring back RuntimeManager.replayComputeState, this assertion should be bring back
+      //  _      = logEff.warns.isEmpty should be(true)
+      _      = logEff.infos.zip(logMessages).forall { case (a, b) => a.startsWith(b) } should be(true)
       dag    <- MultiParentCasper[Effect].blockDag
       result <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock)
       _      = node.tearDown()
@@ -1055,15 +1063,17 @@ object HashSetCasperTest {
     val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
     val emptyStateHash          = runtimeManager.emptyStateHash
     val validators              = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-    val genesis = Genesis.withContracts(
-      initial,
-      ProofOfStakeParams(minimumBond, maximumBond, validators),
-      wallets,
-      faucetCode,
-      emptyStateHash,
-      runtimeManager,
-      deployTimestamp
-    )
+    val genesis = Genesis
+      .withContracts(
+        initial,
+        ProofOfStakeParams(minimumBond, maximumBond, validators),
+        wallets,
+        faucetCode,
+        emptyStateHash,
+        runtimeManager,
+        deployTimestamp
+      )
+      .unsafeRunSync
     genesis
   }
 }
