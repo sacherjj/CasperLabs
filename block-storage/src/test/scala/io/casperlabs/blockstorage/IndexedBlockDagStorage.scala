@@ -1,7 +1,7 @@
 package io.casperlabs.blockstorage
 
 import cats.effect.Concurrent
-import cats.{Id, Monad}
+import cats.Monad
 import cats.implicits._
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
@@ -20,12 +20,14 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       result <- underlying.getRepresentation
       _      <- lock.release
     } yield result
+
   def insert(block: BlockMessage): F[Unit] =
     for {
       _ <- lock.acquire
       _ <- underlying.insert(block)
       _ <- lock.release
     } yield ()
+
   def insertIndexed(block: BlockMessage): F[BlockMessage] =
     for {
       _                 <- lock.acquire
@@ -46,6 +48,7 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       _ <- currentIdRef.set(nextId)
       _ <- lock.release
     } yield modifiedBlock
+
   def inject(index: Int, block: BlockMessage): F[Unit] =
     for {
       _ <- lock.acquire
@@ -53,7 +56,9 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       _ <- underlying.insert(block)
       _ <- lock.release
     } yield ()
+
   def checkpoint(): F[Unit] = underlying.checkpoint()
+
   def clear(): F[Unit] =
     for {
       _ <- lock.acquire
@@ -62,11 +67,14 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       _ <- currentIdRef.set(-1)
       _ <- lock.release
     } yield ()
+
   def close(): F[Unit] = underlying.close()
+
   def lookupById(id: Int): F[Option[BlockMessage]] =
     for {
       idToBlocks <- idToBlocksRef.get
     } yield idToBlocks.get(id)
+
   def lookupByIdUnsafe(id: Int): F[BlockMessage] =
     for {
       idToBlocks <- idToBlocksRef.get
