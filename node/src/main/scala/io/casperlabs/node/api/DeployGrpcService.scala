@@ -1,6 +1,7 @@
 package io.casperlabs.node.api
 
-import cats.effect.Sync
+import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.empty.Empty
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -9,14 +10,16 @@ import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.protocol.{DeployData, DeployServiceResponse, _}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib.Taskable
+import io.casperlabs.catscontrib.{Taskable, ToAbstractContext}
 import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
 private[api] object DeployGrpcService {
-  def instance[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+      blockApiLock: Semaphore[F]
+  )(
       implicit worker: Scheduler
   ): CasperMessageGrpcMonix.DeployService =
     new CasperMessageGrpcMonix.DeployService {
@@ -28,10 +31,7 @@ private[api] object DeployGrpcService {
         defer(BlockAPI.deploy[F](d))
 
       override def createBlock(e: Empty): Task[DeployServiceResponse] =
-        defer(BlockAPI.createBlock[F])
-
-      override def addBlock(b: BlockMessage): Task[DeployServiceResponse] =
-        defer(BlockAPI.addBlock[F](b))
+        defer(BlockAPI.createBlock[F](blockApiLock))
 
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
         defer(BlockAPI.showBlock[F](q))

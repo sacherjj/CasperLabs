@@ -1,8 +1,9 @@
 package io.casperlabs.casper
 
-import cats.Id
-import cats.effect.Sync
+import cats.effect.concurrent.Semaphore
+import cats.{Applicative, Monad}
 import cats.implicits._
+import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{
   BlockDagRepresentation,
@@ -23,11 +24,15 @@ import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
+import io.casperlabs.catscontrib.ski._
 
 import scala.concurrent.SyncVar
 
 trait Casper[F[_], A] {
-  def addBlock(b: BlockMessage): F[BlockStatus]
+  def addBlock(
+      b: BlockMessage,
+      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
+  ): F[BlockStatus]
   def contains(b: BlockMessage): F[Boolean]
   def deploy(d: DeployData): F[Either[Throwable, Unit]]
   def estimator(dag: BlockDagRepresentation[F]): F[A]
@@ -49,17 +54,25 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
 
 object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
+  def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
+    kp2(().pure[F])
+
+  def forkChoiceTip[F[_]: MultiParentCasper: Monad]: F[BlockMessage] =
+    for {
+      dag  <- MultiParentCasper[F].blockDag
+      tips <- MultiParentCasper[F].estimator(dag)
+      tip  = tips.head
+    } yield tip
 }
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+  def hashSetCasper[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
       runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] = {
-    val genesisBonds = ProtoUtil.bonds(genesis)
+  ): F[MultiParentCasper[F]] =
     for {
       // Initialize DAG storage with genesis block in case it is empty
       _   <- BlockDagStorage[F].insert(genesis)
@@ -83,13 +96,20 @@ sealed abstract class MultiParentCasperInstances {
                                  ByteString.copyFromUtf8("test").pure[F]
                                case Right(Some(hash)) => hash.pure[F]
                              }
-    } yield
+      blockProcessingLock <- Semaphore[F](1)
+      casperState <- Cell.mvarCell[F, CasperState](
+                      CasperState()
+                    )
+
+    } yield {
+      implicit val state = casperState
       new MultiParentCasperImpl[F](
         runtimeManager,
         validatorId,
         genesis,
         postGenesisStateHash,
-        shardId
+        shardId,
+        blockProcessingLock
       )
-  }
+    }
 }

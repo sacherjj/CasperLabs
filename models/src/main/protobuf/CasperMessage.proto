@@ -19,8 +19,6 @@ option (scalapb.options) = {
 service DeployService {
     rpc DoDeploy (DeployData) returns (DeployServiceResponse) {
     }
-    rpc addBlock (BlockMessage) returns (DeployServiceResponse) {
-    }
     rpc createBlock (google.protobuf.Empty) returns (DeployServiceResponse) {
     }
     rpc showBlock (BlockQuery) returns (BlockQueryResponse) {
@@ -54,6 +52,10 @@ message BlockRequest {
     //from other message types with similar serializations.
     string base16Hash = 1;
     bytes hash = 2;
+}
+
+message ForkChoiceTipRequest {
+
 }
 
 message FindDeployInBlockQuery {

@@ -1,16 +1,14 @@
 package io.casperlabs.casper
 
+import cats.Monad
 import cats.effect.Sync
-import cats.{Id, Monad}
-import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
+import io.casperlabs.blockstorage.IndexedBlockDagStorage
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.protocol.{BlockMessage, Bond}
-import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.{Log, Time}
@@ -41,7 +39,12 @@ class ManyValidatorsTest
     val v1 = bonds(0).validator
 
     val testProgram = for {
-      blockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
+      blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
+      blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
+                          metrics,
+                          log,
+                          blockStore
+                        )
       indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
       genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)(
                   Monad[Task],
@@ -51,7 +54,7 @@ class ManyValidatorsTest
                 )
       b <- createBlock[Task](Seq(genesis.blockHash), v1, bonds, bonds.map {
             case Bond(validator, _) => validator -> genesis.blockHash
-          }.toMap)(Monad[Task], Time[Task], BlockStore[Task], indexedBlockDagStorage)
+          }.toMap)(Monad[Task], Time[Task], blockStore, indexedBlockDagStorage)
       _                     <- indexedBlockDagStorage.close()
       initialLatestMessages = bonds.map { case Bond(validator, _) => validator -> b }.toMap
       _ <- Sync[Task].delay {
@@ -61,10 +64,14 @@ class ManyValidatorsTest
               initialLatestMessages
             )
           }
-      newBlockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
+      newBlockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
+                             metrics,
+                             log,
+                             blockStore
+                           )
       newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
       dag                       <- newIndexedBlockDagStorage.getRepresentation
-      tips                      <- Estimator.tips[Task](dag, genesis.blockHash)
+      tips                      <- Estimator.tips[Task](dag, genesis.blockHash)(Monad[Task], blockStore)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMessage],
                        tips.toIndexedSeq

@@ -45,11 +45,11 @@ class BlockApproverProtocol(
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Capture: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       u: UnapprovedBlock,
       runtimeManager: RuntimeManager[F]
-  ): F[Option[Packet]] =
+  ): F[Unit] =
     if (u.candidate.isEmpty) {
       Log[F]
         .warn("Candidate is not defined.")
@@ -80,11 +80,10 @@ class BlockApproverProtocol(
               _ <- Log[F].info(
                     s"Received expected candidate from $peer. Approval sent in response."
                   )
-            } yield none[Packet]
+            } yield ()
           case Left(errMsg) =>
             Log[F]
               .warn(s"Received unexpected candidate from $peer because: $errMsg")
-              .map(_ => none[Packet])
         }
     }
 }

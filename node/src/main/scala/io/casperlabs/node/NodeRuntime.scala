@@ -2,8 +2,8 @@ package io.casperlabs.node
 
 import cats._
 import cats.data._
-import cats.effect._
-import cats.effect.concurrent.Ref
+import cats.effect.{Effect, _}
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
@@ -197,7 +197,7 @@ class NodeRuntime private[node] (
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
-  private def acquireServers()(
+  private def acquireServers(blockApiLock: Semaphore[Effect])(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -205,7 +205,8 @@ class NodeRuntime private[node] (
       multiParentCasperRef: MultiParentCasperRef[Effect],
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task],
-      connectionsCell: ConnectionsCell[Task]
+      connectionsCell: ConnectionsCell[Task],
+      concurrent: Concurrent[Effect]
   ): Effect[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
@@ -213,7 +214,8 @@ class NodeRuntime private[node] (
                              .acquireExternalServer[Effect](
                                conf.grpcServer.portExternal,
                                conf.server.maxMessageSize,
-                               grpcScheduler
+                               grpcScheduler,
+                               blockApiLock
                              )
 
       grpcServerInternal <- GrpcServer
@@ -352,12 +354,13 @@ class NodeRuntime private[node] (
       } yield ()
 
     for {
-      _       <- info
-      local   <- peerNodeAsk.ask.toEffect
-      host    = local.endpoint.host
-      servers <- acquireServers()
-      _       <- addShutdownHook(servers, executionEngineService).toEffect
-      _       <- servers.grpcServerExternal.start.toEffect
+      blockApiLock <- Semaphore[Effect](1)
+      _            <- info
+      local        <- peerNodeAsk.ask.toEffect
+      host         = local.endpoint.host
+      servers      <- acquireServers(blockApiLock)
+      _            <- addShutdownHook(servers, executionEngineService).toEffect
+      _            <- servers.grpcServerExternal.start.toEffect
       _ <- Log[Effect].info(
             s"gRPC external server started at $host:${servers.grpcServerExternal.port}"
           )

@@ -54,16 +54,16 @@ class HashSetCasperTestNode[F[_]](
     storageSize: Long,
     val blockDagDir: Path,
     val blockStoreDir: Path,
+    blockProcessingLock: Semaphore[F],
     shardId: String = "casperlabs"
 )(
-    implicit scheduler: Scheduler,
-    syncF: Sync[F],
-    captureF: Capture[F],
+    implicit
     concurrentF: Concurrent[F],
     val blockStore: BlockStore[F],
     val blockDagStorage: BlockDagStorage[F],
     val metricEff: Metrics[F],
-    val abF: ToAbstractContext[F]
+    val abF: ToAbstractContext[F],
+    val casperState: Cell[F, CasperState]
 ) {
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
@@ -86,12 +86,14 @@ class HashSetCasperTestNode[F[_]](
 
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
+
   implicit val casperEff = new MultiParentCasperImpl[F](
     runtimeManager,
     Some(validatorId),
     genesis,
     postGenesisStateHash,
-    shardId
+    shardId,
+    blockProcessingLock
   )
 
   implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[F](Some(casperEff))
@@ -118,16 +120,17 @@ class HashSetCasperTestNode[F[_]](
 
   def receive(): F[Unit] = tle.receive(p => handle[F](p, defaultTimeout), kp(().pure[F]))
 
-  def tearDown(): Unit = {
-    tearDownNode()
-    blockStoreDir.recursivelyDelete()
-    blockDagDir.recursivelyDelete()
-  }
+  def tearDown(): F[Unit] =
+    tearDownNode().map { _ =>
+      blockStoreDir.recursivelyDelete()
+      blockDagDir.recursivelyDelete()
+    }
 
-  def tearDownNode(): Unit = {
-    blockStore.close()
-    blockDagStorage.close()
-  }
+  def tearDownNode(): F[Unit] =
+    for {
+      _ <- blockStore.close()
+      _ <- blockDagStorage.close()
+    } yield ()
 }
 
 object HashSetCasperTestNode {
@@ -142,10 +145,8 @@ object HashSetCasperTestNode {
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10
   )(
-      implicit scheduler: Scheduler,
+      implicit
       errorHandler: ErrorHandler[F],
-      syncF: Sync[F],
-      captureF: Capture[F],
       concurrentF: Concurrent[F],
       absF: ToAbstractContext[F]
   ): F[HashSetCasperTestNode[F]] = {
@@ -173,7 +174,9 @@ object HashSetCasperTestNode {
                             blockDagDir.resolve("checkpoints")
                           ),
                           genesis
-                        )
+                        )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
+      blockProcessingLock <- Semaphore[F](1)
+      casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       node = new HashSetCasperTestNode[F](
         name,
         identity,
@@ -185,8 +188,15 @@ object HashSetCasperTestNode {
         storageSize,
         blockDagDir,
         blockStoreDir,
-        "rchain"
-      )(scheduler, syncF, captureF, concurrentF, blockStore, blockDagStorage, metricEff, absF)
+        blockProcessingLock
+      )(
+        concurrentF,
+        blockStore,
+        blockDagStorage,
+        metricEff,
+        absF,
+        casperState
+      )
       result <- node.initialize.map(_ => node)
     } yield result
   }
@@ -194,10 +204,7 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
     standaloneF[Effect](genesis, sk, storageSize)(
-      scheduler,
       ApplicativeError_[Effect, CommError],
-      syncEffectInstance,
-      Capture[Effect],
       Concurrent[Effect],
       ToAbstractContext[Effect]
     ).value.unsafeRunSync.right.get
@@ -207,10 +214,7 @@ object HashSetCasperTestNode {
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10
   )(
-      implicit scheduler: Scheduler,
-      errorHandler: ErrorHandler[F],
-      syncF: Sync[F],
-      captureF: Capture[F],
+      implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
       absF: ToAbstractContext[F]
   ): F[IndexedSeq[HashSetCasperTestNode[F]]] = {
@@ -250,7 +254,11 @@ object HashSetCasperTestNode {
                                     blockDagDir.resolve("checkpoints")
                                   ),
                                   genesis
-                                )
+                                )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
+              semaphore <- Semaphore[F](1)
+              casperState <- Cell.mvarCell[F, CasperState](
+                              CasperState()
+                            )
               node = new HashSetCasperTestNode[F](
                 n,
                 p,
@@ -262,16 +270,15 @@ object HashSetCasperTestNode {
                 storageSize,
                 blockDagDir,
                 blockStoreDir,
-                "rchain"
+                semaphore,
+                "casperlabs"
               )(
-                scheduler,
-                syncF,
-                captureF,
                 concurrentF,
                 blockStore,
                 blockDagStorage,
                 metricEff,
-                absF
+                absF,
+                casperState
               )
             } yield node
         }
@@ -302,12 +309,9 @@ object HashSetCasperTestNode {
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10
-  )(implicit scheduler: Scheduler): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
+  ): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
     networkF[Effect](sks, genesis, storageSize)(
-      scheduler,
       ApplicativeError_[Effect, CommError],
-      syncEffectInstance,
-      Capture[Effect],
       Concurrent[Effect],
       ToAbstractContext[Effect]
     )

@@ -29,8 +29,6 @@ object InterpreterUtil {
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  )(
-      implicit scheduler: Scheduler
   ): F[Either[BlockException, Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
@@ -139,8 +137,6 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       time: Option[Long] = None
-  )(
-      implicit scheduler: Scheduler
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, time)
@@ -218,8 +214,6 @@ object InterpreterUtil {
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  )(
-      implicit scheduler: Scheduler
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)

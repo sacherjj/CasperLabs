@@ -1,14 +1,13 @@
 package io.casperlabs.casper.helper
 
+import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Applicative, Monad}
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData}
 import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
-import monix.eval.Task
 
 import scala.collection.mutable.{Map => MutableMap}
 
@@ -19,7 +18,10 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
 
   def store: Map[BlockHash, BlockMessage] = blockStore.toMap
 
-  def addBlock(b: BlockMessage): F[BlockStatus] =
+  def addBlock(
+      b: BlockMessage,
+      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
+  ): F[BlockStatus] =
     for {
       _ <- Sync[F].delay(blockStore.update(b.blockHash, b))
       _ <- BlockStore[F].put(b.blockHash, b)

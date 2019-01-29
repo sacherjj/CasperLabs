@@ -1,27 +1,22 @@
 package io.casperlabs.casper.api
 
 import cats.Monad
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b512Random
-import io.casperlabs.shared.{Log, SyncLock}
-import monix.execution.Scheduler
-import scodec.Codec
-
-import scala.collection.immutable
+import io.casperlabs.shared.Log
 
 object BlockAPI {
-
-  private val createBlockLock = new SyncLock
 
   def deploy[F[_]: Monad: MultiParentCasperRef: Log](d: DeployData): F[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
@@ -40,34 +35,35 @@ object BlockAPI {
       )
   }
 
-  def addBlock[F[_]: Monad: MultiParentCasperRef: Log](b: BlockMessage): F[DeployServiceResponse] =
+  def createBlock[F[_]: Concurrent: MultiParentCasperRef: Log](
+      blockApiLock: Semaphore[F]
+  ): F[DeployServiceResponse] =
     MultiParentCasperRef.withCasper[F, DeployServiceResponse](
-      casper =>
-        for {
-          status <- casper.addBlock(b)
-        } yield addResponse(status, b),
-      DeployServiceResponse(success = false, "Error: Casper instance not available")
-    )
-
-  def createBlock[F[_]: Sync: MultiParentCasperRef: Log]: F[DeployServiceResponse] =
-    MultiParentCasperRef.withCasper[F, DeployServiceResponse](
-      casper =>
-        // TODO: Use Bracket: See https://github.com/rchain/rchain/pull/1436#discussion_r215520914
-        Monad[F].ifM(Sync[F].delay { createBlockLock.tryLock() })(
-          for {
-            maybeBlock <- casper.createBlock
-            result <- maybeBlock match {
-                       case err: NoBlock =>
-                         DeployServiceResponse(success = false, s"Error while creating block: $err")
-                           .pure[F]
-                       case Created(block) => casper.addBlock(block).map(addResponse(_, block))
-                     }
-            _ <- Sync[F].delay { createBlockLock.unlock() }
-          } yield result,
-          DeployServiceResponse(success = false, "Error: There is another propose in progress.")
-            .pure[F]
-        ),
-      DeployServiceResponse(success = false, "Error: Casper instance not available")
+      casper => {
+        Sync[F].bracket(blockApiLock.tryAcquire) {
+          case true =>
+            for {
+              maybeBlock <- casper.createBlock
+              result <- maybeBlock match {
+                         case err: NoBlock =>
+                           DeployServiceResponse(
+                             success = false,
+                             s"Error while creating block: $err"
+                           ).pure[F]
+                         case Created(block) =>
+                           casper
+                             .addBlock(block, ignoreDoppelgangerCheck[F])
+                             .map(addResponse(_, block))
+                       }
+            } yield result
+          case false =>
+            DeployServiceResponse(success = false, "Error: There is another propose in progress.")
+              .pure[F]
+        } { _ =>
+          blockApiLock.release
+        }
+      },
+      default = DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
   private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](

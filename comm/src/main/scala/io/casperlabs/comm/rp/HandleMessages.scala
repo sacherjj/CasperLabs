@@ -1,11 +1,9 @@
 package io.casperlabs.comm.rp
 
 import scala.concurrent.duration._
-
 import cats._
+import cats.effect.Sync
 import cats.implicits._
-
-import io.casperlabs.catscontrib._
 import io.casperlabs.comm._
 import io.casperlabs.comm.CommError._
 import io.casperlabs.comm.protocol.routing._
@@ -21,7 +19,7 @@ object HandleMessages {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def handle[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+  def handle[F[_]: Sync: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       protocol: Protocol,
       defaultTimeout: FiniteDuration
   ): F[CommunicationResponse] =
@@ -31,7 +29,7 @@ object HandleMessages {
       case Some(sender) => handle_[F](protocol, sender, defaultTimeout)
     }
 
-  private def handle_[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+  private def handle_[F[_]: Sync: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       proto: Protocol,
       sender: PeerNode,
       defaultTimeout: FiniteDuration
@@ -47,7 +45,7 @@ object HandleMessages {
           .pure[F]
     }
 
-  def handleDisconnect[F[_]: Monad: Capture: Metrics: TransportLayer: Log: ConnectionsCell](
+  def handleDisconnect[F[_]: Sync: Metrics: TransportLayer: Log: ConnectionsCell](
       sender: PeerNode,
       disconnect: Disconnect
   ): F[CommunicationResponse] =
