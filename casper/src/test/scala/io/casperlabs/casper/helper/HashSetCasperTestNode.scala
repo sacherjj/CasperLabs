@@ -174,7 +174,7 @@ object HashSetCasperTestNode {
                             blockDagDir.resolve("checkpoints")
                           ),
                           genesis
-                        )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
+                        )(Concurrent[F], Log[F], blockStore)
       blockProcessingLock <- Semaphore[F](1)
       casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       node = new HashSetCasperTestNode[F](
@@ -254,7 +254,7 @@ object HashSetCasperTestNode {
                                     blockDagDir.resolve("checkpoints")
                                   ),
                                   genesis
-                                )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
+                                )(Concurrent[F], Log[F], blockStore)
               semaphore <- Semaphore[F](1)
               casperState <- Cell.mvarCell[F, CasperState](
                               CasperState()

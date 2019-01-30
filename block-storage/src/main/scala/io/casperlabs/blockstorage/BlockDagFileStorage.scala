@@ -25,7 +25,7 @@ import scala.ref.WeakReference
 import scala.util.matching.Regex
 import collection.JavaConverters._
 
-final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private (
+final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore] private (
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
@@ -246,7 +246,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
               }
           }
       _                <- Sync[F].delay { Files.write(tmpSquashedData, dataByteBuffer.array()) }
-      squashedCrc      = Crc32.empty[F]()
+      squashedCrc      <- Crc32.emptyF[F]()
       _                <- squashedCrc.update(dataByteBuffer.array())
       squashedCrcBytes <- squashedCrc.bytes
       _                <- Sync[F].delay { Files.write(tmpSquashedCrc, squashedCrcBytes) }
@@ -375,12 +375,12 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       _ <- Sync[F].delay {
             Files.write(blockMetadataLogPath, Array.emptyByteArray)
           }
-      newLatestMessagesCrc      = Crc32.empty[F]()
+      newLatestMessagesCrc      <- Crc32.emptyF[F]()
       newLatestMessagesCrcBytes <- newLatestMessagesCrc.bytes
       _ <- Sync[F].delay {
             Files.write(latestMessagesCrcFilePath, newLatestMessagesCrcBytes)
           }
-      newBlockMetadataCrc      = Crc32.empty[F]()
+      newBlockMetadataCrc      <- Crc32.emptyF[F]()
       newBlockMetadataCrcBytes <- newBlockMetadataCrc.bytes
       _ <- Sync[F].delay {
             Files.write(blockMetadataCrcPath, newBlockMetadataCrcBytes)
@@ -737,7 +737,7 @@ object BlockDagFileStorage {
         config.blockMetadataCrcPath
       )
 
-  def createEmptyFromGenesis[F[_]: Monad: Concurrent: Sync: Log: BlockStore](
+  def createEmptyFromGenesis[F[_]: Concurrent: Log: BlockStore](
       config: Config,
       genesis: BlockMessage
   ): F[BlockDagFileStorage[F]] =
@@ -753,7 +753,7 @@ object BlockDagFileStorage {
             byteString.concat(validator).concat(blockHash)
         }
         .toByteArray
-      latestMessagesCrc = Crc32.empty[F]()
+      latestMessagesCrc <- Crc32.emptyF[F]()
       _ <- initialLatestMessages.toList.traverse_ {
             case (validator, blockHash) =>
               latestMessagesCrc.update(validator.concat(blockHash).toByteArray)
@@ -777,7 +777,7 @@ object BlockDagFileStorage {
                                               true
                                             )
                                           )
-      blockMetadataCrc      = Crc32.empty[F]()
+      blockMetadataCrc      <- Crc32.emptyF[F]()
       genesisByteString     = genesis.toByteString
       genesisData           = genesisByteString.size.toByteString.concat(genesisByteString).toByteArray
       _                     <- blockMetadataCrc.update(genesisData)

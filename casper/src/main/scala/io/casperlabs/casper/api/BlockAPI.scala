@@ -66,6 +66,7 @@ object BlockAPI {
       default = DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
+  // FIX: Not used at the moment - in RChain it's being used in method like `getListeningName*`
   private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[IndexedSeq[BlockMessage]] =
@@ -81,9 +82,7 @@ object BlockAPI {
   ): F[List[BlockInfoWithoutTuplespace]] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        dag         <- MultiParentCasper[F].blockDag
-        maxHeight   <- dag.topoSort(0L).map(_.length - 1) // TODO: Optimize calculating max height
-        startHeight = math.max(0, maxHeight - depth)
+        dag <- MultiParentCasper[F].blockDag
         flattenedBlockInfosUntilDepth <- getFlattenedBlockInfosUntilDepth[F](
                                           depth,
                                           dag

@@ -551,59 +551,6 @@ class InterpreterUtilTest
       }
   }
 
-  ignore should "pass tests involving races" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      (0 to 10).toList.traverse_ { _ =>
-        val deploys =
-          Vector(
-            """
-            | contract @"loop"(@xs) = {
-            |   match xs {
-            |     [] => {
-            |       for (@winner <- @"ch") {
-            |         @"return"!(winner)
-            |       }
-            |     }
-            |     [first, ...rest] => {
-            |       @"ch"!(first) | @"loop"!(rest)
-            |     }
-            |   }
-            | } | @"loop"!(["a","b","c","d"])
-            |""".stripMargin
-          ).map(
-            s =>
-              ProtoUtil.sourceDeploy(
-                ByteString.copyFromUtf8(s),
-                System.currentTimeMillis(),
-                Integer.MAX_VALUE
-              )
-          )
-
-        mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
-          for {
-            dag1 <- blockDagStorage.getRepresentation
-            deploysCheckpoint <- computeDeploysCheckpoint[Task](
-                                  Seq.empty,
-                                  deploys.map((_, ExecutionEffect())),
-                                  dag1,
-                                  runtimeManager
-                                )
-            Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
-            block <- createBlock[Task](
-                      Seq.empty,
-                      deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
-                      tsHash = computedTsHash,
-                      preStateHash = preStateHash
-                    )
-            dag2 <- blockDagStorage.getRepresentation
-
-            validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
-            Right(tsHash)  = validateResult
-          } yield tsHash should be(Some(computedTsHash))
-        }
-      }
-  }
-
   ignore should "pass map update test" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       (0 to 10).toList.traverse_ { _ =>
