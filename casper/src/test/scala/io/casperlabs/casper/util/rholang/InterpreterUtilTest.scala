@@ -127,7 +127,7 @@ class InterpreterUtilTest
       }
   }
 
-  ignore should "merge histories in case of multiple parents" in withStorage {
+  it should "merge histories in case of multiple parents" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val genesisDeploys = Vector(
         ByteString.EMPTY
@@ -222,7 +222,7 @@ class InterpreterUtilTest
     genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
   }
 
-  it should "merge histories in case of multiple parents with complex contract" ignore withStorage {
+  it should "merge histories in case of multiple parents with complex contract" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val contract = ByteString.copyFromUtf8(registry)
 
@@ -271,12 +271,13 @@ class InterpreterUtilTest
             _         <- step(2, genesis)
             dag       <- blockDagStorage.getRepresentation
             postState <- validateBlockCheckpoint[Task](b3, dag, runtimeManager)
-            result    = postState shouldBe Right(None)
+            // Result should be validated post-state-hash.
+            result = postState should matchPattern { case Right(Some(_)) => }
           } yield result
         }
   }
 
-  it should "merge histories in case of multiple parents (uneven histories)" ignore withStorage {
+  it should "merge histories in case of multiple parents (uneven histories)" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val contract = ByteString.copyFromUtf8(registry)
 
@@ -329,6 +330,7 @@ class InterpreterUtilTest
                          postB1ProcessedDeploys
                        )
             } yield result
+
           for {
             genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
             b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
@@ -352,7 +354,8 @@ class InterpreterUtilTest
 
             dag2      <- blockDagStorage.getRepresentation
             postState <- validateBlockCheckpoint[Task](b5, dag2, runtimeManager)
-            result    = postState shouldBe Right(None)
+            // Result should be validated post-state-hash.
+            result = postState should matchPattern { case Right(Some(_)) => }
           } yield result
         }
   }
@@ -363,6 +366,16 @@ class InterpreterUtilTest
       deploy: Deploy*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[InternalProcessedDeploy]] =
     for {
+      executionResults <- Task.traverse(deploy) { d =>
+                           runtimeManager
+                             .sendDeploy(ProtoUtil.deployDataToEEDeploy(d.getRaw))
+                             .flatMap {
+                               case Right(effect) => Task.now(d -> effect)
+                               // FIXME: The `computeDeploysCheckpoint` should allow passing in
+                               // negative results but it needs to change in MultiParentCasperImpl as well.
+                               case Left(ex) => Task.raiseError(ex)
+                             }
+                         }
       computeResult <- computeDeploysCheckpoint[Task](
                         Seq.empty,
                         deploy.map((_, ExecutionEffect())),
@@ -372,7 +385,7 @@ class InterpreterUtilTest
       Right((_, _, result)) = computeResult
     } yield result
 
-  "computeDeploysCheckpoint" should "aggregate cost of deploying rholang programs within the block" in withStorage {
+  "computeDeploysCheckpoint" should "aggregate the result of deploying rholang programs within the block" in withStorage {
     implicit blockStore =>
       implicit blockDagStorage =>
         //reference costs
@@ -396,60 +409,66 @@ class InterpreterUtilTest
           )
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {
-            dag          <- blockDagStorage.getRepresentation
-            cost1        <- computeSingleProcessedDeploy(runtimeManager, dag, deploy1)
-            cost2        <- computeSingleProcessedDeploy(runtimeManager, dag, deploy2)
-            cost3        <- computeSingleProcessedDeploy(runtimeManager, dag, deploy3)
-            accCostsSep  = cost1 ++ cost2 ++ cost3
-            singleDeploy = Seq(deploy1, deploy2, deploy3)
-            accCostBatch <- computeSingleProcessedDeploy(runtimeManager, dag, singleDeploy: _*)
-          } yield accCostBatch should contain theSameElementsAs accCostsSep
+            dag           <- blockDagStorage.getRepresentation
+            proc1         <- computeSingleProcessedDeploy(runtimeManager, dag, deploy1)
+            proc2         <- computeSingleProcessedDeploy(runtimeManager, dag, deploy2)
+            proc3         <- computeSingleProcessedDeploy(runtimeManager, dag, deploy3)
+            singleResults = proc1 ++ proc2 ++ proc3
+            batchDeploy   = Seq(deploy1, deploy2, deploy3)
+            batchResult   <- computeSingleProcessedDeploy(runtimeManager, dag, batchDeploy: _*)
+          } yield batchResult should contain theSameElementsAs singleResults
       }
   }
 
-  ignore should "return cost of deploying even if one of the programs withing the deployment throws an error" in
-    pendingUntilFixed { //reference costs
-      withStorage { implicit blockStore => implicit blockDagStorage =>
-        //deploy each Rholang program separately and record its cost
-        val deploy1 =
-          ProtoUtil.sourceDeploy(
-            ByteString.EMPTY,
+  it should "return result of deploying even if one of the programs withing the deployment throws an error" in
+    withStorage { implicit blockStore => implicit blockDagStorage =>
+      //deploy each Rholang program separately and record its cost
+      val deploy1 =
+        ProtoUtil.sourceDeploy(
+          ByteString.EMPTY,
+          System.currentTimeMillis(),
+          Integer.MAX_VALUE
+        )
+      val deploy2 =
+        ProtoUtil.sourceDeploy(
+          ByteString.EMPTY,
+          System.currentTimeMillis(),
+          Integer.MAX_VALUE
+        )
+      mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
+        for {
+          dag <- blockDagStorage.getRepresentation
+
+          proc1 <- computeSingleProcessedDeploy(runtimeManager, dag, deploy1)
+          proc2 <- computeSingleProcessedDeploy(runtimeManager, dag, deploy2)
+
+          singleResults = proc1 ++ proc2
+
+          deployErr = ProtoUtil.sourceDeploy(
+            ByteString.copyFromUtf8("@3!(\"a\" + 3)"),
             System.currentTimeMillis(),
             Integer.MAX_VALUE
           )
-        val deploy2 =
-          ProtoUtil.sourceDeploy(
-            ByteString.EMPTY,
-            System.currentTimeMillis(),
-            Integer.MAX_VALUE
-          )
-        mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
-          for {
-            dag <- blockDagStorage.getRepresentation
-
-            cost1 <- computeSingleProcessedDeploy(runtimeManager, dag, deploy1)
-            cost2 <- computeSingleProcessedDeploy(runtimeManager, dag, deploy2)
-
-            accCostsSep = cost1 ++ cost2
-
-            deployErr = ProtoUtil.sourceDeploy(
-              ByteString.copyFromUtf8("@3!(\"a\" + 3)"),
-              System.currentTimeMillis(),
-              Integer.MAX_VALUE
-            )
-            batchDeploy  = Seq(deploy1, deploy2, deployErr)
-            accCostBatch <- computeSingleProcessedDeploy(runtimeManager, dag, batchDeploy: _*)
-          } yield accCostBatch should contain theSameElementsAs accCostsSep
-      }
-      }
+          batchDeploy = Seq(deploy1, deploy2, deployErr)
+          batchResult <- computeSingleProcessedDeploy(runtimeManager, dag, batchDeploy: _*)
+        } yield {
+          batchResult should have size 3
+          batchResult.take(2) should contain theSameElementsAs singleResults
+          // FIXME: Currently if a deploy were to throw an error it wouldn't
+          // make it into the block at all. We want user errors to be in there.
+          pendingUntilFixed {
+            batchResult.last.result.isFailed shouldBe true
+          }
+        }
+    }
     }
 
-  "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" ignore withStorage {
+  "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val deploys = Vector(ByteString.EMPTY)
         .map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
       val processedDeploys = deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
-      val invalidHash      = ByteString.EMPTY
+      val invalidHash      = ByteString.copyFromUtf8("invalid")
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
           block            <- createBlock[Task](Seq.empty, deploys = processedDeploys, tsHash = invalidHash)
@@ -490,7 +509,7 @@ class InterpreterUtilTest
       }
   }
 
-  ignore should "pass persistent produce test with causality" in withStorage {
+  it should "pass persistent produce test with causality" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val deploys =
         Vector("""new x, y, delay in {
@@ -551,7 +570,7 @@ class InterpreterUtilTest
       }
   }
 
-  ignore should "pass map update test" in withStorage {
+  it should "pass map update test" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       (0 to 10).toList.traverse_ { _ =>
         val deploys =
