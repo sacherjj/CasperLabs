@@ -155,7 +155,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       } yield result
   }
 
-  it should "create a valid genesis block" ignore withStorage {
+  it should "create a valid genesis block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       withGenResources {
         (
