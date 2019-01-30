@@ -23,7 +23,7 @@ import io.casperlabs.comm.transport
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.{Blake2b256, Keccak256}
 import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
-import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
+import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Log, StoreType}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -230,7 +230,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                           ].createBlock
       Created(signedBlock) = createBlockResult
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
-      _                    = logEff.warns.head.contains("Ignoring block") should be(true)
+      _                    = exactly(1, logEff.warns) should include("Ignoring block")
       _                    <- node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>
                  blockStore.get(signedBlock.blockHash) shouldBeF None
@@ -982,8 +982,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                 <- node.casperEff.deploy(deployData)
       createBlockResult <- MultiParentCasper[Effect].createBlock
       Created(block)    = createBlockResult
-    } yield assert(block.body.get.deploys.head.errored)
+    } yield {
+      assume(!logEff.debugs.contains("FIXME: Implement cost accounting!"))
+      assert(block.body.get.deploys.head.errored)
+    }
   }
+
   // Todo this is blocked by ApprovedBlockReceivedHandler, and ApprovedBlockReceivedHandler is blocked by RuntimeManager.replayComputeState. Now there are no deploys in the body
   ignore should "succeed if given enough gas for deploy" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
@@ -1062,6 +1066,7 @@ object HashSetCasperTest {
       faucetCode: String => String,
       deployTimestamp: Long
   ): BlockMessage = {
+    implicit val logEff         = new LogStub[Task]()
     val initial                 = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "casperlabs")
     val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
     val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)

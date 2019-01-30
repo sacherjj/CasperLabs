@@ -393,7 +393,7 @@ class ValidateTest
                        _ <- Validate.parents[Task](b9, b0, dag)
 
                        // Todo Once we bring back RuntimeManger.replayComputeState, the size of warn should be changed back 3
-                       _ = log.warns.size should be(4)
+                       _ = log.warns should have size (4)
                        result = log.warns.forall(
                          _.contains("block parents did not match estimate based on justification")
                        ) should be(
