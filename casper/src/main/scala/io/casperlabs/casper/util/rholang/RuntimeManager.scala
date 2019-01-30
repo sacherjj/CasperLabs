@@ -23,7 +23,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
   ): F[Either[(Option[Deploy], Failed), StateHash]] =
-    ByteString.EMPTY.asRight[(Option[Deploy], Failed)].pure
+    hash.asRight[(Option[Deploy], Failed)].pure
 
   def computeState(
       hash: StateHash,

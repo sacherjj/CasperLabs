@@ -1,44 +1,45 @@
 package io.casperlabs.node
 
+import scala.concurrent.duration._
 import cats._
 import cats.data._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.syntax.applicative._
 import cats.syntax.apply._
+import cats.syntax.monad._
+import cats.syntax.flatMap._
 import cats.syntax.functor._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.{BlockStore, InMemBlockStore}
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.blockstorage.{BlockDagFileStorage, BlockStore, InMemBlockStore}
 import io.casperlabs.casper._
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.casper.util.rholang.RuntimeManager
+import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
-import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
+import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery._
-import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import io.casperlabs.comm.rp._
+import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api._
-import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.configuration.{Configuration, ConfigurationSoft}
 import io.casperlabs.node.diagnostics._
 import io.casperlabs.p2p.effects._
-import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
+import io.casperlabs.shared.PathOps._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import kamon._
 import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
-
-import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
     conf: Configuration,
@@ -68,6 +69,12 @@ class NodeRuntime private[node] (
       httpServer: Fiber[Task, Unit]
   )
 
+  /**
+    * Main node entry. It will:
+    * 1. set up configurations
+    * 2. create instances of typeclasses
+    * 3. run the node program.
+    */
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   val main: Effect[Unit] = for {
     local <- WhoAmI
@@ -126,6 +133,12 @@ class NodeRuntime private[node] (
       blockMap,
       Metrics.eitherT(Monad[Task], metrics)
     )
+    blockDagStorage <- BlockDagFileStorage.create[Effect](conf.blockDagStorage)(
+                        Concurrent[Effect],
+                        Sync[Effect],
+                        Log.eitherTLog(Monad[Task], log),
+                        blockStore
+                      )
     _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
     executionEngineService = new GrpcExecutionEngineService(
@@ -153,6 +166,7 @@ class NodeRuntime private[node] (
                               Log.eitherTLog(Monad[Task], log),
                               multiParentCasperRef,
                               abs,
+                              blockDagStorage,
                               scheduler
                             )
     packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(

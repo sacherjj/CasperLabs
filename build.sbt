@@ -74,6 +74,17 @@ lazy val shared = (project in file("shared"))
     )
   )
 
+lazy val graphz = (project in file("graphz"))
+  .settings(commonSettings: _*)
+  .settings(
+    version := "0.1",
+    libraryDependencies ++= commonDependencies ++ Seq(
+      catsCore,
+      catsEffect,
+      catsMtl
+    )
+  ).dependsOn(shared)
+
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(
@@ -377,6 +388,7 @@ lazy val casperlabs = (project in file("."))
     casper,
     comm,
     crypto,
+    graphz,
     models,
     node,
     shared,
