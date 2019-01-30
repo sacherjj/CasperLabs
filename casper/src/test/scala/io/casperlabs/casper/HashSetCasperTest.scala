@@ -212,16 +212,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "not request invalid blocks from peers" in effectTest {
-    val dummyContract = {
-      val is = getClass.getResourceAsStream("/helloname.wasm")
-      val contractArray =
-        Iterator
-          .continually(is.read())
-          .takeWhile(_ != -1)
-          .map(_.toByte)
-          .toArray
-      ByteString.copyFrom(contractArray)
-    }
+    val dummyContract =
+      ByteString.readFrom(getClass.getResourceAsStream("/helloname.wasm"))
 
     val List(data0, data1) =
       (0 to 1)
