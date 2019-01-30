@@ -3,12 +3,8 @@ package io.casperlabs.node.diagnostics
 import java.time.Duration
 
 import com.typesafe.config.{Config, ConfigUtil}
-import scala.collection.JavaConverters._
 import kamon._
 import kamon.metric._
-import monix.eval.Task
-import org.http4s._
-import org.http4s.dsl.io._
 
 import scala.collection.JavaConverters._
 
