@@ -2,7 +2,7 @@ package io.casperlabs.client
 import java.io.File
 import java.nio.file.Files
 
-import cats.Apply
+import cats.{Apply, Monad}
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -24,6 +24,9 @@ object DeployRuntime {
 
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
+
+  def visualizeBlocks[F[_]: Monad: Sync: DeployService](depth: Int): F[Unit] =
+    gracefulExit(DeployService[F].visualizeBlocks(BlocksQuery(depth)))
 
   def deployFileProgram[F[_]: Sync: DeployService](
       from: String,
