@@ -4,7 +4,12 @@ import cats.Id
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStore}
+import io.casperlabs.blockstorage.{
+  BlockDagRepresentation,
+  BlockDagStorage,
+  BlockMetadata,
+  BlockStore
+}
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util._
@@ -17,17 +22,20 @@ import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.execution.atomic.AtomicAny
+
+import scala.concurrent.SyncVar
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[BlockStatus]
   def contains(b: BlockMessage): F[Boolean]
   def deploy(d: DeployData): F[Either[Throwable, Unit]]
-  def estimator(dag: BlockDag): F[A]
+  def estimator(dag: BlockDagRepresentation[F]): F[A]
   def createBlock: F[CreateBlockStatus]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
-  def blockDag: F[BlockDag]
+  def blockDag: F[BlockDagRepresentation[F]]
   def fetchDependencies: F[Unit]
   // This is the weight of faults that have been accumulated so far.
   // We want the clique oracle to give us a fault tolerance that is greater than
@@ -45,21 +53,17 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext](
+  def hashSetCasper[
+      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: ToAbstractContext: BlockDagStorage](
       runtimeManager: RuntimeManager[Task],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] = {
-    val genesisBonds          = ProtoUtil.bonds(genesis)
-    val initialLatestMessages = genesisBonds.map(_.validator -> genesis).toMap
-    val dag = BlockDag.empty
-      .copy(
-        latestMessages = initialLatestMessages,
-        dataLookup = Map(genesis.blockHash -> BlockMetadata.fromBlock(genesis)),
-        topoSort = Vector(Vector(genesis.blockHash))
-      )
+  )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] =
     for {
+      // Initialize DAG storage with genesis block in case it is empty
+      _   <- BlockDagStorage[F].insert(genesis)
+      dag <- BlockDagStorage[F].getRepresentation
       // TODO: bring back when validation is working again
       // maybePostGenesisStateHash <- InterpreterUtil
       //                               .validateBlockCheckpoint[F](
@@ -84,9 +88,7 @@ sealed abstract class MultiParentCasperInstances {
         runtimeManager,
         validatorId,
         genesis,
-        dag,
         postGenesisStateHash,
         shardId
       )
-  }
 }

@@ -3,11 +3,11 @@ package io.casperlabs.casper.util.rholang
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStore}
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
-import io.casperlabs.casper.{BlockDag, BlockException, PrettyPrinter}
+import io.casperlabs.casper.{BlockException, PrettyPrinter}
 import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.ExecutionEffect
@@ -27,7 +27,7 @@ object InterpreterUtil {
   //does not match the computed hash based on the deploys
   def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore: ToAbstractContext](
       b: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[Task]
   )(
       implicit scheduler: Scheduler
@@ -139,7 +139,7 @@ object InterpreterUtil {
   def computeDeploysCheckpoint[F[_]: Monad: BlockStore: ToAbstractContext](
       parents: Seq[BlockMessage],
       deploysWithEffect: Seq[(Deploy, ExecutionEffect)],
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[Task],
       time: Option[Long] = None
   )(
@@ -165,12 +165,11 @@ object InterpreterUtil {
 
   private def computeParentsPostState[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[Task],
       time: Option[Long]
   )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] = {
-    val parentTuplespaces =
-      parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
+    val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     parentTuplespaces match {
       //no parents to base off of, so use default
@@ -187,41 +186,44 @@ object InterpreterUtil {
       //merged. This is done by computing uncommon ancestors
       //and applying the deploys in those blocks.
       case (initParent, initStateHash) +: _ =>
-        implicit val ordering: Ordering[BlockMetadata] = BlockDag.deriveOrdering(dag)
-        val indexedParents                             = parents.toVector.map(b => dag.dataLookup(b.blockHash))
-        val uncommonAncestors                          = DagOperations.uncommonAncestors(indexedParents, dag.dataLookup)
-
-        val initIndex = indexedParents.indexOf(dag.dataLookup(initParent.blockHash))
-        //filter out blocks that already included by starting from the chosen initParent
-        val blocksToApply = uncommonAncestors
-          .filterNot { case (_, set) => set.contains(initIndex) }
-          .keys
-          .toVector
-          .sorted //ensure blocks to apply is topologically sorted to maintain any causal dependencies
-
-        for {
-          maybeBlocks <- blocksToApply.traverse(b => BlockStore[F].get(b.blockHash))
-          _           = assert(maybeBlocks.forall(_.isDefined))
-          blocks      = maybeBlocks.flatten
-          deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
-        } yield
-          runtimeManager
-            .replayComputeState(initStateHash, deploys, time)
-            .runSyncUnsafe(Duration.Inf) match {
-            case result @ Right(hash) => result.leftCast[Throwable]
-            case Left((_, status)) =>
-              val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-              Left(
-                new Exception(s"Failed status while computing post state of $parentHashes: $status")
-              )
-          }
+        dag.deriveOrdering(0L).flatMap { implicit ordering: Ordering[BlockMetadata] => // TODO: Replace with an actual starting number
+          for {
+            parentsMetadata    <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
+            indexedParents     = parentsMetadata.toVector
+            uncommonAncestors  <- DagOperations.uncommonAncestors[F](indexedParents, dag)
+            initParentMetadata <- dag.lookup(initParent.blockHash)
+            initIndex          = indexedParents.indexOf(initParentMetadata)
+            //filter out blocks that already included by starting from the chosen initParent
+            blocksToApply = uncommonAncestors
+              .filterNot { case (_, set) => set.contains(initIndex) }
+              .keys
+              .toVector
+              .sorted //ensure blocks to apply is topologically sorted to maintain any causal dependencies
+            maybeBlocks <- blocksToApply.traverse(b => BlockStore[F].get(b.blockHash))
+            _           = assert(maybeBlocks.forall(_.isDefined))
+            blocks      = maybeBlocks.flatten
+            deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
+          } yield
+            runtimeManager
+              .replayComputeState(initStateHash, deploys, time)
+              .runSyncUnsafe(Duration.Inf) match {
+              case result @ Right(_) => result.leftCast[Throwable]
+              case Left((_, status)) =>
+                val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+                Left(
+                  new Exception(
+                    s"Failed status while computing post state of $parentHashes: $status"
+                  )
+                )
+            }
+        }
     }
   }
 
   private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore: ExecutionEngineService: ToAbstractContext](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[Task]
   )(
       implicit scheduler: Scheduler

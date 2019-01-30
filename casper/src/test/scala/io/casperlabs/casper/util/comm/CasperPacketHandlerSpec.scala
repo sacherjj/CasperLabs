@@ -1,15 +1,13 @@
 package io.casperlabs.casper.util.comm
 
-import java.nio.file.Paths
-
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.InMemBlockStore
+import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.genesis.contracts.Faucet
-import io.casperlabs.casper.helper.{BlockStoreTestFixture, NoOpsCasperEffect}
+import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
@@ -34,7 +32,7 @@ import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
-import io.casperlabs.shared.{Cell, StoreType}
+import io.casperlabs.shared.Cell
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -50,7 +48,7 @@ import scala.concurrent.duration._
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
     val scheduler               = Scheduler.io("test")
-    val runtimeDir              = BlockStoreTestFixture.dbDir
+    val runtimeDir              = BlockDagStorageTestFixture.blockStorageDir
     val storageSize: Long       = 1024L * 1024
     val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
     val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
@@ -95,12 +93,15 @@ class CasperPacketHandlerSpec extends WordSpec {
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
     implicit val blockStore = InMemBlockStore.create[Task]
-    implicit val casperRef  = MultiParentCasperRef.unsafe[Task](None)
+    implicit val blockDagStorage = InMemBlockDagStorage
+      .create[Task]
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+    implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(
-          blockDag: BlockDag,
+          blockDag: BlockDagRepresentation[Task],
           estimateBlockHash: BlockHash
-      ): Float = 1.0f
+      ): Task[Float] = Task.pure(1.0f)
     }
   }
 

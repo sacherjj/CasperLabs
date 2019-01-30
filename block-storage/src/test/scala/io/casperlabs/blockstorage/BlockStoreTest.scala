@@ -56,7 +56,7 @@ trait BlockStoreTest
         items.foreach(store.put(_))
         items.foreach {
           case (k, v) =>
-            val w = store.find(_ == ByteString.copyFrom(k.getBytes()))
+            val w = store.find(_ == ByteString.copyFromUtf8(k))
             w should have size 1
             w.head._2 shouldBe v
         }

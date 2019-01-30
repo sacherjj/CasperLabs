@@ -1,12 +1,11 @@
 package io.casperlabs.casper
 
 import cats.effect.Sync
-import cats.{Applicative, Id, Monad}
+import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.protocol.Event.EventInstance
 import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.ProtoUtil.bonds
@@ -93,7 +92,7 @@ object Validate {
   def blockSender[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag
+      dag: BlockDagRepresentation[F]
   ): F[Boolean] =
     if (b == genesis) {
       true.pure[F] //genesis block has a valid sender
@@ -176,7 +175,7 @@ object Validate {
   def blockSummary[F[_]: Monad: Log: Time: BlockStore](
       block: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       shardId: String
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
@@ -217,7 +216,7 @@ object Validate {
     */
   def missingBlocks[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
-      dag: BlockDag
+      dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
       parentsPresent <- ProtoUtil.parentHashes(block).toList.forallM(p => BlockStore[F].contains(p))
@@ -242,7 +241,7 @@ object Validate {
     */
   def repeatDeploy[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
-      dag: BlockDag
+      dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val deployKeySet = (for {
       bd <- block.body.toList
@@ -281,7 +280,7 @@ object Validate {
   // This is not a slashable offence
   def timestamp[F[_]: Monad: Log: Time: BlockStore](
       b: BlockMessage,
-      dag: BlockDag
+      dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
       currentTime  <- Time[F].currentMillis
@@ -345,7 +344,7 @@ object Validate {
     */
   def sequenceNumber[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
-      dag: BlockDag
+      dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
@@ -423,7 +422,7 @@ object Validate {
   def parents[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag
+      dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
@@ -453,7 +452,7 @@ object Validate {
   def justificationFollows[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag
+      dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val justifiedValidators = b.justifications.map(_.validator).toSet
     val mainParentHash      = ProtoUtil.parentHashes(b).head
@@ -487,22 +486,27 @@ object Validate {
   def justificationRegressions[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag
+      dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
-    val latestMessagesOfBlock             = ProtoUtil.toLatestMessageHashes(b.justifications)
-    val maybeLatestMessagesFromSenderView = dag.latestMessagesOfLatestMessages.get(b.sender)
-    maybeLatestMessagesFromSenderView match {
-      case Some(latestMessagesFromSenderView) =>
-        justificationRegressionsAux[F](
-          b,
-          latestMessagesOfBlock,
-          latestMessagesFromSenderView,
-          genesis
-        )
-      case None =>
-        // We cannot have a justification regression if we don't have a previous latest message from sender
-        Applicative[F].pure(Right(Valid))
-    }
+    val latestMessagesOfBlock = ProtoUtil.toLatestMessageHashes(b.justifications)
+    for {
+      maybeLatestMessage <- dag.latestMessage(b.sender)
+      maybeLatestMessagesFromSenderView = maybeLatestMessage.map(
+        bm => ProtoUtil.toLatestMessageHashes(bm.justifications)
+      )
+      result <- maybeLatestMessagesFromSenderView match {
+                 case Some(latestMessagesFromSenderView) =>
+                   justificationRegressionsAux[F](
+                     b,
+                     latestMessagesOfBlock,
+                     latestMessagesFromSenderView,
+                     genesis
+                   )
+                 case None =>
+                   // We cannot have a justification regression if we don't have a previous latest message from sender
+                   Applicative[F].pure(Right(Valid))
+               }
+    } yield result
   }
 
   private def justificationRegressionsAux[F[_]: Monad: Log: BlockStore](
@@ -556,7 +560,7 @@ object Validate {
 
   def transactions[F[_]: Sync: Log: BlockStore: ToAbstractContext](
       block: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager[Task]
   )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =

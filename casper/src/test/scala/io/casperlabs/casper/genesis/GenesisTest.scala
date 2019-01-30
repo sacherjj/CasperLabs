@@ -8,8 +8,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.casper.BlockDag
-import io.casperlabs.casper.helper.BlockStoreFixture
+import io.casperlabs.casper.helper.BlockDagStorageFixture
 import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -21,10 +20,11 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import io.casperlabs.shared.StoreType
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
+import cats.effect.Sync
 import monix.eval.Task
 import io.casperlabs.shared.TestOutlaws._
 
-class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
+class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   import GenesisTest._
   implicit val absId = ToAbstractContext.idToAbstractContext
 
@@ -66,42 +66,45 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
     (
         runtimeManager: RuntimeManager[Task],
         genesisPath: Path,
-        log: LogStub[Id],
-        time: LogicalTime[Id]
+        log: LogStub[Task],
+        time: LogicalTime[Task]
     ) =>
-      val _ = fromInputFiles()(runtimeManager, genesisPath, log, time)
-
-      log.warns.find(_.contains("bonds")) should be(None)
-      log.infos.count(_.contains("Created validator")) should be(numValidators)
-
+      for {
+        _      <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+        _      = log.warns.find(_.contains("bonds")) should be(None)
+        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
+      } yield result
   }
 
   it should "generate random validators, with a warning, when bonds file does not exist" in withGenResources {
     (
         runtimeManager: RuntimeManager[Task],
         genesisPath: Path,
-        log: LogStub[Id],
-        time: LogicalTime[Id]
+        log: LogStub[Task],
+        time: LogicalTime[Task]
     ) =>
-      val _ = fromInputFiles(maybeBondsPath = Some("not/a/real/file"))(
-        runtimeManager,
-        genesisPath,
-        log,
-        time
-      )
-
-      log.warns.count(_.contains("does not exist. Falling back on generating random validators.")) should be(
-        1
-      )
-      log.infos.count(_.contains("Created validator")) should be(numValidators)
+      for {
+        _ <- fromInputFiles(maybeBondsPath = Some("not/a/real/file"))(
+              runtimeManager,
+              genesisPath,
+              log,
+              time
+            )
+        _ = log.warns.count(
+          _.contains("does not exist. Falling back on generating random validators.")
+        ) should be(
+          1
+        )
+        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
+      } yield result
   }
 
   it should "generate random validators, with a warning, when bonds file cannot be parsed" in withGenResources {
     (
         runtimeManager: RuntimeManager[Task],
         genesisPath: Path,
-        log: LogStub[Id],
-        time: LogicalTime[Id]
+        log: LogStub[Task],
+        time: LogicalTime[Task]
     ) =>
       val badBondsFile = genesisPath.resolve("misformatted.txt").toString
 
@@ -109,84 +112,97 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
       pw.println("xzy 1\nabc 123 7")
       pw.close()
 
-      val _ =
-        fromInputFiles(maybeBondsPath = Some(badBondsFile))(runtimeManager, genesisPath, log, time)
-
-      log.warns.count(_.contains("cannot be parsed. Falling back on generating random validators.")) should be(
-        1
-      )
-      log.infos.count(_.contains("Created validator")) should be(numValidators)
+      for {
+        _ <- fromInputFiles(maybeBondsPath = Some(badBondsFile))(
+              runtimeManager,
+              genesisPath,
+              log,
+              time
+            )
+        _ = log.warns.count(
+          _.contains("cannot be parsed. Falling back on generating random validators.")
+        ) should be(
+          1
+        )
+        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
+      } yield result
   }
 
   it should "create a genesis block with the right bonds when a proper bonds file is given" in withGenResources {
     (
         runtimeManager: RuntimeManager[Task],
         genesisPath: Path,
-        log: LogStub[Id],
-        time: LogicalTime[Id]
+        log: LogStub[Task],
+        time: LogicalTime[Task]
     ) =>
       val bondsFile = genesisPath.resolve("givenBonds.txt").toString
       printBonds(bondsFile)
 
-      val genesis =
-        fromInputFiles(maybeBondsPath = Some(bondsFile))(runtimeManager, genesisPath, log, time)
-      val bonds = ProtoUtil.bonds(genesis)
-
-      log.infos.isEmpty should be(true)
-      validators
-        .map {
-          case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
-        }
-        .forall(
-          bonds.contains(_)
-        ) should be(true)
+      for {
+        genesis <- fromInputFiles(maybeBondsPath = Some(bondsFile))(
+                    runtimeManager,
+                    genesisPath,
+                    log,
+                    time
+                  )
+        bonds = ProtoUtil.bonds(genesis)
+        _     = log.infos.isEmpty should be(true)
+        result = validators
+          .map {
+            case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
+          }
+          .forall(
+            bonds.contains(_)
+          ) should be(true)
+      } yield result
   }
 
-  it should "create a valid genesis block" in withStore { implicit store =>
-    withGenResources {
-      (
-          runtimeManager: RuntimeManager[Task],
-          genesisPath: Path,
-          log: LogStub[Id],
-          time: LogicalTime[Id]
-      ) =>
-        implicit val logEff = log
-        val genesis         = fromInputFiles()(runtimeManager, genesisPath, log, time)
-        BlockStore[Id].put(genesis.blockHash, genesis)
-        val blockDag = BlockDag.empty
-
-        val maybePostGenesisStateHash = InterpreterUtil
-          .validateBlockCheckpoint[Id](
-            genesis,
-            blockDag,
-            runtimeManager
-          )
-
-        maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
-    }
+  it should "create a valid genesis block" ignore withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      withGenResources {
+        (
+            runtimeManager: RuntimeManager[Task],
+            genesisPath: Path,
+            log: LogStub[Task],
+            time: LogicalTime[Task]
+        ) =>
+          implicit val logEff = log
+          for {
+            genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+            _       <- BlockStore[Task].put(genesis.blockHash, genesis)
+            dag     <- blockDagStorage.getRepresentation
+            maybePostGenesisStateHash <- InterpreterUtil
+                                          .validateBlockCheckpoint[Task](
+                                            genesis,
+                                            dag,
+                                            runtimeManager
+                                          )
+          } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
+      }
   }
 
   it should "detect an existing bonds file in the default location" in withGenResources {
     (
         runtimeManager: RuntimeManager[Task],
         genesisPath: Path,
-        log: LogStub[Id],
-        time: LogicalTime[Id]
+        log: LogStub[Task],
+        time: LogicalTime[Task]
     ) =>
       val bondsFile = genesisPath.resolve("bonds.txt").toString
       printBonds(bondsFile)
 
-      val genesis = fromInputFiles()(runtimeManager, genesisPath, log, time)
-      val bonds   = ProtoUtil.bonds(genesis)
-
-      log.infos.length should be(1)
-      validators
-        .map {
-          case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
-        }
-        .forall(
-          bonds.contains(_)
-        ) should be(true)
+      for {
+        genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+        bonds   = ProtoUtil.bonds(genesis)
+        _       = log.infos.length should be(1)
+        result = validators
+          .map {
+            case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
+          }
+          .forall(
+            bonds.contains(_)
+          ) should be(true)
+      } yield result
   }
 }
 
@@ -209,11 +225,11 @@ object GenesisTest {
   )(
       implicit runtimeManager: RuntimeManager[Task],
       genesisPath: Path,
-      log: LogStub[Id],
-      time: LogicalTime[Id]
-  ): BlockMessage =
+      log: LogStub[Task],
+      time: LogicalTime[Task]
+  ): Task[BlockMessage] =
     Genesis
-      .fromInputFiles[Id](
+      .fromInputFiles[Task](
         maybeBondsPath,
         numValidators,
         genesisPath,
@@ -227,29 +243,30 @@ object GenesisTest {
       )
 
   def withRawGenResources(
-      body: (ExecutionEngineService[Task], Path, LogStub[Id], LogicalTime[Id]) => Unit
-  ): Unit = {
+      body: (ExecutionEngineService[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
+  ): Task[Unit] = {
     val storePath               = storageLocation
     val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
     val gp                      = genesisPath
-    val log                     = new LogStub[Id]
-    val time                    = new LogicalTime[Id]
+    val log                     = new LogStub[Task]
+    val time                    = new LogicalTime[Task]
 
-    body(casperSmartContractsApi, genesisPath, log, time)
-
-    storePath.recursivelyDelete()
-    gp.recursivelyDelete()
+    for {
+      result <- body(casperSmartContractsApi, genesisPath, log, time)
+      _      <- Sync[Task].delay { storePath.recursivelyDelete() }
+      _      <- Sync[Task].delay { gp.recursivelyDelete() }
+    } yield result
   }
 
   def withGenResources(
-      body: (RuntimeManager[Task], Path, LogStub[Id], LogicalTime[Id]) => Unit
-  ): Unit =
+      body: (RuntimeManager[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
+  ): Task[Unit] =
     withRawGenResources {
       (
           executionEngineService: ExecutionEngineService[Task],
           genesisPath: Path,
-          log: LogStub[Id],
-          time: LogicalTime[Id]
+          log: LogStub[Task],
+          time: LogicalTime[Task]
       ) =>
         val runtimeManager = RuntimeManager.fromExecutionEngineService(executionEngineService)
         body(runtimeManager, genesisPath, log, time)
