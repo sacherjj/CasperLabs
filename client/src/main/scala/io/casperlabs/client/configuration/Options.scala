@@ -95,5 +95,17 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showBlocks)
 
+  val visualizeBlocks = new Subcommand("vdag") {
+    descr(
+      "DAG in DOT format"
+    )
+    val depth =
+      opt[Int](
+        name = "depth",
+        descr = "depth in terms of block height"
+      )
+  }
+  addSubcommand(visualizeBlocks)
+
   verify()
 }

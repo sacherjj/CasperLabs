@@ -1,4 +1,4 @@
-package coop.rchain.graphz
+package io.casperlabs.graphz
 
 import cats._, cats.data._, cats.implicits._
 import cats.effect.Sync
