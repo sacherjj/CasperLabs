@@ -2,18 +2,17 @@ package io.casperlabs.blockstorage
 
 import java.nio.file.StandardOpenOption
 
-import cats.implicits._
-import io.casperlabs.shared.PathOps._
-import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import BlockGen._
 import cats.effect.Sync
-import io.casperlabs.blockstorage.Context
+import cats.implicits._
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
+import io.casperlabs.blockstorage.BlockGen._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.casper.protocol.BlockMessage
-import io.casperlabs.metrics.Metrics.MetricsNOP
+import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.shared
+import io.casperlabs.shared.Log
+import io.casperlabs.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
@@ -74,10 +73,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       }
     } {
       case (dagDataDir, blockStoreDataDir) =>
-        val blockStore = createBlockStore(blockStoreDataDir)
         for {
-          result <- f(dagDataDir, blockStore)
-          _      <- blockStore.close()
+          blockStore <- createBlockStore(blockStoreDataDir)
+          result     <- f(dagDataDir, blockStore)
+          _          <- blockStore.close()
         } yield result
     } {
       case (dagDataDir, blockStoreDataDir) =>
@@ -113,18 +112,17 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def defaultCheckpointsDir(dagDataDir: Path): Path =
     dagDataDir.resolve("checkpoints")
 
-  private def createBlockStore(blockStoreDataDir: Path): BlockStore[Task] = {
-    val env              = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
-    implicit val metrics = new MetricsNOP[Task]()
-    LMDBBlockStore.create[Task](env, blockStoreDataDir)
+  private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
+    implicit val log = new Log.NOPLog[Task]()
+    val env          = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
+    FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir).map(_.right.get)
   }
 
   private def createAtDefaultLocation(
       dagDataDir: Path,
       maxSizeFactor: Int = 10
   )(implicit blockStore: BlockStore[Task]): Task[BlockDagFileStorage[Task]] = {
-    implicit val log     = new shared.Log.NOPLog[Task]()
-    implicit val metrics = new MetricsNOP[Task]()
+    implicit val log = new shared.Log.NOPLog[Task]()
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
         defaultLatestMessagesLog(dagDataDir),

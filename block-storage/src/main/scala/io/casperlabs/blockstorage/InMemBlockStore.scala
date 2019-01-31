@@ -5,6 +5,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.StorageError.StorageIOErr
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.metrics.Metrics
 
@@ -23,37 +24,30 @@ class InMemBlockStore[F[_]] private ()(
       state <- refF.get
     } yield state.get(blockHash)
 
-  @deprecated(
-    message = "to be removed when casper code no longer needs the whole DB in memmory",
-    since = "0.5"
-  )
-  def asMap(): F[Map[BlockHash, BlockMessage]] =
-    for {
-      _     <- metricsF.incrementCounter("block-store-as-map")
-      state <- refF.get
-    } yield state
-
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
     for {
       _     <- metricsF.incrementCounter("block-store-find")
       state <- refF.get
     } yield state.filterKeys(p(_)).toSeq
 
-  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
+  def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]] =
     for {
       _ <- metricsF.incrementCounter("block-store-put")
       _ <- refF.update { state =>
             val (hash, message) = f
             state.updated(hash, message)
           }
-    } yield ()
+    } yield Right(())
 
-  def clear(): F[Unit] =
+  def checkpoint(): F[Unit] =
+    ().pure[F]
+
+  def clear(): F[StorageIOErr[Unit]] =
     for {
       _ <- refF.update { _.empty }
-    } yield ()
+    } yield Right(())
 
-  override def close(): F[Unit] = monadF.pure(())
+  override def close(): F[StorageIOErr[Unit]] = monadF.pure(Right(()))
 }
 
 object InMemBlockStore {
