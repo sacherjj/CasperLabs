@@ -10,7 +10,7 @@ import com.typesafe.scalalogging.Logger
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
-
+import org.scalatest.exceptions.{TestCanceledException, TestPendingException}
 import scala.reflect.io.Directory
 
 /**
@@ -23,7 +23,9 @@ object Resources {
     Resource.makeCase(Applicative[F].pure(Files.createTempDirectory(prefix)))(
       (path, exitCase) =>
         Applicative[F].pure(exitCase match {
-          case Error(ex) =>
+          case Error(ex)
+              if !ex.isInstanceOf[TestCanceledException] &&
+                !ex.isInstanceOf[TestPendingException] =>
             logger
               .error(
                 s"Exception thrown while using the tempDir '$path'. Temporary dir NOT deleted.",
