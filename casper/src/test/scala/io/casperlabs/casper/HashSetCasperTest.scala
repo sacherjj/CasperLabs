@@ -1,42 +1,36 @@
 package io.casperlabs.casper
 
-import java.nio.file.{Files, Paths}
-
-import cats.Id
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
-import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, BlockUtil, HashSetCasperTestNode}
 import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
+import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, BlockUtil, HashSetCasperTestNode}
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
+import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.rholang.RuntimeManager
-import io.casperlabs.catscontrib.Capture._
+import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.comm.rp.ProtocolHelper.packet
 import io.casperlabs.comm.transport
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.{Blake2b256, Keccak256}
 import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
+import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps.RichPath
-import io.casperlabs.shared.{Log, StoreType}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
-import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.casper.MultiParentCasper.ignoreDoppelgangerCheck
 
 import scala.collection.immutable
-import scala.util.Random
 
 class HashSetCasperTest extends FlatSpec with Matchers {
 
@@ -972,7 +966,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield ()
   }
 
-  it should "fail when deploying with insufficient phlos" in effectTest {
+  ignore should "fail when deploying with insufficient phlos" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
