@@ -212,6 +212,40 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
+  it should "not request invalid blocks from peers" in effectTest {
+    val dummyContract =
+      ByteString.readFrom(getClass.getResourceAsStream("/helloname.wasm"))
+
+    val List(data0, data1) =
+      (0 to 1)
+        .flatMap(i => ProtoUtil.sourceDeploy(dummyContract, i, Int.MaxValue).raw)
+        .toList
+
+    for {
+      nodes              <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      List(node0, node1) = nodes.toList
+
+      unsignedBlock <- (node0.casperEff.deploy(data0) *> node0.casperEff.createBlock)
+                        .map {
+                          case Created(block) =>
+                            block.copy(sigAlgorithm = "invalid", sig = ByteString.EMPTY)
+                        }
+
+      _ <- node0.casperEff.addBlock(unsignedBlock, ignoreDoppelgangerCheck[Effect])
+      _ <- node1.transportLayerEff.clear(node1.local) //node1 misses this block
+
+      signedBlock <- (node0.casperEff.deploy(data1) *> node0.casperEff.createBlock)
+                      .map { case Created(block) => block }
+
+      _ <- node0.casperEff.addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
+      _ <- node1.receive() //receives block1; should not ask for block0
+
+      _ <- node0.casperEff.contains(unsignedBlock) shouldBeF false
+      _ <- node1.casperEff.contains(unsignedBlock) shouldBeF false
+
+    } yield ()
+  }
+
   it should "reject blocks not from bonded validators" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, otherSk)
     import node._
