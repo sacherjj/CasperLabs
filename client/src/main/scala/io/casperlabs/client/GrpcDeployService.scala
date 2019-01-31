@@ -7,6 +7,8 @@ import io.casperlabs.casper.protocol._
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
+import scala.util.Either
+
 class GrpcDeployService(host: String, port: Int) extends DeployService[Task] with Closeable {
   private val DefaultMaxMessageSize = 256 * 1024 * 1024
 
@@ -33,6 +35,12 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
 
   def showBlock(q: BlockQuery): Task[Either[Throwable, String]] =
     stub.showBlock(q).map { response =>
+      if (response.status == "Success") Right(response.toProtoString)
+      else Left(new RuntimeException(response.status))
+    }
+
+  def visualizeBlocks(q: BlocksQuery): Task[Either[Throwable, String]] =
+    stub.visualizeBlocks(q).map { response =>
       if (response.status == "Success") Right(response.toProtoString)
       else Left(new RuntimeException(response.status))
     }
