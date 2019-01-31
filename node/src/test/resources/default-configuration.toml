@@ -60,3 +60,18 @@ approve-genesis = true
 approve-genesis-interval = "1second"
 approve-genesis-duration = "1second"
 deploy-timestamp = 1
+
+[kamon]
+prometheus = false
+zipkin = false
+sigar = false
+
+[influx]
+hostname = "0.0.0.0"
+port = 14
+database = "test"
+protocol = "https"
+
+[influx-auth]
+user = "user"
+password = "password"

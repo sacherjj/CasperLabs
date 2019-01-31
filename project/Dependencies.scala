@@ -6,7 +6,7 @@ object Dependencies {
 
   val circeVersion  = "0.10.0"
   val http4sVersion = "0.19.0"
-  val kamonVersion  = "1.1.0"
+  val kamonVersion  = "1.1.3"
 
   // format: off
   val bitcoinjCore           = "org.bitcoinj"               % "bitcoinj-core"                   % "0.14.6"
@@ -31,9 +31,11 @@ object Dependencies {
   // see https://jitpack.io/#rchain/kalium
   val kalium                 = "com.github.rchain"          % "kalium"                          % "0.8.1"
   val kamonCore              = "io.kamon"                   %% "kamon-core"                     % kamonVersion
-  val kamonPrometheus        = "io.kamon"                   %% "kamon-prometheus"               % kamonVersion
+  val kamonSystemMetrics     = "io.kamon"                   %% "kamon-system-metrics"           % "1.0.0"
+  val kamonPrometheus        = "io.kamon"                   %% "kamon-prometheus"               % "1.1.1"
+  val kamonInfluxDb          = "io.kamon"                   %% "kamon-influxdb"                 % "1.0.2"
   val kamonZipkin            = "io.kamon"                   %% "kamon-zipkin"                   % "1.0.0"
-  val lightningj          = ("org.lightningj"             % "lightningj"                % "0.5.0-Beta-rc2")
+  val lightningj             = ("org.lightningj"             % "lightningj"                     % "0.5.0-Beta-rc2")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
   val lmdbjava               = "org.lmdbjava"               % "lmdbjava"                        % "0.6.1"
   val logbackClassic         = "ch.qos.logback"             % "logback-classic"                 % "1.2.3"
@@ -107,7 +109,7 @@ object Dependencies {
     Seq(scalapbRuntimeLib)
 
   val kamonDependencies: Seq[ModuleID] =
-    Seq(kamonCore, kamonPrometheus, kamonZipkin)
+    Seq(kamonCore, kamonSystemMetrics, kamonPrometheus, kamonZipkin, kamonInfluxDb)
 
   val apiServerDependencies: Seq[ModuleID] =
     http4sDependencies ++ circeDependencies

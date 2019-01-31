@@ -13,6 +13,8 @@ import io.casperlabs.comm.CommError._
 import io.casperlabs.comm._
 import io.casperlabs.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
 import io.casperlabs.comm.protocol.routing._
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared._
 import io.grpc._
 import io.grpc.netty._
@@ -36,20 +38,21 @@ class TcpTransportLayer(
 )(
     implicit scheduler: Scheduler,
     log: Log[Task],
+    metrics: Metrics[Task],
     connectionsCache: ConnectionsCache[Task, TcpConnTag]
 ) extends TransportLayer[Task] {
 
   private val DefaultSendTimeout = 5.seconds
-  private val connections        = connectionsCache(clientChannel)
+  private val cell               = connectionsCache(clientChannel)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "rp.transport")
 
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
   private val streamObservable = new StreamObservable(clientQueueSize, tempFolder)
-
-  import connections.cell
 
   private lazy val serverSslContext: SslContext =
     try {
@@ -110,7 +113,7 @@ class TcpTransportLayer(
       f: TransportLayerStub => Task[A]
   ): Task[A] =
     for {
-      channel <- connections.connection(peer, enforce)
+      channel <- cell.connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
                  case Some(_) => disconnect(peer)
@@ -154,15 +157,22 @@ class TcpTransportLayer(
             case p if p.isNoResponse => Right(None)
             case TLResponse.Payload.InternalServerError(ise) =>
               Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
-        }
+          }
       )
 
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
-    transport(peer, enforce = false)(_.ask(TLRequest(msg.some)).nonCancelingTimeout(timeout))
-      .map(_.flatMap {
-        case Some(p) => Right(p)
-        case _       => Left(internalCommunicationError("Was expecting message, nothing arrived"))
-      })
+    for {
+      _ <- metrics.incrementCounter("round-trip")
+      result <- transport(peer, enforce = false)(
+                 _.ask(TLRequest(msg.some))
+                   .timer("round-trip-time")
+                   .nonCancelingTimeout(timeout)
+               ).map(_.flatMap {
+                 case Some(p) => Right(p)
+                 case _ =>
+                   Left(internalCommunicationError("Was expecting message, nothing arrived"))
+               })
+    } yield result
 
   private def innerSend(
       peer: PeerNode,
@@ -170,11 +180,18 @@ class TcpTransportLayer(
       enforce: Boolean = false,
       timeout: FiniteDuration = DefaultSendTimeout
   ): Task[CommErr[Unit]] =
-    transport(peer, enforce)(_.ask(TLRequest(msg.some)).nonCancelingTimeout(timeout))
-      .map(_.flatMap {
-        case Some(p) => Left(internalCommunicationError(s"Was expecting no message. Response: $p"))
-        case _       => Right(())
-      })
+    for {
+      _ <- metrics.incrementCounter("send")
+      result <- transport(peer, enforce)(
+                 _.ask(TLRequest(msg.some))
+                   .timer("send-time")
+                   .nonCancelingTimeout(timeout)
+               ).map(_.flatMap {
+                 case Some(p) =>
+                   Left(internalCommunicationError(s"Was expecting no message. Response: $p"))
+                 case _ => Right(())
+               })
+    } yield result
 
   private def innerBroadcast(
       peers: Seq[PeerNode],
@@ -306,21 +323,4 @@ class TcpTransportLayer(
       else shutdownServer *> sendShutdownMessages
     }
   }
-}
-
-object TcpTransportLayer {
-  type Connection          = ManagedChannel
-  type Connections         = Map[PeerNode, Connection]
-  type TransportCell[F[_]] = Cell[F, TransportState]
-}
-
-case class TransportState(
-    connections: TcpTransportLayer.Connections = Map.empty,
-    server: Option[Cancelable] = None,
-    clientQueue: Option[Cancelable] = None,
-    shutdown: Boolean = false
-)
-
-object TransportState {
-  def empty: TransportState = TransportState()
 }

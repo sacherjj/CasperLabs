@@ -444,6 +444,7 @@ def make_bootstrap_node(
         "--casper-validator-public-key":   key_pair.public_key,
         "--casper-has-faucet":             "",
         "--server-host":                   name,
+        "--prometheus":                    "",
     }
 
     if cli_options is not None:
@@ -497,6 +498,7 @@ def make_peer(
         "--casper-validator-private-key":  key_pair.private_key,
         "--casper-validator-public-key":   key_pair.public_key,
         "--casper-host":                   name,
+        "--prometheus":                    "",
     }
 
     container = make_node(

@@ -10,16 +10,19 @@ import io.casperlabs.metrics.Metrics
 
 import scala.language.higherKinds
 
-class InMemBlockStore[F[_]] private ()(
+class InMemBlockStore[F[_]] private (
     implicit
     monadF: Monad[F],
     refF: Ref[F, Map[BlockHash, BlockMessage]],
     metricsF: Metrics[F]
 ) extends BlockStore[F] {
 
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(BlockStorageMetricsSource, "in-mem")
+
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {
-      _     <- metricsF.incrementCounter("block-store-get")
+      _     <- metricsF.incrementCounter("get")
       state <- refF.get
     } yield state.get(blockHash)
 
@@ -29,19 +32,19 @@ class InMemBlockStore[F[_]] private ()(
   )
   def asMap(): F[Map[BlockHash, BlockMessage]] =
     for {
-      _     <- metricsF.incrementCounter("block-store-as-map")
+      _     <- metricsF.incrementCounter("as-map")
       state <- refF.get
     } yield state
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
     for {
-      _     <- metricsF.incrementCounter("block-store-find")
+      _     <- metricsF.incrementCounter("find")
       state <- refF.get
     } yield state.filterKeys(p(_)).toSeq
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
-      _ <- metricsF.incrementCounter("block-store-put")
+      _ <- metricsF.incrementCounter("put")
       _ <- refF.update { state =>
             val (hash, message) = f
             state.updated(hash, message)
@@ -63,7 +66,7 @@ object InMemBlockStore {
       refF: Ref[F, Map[BlockHash, BlockMessage]],
       metricsF: Metrics[F]
   ): BlockStore[F] =
-    new InMemBlockStore()
+    new InMemBlockStore
 
   def createWithId: BlockStore[Id] = {
     import io.casperlabs.catscontrib.effect.implicits._

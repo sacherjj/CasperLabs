@@ -8,7 +8,7 @@ import cats.{FlatMap, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.{LastApprovedBlock, PrettyPrinter, Validate}
+import io.casperlabs.casper.{CasperMetricsSource, LastApprovedBlock, PrettyPrinter, Validate}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.{Capture, MonadTrans}
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -20,6 +20,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 
 import scala.concurrent.duration._
+import scala.language.higherKinds
 
 /**
   * Bootstrap side of the protocol defined in
@@ -97,6 +98,8 @@ object ApproveBlockProtocol {
       private val sigsF: Ref[F, Set[Signature]]
   ) extends ApproveBlockProtocol[F] {
     private implicit val logSource: LogSource = LogSource(this.getClass)
+    private implicit val metricsSource: Metrics.Source =
+      Metrics.Source(CasperMetricsSource, "approve-block")
 
     private val candidate                 = ApprovedBlockCandidate(Some(block), requiredSigs)
     private val u                         = UnapprovedBlock(Some(candidate), start, duration.toMillis)
@@ -131,7 +134,7 @@ object ApproveBlockProtocol {
           _      <- sigsF.update(_ + validSig.get)
           after  <- sigsF.get
           _ <- if (after > before)
-                Metrics[F].incrementCounter(METRICS_APPROVAL_COUNTER_NAME)
+                Metrics[F].incrementCounter("genesis")
               else ().pure[F]
           _ <- Log[F].info(s"APPROVAL: received block approval from $sender")
         } yield (),
@@ -187,7 +190,4 @@ object ApproveBlockProtocol {
             }
       } yield ()
   }
-
-  val METRICS_APPROVAL_COUNTER_NAME = "genesis-block-approvals"
-
 }

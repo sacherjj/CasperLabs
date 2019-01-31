@@ -143,6 +143,18 @@ private[configuration] object Options {
         None,
         None
       )
+      val kamon = ConfigurationSoft.Kamon(
+        options.run.prometheus,
+        options.run.zipkin,
+        options.run.sigar
+      )
+
+      val influx = ConfigurationSoft.Influx(
+        options.run.influxHostname,
+        options.run.influxPort,
+        options.run.influxDatabase,
+        options.run.influxProtocol
+      )
 
       ConfigurationSoft(
         Some(server),
@@ -150,6 +162,9 @@ private[configuration] object Options {
         Some(tls),
         Some(casper),
         Some(lmdb),
+        None,
+        Some(kamon),
+        Some(influx),
         None
       )
     }.toEither.leftMap(_.getMessage)
@@ -425,6 +440,26 @@ private[configuration] final case class Options(
     val casperShardId = opt[String](
       descr = s"String. Identifier of the shard this node is connected to.${c(_.shardId)}"
     )
+
+    val prometheus =
+      opt[Flag](descr = "Enable the Prometheus metrics reporter")
+
+    val zipkin =
+      opt[Flag](descr = "Enable the Zipkin span reporter")
+
+    val sigar =
+      opt[Flag](descr = "Enable Sigar host system metrics")
+
+    val influxHostname =
+      opt[String](descr = "String. Hostname or IP of the Influx instancfe.")
+
+    val influxDatabase = opt[String](descr = "String. Name of the database in Influx.")
+
+    val influxPort =
+      opt[Int](descr = "Number. Port of the Influx instance.")
+
+    val influxProtocol =
+      opt[String](descr = "Protocol used in Influx.")
   }
   addSubcommand(run)
 

@@ -54,8 +54,10 @@ object PathOps {
         for {
           _ <- Sync[F]
                 .delay(file.delete)
-                .ifM(Log[F].info(s"Deleted file ${file.getAbsolutePath}"),
-                     Log[F].warn(s"Can't delete file ${file.getAbsolutePath}"))
+                .ifM(
+                  Log[F].info(s"Deleted file ${file.getAbsolutePath}"),
+                  Log[F].warn(s"Can't delete file ${file.getAbsolutePath}")
+                )
         } yield ()
 
       def getFiles: F[List[Path]] = Sync[F].delay(

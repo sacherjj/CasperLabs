@@ -23,7 +23,8 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     metricsF: Metrics[F]
 ) extends BlockStore[F] {
 
-  import LMDBBlockStore.MetricNamePrefix
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(BlockStorageMetricsSource, "lmdb")
 
   implicit class RichBlockHash(byteVector: BlockHash) {
 
@@ -67,7 +68,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
-      _ <- metricsF.incrementCounter(MetricNamePrefix + "put")
+      _ <- metricsF.incrementCounter("put")
       ret <- withWriteTxn { txn =>
               val (blockHash, blockMessage) = f
               blocks.put(
@@ -80,7 +81,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {
-      _ <- metricsF.incrementCounter(MetricNamePrefix + "get")
+      _ <- metricsF.incrementCounter("get")
       ret <- withReadTxn { txn =>
               Option(blocks.get(txn, blockHash.toDirectByteBuffer))
                 .map(r => BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput()))
@@ -89,7 +90,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
     for {
-      _ <- metricsF.incrementCounter(MetricNamePrefix + "find")
+      _ <- metricsF.incrementCounter("find")
       ret <- withReadTxn { txn =>
               withResource(blocks.iterate(txn)) { iterator =>
                 iterator.asScala
@@ -111,7 +112,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   )
   def asMap(): F[Map[BlockHash, BlockMessage]] =
     for {
-      _ <- metricsF.incrementCounter(MetricNamePrefix + "as-map")
+      _ <- metricsF.incrementCounter("as-map")
       ret <- withReadTxn { txn =>
               blocks.iterate(txn).asScala.foldLeft(Map.empty[BlockHash, BlockMessage]) {
                 (acc: Map[BlockHash, BlockMessage], x: CursorIterator.KeyVal[ByteBuffer]) =>
