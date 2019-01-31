@@ -650,7 +650,7 @@ object BlockDagFileStorage {
                }
     } yield result
 
-  def create[F[_]: Concurrent: Sync: Log: BlockStore](
+  def create[F[_]: Concurrent: Log: BlockStore](
       config: Config
   ): F[BlockDagFileStorage[F]] =
     for {
