@@ -280,7 +280,7 @@ This is required only when the `ipc.proto` file changes (but this is true when y
   
 #### Build Wasm contracts:
   1. Go to contract that interests you in the `contracts-example` directory.
-  2. To compile Rust contract to Wasm, in the root dir of the contract (where Cargo.toml is defined) you need to run: `cargo build --        release --target wasm32-unknown-unknown`. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory.      We will use this file when deploying a contract. For the purposes of "Hello World" demo we use `store-hello-world` and `call-hello-      name` contracts.
+  2. To compile Rust contract to Wasm, in the root dir of the contract (where Cargo.toml is defined) you need to run: `cargo build --release --target wasm32-unknown-unknown`. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory.      We will use this file when deploying a contract. For the purposes of "Hello World" demo we use `store-hello-world` and `call-hello-      name` contracts.
   3. If `cargo build --release ...`  doesn't work try `cargo +nightly build ...`
 
 #### Building node:
