@@ -608,7 +608,8 @@ object Validate {
       runtimeManager: RuntimeManager[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
-    Applicative[F].pure[Either[InvalidBlock, ValidBlock]](Right(Valid))
+    Log[F].debug("FIXME: Implement bonds!") *>
+      Applicative[F].pure[Either[InvalidBlock, ValidBlock]](Right(Valid))
     // TODO: bring back when global state includes the bonds
     // ProtoUtil.tuplespace(b) match {
     //   case Some(tuplespaceHash) =>

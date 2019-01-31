@@ -37,6 +37,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{Ignore, Matchers, WordSpec}
 import io.casperlabs.casper.util.TestTime
+import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 import scala.concurrent.duration._
@@ -126,9 +127,9 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
             blockApproval.toByteString
           )
           _ = {
-            // Currently this test is failing becuase the RuntimeManager is hardcoded with 
+            // Currently this test is failing becuase the RuntimeManager is hardcoded with
             // empty Bonds and doesn't have access to any storage either to retrieve it.
-            assume(!log.debugs.contains("FIXME: Implement bonds!"))
+            cancelUntilFixed("FIXME: Implement bonds!")
             log.warns shouldBe empty
             transportLayer.requests should not be empty
             val lastMessage = transportLayer.requests.last

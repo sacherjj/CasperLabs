@@ -983,7 +983,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       createBlockResult <- MultiParentCasper[Effect].createBlock
       Created(block)    = createBlockResult
     } yield {
-      assume(!logEff.debugs.contains("FIXME: Implement cost accounting!"))
+      cancelUntilFixed("FIXME: Implement cost accounting!")
       assert(block.body.get.deploys.head.errored)
     }
   }
