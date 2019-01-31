@@ -53,7 +53,9 @@ class RuntimeManager[F[_]: Concurrent] private (
   }
 
   // todo this should be complemented
-  def computeBonds(hash: StateHash): F[Seq[Bond]] = Seq[Bond]().pure[F]
+  def computeBonds(hash: StateHash)(implicit log: Log[F]): F[Seq[Bond]] =
+    log.debug("FIXME: Implement bonds!") *>
+      Seq[Bond]().pure[F]
 
   def sendDeploy(d: IPCDeploy): F[Either[Throwable, ExecutionEffect]] =
     executionEngineService.sendDeploy(d)

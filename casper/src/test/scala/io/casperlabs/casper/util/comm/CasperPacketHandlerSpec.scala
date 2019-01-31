@@ -35,15 +35,13 @@ import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.Cell
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.{Ignore, WordSpec}
+import org.scalatest.{Ignore, Matchers, WordSpec}
 import io.casperlabs.casper.util.TestTime
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 import scala.concurrent.duration._
 
-//todo this is block by runTimeManager.replayComputeStates
-@Ignore
-class CasperPacketHandlerSpec extends WordSpec {
+class CasperPacketHandlerSpec extends WordSpec with Matchers {
   private def setup() = new {
     val scheduler               = Scheduler.io("test")
     val runtimeDir              = BlockDagStorageTestFixture.blockStorageDir
@@ -128,6 +126,11 @@ class CasperPacketHandlerSpec extends WordSpec {
             blockApproval.toByteString
           )
           _ = {
+            // Currently this test is failing becuase the RuntimeManager is hardcoded with 
+            // empty Bonds and doesn't have access to any storage either to retrieve it.
+            assume(!log.debugs.contains("FIXME: Implement bonds!"))
+            log.warns shouldBe empty
+            transportLayer.requests should not be empty
             val lastMessage = transportLayer.requests.last
             assert(lastMessage.peer == local && lastMessage.msg == expectedPacket)
           }
