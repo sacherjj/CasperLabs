@@ -11,7 +11,14 @@ import io.casperlabs.casper.genesis.contracts.Faucet
 import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
 import io.casperlabs.casper.util.TestTime
-import io.casperlabs.casper.util.comm.CasperPacketHandler.{ApprovedBlockReceivedHandler, BootstrapCasperHandler, CasperPacketHandlerImpl, CasperPacketHandlerInternal, GenesisValidatorHandler, StandaloneCasperHandler}
+import io.casperlabs.casper.util.comm.CasperPacketHandler.{
+  ApprovedBlockReceivedHandler,
+  BootstrapCasperHandler,
+  CasperPacketHandlerImpl,
+  CasperPacketHandlerInternal,
+  GenesisValidatorHandler,
+  StandaloneCasperHandler
+}
 import io.casperlabs.casper.util.comm.CasperPacketHandlerSpec._
 import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib.TaskContrib._

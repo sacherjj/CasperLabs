@@ -26,11 +26,10 @@ class ManyValidatorsTest
     with BlockGenerator
     with BlockDagStorageFixture {
   "Show blocks" should "be processed quickly for a node with 300 validators" in {
-    val blockDagStorageDir  = BlockDagStorageTestFixture.blockDagStorageDir
-    val blockStoreDir       = BlockDagStorageTestFixture.blockStorageDir
-    implicit val metrics    = new MetricsNOP[Task]()
-    implicit val log        = new Log.NOPLog[Task]()
-    implicit val blockStore = BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
+    val blockDagStorageDir = BlockDagStorageTestFixture.blockDagStorageDir
+    val blockStoreDir      = BlockDagStorageTestFixture.blockStorageDir
+    implicit val metrics   = new MetricsNOP[Task]()
+    implicit val log       = new Log.NOPLog[Task]()
     val bonds = Seq
       .fill(300)(
         ByteString.copyFromUtf8(Random.nextString(20)).substring(0, 32)

@@ -1,5 +1,4 @@
 import Dependencies._
-import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
 
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
@@ -167,7 +166,7 @@ lazy val models = (project in file("models"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(crypto)
+  .dependsOn(crypto, shared % "compile->compile;test->test")
 
 val nodeAndClientVersion = "0.0"
 
@@ -302,7 +301,7 @@ lazy val blockStorage = (project in file("block-storage"))
       catsMtl
     )
   )
-  .dependsOn(shared, models)
+  .dependsOn(shared, models % "compile->compile;test->test")
 
 lazy val smartContracts = (project in file("smart-contracts"))
   .settings(commonSettings: _*)

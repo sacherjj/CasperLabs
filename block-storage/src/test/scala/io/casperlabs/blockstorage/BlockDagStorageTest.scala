@@ -5,11 +5,11 @@ import java.nio.file.StandardOpenOption
 import cats.effect.Sync
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
-import io.casperlabs.blockstorage.BlockGen._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
+import io.casperlabs.models.blockImplicits._
 import io.casperlabs.shared
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
@@ -31,7 +31,7 @@ trait BlockDagStorageTest
   def withDagStorage[R](f: BlockDagStorage[Task] => Task[R]): R
 
   "DAG Storage" should "be able to lookup a stored block" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       withDagStorage { dagStorage =>
         for {
           _   <- blockElements.traverse_(dagStorage.insert)
@@ -215,7 +215,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to restore state on startup" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       withDagStorageLocation { (dagDataDir, blockStore) =>
         for {
           firstStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
@@ -230,8 +230,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to restore state from the previous two instances" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { firstBlockElements =>
-      forAll(blockElementsGen, minSize(0), sizeRange(10)) { secondBlockElements =>
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { firstBlockElements =>
+      forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { secondBlockElements =>
         withDagStorageLocation { (dagDataDir, blockStore) =>
           for {
             firstStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
@@ -250,7 +250,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to restore latest messages on startup with appended 64 garbage bytes" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       withDagStorageLocation { (dagDataDir, blockStore) =>
         for {
           firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
@@ -274,7 +274,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to restore data lookup on startup with appended garbage block metadata" in {
-    forAll(blockElementsGen, blockElementGen, minSize(0), sizeRange(10)) {
+    forAll(blockElementsWithParentsGen, blockElementGen, minSize(0), sizeRange(10)) {
       (blockElements, garbageBlock) =>
         withDagStorageLocation { (dagDataDir, blockStore) =>
           for {
@@ -315,7 +315,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to restore after squashing latest messages" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       forAll(blockWithNewHashesGen(blockElements), blockWithNewHashesGen(blockElements)) {
         (secondBlockElements, thirdBlockElements) =>
           withDagStorageLocation { (dagDataDir, blockStore) =>
@@ -339,7 +339,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to load checkpoints" in {
-    forAll(blockElementsGen, minSize(1), sizeRange(2)) { blockElements =>
+    forAll(blockElementsWithParentsGen, minSize(1), sizeRange(2)) { blockElements =>
       withDagStorageLocation { (dagDataDir, blockStore) =>
         for {
           firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)

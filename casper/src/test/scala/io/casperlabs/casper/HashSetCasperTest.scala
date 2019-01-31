@@ -205,7 +205,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       invalidBlock   = block.withSig(ByteString.EMPTY)
       _              <- MultiParentCasper[Effect].addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
       _              = logEff.warns.count(_.contains("because block signature")) should be(1)
-      _              = node.tearDownNode()
+      _              <- node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>
                  blockStore.get(block.blockHash) shouldBeF None
                }
