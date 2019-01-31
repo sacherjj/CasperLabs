@@ -48,7 +48,6 @@ object Configuration {
       case options.showBlocks =>
         ShowBlocks(options.port(), options.host(), options.showBlocks.depth())
       case options.visualizeBlocks =>
-        import options.visualizeBlocks._
         VisualizeBlocks(options.port(), options.host(), options.visualizeBlocks.depth())
     }
   }
