@@ -1,6 +1,7 @@
 package io.casperlabs.casper.util.comm
 
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Ref
+import cats.{Applicative, ApplicativeError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
@@ -9,14 +10,8 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.genesis.contracts.Faucet
 import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
-import io.casperlabs.casper.util.comm.CasperPacketHandler.{
-  ApprovedBlockReceivedHandler,
-  BootstrapCasperHandler,
-  CasperPacketHandlerImpl,
-  CasperPacketHandlerInternal,
-  GenesisValidatorHandler,
-  StandaloneCasperHandler
-}
+import io.casperlabs.casper.util.TestTime
+import io.casperlabs.casper.util.comm.CasperPacketHandler.{ApprovedBlockReceivedHandler, BootstrapCasperHandler, CasperPacketHandlerImpl, CasperPacketHandlerInternal, GenesisValidatorHandler, StandaloneCasperHandler}
 import io.casperlabs.casper.util.comm.CasperPacketHandlerSpec._
 import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib.TaskContrib._
@@ -24,20 +19,18 @@ import io.casperlabs.catscontrib.{ApplicativeError_, Capture}
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.{Connections, ConnectionsCell}
 import io.casperlabs.comm.rp.ProtocolHelper
-import ProtocolHelper._
+import io.casperlabs.comm.rp.ProtocolHelper._
 import io.casperlabs.comm.{transport, _}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.Cell
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{Ignore, WordSpec}
-import io.casperlabs.casper.util.TestTime
-import io.casperlabs.smartcontracts.ExecutionEngineService
 
 import scala.concurrent.duration._
 
@@ -79,12 +72,15 @@ class CasperPacketHandlerSpec extends WordSpec {
     implicit val rpConf         = createRPConfAsk[Task](local)
     implicit val time           = TestTime.instance
     implicit val log            = new LogStub[Task]
-    implicit val errHandler = new ApplicativeError_[Task, CommError] {
-      override def raiseError[A](e: CommError): Task[A] =
-        Task.raiseError(new Exception(s"CommError: $e"))
-      override def handleErrorWith[A](fa: Task[A])(f: CommError => Task[A]): Task[A] =
-        fa.onErrorHandleWith(th => f(UnknownCommError(th.getMessage)))
-    }
+    implicit val errHandler =
+      ApplicativeError_.applicativeError(new ApplicativeError[Task, CommError] {
+        override def raiseError[A](e: CommError): Task[A] =
+          Task.raiseError(new Exception(s"CommError: $e"))
+        override def handleErrorWith[A](fa: Task[A])(f: CommError => Task[A]): Task[A] =
+          fa.onErrorHandleWith(th => f(UnknownCommError(th.getMessage)))
+        override def pure[A](x: A): Task[A]                           = Task.pure(x)
+        override def ap[A, B](ff: Task[A => B])(fa: Task[A]): Task[B] = Applicative[Task].ap(ff)(fa)
+      })
     implicit val metrics = new MetricsNOP[Task]
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
