@@ -188,7 +188,7 @@ class TcpTransportLayer(
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
     innerBroadcast(peers, msg)
 
-  def streamToPeer(peer: PeerNode, path: Path, sender: PeerNode): Task[Unit] = {
+  private def streamToPeer(peer: PeerNode, path: Path, sender: PeerNode): Task[Unit] = {
 
     def delay[A](a: => Task[A]): Task[A] =
       Task.defer(a).delayExecution(1.second)
@@ -232,6 +232,7 @@ class TcpTransportLayer(
       dispatch: Protocol => Task[CommunicationResponse],
       handleStreamed: Blob => Task[Unit]
   ): Task[Unit] = {
+
     val dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
       case Tell(protocol) => dispatch(protocol).attemptAndLog.void
@@ -309,21 +310,4 @@ class TcpTransportLayer(
       else shutdownServer *> sendShutdownMessages
     }
   }
-}
-
-object TcpTransportLayer {
-  type Connection          = ManagedChannel
-  type Connections         = Map[PeerNode, Connection]
-  type TransportCell[F[_]] = Cell[F, TransportState]
-}
-
-case class TransportState(
-    connections: TcpTransportLayer.Connections = Map.empty,
-    server: Option[Cancelable] = None,
-    clientQueue: Option[Cancelable] = None,
-    shutdown: Boolean = false
-)
-
-object TransportState {
-  def empty: TransportState = TransportState()
 }
