@@ -30,6 +30,6 @@ object ListContrib {
           case false => (tail, acc).asLeft[List[A]]
         }
       case (Nil, acc) =>
-        G.pure(acc.asRight[(List[A], List[A])])
+        G.pure(acc.reverse.asRight[(List[A], List[A])])
     }
 }
