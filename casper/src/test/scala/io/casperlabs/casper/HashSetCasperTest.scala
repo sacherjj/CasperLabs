@@ -1023,7 +1023,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield ()
   }
 
-  it should "fail when deploying with insufficient phlos" in effectTest {
+  it should "fail when deploying with insufficient gas" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
