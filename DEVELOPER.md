@@ -173,9 +173,95 @@ __Note__ Successfully building from source requires attending to all of the prer
 </details>
 
 ### CasperLabs Development Environment on Fedora
-```
-TBD
-```
+<details>
+  <summary>Click to expand!</summary>
+  
+  Java:
+  ```console
+  dev@dev:~$ dnf search openjdk
+  ...
+
+  dev@dev:~$ sudo dnf install <java-version>
+
+  dev@dev:~/CasperLabs$ java --version
+  openjdk 11.0.1 2018-10-16
+  OpenJDK Runtime Environment 18.9 (build 11.0.1+13)
+  OpenJDK 64-Bit Server VM 18.9 (build 11.0.1+13, mixed mode, sharing)
+  ```
+
+  sbt:
+  ```console
+  dev@dev:~/CasperLabs$ curl https://bintray.com/sbt/rpm/rpm | sudo tee /etc/yum.repos.d/bintray-sbt-rpm.repo
+  dev@dev:~/CasperLabs$ dnf repolist
+  Last metadata expiration check: 0:40:08 ago on Thu 31 Jan 2019 02:04:54 PM EST.
+  repo id                                      repo name                                                         status
+  bintray--sbt-rpm                             bintray--sbt-rpm                                                      37
+  ...
+  
+  dev@dev:~/CasperLabs$ sudo dnf --enablerepo=bintray--sbt-rpm install sbt
+
+  dev@dev:~$ sbt sbtVersion
+  [info] Loading project definition from /home/dev/project
+  [info] Set current project to dev (in build file:/home/dev/)
+  [info] 1.2.8
+  ```
+
+  rust:
+  ```console
+  dev@dev:~$ curl https://sh.rustup.rs -sSf | sh
+  ...
+  1) Proceed with installation (default)
+  2) Customize installation
+  3) Cancel installation
+  >1
+  ...
+  Rust is installed now. Great!
+
+  To get started you need Cargo's bin directory ($HOME/.cargo/bin) in your PATH
+  environment variable. Next time you log in this will be done automatically.
+
+  To configure your current shell run source $HOME/.cargo/env
+
+  dev@dev:~$ source $HOME/.cargo/env
+
+  dev@dev:~$ rustup update
+  info: syncing channel updates for 'stable-x86_64-unknown-linux-gnu'
+  info: checking for self-updates
+
+    stable-x86_64-unknown-linux-gnu unchanged - rustc 1.32.0 (9fda7c223 2019-01-16)
+
+  dev@dev:~$ rustup toolchain install nightly
+  info: syncing channel updates for 'nightly-x86_64-unknown-linux-gnu'
+  info: latest update on 2019-01-23, rust version 1.33.0-nightly (4c2be9c97 2019-01-22)
+  ...
+
+    nightly-x86_64-unknown-linux-gnu installed - rustc 1.33.0-nightly (4c2be9c97 2019-01-22)
+
+  dev@dev:~$ rustup target add wasm32-unknown-unknown --toolchain nightly
+  info: downloading component 'rust-std' for 'wasm32-unknown-unknown'
+   10.0 MiB /  10.0 MiB (100 %)   2.6 MiB/s ETA:   0 s
+  info: installing component 'rust-std' for 'wasm32-unknown-unknown'
+  ```
+
+  protoc:
+  ```console
+  dev@dev:~$ PROTOC_VERSION=3.6.1
+  dev@dev:~$ PROTOC_ZIP=protoc-$PROTOC_VERSION-linux-x86_64.zip
+  dev@dev:~$ curl -OL https://github.com/google/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP
+    % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                   Dload  Upload   Total   Spent    Left  Speed
+  100   164    0   164    0     0    301      0 --:--:-- --:--:-- --:--:--   300
+  100   619    0   619    0     0    923      0 --:--:-- --:--:-- --:--:--   923
+  100 1390k  100 1390k    0     0   973k      0  0:00:01  0:00:01 --:--:-- 3029k
+  dev@dev:~$ sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
+  Archive:  protoc-3.6.1-linux-x86_64.zip
+    inflating: /usr/local/bin/protoc
+  dev@dev:~$ rm -f $PROTOC_ZIP
+
+  dev@dev:~$ protoc --version
+  libprotoc 3.6.1
+  ```
+</details>
 
 ### CasperLabs Development Environment on ArchLinux
 You can use `pacaur` or other AUR installer instead of [`trizen`](https://github.com/trizen/trizen).
@@ -194,7 +280,7 @@ This is required only when the `ipc.proto` file changes (but this is true when y
   
 #### Build Wasm contracts:
   1. Go to contract that interests you in the `contracts-example` directory.
-  2. To compile Rust contract to Wasm, in the root dir of the contract (where Cargo.toml is defined) you need to run: `cargo build --        release --target wasm32-unknown-unknown`. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory.      We will use this file when deploying a contract. For the purposes of "Hello World" demo we use `store-hello-world` and `call-hello-      name` contracts.
+  2. To compile Rust contract to Wasm, in the root dir of the contract (where Cargo.toml is defined) you need to run: `cargo build --release --target wasm32-unknown-unknown`. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory.      We will use this file when deploying a contract. For the purposes of "Hello World" demo we use `store-hello-world` and `call-hello-      name` contracts.
   3. If `cargo build --release ...`  doesn't work try `cargo +nightly build ...`
 
 #### Building node:
