@@ -3,7 +3,7 @@ package io.casperlabs.comm.discovery
 import cats._
 import io.casperlabs.comm._
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.shared.TestOutlaws._
+import io.casperlabs.catscontrib.effect.implicits._
 import org.scalatest._
 
 object b {

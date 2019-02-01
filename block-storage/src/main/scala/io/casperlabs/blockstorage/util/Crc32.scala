@@ -33,5 +33,8 @@ object Crc32 {
     crc.update(initialBytes)
     new Crc32(crc)
   }
+
   def empty[F[_]: Monad](): Crc32[F] = new Crc32(new CRC32())
+
+  def emptyF[F[_]: Monad](): F[Crc32[F]] = Monad[F].pure(new Crc32(new CRC32()))
 }

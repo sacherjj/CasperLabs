@@ -19,11 +19,12 @@ option (scalapb.options) = {
 service DeployService {
     rpc DoDeploy (DeployData) returns (DeployServiceResponse) {
     }
-    rpc addBlock (BlockMessage) returns (DeployServiceResponse) {
-    }
     rpc createBlock (google.protobuf.Empty) returns (DeployServiceResponse) {
     }
     rpc showBlock (BlockQuery) returns (BlockQueryResponse) {
+    }
+    // Get dag
+    rpc visualizeBlocks(BlocksQuery) returns (VisualizeBlocksResponse){
     }
     rpc showMainChain (BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {
     }
@@ -56,6 +57,10 @@ message BlockRequest {
     bytes hash = 2;
 }
 
+message ForkChoiceTipRequest {
+
+}
+
 message FindDeployInBlockQuery {
     bytes user = 1;
     int64 timestamp = 2;
@@ -81,6 +86,11 @@ message MaybeBlockMessage {
 message BlockQueryResponse {
     string status = 1;
     BlockInfo blockInfo = 2;
+}
+
+message VisualizeBlocksResponse {
+    string status =  1;
+    string content = 2;
 }
 
 message DataWithBlockInfo {

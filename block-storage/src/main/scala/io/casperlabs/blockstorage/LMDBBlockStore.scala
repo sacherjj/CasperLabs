@@ -3,19 +3,21 @@ package io.casperlabs.blockstorage
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
-import scala.collection.JavaConverters._
-import scala.language.higherKinds
 import cats._
 import cats.effect.{ExitCase, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.StorageError.StorageIOErr
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.metrics.Metrics
-import org.lmdbjava._
+import io.casperlabs.shared.Resources.withResource
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
-import io.casperlabs.shared.Resources.withResource
+import org.lmdbjava._
+
+import scala.collection.JavaConverters._
+import scala.language.higherKinds
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
@@ -54,7 +56,6 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             case ex: NotReadyException =>
               ex.printStackTrace()
               TxnOps.manuallyAbortTxn(txn)
-            // vide: rchain/rspace/src/main/scala/coop/rchain/rspace/LMDBOps.scala
           }
           txn.close()
         }
@@ -66,7 +67,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
     withTxn(env.txnRead())(f)
 
-  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
+  def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]] =
     for {
       _ <- metricsF.incrementCounter("put")
       ret <- withWriteTxn { txn =>
@@ -77,7 +78,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
                 blockMessage.toByteString.toDirectByteBuffer
               )
             }
-    } yield ret
+    } yield Right(ret)
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {
@@ -106,32 +107,13 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             }
     } yield ret
 
-  @deprecated(
-    message = "to be removed when casper code no longer needs the whole DB in memmory",
-    since = "0.5"
-  )
-  def asMap(): F[Map[BlockHash, BlockMessage]] =
-    for {
-      _ <- metricsF.incrementCounter("as-map")
-      ret <- withReadTxn { txn =>
-              blocks.iterate(txn).asScala.foldLeft(Map.empty[BlockHash, BlockMessage]) {
-                (acc: Map[BlockHash, BlockMessage], x: CursorIterator.KeyVal[ByteBuffer]) =>
-                  val hash = ByteString.copyFrom(x.key())
-                  val msg  = BlockMessage.parseFrom(ByteString.copyFrom(x.`val`()).newCodedInput())
-                  acc.updated(hash, msg)
-              }
-            }
-    } yield ret
+  def checkpoint(): F[StorageIOErr[Unit]] =
+    ().asRight[StorageIOError].pure[F]
 
-  def clear(): F[Unit] =
-    for {
-      ret <- withWriteTxn { txn =>
-              blocks.drop(txn)
-            }
-    } yield ()
+  def clear(): F[StorageIOErr[Unit]] = withWriteTxn(blocks.drop) map Right.apply
 
-  override def close(): F[Unit] =
-    syncF.delay { env.close() }
+  override def close(): F[StorageIOErr[Unit]] =
+    syncF.delay { Right(env.close()) }
 }
 
 object LMDBBlockStore {
@@ -175,8 +157,8 @@ object LMDBBlockStore {
   }
 
   def createWithId(env: Env[ByteBuffer], path: Path): BlockStore[Id] = {
-    import io.casperlabs.metrics.Metrics.MetricsNOP
     import io.casperlabs.catscontrib.effect.implicits._
+    import io.casperlabs.metrics.Metrics.MetricsNOP
     implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(syncId)
     LMDBBlockStore.create(env, path)(syncId, metrics)
   }

@@ -2,23 +2,23 @@ package io.casperlabs.comm.transport
 
 import java.nio.file.Path
 
-import scala.concurrent.TimeoutException
-import scala.concurrent.duration._
-import scala.util.control.NonFatal
 import cats.implicits._
-import io.casperlabs.shared._
-import Compression._
-import io.casperlabs.comm.{CommError, PeerNode}
+import io.casperlabs.catscontrib.ski._
+import io.casperlabs.comm.CommError
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.ProtocolHelper
-import com.google.protobuf.ByteString
+import io.casperlabs.shared._
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
 import monix.eval.Task
 import monix.execution.{Cancelable, Scheduler}
 import monix.reactive.Observable
-import monix.reactive.observers.Subscriber
 import monix.reactive.OverflowStrategy._
+import monix.reactive.observers.Subscriber
+
+import scala.concurrent.TimeoutException
+import scala.concurrent.duration._
+import scala.util.control.NonFatal
 
 class TcpServerObservable(
     port: Int,
@@ -75,11 +75,17 @@ class TcpServerObservable(
               }
           }
 
-      def stream(observable: Observable[Chunk]): Task[ChunkResponse] =
-        (StreamHandler.handleStream(tempFolder, observable) >>= {
-          case Left(ex)   => logger.error("Could not receive stream! Details: ${ex.getMessage}", ex)
-          case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg))
+      def stream(observable: Observable[Chunk]): Task[ChunkResponse] = {
+
+        // TODO RCHAIN-2792
+        val neverBreak: StreamHandler.CircuitBreaker = kp(false)
+
+        (StreamHandler.handleStream(tempFolder, observable, neverBreak) >>= {
+          case Left(ex)   => logger.error(s"Could not receive stream! Details: ${ex.getMessage}", ex)
+          case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg)).as(())
         }).as(ChunkResponse())
+
+      }
 
       private def returnProtocol(protocol: Protocol): TLResponse =
         TLResponse(TLResponse.Payload.Protocol(protocol))

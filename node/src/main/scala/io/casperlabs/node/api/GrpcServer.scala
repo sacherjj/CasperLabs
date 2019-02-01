@@ -2,7 +2,8 @@ package io.casperlabs.node.api
 
 import java.util.concurrent.TimeUnit
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -66,19 +67,21 @@ object GrpcServer {
       )
     }
 
-  def acquireExternalServer[F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
       maxMessageSize: Int,
-      grpcExecutor: Scheduler
+      grpcExecutor: Scheduler,
+      blockApiLock: Semaphore[F]
   )(implicit worker: Scheduler): F[GrpcServer] =
-    Capture[F].capture {
+    Sync[F].delay {
       GrpcServer(
         NettyServerBuilder
           .forPort(port)
           .executor(grpcExecutor)
           .maxMessageSize(maxMessageSize)
           .addService(
-            CasperMessageGrpcMonix.bindService(DeployGrpcService.instance, grpcExecutor)
+            CasperMessageGrpcMonix
+              .bindService(DeployGrpcService.instance(blockApiLock), grpcExecutor)
           )
           .build
       )

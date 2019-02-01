@@ -24,7 +24,7 @@ class TcpTransportLayerSpec
   var tempFolder: Path = null
 
   override def beforeEach(): Unit =
-    tempFolder = Files.createTempDirectory("rchain")
+    tempFolder = Files.createTempDirectory("casperlabs")
 
   override def afterEach(): Unit =
     tempFolder.toFile.delete()
@@ -36,7 +36,7 @@ class TcpTransportLayerSpec
       val cert    = CertificatePrinter.print(CertificateHelper.generate(keyPair))
       val key     = CertificatePrinter.printPrivateKey(keyPair.getPrivate)
       val id      = CertificateHelper.publicAddress(keyPair.getPublic).map(Base16.encode).get
-      val address = s"rnode://$id@$host?protocol=$port&discovery=0"
+      val address = s"casperlabs://$id@$host?protocol=$port&discovery=0"
       val peer    = PeerNode.fromAddress(address).right.get
       TcpTlsEnvironment(host, port, cert, key, peer)
     }

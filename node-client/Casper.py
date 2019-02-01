@@ -1,10 +1,10 @@
-'''RChain casper client
+'''CasperLabs casper client
 
 Usage:
   $ export FLASK_APP=Casper.py
   $ flask run
 
-We assume the RChain node is running and that it is listening on port
+We assume the CasperLabs node is running and that it is listening on port
 5000. Double-check that you see this message in the logs:
 
   Server started, listening on 5000
@@ -23,7 +23,7 @@ The output should be something like:
             "hash": "8a50ce909d3605b43538fbe2da92289cb14549223c3dd726bef647535db5153b",
             "merkleroot": "00a956e671e3ba40d09cb68e8b22f4f5fdab68f68713d2046a6811ad13e6f521",
             "pool_info": {},
-            "shardId": "rchain",
+            "shardId": "casperlabs",
             "size": "40519",
             "time": "0",
             "tupleSpaceDump": "@{\"proofOfStake\"}!(.........",
@@ -43,7 +43,7 @@ The output should be something like:
     "hash": "8a50ce909d3605b43538fbe2da92289cb14549223c3dd726bef647535db5153b",
     "merkleroot": "00a956e671e3ba40d09cb68e8b22f4f5fdab68f68713d2046a6811ad13e6f521",
     "pool_info": {},
-    "shardId": "rchain",
+    "shardId": "casperlabs",
     "size": "40519",
     "time": "0",
     "tupleSpaceDump": "@{\"proofOfStake\"}!({\"00f3bd4ebf3f2723e........",
@@ -51,7 +51,7 @@ The output should be something like:
     "txlength": "8"
 }
 
-Tested with rnode-0.6.4 Sep 13 2018.
+Tested with casperlabs-0.6.4 Sep 13 2018.
 
 '''
 

@@ -1,11 +1,10 @@
 package io.casperlabs.comm.rp
 
+import cats.Id
+
 import scala.concurrent.duration._
-
-import cats._
-
 import io.casperlabs.catscontrib._
-import io.casperlabs.shared.TestOutlaws._
+import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm._
 import io.casperlabs.comm.CommError._
@@ -15,7 +14,6 @@ import io.casperlabs.comm.rp.ProtocolHelper._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.{LogicalTime, TransportLayerStub}
 import io.casperlabs.shared._
-
 import org.scalatest._
 
 class ClearConnectionsSpec

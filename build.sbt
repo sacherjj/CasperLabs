@@ -1,5 +1,4 @@
 import Dependencies._
-import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
 
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
@@ -70,9 +69,22 @@ lazy val shared = (project in file("shared"))
       monix,
       scodecCore,
       scodecBits,
-      scalapbRuntimegGrpc
+      scalapbRuntimegGrpc,
+      catsLawsTest,
+      catsLawsTestkitTest
     )
   )
+
+lazy val graphz = (project in file("graphz"))
+  .settings(commonSettings: _*)
+  .settings(
+    version := "0.1",
+    libraryDependencies ++= commonDependencies ++ Seq(
+      catsCore,
+      catsEffect,
+      catsMtl
+    )
+  ).dependsOn(shared)
 
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
@@ -91,6 +103,7 @@ lazy val casper = (project in file("casper"))
     blockStorage % "compile->compile;test->test",
     comm         % "compile->compile;test->test",
     shared       % "compile->compile;test->test",
+		graphz,
     crypto,
     models
   )
@@ -154,7 +167,7 @@ lazy val models = (project in file("models"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(crypto)
+  .dependsOn(crypto, shared % "compile->compile;test->test")
 
 val nodeAndClientVersion = "0.0"
 
@@ -164,7 +177,7 @@ lazy val node = (project in file("node"))
   .settings(
     version := nodeAndClientVersion,
     name := "node",
-    maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
+    maintainer := "CasperLabs, LLC. <info@casperlabs.io>",
     packageSummary := "CasperLabs Node",
     packageDescription := "CasperLabs Node - the Casperlabs blockchain node server software.",
     libraryDependencies ++=
@@ -199,7 +212,7 @@ lazy val node = (project in file("node"))
      *    initializes all useful variables (like $java_version).
      *
      * This won't work if someone passes -no-version-check command line
-     * argument to rnode. They most probably know what they're doing.
+     * argument to casperlabsnode. They most probably know what they're doing.
      *
      * https://unix.stackexchange.com/a/29742/124070
      * Thanks Gilles!
@@ -246,9 +259,9 @@ lazy val node = (project in file("node"))
     },
     /* Packaging */
     linuxPackageMappings ++= {
-      val file = baseDirectory.value / "rnode.service"
+      val file = baseDirectory.value / "casperlabsnode.service"
       Seq(
-        packageMapping(file -> "/lib/systemd/system/rnode.service")
+        packageMapping(file -> "/lib/systemd/system/casperlabsnode.service")
       )
     },
     /* Debian */
@@ -289,7 +302,7 @@ lazy val blockStorage = (project in file("block-storage"))
       catsMtl
     )
   )
-  .dependsOn(shared, models)
+  .dependsOn(shared, models % "compile->compile;test->test")
 
 lazy val smartContracts = (project in file("smart-contracts"))
   .settings(commonSettings: _*)
@@ -347,7 +360,7 @@ lazy val client = (project in file("client"))
      *    initializes all useful variables (like $java_version).
      *
      * This won't work if someone passes -no-version-check command line
-     * argument to rnode. They most probably know what they're doing.
+     * argument to casperlabsnode. They most probably know what they're doing.
      *
      * https://unix.stackexchange.com/a/29742/124070
      * Thanks Gilles!
@@ -377,6 +390,7 @@ lazy val casperlabs = (project in file("."))
     casper,
     comm,
     crypto,
+    graphz,
     models,
     node,
     shared,

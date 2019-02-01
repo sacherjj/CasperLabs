@@ -1,4 +1,4 @@
-RChain Genesis test
+CasperLabs Genesis test
 ===================
 
 Scripts to setup and test genesis in Docker containers.
@@ -74,14 +74,14 @@ Scripts to setup and test genesis in Docker containers.
 2. Deploy a setup
     ```
     % ./deploy-setup setup-small.yaml 
-    Context initialized in /tmp/rchain-genesis-setup_a0brhxy6
+    Context initialized in /tmp/casperlabs-genesis-setup_a0brhxy6
     % docker ps
     CONTAINER ID        IMAGE                      COMMAND                  CREATED             STATUS              PORTS               NAMES
-    4ed77bf6abef        coop.rchain/rnode:latest   "bin/rnode --profile…"   3 seconds ago       Up 3 seconds                            validator-9a0edb
-    34a8beacdcce        coop.rchain/rnode:latest   "bin/rnode --profile…"   4 seconds ago       Up 3 seconds                            validator-9ea830
-    e631421a6b3b        coop.rchain/rnode:latest   "bin/rnode --profile…"   4 seconds ago       Up 4 seconds                            bootstrap-c4e795
-    % tree /tmp/rchain-genesis-setup_a0brhxy6
-    /tmp/rchain-genesis-setup_a0brhxy6
+    4ed77bf6abef        io.casperabs/node:latest   "bin/node --profile…"   3 seconds ago       Up 3 seconds                            validator-9a0edb
+    34a8beacdcce        io.casperabs/node:latest   "bin/node --profile…"   4 seconds ago       Up 3 seconds                            validator-9ea830
+    e631421a6b3b        io.casperabs/node:latest   "bin/node --profile…"   4 seconds ago       Up 4 seconds                            bootstrap-c4e795
+    % tree /tmp/casperlabs-genesis-setup_a0brhxy6
+    /tmp/casperlabs-genesis-setup_a0brhxy6
     ├── bonds.txt
     ├── bootstrap-c4e795
     │   ├── casper-block-store
@@ -89,7 +89,7 @@ Scripts to setup and test genesis in Docker containers.
     │   │   └── lock.mdb
     │   ├── node.certificate.pem
     │   ├── node.key.pem
-    │   ├── rnode.log
+    │   ├── casperlabsnode.log
     │   └── rspace
     │       ├── casper
     │       │   ├── data.mdb
@@ -102,7 +102,7 @@ Scripts to setup and test genesis in Docker containers.
     │   │   └── lock.mdb
     │   ├── node.certificate.pem
     │   ├── node.key.pem
-    │   ├── rnode.log
+    │   ├── casperlabsnode.log
     │   └── rspace
     │       ├── casper
     │       │   ├── data.mdb
@@ -115,7 +115,7 @@ Scripts to setup and test genesis in Docker containers.
     │   │   └── lock.mdb
     │   ├── node.certificate.pem
     │   ├── node.key.pem
-    │   ├── rnode.log
+    │   ├── casperlabsnode.log
     │   └── rspace
     │       ├── casper
     │       │   ├── data.mdb

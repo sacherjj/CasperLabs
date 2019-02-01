@@ -42,16 +42,16 @@ $ pipenv sync
 ```
 
 
-## Step 4: Create the rnode docker image
+## Step 4: Create the casperlabsnode docker image
 
-Tests use RNode Docker image. If environment variable `${DRONE_BUILD_NUMBER}` is
-defined, then `coop.rchain/rnode:DRONE-${DRONE_BUILD_NUMBER}` image is used.
+Tests use CasperLabs Node Docker image. If environment variable `${DRONE_BUILD_NUMBER}` is
+defined, then `io.casperlabs/node:DRONE-${DRONE_BUILD_NUMBER}` image is used.
 These are created on Drone CI in order to use have image per build. If the
-variable is undefined, `coop.rchain/rnode:latest` is used.
+variable is undefined, `io.casperlabs/node:latest` is used.
  
 When the tests are run against the current source code one should build the
 docker image and publish it locally. For details see [the developer
-information](https://github.com/rchain/rchain/blob/dev/DEVELOPER.md) 
+information](https://github.com/CasperLabs/CasperLabs/blob/dev/DEVELOPER.md) 
  
 # Running the tests
 
@@ -192,7 +192,7 @@ When this fixture is destroyed it:
 
 
 #### Package fixtures
-The logic for setting up rnode networks are defined in `rnode_testing/network.py` as context managers. These are 
+The logic for setting up casperlabsnode networks are defined in `casperlabsnode_testing/network.py` as context managers. These are 
 used in`conftest.py` and wrapped in a `@pytest.fixture` in order to build a network with the given shape.
 
 This way the setup/teardown logic reused in several places.
@@ -200,20 +200,20 @@ This way the setup/teardown logic reused in several places.
 ### Waiting for conditions
 Because simple `sleep`s are unreliable *all* waiting for various conditions is done via calls to wait-for.
 
-The wait utilities are defined in `rnode_testing/wait.py`.
+The wait utilities are defined in `casperlabsnode_testing/wait.py`.
 
 There are also a predicates which can be used to define various conditions. One can write custom predicates
 based on these examples. 
 
 ### File resources
 The resources like contracts to be deployed, certificates etc. are stored in the `resources` directory. The code that 
-needs access to these resources can access them using the utilities found in  `rnode_testing/resources.py`
+needs access to these resources can access them using the utilities found in  `casperlabsnode_testing/resources.py`
 
-### RNode interface
-The file `rnode_testing/rnode.py` contains utilities for working with node.
+### Casper Labs Node interface
+The file `casperlabsnode_testing/casperlabsnode.py` contains utilities for working with node.
 
 ### Mixing fixtures
-The file `rnode_testing/fixture.py` contains tools for parameterizing tests with different fixtures.
+The file `casperlabsnode_testing/fixture.py` contains tools for parameterizing tests with different fixtures.
 
 ```python
 @parametrize.cartesian(x=[a, b, c], y=[q,w,e])

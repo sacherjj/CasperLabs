@@ -6,6 +6,9 @@ The open-source CasperLabs project is building a decentralized, economic, censor
 
 ## Running
 
+### Running from source
+Please refer to the [Developer guide](DEVELOPER.md) for information on running from source.
+
 ### Running from Docker
 
 TBD
@@ -26,7 +29,7 @@ TBD
 
 ## Developer guide
 
-TBD
+For building of CasperLabs, please refer to the [Developer guide](DEVELOPER.md)
 
 ### Caveats
 

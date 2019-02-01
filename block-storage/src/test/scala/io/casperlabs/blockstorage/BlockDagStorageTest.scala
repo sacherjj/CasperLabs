@@ -2,18 +2,17 @@ package io.casperlabs.blockstorage
 
 import java.nio.file.StandardOpenOption
 
-import cats.implicits._
-import io.casperlabs.shared.PathOps._
-import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import BlockGen._
 import cats.effect.Sync
-import coop.rchain.blockstorage.Context
+import cats.implicits._
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.casper.protocol.BlockMessage
-import io.casperlabs.metrics.Metrics.MetricsNOP
+import io.casperlabs.catscontrib.TaskContrib.TaskOps
+import io.casperlabs.models.blockImplicits._
 import io.casperlabs.shared
+import io.casperlabs.shared.Log
+import io.casperlabs.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
@@ -32,7 +31,7 @@ trait BlockDagStorageTest
   def withDagStorage[R](f: BlockDagStorage[Task] => Task[R]): R
 
   "DAG Storage" should "be able to lookup a stored block" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       withDagStorage { dagStorage =>
         for {
           _   <- blockElements.traverse_(dagStorage.insert)
@@ -65,7 +64,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   import java.nio.file.{Files, Path}
 
-  private[this] def mkTmpDir(): Path = Files.createTempDirectory("rchain-dag-storage-test-")
+  private[this] def mkTmpDir(): Path = Files.createTempDirectory("casperlabs-dag-storage-test-")
 
   def withDagStorageLocation[R](f: (Path, BlockStore[Task]) => Task[R]): R = {
     val testProgram = Sync[Task].bracket {
@@ -74,10 +73,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       }
     } {
       case (dagDataDir, blockStoreDataDir) =>
-        val blockStore = createBlockStore(blockStoreDataDir)
         for {
-          result <- f(dagDataDir, blockStore)
-          _      <- blockStore.close()
+          blockStore <- createBlockStore(blockStoreDataDir)
+          result     <- f(dagDataDir, blockStore)
+          _          <- blockStore.close()
         } yield result
     } {
       case (dagDataDir, blockStoreDataDir) =>
@@ -113,18 +112,17 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def defaultCheckpointsDir(dagDataDir: Path): Path =
     dagDataDir.resolve("checkpoints")
 
-  private def createBlockStore(blockStoreDataDir: Path): BlockStore[Task] = {
-    val env              = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
-    implicit val metrics = new MetricsNOP[Task]()
-    LMDBBlockStore.create[Task](env, blockStoreDataDir)
+  private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
+    implicit val log = new Log.NOPLog[Task]()
+    val env          = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
+    FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir).map(_.right.get)
   }
 
   private def createAtDefaultLocation(
       dagDataDir: Path,
       maxSizeFactor: Int = 10
   )(implicit blockStore: BlockStore[Task]): Task[BlockDagFileStorage[Task]] = {
-    implicit val log     = new shared.Log.NOPLog[Task]()
-    implicit val metrics = new MetricsNOP[Task]()
+    implicit val log = new shared.Log.NOPLog[Task]()
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
         defaultLatestMessagesLog(dagDataDir),
@@ -217,7 +215,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to restore state on startup" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       withDagStorageLocation { (dagDataDir, blockStore) =>
         for {
           firstStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
@@ -232,8 +230,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to restore state from the previous two instances" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { firstBlockElements =>
-      forAll(blockElementsGen, minSize(0), sizeRange(10)) { secondBlockElements =>
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { firstBlockElements =>
+      forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { secondBlockElements =>
         withDagStorageLocation { (dagDataDir, blockStore) =>
           for {
             firstStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
@@ -252,7 +250,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to restore latest messages on startup with appended 64 garbage bytes" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       withDagStorageLocation { (dagDataDir, blockStore) =>
         for {
           firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
@@ -276,7 +274,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to restore data lookup on startup with appended garbage block metadata" in {
-    forAll(blockElementsGen, blockElementGen, minSize(0), sizeRange(10)) {
+    forAll(blockElementsWithParentsGen, blockElementGen, minSize(0), sizeRange(10)) {
       (blockElements, garbageBlock) =>
         withDagStorageLocation { (dagDataDir, blockStore) =>
           for {
@@ -317,7 +315,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to restore after squashing latest messages" in {
-    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       forAll(blockWithNewHashesGen(blockElements), blockWithNewHashesGen(blockElements)) {
         (secondBlockElements, thirdBlockElements) =>
           withDagStorageLocation { (dagDataDir, blockStore) =>
@@ -341,7 +339,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to load checkpoints" in {
-    forAll(blockElementsGen, minSize(1), sizeRange(2)) { blockElements =>
+    forAll(blockElementsWithParentsGen, minSize(1), sizeRange(2)) { blockElements =>
       withDagStorageLocation { (dagDataDir, blockStore) =>
         for {
           firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)

@@ -39,7 +39,7 @@ object PeerNode {
     PeerNode(id, Endpoint(host, protocol, discovery))
 
   def fromAddress(str: String): Either[CommError, PeerNode] = {
-    // TODO toInt, not URL, scheme not rnode, renameflag to discovery-port
+    // TODO toInt, not URL, scheme not casperlabs, renameflag to discovery-port
     val maybeUrl: Option[Url] = Try(Url.parse(str)).toOption
 
     val maybePeer = maybeUrl flatMap (

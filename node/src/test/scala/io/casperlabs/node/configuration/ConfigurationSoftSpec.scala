@@ -120,7 +120,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       |dynamic-host-address = false
       |no-upnp = false
       |default-timeout = 2
-      |bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.254?protocol=2&discovery=2"
+      |bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.254?protocol=2&discovery=2"
       |standalone = false
       |map-size = 2
       |store-type = "inmem"
@@ -299,7 +299,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     List("--lmdb-block-store-size", "3"),
     List(
       "--server-bootstrap",
-      "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.253?protocol=3&discovery=3"
+      "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.253?protocol=3&discovery=3"
     ),
     List("--server-data-dir", "test3"),
     List("--server-default-timeout", "3"),

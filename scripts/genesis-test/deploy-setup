@@ -14,7 +14,7 @@ import oyaml as yaml
 
 ########################################
 
-TMPDIR_PREFIX = 'rchain-genesis-setup_'
+TMPDIR_PREFIX = 'casperlabs-genesis-setup_'
 PORT = 40400
 
 dockercli = docker.from_env()
@@ -45,7 +45,7 @@ class Node:
         self.data_dir = ctx.base_dir / node_yaml.name
         self.key_file = self.data_dir / 'node.key.pem'
         self.fqdn = self.name + '.' + ctx.args.network
-        self.url = 'rnode://{}@{}:{}'.format(node_yaml.addr, self.fqdn, PORT)
+        self.url = 'casperlabs://{}@{}:{}'.format(node_yaml.addr, self.fqdn, PORT)
         self.container_name = ctx.args.container_prefix + node_yaml.name
 
 class Context:
@@ -81,8 +81,8 @@ def create_node(node, add_cmdline):
     volumes = {
         ctx.bonds_file   : { 'bind': '/tmp/bonds.txt' },
         ctx.wallets_file : { 'bind': '/tmp/wallets.txt' },
-        node.data_dir    : { 'bind': ctx.args.rnode_directory },
-        node.key_file    : { 'bind': ctx.args.rnode_directory + '/node.key.pem' },
+        node.data_dir    : { 'bind': ctx.args.casperlabsnode_directory },
+        node.key_file    : { 'bind': ctx.args.casperlabsnode_directory + '/node.key.pem' },
     }
     common_cmdline = [
         'run',
@@ -136,16 +136,16 @@ parser.add_argument(
 parser.add_argument(
         '--image',
         type    = str,
-        default = 'coop.rchain/rnode:latest')
+        default = 'io.casperlabs/node:latest')
 parser.add_argument(
         '--network',
         type    = str,
-        default = 'rchain.coop')
+        default = 'casperlabs.io')
 parser.add_argument(
-        '--rnode-directory',
+        '--casperlabsnode-directory',
         type    = str,
-        default = '/var/lib/rnode',
-        help    = 'rnode container root directory on each container')
+        default = '/var/lib/casperlabsnode',
+        help    = 'casperlabsnode container root directory on each container')
 parser.add_argument(
         '--container-prefix',
         type    = str,

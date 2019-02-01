@@ -21,8 +21,8 @@ private[configuration] object TomlReader {
         PeerNode
           .fromAddress(uri)
           .map(u => Right(u))
-          .getOrElse(Left((Nil, "can't parse the rnode bootstrap address")))
-      case _ => Left((Nil, "the rnode bootstrap address should be a string"))
+          .getOrElse(Left((Nil, "can't parse the casperlabs node bootstrap address")))
+      case _ => Left((Nil, "the casperlabs node bootstrap address should be a string"))
     }
   private implicit val pathCodec: Codec[Path] =
     Codec {
@@ -36,6 +36,7 @@ private[configuration] object TomlReader {
     case (value, _) =>
       Left((List.empty, s"Bool expected, $value provided"))
   }
+
   private implicit val finiteDurationCodec: Codec[FiniteDuration] = Codec {
     case (Value.Str(value), _) =>
       Duration(value) match {

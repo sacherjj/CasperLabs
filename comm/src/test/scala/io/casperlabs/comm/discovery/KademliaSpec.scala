@@ -1,15 +1,11 @@
 package io.casperlabs.comm.discovery
 
-import scala.collection.mutable
-
 import cats.Id
-
-import io.casperlabs.comm.protocol.routing._
-import io.casperlabs.catscontrib._, Catscontrib._
+import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.comm._
-import io.casperlabs.shared.TestOutlaws._
-
 import org.scalatest._
+
+import scala.collection.mutable
 
 class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   val local = createPeer("00000001")

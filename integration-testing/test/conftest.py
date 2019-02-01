@@ -19,11 +19,11 @@ from typing import (
 import pytest
 import docker as docker_py
 
-from rnode_testing.common import (
+from casperlabsnode_testing.common import (
     KeyPair,
     TestingContext,
 )
-from rnode_testing.pregenerated_keypairs import PREGENERATED_KEYPAIRS
+from casperlabsnode_testing.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 
 if TYPE_CHECKING:
     from docker.client import DockerClient
@@ -46,7 +46,7 @@ def pytest_addoption(parser: "Parser") -> None:
     parser.addoption("--start-timeout", action="store", default="0", help="timeout in seconds for starting a node. Defaults to 30 + peer_count * 10")
     parser.addoption("--converge-timeout", action="store", default="0", help="timeout in seconds for network converge. Defaults to 200 + peer_count * 10")
     parser.addoption("--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message. Defaults to 10 + peer_count * 10")
-    parser.addoption("--command-timeout", action="store", default="10", help="timeout in seconds for executing an rnode call (Examples: propose, show-logs etc.). Defaults to 10s")
+    parser.addoption("--command-timeout", action="store", default="10", help="timeout in seconds for executing an casperlabsnode call (Examples: propose, show-logs etc.). Defaults to 10s")
     parser.addoption("--blocks", action="store", default="1", help="the number of deploys per test deploy")
     parser.addoption("--mount-dir", action="store", default=None, help="globally accesible directory for mounting between containers")
 
@@ -83,7 +83,7 @@ def command_line_options_fixture(request):
 
 @contextlib.contextmanager
 def temporary_bonds_txt_file(validator_keys: List[KeyPair]) -> Generator[str, None, None]:
-    (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt", dir="/tmp")
+    (fd, file) = tempfile.mkstemp(prefix="casperlabs-bonds-file-", suffix=".txt", dir="/tmp")
     try:
         with os.fdopen(fd, "w") as f:
             for pair in validator_keys:
@@ -111,8 +111,8 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
     if peers_keypairs is None:
         peers_keypairs = PREGENERATED_KEYPAIRS[1:]
 
-    # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
-    # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
+    # Using pre-generated validator key pairs by casperlabsnode. We do this because warning below  with python generated keys
+    # WARN  io.casperlabs.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
     validator_keys = [kp for kp in peers_keypairs[0:command_line_options_fixture.peer_count+1]]
     with temporary_bonds_txt_file(validator_keys) as bonds_file:
         bootstrap_keypair = validator_keys[0]

@@ -3,7 +3,7 @@ package io.casperlabs.casper
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{BlockMessage, Bond, Justification}
@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.ProtoUtil.{
   findCreatorJustificationAncestorWithSeqNum,
   toLatestMessageHashes
 }
-import io.casperlabs.shared.{Log, LogSource}
+import io.casperlabs.shared.{Cell, Log, LogSource}
 
 import scala.collection.mutable
 
@@ -45,12 +45,12 @@ import scala.collection.mutable
   * to detect the equivocation corresponding to the "equivocation record".
   */
 sealed trait EquivocationDiscoveryStatus
-case object EquivocationNeglected extends EquivocationDiscoveryStatus
-case object EquivocationDetected  extends EquivocationDiscoveryStatus
-case object EquivocationOblivious extends EquivocationDiscoveryStatus
+final case object EquivocationNeglected extends EquivocationDiscoveryStatus
+final case object EquivocationDetected  extends EquivocationDiscoveryStatus
+final case object EquivocationOblivious extends EquivocationDiscoveryStatus
 
 // This is the sequence number of the equivocator's base block
-case class EquivocationRecord(
+final case class EquivocationRecord(
     equivocator: Validator,
     equivocationBaseBlockSeqNum: SequenceNumber,
     equivocationDetectedBlockHashes: Set[BlockHash]
@@ -67,32 +67,31 @@ object EquivocationDetector {
   def checkEquivocations[F[_]: Monad: Log](
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       block: BlockMessage,
-      dag: BlockDag
-  ): F[Either[InvalidBlock, ValidBlock]] = {
-    val maybeCreatorJustification   = creatorJustificationHash(block)
-    val maybeLatestMessageOfCreator = dag.latestMessages.get(block.sender)
-    val isNotEquivocation = maybeCreatorJustification == maybeLatestMessageOfCreator.map(
-      _.blockHash
-    )
-    if (isNotEquivocation) {
-      Applicative[F].pure(Right(Valid))
-    } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
-      Applicative[F].pure(Left(AdmissibleEquivocation))
-    } else {
-      for {
-        sender <- PrettyPrinter.buildString(block.sender).pure[F]
-        creatorJustificationHash = PrettyPrinter.buildString(
-          maybeCreatorJustification.getOrElse(ByteString.EMPTY)
-        )
-        latestMessageOfCreator = PrettyPrinter.buildString(
-          maybeLatestMessageOfCreator.map(_.blockHash).getOrElse(ByteString.EMPTY)
-        )
-        _ <- Log[F].warn(
-              s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator"
-            )
-      } yield Left(IgnorableEquivocation)
-    }
-  }
+      dag: BlockDagRepresentation[F]
+  ): F[Either[InvalidBlock, ValidBlock]] =
+    for {
+      maybeLatestMessageOfCreatorHash <- dag.latestMessageHash(block.sender)
+      maybeCreatorJustification       = creatorJustificationHash(block)
+      isNotEquivocation               = maybeCreatorJustification == maybeLatestMessageOfCreatorHash
+      result <- if (isNotEquivocation) {
+                 Applicative[F].pure(Right(Valid))
+               } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
+                 Applicative[F].pure(Left(AdmissibleEquivocation))
+               } else {
+                 for {
+                   sender <- PrettyPrinter.buildString(block.sender).pure[F]
+                   creatorJustificationHash = PrettyPrinter.buildString(
+                     maybeCreatorJustification.getOrElse(ByteString.EMPTY)
+                   )
+                   latestMessageOfCreator = PrettyPrinter.buildString(
+                     maybeLatestMessageOfCreatorHash.getOrElse(ByteString.EMPTY)
+                   )
+                   _ <- Log[F].warn(
+                         s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator"
+                       )
+                 } yield Left(IgnorableEquivocation)
+               }
+    } yield result
 
   private def requestedAsDependency(
       block: BlockMessage,
@@ -107,14 +106,12 @@ object EquivocationDetector {
 
   // See summary of algorithm above
   def checkNeglectedEquivocationsWithUpdate[F[_]: Monad: BlockStore](
-      equivocationsTracker: mutable.Set[EquivocationRecord],
       block: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       genesis: BlockMessage
-  ): F[Either[InvalidBlock, ValidBlock]] =
+  )(implicit state: Cell[F, CasperState]): F[Either[InvalidBlock, ValidBlock]] =
     for {
       neglectedEquivocationDetected <- isNeglectedEquivocationDetectedWithUpdate[F](
-                                        equivocationsTracker,
                                         block,
                                         dag,
                                         genesis
@@ -127,22 +124,21 @@ object EquivocationDetector {
     } yield status
 
   private def isNeglectedEquivocationDetectedWithUpdate[F[_]: Monad: BlockStore](
-      equivocationsTracker: mutable.Set[EquivocationRecord],
       block: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       genesis: BlockMessage
-  ): F[Boolean] =
-    equivocationsTracker.toList.existsM { equivocationRecord =>
-      for {
-        neglectedEquivocationDetected <- updateEquivocationsTracker[F](
-                                          equivocationsTracker,
+  )(implicit state: Cell[F, CasperState]): F[Boolean] =
+    for {
+      s <- Cell[F, CasperState].read
+      neglectedEquivocationDetected <- s.equivocationsTracker.toList.existsM { equivocationRecord =>
+                                        updateEquivocationsTracker[F](
                                           block,
                                           dag,
                                           equivocationRecord,
                                           genesis
                                         )
-      } yield neglectedEquivocationDetected
-    }
+                                      }
+    } yield neglectedEquivocationDetected
 
   /**
     * If an equivocation is detected, it is added to the equivocationDetectedBlockHashes, which keeps track
@@ -151,12 +147,11 @@ object EquivocationDetector {
     * @return Whether a neglected equivocation was discovered.
     */
   private def updateEquivocationsTracker[F[_]: Monad: BlockStore](
-      equivocationsTracker: mutable.Set[EquivocationRecord],
       block: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
       genesis: BlockMessage
-  ): F[Boolean] =
+  )(implicit state: Cell[F, CasperState]): F[Boolean] =
     for {
       equivocationDiscoveryStatus <- getEquivocationDiscoveryStatus[F](
                                       block,
@@ -168,21 +163,25 @@ object EquivocationDetector {
         case EquivocationNeglected =>
           true
         case EquivocationDetected =>
-          val updatedEquivocationDetectedBlockHashes = equivocationRecord.equivocationDetectedBlockHashes + block.blockHash
-          equivocationsTracker.remove(equivocationRecord)
-          equivocationsTracker.add(
-            equivocationRecord
-              .copy(equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes)
-          )
           false
         case EquivocationOblivious =>
           false
       }
+      _ <- if (equivocationDiscoveryStatus == EquivocationDetected) {
+            Cell[F, CasperState].modify { s =>
+              val updatedEquivocationDetectedBlockHashes = equivocationRecord.equivocationDetectedBlockHashes + block.blockHash
+              val newEquivocationsTracker = s.equivocationsTracker - equivocationRecord + (
+                equivocationRecord
+                  .copy(equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes)
+                )
+              s.copy(equivocationsTracker = newEquivocationsTracker)
+            }
+          } else ().pure[F]
     } yield neglectedEquivocationDetected
 
   private def getEquivocationDiscoveryStatus[F[_]: Monad: BlockStore](
       block: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
       genesis: BlockMessage
   ): F[EquivocationDiscoveryStatus] = {

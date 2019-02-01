@@ -207,17 +207,18 @@ class TcpTransportLayer(
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
     innerBroadcast(peers, msg)
 
-  def handleToStream(toStream: ToStream): Task[Unit] = {
+  private def streamToPeer(peer: PeerNode, path: Path, sender: PeerNode): Task[Unit] = {
 
     def delay[A](a: => Task[A]): Task[A] =
       Task.defer(a).delayExecution(1.second)
 
     def handle(retryCount: Int): Task[Unit] =
-      if (retryCount > 0)
-        PacketOps.restore[Task](toStream.path) >>= {
+      if (retryCount > 0) {
+        PacketOps.restore[Task](path) >>= {
+          case Left(error) => log.error(s"Error while streaming packet, error: $error")
           case Right(packet) =>
-            withClient(toStream.peerNode, enforce = false) { stub =>
-              val blob = Blob(toStream.sender, packet)
+            withClient(peer, enforce = false) { stub =>
+              val blob = Blob(sender, packet)
               stub.stream(Observable.fromIterator(Task(Chunker.chunkIt(blob, chunkSize))))
             }.attempt
               .flatMap {
@@ -225,16 +226,12 @@ class TcpTransportLayer(
                   log.error(s"Error while streaming packet, error: $error") *> delay(
                     handle(retryCount - 1)
                   )
-                case Right(_) => toStream.path.delete[Task]()
+                case Right(_) => log.info(s"Streamed packet $path to $peer")
               }
-          case Left(error) =>
-            log.error(s"Error while streaming packet, error: $error") >>= kp(
-              toStream.path.delete[Task]()
-            )
-        } else
-        log.debug(s"Giving up on streaming packet ${toStream.path} to ${toStream.peerNode}") >>= kp(
-          toStream.path.delete[Task]()
-        )
+        }
+      } else {
+        log.debug(s"Giving up on streaming packet $path to $peer")
+      }
 
     handle(3)
   }
@@ -254,6 +251,7 @@ class TcpTransportLayer(
       dispatch: Protocol => Task[CommunicationResponse],
       handleStreamed: Blob => Task[Unit]
   ): Task[Unit] = {
+
     val dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
       case Tell(protocol) => dispatch(protocol).attemptAndLog.void
@@ -289,9 +287,17 @@ class TcpTransportLayer(
 
                  }
         clientQueue <- initQueue(s.clientQueue) {
+                        import io.casperlabs.shared.PathOps._
                         Task.delay {
                           streamObservable
-                            .mapParallelUnordered(parallelism)(handleToStream)
+                            .flatMap { s =>
+                              Observable
+                                .fromIterable(s.peers)
+                                .mapParallelUnordered(parallelism)(
+                                  streamToPeer(_, s.path, s.sender)
+                                )
+                                .guarantee(s.path.deleteSingleFile[Task]())
+                            }
                             .subscribe()(queueScheduler)
                         }
                       }

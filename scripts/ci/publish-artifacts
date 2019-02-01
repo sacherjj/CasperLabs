@@ -24,7 +24,7 @@ echo "$SSH_PRIVATE_KEY" | base64 -d | tr -d '\r' >~/.ssh/id_rsa
 # We don't check host keys because artifacts are public.
 rsync -avrz --delete -e "ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
     artifacts/*.deb artifacts/*.rpm artifacts/*.tgz \
-    inbound@build.rchain-dev.tk:/srv/inbound/$REF/
+    inbound@build.casperlabs-dev.tk:/srv/inbound/$REF/
 
 # Upload Docker image
 
@@ -36,10 +36,10 @@ builtin echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdi
 
 set -x
 
-docker tag coop.rchain/rnode:DRONE-$DRONE_BUILD_NUMBER rchain/rnode:$REF
-docker push rchain/rnode:$REF
+docker tag io.casperlabs/node:DRONE-$DRONE_BUILD_NUMBER casperlabs/node:$REF
+docker push casperlabs/node:$REF
 
 if [[ $TAG == 1 ]]; then
-	docker tag coop.rchain/rnode:DRONE-$DRONE_BUILD_NUMBER rchain/rnode:latest
-	docker push rchain/rnode:latest
+	docker tag io.casperlabs/node:DRONE-$DRONE_BUILD_NUMBER casperlabs/node:latest
+	docker push casperlabs/node:latest
 fi
