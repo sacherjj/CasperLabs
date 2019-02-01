@@ -19,9 +19,10 @@ final case class Deploy(
 
 final case class Propose(port: Int, host: String) extends Configuration
 
-final case class ShowBlock(port: Int, host: String, hash: String)     extends Configuration
-final case class ShowBlocks(port: Int, host: String, depth: Int)      extends Configuration
-final case class VisualizeBlocks(port: Int, host: String, depth: Int) extends Configuration
+final case class ShowBlock(port: Int, host: String, hash: String) extends Configuration
+final case class ShowBlocks(port: Int, host: String, depth: Int)  extends Configuration
+final case class VisualizeDag(port: Int, host: String, depth: Int, showJustificationLines: Boolean)
+    extends Configuration
 
 object Configuration {
   def parse(args: Array[String]): Option[Configuration] = {

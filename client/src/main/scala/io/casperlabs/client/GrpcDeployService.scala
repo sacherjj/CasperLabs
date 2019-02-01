@@ -39,8 +39,8 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
       else Left(new RuntimeException(response.status))
     }
 
-  def visualizeBlocks(q: BlocksQuery): Task[Either[Throwable, String]] =
-    stub.visualizeBlocks(q).map { response =>
+  def visualizeDag(q: VisualizeDagQuery): Task[Either[Throwable, String]] =
+    stub.visualizeDag(q).map { response =>
       if (response.status == "Success") Right(response.toProtoString)
       else Left(new RuntimeException(response.status))
     }
