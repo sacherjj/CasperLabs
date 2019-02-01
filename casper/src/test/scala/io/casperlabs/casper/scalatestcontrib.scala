@@ -19,9 +19,9 @@ object scalatestcontrib extends Matchers with Assertions {
     f.value.unsafeRunSync(scheduler).right.get
 
   /** If a feature is missing we can do `Log[F].debug("FIXME: Implement feature X!")`
-	  * and add an assumption to the test that this has been done, otherwise cancel the test.
-	  * The test will automatically resume and pass once the log is removed.
-	  * This method is here so we have 1 way to check for the presence of these logs. */
+    * and add an assumption to the test that this has been done, otherwise cancel the test.
+    * The test will automatically resume and pass once the log is removed.
+    * This method is here so we have 1 way to check for the presence of these logs. */
   def cancelUntilFixed[F[_]](feature: String)(implicit log: LogStub[F], pos: source.Position) = {
     assert(feature.startsWith("FIXME:")) // So that we can find FIXME in code and test easily.
     val fixed = !log.debugs.contains(feature)

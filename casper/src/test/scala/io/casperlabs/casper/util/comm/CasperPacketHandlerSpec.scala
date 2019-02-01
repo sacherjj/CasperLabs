@@ -134,9 +134,6 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
             blockApproval.toByteString
           )
           _ = {
-            // Currently this test is failing becuase the RuntimeManager is hardcoded with
-            // empty Bonds and doesn't have access to any storage either to retrieve it.
-            cancelUntilFixed("FIXME: Implement bonds!")
             log.warns shouldBe empty
             transportLayer.requests should not be empty
             val lastMessage = transportLayer.requests.last
