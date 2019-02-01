@@ -850,12 +850,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  ignore should "handle a long chain of block requests appropriately" in effectTest {
+  it should "handle a long chain of block requests appropriately" in effectTest {
     for {
       nodes <- HashSetCasperTestNode.networkEff(
                 validatorKeys.take(2),
                 genesis,
-                storageSize = 1024L * 1024 * 10
+                storageSize = 1024L * 1024 * 10,
+                bonds = bonds
               )
 
       _ <- (0 to 9).toList.traverse_[Effect, Unit] { i =>
@@ -896,13 +897,28 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  ignore should "increment last finalized block as appropriate in round robin" in effectTest {
+  it should "increment last finalized block as appropriate in round robin" in effectTest {
     val stake      = 10L
     val equalBonds = validators.map(_ -> stake).toMap
     val genesisWithEqualBonds =
       buildGenesis(Seq.empty, equalBonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
+
+    def checkLastFinalizedBlock(
+        node: HashSetCasperTestNode[Effect],
+        expected: BlockMessage
+    ): Effect[Unit] =
+      node.casperEff.lastFinalizedBlock map { block =>
+        PrettyPrinter.buildString(block) shouldBe PrettyPrinter.buildString(expected)
+        ()
+      }
+
     for {
-      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesisWithEqualBonds)
+      nodes <- HashSetCasperTestNode.networkEff(
+                validatorKeys.take(3),
+                genesisWithEqualBonds,
+                bonds = bonds,
+                faultToleranceThreshold = -0.85f // Something to allow the last finalized block to move.
+              )
       deployDatas <- (0 to 7).toList.traverse(i => ProtoUtil.basicDeployData[Effect](i))
 
       createBlock1Result <- nodes(0).casperEff
@@ -933,6 +949,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(1).receive()
       _               <- nodes(2).receive()
 
+      _     <- checkLastFinalizedBlock(nodes(0), genesisWithEqualBonds)
+      state <- nodes(0).casperState.read
+      _     = state.deployHistory.size should be(2)
+
       createBlock5Result <- nodes(1).casperEff
                              .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
       Created(block5) = createBlock5Result
@@ -940,9 +960,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(0).receive()
       _               <- nodes(2).receive()
 
-      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF genesisWithEqualBonds
+      _     <- checkLastFinalizedBlock(nodes(0), block1)
       state <- nodes(0).casperState.read
-      _     = state.deployHistory.size should be(2)
+      _     = state.deployHistory.size should be(1)
 
       createBlock6Result <- nodes(2).casperEff
                              .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
@@ -951,9 +971,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(0).receive()
       _               <- nodes(1).receive()
 
-      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block1
-      state <- nodes(0).casperState.read
-      _     = state.deployHistory.size should be(1)
+      _ <- checkLastFinalizedBlock(nodes(0), block2)
 
       createBlock7Result <- nodes(0).casperEff
                              .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
@@ -962,7 +980,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(1).receive()
       _               <- nodes(2).receive()
 
-      _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
+      _     <- checkLastFinalizedBlock(nodes(0), block3)
+      state <- nodes(0).casperState.read
+      _     = state.deployHistory.size should be(2)
 
       createBlock8Result <- nodes(1).casperEff
                              .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
@@ -970,10 +990,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(1).casperEff.addBlock(block8, ignoreDoppelgangerCheck[Effect])
       _               <- nodes(0).receive()
       _               <- nodes(2).receive()
-
-      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
-      state <- nodes(0).casperState.read
-      _     = state.deployHistory.size should be(2)
 
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()

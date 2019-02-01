@@ -57,7 +57,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
     shardId: String,
-    blockProcessingLock: Semaphore[F]
+    blockProcessingLock: Semaphore[F],
+    faultToleranceThreshold: Float = 0f
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
 
@@ -70,8 +71,6 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
 
   private val emptyStateHash = runtimeManager.emptyStateHash
 
-  // TODO: Extract hardcoded fault tolerance threshold
-  private val faultToleranceThreshold         = 0f
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
   def addBlock(
@@ -157,18 +156,21 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       childrenHashes <- dag
                          .children(lastFinalizedBlockHash)
                          .map(_.getOrElse(Set.empty[BlockHash]).toList)
-      maybeFinalizedChild <- ListContrib.findM(
-                              childrenHashes,
-                              (blockHash: BlockHash) =>
-                                isGreaterThanFaultToleranceThreshold(dag, blockHash)
-                            )
-      newFinalizedBlock <- maybeFinalizedChild match {
-                            case Some(finalizedChild) =>
-                              removeDeploysInFinalizedBlock(finalizedChild) *> updateLastFinalizedBlock(
+      // Find all finalized children so that we can get rid of their deploys.
+      finalizedChildren <- ListContrib.filterM(
+                            childrenHashes,
+                            (blockHash: BlockHash) =>
+                              isGreaterThanFaultToleranceThreshold(dag, blockHash)
+                          )
+      newFinalizedBlock <- if (finalizedChildren.isEmpty) {
+                            lastFinalizedBlockHash.pure[F]
+                          } else {
+                            finalizedChildren.traverse(removeDeploysInFinalizedBlock) *>
+                              updateLastFinalizedBlock(
                                 dag,
-                                finalizedChild
+                                // FIXME: This is what happened with findM, but is it going to cover all paths?
+                                finalizedChildren.head
                               )
-                            case None => lastFinalizedBlockHash.pure[F]
                           }
     } yield newFinalizedBlock
 
@@ -204,7 +206,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     for {
       faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
       _ <- Log[F].info(
-            s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance."
+            s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance; threshold is $faultToleranceThreshold"
           )
     } yield faultTolerance > faultToleranceThreshold
 

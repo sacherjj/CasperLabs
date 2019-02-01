@@ -56,6 +56,7 @@ class HashSetCasperTestNode[F[_]](
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     bonds: Map[Array[Byte], Long],
+    faultToleranceThreshold: Float = 0f,
     shardId: String = "casperlabs"
 )(
     implicit
@@ -96,7 +97,8 @@ class HashSetCasperTestNode[F[_]](
     genesis,
     postGenesisStateHash,
     shardId,
-    blockProcessingLock
+    blockProcessingLock,
+    faultToleranceThreshold = faultToleranceThreshold
   )
 
   implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[F](Some(casperEff))
@@ -147,7 +149,8 @@ object HashSetCasperTestNode {
       genesis: BlockMessage,
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
-      bonds: Map[Array[Byte], Long] = Map.empty
+      bonds: Map[Array[Byte], Long] = Map.empty,
+      faultToleranceThreshold: Float = 0f
   )(
       implicit
       errorHandler: ErrorHandler[F],
@@ -193,7 +196,8 @@ object HashSetCasperTestNode {
         blockDagDir,
         blockStoreDir,
         blockProcessingLock,
-        bonds
+        bonds,
+        faultToleranceThreshold
       )(
         concurrentF,
         blockStore,
@@ -210,11 +214,12 @@ object HashSetCasperTestNode {
       genesis: BlockMessage,
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
-      bonds: Map[Array[Byte], Long] = Map.empty
+      bonds: Map[Array[Byte], Long] = Map.empty,
+      faultToleranceThreshold: Float = 0f
   )(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
-    standaloneF[Effect](genesis, sk, storageSize, bonds)(
+    standaloneF[Effect](genesis, sk, storageSize, bonds, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
       ToAbstractContext[Effect]
@@ -224,7 +229,8 @@ object HashSetCasperTestNode {
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10,
-      bonds: Map[Array[Byte], Long] = Map.empty
+      bonds: Map[Array[Byte], Long] = Map.empty,
+      faultToleranceThreshold: Float = 0f
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
@@ -283,7 +289,8 @@ object HashSetCasperTestNode {
                 blockDagDir,
                 blockStoreDir,
                 semaphore,
-                bonds
+                bonds,
+                faultToleranceThreshold
               )(
                 concurrentF,
                 blockStore,
@@ -322,9 +329,10 @@ object HashSetCasperTestNode {
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10,
-      bonds: Map[Array[Byte], Long] = Map.empty
+      bonds: Map[Array[Byte], Long] = Map.empty,
+      faultToleranceThreshold: Float = 0f
   ): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
-    networkF[Effect](sks, genesis, storageSize, bonds)(
+    networkF[Effect](sks, genesis, storageSize, bonds, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
       ToAbstractContext[Effect]
