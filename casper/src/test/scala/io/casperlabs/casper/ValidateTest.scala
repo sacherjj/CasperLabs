@@ -619,15 +619,6 @@ class ValidateTest
         _ <- Validate.formatOfFields[Task](
               genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
             ) shouldBeF false
-        // Not sure what exactly this was supposed to be testing.
-        _ <- Validate.formatOfFields[Task](
-              genesis.withBody(
-                genesis.body.get
-                  .withDeploys(
-                    genesis.body.get.deploys
-                  )
-              )
-            ) shouldBeF true
       } yield ()
   }
 
