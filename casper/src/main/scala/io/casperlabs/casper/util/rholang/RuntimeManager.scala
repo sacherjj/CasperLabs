@@ -54,8 +54,23 @@ class RuntimeManager[F[_]: Concurrent] private (
 
   // todo this should be complemented
   def computeBonds(hash: StateHash)(implicit log: Log[F]): F[Seq[Bond]] =
-    log.debug("FIXME: Implement bonds!") *>
-      Seq[Bond]().pure[F]
+    // FIXME: Implement bonds!
+    testBonds.pure[F]
+
+  private var testBonds = Seq.empty[Bond]
+
+  // By allowing to inject bonds we can enable some tests that only fail because
+  // they reject blocks due to having no bonds to validate with.
+  def withTestBonds(bonds: Seq[Bond]): this.type = {
+    testBonds = bonds
+    this
+  }
+  def withTestBonds(bonds: Map[Array[Byte], Long]): this.type = withTestBonds {
+    bonds.toSeq.map {
+      case (validator, stake) =>
+        Bond(ByteString.copyFrom(validator), stake)
+    }
+  }
 
   def sendDeploy(d: IPCDeploy): F[Either[Throwable, ExecutionEffect]] =
     executionEngineService.sendDeploy(d)

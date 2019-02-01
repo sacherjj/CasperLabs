@@ -103,9 +103,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     node.tearDown().value.unsafeRunSync
   }
 
-  //todo this is blocked by InterpreterUtil.computeDeploysCheckpoint, which is block by RuntimeManager.computeState and replayComputeState
-  ignore should "create blocks based on deploys" in effectTest {
-    val node            = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+  it should "create blocks based on deploys" in effectTest {
+    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    import node.logEff
     implicit val casper = node.casperEff
 
     for {
@@ -118,13 +118,15 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       parents           = ProtoUtil.parentHashes(block)
       storage           <- blockTuplespaceContents(block)
 
-      _      = parents.size should be(1)
-      _      = parents.head should be(genesis.blockHash)
-      _      = deploys.size should be(1)
-      _      = deploys.head.raw should be(Some(deploy))
-      result = storage.contains("@{0}!(0)") should be(true)
-      _      <- node.tearDown()
-    } yield result
+      _ = parents should have size 1
+      _ = parents.head shouldBe genesis.blockHash
+      _ = deploys should have size 1
+      _ = deploys.head.raw should contain(deploy)
+      _ = pendingUntilFixed {
+        storage.contains("@{0}!(0)") shouldBe true
+      }
+      _ <- node.tearDown()
+    } yield ()
   }
 
   it should "accept signed blocks" in effectTest {
@@ -146,8 +148,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   //Todo bring back this test once we implement the blocking function in RuntimeManager
-  ignore should "be able to create a chain of blocks from different deploys" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+  it should "be able to create a chain of blocks from different deploys" in effectTest {
+    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head, bonds = bonds)
     import node._
 
     val start = System.currentTimeMillis()
@@ -169,14 +171,15 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       Created(signedBlock2) = createBlockResult2
       _                     <- MultiParentCasper[Effect].addBlock(signedBlock2, ignoreDoppelgangerCheck[Effect])
       storage               <- blockTuplespaceContents(signedBlock2)
-
-      _      = logEff.warns should be(Nil)
-      _      = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
-      dag    <- MultiParentCasper[Effect].blockDag
-      _      <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock2)
-      result = storage.contains("!(12)") should be(true)
-      _      <- node.tearDown()
-    } yield result
+      _                     = logEff.warns shouldBe empty
+      _                     = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
+      dag                   <- MultiParentCasper[Effect].blockDag
+      _                     <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock2)
+      _ = pendingUntilFixed {
+        storage.contains("!(12)") should be(true)
+      }
+      _ <- node.tearDown()
+    } yield ()
   }
 
   it should "allow multiple deploys in a single block" in effectTest {
@@ -275,10 +278,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  // todo bring back this test once we implement the blocking functions
-  ignore should "handle multi-parent blocks correctly" in effectTest {
+  it should "handle multi-parent blocks correctly" in effectTest {
     for {
-      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis, bonds = bonds)
       deployData0 <- ProtoUtil.basicDeployData[Effect](0)
       deployData2 <- ProtoUtil.basicDeployData[Effect](2)
       deploys = Vector(
@@ -308,20 +310,22 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                         <- nodes(0).casperEff.addBlock(multiparentBlock, ignoreDoppelgangerCheck[Effect])
       _                         <- nodes(1).receive()
 
-      _ = nodes(0).logEff.warns.isEmpty shouldBe true
-      _ = nodes(1).logEff.warns.isEmpty shouldBe true
+      _ = nodes(0).logEff.warns shouldBe empty
+      _ = nodes(1).logEff.warns shouldBe empty
       _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
       _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
       _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
 
       finalTuplespace <- nodes(0).casperEff
                           .storageContents(ProtoUtil.postStateHash(multiparentBlock))
-      _      = finalTuplespace.contains("@{0}!(0)") shouldBe true
-      _      = finalTuplespace.contains("@{1}!(1)") shouldBe true
-      result = finalTuplespace.contains("@{2}!(2)") shouldBe true
+      _ = pendingUntilFixed {
+        finalTuplespace.contains("@{0}!(0)") shouldBe true
+        finalTuplespace.contains("@{1}!(1)") shouldBe true
+        finalTuplespace.contains("@{2}!(2)") shouldBe true
+      }
 
       _ = nodes.foreach(_.tearDown())
-    } yield result
+    } yield ()
   }
 
   //todo we need some genenis Contract to pass this test
@@ -361,10 +365,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 //    val block1Status = nodes(0).casperEff.addBlock(block1)
 //    nodes.foreach(_.receive) //send to all peers
 
-  // todo once adding the bonding contract, we need to bring back this test
-  ignore should "allow bonding via the faucet" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
-    import node.casperEff
+  it should "allow bonding via the faucet" in effectTest {
+    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head, bonds = bonds)
+    import node.{casperEff, logEff}
 
     implicit val runtimeManager = node.runtimeManager
     val (sk, pk)                = Ed25519.newKeyPair
@@ -389,23 +392,28 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       createBlockResult2 <- casperEff.deploy(bondingDeploy) *> casperEff.createBlock
       Created(block2)    = createBlockResult2
       block2Status       <- casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
-      oldBonds           = block1.getBody.getState.bonds
-      newBonds           = block2.getBody.getState.bonds
-      _                  = block1Status shouldBe Valid
-      _                  = block2Status shouldBe Valid
-      result             = (oldBonds.size + 1) shouldBe newBonds.size
+
+      _        = logEff.warns shouldBe empty
+      oldBonds = block1.getBody.getState.bonds
+      newBonds = block2.getBody.getState.bonds
+      _        = block1Status shouldBe Valid
+      _        = block2Status shouldBe Valid
+      // Need bonding to be implemented and the bonding code to actually do something.
+      _ = pendingUntilFixed {
+        (oldBonds.size + 1) shouldBe newBonds.size
+      }
 
       _ = node.tearDown()
-    } yield result
+    } yield ()
   }
-  // todo once adding the bonding contract, we need to bring back this test
-  ignore should "not fail if the forkchoice changes after a bonding event" in {
+
+  it should "not fail if the forkchoice changes after a bonding event" in {
     val localValidators = validatorKeys.take(3)
     val localBonds      = localValidators.map(Ed25519.toPublic).zip(List(10L, 30L, 5000L)).toMap
     val localGenesis =
       buildGenesis(Nil, localBonds, 1L, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
     for {
-      nodes <- HashSetCasperTestNode.networkEff(localValidators, localGenesis)
+      nodes <- HashSetCasperTestNode.networkEff(localValidators, localGenesis, bonds = bonds)
 
       rm          = nodes.head.runtimeManager
       (sk, pk)    = Ed25519.newKeyPair
@@ -479,10 +487,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  //Todo this is blocked by ApprovedBlockReceivedHandler, and ApprovedBlockReceivedHandler is blocked by RuntimeManager.replayComputeState
-  ignore should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
+  it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
     for {
-      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis, bonds = bonds)
       deployDatas <- (0 to 2).toList
                       .traverse[Effect, DeployData](i => ProtoUtil.basicDeployData[Effect](i))
       deployPrim0 = deployDatas(1)
@@ -538,10 +545,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  //Todo this is blocked by ApprovedBlockReceivedHandler, and ApprovedBlockReceivedHandler is blocked by RuntimeManager.replayComputeState
-  ignore should "ask peers for blocks it is missing" in {
+  it should "ask peers for blocks it is missing" in {
     for {
-      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis, bonds = bonds)
       deployDatas = Vector(
         "for(_ <- @1){ Nil } | @1!(1)",
         "@2!(2)"
@@ -613,9 +619,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
    *  f2 has in its justifications list c2. This should be handled properly.
    *
    */
-  ignore should "ask peers for blocks it is missing and add them" in effectTest {
+  it should "ask peers for blocks it is missing and add them" in effectTest {
     //TODO: figure out a way to get wasm into deploys for tests
-    val deployDatasFs = Vector.empty[() => DeployData]
+    val deployDatasFs = Vector[() => DeployData](
+      () => ProtoUtil.sourceDeploy("1", System.currentTimeMillis, Integer.MAX_VALUE),
+      () => ProtoUtil.sourceDeploy("2", System.currentTimeMillis, Integer.MAX_VALUE)
+    )
 
     def deploy(node: HashSetCasperTestNode[Effect], dd: DeployData): Effect[BlockMessage] =
       for {
@@ -652,7 +661,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       } yield ()
 
     for {
-      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis, bonds = bonds)
 
       _ <- stepSplit(nodes) // blocks a1 a2
       _ <- stepSplit(nodes) // blocks b1 b2
@@ -666,6 +675,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
       // this block will be propagated to all nodes and force nodes(2) to ask for missing blocks.
       br <- deploy(nodes(0), deployDatasFs(0).apply()) // block h1
+      _  <- nodes(0).casperEff.contains(br) shouldBeF true
 
       _ <- List.fill(22)(propagate(nodes)).toList.sequence // force the network to communicate
 
@@ -711,11 +721,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  // todo this is blocked by ApprovedBlockReceivedHandler, and ApprovedBlockReceivedHandler is blocked by RuntimeManager.replayComputeState
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
-  ignore should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
+  it should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
     for {
-      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
+      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis, bonds = bonds)
       deployDatas <- (0 to 5).toList.traverse[Effect, DeployData](ProtoUtil.basicDeployData[Effect])
 
       // Creates a pair that constitutes equivocation blocks
@@ -841,7 +850,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  // todo Once we have implemented computeBond, bring this test back
   ignore should "handle a long chain of block requests appropriately" in effectTest {
     for {
       nodes <- HashSetCasperTestNode.networkEff(
@@ -888,7 +896,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  // todo bring back this function once we implement the blocking functions in RuntimeManager
   ignore should "increment last finalized block as appropriate in round robin" in effectTest {
     val stake      = 10L
     val equalBonds = validators.map(_ -> stake).toMap
@@ -988,8 +995,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     }
   }
 
-  // Todo this is blocked by ApprovedBlockReceivedHandler, and ApprovedBlockReceivedHandler is blocked by RuntimeManager.replayComputeState. Now there are no deploys in the body
-  ignore should "succeed if given enough gas for deploy" in effectTest {
+  it should "succeed if given enough gas for deploy" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Effect]

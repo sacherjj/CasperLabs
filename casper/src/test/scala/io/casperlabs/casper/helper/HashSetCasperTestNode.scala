@@ -55,6 +55,7 @@ class HashSetCasperTestNode[F[_]](
     val blockDagDir: Path,
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
+    bonds: Map[Array[Byte], Long],
     shardId: String = "casperlabs"
 )(
     implicit
@@ -77,7 +78,9 @@ class HashSetCasperTestNode[F[_]](
 
   val casperSmartContractsApi = ExecutionEngineService.noOpApi[F]()
 
-  val runtimeManager                 = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
+  val runtimeManager = RuntimeManager
+    .fromExecutionEngineService(casperSmartContractsApi)
+    .withTestBonds(bonds)
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
@@ -143,7 +146,8 @@ object HashSetCasperTestNode {
   def standaloneF[F[_]](
       genesis: BlockMessage,
       sk: Array[Byte],
-      storageSize: Long = 1024L * 1024 * 10
+      storageSize: Long = 1024L * 1024 * 10,
+      bonds: Map[Array[Byte], Long] = Map.empty
   )(
       implicit
       errorHandler: ErrorHandler[F],
@@ -188,7 +192,8 @@ object HashSetCasperTestNode {
         storageSize,
         blockDagDir,
         blockStoreDir,
-        blockProcessingLock
+        blockProcessingLock,
+        bonds
       )(
         concurrentF,
         blockStore,
@@ -200,10 +205,16 @@ object HashSetCasperTestNode {
       result <- node.initialize.map(_ => node)
     } yield result
   }
-  def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
+
+  def standaloneEff(
+      genesis: BlockMessage,
+      sk: Array[Byte],
+      storageSize: Long = 1024L * 1024 * 10,
+      bonds: Map[Array[Byte], Long] = Map.empty
+  )(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
-    standaloneF[Effect](genesis, sk, storageSize)(
+    standaloneF[Effect](genesis, sk, storageSize, bonds)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
       ToAbstractContext[Effect]
@@ -212,7 +223,8 @@ object HashSetCasperTestNode {
   def networkF[F[_]](
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024 * 10
+      storageSize: Long = 1024L * 1024 * 10,
+      bonds: Map[Array[Byte], Long] = Map.empty
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
@@ -271,7 +283,7 @@ object HashSetCasperTestNode {
                 blockDagDir,
                 blockStoreDir,
                 semaphore,
-                "casperlabs"
+                bonds
               )(
                 concurrentF,
                 blockStore,
@@ -305,12 +317,14 @@ object HashSetCasperTestNode {
           }
     } yield nodes
   }
+
   def networkEff(
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024 * 10
+      storageSize: Long = 1024L * 1024 * 10,
+      bonds: Map[Array[Byte], Long] = Map.empty
   ): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
-    networkF[Effect](sks, genesis, storageSize)(
+    networkF[Effect](sks, genesis, storageSize, bonds)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
       ToAbstractContext[Effect]

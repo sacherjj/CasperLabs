@@ -392,8 +392,7 @@ class ValidateTest
                        _ <- Validate.parents[Task](b8, b0, dag)
                        _ <- Validate.parents[Task](b9, b0, dag)
 
-                       // Todo Once we bring back RuntimeManger.replayComputeState, the size of warn should be changed back 3
-                       _ = log.warns should have size (4)
+                       _ = log.warns should have size (3)
                        result = log.warns.forall(
                          _.contains("block parents did not match estimate based on justification")
                        ) should be(
@@ -580,13 +579,14 @@ class ValidateTest
       val storageDirectory        = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long       = 1024L * 1024
       val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-      val runtimeManager          = RuntimeManager.fromExecutionEngineService[Task](casperSmartContractsApi)
-      implicit val log            = new LogStub[Task]
+      val runtimeManager = RuntimeManager
+        .fromExecutionEngineService[Task](casperSmartContractsApi)
+        .withTestBonds(bonds)
+      implicit val log = new LogStub[Task]
       for {
         dag               <- blockDagStorage.getRepresentation
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
         _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
-        _                 = cancelUntilFixed("FIXME: Implement bonds!")
         modifiedBonds     = Seq.empty[Bond]
         modifiedPostState = genesis.getBody.getState.withBonds(modifiedBonds)
         modifiedBody      = genesis.getBody.withState(modifiedPostState)

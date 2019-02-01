@@ -428,19 +428,26 @@ object Validate {
       case hashes                   => hashes
     }
 
+    def printHashes(hashes: Iterable[ByteString]) =
+      hashes.map(PrettyPrinter.buildString(_)).mkString("[", ", ", "]")
+
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
       estimate             <- Estimator.tips[F](dag, genesis.blockHash, latestMessagesHashes)
+      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(estimate.map(_.blockHash))}")
       computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
       computedParentHashes = computedParents.map(_.blockHash)
+      _                    <- Log[F].debug(s"Expected parents are ${printHashes(computedParentHashes)}")
+      _                    <- Log[F].debug(s"Block parents are ${printHashes(parentHashes)}")
       status <- if (parentHashes == computedParentHashes)
                  Applicative[F].pure(Right(Valid))
-               else
+               else {
                  for {
                    _ <- Log[F].warn(
-                         ignore(b, "block parents did not match estimate based on justification.")
+                         ignore(b, s"block parents did not match estimate based on justification.")
                        )
                  } yield Left(InvalidParents)
+               }
     } yield status
   }
 
@@ -603,36 +610,28 @@ object Validate {
     }
   }
 
-  def bondsCache[F[_]: Applicative: Log](
+  def bondsCache[F[_]: Monad: Log](
       b: BlockMessage,
       runtimeManager: RuntimeManager[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
-    Log[F].debug("FIXME: Implement bonds!") *>
-      Applicative[F].pure[Either[InvalidBlock, ValidBlock]](Right(Valid))
-    // TODO: bring back when global state includes the bonds
-    // ProtoUtil.tuplespace(b) match {
-    //   case Some(tuplespaceHash) =>
-    //     Try(runtimeManager.computeBonds(tuplespaceHash)) match {
-    //       case Success(computedBonds) =>
-    //         if (bonds.toSet == computedBonds.toSet) {
-    //           Applicative[F].pure(Right(Valid))
-    //         } else {
-    //           for {
-    //             _ <- Log[F].warn(
-    //                   "Bonds in proof of stake contract do not match block's bond cache."
-    //                 )
-    //           } yield Left(InvalidBondsCache)
-    //         }
-    //       case Failure(ex: Throwable) =>
-    //         for {
-    //           _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
-    //         } yield Left(InvalidBondsCache)
-    //     }
-    //   case None =>
-    //     for {
-    //       _ <- Log[F].warn(s"Block ${PrettyPrinter.buildString(b)} is missing a tuplespace hash.")
-    //     } yield Left(InvalidBondsCache)
-    // }
+    ProtoUtil.tuplespace(b) match {
+      case Some(tuplespaceHash) =>
+        runtimeManager.computeBonds(tuplespaceHash) flatMap { computedBonds =>
+          if (bonds.toSet == computedBonds.toSet) {
+            Applicative[F].pure(Right(Valid))
+          } else {
+            for {
+              _ <- Log[F].warn(
+                    "Bonds in proof of stake contract do not match block's bond cache."
+                  )
+            } yield Left(InvalidBondsCache)
+          }
+        }
+      case None =>
+        for {
+          _ <- Log[F].warn(s"Block ${PrettyPrinter.buildString(b)} is missing a tuplespace hash.")
+        } yield Left(InvalidBondsCache)
+    }
   }
 }

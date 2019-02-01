@@ -135,12 +135,18 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
             case _ =>
               reAttemptBuffer // reAttempt for any status that resulted in the adding of the block into the view
           }
-      estimates                     <- estimator(dag)
+      estimates <- estimator(dag)
+      _ <- Log[F].debug(
+            s"Tip estimates: ${estimates.map(x => PrettyPrinter.buildString(x.blockHash)).mkString(", ")}"
+          )
       tip                           = estimates.head
       _                             <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
       lastFinalizedBlockHash        <- lastFinalizedBlockHashContainer.get
       updatedLastFinalizedBlockHash <- updateLastFinalizedBlock(dag, lastFinalizedBlockHash)
       _                             <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
+      _ <- Log[F].info(
+            s"New last finalized block hash is ${PrettyPrinter.buildString(updatedLastFinalizedBlockHash)}."
+          )
     } yield attempt
 
   private def updateLastFinalizedBlock(
@@ -398,7 +404,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
 
-  def storageContents(hash: StateHash): F[String] = """""".pure[F]
+  def storageContents(hash: StateHash): F[String] =
+    """""".pure[F]
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     for {
