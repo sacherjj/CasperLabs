@@ -4,7 +4,8 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util.zip.CRC32
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
+import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage._
@@ -92,11 +93,11 @@ object BlockDagStorageTestFixture {
 
   val mapSize: Long = 1024L * 1024L * 100L
 
-  def createBlockStorage[F[_]: Sync: Metrics](
+  def createBlockStorage[F[_]: Concurrent: Metrics: Log](
       blockStorageDir: Path
-  ): F[BlockStore[F]] = Sync[F].delay {
-    val environment = env(blockStorageDir, mapSize)
-    LMDBBlockStore.create[F](environment, blockStorageDir)
+  ): F[BlockStore[F]] = {
+    val env = Context.env(blockStorageDir, mapSize)
+    FileLMDBIndexBlockStore.create[F](env, blockStorageDir).map(_.right.get)
   }
 
   def createBlockDagStorage(blockDagStorageDir: Path)(

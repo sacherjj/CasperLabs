@@ -1,17 +1,16 @@
 package io.casperlabs.comm.transport
 
-import java.nio.file._
-
-import cats.implicits._
-import io.casperlabs.comm.{PeerNode, _}
-import io.casperlabs.comm.transport.PacketOps._
+import PacketOps._
+import io.casperlabs.comm._
+import cats._, cats.data._, cats.implicits._
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import monix.execution.{Cancelable, Scheduler}
 import monix.reactive.Observable
 import monix.reactive.observers.Subscriber
-
+import java.nio.file._
 import scala.concurrent.duration._
+import io.casperlabs.catscontrib.Catscontrib._
 
 final case class StreamToPeers(peers: Seq[PeerNode], path: Path, sender: PeerNode)
 
@@ -35,7 +34,7 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
       Task.delay(subject.pushNext(StreamToPeers(peers, file, blob.sender)))
 
     def propose(file: Path): Task[Unit] =
-      push(file).ifM(Task.unit, retry(file))
+      push(file) >>= (_.fold(Task.unit, retry(file)))
 
     def retry(file: Path): Task[Unit] =
       Task

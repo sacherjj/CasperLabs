@@ -3,23 +3,23 @@ package io.casperlabs.casper.util.rholang
 import cats.effect.Concurrent
 import cats.syntax.applicative._
 import cats.syntax.apply._
+import cats.syntax.either._
 import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.ipc.{CommutativeEffects, ExecutionEffect, Deploy => IPCDeploy}
-import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.models._
 import io.casperlabs.shared.{Log, LogSource}
-import cats.syntax.either._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import monix.eval.Task
-import monix.execution.Scheduler
 
 class RuntimeManager[F[_]: Concurrent] private (
     val executionEngineService: ExecutionEngineService[F],
     val emptyStateHash: StateHash
 ) {
+  // TODO: This function should return more information than just StateHash.
+  // We need also check whether the cost of execution is the same as one published
+  // by original validator and whether result of running each deploy is the same (failure vs success)
   def replayComputeState(
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],

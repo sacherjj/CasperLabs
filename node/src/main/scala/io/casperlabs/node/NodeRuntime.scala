@@ -8,7 +8,7 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.{BlockDagFileStorage, BlockStore, InMemBlockStore}
+import io.casperlabs.blockstorage.{BlockStore, InMemBlockDagStorage, InMemBlockStore}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.BlockMessage
@@ -29,8 +29,8 @@ import io.casperlabs.node.api._
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics._
 import io.casperlabs.p2p.effects._
-import io.casperlabs.shared._
 import io.casperlabs.shared.PathOps._
+import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import kamon._
 import kamon.zipkin.ZipkinReporter
@@ -132,9 +132,8 @@ class NodeRuntime private[node] (
       blockMap,
       Metrics.eitherT(Monad[Task], metrics)
     )
-    blockDagStorage <- BlockDagFileStorage.create[Effect](conf.blockDagStorage)(
+    blockDagStorage <- InMemBlockDagStorage.create[Effect](
                         Concurrent[Effect],
-                        Sync[Effect],
                         Log.eitherTLog(Monad[Task], log),
                         blockStore
                       )
@@ -227,12 +226,13 @@ class NodeRuntime private[node] (
                              .toEffect
 
       prometheusReporter = new NewPrometheusReporter()
-      prometheusService  = NewPrometheusReporter.service(prometheusReporter)
+      prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
 
       httpServerFiber <- BlazeBuilder[Task]
                           .bindHttp(conf.server.httpPort, "0.0.0.0")
                           .mountService(prometheusService, "/metrics")
                           .mountService(VersionInfo.service, "/version")
+                          .mountService(StatusInfo.service, "/status")
                           .resource
                           .use(_ => Task.never[Unit])
                           .start

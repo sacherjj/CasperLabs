@@ -118,11 +118,11 @@ object Connect {
       connections      <- ConnectionsCell[F].read
       tout             <- RPConfAsk[F].reader(_.defaultTimeout)
       peers            <- NodeDiscovery[F].peers.map(p => (p.toSet -- connections).toList)
-      responses        <- peers.traverse(conn(_, tout).attempt)
+      responses        <- peers.traverse(peer => ErrorHandler[F].attempt(conn(peer, tout)))
       peersAndResonses = peers.zip(responses)
       _ <- peersAndResonses.traverse {
             case (peer, Left(error)) =>
-              Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.getMessage}")
+              Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
             case (peer, Right(_)) =>
               Log[F].info(s"Connected to ${peer.toAddress}.")
           }

@@ -1,5 +1,4 @@
 import Dependencies._
-import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
 
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
@@ -76,6 +75,17 @@ lazy val shared = (project in file("shared"))
     )
   )
 
+lazy val graphz = (project in file("graphz"))
+  .settings(commonSettings: _*)
+  .settings(
+    version := "0.1",
+    libraryDependencies ++= commonDependencies ++ Seq(
+      catsCore,
+      catsEffect,
+      catsMtl
+    )
+  ).dependsOn(shared)
+
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(
@@ -93,6 +103,7 @@ lazy val casper = (project in file("casper"))
     blockStorage % "compile->compile;test->test",
     comm         % "compile->compile;test->test",
     shared       % "compile->compile;test->test",
+		graphz,
     crypto,
     models
   )
@@ -156,7 +167,7 @@ lazy val models = (project in file("models"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(crypto)
+  .dependsOn(crypto, shared % "compile->compile;test->test")
 
 val nodeAndClientVersion = "0.0"
 
@@ -291,7 +302,7 @@ lazy val blockStorage = (project in file("block-storage"))
       catsMtl
     )
   )
-  .dependsOn(shared, models)
+  .dependsOn(shared, models % "compile->compile;test->test")
 
 lazy val smartContracts = (project in file("smart-contracts"))
   .settings(commonSettings: _*)
@@ -379,6 +390,7 @@ lazy val casperlabs = (project in file("."))
     casper,
     comm,
     crypto,
+    graphz,
     models,
     node,
     shared,

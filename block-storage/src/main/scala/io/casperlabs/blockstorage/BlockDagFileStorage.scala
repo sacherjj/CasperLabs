@@ -1,29 +1,28 @@
 package io.casperlabs.blockstorage
 
 import java.io._
-import java.nio.{BufferUnderflowException, ByteBuffer}
 import java.nio.file.{Files, Path, StandardCopyOption}
+import java.nio.{BufferUnderflowException, ByteBuffer}
 import java.util.stream.Collectors
 
-import cats.{Id, Monad}
-import cats.implicits._
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.Monad
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.{Concurrent, Resource, Sync}
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.errors._
 import io.casperlabs.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, parentHashes}
-import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import io.casperlabs.blockstorage.util.byteOps._
+import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.{Log, LogSource}
 
+import scala.collection.JavaConverters._
 import scala.ref.WeakReference
 import scala.util.matching.Regex
-import collection.JavaConverters._
 
 final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore] private (
     lock: Semaphore[F],
@@ -644,14 +643,14 @@ object BlockDagFileStorage {
                      }) {
                    sortedCheckpoints.pure[F]
                  } else {
-                   Sync[F].raiseError(CheckpointsAreNotConsecutive(sortedCheckpoints))
+                   Sync[F].raiseError(CheckpointsAreNotConsecutive(sortedCheckpoints.map(_.path)))
                  }
                } else {
-                 Sync[F].raiseError(CheckpointsDoNotStartFromZero(sortedCheckpoints))
+                 Sync[F].raiseError(CheckpointsDoNotStartFromZero(sortedCheckpoints.map(_.path)))
                }
     } yield result
 
-  def create[F[_]: Concurrent: Sync: Log: BlockStore](
+  def create[F[_]: Concurrent: Log: BlockStore](
       config: Config
   ): F[BlockDagFileStorage[F]] =
     for {

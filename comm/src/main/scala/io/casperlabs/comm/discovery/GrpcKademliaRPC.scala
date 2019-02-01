@@ -141,16 +141,17 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       pingHandler: PeerNode => Task[Unit],
       lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
   ) extends KademliaGrpcMonix.KademliaRPCService {
+
     def sendLookup(lookup: Lookup): Task[LookupResponse] = {
       val id               = lookup.id.toByteArray
       val sender: PeerNode = toPeerNode(lookup.sender.get)
       lookupHandler(sender, id)
         .map(peers => LookupResponse().withNodes(peers.map(node)))
     }
+
     def sendPing(ping: Ping): Task[Pong] = {
       val sender: PeerNode = toPeerNode(ping.sender.get)
       pingHandler(sender).as(Pong())
     }
   }
-
 }

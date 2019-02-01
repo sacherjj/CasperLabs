@@ -7,7 +7,7 @@ object ProcessedDeployUtil {
   def toInternal(pd: ProcessedDeploy): Option[InternalProcessedDeploy] =
     for {
       d <- pd.deploy
-      c = 1.0
+      c = pd.cost
       s = if (pd.errored) UnknownFailure else Succeeded
     } yield InternalProcessedDeploy(d, c, s)
 
@@ -15,6 +15,7 @@ object ProcessedDeployUtil {
     case InternalProcessedDeploy(deploy, cost, status) =>
       ProcessedDeploy(
         deploy = Some(deploy),
+        cost = cost,
         errored = status.isFailed
       )
   }
