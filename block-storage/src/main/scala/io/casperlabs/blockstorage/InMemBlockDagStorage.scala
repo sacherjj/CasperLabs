@@ -1,17 +1,20 @@
 package io.casperlabs.blockstorage
-import cats.Monad
-import cats.effect.{Concurrent, Sync}
+
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.util.BlockMessageUtil.parentHashes
+import io.casperlabs.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import io.casperlabs.blockstorage.util.TopologicalSortUtil
 import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.shared.Log
 
 import scala.collection.immutable.HashSet
 
-final class InMemBlockDagStorage[F[_]: Monad: Sync](
+final class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
@@ -25,45 +28,32 @@ final class InMemBlockDagStorage[F[_]: Monad: Sync](
       topoSortVector: Vector[Vector[BlockHash]]
   ) extends BlockDagRepresentation[F] {
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
-      Sync[F].delay { childMap.get(blockHash) }
-
+      childMap.get(blockHash).pure[F]
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
-      Sync[F].delay { dataLookup.get(blockHash) }
-
+      dataLookup.get(blockHash).pure[F]
     def contains(blockHash: BlockHash): F[Boolean] =
-      Sync[F].delay { dataLookup.contains(blockHash) }
-
+      dataLookup.contains(blockHash).pure[F]
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
-      Sync[F].delay { topoSortVector.drop(startBlockNumber.toInt) }
-
+      topoSortVector.drop(startBlockNumber.toInt).pure[F]
     def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
-      Sync[F].delay { topoSortVector.takeRight(tailLength) }
-
+      topoSortVector.takeRight(tailLength).pure[F]
     def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
       topoSort(startBlockNumber).map { topologicalSorting =>
         val order = topologicalSorting.flatten.zipWithIndex.toMap
         Ordering.by(b => order(b.blockHash))
       }
-
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
-      Sync[F].delay { latestMessagesMap.get(validator) }
-
+      latestMessagesMap.get(validator).pure[F]
     def latestMessage(validator: Validator): F[Option[BlockMetadata]] =
-      latestMessageHash(validator).flatMap {
-        case Some(blockHash) => lookup(blockHash)
-        case None            => Sync[F].pure(None)
-      }
-
+      latestMessagesMap.get(validator).flatTraverse(lookup)
     def latestMessageHashes: F[Map[Validator, BlockHash]] =
-      Sync[F].delay { latestMessagesMap }
-
+      latestMessagesMap.pure[F]
     def latestMessages: F[Map[Validator, BlockMetadata]] =
-      for {
-        latestMessagesMapList <- Sync[F].delay(latestMessagesMap.toList)
-        latestMessages <- latestMessagesMapList.traverse {
-                           case (validator, hash) => lookup(hash).map(validator -> _.get)
-                         }
-      } yield latestMessages.toMap
+      latestMessagesMap.toList
+        .traverse {
+          case (validator, hash) => lookup(hash).map(validator -> _.get)
+        }
+        .map(_.toMap)
   }
 
   override def getRepresentation: F[BlockDagRepresentation[F]] =
@@ -86,10 +76,30 @@ final class InMemBlockDagStorage[F[_]: Monad: Sync](
                 case (acc, p) =>
                   val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
                   acc.updated(p, currChildren + block.blockHash)
-            }
+              }
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
-      _ <- latestMessagesRef.update(_.updated(block.sender, block.blockHash))
+      newValidators = bonds(block)
+        .map(_.validator)
+        .toSet
+        .diff(block.justifications.map(_.validator).toSet)
+      newValidatorsWithSender <- if (block.sender.isEmpty) {
+                                  // Ignore empty sender for special cases such as genesis block
+                                  Log[F].warn(
+                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                  ) *> newValidators.pure[F]
+                                } else if (block.sender.size() == 32) {
+                                  (newValidators + block.sender).pure[F]
+                                } else {
+                                  Sync[F].raiseError[Set[ByteString]](
+                                    BlockSenderIsMalformed(block)
+                                  )
+                                }
+      _ <- latestMessagesRef.update { latestMessages =>
+            newValidatorsWithSender.foldLeft(latestMessages) {
+              case (acc, v) => acc.updated(v, block.blockHash)
+            }
+          }
       _ <- lock.release
     } yield ()
 
@@ -109,7 +119,7 @@ final class InMemBlockDagStorage[F[_]: Monad: Sync](
 }
 
 object InMemBlockDagStorage {
-  def create[F[_]: Monad: Sync: Concurrent]: F[InMemBlockDagStorage[F]] =
+  def create[F[_]: Concurrent: Log: BlockStore]: F[InMemBlockDagStorage[F]] =
     for {
       lock              <- Semaphore[F](1)
       latestMessagesRef <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)

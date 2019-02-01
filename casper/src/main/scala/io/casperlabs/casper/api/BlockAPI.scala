@@ -2,32 +2,26 @@ package io.casperlabs.casper.api
 
 import cats.{Id, Monad}
 import cats.data.StateT
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.mtl._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b512Random
 import io.casperlabs.graphz._
-import io.casperlabs.shared.{Log, SyncLock}
-import monix.execution.Scheduler
-import scodec.Codec
-
-import scala.collection.immutable
-import io.casperlabs.catscontrib._
+import io.casperlabs.shared.Log
 import io.casperlabs.catscontrib.ski._
 
 object BlockAPI {
-
-  private val createBlockLock = new SyncLock
 
   def deploy[F[_]: Monad: MultiParentCasperRef: Log](d: DeployData): F[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
@@ -46,27 +40,38 @@ object BlockAPI {
       )
   }
 
-  def createBlock[F[_]: Sync: MultiParentCasperRef: Log]: F[DeployServiceResponse] =
+  def createBlock[F[_]: Concurrent: MultiParentCasperRef: Log](
+      blockApiLock: Semaphore[F]
+  ): F[DeployServiceResponse] =
     MultiParentCasperRef.withCasper[F, DeployServiceResponse](
-      casper =>
-        // TODO: Use Bracket: See https://github.com/rchain/rchain/pull/1436#discussion_r215520914
-        Monad[F].ifM(Sync[F].delay { createBlockLock.tryLock() })(
-          for {
-            maybeBlock <- casper.createBlock
-            result <- maybeBlock match {
-                       case err: NoBlock =>
-                         DeployServiceResponse(success = false, s"Error while creating block: $err")
-                           .pure[F]
-                       case Created(block) => casper.addBlock(block).map(addResponse(_, block))
-                     }
-            _ <- Sync[F].delay { createBlockLock.unlock() }
-          } yield result,
-          DeployServiceResponse(success = false, "Error: There is another propose in progress.")
-            .pure[F]
-        ),
-      DeployServiceResponse(success = false, "Error: Casper instance not available")
+      casper => {
+        Sync[F].bracket(blockApiLock.tryAcquire) {
+          case true =>
+            for {
+              maybeBlock <- casper.createBlock
+              result <- maybeBlock match {
+                         case err: NoBlock =>
+                           DeployServiceResponse(
+                             success = false,
+                             s"Error while creating block: $err"
+                           ).pure[F]
+                         case Created(block) =>
+                           casper
+                             .addBlock(block, ignoreDoppelgangerCheck[F])
+                             .map(addResponse(_, block))
+                       }
+            } yield result
+          case false =>
+            DeployServiceResponse(success = false, "Error: There is another propose in progress.")
+              .pure[F]
+        } { _ =>
+          blockApiLock.release
+        }
+      },
+      default = DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
+  // FIX: Not used at the moment - in RChain it's being used in method like `getListeningName*`
   private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[IndexedSeq[BlockMessage]] =
@@ -78,7 +83,7 @@ object BlockAPI {
     } yield mainChain
 
   // TOOD extract common code from show blocks
-  def visualizeBlocks[F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def visualizeBlocks[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       d: Option[Int] = None
   ): F[String] = {
 

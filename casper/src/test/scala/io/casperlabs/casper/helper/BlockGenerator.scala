@@ -1,41 +1,33 @@
 package io.casperlabs.casper.helper
 
 import cats._
-import cats.data.StateT
 import cats.effect.Sync
 import cats.implicits._
-import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{
-  BlockDagRepresentation,
-  BlockMetadata,
-  BlockStore,
-  IndexedBlockDagStorage
-}
-import io.casperlabs.blockstorage.util.TopologicalSortUtil
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
+import io.casperlabs.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
-
-import scala.collection.immutable.{HashMap, HashSet}
-import scala.language.higherKinds
 import monix.execution.Scheduler.Implicits.global
 
+import scala.collection.immutable.HashMap
+import scala.language.higherKinds
+
 object BlockGenerator {
-  implicit val timeEff = new LogicalTime[Task]()(Capture.taskCapture)
+  implicit val timeEff = new LogicalTime[Task]()
 
   def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: ToAbstractContext](
       id: Int,
       genesis: BlockMessage,
-      runtimeManager: RuntimeManager[Task]
+      runtimeManager: RuntimeManager[F]
   ): F[BlockMessage] =
     for {
       b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id)
@@ -54,7 +46,7 @@ object BlockGenerator {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[Task]
+      runtimeManager: RuntimeManager[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] =
     for {
       result <- InterpreterUtil

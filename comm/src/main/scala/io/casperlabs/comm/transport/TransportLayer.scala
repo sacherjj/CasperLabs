@@ -8,7 +8,7 @@ import io.casperlabs.comm.rp.ProtocolHelper
 import io.casperlabs.shared._
 import io.casperlabs.comm.protocol.routing._
 
-case class Blob(sender: PeerNode, packet: Packet)
+final case class Blob(sender: PeerNode, packet: Packet)
 
 trait TransportLayer[F[_]] {
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]]

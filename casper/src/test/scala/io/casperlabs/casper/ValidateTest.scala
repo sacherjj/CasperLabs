@@ -580,7 +580,7 @@ class ValidateTest
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long = 1024L * 1024
-      val runtimeManager    = RuntimeManager.fromExecutionEngineService(???)
+      val runtimeManager    = RuntimeManager.fromExecutionEngineService[Task](???)
       for {
         dag               <- blockDagStorage.getRepresentation
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
@@ -620,7 +620,9 @@ class ValidateTest
         result <- Validate.formatOfFields[Task](
                    genesis.withBody(
                      genesis.body.get
-                       .withDeploys(genesis.body.get.deploys)
+                       .withDeploys(
+                         genesis.body.get.deploys
+                       )
                    )
                  ) shouldBeF false
       } yield result

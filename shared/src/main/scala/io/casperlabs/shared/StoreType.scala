@@ -2,15 +2,9 @@ package io.casperlabs.shared
 
 sealed trait StoreType
 object StoreType {
-  case object Mixed extends StoreType {
-    override def toString: String = "mixed"
-  }
-  case object LMDB extends StoreType {
-    override def toString: String = "lmdb"
-  }
-  case object InMem extends StoreType {
-    override def toString: String = "inmem"
-  }
+  case object Mixed extends StoreType
+  case object LMDB  extends StoreType
+  case object InMem extends StoreType
 
   def from(s: String): Option[StoreType] = s match {
     case "mixed" => Some(Mixed)

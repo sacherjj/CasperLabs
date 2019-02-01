@@ -1,10 +1,9 @@
 package io.casperlabs.p2p
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
-
 import cats._
+import cats.effect.Sync
 import cats.implicits._
-
 import io.casperlabs.comm.rp._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError._
@@ -17,30 +16,30 @@ import io.casperlabs.comm.protocol.routing._
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {
 
-  class LogicalTime[F[_]: Capture] extends Time[F] {
+  class LogicalTime[F[_]: Sync] extends Time[F] {
     var clock: Long = 0
 
-    def currentMillis: F[Long] = Capture[F].capture {
+    def currentMillis: F[Long] = Sync[F].delay {
       this.clock = clock + 1
       clock
     }
 
-    def nanoTime: F[Long] = Capture[F].capture {
+    def nanoTime: F[Long] = Sync[F].delay {
       this.clock = clock + 1
       clock
     }
 
-    def sleep(duration: FiniteDuration): F[Unit] = Capture[F].capture(())
+    def sleep(duration: FiniteDuration): F[Unit] = Sync[F].delay(())
 
     def reset(): Unit = this.clock = 0
   }
 
-  class NodeDiscoveryStub[F[_]: Capture]() extends NodeDiscovery[F] {
+  class NodeDiscoveryStub[F[_]: Sync]() extends NodeDiscovery[F] {
 
     var nodes: List[PeerNode] = List.empty[PeerNode]
     def reset(): Unit =
       nodes = List.empty[PeerNode]
-    def peers: F[Seq[PeerNode]] = Capture[F].capture {
+    def peers: F[Seq[PeerNode]] = Sync[F].delay {
       nodes
     }
     def discover: F[Unit]                                          = ???
@@ -56,7 +55,7 @@ object EffectsTestInstances {
       RPConf(local, Some(local), defaultTimeout, clearConnections)
     )
 
-  class TransportLayerStub[F[_]: Capture: Applicative] extends TransportLayer[F] {
+  class TransportLayerStub[F[_]: Sync] extends TransportLayer[F] {
     case class Request(peer: PeerNode, msg: Protocol)
     type Responses = PeerNode => Protocol => CommErr[Protocol]
     var reqresp: Option[Responses]  = None
@@ -73,18 +72,18 @@ object EffectsTestInstances {
     }
 
     def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] =
-      Capture[F].capture {
+      Sync[F].delay {
         requests = requests :+ Request(peer, msg)
         reqresp.get.apply(peer).apply(msg)
       }
 
     def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
-      Capture[F].capture {
+      Sync[F].delay {
         requests = requests :+ Request(peer, msg)
         Right(())
       }
 
-    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] = Capture[F].capture {
+    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] = Sync[F].delay {
       requests = requests ++ peers.map(peer => Request(peer, msg))
       peers.map(_ => Right(()))
     }
@@ -98,7 +97,7 @@ object EffectsTestInstances {
     ): F[Unit] = ???
 
     def disconnect(peer: PeerNode): F[Unit] =
-      Capture[F].capture {
+      Sync[F].delay {
         disconnects = disconnects :+ peer
       }
 

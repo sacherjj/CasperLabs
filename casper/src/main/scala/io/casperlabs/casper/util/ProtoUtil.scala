@@ -73,6 +73,7 @@ object ProtoUtil {
     } yield mainChain
   }
 
+  // TODO: instead of throwing Exception use MonadError.raiseError
   def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
       maybeBlock <- BlockStore[F].get(hash)
@@ -533,4 +534,12 @@ object ProtoUtil {
     */
   def stripDeployData(d: DeployData): DeployData =
     DeployData().withUser(d.user).withTimestamp(d.timestamp)
+
+  def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {
+    val missingParents = parentHashes(b).toSet
+    val missingJustifications = b.justifications
+      .map(_.latestBlockHash)
+      .toSet
+    (missingParents union missingJustifications).toList
+  }
 }

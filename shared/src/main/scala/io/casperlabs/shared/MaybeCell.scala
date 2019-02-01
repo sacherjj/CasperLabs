@@ -1,4 +1,5 @@
 package io.casperlabs.shared
+
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._

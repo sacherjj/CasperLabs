@@ -1,33 +1,26 @@
 package io.casperlabs.casper.util.comm
 
 import cats.effect.concurrent.Ref
-import io.casperlabs.comm.rp.Connect, Connect._
-import io.casperlabs.shared._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.HashSetCasperTest
+import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.helper.HashSetCasperTestNode
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.util.TestTime
+import io.casperlabs.casper.util.comm.ApproveBlockProtocolTest.TestFixture
+import io.casperlabs.casper.{HashSetCasperTest, LastApprovedBlock}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
-import io.casperlabs.comm.rp.Connect
 import io.casperlabs.comm.rp.Connect.Connections
 import io.casperlabs.comm.{Endpoint, NodeIdentifier, PeerNode}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.shared.Log.NOPLog
-import io.casperlabs.shared.{Cell, Time}
+import io.casperlabs.shared.{Cell, _}
 import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
+import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
-import org.scalatest.{FlatSpec, Matchers}
-import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
-import io.casperlabs.casper.util.comm.ApproveBlockProtocolTest.TestFixture
-import io.casperlabs.casper.{HashSetCasperTest, LastApprovedBlock}
-import org.scalatest.{Assertion, FlatSpec, Matchers}
-import io.casperlabs.casper.util.TestTime
-
 import scala.util.Success
 
 class ApproveBlockProtocolTest extends FlatSpec with Matchers {

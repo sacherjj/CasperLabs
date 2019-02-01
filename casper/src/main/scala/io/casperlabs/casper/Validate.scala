@@ -1,24 +1,22 @@
 package io.casperlabs.casper
 
 import cats.effect.Sync
-import cats.{Applicative, Monad}
 import cats.implicits._
+import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.ProtoUtil.bonds
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
-import io.casperlabs.catscontrib.{Capture, ToAbstractContext}
+import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.shared._
-import monix.eval.Task
 import monix.execution.Scheduler
 
-import scala.util.{Failure, Success, Try}
+import scala.util.{Success, Try}
 
 object Validate {
   type PublicKey = Array[Byte]
@@ -558,12 +556,12 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Sync: Log: BlockStore: ToAbstractContext](
+  def transactions[F[_]: Sync: Log: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager[Task]
-  )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
+      runtimeManager: RuntimeManager[F]
+  ): F[Either[BlockStatus, ValidBlock]] =
     Sync[F].pure[Either[BlockStatus, ValidBlock]](Right(Valid))
   // TODO: bring this back when validation works again
   // for {
@@ -605,8 +603,9 @@ object Validate {
     }
   }
 
-  def bondsCache[F[_]: Applicative: Log](b: BlockMessage, runtimeManager: RuntimeManager[Task])(
-      implicit scheduler: Scheduler
+  def bondsCache[F[_]: Applicative: Log](
+      b: BlockMessage,
+      runtimeManager: RuntimeManager[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
     Applicative[F].pure[Either[InvalidBlock, ValidBlock]](Right(Valid))

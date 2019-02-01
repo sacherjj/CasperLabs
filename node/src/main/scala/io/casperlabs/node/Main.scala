@@ -41,11 +41,6 @@ object Main {
         conf.grpcServer.portInternal,
         conf.server.maxMessageSize
       )
-    implicit val executionEngineService: GrpcExecutionEngineService =
-      new GrpcExecutionEngineService(
-        conf.grpcServer.socket,
-        conf.server.maxMessageSize
-      )
 
     implicit val consoleIO: ConsoleIO[Task] = (str: String) => Task(println(str))
 
@@ -58,7 +53,6 @@ object Main {
       _ =>
         Task.delay {
           diagnosticsService.close()
-          executionEngineService.close()
           System.exit(1)
         }
     )

@@ -28,9 +28,7 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  private val connections = connectionsCache(clientChannel)
-
-  import connections.cell
+  private val cell = connectionsCache(clientChannel)
 
   def ping(peer: PeerNode): Task[Boolean] =
     for {
@@ -66,7 +64,7 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       f: KademliaRPCServiceStub => Task[A]
   ): Task[A] =
     for {
-      channel <- connections.connection(peer, enforce)
+      channel <- cell.connection(peer, enforce)
       stub    <- Task.delay(KademliaGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
                  case Some(_) => disconnect(peer)
@@ -143,16 +141,17 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       pingHandler: PeerNode => Task[Unit],
       lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
   ) extends KademliaGrpcMonix.KademliaRPCService {
+
     def sendLookup(lookup: Lookup): Task[LookupResponse] = {
       val id               = lookup.id.toByteArray
       val sender: PeerNode = toPeerNode(lookup.sender.get)
       lookupHandler(sender, id)
         .map(peers => LookupResponse().withNodes(peers.map(node)))
     }
+
     def sendPing(ping: Ping): Task[Pong] = {
       val sender: PeerNode = toPeerNode(ping.sender.get)
       pingHandler(sender).as(Pong())
     }
   }
-
 }

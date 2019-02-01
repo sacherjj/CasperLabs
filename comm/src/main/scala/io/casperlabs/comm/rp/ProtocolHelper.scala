@@ -86,4 +86,5 @@ object ProtocolHelper {
         .withTypeId(typeId)
         .withContent(ProtocolHelper.toProtocolBytes(content))
     )
+
 }

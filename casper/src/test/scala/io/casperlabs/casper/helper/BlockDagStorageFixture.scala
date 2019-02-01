@@ -4,8 +4,8 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util.zip.CRC32
 
-import cats.Id
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
+import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage._
@@ -14,11 +14,11 @@ import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared.Log
-import org.scalatest.{BeforeAndAfter, Suite}
 import io.casperlabs.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.lmdbjava.{Env, EnvFlags}
+import org.scalatest.{BeforeAndAfter, Suite}
 
 trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
   val scheduler = Scheduler.fixedPool("block-dag-storage-fixture-scheduler", 4)
@@ -32,10 +32,13 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
       case (blockDagStorageDir, blockStorageDir) =>
         implicit val metrics = new MetricsNOP[Task]()
         implicit val log     = new Log.NOPLog[Task]()
-        implicit val blockStore =
-          BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
         for {
-          blockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
+          blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
+          blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
+                              metrics,
+                              log,
+                              blockStore
+                            )
           indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
           result                 <- f(blockStore)(indexedBlockDagStorage)
         } yield result
@@ -90,11 +93,11 @@ object BlockDagStorageTestFixture {
 
   val mapSize: Long = 1024L * 1024L * 100L
 
-  def createBlockStorage[F[_]: Sync: Metrics](
+  def createBlockStorage[F[_]: Concurrent: Metrics: Log](
       blockStorageDir: Path
-  ): BlockStore[F] = {
-    val environment = env(blockStorageDir, mapSize)
-    LMDBBlockStore.create[F](environment, blockStorageDir)
+  ): F[BlockStore[F]] = {
+    val env = Context.env(blockStorageDir, mapSize)
+    FileLMDBIndexBlockStore.create[F](env, blockStorageDir).map(_.right.get)
   }
 
   def createBlockDagStorage(blockDagStorageDir: Path)(

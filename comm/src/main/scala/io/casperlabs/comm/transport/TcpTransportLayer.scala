@@ -40,7 +40,7 @@ class TcpTransportLayer(
 ) extends TransportLayer[Task] {
 
   private val DefaultSendTimeout = 5.seconds
-  private val connections        = connectionsCache(clientChannel)
+  private val cell               = connectionsCache(clientChannel)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -48,8 +48,6 @@ class TcpTransportLayer(
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
   private val streamObservable = new StreamObservable(clientQueueSize, tempFolder)
-
-  import connections.cell
 
   private lazy val serverSslContext: SslContext =
     try {
@@ -110,7 +108,7 @@ class TcpTransportLayer(
       f: TransportLayerStub => Task[A]
   ): Task[A] =
     for {
-      channel <- connections.connection(peer, enforce)
+      channel <- cell.connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
                  case Some(_) => disconnect(peer)
@@ -190,7 +188,7 @@ class TcpTransportLayer(
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
     innerBroadcast(peers, msg)
 
-  def streamToPeer(peer: PeerNode, path: Path, sender: PeerNode): Task[Unit] = {
+  private def streamToPeer(peer: PeerNode, path: Path, sender: PeerNode): Task[Unit] = {
 
     def delay[A](a: => Task[A]): Task[A] =
       Task.defer(a).delayExecution(1.second)
@@ -234,6 +232,7 @@ class TcpTransportLayer(
       dispatch: Protocol => Task[CommunicationResponse],
       handleStreamed: Blob => Task[Unit]
   ): Task[Unit] = {
+
     val dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
       case Tell(protocol) => dispatch(protocol).attemptAndLog.void
@@ -311,21 +310,4 @@ class TcpTransportLayer(
       else shutdownServer *> sendShutdownMessages
     }
   }
-}
-
-object TcpTransportLayer {
-  type Connection          = ManagedChannel
-  type Connections         = Map[PeerNode, Connection]
-  type TransportCell[F[_]] = Cell[F, TransportState]
-}
-
-case class TransportState(
-    connections: TcpTransportLayer.Connections = Map.empty,
-    server: Option[Cancelable] = None,
-    clientQueue: Option[Cancelable] = None,
-    shutdown: Boolean = false
-)
-
-object TransportState {
-  def empty: TransportState = TransportState()
 }

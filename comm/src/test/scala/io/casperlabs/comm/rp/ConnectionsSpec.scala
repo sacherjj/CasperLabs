@@ -1,14 +1,18 @@
 package io.casperlabs.comm.rp
 
-import Connect._, Connections._
+import Connect._
+import Connections._
 import io.casperlabs.shared._
-import io.casperlabs.comm._, CommError._
+import io.casperlabs.comm._
+import CommError._
 import io.casperlabs.p2p.effects._
+import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.metrics.Metrics
-import cats._, cats.data._, cats.implicits._
-import io.casperlabs.catscontrib._, Catscontrib._, ski._
+import io.casperlabs.catscontrib._
+import Catscontrib._
+import cats.Id
+import ski._
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.shared.TestOutlaws._
 import org.scalatest._
 
 class ConnectionsSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {

@@ -14,6 +14,7 @@ final class IndexedBlockDagStorage[F[_]: Monad](
     idToBlocksRef: Ref[F, Map[Int, BlockMessage]],
     currentIdRef: Ref[F, Int]
 ) extends BlockDagStorage[F] {
+
   def getRepresentation: F[BlockDagRepresentation[F]] =
     for {
       _      <- lock.acquire

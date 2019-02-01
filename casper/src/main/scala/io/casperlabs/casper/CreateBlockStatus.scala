@@ -1,5 +1,7 @@
 package io.casperlabs.casper
 
+import cats.Applicative
+import cats.implicits._
 import io.casperlabs.casper.protocol.BlockMessage
 
 sealed trait CreateBlockStatus

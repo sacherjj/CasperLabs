@@ -2,20 +2,15 @@ package io.casperlabs.casper.util.comm
 
 import io.casperlabs.casper.HashSetCasperTest
 import io.casperlabs.casper.genesis.contracts._
+import io.casperlabs.casper.helper.HashSetCasperTestNode
 import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
-import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.rholang.RuntimeManager
-import io.casperlabs.catscontrib.Capture._
+import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.transport
 import io.casperlabs.crypto.signatures.Ed25519
-import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.smartcontracts.ExecutionEngineService
-import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
-import io.casperlabs.shared.TestOutlaws._
 
 class BlockApproverProtocolTest extends FlatSpec with Matchers {
   import BlockApproverProtocolTest._
@@ -32,7 +27,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
         import node._
 
         for {
-          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, unapproved)
+          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, unapproved, runtimeManager)
 
           _ = node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
           _ = node.logEff.warns.isEmpty should be(true)
@@ -55,8 +50,16 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
         import node._
 
         for {
-          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, differentUnapproved1)
-          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, differentUnapproved2)
+          _ <- approver.unapprovedBlockPacketHandler[Effect](
+                node.local,
+                differentUnapproved1,
+                runtimeManager
+              )
+          _ <- approver.unapprovedBlockPacketHandler[Effect](
+                node.local,
+                differentUnapproved2,
+                runtimeManager
+              )
 
           _      = node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
           queue  <- node.transportLayerEff.msgQueues(node.local).get
@@ -79,10 +82,6 @@ object BlockApproverProtocolTest {
       sk: Array[Byte],
       bonds: Map[Array[Byte], Long]
   ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
-    import monix.execution.Scheduler.Implicits.global
-
-    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-    val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
 
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
@@ -102,7 +101,6 @@ object BlockApproverProtocolTest {
       new BlockApproverProtocol(
         node.validatorId,
         deployTimestamp,
-        runtimeManager,
         bonds,
         wallets,
         1L,

@@ -45,8 +45,8 @@ class InterpreterUtilTest
   private val runtimeDir = Files.createTempDirectory(s"interpreter-util-test")
 
   private val socket = Paths.get(runtimeDir.toString, ".casper-node.sock")
-  implicit val executionEngineService: GrpcExecutionEngineService =
-    new GrpcExecutionEngineService(
+  implicit val executionEngineService: GrpcExecutionEngineService[Task] =
+    new GrpcExecutionEngineService[Task](
       socket,
       4 * 1024 * 1024
     )
@@ -526,7 +526,7 @@ class InterpreterUtilTest
                 ByteString.copyFromUtf8(s),
                 System.currentTimeMillis(),
                 Integer.MAX_VALUE
-            )
+              )
           )
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
@@ -578,7 +578,7 @@ class InterpreterUtilTest
                 ByteString.copyFromUtf8(s),
                 System.currentTimeMillis(),
                 Integer.MAX_VALUE
-            )
+              )
           )
 
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
@@ -604,4 +604,61 @@ class InterpreterUtilTest
         }
       }
   }
+
+  "findMultiParentsBlockHashesForReplay" should "filter out duplicate ancestors of main parent block" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1.0)
+      val b1DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1.0)
+      val b2DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1.0)
+      val b3DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1.0)
+
+      /*
+       * DAG Looks like this:
+       *
+       *           b3
+       *          /  \
+       *        b1    b2
+       *         \    /
+       *         genesis
+       */
+
+      mkRuntimeManager("interpreter-util-test")
+        .use { runtimeManager =>
+          def step(index: Int, genesis: BlockMessage) =
+            for {
+              b1  <- blockDagStorage.lookupByIdUnsafe(index)
+              dag <- blockDagStorage.getRepresentation
+              computeBlockCheckpointResult <- computeBlockCheckpoint(
+                                               b1,
+                                               genesis,
+                                               dag,
+                                               runtimeManager
+                                             )
+              (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
+              result <- injectPostStateHash[Task](
+                         index,
+                         b1,
+                         postB1StateHash,
+                         postB1ProcessedDeploys
+                       )
+            } yield result
+          for {
+            genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
+            b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+            b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+            b3      <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
+            _       <- step(0, genesis)
+            _       <- step(1, genesis)
+            _       <- step(2, genesis)
+            dag     <- blockDagStorage.getRepresentation
+            blockHashes <- InterpreterUtil.findMultiParentsBlockHashesForReplay(
+                            Seq(b1, b2),
+                            dag
+                          )
+            _ = withClue("Main parent hasn't been filtered out: ") { blockHashes.size shouldBe (1) }
+
+          } yield ()
+        }
+  }
+
 }
