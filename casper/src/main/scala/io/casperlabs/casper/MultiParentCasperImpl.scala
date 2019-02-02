@@ -166,11 +166,9 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
                             lastFinalizedBlockHash.pure[F]
                           } else {
                             finalizedChildren.traverse(removeDeploysInFinalizedBlock) *>
-                              updateLastFinalizedBlock(
-                                dag,
-                                // FIXME: This is what happened with findM, but is it going to cover all paths?
-                                finalizedChildren.head
-                              )
+                              finalizedChildren
+                                .traverse(updateLastFinalizedBlock(dag, _))
+                                .map(_.head)
                           }
     } yield newFinalizedBlock
 
