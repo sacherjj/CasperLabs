@@ -96,7 +96,6 @@ object BlockAPI {
         dag                <- MultiParentCasper[F].blockDag
         maxHeight          <- dag.topoSort(0L).map(_.length - 1)
         depth              = d.getOrElse(maxHeight)
-        startHeight        = math.max(0, maxHeight - depth)
         topoSort           <- dag.topoSortTail(depth)
         lastFinalizedBlock <- MultiParentCasper[F].lastFinalizedBlock
         graph              <- visualizer(topoSort, PrettyPrinter.buildString(lastFinalizedBlock.blockHash))

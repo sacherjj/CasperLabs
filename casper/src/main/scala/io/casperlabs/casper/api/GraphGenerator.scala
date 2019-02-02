@@ -1,18 +1,16 @@
 package io.casperlabs.casper.api
 
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.casper._, Estimator.BlockHash, MultiParentCasperRef.MultiParentCasperRef
+import cats.{Monad, _}
+import cats.effect.Sync
+import cats.implicits._
+import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper._
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.graphz._
 import io.casperlabs.shared.Log
-
-import cats.Monad
-import cats.effect.Sync
-import cats._, cats.data._, cats.implicits._
-import cats.mtl._
-import cats.mtl.implicits._
-import io.casperlabs.catscontrib.Catscontrib._
-import io.casperlabs.catscontrib.ski._
 
 final case class ValidatorBlock(
     blockHash: String,
@@ -56,7 +54,7 @@ object GraphzGenerator {
       config: GraphConfig
   ): F[G[Graphz[G]]] =
     for {
-      acc <- topoSort.foldM(DagInfo.empty[G])(accumulateDagInfo[F, G](_, _))
+      acc <- topoSort.foldM(DagInfo.empty[G])(accumulateDagInfo[F, G])
     } yield {
 
       val timeseries     = acc.timeseries.reverse
@@ -70,8 +68,7 @@ object GraphzGenerator {
             case (_, blocks) =>
               blocks.get(firstTs).map(_.parentsHashes).getOrElse(List.empty[String])
           }
-          .toSet
-          .toList
+          .distinct
           .sorted
         // draw ancesotrs first
         _ <- allAncestors.traverse(
@@ -119,20 +116,19 @@ object GraphzGenerator {
     for {
       blocks    <- blockHashes.traverse(ProtoUtil.unsafeGetBlock[F])
       timeEntry = blocks.head.getBody.getState.blockNumber
-      validators = blocks.toList.map {
-        case b =>
-          val blockHash       = PrettyPrinter.buildString(b.blockHash)
-          val blockSenderHash = PrettyPrinter.buildString(b.sender)
-          val parents = b.getHeader.parentsHashList.toList
-            .map(PrettyPrinter.buildString)
-          val justifications = b.justifications
-            .map(_.latestBlockHash)
-            .map(PrettyPrinter.buildString)
-            .toSet
-            .toList
-          val validatorBlocks =
-            Map(timeEntry -> ValidatorBlock(blockHash, parents, justifications))
-          Map(blockSenderHash -> validatorBlocks)
+      validators = blocks.toList.map { b =>
+        val blockHash       = PrettyPrinter.buildString(b.blockHash)
+        val blockSenderHash = PrettyPrinter.buildString(b.sender)
+        val parents = b.getHeader.parentsHashList.toList
+          .map(PrettyPrinter.buildString)
+        val justifications = b.justifications
+          .map(_.latestBlockHash)
+          .map(PrettyPrinter.buildString)
+          .toSet
+          .toList
+        val validatorBlocks =
+          Map(timeEntry -> ValidatorBlock(blockHash, parents, justifications))
+        Map(blockSenderHash -> validatorBlocks)
       }
     } yield
       acc.copy(
@@ -156,10 +152,9 @@ object GraphzGenerator {
     validators
       .flatMap(_.values.toList)
       .traverse {
-        case ValidatorBlock(blockHash, parentsHashes, _) => {
+        case ValidatorBlock(blockHash, parentsHashes, _) =>
           parentsHashes
             .traverse(p => g.edge(blockHash, p, constraint = Some(false)))
-        }
       }
       .as(())
 
@@ -170,7 +165,7 @@ object GraphzGenerator {
     validators.values.toList
       .flatMap(_.values.toList)
       .traverse {
-        case ValidatorBlock(blockHash, _, justifications) => {
+        case ValidatorBlock(blockHash, _, justifications) =>
           justifications
             .traverse(
               j =>
@@ -182,8 +177,6 @@ object GraphzGenerator {
                   arrowHead = Some(NoneArrow)
                 )
             )
-
-        }
 
       }
       .as(())
