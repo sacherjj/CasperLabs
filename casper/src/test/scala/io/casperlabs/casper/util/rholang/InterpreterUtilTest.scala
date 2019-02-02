@@ -385,7 +385,7 @@ class InterpreterUtilTest
       Right((_, _, result)) = computeResult
     } yield result
 
-  "computeDeploysCheckpoint" should "aggregate the result of deploying rholang programs within the block" in withStorage {
+  "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
     implicit blockStore =>
       implicit blockDagStorage =>
         //reference costs
