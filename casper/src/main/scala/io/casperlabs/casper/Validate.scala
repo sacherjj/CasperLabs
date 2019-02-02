@@ -437,14 +437,15 @@ object Validate {
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(estimate.map(_.blockHash))}")
       computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
       computedParentHashes = computedParents.map(_.blockHash)
-      _                    <- Log[F].debug(s"Expected parents are ${printHashes(computedParentHashes)}")
-      _                    <- Log[F].debug(s"Block parents are ${printHashes(parentHashes)}")
       status <- if (parentHashes == computedParentHashes)
                  Applicative[F].pure(Right(Valid))
                else {
                  for {
                    _ <- Log[F].warn(
-                         ignore(b, s"block parents did not match estimate based on justification.")
+                         ignore(
+                           b,
+                           s"block parents did not match estimate based on justification. Expected parents are ${printHashes(computedParentHashes)}, got ${printHashes(parentHashes)}."
+                         )
                        )
                  } yield Left(InvalidParents)
                }
