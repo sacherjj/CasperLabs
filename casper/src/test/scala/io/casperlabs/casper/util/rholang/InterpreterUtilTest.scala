@@ -378,7 +378,7 @@ class InterpreterUtilTest
                          }
       computeResult <- computeDeploysCheckpoint[Task](
                         Seq.empty,
-                        deploy.map((_, ExecutionEffect())),
+                        executionResults,
                         dag,
                         runtimeManager
                       )
