@@ -49,7 +49,12 @@ object Configuration {
       case options.showBlocks =>
         ShowBlocks(options.port(), options.host(), options.showBlocks.depth())
       case options.visualizeBlocks =>
-        VisualizeBlocks(options.port(), options.host(), options.visualizeBlocks.depth())
+        VisualizeDag(
+          options.port(),
+          options.host(),
+          options.visualizeBlocks.depth(),
+          options.visualizeBlocks.showJustificationLines()
+        )
     }
   }
 }
