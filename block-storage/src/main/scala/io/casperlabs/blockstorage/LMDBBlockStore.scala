@@ -118,8 +118,6 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 
 object LMDBBlockStore {
 
-  private val MetricNamePrefix = "lmdb-block-store-"
-
   case class Config(
       path: Path,
       mapSize: Long,

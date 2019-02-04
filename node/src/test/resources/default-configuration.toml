@@ -61,7 +61,7 @@ approve-genesis-interval = "1second"
 approve-genesis-duration = "1second"
 deploy-timestamp = 1
 
-[kamon]
+[metrics]
 prometheus = false
 zipkin = false
 sigar = false

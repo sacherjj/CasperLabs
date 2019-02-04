@@ -143,17 +143,17 @@ private[configuration] object Options {
         None,
         None
       )
-      val kamon = ConfigurationSoft.Kamon(
-        options.run.prometheus,
-        options.run.zipkin,
-        options.run.sigar
+      val metrics = ConfigurationSoft.Metrics(
+        options.run.metricsPrometheus,
+        options.run.metricsZipkin,
+        options.run.metricsSigar
       )
 
       val influx = ConfigurationSoft.Influx(
-        options.run.influxHostname,
-        options.run.influxPort,
-        options.run.influxDatabase,
-        options.run.influxProtocol
+        options.run.metricsInfluxHostname,
+        options.run.metricsInfluxPort,
+        options.run.metricsInfluxDatabase,
+        options.run.metricsInfluxProtocol
       )
 
       ConfigurationSoft(
@@ -163,7 +163,7 @@ private[configuration] object Options {
         Some(casper),
         Some(lmdb),
         None,
-        Some(kamon),
+        Some(metrics),
         Some(influx),
         None
       )
@@ -221,7 +221,7 @@ private[configuration] final case class Options(
   banner(
     """
       |Configuration file --config-file can contain tables
-      |[server], [grpc], [lmdb], [casper] and [block-storage].
+      |[server], [grpc], [lmdb], [casper], [tls], [metrics], [influx] and [block-storage].
       |
       |CLI options match TOML keys, example:
       |    --[prefix]-[key-name]=value i.e. --server-host=localhost
@@ -441,24 +441,24 @@ private[configuration] final case class Options(
       descr = s"String. Identifier of the shard this node is connected to.${c(_.shardId)}"
     )
 
-    val prometheus =
+    val metricsPrometheus =
       opt[Flag](descr = "Enable the Prometheus metrics reporter")
 
-    val zipkin =
+    val metricsZipkin =
       opt[Flag](descr = "Enable the Zipkin span reporter")
 
-    val sigar =
+    val metricsSigar =
       opt[Flag](descr = "Enable Sigar host system metrics")
 
-    val influxHostname =
+    val metricsInfluxHostname =
       opt[String](descr = "String. Hostname or IP of the Influx instancfe.")
 
-    val influxDatabase = opt[String](descr = "String. Name of the database in Influx.")
+    val metricsInfluxDatabase = opt[String](descr = "String. Name of the database in Influx.")
 
-    val influxPort =
+    val metricsInfluxPort =
       opt[Int](descr = "Number. Port of the Influx instance.")
 
-    val influxProtocol =
+    val metricsInfluxProtocol =
       opt[String](descr = "Protocol used in Influx.")
   }
   addSubcommand(run)

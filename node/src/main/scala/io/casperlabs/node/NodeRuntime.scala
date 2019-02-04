@@ -240,7 +240,9 @@ class NodeRuntime private[node] (
                           .start
                           .toEffect
 
-      _ <- setupMetrics(prometheusReporter)
+      metrics = new MetricsRuntime[Effect](conf, id)
+      _       <- metrics.setupMetrics(prometheusReporter)
+
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
@@ -391,72 +393,6 @@ class NodeRuntime private[node] (
 
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
     RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
-
-  private def setupMetrics(metricsReporter: MetricReporter): Effect[Unit] =
-    Task.delay {
-      Kamon.reconfigure(
-        ConfigFactory
-          .parseString(buildKamonConf)
-          .withFallback(Kamon.config())
-      )
-
-      if (conf.kamon.influx.isDefined)
-        Kamon.addReporter(new kamon.influxdb.InfluxDBReporter())
-      if (conf.kamon.prometheus) Kamon.addReporter(metricsReporter)
-      if (conf.kamon.zipkin) Kamon.addReporter(new ZipkinReporter())
-
-      Kamon.addReporter(new JmxReporter())
-      SystemMetrics.startCollecting()
-    }.toEffect
-
-  private def buildKamonConf: String = {
-    val authentication = conf.kamon.influx
-      .flatMap(
-        _.authentication
-          .map { auth =>
-            s"""
-           |    authentication {
-           |      user = "${auth.user}"
-           |      password = "${auth.password}"
-           |    }
-           |""".stripMargin
-          }
-      )
-      .getOrElse("")
-
-    val influxConf = conf.kamon.influx
-      .map { influx =>
-        s"""
-         |  influxdb {
-         |    hostname = "${influx.hostname}"
-         |    port     =  ${influx.port}
-         |    database = "${influx.database}"
-         |    protocol = "${influx.protocol}"
-         |    $authentication
-         |  }
-         |""".stripMargin
-      }
-      .getOrElse("")
-
-    s"""
-         |kamon {
-         |  environment {
-         |    service = "rnode"
-         |    instance = "${id.toString}"
-         |  }
-         |  metric {
-         |    tick-interval = 10 seconds
-         |  }
-         |  system-metrics {
-         |    host {
-         |      enabled = ${conf.kamon.sigar}
-         |      sigar-native-folder = ${conf.server.dataDir.resolve("native")}
-         |    }
-         |  }
-         |  $influxConf
-         |}
-         |""".stripMargin
-  }
 }
 
 object NodeRuntime {

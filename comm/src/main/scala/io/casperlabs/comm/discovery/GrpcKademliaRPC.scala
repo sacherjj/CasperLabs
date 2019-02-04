@@ -48,7 +48,6 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
   def lookup(key: Seq[Byte], peer: PeerNode): Task[Seq[PeerNode]] =
     for {
       _      <- Metrics[Task].incrementCounter("protocol-lookup-send")
-      _      <- Metrics[Task].incrementCounter("protocol-lookup-send")
       local  <- peerNodeAsk.ask
       lookup = Lookup().withId(ByteString.copyFrom(key.toArray)).withSender(node(local))
       responseErr <- withClient(peer)(

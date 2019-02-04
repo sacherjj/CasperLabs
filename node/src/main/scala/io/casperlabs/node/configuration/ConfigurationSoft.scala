@@ -20,7 +20,7 @@ case class ConfigurationSoft(
     casper: Option[ConfigurationSoft.Casper],
     lmdb: Option[ConfigurationSoft.LmdbBlockStore],
     blockstorage: Option[ConfigurationSoft.BlockDagFileStorage],
-    kamon: Option[ConfigurationSoft.Kamon],
+    metrics: Option[ConfigurationSoft.Metrics],
     influx: Option[ConfigurationSoft.Influx],
     influxAuth: Option[ConfigurationSoft.InfluxAuth]
 ) {
@@ -101,7 +101,7 @@ private[configuration] object ConfigurationSoft {
       deployTimestamp: Option[Long]
   )
 
-  private[configuration] case class Kamon(
+  private[configuration] case class Metrics(
       prometheus: Option[Boolean],
       zipkin: Option[Boolean],
       sigar: Option[Boolean]

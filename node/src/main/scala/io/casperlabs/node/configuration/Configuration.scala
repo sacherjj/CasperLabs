@@ -19,10 +19,30 @@ final case class Configuration(
     casper: CasperConf,
     blockStorage: LMDBBlockStore.Config,
     blockDagStorage: BlockDagFileStorage.Config,
-    kamon: Kamon
+    kamon: Configuration.Kamon
 )
 
 object Configuration {
+  case class Kamon(
+      prometheus: Boolean,
+      influx: Option[Influx],
+      zipkin: Boolean,
+      sigar: Boolean
+  )
+
+  case class Influx(
+      hostname: String,
+      port: Int,
+      database: String,
+      protocol: String,
+      authentication: Option[InfluxDbAuthentication]
+  )
+
+  case class InfluxDbAuthentication(
+      user: String,
+      password: String
+  )
+
   case class Server(
       host: Option[String],
       port: Int,
@@ -91,9 +111,9 @@ object Configuration {
   ): ValidatedNel[String, Kamon] = {
     val influx = parseInflux(soft).toOption
     (
-      optToValidated(soft.kamon.flatMap(_.prometheus), "Kamon.prometheus"),
-      optToValidated(soft.kamon.flatMap(_.zipkin), "Kamon.zipkin"),
-      optToValidated(soft.kamon.flatMap(_.sigar), "Kamon.sigar")
+      optToValidated(soft.metrics.flatMap(_.prometheus), "Kamon.prometheus"),
+      optToValidated(soft.metrics.flatMap(_.zipkin), "Kamon.zipkin"),
+      optToValidated(soft.metrics.flatMap(_.sigar), "Kamon.sigar")
     ) mapN (Kamon(_, influx, _, _))
   }
 

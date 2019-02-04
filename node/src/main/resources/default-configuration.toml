@@ -61,17 +61,17 @@ approve-genesis-interval = "5seconds"
 approve-genesis-duration = "5minutes"
 #deploy-timestamp =
 
-[kamon]
-prometheus = true
-zipkin = true
-sigar = true
+[metrics]
+prometheus = false
+zipkin = false
+sigar = false
 
-[influx]
-hostname = "0.0.0.0"
-port = 14
-database = "test"
-protocol = "https"
-
-[influx-auth]
-user = "user"
-password = "password"
+#[influx]
+#hostname = "0.0.0.0"
+#port = 14
+#database = "test"
+#protocol = "https"
+#
+#[influx-auth]
+#user = "user"
+#password = "password"

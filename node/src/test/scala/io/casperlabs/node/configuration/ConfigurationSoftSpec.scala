@@ -82,7 +82,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       checkpointsDirPath = Paths.get("test").some,
       latestMessagesLogMaxSizeFactor = 1.some
     )
-    val kamonSettings = Kamon(
+    val kamonSettings = Metrics(
       false.some,
       false.some,
       false.some
@@ -242,7 +242,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       checkpointsDirPath = Paths.get("test2").some,
       latestMessagesLogMaxSizeFactor = 2.some
     )
-    val kamonSettings = Kamon(
+    val kamonSettings = Metrics(
       false.some,
       false.some,
       false.some
@@ -316,13 +316,13 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     List("--tls-certificate", "test3"),
     List("--tls-key", "test3"),
     List("--tls-secure-random-non-blocking"),
-    List("--prometheus"),
-    List("--zipkin"),
-    List("--sigar"),
-    List("--influx-hostname", "localhost"),
-    List("--influx-database", "test"),
-    List("--influx-port", "1337"),
-    List("--influx-protocol", "ssh")
+    List("--metrics-prometheus"),
+    List("--metrics-zipkin"),
+    List("--metrics-sigar"),
+    List("--metrics-influx-hostname", "localhost"),
+    List("--metrics-influx-database", "test"),
+    List("--metrics-influx-port", "1337"),
+    List("--metrics-influx-protocol", "ssh")
   ).flatten.toArray
   val expectedFromCliArgs = {
     val server = Server(
@@ -391,7 +391,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       checkpointsDirPath = Paths.get("test2").some,
       latestMessagesLogMaxSizeFactor = 2.some
     )
-    val kamonSettings = Kamon(
+    val kamonSettings = Metrics(
       true.some,
       true.some,
       true.some
@@ -440,7 +440,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     writeTestConfigFile("""
         |[grpc]
         |host = "localhost"
-        |[kamon]
+        |[metrics]
         |zipkin = true
       """.stripMargin)
     val Right(c) =
@@ -450,7 +450,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
         .copy(
           grpc = expectedFromResources.grpc
             .map(_.copy(host = "localhost".some, portExternal = 100.some)),
-          kamon = expectedFromResources.kamon
+          metrics = expectedFromResources.metrics
             .map(_.copy(zipkin = true.some))
         )
     c shouldEqual expected
@@ -485,7 +485,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
         None,
         None,
         None,
-        Kamon(
+        Metrics(
           false.some,
           false.some,
           false.some
@@ -521,7 +521,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
         None,
         None,
         None,
-        Kamon(
+        Metrics(
           false.some,
           false.some,
           false.some

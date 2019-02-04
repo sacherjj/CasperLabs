@@ -61,8 +61,8 @@ object JvmMetrics extends JmxMetricsInstances {
     def reportGarbageCollector(garbageCollector: GarbageCollector): List[F[Unit]] = {
       val name = "gc." + garbageCollector.name.replace(' ', '-').toLowerCase
       List(
-        g(s"$name..otal-collections", garbageCollector.totalCollections),
-        g(s"$name..otal-collection-time", garbageCollector.totalCollectionTime)
+        g(s"$name.total-collections", garbageCollector.totalCollections),
+        g(s"$name.total-collection-time", garbageCollector.totalCollectionTime)
       ) ++ List(
         garbageCollector.startTime.map(g(s"$name.start-time", _)).toList,
         garbageCollector.endTime.map(g(s"$name.end-time", _)).toList,

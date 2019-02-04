@@ -52,7 +52,7 @@ object Metrics extends MetricsInstances {
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   private def Source(name: String): Source         = name.asInstanceOf[Source]
   def Source(prefix: Source, name: String): Source = Source(s"$prefix.$name")
-  val BaseSource: Source                           = Source("rchain")
+  val BaseSource: Source                           = Source("casperlabs")
 }
 
 sealed abstract class MetricsInstances {
