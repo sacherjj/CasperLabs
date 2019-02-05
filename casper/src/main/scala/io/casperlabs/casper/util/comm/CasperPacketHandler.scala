@@ -45,9 +45,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
     if (conf.approveGenesis) {
       for {
-        walletsFile    <- Genesis.toFile[F](conf.walletsFile, conf.genesisPath.resolve("wallets.txt"))
-        wallets        <- Genesis.getWallets[F](walletsFile, conf.walletsFile)
         timestamp      <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+        wallets        <- Genesis.getWallets[F](conf.genesisPath, conf.walletsFile)
         bonds          <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
         runtimeManager = RuntimeManager[F](executionEngineService, bonds)
         validatorId    <- ValidatorIdentity.fromConfig[F](conf)

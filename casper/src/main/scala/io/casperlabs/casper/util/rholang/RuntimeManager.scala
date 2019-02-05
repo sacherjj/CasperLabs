@@ -17,7 +17,7 @@ class RuntimeManager[F[_]: Concurrent] private (
     val executionEngineService: ExecutionEngineService[F],
     val emptyStateHash: StateHash,
     // Pass in the genesis bonds until we have a solution based on the BlockStore.
-    val initialBonds: Seq[Bond]
+    initialBonds: Seq[Bond]
 ) {
   // TODO: This function should return more information than just StateHash.
   // We need also check whether the cost of execution is the same as one published

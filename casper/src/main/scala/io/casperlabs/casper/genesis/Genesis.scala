@@ -108,11 +108,10 @@ object Genesis {
       deployTimestamp: Option[Long]
   ): F[BlockMessage] =
     for {
-      walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
-      wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
-      bonds       <- runtimeManager.computeBonds(runtimeManager.emptyStateHash)
-      bondsMap    = bonds.map(b => b.validator.toByteArray -> b.stake).toMap
-      timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+      wallets   <- getWallets[F](genesisPath, maybeWalletsPath)
+      bonds     <- runtimeManager.computeBonds(runtimeManager.emptyStateHash)
+      bondsMap  = bonds.map(b => b.validator.toByteArray -> b.stake).toMap
+      timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       initial = withoutContracts(
         bonds = bondsMap,
         timestamp = 1L,
@@ -154,7 +153,7 @@ object Genesis {
     }
 
   def getWallets[F[_]: Sync: Log](
-      walletsFile: Option[File],
+      genesisPath: Path,
       maybeWalletsPath: Option[String]
   ): F[Seq[PreWallet]] = {
     def walletFromFile(file: File): F[Seq[PreWallet]] =
@@ -180,19 +179,24 @@ object Genesis {
                   }
       } yield wallets
 
-    (walletsFile, maybeWalletsPath) match {
-      case (Some(file), _) => walletFromFile(file)
-      case (None, Some(path)) =>
-        Log[F]
-          .warn(s"Specified wallets file $path does not exist. No wallets will exist at genesis.")
-          .map(_ => Seq.empty[PreWallet])
-      case (None, None) =>
-        Log[F]
-          .warn(
-            s"No wallets file specified and no default file found. No wallets will exist at genesis."
-          )
-          .map(_ => Seq.empty[PreWallet])
-    }
+    for {
+      walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
+      wallets <- (walletsFile, maybeWalletsPath) match {
+                  case (Some(file), _) => walletFromFile(file)
+                  case (None, Some(path)) =>
+                    Log[F]
+                      .warn(
+                        s"Specified wallets file $path does not exist. No wallets will exist at genesis."
+                      )
+                      .map(_ => Seq.empty[PreWallet])
+                  case (None, None) =>
+                    Log[F]
+                      .warn(
+                        s"No wallets file specified and no default file found. No wallets will exist at genesis."
+                      )
+                      .map(_ => Seq.empty[PreWallet])
+                }
+    } yield wallets
   }
 
   def getBondedValidators[F[_]: Monad: Sync: Log](bondsFile: Option[String]): F[Set[ByteString]] =
