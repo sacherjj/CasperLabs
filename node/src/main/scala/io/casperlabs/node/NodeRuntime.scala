@@ -33,11 +33,8 @@ import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import kamon._
-import kamon.system.SystemMetrics
-import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
 import monix.execution.Scheduler
-import com.typesafe.config.ConfigFactory
 import org.http4s.server.blaze._
 
 import scala.concurrent.duration._

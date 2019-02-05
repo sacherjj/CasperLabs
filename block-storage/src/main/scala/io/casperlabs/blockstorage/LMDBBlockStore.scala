@@ -11,6 +11,7 @@ import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.StorageError.StorageIOErr
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Resources.withResource
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
@@ -21,12 +22,8 @@ import scala.language.higherKinds
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
-    syncF: Sync[F],
-    metricsF: Metrics[F]
+    syncF: Sync[F]
 ) extends BlockStore[F] {
-
-  private implicit val metricsSource: Metrics.Source =
-    Metrics.Source(BlockStorageMetricsSource, "lmdb")
 
   implicit class RichBlockHash(byteVector: BlockHash) {
 
@@ -68,44 +65,35 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     withTxn(env.txnRead())(f)
 
   def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]] =
-    for {
-      _ <- metricsF.incrementCounter("put")
-      ret <- withWriteTxn { txn =>
-              val (blockHash, blockMessage) = f
-              blocks.put(
-                txn,
-                blockHash.toDirectByteBuffer,
-                blockMessage.toByteString.toDirectByteBuffer
-              )
-            }
-    } yield Right(ret)
+    withWriteTxn { txn =>
+      val (blockHash, blockMessage) = f
+      blocks.put(
+        txn,
+        blockHash.toDirectByteBuffer,
+        blockMessage.toByteString.toDirectByteBuffer
+      )
+    } map Right.apply
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
-    for {
-      _ <- metricsF.incrementCounter("get")
-      ret <- withReadTxn { txn =>
-              Option(blocks.get(txn, blockHash.toDirectByteBuffer))
-                .map(r => BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput()))
-            }
-    } yield ret
+    withReadTxn { txn =>
+      Option(blocks.get(txn, blockHash.toDirectByteBuffer))
+        .map(r => BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput()))
+    }
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
-    for {
-      _ <- metricsF.incrementCounter("find")
-      ret <- withReadTxn { txn =>
-              withResource(blocks.iterate(txn)) { iterator =>
-                iterator.asScala
-                  .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
-                  .withFilter { case (key, _) => p(key) }
-                  .map {
-                    case (key, value) =>
-                      val msg = BlockMessage.parseFrom(ByteString.copyFrom(value).newCodedInput())
-                      (key, msg)
-                  }
-                  .toList
-              }
-            }
-    } yield ret
+    withReadTxn { txn =>
+      withResource(blocks.iterate(txn)) { iterator =>
+        iterator.asScala
+          .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
+          .withFilter { case (key, _) => p(key) }
+          .map {
+            case (key, value) =>
+              val msg = BlockMessage.parseFrom(ByteString.copyFrom(value).newCodedInput())
+              (key, msg)
+          }
+          .toList
+      }
+    }
 
   def checkpoint(): F[StorageIOErr[Unit]] =
     ().asRight[StorageIOError].pure[F]
@@ -142,7 +130,12 @@ object LMDBBlockStore {
       .open(config.path.toFile, flags: _*) //TODO this is a bracket
 
     val blocks: Dbi[ByteBuffer] = env.openDbi(s"blocks", MDB_CREATE) //TODO this is a bracket
-    new LMDBBlockStore(env, config.path, blocks)
+
+    new LMDBBlockStore[F](env, config.path, blocks) with BlockStore.WithMetrics[F] {
+      override implicit val m: Metrics[F] = metricsF
+      override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "lmdb")
+      override implicit val a: Apply[F]   = syncF
+    }
   }
 
   def create[F[_]](env: Env[ByteBuffer], path: Path)(
@@ -151,7 +144,12 @@ object LMDBBlockStore {
       metricsF: Metrics[F]
   ): BlockStore[F] = {
     val blocks: Dbi[ByteBuffer] = env.openDbi(s"blocks", MDB_CREATE)
-    new LMDBBlockStore[F](env, path, blocks)
+
+    new LMDBBlockStore[F](env, path, blocks) with BlockStore.WithMetrics[F] {
+      override implicit val m: Metrics[F] = metricsF
+      override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "lmdb")
+      override implicit val a: Apply[F]   = syncF
+    }
   }
 
   def createWithId(env: Env[ByteBuffer], path: Path): BlockStore[Id] = {
