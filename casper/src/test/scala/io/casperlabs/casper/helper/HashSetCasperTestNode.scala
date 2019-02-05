@@ -79,10 +79,8 @@ class HashSetCasperTestNode[F[_]](
 
   val casperSmartContractsApi = ExecutionEngineService.noOpApi[F]()
 
-  val runtimeManager = RuntimeManager
-    .fromExecutionEngineService(casperSmartContractsApi)
-    .withTestBonds(bonds)
-  val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
+  val runtimeManager = RuntimeManager(casperSmartContractsApi, bonds)
+  val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
