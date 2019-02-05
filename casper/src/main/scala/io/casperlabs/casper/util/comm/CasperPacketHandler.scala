@@ -25,6 +25,7 @@ import io.casperlabs.comm.{transport, PeerNode}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.{Log, LogSource, Time}
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -39,18 +40,16 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage](
       conf: CasperConf,
       delay: FiniteDuration,
-      runtimeManager: RuntimeManager[F],
+      executionEngineService: ExecutionEngineService[F],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
     if (conf.approveGenesis) {
       for {
-        walletsFile <- Genesis.toFile[F](conf.walletsFile, conf.genesisPath.resolve("wallets.txt"))
-        wallets     <- Genesis.getWallets[F](walletsFile, conf.walletsFile)
-        timestamp   <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-        bondsFile   <- Genesis.toFile[F](conf.bondsFile, conf.genesisPath.resolve("bonds.txt"))
-        bonds <- Genesis
-                  .getBonds[F](bondsFile, conf.numValidators, conf.genesisPath)
-        validatorId <- ValidatorIdentity.fromConfig[F](conf)
+        timestamp      <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+        wallets        <- Genesis.getWallets[F](conf.genesisPath, conf.walletsFile)
+        bonds          <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
+        runtimeManager = RuntimeManager[F](executionEngineService, bonds)
+        validatorId    <- ValidatorIdentity.fromConfig[F](conf)
         bap = new BlockApproverProtocol(
           validatorId.get,
           timestamp,
@@ -72,9 +71,9 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       } yield new CasperPacketHandlerImpl[F](gv)
     } else if (conf.createGenesis) {
       for {
-        genesis <- Genesis.fromInputFiles[F](
-                    conf.bondsFile,
-                    conf.numValidators,
+        bonds          <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
+        runtimeManager = RuntimeManager[F](executionEngineService, bonds)
+        genesis <- Genesis[F](
                     conf.genesisPath,
                     conf.walletsFile,
                     conf.minimumBond,
@@ -117,8 +116,9 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       } yield new CasperPacketHandlerImpl[F](standalone)
     } else {
       for {
-        validators  <- CasperConf.parseValidatorsFile[F](conf.knownValidatorsFile)
-        validatorId <- ValidatorIdentity.fromConfig[F](conf)
+        validators     <- CasperConf.parseValidatorsFile[F](conf.knownValidatorsFile)
+        validatorId    <- ValidatorIdentity.fromConfig[F](conf)
+        runtimeManager = RuntimeManager[F](executionEngineService, bonds = Map.empty) // Will take bonds from approved block.
         bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]](
                       new BootstrapCasperHandler(
                         runtimeManager,

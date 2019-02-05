@@ -579,10 +579,8 @@ class ValidateTest
       val storageDirectory        = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long       = 1024L * 1024
       val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-      val runtimeManager = RuntimeManager
-        .fromExecutionEngineService[Task](casperSmartContractsApi)
-        .withTestBonds(bonds)
-      implicit val log = new LogStub[Task]
+      val runtimeManager          = RuntimeManager[Task](casperSmartContractsApi, bonds)
+      implicit val log            = new LogStub[Task]
       for {
         dag               <- blockDagStorage.getRepresentation
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)

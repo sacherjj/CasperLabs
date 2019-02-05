@@ -58,9 +58,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     val storageSize: Long          = 1024L * 1024
 
     val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-    val runtimeManager = RuntimeManager
-      .fromExecutionEngineService(casperSmartContractsApi)
-      .withTestBonds(bonds)
+    val runtimeManager          = RuntimeManager(casperSmartContractsApi, bonds)
 
     val bap = new BlockApproverProtocol(
       validatorId,
