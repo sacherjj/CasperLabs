@@ -104,7 +104,7 @@ object BlockApproverProtocol {
   ): BlockApproval =
     getBlockApproval(candidate, validatorId)
 
-  def validateCandidate[F[_]: Concurrent](
+  def validateCandidate[F[_]: Concurrent: Log](
       runtimeManager: RuntimeManager[F],
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,

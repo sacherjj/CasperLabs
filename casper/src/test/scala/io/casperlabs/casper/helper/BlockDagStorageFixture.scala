@@ -97,7 +97,11 @@ object BlockDagStorageTestFixture {
       blockStorageDir: Path
   ): F[BlockStore[F]] = {
     val env = Context.env(blockStorageDir, mapSize)
-    FileLMDBIndexBlockStore.create[F](env, blockStorageDir).map(_.right.get)
+    // FIXME: RChain uses this but it doesn't work even if we update HashSetCasperTestNode to use it.
+    // FileLMDBIndexBlockStore.create[F](env, blockStorageDir).map(_.right.get)
+    Sync[F].delay {
+      LMDBBlockStore.create[F](env, blockStorageDir)
+    }
   }
 
   def createBlockDagStorage(blockDagStorageDir: Path)(

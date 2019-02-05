@@ -37,20 +37,16 @@ import io.casperlabs.shared.Cell
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.{Ignore, WordSpec}
-
+import org.scalatest.{Ignore, Matchers, WordSpec}
+import io.casperlabs.casper.util.TestTime
+import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import scala.concurrent.duration._
 
-//todo this is block by runTimeManager.replayComputeStates
-@Ignore
-class CasperPacketHandlerSpec extends WordSpec {
+class CasperPacketHandlerSpec extends WordSpec with Matchers {
   private def setup() = new {
-    val scheduler               = Scheduler.io("test")
-    val runtimeDir              = BlockDagStorageTestFixture.blockStorageDir
-    val storageSize: Long       = 1024L * 1024
-    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-    val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
-
+    val scheduler                  = Scheduler.io("test")
+    val runtimeDir                 = BlockDagStorageTestFixture.blockStorageDir
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
@@ -59,6 +55,13 @@ class CasperPacketHandlerSpec extends WordSpec {
     val deployTimestamp            = 1L
     val genesis                    = buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
+    val storageSize: Long          = 1024L * 1024
+
+    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+    val runtimeManager = RuntimeManager
+      .fromExecutionEngineService(casperSmartContractsApi)
+      .withTestBonds(bonds)
+
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,
@@ -131,6 +134,8 @@ class CasperPacketHandlerSpec extends WordSpec {
             blockApproval.toByteString
           )
           _ = {
+            log.warns shouldBe empty
+            transportLayer.requests should not be empty
             val lastMessage = transportLayer.requests.last
             assert(lastMessage.peer == local && lastMessage.msg == expectedPacket)
           }

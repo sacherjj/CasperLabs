@@ -21,6 +21,7 @@ import monix.eval.Task
 import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
 import io.casperlabs.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
+import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
@@ -35,7 +36,10 @@ class CasperUtilTest
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture {
+
+  implicit val logEff                  = new LogStub[Task]()
   implicit val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+
   "isInMainChain" should "classify appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {

@@ -126,7 +126,7 @@ object InterpreterUtil {
           }
       }
 
-  def computeDeploysCheckpoint[F[_]: Sync: BlockStore](
+  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Log](
       parents: Seq[BlockMessage],
       deploysWithEffect: Seq[(Deploy, ExecutionEffect)],
       dag: BlockDagRepresentation[F],
@@ -239,7 +239,7 @@ object InterpreterUtil {
       }
     } yield blockHashesToApply
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: ExecutionEngineService](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: ExecutionEngineService: Log](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],

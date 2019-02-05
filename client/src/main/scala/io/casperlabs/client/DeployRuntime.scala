@@ -6,7 +6,7 @@ import cats.{Apply, Monad}
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.{BlockQuery, BlocksQuery, DeployData}
+import io.casperlabs.casper.protocol.{BlockQuery, BlocksQuery, DeployData, VisualizeDagQuery}
 
 import scala.util.Try
 
@@ -25,8 +25,11 @@ object DeployRuntime {
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
 
-  def visualizeBlocks[F[_]: Monad: Sync: DeployService](depth: Int): F[Unit] =
-    gracefulExit(DeployService[F].visualizeBlocks(BlocksQuery(depth)))
+  def visualizeDag[F[_]: Monad: Sync: DeployService](
+      depth: Int,
+      showJustificationLines: Boolean
+  ): F[Unit] =
+    gracefulExit(DeployService[F].visualizeDag(VisualizeDagQuery(depth, showJustificationLines)))
 
   def deployFileProgram[F[_]: Sync: DeployService](
       from: String,

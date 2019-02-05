@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, 
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
-import io.casperlabs.shared.Time
+import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -24,7 +24,7 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: ToAbstractContext](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: Log](
       id: Int,
       genesis: BlockMessage,
       runtimeManager: RuntimeManager[F]
@@ -42,7 +42,7 @@ object BlockGenerator {
       _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
     } yield b
 
-  def computeBlockCheckpoint[F[_]: Sync: BlockStore: ExecutionEngineService: ToAbstractContext](
+  def computeBlockCheckpoint[F[_]: Sync: BlockStore: ExecutionEngineService: Log](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],

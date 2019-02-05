@@ -106,37 +106,46 @@ object EffectsTestInstances {
 
   class LogStub[F[_]: Applicative] extends Log[F] {
 
-    var debugs: List[String] = List.empty[String]
-    var infos: List[String]  = List.empty[String]
-    var warns: List[String]  = List.empty[String]
-    var errors: List[String] = List.empty[String]
+    var debugs: Vector[String] = Vector.empty[String]
+    var infos: Vector[String]  = Vector.empty[String]
+    var warns: Vector[String]  = Vector.empty[String]
+    var errors: Vector[String] = Vector.empty[String]
+
+    // To be able to reconstruct the timeline.
+    var all: Vector[String] = Vector.empty[String]
 
     def reset(): Unit = {
-      debugs = List.empty[String]
-      infos = List.empty[String]
-      warns = List.empty[String]
-      errors = List.empty[String]
+      debugs = Vector.empty[String]
+      infos = Vector.empty[String]
+      warns = Vector.empty[String]
+      errors = Vector.empty[String]
+      all = Vector.empty[String]
     }
     def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
     def trace(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
     def debug(msg: String)(implicit ev: LogSource): F[Unit] = {
       debugs = debugs :+ msg
+      all = all :+ msg
       ().pure[F]
     }
     def info(msg: String)(implicit ev: LogSource): F[Unit] = {
       infos = infos :+ msg
+      all = all :+ msg
       ().pure[F]
     }
     def warn(msg: String)(implicit ev: LogSource): F[Unit] = {
       warns = warns :+ msg
+      all = all :+ msg
       ().pure[F]
     }
     def error(msg: String)(implicit ev: LogSource): F[Unit] = {
       errors = errors :+ msg
+      all = all :+ msg
       ().pure[F]
     }
     def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = {
       errors = errors :+ msg
+      all = all :+ msg
       ().pure[F]
     }
   }

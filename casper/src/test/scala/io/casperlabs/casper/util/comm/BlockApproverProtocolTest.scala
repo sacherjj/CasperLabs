@@ -17,7 +17,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
 
   private implicit val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
 
-  "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" ignore {
+  "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
     val n                          = 8
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = Map(validatorPk -> 10L)
@@ -39,7 +39,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   }
 
   // Todo this is block by runtimeManager.replayComputeState
-  ignore should "log a warning for invalid ApprovedBlockCandidates" in effectTest {
+  it should "log a warning for invalid ApprovedBlockCandidates" in effectTest {
     val n                          = 8
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = Map(validatorPk -> 10L)

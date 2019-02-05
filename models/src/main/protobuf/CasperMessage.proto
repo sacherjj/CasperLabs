@@ -24,7 +24,7 @@ service DeployService {
     rpc showBlock (BlockQuery) returns (BlockQueryResponse) {
     }
     // Get dag
-    rpc visualizeBlocks(BlocksQuery) returns (VisualizeBlocksResponse){
+    rpc visualizeDag(VisualizeDagQuery) returns (VisualizeBlocksResponse) {
     }
     rpc showMainChain (BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {
     }
@@ -86,6 +86,11 @@ message MaybeBlockMessage {
 message BlockQueryResponse {
     string status = 1;
     BlockInfo blockInfo = 2;
+}
+
+message VisualizeDagQuery {
+    int32 depth                 = 1;
+    bool showJustificationLines = 2;
 }
 
 message VisualizeBlocksResponse {

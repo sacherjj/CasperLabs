@@ -12,7 +12,7 @@ import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.shared.Time
+import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.ipc.{Deploy => EEDeploy}
 
 import scala.collection.{immutable, BitSet}
@@ -285,7 +285,7 @@ object ProtoUtil {
    * TODO: Update the logic of this function to make use of the trace logs and
    * say that two blocks don't conflict if they act on disjoint sets of channels
    */
-  def conflicts[F[_]: Monad: BlockStore](
+  def conflicts[F[_]: Monad: BlockStore: Log](
       b1: BlockMessage,
       b2: BlockMessage,
       genesis: BlockMessage,
@@ -297,7 +297,8 @@ object ProtoUtil {
                  //blocks which already exist in each other's chains do not conflict
                  false.pure[F]
                } else {
-                 def getDeploys(b: BlockMessage) =
+                 // Gather for each deploy which blocks it appears in.
+                 def getDeploys(b: BlockMessage): F[Map[Deploy, Set[ByteString]]] =
                    for {
                      bAncestors <- DagOperations
                                     .bfTraverseF[F, BlockMessage](List(b))(
@@ -306,19 +307,36 @@ object ProtoUtil {
                                     .takeWhile(_ != gca)
                                     .toList
                      deploys = bAncestors
-                       .flatMap(b => {
-                         b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
-                       })
-                       .toSet
+                       .flatMap { b =>
+                         val deploys =
+                           b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
+                         deploys.map(_ -> b.blockHash)
+                       }
+                       .groupBy { case (d, b) => d }
+                       .map { case (d, xs) => d -> xs.map(_._2).toSet }
+                       .toMap
                    } yield deploys
+
                  for {
                    b1Deploys <- getDeploys(b1)
                    b2Deploys <- getDeploys(b2)
-                 } yield b1Deploys.intersect(b2Deploys).nonEmpty
+                   // Find deploys that appear in multiple blocks.
+                   conflicts = (b1Deploys.keySet ++ b2Deploys.keySet).filter { d =>
+                     val fromB1 = b1Deploys.get(d).getOrElse(Set.empty)
+                     val fromB2 = b2Deploys.get(d).getOrElse(Set.empty)
+                     (fromB1 union fromB2).size > 1
+                   }
+                   _ <- if (conflicts.nonEmpty) {
+                         Log[F].debug(
+                           s"Block ${PrettyPrinter.buildString(b1.blockHash)} conflicts ${PrettyPrinter
+                             .buildString(b2.blockHash)} on ${conflicts.size} deploys."
+                         )
+                       } else ().pure[F]
+                 } yield conflicts.nonEmpty
                }
     } yield result
 
-  def chooseNonConflicting[F[_]: Monad: BlockStore](
+  def chooseNonConflicting[F[_]: Monad: BlockStore: Log](
       blocks: Seq[BlockMessage],
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
