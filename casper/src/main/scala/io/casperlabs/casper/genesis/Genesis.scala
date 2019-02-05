@@ -97,9 +97,7 @@ object Genesis {
   }
 
   //TODO: Decide on version number and shard identifier
-  def fromInputFiles[F[_]: Concurrent: Log: Time](
-      maybeBondsPath: Option[String],
-      numValidators: Int,
+  def apply[F[_]: Concurrent: Log: Time](
       genesisPath: Path,
       maybeWalletsPath: Option[String],
       minimumBond: Long,
@@ -110,22 +108,19 @@ object Genesis {
       deployTimestamp: Option[Long]
   ): F[BlockMessage] =
     for {
-      bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
-      _ <- bondsFile.fold[F[Unit]](
-            maybeBondsPath.fold(().pure[F])(
-              path =>
-                Log[F].warn(
-                  s"Specified bonds file $path does not exist. Falling back on generating random validators."
-                )
-            )
-          )(_ => ().pure[F])
       walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
       wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
-      bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
+      bonds       <- runtimeManager.computeBonds(runtimeManager.emptyStateHash)
+      bondsMap    = bonds.map(b => b.validator.toByteArray -> b.stake).toMap
       timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 1L, shardId = shardId)
-      validators  = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-      faucetCode  = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
+      initial = withoutContracts(
+        bonds = bondsMap,
+        timestamp = 1L,
+        version = 1L,
+        shardId = shardId
+      )
+      validators = bondsMap.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+      faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
       withContr <- withContracts(
                     initial,
                     ProofOfStakeParams(minimumBond, maximumBond, validators),
@@ -227,34 +222,42 @@ object Genesis {
     }
 
   def getBonds[F[_]: Sync: Log](
-      bondsFile: Option[File],
-      numValidators: Int,
-      genesisPath: Path
+      genesisPath: Path,
+      maybeBondsPath: Option[String],
+      numValidators: Int
   ): F[Map[Array[Byte], Long]] =
-    bondsFile match {
-      case Some(file) =>
-        Sync[F]
-          .delay {
-            Try {
-              Source
-                .fromFile(file)
-                .getLines()
-                .map(line => {
-                  val Array(pk, stake) = line.trim.split(" ")
-                  Base16.decode(pk) -> (stake.toLong)
-                })
-                .toMap
-            }
-          }
-          .flatMap {
-            case Success(bonds) => bonds.pure[F]
-            case Failure(_) =>
-              Log[F].warn(
-                s"Bonds file ${file.getPath} cannot be parsed. Falling back on generating random validators."
-              ) *> newValidators[F](numValidators, genesisPath)
-          }
-      case None => newValidators[F](numValidators, genesisPath)
-    }
+    for {
+      bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
+      bonds <- bondsFile match {
+                case Some(file) =>
+                  Sync[F]
+                    .delay {
+                      Try {
+                        Source
+                          .fromFile(file)
+                          .getLines()
+                          .map(line => {
+                            val Array(pk, stake) = line.trim.split(" ")
+                            Base16.decode(pk) -> (stake.toLong)
+                          })
+                          .toMap
+                      }
+                    }
+                    .flatMap {
+                      case Success(bonds) =>
+                        bonds.pure[F]
+                      case Failure(_) =>
+                        Log[F].warn(
+                          s"Bonds file ${file.getPath} cannot be parsed. Falling back on generating random validators."
+                        ) *> newValidators[F](numValidators, genesisPath)
+                    }
+                case None =>
+                  Log[F].warn(
+                    s"Specified bonds file $bondsFile does not exist. Falling back on generating random validators."
+                  ) *>
+                    newValidators[F](numValidators, genesisPath)
+              }
+    } yield bonds
 
   private def newValidators[F[_]: Sync: Log](
       numValidators: Int,
