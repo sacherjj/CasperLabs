@@ -67,10 +67,10 @@ pipeline:
       - cd execution-engine/tests
       - ~/.cargo/bin/cargo test
 
-#  run-unit-tests:
-#    <<: *sbtenv
-#    commands:
-#      - sbt test it:test
+  run-unit-tests:
+    <<: *sbtenv
+    commands:
+      - sbt test
 
   # push
 
