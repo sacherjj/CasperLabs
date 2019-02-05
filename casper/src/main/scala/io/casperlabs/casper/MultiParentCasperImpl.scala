@@ -165,30 +165,34 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       newFinalizedBlock <- if (finalizedChildren.isEmpty) {
                             lastFinalizedBlockHash.pure[F]
                           } else {
-                            finalizedChildren.traverse(removeDeploysInFinalizedBlock) *>
-                              finalizedChildren
-                                .traverse(updateLastFinalizedBlock(dag, _))
-                                .map(_.head)
+                            finalizedChildren.traverse { childHash =>
+                              for {
+                                removed <- removeDeploysInBlock(childHash)
+                                _ <- Log[F].info(
+                                      s"Removed $removed deploys from deploy history as we finalized block ${PrettyPrinter
+                                        .buildString(childHash)}."
+                                    )
+                                finalizedHash <- updateLastFinalizedBlock(dag, childHash)
+                              } yield finalizedHash
+                            } map (_.head)
                           }
     } yield newFinalizedBlock
 
-  private def removeDeploysInFinalizedBlock(finalizedChild: BlockHash): F[Unit] =
+  /** Remove deploys from the history which are included in a just finalised block. */
+  private def removeDeploysInBlock(blockHash: BlockHash): F[Int] =
     for {
-      b                  <- ProtoUtil.unsafeGetBlock[F](finalizedChild)
-      deploys            = b.body.get.deploys.map(_.deploy.get).toList
+      b                  <- ProtoUtil.unsafeGetBlock[F](blockHash)
+      deploysToRemove    = b.body.get.deploys.map(_.deploy.get).toSet
       stateBefore        <- Cell[F, CasperState].read
       initialHistorySize = stateBefore.deployHistory.size
       _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployHistory = (s.deployHistory.toMap -- deploys).toSet)
+            s.copy(deployHistory = s.deployHistory.filterNot {
+              case (d, _) => deploysToRemove(d)
+            })
           }
-
       stateAfter     <- Cell[F, CasperState].read
       deploysRemoved = initialHistorySize - stateAfter.deployHistory.size
-      _ <- Log[F].info(
-            s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
-              .buildString(finalizedChild)}."
-          )
-    } yield ()
+    } yield deploysRemoved
 
   /*
    * On the first pass, block B is finalized if B's main parent block is finalized

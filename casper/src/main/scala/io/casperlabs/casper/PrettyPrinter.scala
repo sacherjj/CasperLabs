@@ -90,7 +90,7 @@ object PrettyPrinter {
     limit(Base16.encode(b.toByteArray), 10)
 
   private def buildString(d: Deploy): String =
-    s"Deploy #${d.raw.fold(0L)(_.timestamp)}}"
+    s"Deploy #${d.raw.fold(0L)(_.timestamp)}"
 
   private def buildString(r: RChainState): String =
     buildString(r.postStateHash)
