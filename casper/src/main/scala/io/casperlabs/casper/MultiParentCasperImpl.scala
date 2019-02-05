@@ -57,7 +57,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
     shardId: String,
-    blockProcessingLock: Semaphore[F]
+    blockProcessingLock: Semaphore[F],
+    faultToleranceThreshold: Float = 0f
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
 
@@ -70,8 +71,6 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
 
   private val emptyStateHash = runtimeManager.emptyStateHash
 
-  // TODO: Extract hardcoded fault tolerance threshold
-  private val faultToleranceThreshold         = 0f
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
   def addBlock(
@@ -135,12 +134,18 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
             case _ =>
               reAttemptBuffer // reAttempt for any status that resulted in the adding of the block into the view
           }
-      estimates                     <- estimator(dag)
+      estimates <- estimator(dag)
+      _ <- Log[F].debug(
+            s"Tip estimates: ${estimates.map(x => PrettyPrinter.buildString(x.blockHash)).mkString(", ")}"
+          )
       tip                           = estimates.head
       _                             <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
       lastFinalizedBlockHash        <- lastFinalizedBlockHashContainer.get
       updatedLastFinalizedBlockHash <- updateLastFinalizedBlock(dag, lastFinalizedBlockHash)
       _                             <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
+      _ <- Log[F].info(
+            s"New last finalized block hash is ${PrettyPrinter.buildString(updatedLastFinalizedBlockHash)}."
+          )
     } yield attempt
 
   private def updateLastFinalizedBlock(
@@ -151,38 +156,43 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       childrenHashes <- dag
                          .children(lastFinalizedBlockHash)
                          .map(_.getOrElse(Set.empty[BlockHash]).toList)
-      maybeFinalizedChild <- ListContrib.findM(
-                              childrenHashes,
-                              (blockHash: BlockHash) =>
-                                isGreaterThanFaultToleranceThreshold(dag, blockHash)
-                            )
-      newFinalizedBlock <- maybeFinalizedChild match {
-                            case Some(finalizedChild) =>
-                              removeDeploysInFinalizedBlock(finalizedChild) *> updateLastFinalizedBlock(
-                                dag,
-                                finalizedChild
-                              )
-                            case None => lastFinalizedBlockHash.pure[F]
+      // Find all finalized children so that we can get rid of their deploys.
+      finalizedChildren <- ListContrib.filterM(
+                            childrenHashes,
+                            (blockHash: BlockHash) =>
+                              isGreaterThanFaultToleranceThreshold(dag, blockHash)
+                          )
+      newFinalizedBlock <- if (finalizedChildren.isEmpty) {
+                            lastFinalizedBlockHash.pure[F]
+                          } else {
+                            finalizedChildren.traverse { childHash =>
+                              for {
+                                removed <- removeDeploysInBlock(childHash)
+                                _ <- Log[F].info(
+                                      s"Removed $removed deploys from deploy history as we finalized block ${PrettyPrinter
+                                        .buildString(childHash)}."
+                                    )
+                                finalizedHash <- updateLastFinalizedBlock(dag, childHash)
+                              } yield finalizedHash
+                            } map (_.head)
                           }
     } yield newFinalizedBlock
 
-  private def removeDeploysInFinalizedBlock(finalizedChild: BlockHash): F[Unit] =
+  /** Remove deploys from the history which are included in a just finalised block. */
+  private def removeDeploysInBlock(blockHash: BlockHash): F[Int] =
     for {
-      b                  <- ProtoUtil.unsafeGetBlock[F](finalizedChild)
-      deploys            = b.body.get.deploys.map(_.deploy.get).toList
+      b                  <- ProtoUtil.unsafeGetBlock[F](blockHash)
+      deploysToRemove    = b.body.get.deploys.map(_.deploy.get).toSet
       stateBefore        <- Cell[F, CasperState].read
       initialHistorySize = stateBefore.deployHistory.size
       _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployHistory = (s.deployHistory.toMap -- deploys).toSet)
+            s.copy(deployHistory = s.deployHistory.filterNot {
+              case (d, _) => deploysToRemove(d)
+            })
           }
-
       stateAfter     <- Cell[F, CasperState].read
       deploysRemoved = initialHistorySize - stateAfter.deployHistory.size
-      _ <- Log[F].info(
-            s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
-              .buildString(finalizedChild)}."
-          )
-    } yield ()
+    } yield deploysRemoved
 
   /*
    * On the first pass, block B is finalized if B's main parent block is finalized
@@ -198,7 +208,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     for {
       faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
       _ <- Log[F].info(
-            s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance."
+            s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance; threshold is $faultToleranceThreshold"
           )
     } yield faultTolerance > faultToleranceThreshold
 
@@ -398,7 +408,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
 
-  def storageContents(hash: StateHash): F[String] = """""".pure[F]
+  def storageContents(hash: StateHash): F[String] =
+    """""".pure[F]
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     for {

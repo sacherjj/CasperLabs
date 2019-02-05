@@ -33,7 +33,7 @@ object Genesis {
   ): List[Deploy] =
     List()
 
-  def withContracts[F[_]: Concurrent](
+  def withContracts[F[_]: Concurrent: Log](
       initial: BlockMessage,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
@@ -49,7 +49,7 @@ object Genesis {
       runtimeManager
     )
 
-  def withContracts[F[_]: Concurrent](
+  def withContracts[F[_]: Concurrent: Log](
       blessedTerms: List[Deploy],
       initial: BlockMessage,
       startHash: StateHash,

@@ -21,4 +21,15 @@ object ListContrib {
         }
       case Nil => G.pure(None.asRight[List[A]])
     }
+
+  def filterM[G[_], A](list: List[A], p: A => G[Boolean])(implicit G: Monad[G]): G[List[A]] =
+    (list, List.empty[A]).tailRecM[G, List[A]] {
+      case (head :: tail, acc) =>
+        p(head).map {
+          case true  => (tail, head :: acc).asLeft[List[A]]
+          case false => (tail, acc).asLeft[List[A]]
+        }
+      case (Nil, acc) =>
+        G.pure(acc.reverse.asRight[(List[A], List[A])])
+    }
 }
