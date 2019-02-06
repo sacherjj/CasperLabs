@@ -55,7 +55,7 @@ docker-push/%:
 	docker tag $(DOCKER_USERNAME)/$(PROJECT):latest $(DOCKER_USERNAME)/$(PROJECT):$(VER)
 	docker push $(DOCKER_USERNAME)/$(PROJECT):$(VER)
 	if [ "$(DOCKER_PUSH_LATEST)" = "true" ]; then \
-		echo docker push $(DOCKER_USERNAME)/$(PROJECT):latest ; \
+		docker push $(DOCKER_USERNAME)/$(PROJECT):latest ; \
 	fi
 
 
