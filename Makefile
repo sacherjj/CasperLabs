@@ -21,13 +21,13 @@ docker-build-universal/%: sbt-stage/%
 	# Copy the 3rd party dependencies to a separate directory so if they don't change we can push faster.
 	mkdir -p $(STAGE)/.docker/layers/3rd
 	find $(STAGE)/lib \
-	    -type f ! -iregex ".*/io.casperlabs.*jar" \
+	    -type f -not -iregex ".*/io.casperlabs.*jar" \
 	    -exec cp {} $(STAGE)/.docker/layers/3rd \;
 	# Copy our own code.
 	mkdir -p $(STAGE)/.docker/layers/1st
 	find $(STAGE)/lib \
 	    -type f -iregex ".*/io.casperlabs.*jar" \
-	    -exec cp {} $(STAGE)/.docker/layers/3rd \;
+	    -exec cp {} $(STAGE)/.docker/layers/1st \;
 	# Use the Dockerfile to build the project. Has to be within the context.
 	cp $(PROJECT)/Dockerfile $(STAGE)/Dockerfile
 	docker build -f $(STAGE)/Dockerfile -t $(DOCKER_USERNAME)/$(PROJECT):latest $(STAGE)
