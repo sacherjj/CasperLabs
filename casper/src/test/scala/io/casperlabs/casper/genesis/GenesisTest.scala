@@ -60,15 +60,15 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
     pw.close()
   }
 
-  "Genesis.fromInputFiles" should "generate random validators when no bonds file is given" in withGenResources {
+  "Genesis.getBonds" should "generate random validators when no bonds file is given" in withGenResources {
     (
-        runtimeManager: RuntimeManager[Task],
+        executionEngineService: ExecutionEngineService[Task],
         genesisPath: Path,
         log: LogStub[Task],
         time: LogicalTime[Task]
     ) =>
       for {
-        _      <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+        _      <- fromBondsFile(genesisPath)(executionEngineService, log, time)
         _      = log.warns.find(_.contains("bonds")) should be(None)
         result = log.infos.count(_.contains("Created validator")) should be(numValidators)
       } yield result
@@ -76,15 +76,14 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 
   it should "generate random validators, with a warning, when bonds file does not exist" in withGenResources {
     (
-        runtimeManager: RuntimeManager[Task],
+        executionEngineService: ExecutionEngineService[Task],
         genesisPath: Path,
         log: LogStub[Task],
         time: LogicalTime[Task]
     ) =>
       for {
-        _ <- fromInputFiles(maybeBondsPath = Some("not/a/real/file"))(
-              runtimeManager,
-              genesisPath,
+        _ <- fromBondsFile(genesisPath, maybeBondsPath = Some("not/a/real/file"))(
+              executionEngineService,
               log,
               time
             )
@@ -99,7 +98,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 
   it should "generate random validators, with a warning, when bonds file cannot be parsed" in withGenResources {
     (
-        runtimeManager: RuntimeManager[Task],
+        executionEngineService: ExecutionEngineService[Task],
         genesisPath: Path,
         log: LogStub[Task],
         time: LogicalTime[Task]
@@ -111,9 +110,8 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       pw.close()
 
       for {
-        _ <- fromInputFiles(maybeBondsPath = Some(badBondsFile))(
-              runtimeManager,
-              genesisPath,
+        _ <- fromBondsFile(genesisPath, maybeBondsPath = Some(badBondsFile))(
+              executionEngineService,
               log,
               time
             )
@@ -128,7 +126,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 
   it should "create a genesis block with the right bonds when a proper bonds file is given" in withGenResources {
     (
-        runtimeManager: RuntimeManager[Task],
+        executionEngineService: ExecutionEngineService[Task],
         genesisPath: Path,
         log: LogStub[Task],
         time: LogicalTime[Task]
@@ -137,9 +135,8 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       printBonds(bondsFile)
 
       for {
-        genesis <- fromInputFiles(maybeBondsPath = Some(bondsFile))(
-                    runtimeManager,
-                    genesisPath,
+        genesis <- fromBondsFile(genesisPath, maybeBondsPath = Some(bondsFile))(
+                    executionEngineService,
                     log,
                     time
                   )
@@ -159,21 +156,23 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
     implicit blockStore => implicit blockDagStorage =>
       withGenResources {
         (
-            runtimeManager: RuntimeManager[Task],
+            executionEngineService: ExecutionEngineService[Task],
             genesisPath: Path,
             log: LogStub[Task],
             time: LogicalTime[Task]
         ) =>
           implicit val logEff = log
           for {
-            genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+            genesis <- fromBondsFile(genesisPath)(executionEngineService, log, time)
             _       <- BlockStore[Task].put(genesis.blockHash, genesis)
             dag     <- blockDagStorage.getRepresentation
             maybePostGenesisStateHash <- InterpreterUtil
                                           .validateBlockCheckpoint[Task](
                                             genesis,
                                             dag,
-                                            runtimeManager
+                                            RuntimeManager.fromExecutionEngineService(
+                                              executionEngineService
+                                            )
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }
@@ -181,7 +180,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 
   it should "detect an existing bonds file in the default location" in withGenResources {
     (
-        runtimeManager: RuntimeManager[Task],
+        executionEngineService: ExecutionEngineService[Task],
         genesisPath: Path,
         log: LogStub[Task],
         time: LogicalTime[Task]
@@ -190,7 +189,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       printBonds(bondsFile)
 
       for {
-        genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+        genesis <- fromBondsFile(genesisPath)(executionEngineService, log, time)
         bonds   = ProtoUtil.bonds(genesis)
         _       = log.infos.length should be(1)
         result = validators
@@ -206,67 +205,47 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 
 object GenesisTest {
   val storageSize       = 1024L * 1024
-  def storageLocation   = Files.createTempDirectory(s"casper-genesis-test-runtime")
-  def genesisPath       = Files.createTempDirectory(s"casper-genesis-test")
+  def mkStoragePath     = Files.createTempDirectory(s"casper-genesis-test-runtime")
+  def mkGenesisPath     = Files.createTempDirectory(s"casper-genesis-test")
   val numValidators     = 5
   val casperlabsShardId = "casperlabs"
 
-  def fromInputFiles(
-      maybeBondsPath: Option[String] = None,
-      numValidators: Int = numValidators,
-      maybeWalletsPath: Option[String] = None,
-      minimumBond: Long = 1L,
-      maximumBond: Long = Long.MaxValue,
-      faucet: Boolean = false,
-      shardId: String = casperlabsShardId,
-      deployTimestamp: Option[Long] = Some(System.currentTimeMillis())
-  )(
-      implicit runtimeManager: RuntimeManager[Task],
+  def fromBondsFile(
       genesisPath: Path,
+      maybeBondsPath: Option[String] = None
+  )(
+      implicit executionEngineService: ExecutionEngineService[Task],
       log: LogStub[Task],
       time: LogicalTime[Task]
   ): Task[BlockMessage] =
-    Genesis
-      .fromInputFiles[Task](
-        maybeBondsPath,
-        numValidators,
-        genesisPath,
-        maybeWalletsPath,
-        minimumBond,
-        maximumBond,
-        faucet,
-        runtimeManager,
-        shardId,
-        deployTimestamp
-      )
+    for {
+      bonds          <- Genesis.getBonds[Task](genesisPath, maybeBondsPath, numValidators)
+      runtimeManager = RuntimeManager[Task](executionEngineService, bonds)
+      genesis <- Genesis[Task](
+                  genesisPath,
+                  maybeWalletsPath = None,
+                  minimumBond = 1L,
+                  maximumBond = Long.MaxValue,
+                  faucet = false,
+                  runtimeManager,
+                  shardId = casperlabsShardId,
+                  deployTimestamp = Some(System.currentTimeMillis)
+                )
+    } yield genesis
 
-  def withRawGenResources(
+  def withGenResources(
       body: (ExecutionEngineService[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] = {
-    val storePath               = storageLocation
+    val storagePath             = mkStoragePath
+    val genesisPath             = mkGenesisPath
     val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-    val gp                      = genesisPath
     val log                     = new LogStub[Task]
     val time                    = new LogicalTime[Task]
 
     for {
       result <- body(casperSmartContractsApi, genesisPath, log, time)
-      _      <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _      <- Sync[Task].delay { gp.recursivelyDelete() }
+      _      <- Sync[Task].delay { storagePath.recursivelyDelete() }
+      _      <- Sync[Task].delay { genesisPath.recursivelyDelete() }
     } yield result
   }
-
-  def withGenResources(
-      body: (RuntimeManager[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
-  ): Task[Unit] =
-    withRawGenResources {
-      (
-          executionEngineService: ExecutionEngineService[Task],
-          genesisPath: Path,
-          log: LogStub[Task],
-          time: LogicalTime[Task]
-      ) =>
-        val runtimeManager = RuntimeManager.fromExecutionEngineService(executionEngineService)
-        body(runtimeManager, genesisPath, log, time)
-    }
 }

@@ -15,7 +15,9 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 
 class RuntimeManager[F[_]: Concurrent] private (
     val executionEngineService: ExecutionEngineService[F],
-    val emptyStateHash: StateHash
+    val emptyStateHash: StateHash,
+    // Pass in the genesis bonds until we have a solution based on the BlockStore.
+    initialBonds: Seq[Bond]
 ) {
   // TODO: This function should return more information than just StateHash.
   // We need also check whether the cost of execution is the same as one published
@@ -55,22 +57,7 @@ class RuntimeManager[F[_]: Concurrent] private (
   // todo this should be complemented
   def computeBonds(hash: StateHash)(implicit log: Log[F]): F[Seq[Bond]] =
     // FIXME: Implement bonds!
-    testBonds.pure[F]
-
-  private var testBonds = Seq.empty[Bond]
-
-  // By allowing to inject bonds we can enable some tests that only fail because
-  // they reject blocks due to having no bonds to validate with.
-  def withTestBonds(bonds: Seq[Bond]): this.type = {
-    testBonds = bonds
-    this
-  }
-  def withTestBonds(bonds: Map[Array[Byte], Long]): this.type = withTestBonds {
-    bonds.toSeq.map {
-      case (validator, stake) =>
-        Bond(ByteString.copyFrom(validator), stake)
-    }
-  }
+    initialBonds.pure[F]
 
   def sendDeploy(d: IPCDeploy): F[Either[Throwable, ExecutionEffect]] =
     executionEngineService.sendDeploy(d)
@@ -79,9 +66,19 @@ class RuntimeManager[F[_]: Concurrent] private (
 object RuntimeManager {
   type StateHash = ByteString
 
+  //TODO define 'emptyStateHash'
+  private val emptyStateHash = ByteString.EMPTY
+
   def fromExecutionEngineService[F[_]: Concurrent](
       executionEngineService: ExecutionEngineService[F]
   ): RuntimeManager[F] =
-    //TODO define 'emptyStateHash'
-    new RuntimeManager(executionEngineService, ByteString.EMPTY)
+    new RuntimeManager(executionEngineService, emptyStateHash, Seq.empty)
+
+  def apply[F[_]: Concurrent](
+      executionEngineService: ExecutionEngineService[F],
+      bonds: Map[Array[Byte], Long]
+  ): RuntimeManager[F] =
+    new RuntimeManager(executionEngineService, emptyStateHash, bonds.map {
+      case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
+    }.toSeq)
 }

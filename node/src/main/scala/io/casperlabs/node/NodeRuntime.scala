@@ -146,9 +146,13 @@ class NodeRuntime private[node] (
       conf.grpcServer.socket,
       conf.server.maxMessageSize
     )(Monad[Effect], abs)
-    runtimeManager = RuntimeManager.fromExecutionEngineService[Effect](executionEngineService)
     casperPacketHandler <- CasperPacketHandler
-                            .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
+                            .of[Effect](
+                              conf.casper,
+                              defaultTimeout,
+                              executionEngineService,
+                              _.value
+                            )(
                               labEff,
                               Metrics.eitherT(Monad[Task], metrics),
                               blockStore,
