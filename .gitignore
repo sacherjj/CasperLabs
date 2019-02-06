@@ -89,4 +89,4 @@ contract-examples/*/*.lock
 contract-examples/counter/*/*.lock
 contract-examples/mailing-list/*/*.lock
 
-.mark.*
+.make
