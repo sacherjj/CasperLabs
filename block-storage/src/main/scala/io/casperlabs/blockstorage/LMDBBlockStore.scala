@@ -7,7 +7,7 @@ import cats._
 import cats.effect.{ExitCase, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
 import io.casperlabs.blockstorage.StorageError.StorageIOErr
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.metrics.Metrics
@@ -131,7 +131,7 @@ object LMDBBlockStore {
 
     val blocks: Dbi[ByteBuffer] = env.openDbi(s"blocks", MDB_CREATE) //TODO this is a bracket
 
-    new LMDBBlockStore[F](env, config.path, blocks) with BlockStore.WithMetrics[F] {
+    new LMDBBlockStore[F](env, config.path, blocks) with MeteredBlockStore[F] {
       override implicit val m: Metrics[F] = metricsF
       override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "lmdb")
       override implicit val a: Apply[F]   = syncF
@@ -145,7 +145,7 @@ object LMDBBlockStore {
   ): BlockStore[F] = {
     val blocks: Dbi[ByteBuffer] = env.openDbi(s"blocks", MDB_CREATE)
 
-    new LMDBBlockStore[F](env, path, blocks) with BlockStore.WithMetrics[F] {
+    new LMDBBlockStore[F](env, path, blocks) with MeteredBlockStore[F] {
       override implicit val m: Metrics[F] = metricsF
       override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "lmdb")
       override implicit val a: Apply[F]   = syncF

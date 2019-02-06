@@ -38,7 +38,7 @@ trait BlockStore[F[_]] {
 }
 
 object BlockStore {
-  trait WithMetrics[F[_]] extends BlockStore[F] {
+  trait MeteredBlockStore[F[_]] extends BlockStore[F] {
     implicit val m: Metrics[F]
     implicit val ms: Metrics.Source
     implicit val a: Apply[F]

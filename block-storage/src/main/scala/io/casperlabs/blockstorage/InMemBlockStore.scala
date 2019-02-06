@@ -4,7 +4,7 @@ import cats._
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
 import io.casperlabs.blockstorage.StorageError.StorageIOErr
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.metrics.Metrics
@@ -44,7 +44,7 @@ object InMemBlockStore {
       refF: Ref[F, Map[BlockHash, BlockMessage]],
       metricsF: Metrics[F]
   ): BlockStore[F] =
-    new InMemBlockStore[F] with BlockStore.WithMetrics[F] {
+    new InMemBlockStore[F] with MeteredBlockStore[F] {
       override implicit val m: Metrics[F] = metricsF
       override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "in-mem")
       override implicit val a: Apply[F]   = monadF
