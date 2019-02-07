@@ -1,0 +1,55 @@
+version: "3.5"
+
+networks:
+  # Create an explicit network so we can connect to it from the client to do deployments.
+  casperlabs:
+    name: casperlabs
+
+# Cross mounting volumes: https://github.com/docker/compose/issues/3211
+volumes:
+  socketvolume: {}
+
+# Base template for nodes. Can't use replicas unfortunately becuase we have to pair them
+# with an execution engine. Alternatively we could build a single image.
+
+services:
+  # For repeating configs, we could use extension fields: https://medium.com/@kinghuang/docker-compose-anchors-aliases-extensions-a1e4105d70bd
+
+  # Not going to expose ports on the host because there will be many nodes.
+  # We can use a docker container to run the client and connect to the right casperlabs network
+  # and pick one particular node.
+
+  node:
+    image: io.casperlabs/node:latest
+    container_name: node
+    volumes:
+      # Volume for a socket to be created and shared with the execution engine.
+      - socketvolume:/opt/docker/.sockets
+      # Common bonds files. Don't map the .casperlabs directory itself so nodes can create SSL keys.
+      - $PWD/../.casperlabs/genesis:/root/.casperlabs/genesis
+    networks:
+      - casperlabs
+    environment:
+      HOME: /root
+    # Using files created by running the node once as described in https://slack-files.com/TDVFB45LG-FFBGDQSBW-bad20239ec
+    # Later all need to agree on the same validators so these are committed to git and mounted.
+    command:
+      - run
+      - -s
+      - --casper-validator-private-key
+      - 97dce9661d50222e041ab0ce20ddf092ba139c2f92f1e65c00e0d0b7b6a91ad1
+      - --casper-validator-public-key
+      - 27eebce15ea09aee762a1a2becb5c736a2e44479e5bfd62c4e6f50727e6f87af
+      - --grpc-socket
+      - /opt/docker/.sockets/.casper-node.sock
+
+
+  execution-engine:
+    image: io.casperlabs/execution-engine:latest
+    container_name: execution-engine
+    volumes:
+      - socketvolume:/opt/docker/.sockets
+    networks:
+      - casperlabs
+    command:
+      - .sockets/.casper-node.sock
