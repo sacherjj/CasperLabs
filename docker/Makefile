@@ -1,5 +1,5 @@
 
-# Create a new node project by linking to the compose file of node-0
+# Create a new node project by linking to the template docker-complse.yml file.
 node-%:
 	$(eval N = $*)
 	mkdir node-$(N)

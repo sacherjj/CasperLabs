@@ -42,6 +42,8 @@ services:
       - 27eebce15ea09aee762a1a2becb5c736a2e44479e5bfd62c4e6f50727e6f87af
       - --grpc-socket
       - /opt/docker/.sockets/.casper-node.sock
+    depends_on:
+      - execution-engine
 
 
   execution-engine:
