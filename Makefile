@@ -6,22 +6,43 @@ $(eval TAGS_OR_SHA = $(shell git tag -l --points-at HEAD | grep -e . || git desc
 $(eval SEMVER_REGEX = 'v?\K\d+\.\d+(\.\d+)?')
 $(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -Po $(SEMVER_REGEX) | tail -n 1 | grep -e . || echo $(TAGS_OR_SHA)))
 
+# Don't delete intermediary files we touch under .make,
+# which are markers for things we have done.
+# https://stackoverflow.com/questions/5426934/why-this-makefile-removes-my-goal
+.SECONDARY:
 
 docker-build-all: \
 	docker-build/node \
 	docker-build/client \
 	docker-build/execution-engine
+
 docker-push-all: \
 	docker-push/node \
 	docker-push/client \
 	docker-push/execution-engine
 
-docker-build/node: .docker-build-universal/node
-docker-build/client: .docker-build-universal/client
+docker-build/node: .make/docker-build/universal/node
+docker-build/client: .make/docker-build/universal/client
+docker-build/execution-engine: .make/docker-build/execution-engine
+
+# Tag the `latest` build with the version from git and push it.
+# Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
+docker-push/%:
+	$(eval PROJECT = $*)
+	docker tag $(DOCKER_USERNAME)/$(PROJECT):latest $(DOCKER_USERNAME)/$(PROJECT):$(VER)
+	docker push $(DOCKER_USERNAME)/$(PROJECT):$(VER)
+	if [ "$(DOCKER_PUSH_LATEST)" = "true" ]; then \
+		docker push $(DOCKER_USERNAME)/$(PROJECT):latest ; \
+	fi
+
+clean:
+	sbt clean
+	cd execution-engine/comm && cargo clean
+	rm -rf .make
 
 
 # Build the `latest` docker image for local testing. Works with Scala.
-.docker-build-universal/%: .make/sbt-stage/%
+.make/docker-build/universal/%: .make/sbt-stage/%
 	$(eval PROJECT = $*)
 	$(eval STAGE = $(PROJECT)/target/universal/stage)
 	rm -rf $(STAGE)/.docker
@@ -39,25 +60,16 @@ docker-build/client: .docker-build-universal/client
 	cp $(PROJECT)/Dockerfile $(STAGE)/Dockerfile
 	docker build -f $(STAGE)/Dockerfile -t $(DOCKER_USERNAME)/$(PROJECT):latest $(STAGE)
 	rm -rf $(STAGE)/.docker $(STAGE)/Dockerfile
+	mkdir -p $(dir $@) && touch $@
 
 
-docker-build/execution-engine: execution-engine/comm/target/release/engine-grpc-server
+.make/docker-build/execution-engine: execution-engine/comm/target/release/engine-grpc-server
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/comm/target/release)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
 	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:latest $(RELEASE)
 	rm -rf $(RELEASE)/Dockerfile
-
-
-# Tag the `latest` build with the version from git and push it.
-# Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
-docker-push/%:
-	$(eval PROJECT = $*)
-	docker tag $(DOCKER_USERNAME)/$(PROJECT):latest $(DOCKER_USERNAME)/$(PROJECT):$(VER)
-	docker push $(DOCKER_USERNAME)/$(PROJECT):$(VER)
-	if [ "$(DOCKER_PUSH_LATEST)" = "true" ]; then \
-		docker push $(DOCKER_USERNAME)/$(PROJECT):latest ; \
-	fi
+	mkdir -p $(dir $@) && touch $@
 
 
 # Refresh Scala build artifacts if source was changed.
@@ -81,11 +93,6 @@ execution-engine/comm/target/release/engine-grpc-server: .make/rust-proto \
 	cargo build --release
 
 # Miscellaneous tools to install once.
-
-# Don't delete intermediary files we touch under .make,
-# which are markers for things we have done.
-# https://stackoverflow.com/questions/5426934/why-this-makefile-removes-my-goal
-.SECONDARY:
 
 .make:
 	mkdir .make
