@@ -6,11 +6,11 @@ use std::ops::Add;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Transform {
-    Identity,
-    Write(Value),
-    AddInt32(i32),
-    AddKeys(BTreeMap<String, Key>),
-    Failure(super::Error),
+    Write,
+    AddInt32(i32),                    // value is sum of all adds executed during contract activation
+    AddKeys(BTreeMap<String, Key>),   // value is ?
+    Read,
+    Failure(super::Error)
 }
 
 use self::Transform::*;
@@ -37,11 +37,11 @@ impl Transform {
                 } => {
                     known_urefs.append(&mut keys);
                     Ok(Value::Contract { bytes, known_urefs })
-                }
+                },
                 Value::Acct(mut a) => {
                     a.insert_urefs(&mut keys);
                     Ok(Value::Acct(a))
-                }
+                },
                 other => {
                     let expected = String::from("Contract or Account");
                     Err(super::Error::TypeMismatch {

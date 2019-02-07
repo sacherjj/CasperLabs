@@ -4,9 +4,19 @@ use super::bytesrepr::{Error, FromBytes, ToBytes};
 #[repr(C)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub enum Key {
-    Account([u8; 20]),
-    Hash([u8; 32]),
-    URef([u8; 32]), //TODO: more bytes?
+    Account([u8; 20]),  // forgeable (only names V::Acct)
+    Hash([u8; 32]),   // contracts; forgeable (only names V::Contract)
+    URef([u8; 32]),   // data value; unforgeable; TODO: more bytes to reduce collision?
+}                     // only names !(V::Acct, V::Contract?)
+
+impl AsRef< [u8] > for &Key {
+    fn as_ref( &self ) -> &[u8] {
+        match self {
+            Account( a ) => a,
+            Hash( h )    => h,
+            URef( u )    => u
+        }
+    }
 }
 
 use self::Key::*;

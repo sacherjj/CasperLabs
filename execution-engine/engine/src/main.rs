@@ -78,7 +78,10 @@ fn main() {
         .and_then(|v| v.parse::<u64>().ok())
         .expect("Provided gas limit value is not u64.");
 
-    let gs = storage::InMemGS::new();
+    //let gs = storage::InMemGS::new();
+    // TODO: need a command line (preferably a config file) argument specifying LMDB directory
+    let gs = storage::LMDB::new( path );
+
     let engine_state = {
         let state = EngineState::new(gs);
         state.with_mocked_account(account_addr);

@@ -1,9 +1,10 @@
 [package]
-name = "storage"
+name    = "storage"
 version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>"]
 
 [dependencies]
-rand = "0.6.1"
-wasmi = "0.4.2"
+rand   = "0.6.1"
+wasmi  = "0.4.2"
+rkv    = "0.7.0"
 common = { path = "../common", features = ["std"] }

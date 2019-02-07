@@ -11,11 +11,11 @@ pub enum Value {
     ListInt32(Vec<i32>),
     String(String),
     ListString(Vec<String>),
-    NamedKey(String, Key),
+    NamedKey(String, Key),  // String=human readable, Key=unforgeable
     Acct(Account),
     Contract {
         bytes: Vec<u8>,
-        known_urefs: BTreeMap<String, Key>,
+        known_urefs: BTreeMap<String, Key>,  // NamedKey is type of entry inserted here (and in account)
     },
 }
 
@@ -205,6 +205,10 @@ impl Account {
 
     pub fn insert_urefs(&mut self, keys: &mut BTreeMap<String, Key>) {
         self.known_urefs.append(keys);
+    }
+
+    pub fn add_map( &mut self, name: String, uref: Key ) {
+        self.known_urefs.insert( name, uref );
     }
 
     pub fn urefs_lookup(&self) -> &BTreeMap<String, Key> {
