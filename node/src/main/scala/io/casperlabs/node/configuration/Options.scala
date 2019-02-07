@@ -143,6 +143,18 @@ private[configuration] object Options {
         None,
         None
       )
+      val metrics = ConfigurationSoft.Metrics(
+        options.run.metricsPrometheus,
+        options.run.metricsZipkin,
+        options.run.metricsSigar
+      )
+
+      val influx = ConfigurationSoft.Influx(
+        options.run.metricsInfluxHostname,
+        options.run.metricsInfluxPort,
+        options.run.metricsInfluxDatabase,
+        options.run.metricsInfluxProtocol
+      )
 
       ConfigurationSoft(
         Some(server),
@@ -150,6 +162,9 @@ private[configuration] object Options {
         Some(tls),
         Some(casper),
         Some(lmdb),
+        None,
+        Some(metrics),
+        Some(influx),
         None
       )
     }.toEither.leftMap(_.getMessage)
@@ -206,7 +221,7 @@ private[configuration] final case class Options(
   banner(
     """
       |Configuration file --config-file can contain tables
-      |[server], [grpc], [lmdb], [casper] and [block-storage].
+      |[server], [grpc], [lmdb], [casper], [tls], [metrics], [influx] and [block-storage].
       |
       |CLI options match TOML keys, example:
       |    --[prefix]-[key-name]=value i.e. --server-host=localhost
@@ -425,6 +440,26 @@ private[configuration] final case class Options(
     val casperShardId = opt[String](
       descr = s"String. Identifier of the shard this node is connected to.${c(_.shardId)}"
     )
+
+    val metricsPrometheus =
+      opt[Flag](descr = "Enable the Prometheus metrics reporter")
+
+    val metricsZipkin =
+      opt[Flag](descr = "Enable the Zipkin span reporter")
+
+    val metricsSigar =
+      opt[Flag](descr = "Enable Sigar host system metrics")
+
+    val metricsInfluxHostname =
+      opt[String](descr = "String. Hostname or IP of the Influx instancfe.")
+
+    val metricsInfluxDatabase = opt[String](descr = "String. Name of the database in Influx.")
+
+    val metricsInfluxPort =
+      opt[Int](descr = "Number. Port of the Influx instance.")
+
+    val metricsInfluxProtocol =
+      opt[String](descr = "Protocol used in Influx.")
   }
   addSubcommand(run)
 

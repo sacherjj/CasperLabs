@@ -1,7 +1,6 @@
 package io.casperlabs.node.configuration
 
-import java.nio.charset.Charset
-import java.nio.file.{Files, OpenOption, Paths, StandardOpenOption}
+import java.nio.file.{Files, Paths, StandardOpenOption}
 import java.util.concurrent.TimeUnit
 
 import cats.syntax.option._
@@ -83,13 +82,31 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       checkpointsDirPath = Paths.get("test").some,
       latestMessagesLogMaxSizeFactor = 1.some
     )
+    val kamonSettings = Metrics(
+      false.some,
+      false.some,
+      false.some
+    )
+    val influx = Influx(
+      "0.0.0.0".some,
+      14.some,
+      "test".some,
+      "https".some
+    )
+    val influxAuth = InfluxAuth(
+      "user".some,
+      "password".some
+    )
     ConfigurationSoft(
       server.some,
       grpcServer.some,
       tls.some,
       casper.some,
       lmdb.some,
-      blockStorage.some
+      blockStorage.some,
+      kamonSettings.some,
+      influx.some,
+      influxAuth.some
     )
   }
 
@@ -225,13 +242,31 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       checkpointsDirPath = Paths.get("test2").some,
       latestMessagesLogMaxSizeFactor = 2.some
     )
+    val kamonSettings = Metrics(
+      false.some,
+      false.some,
+      false.some
+    )
+    val influx = Influx(
+      "0.0.0.0".some,
+      14.some,
+      "test".some,
+      "https".some
+    )
+    val influxAuth = InfluxAuth(
+      "user".some,
+      "password".some
+    )
     ConfigurationSoft(
       server.some,
       grpcServer.some,
       tls.some,
       casper.some,
       lmdb.some,
-      blockStorage.some
+      blockStorage.some,
+      kamonSettings.some,
+      influx.some,
+      influxAuth.some
     )
   }
 
@@ -280,7 +315,14 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     List("--server-store-type", "mixed"),
     List("--tls-certificate", "test3"),
     List("--tls-key", "test3"),
-    List("--tls-secure-random-non-blocking")
+    List("--tls-secure-random-non-blocking"),
+    List("--metrics-prometheus"),
+    List("--metrics-zipkin"),
+    List("--metrics-sigar"),
+    List("--metrics-influx-hostname", "localhost"),
+    List("--metrics-influx-database", "test"),
+    List("--metrics-influx-port", "1337"),
+    List("--metrics-influx-protocol", "ssh")
   ).flatten.toArray
   val expectedFromCliArgs = {
     val server = Server(
@@ -349,13 +391,31 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       checkpointsDirPath = Paths.get("test2").some,
       latestMessagesLogMaxSizeFactor = 2.some
     )
+    val kamonSettings = Metrics(
+      true.some,
+      true.some,
+      true.some
+    )
+    val influx = Influx(
+      "localhost".some,
+      1337.some,
+      "test".some,
+      "ssh".some
+    )
+    val influxAuth = InfluxAuth(
+      "user".some,
+      "password".some
+    )
     ConfigurationSoft(
       server.some,
       grpcServer.some,
       tls.some,
       casper.some,
       lmdb.some,
-      blockStorage.some
+      blockStorage.some,
+      kamonSettings.some,
+      influx.some,
+      influxAuth.some
     )
   }
 
@@ -380,14 +440,19 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     writeTestConfigFile("""
         |[grpc]
         |host = "localhost"
+        |[metrics]
+        |zipkin = true
       """.stripMargin)
     val Right(c) =
       ConfigurationSoft.parse(Array("--config-file", configFilename, "--grpc-port=100", "run"))
     val expected =
-      expectedFromResources.copy(
-        grpc = expectedFromResources.grpc
-          .map(g => g.copy(host = "localhost".some, portExternal = 100.some))
-      )
+      expectedFromResources
+        .copy(
+          grpc = expectedFromResources.grpc
+            .map(_.copy(host = "localhost".some, portExternal = 100.some)),
+          metrics = expectedFromResources.metrics
+            .map(_.copy(zipkin = true.some))
+        )
     c shouldEqual expected
   }
 
@@ -419,6 +484,13 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
         ).some,
         None,
         None,
+        None,
+        Metrics(
+          false.some,
+          false.some,
+          false.some
+        ).some,
+        None,
         None
       ),
       Paths.get("default_test_dir/test").some,
@@ -447,6 +519,13 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
           None
         ).some,
         None,
+        None,
+        None,
+        Metrics(
+          false.some,
+          false.some,
+          false.some
+        ).some,
         None,
         None
       )

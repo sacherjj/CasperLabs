@@ -33,7 +33,6 @@ import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import kamon._
-import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
@@ -93,10 +92,10 @@ class NodeRuntime private[node] (
     rpConfAsk            = effects.rpConfAsk(rpConfState)
     peerNodeAsk          = effects.peerNodeAsk(rpConfState)
     rpConnections        <- effects.rpConnections.toEffect
-    kademliaConnections  <- CachedConnections[Task, KademliaConnTag].toEffect
-    tcpConnections       <- CachedConnections[Task, TcpConnTag].toEffect
+    metrics              = diagnostics.effects.metrics[Task]
+    kademliaConnections  <- CachedConnections[Task, KademliaConnTag](Task.catsAsync, metrics).toEffect
+    tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
     time                 = effects.time
-    metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
@@ -109,7 +108,7 @@ class NodeRuntime private[node] (
       conf.server.maxMessageSize,
       conf.server.chunkSize,
       commTmpFolder
-    )(grpcScheduler, log, tcpConnections)
+    )(grpcScheduler, log, metrics, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,
       peerNodeAsk,
@@ -176,8 +175,8 @@ class NodeRuntime private[node] (
       Log.eitherTLog(Monad[Task], log),
       ErrorHandler[Effect]
     )
-    nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
-    jvmMetrics      = diagnostics.jvmMetrics[Task]
+    nodeCoreMetrics = diagnostics.effects.nodeCoreMetrics[Task]
+    jvmMetrics      = diagnostics.effects.jvmMetrics[Task]
 
     program = nodeProgram[Effect](executionEngineService)(
       Monad[Effect],
@@ -242,11 +241,9 @@ class NodeRuntime private[node] (
                           .start
                           .toEffect
 
-      _ <- Task.delay {
-            Kamon.addReporter(prometheusReporter)
-            Kamon.addReporter(new JmxReporter())
-            Kamon.addReporter(new ZipkinReporter())
-          }.toEffect
+      metrics = new MetricsRuntime[Effect](conf, id)
+      _       <- metrics.setupMetrics(prometheusReporter)
+
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
@@ -278,17 +275,6 @@ class NodeRuntime private[node] (
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
-
-  private def startReportJvmMetrics(
-      implicit metrics: Metrics[Task],
-      jvmMetrics: JvmMetrics[Task]
-  ): Task[Unit] =
-    Task.delay {
-      import scala.concurrent.duration._
-      loopScheduler.scheduleAtFixedRate(3.seconds, 3.second)(
-        JvmMetrics.report[Task].unsafeRunSync(scheduler)
-      )
-    }
 
   private def addShutdownHook[F[_]: Monad](
       servers: Servers,
@@ -372,13 +358,12 @@ class NodeRuntime private[node] (
       _ <- Log[Effect].info(
             s"gRPC internal server started at $host:${servers.grpcServerInternal.port}"
           )
-      _ <- startReportJvmMetrics.toEffect
 
       _ <- TransportLayer[Effect].receive(
             pm => HandleMessages.handle[Effect](pm, defaultTimeout),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
-      _       <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
+      _       <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler).start.toEffect
       _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
       address = s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")

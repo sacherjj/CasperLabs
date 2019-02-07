@@ -18,6 +18,8 @@ import io.casperlabs.shared._
 object HandleMessages {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "rp.handle")
 
   def handle[F[_]: Sync: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       protocol: Protocol,
@@ -53,7 +55,7 @@ object HandleMessages {
       _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
       _ <- TransportLayer[F].disconnect(sender)
       _ <- ConnectionsCell[F].flatModify(_.removeConn[F](sender))
-      _ <- Metrics[F].incrementCounter("disconnect-recv-count")
+      _ <- Metrics[F].incrementCounter("disconnect")
     } yield handledWithoutMessage
 
   def handlePacket[F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler: RPConfAsk](

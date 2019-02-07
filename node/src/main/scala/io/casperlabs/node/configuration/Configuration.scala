@@ -18,10 +18,31 @@ final case class Configuration(
     tls: Configuration.Tls,
     casper: CasperConf,
     blockStorage: LMDBBlockStore.Config,
-    blockDagStorage: BlockDagFileStorage.Config
+    blockDagStorage: BlockDagFileStorage.Config,
+    kamon: Configuration.Kamon
 )
 
 object Configuration {
+  case class Kamon(
+      prometheus: Boolean,
+      influx: Option[Influx],
+      zipkin: Boolean,
+      sigar: Boolean
+  )
+
+  case class Influx(
+      hostname: String,
+      port: Int,
+      database: String,
+      protocol: String,
+      authentication: Option[InfluxDbAuthentication]
+  )
+
+  case class InfluxDbAuthentication(
+      user: String,
+      password: String
+  )
+
   case class Server(
       host: Option[String],
       port: Int,
@@ -81,11 +102,38 @@ object Configuration {
       parseTls(default, confSoft),
       parseCasper(default, confSoft),
       parseBlockStorage(default, confSoft),
-      parseBlockDagStorage(default, confSoft)
-    ).mapN {
-      case (server, grpc, tls, casper, lmdb, blockStorage) =>
-        Configuration(command, server, grpc, tls, casper, lmdb, blockStorage)
-    }
+      parseBlockDagStorage(default, confSoft),
+      parseKamon(default)
+    ).mapN(Configuration(command, _, _, _, _, _, _, _))
+
+  private def parseKamon(
+      soft: ConfigurationSoft
+  ): ValidatedNel[String, Kamon] = {
+    val influx = parseInflux(soft).toOption
+    (
+      optToValidated(soft.metrics.flatMap(_.prometheus), "Kamon.prometheus"),
+      optToValidated(soft.metrics.flatMap(_.zipkin), "Kamon.zipkin"),
+      optToValidated(soft.metrics.flatMap(_.sigar), "Kamon.sigar")
+    ) mapN (Kamon(_, influx, _, _))
+  }
+
+  private def parseInflux(soft: ConfigurationSoft): ValidatedNel[String, Influx] = {
+    val influxAuth = parseInfluxAuth(soft).toOption
+    (
+      optToValidated(soft.influx.flatMap(_.hostname), "Influx.hostname"),
+      optToValidated(soft.influx.flatMap(_.port), "Influx.port"),
+      optToValidated(soft.influx.flatMap(_.database), "Influx.database"),
+      optToValidated(soft.influx.flatMap(_.protocol), "Influx.protocol")
+    ) mapN (Influx(_, _, _, _, influxAuth))
+  }
+
+  private def parseInfluxAuth(
+      soft: ConfigurationSoft
+  ): ValidatedNel[String, InfluxDbAuthentication] =
+    (
+      optToValidated(soft.influxAuth.flatMap(_.user), "[Influx.authentication.user]"),
+      optToValidated(soft.influxAuth.flatMap(_.password), "[Influx.authentication.password]")
+    ) mapN InfluxDbAuthentication
 
   private def parseServer(
       confSoft: ConfigurationSoft

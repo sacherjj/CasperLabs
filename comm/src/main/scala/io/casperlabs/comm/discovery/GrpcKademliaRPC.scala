@@ -8,6 +8,7 @@ import io.casperlabs.comm.CachedConnections.ConnectionsCache
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.KademliaGrpcMonix.KademliaRPCServiceStub
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.{Log, LogSource}
 import io.grpc._
 import io.grpc.netty._
@@ -27,23 +28,33 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
 ) extends KademliaRPC[Task] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "discovery.kademlia.grpc")
 
   private val cell = connectionsCache(clientChannel)
 
   def ping(peer: PeerNode): Task[Boolean] =
     for {
-      _       <- Metrics[Task].incrementCounter("protocol-ping-sends")
-      local   <- peerNodeAsk.ask
-      ping    = Ping().withSender(node(local))
-      pongErr <- withClient(peer)(_.sendPing(ping).nonCancelingTimeout(timeout)).attempt
+      _     <- Metrics[Task].incrementCounter("ping")
+      local <- peerNodeAsk.ask
+      ping  = Ping().withSender(node(local))
+      pongErr <- withClient(peer)(
+                  _.sendPing(ping)
+                    .timer("ping-time")
+                    .nonCancelingTimeout(timeout)
+                ).attempt
     } yield pongErr.fold(kp(false), kp(true))
 
   def lookup(key: Seq[Byte], peer: PeerNode): Task[Seq[PeerNode]] =
     for {
-      _           <- Metrics[Task].incrementCounter("protocol-lookup-send")
-      local       <- peerNodeAsk.ask
-      lookup      = Lookup().withId(ByteString.copyFrom(key.toArray)).withSender(node(local))
-      responseErr <- withClient(peer)(_.sendLookup(lookup).nonCancelingTimeout(timeout)).attempt
+      _      <- Metrics[Task].incrementCounter("protocol-lookup-send")
+      local  <- peerNodeAsk.ask
+      lookup = Lookup().withId(ByteString.copyFrom(key.toArray)).withSender(node(local))
+      responseErr <- withClient(peer)(
+                      _.sendLookup(lookup)
+                        .timer("lookup-time")
+                        .nonCancelingTimeout(timeout)
+                    ).attempt
     } yield responseErr.fold(kp(Seq.empty[PeerNode]), _.nodes.map(toPeerNode))
 
   def disconnect(peer: PeerNode): Task[Unit] =

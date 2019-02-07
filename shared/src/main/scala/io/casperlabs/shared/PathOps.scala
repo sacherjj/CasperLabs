@@ -54,11 +54,12 @@ object PathOps {
       import cats.implicits._
 
       def deleteFile(file: File): F[Unit] =
-        for {
-          deleted <- Sync[F].delay(file.delete)
-          _ <- if (deleted) Log[F].debug(s"Deleted file ${file.getAbsolutePath}")
-              else Log[F].warn(s"Can't delete file ${file.getAbsolutePath}")
-        } yield ()
+        Sync[F]
+          .delay(file.delete)
+          .ifM(
+            Log[F].debug(s"Deleted file ${file.getAbsolutePath}"),
+            Log[F].warn(s"Can't delete file ${file.getAbsolutePath}")
+          )
 
       def getFiles: F[List[Path]] =
         Sync[F].delay(
@@ -109,6 +110,5 @@ object PathOps {
         _      <- exists.fold(delete(), Log[F].warn(s"Can't delete file $path. File not found."))
       } yield ()
     }
-
   }
 }

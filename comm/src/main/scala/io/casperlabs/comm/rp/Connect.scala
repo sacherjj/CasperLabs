@@ -13,6 +13,7 @@ import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.ProtocolHelper._
 import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared._
 
 import scala.concurrent.duration._
@@ -22,6 +23,9 @@ object Connect {
   type Connection            = PeerNode
   type Connections           = List[Connection]
   type ConnectionsCell[F[_]] = Cell[F, Connections]
+
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "rp.connect")
 
   object ConnectionsCell {
     def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev
@@ -132,18 +136,19 @@ object Connect {
       peer: PeerNode,
       timeout: FiniteDuration
   ): F[Unit] =
-    for {
-      address  <- Sync[F].delay(peer.toAddress)
-      _        <- Log[F].debug(s"Connecting to $address")
-      _        <- Metrics[F].incrementCounter("connect")
-      _        <- Log[F].debug(s"Initialize protocol handshake to $address")
-      local    <- RPConfAsk[F].reader(_.local)
-      ph       = protocolHandshake(local)
-      response <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
-      _ <- Log[F].debug(
-            s"Received protocol handshake response from ${ProtocolHelper.sender(response)}."
-          )
-      _ <- ConnectionsCell[F].flatModify(_.addConn[F](peer))
-    } yield ()
-
+    (
+      for {
+        address  <- Sync[F].delay(peer.toAddress)
+        _        <- Log[F].debug(s"Connecting to $address")
+        _        <- Metrics[F].incrementCounter("connect")
+        _        <- Log[F].debug(s"Initialize protocol handshake to $address")
+        local    <- RPConfAsk[F].reader(_.local)
+        ph       = protocolHandshake(local)
+        response <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
+        _ <- Log[F].debug(
+              s"Received protocol handshake response from ${ProtocolHelper.sender(response)}."
+            )
+        _ <- ConnectionsCell[F].flatModify(_.addConn[F](peer))
+      } yield ()
+    ).timer("connect-time")
 }
