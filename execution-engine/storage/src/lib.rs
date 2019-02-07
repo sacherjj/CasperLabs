@@ -145,7 +145,7 @@ pub struct Cache< 'a > {
     rng         : rand::rngs::StdRng
 }
 
-impl< 'a > TrackingCopy for Cache< 'a > {         // BLAH BLAH BLAH
+impl< 'a > TrackingCopy for Cache< 'a > {
     //-------------------------------------------------------------------------------
     fn new_uref( &mut self, v: Value ) -> Key {   // create new uref and initialize to v
         let mut key = [ 0u8; 32 ];
