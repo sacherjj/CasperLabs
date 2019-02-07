@@ -42,7 +42,9 @@ clean:
 
 
 # Build the `latest` docker image for local testing. Works with Scala.
-.make/docker-build/universal/%: .make/sbt-stage/%
+.make/docker-build/universal/%: \
+		%/Dockerfile \
+		.make/sbt-stage/%
 	$(eval PROJECT = $*)
 	$(eval STAGE = $(PROJECT)/target/universal/stage)
 	rm -rf $(STAGE)/.docker
@@ -63,7 +65,9 @@ clean:
 	mkdir -p $(dir $@) && touch $@
 
 
-.make/docker-build/execution-engine: execution-engine/comm/target/release/engine-grpc-server
+.make/docker-build/execution-engine: \
+		execution-engine/Dockerfile \
+		execution-engine/comm/target/release/engine-grpc-server
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/comm/target/release)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
@@ -80,14 +84,16 @@ clean:
 	mkdir -p $(dir $@) && touch $@
 
 
-.make/rust-proto: .make .make/rustup-update .make/protoc-install \
+.make/rust-proto: .make \
+		.make/rustup-update .make/protoc-install \
 		$(shell find . -type f -iregex '.*\.proto')
 	cd execution-engine/comm && \
 	cargo run --bin grpc-protoc
 	touch $@
 
 
-execution-engine/comm/target/release/engine-grpc-server: .make/rust-proto \
+execution-engine/comm/target/release/engine-grpc-server: \
+		.make/rust-proto \
 		$(shell find . -type f -iregex '.*/src/.*\.rs')
 	cd execution-engine/comm && \
 	cargo build --release
