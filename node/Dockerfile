@@ -1,12 +1,15 @@
 FROM openjdk:11-jre-slim
 
-RUN apt-get update && apt-get install -yq openssl 
+RUN apt-get update && apt-get install -yq openssl
 LABEL MAINTAINER="CasperLabs, LLC. <info@casperlabs.io>"
 
-USER root 
-WORKDIR /opt/docker 
+USER root
+WORKDIR /opt/docker
+# HOME points to /root
+RUN mkdir -p /root/.casperlabs
 ENTRYPOINT ["bin/node"]
 CMD ["run"]
+
 
 # Copy dependencies that rarely change.
 COPY .docker/layers/3rd/ /opt/docker/lib
