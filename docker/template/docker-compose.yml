@@ -23,36 +23,42 @@ services:
   node:
     image: io.casperlabs/node:latest
     container_name: node-${NODE_NUMBER}
+    hostname: node-${NODE_NUMBER}
     volumes:
       # Volume for a socket to be created and shared with the execution engine.
-      - socketvolume:/opt/docker/.sockets
+      - socketvolume:/root/.casperlabs/sockets
       # Common bonds files. Don't map the .casperlabs directory itself so nodes can create SSL keys.
+      # Using files created by running the node once as described in https://slack-files.com/TDVFB45LG-FFBGDQSBW-bad20239ec
+      # Later all need to agree on the same validators so these are committed to git and mounted.
       - $PWD/../.casperlabs/genesis:/root/.casperlabs/genesis
+      - $PWD/../.casperlabs/bootstrap:/root/.casperlabs/bootstrap
+      - $PWD/../template/start-node.sh:/opt/docker/start-node.sh
     networks:
       - casperlabs
     environment:
       HOME: /root
-    # Using files created by running the node once as described in https://slack-files.com/TDVFB45LG-FFBGDQSBW-bad20239ec
-    # Later all need to agree on the same validators so these are committed to git and mounted.
-    command:
-      - run
-      - -s
-      - --casper-validator-private-key
-      - $VALIDATOR_PRIVATE_KEY
-      - --casper-validator-public-key
-      - $VALIDATOR_PUBLIC_KEY
-      - --grpc-socket
-      - /opt/docker/.sockets/.casper-node.sock
+      CL_VALIDATOR_PUBLIC_KEY: $CL_VALIDATOR_PUBLIC_KEY
+      CL_VALIDATOR_PRIVATE_KEY: $CL_VALIDATOR_PRIVATE_KEY
+      CL_SERVER_STANDALONE: $CL_SERVER_STANDALONE
+      # Got the ID from the logs by running the node once. They keys are going to be the same for node-0.
+      # i.e. "Listening for traffic on casperlabs://..."
+      CL_SERVER_BOOTSTRAP: casperlabs://bc416197520ec34e19a03507f93bbeae15f80a02@node-0?protocol=40400&discovery=40404
+      CL_GRPC_SOCKET: /root/.casperlabs/sockets/.casper-node.sock
+    entrypoint:
+      - sh
+      - -c
+      - chmod +x ./start-node.sh && ./start-node.sh
     depends_on:
+      # Need the gRPC socket file to be created before we start.
       - execution-engine
-
 
   execution-engine:
     image: io.casperlabs/execution-engine:latest
     container_name: execution-engine-${NODE_NUMBER}
+    hostname: execution-engine-${NODE_NUMBER}
     volumes:
-      - socketvolume:/opt/docker/.sockets
+      - socketvolume:/opt/docker/.casperlabs/sockets
     networks:
       - casperlabs
     command:
-      - .sockets/.casper-node.sock
+      - .casperlabs/sockets/.casper-node.sock
