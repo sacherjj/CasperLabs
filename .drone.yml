@@ -72,6 +72,15 @@ pipeline:
     commands:
       - sbt test
       
+  docker-build-node:
+    <<: *sbtenv
+    commands:
+      - sbt node/docker:publishLocal
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+      - /var/run/docker.sock:/var/run/docker.sock
+
   run-integration-tests:
     <<: *buildenv
     commands:
@@ -86,7 +95,7 @@ pipeline:
   package:
     <<: *sbtenv
     commands:
-      - sbt node/docker:publishLocal node/debian:packageBin node/universal:packageZipTarball
+      - sbt node/debian:packageBin node/universal:packageZipTarball
       - mkdir -p /artifacts/${DRONE_BRANCH}
       - cp node/target/node_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
     volumes:
