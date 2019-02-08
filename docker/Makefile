@@ -1,8 +1,10 @@
+CL_CASPER_NUM_VALIDATORS ?= 10
+
 # Don't remove directories created as dependencies.
 .SECONDARY:
 
 # Create a new node environment by linking to the template docker-complse.yml file.
-node-%:
+node-%: .casperlabs/genesis
 	$(eval N = $*)
 
 	$(eval KEY_FILE_COUNT = $(shell find .casperlabs -type f -name *.sk | wc -l))
@@ -34,10 +36,29 @@ node-%/down:
 
 # Remove all node-N environments.
 clean: $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
-	docker network rm casperlabs
+	docker network rm casperlabs || exit 0
+	@# Removing genesis created by docker, due to permissions.
+	docker run --rm \
+		-v ${PWD}/.casperlabs:/root/.casperlabs \
+		--entrypoint sh \
+		io.casperlabs/node:latest \
+		-c "rm -rf /root/.casperlabs/genesis"
 	rm -rf .make
 
 
 .make/docker/network:
 	docker network create casperlabs
 	mkdir -p $(dir $@) && touch $@
+
+# Generate keys and bonds.
+.casperlabs/genesis:
+	@# Start a node to generate keys.
+	@# The node will fail before it would print the ID corresponding to the
+	@# keys as there's no gRPC socket to connect to, so the bootstrap keys
+	@# and node ID are still hardcoded.
+	docker run --rm \
+		-v ${PWD}/.casperlabs/genesis:/root/.casperlabs/genesis \
+		io.casperlabs/node:latest \
+		run -s --casper-num-validators $(CL_CASPER_NUM_VALIDATORS) \
+		> /dev/null 2>&1 || exit 0
+	[ -f .casperlabs/genesis/bonds.txt ]

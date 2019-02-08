@@ -14,7 +14,9 @@ Run `make docker-build-all` in the main project directory to prepare the images.
 
 ## Set up a network
 
-We'll set up a bunch of nodes in docker with names such as `node-0`, `node-1` etc. Each will have a corresponding container running the Execution Engine. You can only have as many nodes as there are entries in the [bonds.txt](.casperlabs/genesis/bonds.txt) file because each node will use a different validator key.
+We'll set up a bunch of nodes in docker with names such as `node-0`, `node-1` etc. Each will have a corresponding container running the Execution Engine.
+
+The setup process will establish validator keys and bonds in `.casperlabs/genesis` by running the node once up front. By default 10 files are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
 
 `node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first. You can run `make node-0` in this directory to establish its directory and see the values `docker-compose` will use, or just run `make node-0/up` to bring up the node in docker straight away. Check that everything is fine with `docker logs -f node-0`. When it's running, bring up more nodes.
 

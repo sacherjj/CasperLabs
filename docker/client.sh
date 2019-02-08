@@ -21,7 +21,7 @@ case "$CMD" in
 	"deploy")
 		# Need to mount the files.
 		VOL=$1; shift
-		docker run -it --rm \
+		docker run --rm \
 		    --network casperlabs \
 		    --volume $VOL:/data \
 		    io.casperlabs/client:latest \
@@ -29,7 +29,7 @@ case "$CMD" in
 		;;
 
 	"propose")
-		docker run -it --rm \
+		docker run --rm \
 		    --network casperlabs \
 		    io.casperlabs/client:latest \
 			--host $NODE --port 40401 propose
