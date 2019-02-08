@@ -21,7 +21,7 @@ services:
 
   node:
     image: io.casperlabs/node:latest
-    container_name: node
+    container_name: node-${NODE_NUMBER}
     volumes:
       # Volume for a socket to be created and shared with the execution engine.
       - socketvolume:/opt/docker/.sockets
@@ -37,9 +37,9 @@ services:
       - run
       - -s
       - --casper-validator-private-key
-      - 97dce9661d50222e041ab0ce20ddf092ba139c2f92f1e65c00e0d0b7b6a91ad1
+      - $VALIDATOR_PRIVATE_KEY
       - --casper-validator-public-key
-      - 27eebce15ea09aee762a1a2becb5c736a2e44479e5bfd62c4e6f50727e6f87af
+      - $VALIDATOR_PUBLIC_KEY
       - --grpc-socket
       - /opt/docker/.sockets/.casper-node.sock
     depends_on:
@@ -48,7 +48,7 @@ services:
 
   execution-engine:
     image: io.casperlabs/execution-engine:latest
-    container_name: execution-engine
+    container_name: execution-engine-${NODE_NUMBER}
     volumes:
       - socketvolume:/opt/docker/.sockets
     networks:
