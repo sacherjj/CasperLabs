@@ -2,19 +2,19 @@ use common::key::Key;
 use common::value::Value;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::ops::Add;
+// use std::ops::Add;
 
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub enum Transform {
-    Write,
-    //AddInt32(i32),                    // value is sum of all adds executed during contract activation
-    //AddKeys(BTreeMap<String, Key>),   // value is ?
-    Add( Value ),          // Value::Int32 or Value::UrefMap; these sum all adds during contract activation
-    Read,
-    Failure(super::Error)
-}
+// #[derive(PartialEq, Eq, Debug, Clone)]
+// pub enum Transform {
+//     Write,
+//     //AddInt32(i32),                    // value is sum of all adds executed during contract activation
+//     //AddKeys(BTreeMap<String, Key>),   // value is ?
+//     Add( Value ),          // Value::Int32 or Value::UrefMap; these sum all adds during contract activation
+//     Read,
+//     Failure(super::Error)
+// }
 
-use self::Transform::*;
+// use self::Transform::*;
 
 // impl Transform {
 //     pub fn apply(self, v: Value) -> Result<Value, super::Error> {
@@ -94,8 +94,8 @@ use self::Transform::*;
 //     }
 // }
 
-impl fmt::Display for Transform {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
+// impl fmt::Display for Transform {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "{:?}", self)
+//     }
+// }

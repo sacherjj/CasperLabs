@@ -14,13 +14,53 @@ pub enum Value {
     ListInt32(Vec<i32>),
     String(String),
     ListString(Vec<String>),
-    NamedKey(String, Key),  // String=human readable, Key=unforgeable
-    UrefMap( BTreeMap<String, Key> ),
+    NamedKey(String, Key),
+    UrefMap( BTreeMap<String, Key> ),   // associates human-readable strings with urefs
     Acct(Account),
     Contract {
         bytes: Vec<u8>,
-        known_urefs: BTreeMap<String, Key>,  // NamedKey is type of entry inserted here (and in account)
+        known_urefs: BTreeMap<String, Key>,
     },
+}
+
+impl Value {
+    pub fn type_string(&self) -> String {
+        match self {
+            Int32(_) => String::from("Int32"),
+            ListInt32(_) => String::from("List[Int32]"),
+            String(_) => String::from("String"),
+            ByteArray(_) => String::from("ByteArray"),
+            Acct(_) => String::from("Account"),
+            Contract { .. } => String::from("Contract"),
+            NamedKey(_, _) => String::from("NamedKey"),
+            ListString(_) => String::from("List[String]"),
+        }
+    }
+
+    pub fn as_account(&self) -> &Account {
+        match self {
+            Acct(a) => a,
+            _ => panic!("Not an account: {:?}", self),
+        }
+    }
+}
+
+impl Add for Value {
+    type Output = Value;
+
+    fn add( self, rhs: Value ) -> Value {
+        match ( self, rhs ) {
+            ( Int32( lhs ),   Int32( rhsVal )   ) => Int32( lhs + rhsVal ),
+            ( UrefMap( lhs ), UrefMap( rhsVal ) ) => UrefMap( lhs.append( rhs ) ),
+
+            ( Contract { known_urefs: ku, bytes: b }, UrefMap( rhsVal ) ) =>
+                Contract { known_urefs: ku.append( rhsVal ), bytes: b },
+
+            ( Acct( a ), UrefMap( rhsVal ) ) => Acct( a.add_urefs( rhsVal ) ),
+
+            _ => panic!( "attempt to + {:?} to {:?}", self, rhs )
+        }
+    }
 }
 
 const INT32_ID: u8 = 0;
@@ -100,6 +140,7 @@ impl ToBytes for Value {
         }
     }
 }
+
 impl FromBytes for Value {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
@@ -144,70 +185,13 @@ impl FromBytes for Value {
     }
 }
 
+//===============================================================================
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Account {
     public_key: [u8; 32],
     nonce: u64,
     known_urefs: BTreeMap<String, Key>,
-}
-
-impl ToBytes for Account {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::new();
-        result.extend(&self.public_key.to_bytes());
-        result.append(&mut self.nonce.to_bytes());
-        result.append(&mut self.known_urefs.to_bytes());
-        result
-    }
-}
-impl FromBytes for Account {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (public_key, rem1): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (nonce, rem2): (u64, &[u8]) = FromBytes::from_bytes(rem1)?;
-        let (known_urefs, rem3): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem2)?;
-        Ok((
-            Account {
-                public_key,
-                nonce,
-                known_urefs,
-            },
-            rem3,
-        ))
-    }
-}
-
-impl Value {
-    pub fn type_string(&self) -> String {
-        match self {
-            Int32(_) => String::from("Int32"),
-            ListInt32(_) => String::from("List[Int32]"),
-            String(_) => String::from("String"),
-            ByteArray(_) => String::from("ByteArray"),
-            Acct(_) => String::from("Account"),
-            Contract { .. } => String::from("Contract"),
-            NamedKey(_, _) => String::from("NamedKey"),
-            ListString(_) => String::from("List[String]"),
-        }
-    }
-
-    pub fn as_account(&self) -> &Account {
-        match self {
-            Acct(a) => a,
-            _ => panic!("Not an account: {:?}", self),
-        }
-    }
-}
-
-impl Add for Value {
-    type Output = Value;
-
-    fn add( self, rhs: Value ) -> Value {
-        match ( self, rhs ) {
-            ( Int32( lhs ), Int32( rhsVal ) )     => Value::Int32( lhs + rhsVal ),
-            ( UrefMap( lhs ), UrefMap( rhsVal ) ) => Value::UrefMap( lhs.append( rhs ) ),
-            _ => panic!( "attempt to + {:?} to {:?}", self, rhs )
-        }
-    }
 }
 
 impl Account {
@@ -237,5 +221,31 @@ impl Account {
 
     pub fn nonce(&self) -> u64 {
         self.nonce
+    }
+}
+
+impl ToBytes for Account {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut result = Vec::new();
+        result.extend(&self.public_key.to_bytes());
+        result.append(&mut self.nonce.to_bytes());
+        result.append(&mut self.known_urefs.to_bytes());
+        result
+    }
+}
+
+impl FromBytes for Account {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (public_key, rem1): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (nonce, rem2): (u64, &[u8]) = FromBytes::from_bytes(rem1)?;
+        let (known_urefs, rem3): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem2)?;
+        Ok((
+            Account {
+                public_key,
+                nonce,
+                known_urefs,
+            },
+            rem3,
+        ))
     }
 }

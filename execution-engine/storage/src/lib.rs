@@ -15,13 +15,15 @@ use rand::{ FromEntropy, RngCore };
 use std::collections::{ BTreeMap, HashMap };
 use std::{ fmt, mem::discriminant, path::Path };
 
-use self::op::Op;
-use self::transform::Transform;
-use self::utils::add;
+// use self::op::Op;
+// use self::transform::Transform;
+// use self::utils::add;
 
 pub mod op;
 pub mod transform;
 mod utils;
+
+//===============================================================================
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
@@ -38,14 +40,28 @@ impl fmt::Display for Error {
 
 impl HostError for Error {}
 
+//===============================================================================
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum Transform {
+    Write,
+    //AddInt32(i32),                    // value is sum of all adds executed during contract activation
+    //AddKeys(BTreeMap<String, Key>),   // value is ?
+    Add( Value ),          // Value::Int32 or Value::UrefMap; these sum all adds during contract activation
+    Read,
+    //Failure(super::Error)
+}
+
+//===============================================================================
+
 pub trait GlobalState<T: TrackingCopy> {
     fn apply(&mut self, k: Key, t: Transform) -> Result<(), Error>;
     fn get(&self, k: &Key) -> Result<&Value, Error>;
     fn tracking_copy( &self, preStateKey: Key ) -> T;
 }
 
-#[derive(Debug)]
-pub struct ExecutionEffect(pub HashMap<Key, Op>, pub HashMap<Key, Transform>);
+// #[derive(Debug)]
+// pub struct ExecutionEffect(pub HashMap<Key, Op>, pub HashMap<Key, Transform>);
 
 pub trait TrackingCopy {
     fn new_uref(&mut self, v: Value ) -> Key;   // initial value
@@ -54,11 +70,12 @@ pub trait TrackingCopy {
     fn add(&mut self, k: Key, v: Value) -> Result<(), Error>;
 }
 
+//===============================================================================
 // !! LMDB creates 2 files in the specified directory: data.mdb and lock.mdb
 // !! these files may not work when moved between 32-bit and 64-bit machines
 
 pub struct LMDB< 'a > {
-   path   : &'a Path,
+   path   : &'a Path,                    // the directory in the file system where LMDB's two files live
    env    : std::sync::RwLockReadGuard<'a, rkv::Rkv>,   // implements Deref trait so the enclosed rkv::Rkv instance is accessible w/o additional work
    store  : Store,
    reader : rkv::Reader< 'a, &'a Key >   // this is an optimization so a reader does not need to be created on every read
@@ -79,7 +96,7 @@ impl< 'a > LMDB< 'a > {
          path   : lmdbDir,
          env    : env,
          store  : env.open_or_create_default().unwrap(),  // returns handle to default (unnamed) store for the environment
-         reader : env.read().expect( "reader" )   // all keys given to LMDB must implement AsRef<[u8]>
+         reader : env.read().expect( "reader" )           // all keys given to LMDB must implement AsRef<[u8]>
       }
    }
 }
@@ -132,6 +149,7 @@ impl< 'a > GlobalState< Cache< 'a > > for LMDB< 'a > {
     //-------------------------------------------------------------------------------
 }
 
+//===============================================================================
 // a Cache instance is the context for each contract activation
 pub struct Cache< 'a > {
     preState    : &'a LMDB< 'a >,   // pointer to global store GLobalState; accessed on a cache miss
