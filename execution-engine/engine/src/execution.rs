@@ -5,7 +5,8 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
-use storage::{Error as StorageError, ExecutionEffect, GlobalState, TrackingCopy};
+use storage::error::Error as StorageError;
+use storage::gs::{ExecutionEffect, GlobalState, TrackingCopy};
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,

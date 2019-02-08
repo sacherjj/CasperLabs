@@ -1,3 +1,4 @@
+use super::error::Error;
 use common::key::Key;
 use common::value::Value;
 use std::collections::BTreeMap;
@@ -10,13 +11,13 @@ pub enum Transform {
     Write(Value),
     AddInt32(i32),
     AddKeys(BTreeMap<String, Key>),
-    Failure(super::Error),
+    Failure(Error),
 }
 
 use self::Transform::*;
 
 impl Transform {
-    pub fn apply(self, v: Value) -> Result<Value, super::Error> {
+    pub fn apply(self, v: Value) -> Result<Value, Error> {
         match self {
             Identity => Ok(v),
             Write(w) => Ok(w),
@@ -24,7 +25,7 @@ impl Transform {
                 Value::Int32(j) => Ok(Value::Int32(i + j)),
                 other => {
                     let expected = String::from("Int32");
-                    Err(super::Error::TypeMismatch {
+                    Err(Error::TypeMismatch {
                         expected,
                         found: other.type_string(),
                     })
@@ -44,7 +45,7 @@ impl Transform {
                 }
                 other => {
                     let expected = String::from("Contract or Account");
-                    Err(super::Error::TypeMismatch {
+                    Err(Error::TypeMismatch {
                         expected,
                         found: other.type_string(),
                     })
@@ -74,7 +75,7 @@ impl Add for Transform {
             }
             (AddInt32(i), b) => match b {
                 AddInt32(j) => AddInt32(i + j),
-                other => Failure(super::Error::TypeMismatch {
+                other => Failure(Error::TypeMismatch {
                     expected: "AddInt32".to_owned(),
                     found: format!("{:?}", other),
                 }),
@@ -84,7 +85,7 @@ impl Add for Transform {
                     ks1.append(&mut ks2);
                     AddKeys(ks1)
                 }
-                other => Failure(super::Error::TypeMismatch {
+                other => Failure(Error::TypeMismatch {
                     expected: "AddKeys".to_owned(),
                     found: format!("{:?}", other),
                 }),

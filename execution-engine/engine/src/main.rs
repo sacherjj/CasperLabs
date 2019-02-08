@@ -8,7 +8,8 @@ use execution_engine::engine::EngineState;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter::Iterator;
-use storage::ExecutionEffect;
+use storage::gs::inmem::InMemGS;
+use storage::gs::ExecutionEffect;
 
 #[derive(Debug)]
 struct Task {
@@ -78,7 +79,7 @@ fn main() {
         .and_then(|v| v.parse::<u64>().ok())
         .expect("Provided gas limit value is not u64.");
 
-    let gs = storage::InMemGS::new();
+    let gs = InMemGS::new();
     let engine_state = {
         let state = EngineState::new(gs);
         state.with_mocked_account(account_addr);
