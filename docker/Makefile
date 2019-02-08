@@ -23,7 +23,7 @@ node-%:
 	ln -s ${PWD}/template/docker-compose.yml node-$(N)/docker-compose.yml
 
 # Start node.
-node-%/up: node-%
+node-%/up: node-% .make/docker/network
 	@# Go into the directory to pick up values from .env
 	cd node-$* && docker-compose up -d
 
@@ -33,4 +33,11 @@ node-%/down:
 	rm -rf node-$*
 
 # Remove all node-N environments.
-down: $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
+clean: $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
+	docker network rm casperlabs
+	rm -rf .make
+
+
+.make/docker/network:
+	docker network create casperlabs
+	mkdir -p $(dir $@) && touch $@

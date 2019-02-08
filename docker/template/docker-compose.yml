@@ -2,8 +2,9 @@ version: "3.5"
 
 networks:
   # Create an explicit network so we can connect to it from the client to do deployments.
+  # Create it externally so when we remove individual nodes it doesn't try to destroy it.
   casperlabs:
-    name: casperlabs
+    external: true
 
 # Cross mounting volumes: https://github.com/docker/compose/issues/3211
 volumes:
