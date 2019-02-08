@@ -1,3 +1,6 @@
+
+use std::ops::Add;
+
 use super::alloc::collections::btree_map::BTreeMap;
 use super::alloc::string::String;
 use super::alloc::vec::Vec;
@@ -12,6 +15,7 @@ pub enum Value {
     String(String),
     ListString(Vec<String>),
     NamedKey(String, Key),  // String=human readable, Key=unforgeable
+    UrefMap( BTreeMap<String, Key> ),
     Acct(Account),
     Contract {
         bytes: Vec<u8>,
@@ -190,6 +194,18 @@ impl Value {
         match self {
             Acct(a) => a,
             _ => panic!("Not an account: {:?}", self),
+        }
+    }
+}
+
+impl Add for Value {
+    type Output = Value;
+
+    fn add( self, rhs: Value ) -> Value {
+        match ( self, rhs ) {
+            ( Int32( lhs ), Int32( rhsVal ) )     => Value::Int32( lhs + rhsVal ),
+            ( UrefMap( lhs ), UrefMap( rhsVal ) ) => Value::UrefMap( lhs.append( rhs ) ),
+            _ => panic!( "attempt to + {:?} to {:?}", self, rhs )
         }
     }
 }

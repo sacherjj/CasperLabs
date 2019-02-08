@@ -84,17 +84,13 @@ impl< 'a > LMDB< 'a > {
    }
 }
 
-//impl GlobalState<InMemTC> for InMemGS {
 impl< 'a > GlobalState< Cache< 'a > > for LMDB< 'a > {
     //-------------------------------------------------------------------------------
-    fn apply( &mut self,
-              k : Key,
-              t : Transform ) -> Result< (), Error > {
+    fn apply( &mut self, k : Key, t : Transform ) -> Result< (), Error > {  // TODO: why is a Transform being sent here rather than source data?
 
         match self.reader.get( self.store, &k ) {   // translate to blob to_bytes
             Ok( v ) => {
                 let mut writer = self.env.write().unwrap();   // TODO: better error handling than unwrap()?
-
                 match v {
                     Some( val ) => {                          // key does exist
                         writer.put( self.store, &k, t.apply( val )? );
@@ -102,16 +98,15 @@ impl< 'a > GlobalState< Cache< 'a > > for LMDB< 'a > {
                         Ok( () )
                     },
                     None => match t {                         // key does not exist
-                                Transform::Write => {
-                                    writer.put( self.store, k, val );   // TODO: what does this do when key is absent?
-                                    writer.commit();
-                                    Ok( () )
-                                },
-                                _ => Err( Error::KeyNotFound { key: *k } )
-                            }
+                        Transform::Write => {
+                            writer.put( self.store, &k, val );   // TODO: what does this do when key is absent?
+                            writer.commit();
+                            Ok( () )
+                        },
+                        _ => Err( Error::KeyNotFound { key: k } )
+                    }
                 }
             },
-
             Err( e ) => Err( Error::Rkv_error_StoreError )   // e is rkv::error::StoreError
         }
     }
@@ -126,12 +121,12 @@ impl< 'a > GlobalState< Cache< 'a > > for LMDB< 'a > {
         }
     }
     //-------------------------------------------------------------------------------
-    fn tracking_copy( &self, preStateKey: Key ) -> Cache {
+    fn tracking_copy( &self, preStateKey: Key ) -> Cache< 'a > {
         Cache< 'a > {
-            preKey : preKey,
-            global : &'a self,
-            cache  : HashMap::new(),
-            rng    : rand::rngs::StdRng::from_entropy()
+            preState    : self,
+            preStateKey : preStateKey,
+            store       : HashMap::new(),
+            rng         : rand::rngs::StdRng::from_entropy()
         }
     }
     //-------------------------------------------------------------------------------
@@ -139,8 +134,8 @@ impl< 'a > GlobalState< Cache< 'a > > for LMDB< 'a > {
 
 // a Cache instance is the context for each contract activation
 pub struct Cache< 'a > {
-    preState    : LMDB< 'a >,   // pointer to global store GLobalState; accessed on a cache miss
-    preStateKey : Vec< u8 >,    // identifies pre-state to use; prepended to all global store accesses
+    preState    : &'a LMDB< 'a >,   // pointer to global store GLobalState; accessed on a cache miss
+    preStateKey : Key,    // identifies pre-state to use; prepended to all global store accesses
     store       : HashMap< Key, ( Value, Transform ) >,   // caches all reads and writes of state from contract
     rng         : rand::rngs::StdRng
 }
@@ -159,13 +154,13 @@ impl< 'a > TrackingCopy for Cache< 'a > {
 
         match self.store.get( &k ) {
             Some( ( v1, _ ) ) => Ok( v1 ),   // Cache hit; read is most commutative = no need to update Op
-            None => {                        // Cache miss
+            None => {                        // Cache miss; look in preState
                 match self.preState.get( &k ) {
-                    Ok( v2 ) => {            // name exists in preState
+                    Ok( v2 ) => {            // in preState
                         self.store.insert( k, ( *v2, Transform::Read ) );
                         Ok( v2 )
                     },
-                    Err( e ) => Err( e )     // name does not exist in preState or LMBD error
+                    Err( e ) => Err( e )     // not in preState or LMBD error
                 }
             }
         }
@@ -174,108 +169,68 @@ impl< 'a > TrackingCopy for Cache< 'a > {
     fn write( &mut self, k: Key, v: Value ) -> Result< (), Error > {
 
         let oldV = match self.store.get( &k ) {
-            Some( ( v1, _ ) ) => Ok( v1 ),                         // cache hit
-            None              => match self.preState.get( &k ) {   // cache miss
+            Some( ( v1, _ ) ) => Ok( v1 ),                         // Cache hit
+            None              => match self.preState.get( &k ) {   // Cache miss; look in preState
                                      Ok( v2 ) => Ok( v2 ),         // in preState
                                      Err( e ) => Err( e )          // not in preState or LMDB error
                                  }
         };
 
         match oldV {
-            Ok( oldV2 ) => if discriminant( &v ) == discriminant( oldV2 ) {   // type of new value == type of old value
-                               self.store.insert( k, ( v.clone(), Transform::Write ) );
-                               Ok( () )
-                           } else {                                           // type of new value != type of old value
-                               Err( Error::TypeMismatch {
-                                        expected: "no change of type on write".to_string(),
-                                        found:    format!( "write of {:?} over {:?}", v, oldV2 ) } )
-                           },
+            Ok( oldV2 ) =>
+                if discriminant( &v ) == discriminant( oldV2 ) {   // variant of new value == variant of old value
+                    self.store.insert( k, ( v.clone(), Transform::Write ) );
+                    Ok( () )
+                } else {                                           // variant of new value != variant of old value
+                    Err( Error::TypeMismatch {
+                             expected: "no change of type on write".to_string(),
+                             found:    format!( "write of {:?} over {:?}", v, oldV2 ) } )
+                },
             Err( e2 ) => Err( e2 )
         }
      }
     //==============================================================
     fn add( &mut self, k: Key, v: Value ) -> Result<(), Error> {
-        match v {
 
-            Value::Int32( inc ) =>                                   // attempting to add Int32
-                match self.store.get( &k ) {
-                    //---------------------------------------------
-                    Some( ( Value::Int32( oldVal ), oldOp ) ) => {   // Cache hit && current type == Int32
-                        let newOp = match oldOp {                    // find least commutative op
-                            Transform::Write              => Transform::Write,
-                            Transform::AddInt32( oldInc ) => Transform::AddInt32( oldInc + inc ),
-                            _                             => Transform::AddInt32( inc )   // technically this could be AddKeys or Failure
-                        };
-                        self.store.insert( k, ( Value::Int32( oldVal + inc ), newOp ) );
-                        Ok( () )
-                    },
-                    //---------------------------------------------
-                    Some( ( v2, _ ) ) =>
-                        Err( Error::TypeMismatch {          // Cache hit && current type != Int32
-                                 expected: "add of Int32 to Int32".to_string(),
-                                 found:    format!( "add of Int32 to {:?}", v2 ) } ),
-                    //---------------------------------------------
-                    None =>                                          // cache miss
-                        match self.preState.get( &k ) {
-                            Ok( v2 ) =>                              // name exists in preState
-                                match v2 {
-                                    Value::Int32( oldVal ) => {      // current type == Int32
-                                        self.store.insert( k, ( Value::Int32( oldVal + inc ), Transform::AddInt32( inc ) ) );
-                                        Ok( () )
-                                    },
-                                    _  => Err( Error::TypeMismatch {   // current type != Int32
-                                                   expected: "add of Int32 to Int32".to_string(),
-                                                   found: format!( "add of Int32 to {:?}", v2 ) } )
-                                },
-                            Err( e ) => Err( e )                     // name does not exist or LMBD boo-boo
-                        }
-                    //---------------------------------------------
-                },
+        let old = match self.store.get( &k ) {                           // old is Result< ( &Value, &Transform ) >
+            Some( ( oldVal, oldOp ) ) => Ok( ( oldVal, oldOp ) ),        // cache hit
+            None =>                                                      // cache miss
+                match self.preState.get( &k ) {
+                    Ok( oldVal ) => Ok( ( oldVal, &Transform::Read ) ),  // in preState; Transform::Read makes newOp calc work below
+                    Err( e )     => Err( e )                             // not in preState or LMDB error
+                }
+        };
 
-            Value::NamedKey( name, key ) =>                  // attempting to add NamedKey
-                match self.store.get( &k ) {
-                    //---------------------------------------------
-                    Some( ( Value::Acct( account ), oldOp ) ) => {    // Cache hit && current type == Acct;
-                        account.add_map( name, key );
-                        self.store.insert( k,  )
-                        Ok( () )
-                    },
-                    //---------------------------------------------
-                    Some( ( Value::Contract { known_urefs: oldMap, bytes: bytes },
-                            oldOp ) ) => {
-                            // can do contract.known_urefs = updated map; but need variable pointing to entire Contract struct
-                        let newOp = match oldOp {                    // find least commutative op
-                            Transform::Write             => Transform::Write,
-                            Transform::AddKeys( oldInc ) => {
-                                                                oldInc.insert( name, key );
-                                                                Transform::AddKeys( *oldInc )
-                                                            },
-                            _                            => {
-                                                                let incMap = BTreeMap::new();
-                                                                incMap.insert( name, key );
-                                                                Transform::AddKeys( incMap )
-                                                            }
-                        };
-                        oldMap.insert( name, key );
-                        self.store.insert( k, ( Value::Contract { known_urefs: *oldMap, bytes: *bytes }, newOp ) );
-                        Ok( () )
-                    },
-                    //---------------------------------------------
-                    Some( ( v2, _ ) ) =>
-                        Err( Error::TypeMismatch {          // Cache hit && current type != Int32
-                                 expected: "add of NamedKey to Acct or Contract".to_string(),
-                                 found:    format!( "add of NamedKey to {:?}", v2 ) } ),
-                    //---------------------------------------------
-                    None =>
-                        match self.preState.get( &k ) {
-                            Ok( val ) => Ok( () ),
-                            Err( e ) => Err( e )
-                        }
-                },
+        let inc = match ( v, old ) {                                               // inc is Result< Value >
+            ( Value::Int32( _ ), Ok( ( Value::Int32( _ ), _ ) ) ) => Ok( v ),      // add of Int32 to Int32
 
-            other => Err( Error::TypeMismatch {            // attempting to add other than Int32 or NamedKey
-                              expected: "add of Int32 or NamedKey".to_string(),
-                              found:    format!( "add of {:?}", other ) } )
+            ( Value::NamedKey( name, key ), Ok( ( Value::Contract { bytes: _, known_urefs: _ }, _ ) ) ) |
+            ( Value::NamedKey( name, key ), Ok( ( Value::Acct( _ ), _ ) ) ) => {   // add of NamedKey to either Contract or Acct
+                let inc2 = BTreeMap::new();
+                inc2.insert( name, key );
+                Ok( Value::UrefMap( inc2 ) )                                       // create BTreeMap to make it easier to add to existing BTreeMap
+            },
+
+            ( otherInc, Ok( ( otherVal, _ ) ) ) =>
+                Err( Error::TypeMismatch {
+                         expected: "add Int32 to Int32, or add of NamedKey to either Contract or Acct".to_string(),
+                         found:    format!( "add of {:?} to {:?}", otherInc, otherVal ) } ),
+
+            ( _, Err( _ ) ) => old
+        };
+
+        match ( old, inc ) {
+            ( Ok( ( oldVal, oldOp ) ), Ok( inc2 ) ) => {
+                let newOp = match oldOp {
+                    Transform::Write         => Transform::Write,
+                    Transform::Add( oldInc ) => Transform::Add( oldInc + inc2 ),   // oldInc and inc are V::Int32 or V::UrefMap
+                    _                        => Transform::Add( inc2 )
+                };
+                self.store.insert( k, ( oldVal + inc2, newOp ) );   // oldVal is V::Int32 or V::Contract or V::Acct
+                Ok( () )
+            },
+
+            ( _, Err(_) ) => inc                                    // errors in old are propagated througn inc
         }
     }
     //-------------------------------------------------------------------------------
