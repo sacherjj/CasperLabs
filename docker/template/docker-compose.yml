@@ -37,19 +37,19 @@ services:
       - casperlabs
     environment:
       HOME: /root
-      CL_VALIDATOR_PUBLIC_KEY: $CL_VALIDATOR_PUBLIC_KEY
-      CL_VALIDATOR_PRIVATE_KEY: $CL_VALIDATOR_PRIVATE_KEY
-      CL_SERVER_STANDALONE: $CL_SERVER_STANDALONE
       # Got the ID from the logs by running the node once. They keys are going to be the same for node-0.
       # i.e. "Listening for traffic on casperlabs://..."
-      CL_SERVER_BOOTSTRAP: casperlabs://bc416197520ec34e19a03507f93bbeae15f80a02@node-0?protocol=40400&discovery=40404
+      BOOTSTRAP_HOSTNAME: node-0
+      BOOTSTRAP_ID: bc416197520ec34e19a03507f93bbeae15f80a02
+      CL_VALIDATOR_PUBLIC_KEY: $CL_VALIDATOR_PUBLIC_KEY
+      CL_VALIDATOR_PRIVATE_KEY: $CL_VALIDATOR_PRIVATE_KEY
       CL_GRPC_SOCKET: /root/.casperlabs/sockets/.casper-node.sock
     entrypoint:
       - sh
       - -c
       - chmod +x ./start-node.sh && ./start-node.sh
     depends_on:
-      # Need the gRPC socket file to be created before we start.
+      # Need the gRPC socket file to be created before we start the node.
       - execution-engine
 
   execution-engine:

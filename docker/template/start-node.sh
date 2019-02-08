@@ -2,7 +2,7 @@
 
 set -e
 
-if [ "$CL_SERVER_STANDALONE" = "true" ]; then
+if [ "$HOSTNAME" = "$BOOTSTRAP_HOSTNAME" ]; then
 	# Start the bootstrap node with a fixed key to get a deterministic ID.
 	exec ./bin/node run -s \
 	    --server-host $HOSTNAME \
@@ -14,7 +14,7 @@ if [ "$CL_SERVER_STANDALONE" = "true" ]; then
 else
 	exec ./bin/node run \
 	    --server-host $HOSTNAME \
-		--server-bootstrap $CL_SERVER_BOOTSTRAP \
+		--server-bootstrap "casperlabs://${BOOTSTRAP_ID}@${BOOTSTRAP_HOSTNAME}?protocol=40400&discovery=40404" \
 		--casper-validator-private-key $CL_VALIDATOR_PRIVATE_KEY \
         --casper-validator-public-key $CL_VALIDATOR_PUBLIC_KEY \
         --grpc-socket $CL_GRPC_SOCKET

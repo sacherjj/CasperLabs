@@ -15,9 +15,6 @@ node-%:
 	@# Create an .env file to hold template variables for docker-compose.
 	echo NODE_NUMBER=$(N) > $(ENV)
 
-	@# node-0 is the bootstrap node
-	echo CL_SERVER_STANDALONE=$(shell [ "$(N)" = "0" ] && echo "true" || echo "false") >> $(ENV)
-
 	@# The name of the file is the public key. Content is the private key.
 	echo CL_VALIDATOR_PUBLIC_KEY=$(shell echo "$(KEY_FILE)" | awk -F '[/.]' '{print $$4}') >> $(ENV)
 	echo CL_VALIDATOR_PRIVATE_KEY=$(shell cat "$(KEY_FILE)") >> $(ENV)
