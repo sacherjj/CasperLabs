@@ -5,8 +5,9 @@ use execution::{exec, Error as ExecutionError};
 use parity_wasm::elements::Module;
 use parking_lot::Mutex;
 use std::collections::BTreeMap;
+use storage::error::Error as StorageError;
+use storage::gs::{ExecutionEffect, GlobalState, TrackingCopy};
 use storage::transform::Transform;
-use storage::{ExecutionEffect, GlobalState, TrackingCopy};
 use vm::wasm_costs::WasmCosts;
 use wasm_prep::process;
 
@@ -23,7 +24,7 @@ pub enum Error {
     PreprocessingError(String),
     SignatureError(String),
     ExecError(ExecutionError),
-    StorageError(storage::Error),
+    StorageError(StorageError),
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -52,8 +53,8 @@ impl From<wasm_prep::PreprocessingError> for Error {
     }
 }
 
-impl From<storage::Error> for Error {
-    fn from(error: storage::Error) -> Self {
+impl From<StorageError> for Error {
+    fn from(error: StorageError) -> Self {
         Error::StorageError(error)
     }
 }

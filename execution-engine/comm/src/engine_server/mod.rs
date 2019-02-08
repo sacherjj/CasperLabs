@@ -1,6 +1,6 @@
 use execution_engine::engine::EngineState;
 use std::marker::{Send, Sync};
-use storage::{GlobalState, TrackingCopy};
+use storage::gs::{GlobalState, TrackingCopy};
 
 pub mod mappings;
 use mappings::*;
