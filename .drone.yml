@@ -84,8 +84,7 @@ pipeline:
   run-integration-tests:
     <<: *buildenv
     commands:
-      - python3 -m pip install pipenv
-      - python3 -m pip install dataclasses
+      - python3 -m pip install pipenv dataclasses typing_extensions
       - cd integration-testing
       - ./run_tests.sh
     volumes:
