@@ -35,7 +35,7 @@ class LogsContainMessage:
 
 class NodeStarted(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabsnode')
+        super().__init__(node, 'io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabs')
 
 
 class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
