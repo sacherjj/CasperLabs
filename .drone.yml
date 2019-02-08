@@ -71,6 +71,15 @@ pipeline:
     <<: *sbtenv
     commands:
       - sbt test
+      
+  run-integration-tests:
+    <<: *buildenv
+    commands:
+      - python3 -m pip install pipenv
+      - cd integration-testing
+      - ./run_tests.sh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   # push
 
