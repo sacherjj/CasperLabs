@@ -8,7 +8,7 @@ set -e
 # usage: ./client.sh <node-id> <command> [OPTION...]
 # for example:
 #
-# ./client.sh node-0 deploy \$PWD/../contract-examples/store-hello-name/target/wasm32-unknown-unknown/release \
+# ./client.sh node-0 deploy $PWD/../contract-examples/store-hello-name/target/wasm32-unknown-unknown/release \
 #     --from 00000000000000000000 \
 #     --gas-limit 100000000 --gas-price 1 \
 #     --session /data/helloname.wasm \
