@@ -36,7 +36,7 @@ DEFAULT_IMAGE = os.environ.get(
     "DEFAULT_IMAGE",
     "casperlabs-integration-testing:latest")
 
-casperlabsnode_binary = '/opt/docker/bin/node'
+casperlabsnode_binary = '/opt/docker/bin/bootstrap'
 casperlabsnode_directory = "/var/lib/casperlabsnode"
 casperlabsnode_deploy_dir = "{}/deploy".format(casperlabsnode_directory)
 casperlabsnode_bonds_file = '{}/genesis/bonds.txt'.format(casperlabsnode_directory)
@@ -355,6 +355,8 @@ def make_node(
     hosts_allow_file = make_tempfile("hosts-allow-{}".format(name), hosts_allow_file_content)
     hosts_deny_file = make_tempfile("hosts-deny-{}".format(name), "ALL: ALL")
 
+    container_command_options['--server-data-dir'] = casperlabsnode_directory
+    container_command_options['--casper-bonds-file'] = casperlabsnode_bonds_file
     command = make_container_command(container_command, container_command_options)
 
     env = {
@@ -443,7 +445,7 @@ def make_bootstrap_node(
         "--casper-validator-public-key":   key_pair.public_key,
         "--casper-has-faucet":             "",
         "--server-host":                   name,
-        "--prometheus":                    "",
+        "--metrics-prometheus":            "",
     }
 
     if cli_options is not None:
