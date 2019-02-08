@@ -36,6 +36,7 @@ import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.{Cell, Log}
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -167,18 +168,9 @@ object HashSetCasperTestNode {
 
     val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
     val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
-
-    // Make sure however the store is created is in line with what BlockDagStorageFixture is doing.
-    implicit val blockStore =
-      LMDBBlockStore.create[F](
-        LMDBBlockStore.Config(path = blockStoreDir, mapSize = storageSize)
-      )
-
+    val env           = Context.env(blockStoreDir, mapSize)
     for {
-      // blockStore <- {
-      //   val env = Context.env(blockStoreDir, storageSize)
-      //   FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
-      // }
+      blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
       blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                           BlockDagFileStorage.Config(
                             blockDagDir.resolve("latest-messages-data"),
@@ -262,11 +254,9 @@ object HashSetCasperTestNode {
 
             val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
             val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
-            implicit val blockStore =
-              LMDBBlockStore.create[F](
-                LMDBBlockStore.Config(path = blockStoreDir, mapSize = storageSize)
-              )
+            val env           = Context.env(blockStoreDir, mapSize)
             for {
+              blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
               blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                                   BlockDagFileStorage.Config(
                                     blockDagDir.resolve("latest-messages-data"),
