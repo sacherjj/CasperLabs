@@ -236,13 +236,10 @@ class Node:
             return output
         except ContainerError as err:
             logging.warning("EXITED code={} command='{}' output='{}'".format(err.exit_status, err.command, err.stderr))
-            if err.stderr is not None:
-                return err.stderr.decode("utf-8")
-            else:
-                return ""
+            raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
 
     def deploy(self, session_code: str, payment_code:str="payment.wasm",
-               from_address:str="0x01", gas_limit:int=1000000,
+               from_address:str="00000000000000000000", gas_limit:int=1000000,
                gas_price:int=1, nonce:int=0) -> str:
         session_code_full_path = os.path.join(os.getcwd(), "resources", session_code)
         payment_code_full_path = os.path.join(os.getcwd(), "resources", payment_code)
@@ -360,7 +357,9 @@ def make_node(
 
     command = make_container_command(container_command, container_command_options)
 
-    env = {}
+    env = {
+        'RUST_BACKTRACE':'full'
+    }
     java_options = os.environ.get('_JAVA_OPTIONS')
     if java_options is not None:
         env['_JAVA_OPTIONS'] = java_options
