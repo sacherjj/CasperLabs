@@ -42,35 +42,35 @@ pipeline:
     <<: *sbtenv
     commands:
       - sbt update
-#
-#  compile:
-#    <<: *sbtenv
-#    commands:
-#      - sbt compile test:compile doc
-#
-#  compile-rust-engine:
-#    <<: *buildenv
-#    commands:
-#      - cd execution-engine/engine
-#      - ~/.cargo/bin/cargo build
-#
-#  compile-rust-comm:
-#    <<: *buildenv
-#    commands:
-#      - cd execution-engine/comm
-#      - ~/.cargo/bin/cargo run --bin grpc-protoc
-#      - ~/.cargo/bin/cargo build
-#
-#  run-rust-tests:
-#    <<: *buildenv
-#    commands:
-#      - cd execution-engine/tests
-#      - ~/.cargo/bin/cargo test
-#
-#  run-unit-tests:
-#    <<: *sbtenv
-#    commands:
-#      - sbt test
+
+  compile:
+    <<: *sbtenv
+    commands:
+      - sbt compile test:compile doc
+
+  compile-rust-engine:
+    <<: *buildenv
+    commands:
+      - cd execution-engine/engine
+      - ~/.cargo/bin/cargo build
+
+  compile-rust-comm:
+    <<: *buildenv
+    commands:
+      - cd execution-engine/comm
+      - ~/.cargo/bin/cargo run --bin grpc-protoc
+      - ~/.cargo/bin/cargo build
+
+  run-rust-tests:
+    <<: *buildenv
+    commands:
+      - cd execution-engine/tests
+      - ~/.cargo/bin/cargo test
+
+  run-unit-tests:
+    <<: *sbtenv
+    commands:
+      - sbt test
 
   docker-build-node-and-client:
     <<: *sbtenv
@@ -91,36 +91,36 @@ pipeline:
 
   # push
 
-#  package:
-#    <<: *sbtenv
-#    commands:
-#      - sbt node/debian:packageBin node/universal:packageZipTarball
-#      - mkdir -p /artifacts/${DRONE_BRANCH}
-#      - cp node/target/node_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
-#    volumes:
-#      - /var/cache/cl-build/.sbt:/root/.sbt
-#      - /var/cache/cl-build/.ivy2:/root/.ivy2
-#      - /var/run/docker.sock:/var/run/docker.sock
-#      - /artifacts/:/artifacts/
-#    when:
-#      event: [ push, tag ]
-#
-#  package-rpm:
-#    <<: *sbtenv
-#    commands:
-#      - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
-#      - mkdir -p /artifacts/${DRONE_BRANCH}
-#      - cp node/target/rpm/RPMS/noarch/node-*.noarch.rpm /artifacts/${DRONE_BRANCH}
-#    volumes:
-#      - /var/cache/cl-build/.sbt:/root/.sbt
-#      - /var/cache/cl-build/.ivy2:/root/.ivy2
-#      - /artifacts/:/artifacts/
-#    when:
-#      event: [ push, tag ]
-#
-#  notify:
-#    image: plugins/slack
-#    channel: alerts
-#    secrets: [ slack_webhook ]
-#    when:
-#      status: [ failure ]
+  package:
+    <<: *sbtenv
+    commands:
+      - sbt node/debian:packageBin node/universal:packageZipTarball
+      - mkdir -p /artifacts/${DRONE_BRANCH}
+      - cp node/target/node_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /artifacts/:/artifacts/
+    when:
+      event: [ push, tag ]
+
+  package-rpm:
+    <<: *sbtenv
+    commands:
+      - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
+      - mkdir -p /artifacts/${DRONE_BRANCH}
+      - cp node/target/rpm/RPMS/noarch/node-*.noarch.rpm /artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+      - /artifacts/:/artifacts/
+    when:
+      event: [ push, tag ]
+
+  notify:
+    image: plugins/slack
+    channel: alerts
+    secrets: [ slack_webhook ]
+    when:
+      status: [ failure ]
