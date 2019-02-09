@@ -12,11 +12,15 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.GrpcExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
+import scala.concurrent.duration._
 
 object Main {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val log: Log[Task]       = effects.log
+
+  // Mark error types returned by the program so we can log without stacktrace.
+  class CommException(message: String) extends Exception(message)
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.computation(
@@ -49,13 +53,24 @@ object Main {
       case Run         => nodeProgram(conf)
     }
 
-    program.doOnFinish(
-      _ =>
-        Task.delay {
-          diagnosticsService.close()
-          System.exit(1)
-        }
-    )
+    program
+      .guarantee {
+        Task.delay(diagnosticsService.close())
+      }
+      .doOnFinish {
+        case Some(ex) =>
+          (if (ex.isInstanceOf[CommException])
+             log.error(ex.getMessage)
+           else
+             log.error(ex.getMessage, ex)) *>
+            Task
+              .delay(System.exit(1))
+              .delayExecution(500.millis) // A bit of time for logs to flush.
+
+        case None =>
+          Task.delay(System.exit(0))
+      }
+
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
@@ -66,16 +81,19 @@ object Main {
         _       <- runtime.main
       } yield ()
 
+    // Return an error for logging and exit code to be done in `mainProgram`.
+    def raise(msg: String) =
+      Task.raiseError(new CommException(msg))
+
     node.value >>= {
       case Right(_) =>
         Task.unit
       case Left(CouldNotConnectToBootstrap) =>
-        log.error("Node could not connect to bootstrap node.")
+        raise("Node could not connect to bootstrap node.")
       case Left(InitializationError(msg)) =>
-        log.error(msg)
-        Task.delay(System.exit(-1))
+        raise(msg)
       case Left(error) =>
-        log.error(s"Failed! Reason: '$error")
+        raise(s"Failed! Reason: '$error")
     }
   }
 }
