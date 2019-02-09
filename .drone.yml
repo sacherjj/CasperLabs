@@ -38,39 +38,39 @@ pipeline:
 
   # pr
 
-  sbt-update:
-    <<: *sbtenv
-    commands:
-      - sbt update
-
-  compile:
-    <<: *sbtenv
-    commands:
-      - sbt compile test:compile doc
-
-  compile-rust-engine:
-    <<: *buildenv
-    commands:
-      - cd execution-engine/engine
-      - ~/.cargo/bin/cargo build
-
-  compile-rust-comm:
-    <<: *buildenv
-    commands:
-      - cd execution-engine/comm
-      - ~/.cargo/bin/cargo run --bin grpc-protoc
-      - ~/.cargo/bin/cargo build
-
-  run-rust-tests:
-    <<: *buildenv
-    commands:
-      - cd execution-engine/tests
-      - ~/.cargo/bin/cargo test
-
-  run-unit-tests:
-    <<: *sbtenv
-    commands:
-      - sbt test
+#  sbt-update:
+#    <<: *sbtenv
+#    commands:
+#      - sbt update
+#
+#  compile:
+#    <<: *sbtenv
+#    commands:
+#      - sbt compile test:compile doc
+#
+#  compile-rust-engine:
+#    <<: *buildenv
+#    commands:
+#      - cd execution-engine/engine
+#      - ~/.cargo/bin/cargo build
+#
+#  compile-rust-comm:
+#    <<: *buildenv
+#    commands:
+#      - cd execution-engine/comm
+#      - ~/.cargo/bin/cargo run --bin grpc-protoc
+#      - ~/.cargo/bin/cargo build
+#
+#  run-rust-tests:
+#    <<: *buildenv
+#    commands:
+#      - cd execution-engine/tests
+#      - ~/.cargo/bin/cargo test
+#
+#  run-unit-tests:
+#    <<: *sbtenv
+#    commands:
+#      - sbt test
       
   docker-build-node:
     <<: *sbtenv
