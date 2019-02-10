@@ -13,14 +13,12 @@ import io.casperlabs.smartcontracts.GrpcExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 import scala.concurrent.duration._
+import scala.util.control.NoStackTrace
 
 object Main {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val log: Log[Task]       = effects.log
-
-  // Mark error types returned by the program so we can log without stacktrace.
-  class CommException(message: String) extends Exception(message)
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.computation(
@@ -59,10 +57,7 @@ object Main {
       }
       .doOnFinish {
         case Some(ex) =>
-          (if (ex.isInstanceOf[CommException])
-             log.error(ex.getMessage)
-           else
-             log.error(ex.getMessage, ex)) *>
+          log.error(ex.getMessage, ex) *>
             Task
               .delay(System.exit(1))
               .delayExecution(500.millis) // A bit of time for logs to flush.
@@ -83,7 +78,7 @@ object Main {
 
     // Return an error for logging and exit code to be done in `mainProgram`.
     def raise(msg: String) =
-      Task.raiseError(new CommException(msg))
+      Task.raiseError(new Exception(msg) with NoStackTrace)
 
     node.value >>= {
       case Right(_) =>
