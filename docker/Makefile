@@ -31,8 +31,10 @@ node-%/up: node-% .make/docker/network
 
 # Tear down node.
 node-%/down:
-	[ -d node-$* ] && cd node-$* && docker-compose down || exit 0
-	rm -rf node-$*
+	if [ -d node-$* ]; then \
+		cd node-$* && docker-compose down && cd - && \
+		rm -rf node-$* ; \
+	fi
 
 # Remove all node-N environments.
 clean: $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
