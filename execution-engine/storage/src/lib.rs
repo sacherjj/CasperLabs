@@ -1,5 +1,6 @@
 extern crate common;
 extern crate rand;
+extern crate rkv;
 extern crate wasmi;
 
 pub mod error;

@@ -1,6 +1,6 @@
 use execution_engine::engine::EngineState;
 use std::marker::{Send, Sync};
-use storage::gs::{GlobalState, TrackingCopy};
+use storage::gs::GlobalState;
 
 pub mod mappings;
 use mappings::*;
@@ -14,7 +14,7 @@ use ipc_grpc::ExecutionEngineService;
 // It will act as an entry point for execution of Wasm binaries.
 // Proto definitions should be translated into domain objects when Engine's API is invoked.
 // This way core won't depend on comm (outer layer) leading to cleaner design.
-impl<T: TrackingCopy, G: GlobalState<T>> ipc_grpc::ExecutionEngineService for EngineState<T, G> {
+impl<G: GlobalState> ipc_grpc::ExecutionEngineService for EngineState<G> {
     fn send_deploy(
         &self,
         _o: ::grpc::RequestOptions,

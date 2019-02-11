@@ -6,7 +6,7 @@ use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
 use storage::error::Error as StorageError;
-use storage::gs::{ExecutionEffect, GlobalState, TrackingCopy};
+use storage::gs::{ExecutionEffect, GlobalState, TrackingCopy, DbReader};
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
@@ -128,10 +128,10 @@ impl<'a> RuntimeContext<'a> {
     }
 }
 
-pub struct Runtime<'a, T: TrackingCopy + 'a> {
+pub struct Runtime<'a, 'b, R: DbReader> {
     args: Vec<Vec<u8>>,
     memory: MemoryRef,
-    state: &'a mut T,
+    state: &'a mut TrackingCopy<'b, R>,
     module: Module,
     result: Vec<u8>,
     host_buf: Vec<u8>,
@@ -141,10 +141,10 @@ pub struct Runtime<'a, T: TrackingCopy + 'a> {
     context: RuntimeContext<'a>,
 }
 
-impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
+impl<'a, 'b, R: DbReader> Runtime<'a, 'b, R> {
     pub fn new(
         memory: MemoryRef,
-        state: &'a mut T,
+        state: &'a mut TrackingCopy<'b, R>,
         module: Module,
         gas_limit: &'a u64,
         context: RuntimeContext<'a>,
@@ -426,7 +426,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         self.state.add(key, value).map_err(|e| e.into())
     }
 
-    fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<&Value, Trap> {
+    fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
         self.state.read(key).map_err(|e| e.into())
     }
@@ -471,7 +471,7 @@ const GAS_FUNC_INDEX: usize = 14;
 const HAS_UREF_FUNC_INDEX: usize = 15;
 const ADD_UREF_FUNC_INDEX: usize = 16;
 
-impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
+impl<'a, 'b, R: DbReader> Externals for Runtime<'a, 'b, R> {
     fn invoke_index(
         &mut self,
         index: usize,
@@ -781,12 +781,12 @@ fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), 
     Ok((instance, memory))
 }
 
-fn sub_call<T: TrackingCopy>(
+fn sub_call<R: DbReader>(
     parity_module: Module,
     args: Vec<Vec<u8>>,
     refs: &mut BTreeMap<String, Key>,
     key: Key,
-    current_runtime: &mut Runtime<T>,
+    current_runtime: &mut Runtime<R>,
     //Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
@@ -842,7 +842,7 @@ fn sub_call<T: TrackingCopy>(
     }
 }
 
-pub fn exec<T: TrackingCopy, G: GlobalState<T>>(
+pub fn exec<G: GlobalState>(
     parity_module: Module,
     account_addr: [u8; 20],
     gas_limit: &u64,
@@ -850,8 +850,9 @@ pub fn exec<T: TrackingCopy, G: GlobalState<T>>(
 ) -> Result<ExecutionEffect, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let acct_key = Key::Account(account_addr);
-    let account = gs.get(&acct_key)?.as_account();
-    let mut state = gs.tracking_copy();
+    let value = gs.get(&acct_key)?;
+    let account = value.as_account();
+    let mut state = gs.tracking_copy()?;
     let mut known_urefs: HashSet<Key> = HashSet::new();
     for r in account.urefs_lookup().values() {
         known_urefs.insert(*r);

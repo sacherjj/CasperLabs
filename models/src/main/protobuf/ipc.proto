@@ -113,12 +113,25 @@ message StorageError {
     oneof error_instance {
         Key key_not_found = 1;
         StorageTypeMismatch type_mismatch = 2;
+        BytesReprError bytes_repr = 3;
+        RkvError rkv = 4;
     }
 }
 message StorageTypeMismatch {
     string expected = 1;
     string found = 2;
 }
+message BytesReprError {
+    oneof error_instance {
+        EarlyEndOfStream early_end = 1;
+        FormattingError formatting = 2;
+        LeftOverBytes left_over = 3;
+    }
+}
+message EarlyEndOfStream {}
+message FormattingError {}
+message LeftOverBytes {}
+message RkvError {}
 
 // Models key value pair of (key, op) entry.
 // Required b/c protobuff doesn't support maps natively
