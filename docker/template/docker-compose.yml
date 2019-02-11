@@ -1,0 +1,65 @@
+version: "3.5"
+
+networks:
+  # Create an explicit network so we can connect to it from the client to do deployments.
+  # Create it externally so when we remove individual nodes it doesn't try to destroy it.
+  casperlabs:
+    external: true
+
+# Cross mounting volumes: https://github.com/docker/compose/issues/3211
+volumes:
+  socketvolume: {}
+
+# Base template for nodes. Can't use replicas unfortunately because we have to pair them
+# with an execution engine. Alternatively we could build a single image.
+
+services:
+  # For repeating configs, we could use extension fields: https://medium.com/@kinghuang/docker-compose-anchors-aliases-extensions-a1e4105d70bd
+  # or docker-compose.override.yml as described in https://docs.docker.com/compose/extends/
+
+  # Not going to expose ports on the host because there will be many nodes.
+  # We can use a docker container to run the client and connect to the right casperlabs network
+  # and pick one particular node.
+
+  node:
+    image: io.casperlabs/node:latest
+    container_name: node-${NODE_NUMBER}
+    hostname: node-${NODE_NUMBER}
+    volumes:
+      # Volume for a socket to be created and shared with the execution engine.
+      - socketvolume:/root/.casperlabs/sockets
+      # Common bonds files. Don't map the .casperlabs directory itself so nodes can create SSL keys.
+      # Using files created by running the node once as described in https://slack-files.com/TDVFB45LG-FFBGDQSBW-bad20239ec
+      # Later all need to agree on the same validators so these are committed to git and mounted.
+      - $PWD/../.casperlabs/genesis:/root/.casperlabs/genesis
+      - $PWD/../.casperlabs/bootstrap:/root/.casperlabs/bootstrap
+      - $PWD/../template/start-node.sh:/opt/docker/start-node.sh
+    networks:
+      - casperlabs
+    environment:
+      HOME: /root
+      # Got the ID from the logs by running the node once. They keys are going to be the same for node-0.
+      # i.e. "Listening for traffic on casperlabs://..."
+      BOOTSTRAP_HOSTNAME: node-0
+      BOOTSTRAP_ID: bc416197520ec34e19a03507f93bbeae15f80a02
+      CL_VALIDATOR_PUBLIC_KEY: $CL_VALIDATOR_PUBLIC_KEY
+      CL_VALIDATOR_PRIVATE_KEY: $CL_VALIDATOR_PRIVATE_KEY
+      CL_GRPC_SOCKET: /root/.casperlabs/sockets/.casper-node.sock
+    entrypoint:
+      - sh
+      - -c
+      - chmod +x ./start-node.sh && ./start-node.sh
+    depends_on:
+      # Need the gRPC socket file to be created before we start the node.
+      - execution-engine
+
+  execution-engine:
+    image: io.casperlabs/execution-engine:latest
+    container_name: execution-engine-${NODE_NUMBER}
+    hostname: execution-engine-${NODE_NUMBER}
+    volumes:
+      - socketvolume:/opt/docker/.casperlabs/sockets
+    networks:
+      - casperlabs
+    command:
+      - .casperlabs/sockets/.casper-node.sock
