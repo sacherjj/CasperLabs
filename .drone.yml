@@ -89,6 +89,13 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
 
+  cleanup:
+    <<: *sbtenv
+    commands:
+      - docker images | grep none | awk '{print $3;}' | xargs docker rmi
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
   # push
 
   package:
