@@ -10,11 +10,12 @@ networks:
 volumes:
   socketvolume: {}
 
-# Base template for nodes. Can't use replicas unfortunately becuase we have to pair them
+# Base template for nodes. Can't use replicas unfortunately because we have to pair them
 # with an execution engine. Alternatively we could build a single image.
 
 services:
   # For repeating configs, we could use extension fields: https://medium.com/@kinghuang/docker-compose-anchors-aliases-extensions-a1e4105d70bd
+  # or docker-compose.override.yml as described in https://docs.docker.com/compose/extends/
 
   # Not going to expose ports on the host because there will be many nodes.
   # We can use a docker container to run the client and connect to the right casperlabs network

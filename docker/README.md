@@ -2,9 +2,9 @@
 
 The idea is to create many nodes with commands like `make node-0/up`, `make node-1/down` etc. Each will have the same configuration as `template/Dockerfile` by having a symlink. The containers would all be on the same network.
 
-Then we can slow down the network between `nodes` with https://alexei-led.github.io/post/pumba_docker_netem/ and see what happens.
+Then we can slow down the network between `node-*` containers with https://alexei-led.github.io/post/pumba_docker_netem/ and see what happens.
 
-To deploy we'll have to `docker run io.casperlabs/client` and pass it the WASM files. Will need a shell script wrapper.
+To deploy we'll have to `docker run --network casperlabs io.casperlabs/client` and pass it the WASM files; `client.sh` provides is a convenience wrapper for that.
 
 
 ## Build docker images
@@ -16,9 +16,9 @@ Run `make docker-build-all` in the main project directory to prepare the images.
 
 We'll set up a bunch of nodes in docker with names such as `node-0`, `node-1` etc. Each will have a corresponding container running the Execution Engine.
 
-The setup process will establish validator keys and bonds in `.casperlabs/genesis` by running the node once up front. By default 10 files are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
+The setup process will establish validator keys and bonds in `.casperlabs/genesis` by starting a node instance once up front. By default 10 files are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
 
-`node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first. You can run `make node-0` in this directory to establish its directory and see the values `docker-compose` will use, or just run `make node-0/up` to bring up the node in docker straight away. Check that everything is fine with `docker logs -f node-0`. When it's running, bring up more nodes.
+`node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first. You can run `make node-0` to establish its directory and see the values `docker-compose` will use, or just run `make node-0/up` to bring up the node in docker straight away. Check that everything is fine with `docker logs -f node-0`. When it's running, bring up more nodes.
 
 
 ## Deploy some WASM code
