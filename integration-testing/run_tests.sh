@@ -14,4 +14,5 @@ sed "s/io.casperlabs\/node:latest/io.casperlabs\/node:$tag/" Dockerfile |\
     docker build -t $DEFAULT_IMAGE -f - ..
 rm ../Dockerfile
 rm ../.dockerignore
+cp -r resources /tmp
 pipenv run py.test -v "$@"
