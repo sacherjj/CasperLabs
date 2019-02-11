@@ -33,16 +33,20 @@ object BlockAPI {
              }
       } yield re
 
+    val errorMessage = "Could not deploy."
+
     MultiParentCasperRef
       .withCasper[F, DeployServiceResponse](
         casperDeploy(_),
-        DeployServiceResponse(success = false, s"Error: Casper instance not available")
+        errorMessage,
+        DeployServiceResponse(success = false, s"Error: $errorMessage").pure[F]
       )
   }
 
   def createBlock[F[_]: Concurrent: MultiParentCasperRef: Log](
       blockApiLock: Semaphore[F]
-  ): F[DeployServiceResponse] =
+  ): F[DeployServiceResponse] = {
+    val errorMessage = "Could not create block."
     MultiParentCasperRef.withCasper[F, DeployServiceResponse](
       casper => {
         Sync[F].bracket(blockApiLock.tryAcquire) {
@@ -68,8 +72,10 @@ object BlockAPI {
           blockApiLock.release
         }
       },
-      default = DeployServiceResponse(success = false, "Error: Casper instance not available")
+      errorMessage,
+      default = DeployServiceResponse(success = false, s"Error: $errorMessage").pure[F]
     )
+  }
 
   // FIX: Not used at the moment - in RChain it's being used in method like `getListeningName*`
   private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
@@ -90,6 +96,8 @@ object BlockAPI {
       visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
       stringify: G[Graphz[G]] => String
   ): F[String] = {
+    val errorMessage =
+      "Could not visualize graph."
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[String] =
       for {
@@ -103,7 +111,8 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, String](
       casperResponse(_),
-      "no casper"
+      errorMessage,
+      errorMessage.pure[F]
     )
   }
 
@@ -111,6 +120,9 @@ object BlockAPI {
   def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
+    val errorMessage =
+      "Could not show blocks."
+
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag <- MultiParentCasper[F].blockDag
@@ -122,11 +134,13 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
       casperResponse(_),
-      List.empty[BlockInfoWithoutTuplespace]
+      errorMessage,
+      List.empty[BlockInfoWithoutTuplespace].pure[F]
     )
   }
 
-  private def getFlattenedBlockInfosUntilDepth[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+  private def getFlattenedBlockInfosUntilDepth[
+      F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int,
       dag: BlockDagRepresentation[F]
   ): F[List[BlockInfoWithoutTuplespace]] =
@@ -144,6 +158,9 @@ object BlockAPI {
   def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
+    val errorMessage =
+      "Could not show main chain."
+
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag        <- MultiParentCasper[F].blockDag
@@ -155,7 +172,8 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
       casperResponse(_),
-      List.empty[BlockInfoWithoutTuplespace]
+      errorMessage,
+      List.empty[BlockInfoWithoutTuplespace].pure[F]
     )
   }
 
@@ -164,6 +182,9 @@ object BlockAPI {
       user: ByteString,
       timestamp: Long
   ): F[BlockQueryResponse] = {
+    val errorMessage =
+      "Could not find block with deploy."
+
     def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
       for {
         dag                <- MultiParentCasper[F].blockDag
@@ -181,12 +202,13 @@ object BlockAPI {
             BlockQueryResponse(
               status = "Success",
               blockInfo = Some(blockInfo)
-            )
+          )
         )
 
     MultiParentCasperRef.withCasper[F, BlockQueryResponse](
       casperResponse(_),
-      BlockQueryResponse(status = "Error: Casper instance not available")
+      errorMessage,
+      BlockQueryResponse(status = s"Error: errorMessage").pure[F]
     )
   }
 
@@ -202,6 +224,9 @@ object BlockAPI {
   def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       q: BlockQuery
   ): F[BlockQueryResponse] = {
+    val errorMessage =
+      "Could not show block."
+
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag        <- MultiParentCasper[F].blockDag
@@ -224,7 +249,8 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, BlockQueryResponse](
       casperResponse(_),
-      BlockQueryResponse(status = "Error: Casper instance not available")
+      errorMessage,
+      BlockQueryResponse(status = s"Error: $errorMessage").pure[F]
     )
   }
 
@@ -272,7 +298,8 @@ object BlockAPI {
   private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage
   ): F[BlockInfo] = getBlockInfo[BlockInfo, F](block, constructBlockInfo[F])
-  private def getBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+  private def getBlockInfoWithoutTuplespace[
+      F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage
   ): F[BlockInfoWithoutTuplespace] =
     getBlockInfo[BlockInfoWithoutTuplespace, F](block, constructBlockInfoWithoutTuplespace[F])
@@ -307,7 +334,8 @@ object BlockAPI {
         shardId = block.shardId
       )
 
-  private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+  private def constructBlockInfoWithoutTuplespace[
+      F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,
       version: Long,
       deployCount: Int,
