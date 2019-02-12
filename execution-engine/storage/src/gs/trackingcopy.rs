@@ -33,7 +33,7 @@ impl<'a, R: DbReader> TrackingCopy<'a, R> {
         Key::URef(key)
     }
 
-    fn get(&mut self, k: &Key) -> Result<Value, Error> {
+    pub fn get(&mut self, k: &Key) -> Result<Value, Error> {
         //TODO: this remove+insert should not be necessary, but I can't get the borrow checker to agree
         let maybe_value = self.cache.remove(k);
         match maybe_value {
