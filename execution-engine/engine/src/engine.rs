@@ -4,18 +4,20 @@ use execution::{exec, Error as ExecutionError};
 use parity_wasm::elements::Module;
 use parking_lot::Mutex;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::marker::PhantomData;
 use storage::error::Error as StorageError;
-use storage::gs::{ExecutionEffect, DbReader};
+use storage::gs::{DbReader, ExecutionEffect};
 use storage::history::*;
 use storage::transform::Transform;
 use vm::wasm_costs::WasmCosts;
 use wasm_prep::process;
-use std::marker::PhantomData;
-use std::collections::HashMap;
 
 pub struct EngineState<R, H>
-    where R: DbReader,
-          H: History<R> {
+where
+    R: DbReader,
+    H: History<R>,
+{
     // Tracks the "state" of the blockchain (or is an interface to it).
     // I think it should be constrained with a lifetime parameter.
     state: Mutex<H>,
@@ -72,7 +74,7 @@ impl From<ExecutionError> for Error {
 impl<G, R> EngineState<R, G>
 where
     G: History<R>,
-    R: DbReader
+    R: DbReader,
 {
     // To run, contracts need an existing account.
     // This function puts artificial entry in the GlobalState.
@@ -94,7 +96,7 @@ where
         EngineState {
             state: Mutex::new(state),
             wasm_costs: WasmCosts::new(),
-            _phantom: PhantomData
+            _phantom: PhantomData,
         }
     }
 
@@ -108,7 +110,14 @@ where
         gas_limit: &u64,
     ) -> Result<ExecutionEffect, Error> {
         let module = self.preprocess_module(module_bytes, &self.wasm_costs)?;
-        exec(module, address, poststate_hash, &gas_limit, &*self.state.lock()).map_err(|e| e.into())
+        exec(
+            module,
+            address,
+            poststate_hash,
+            &gas_limit,
+            &*self.state.lock(),
+        )
+        .map_err(|e| e.into())
     }
 
     pub fn apply_effect(&self, effects: ExecutionEffect) -> Result<[u8; 32], Error> {
