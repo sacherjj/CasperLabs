@@ -234,7 +234,7 @@ class Node:
             output = self.docker_client.containers.run(
                 image="io.casperlabs/client:{}".format(TAG),
                 auto_remove=True,
-                name="client",
+                name="client-{}".format(TAG),
                 command=command,
                 network=self.network,
                 volumes=volumes
