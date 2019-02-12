@@ -10,8 +10,8 @@ use std::iter::Iterator;
 use clap::{App, Arg};
 
 use execution_engine::engine::EngineState;
-use storage::gs::ExecutionEffect;
 use storage::gs::lmdb::LmdbGs;
+use storage::gs::ExecutionEffect;
 
 #[derive(Debug)]
 struct Task {
@@ -93,15 +93,17 @@ fn main() {
     };
 
     for wasm_bytes in wasm_files.iter() {
-        let result = engine_state.run_deploy(&wasm_bytes.bytes, account_addr, poststate_hash, &gas_limit);
+        let result =
+            engine_state.run_deploy(&wasm_bytes.bytes, account_addr, poststate_hash, &gas_limit);
         match result {
-            Ok(ExecutionEffect(_, transform_map)) => {
-                for (key, transformation) in transform_map.iter() {
-                    engine_state
-                        .apply_effect(poststate_hash, *key, transformation.clone())
-                        .expect(&format!("Error when applying effects on {:?}", *key));
-                }
-                println!("Result for file {}: Success!", wasm_bytes.path);
+            Ok(effects) => {
+                let res = engine_state
+                    .apply_effect(effects)
+                    .expect(&format!("Error when applying effects."));
+                println!(
+                    "Result for file {}: Success! New post state hash: {:?}",
+                    wasm_bytes.path, res
+                );
             }
             Err(_) => println!("Result for file {}: {:?}", wasm_bytes.path, result),
         }

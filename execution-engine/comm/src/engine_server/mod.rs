@@ -4,8 +4,9 @@ use execution_engine::engine::EngineState;
 use ipc::DeployResult;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
-use storage::gs::DbReader;
+use storage::gs::{DbReader, ExecutionEffect};
 use storage::history::*;
+use std::collections::HashMap;
 
 pub mod mappings;
 pub mod ipc;
@@ -48,20 +49,17 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         _o: ::grpc::RequestOptions,
         p: ipc::CommutativeEffects,
     ) -> grpc::SingleResponse<ipc::PostEffectsResult> {
-        let poststate_hash = [0u8; 32];
-        let r: Result<(), execution_engine::engine::Error> = p
-            .get_effects()
-            .iter()
-            .map(|e| transform_entry_to_key_transform(e))
-            .try_fold((), |_, (k, t)| {
-                let res = self.apply_effect(poststate_hash, k, t);
-                match &res {
-                    //TODO: instead of println! this should be logged
-                    Ok(_) => println!("Applied effects for {:?}", k),
-                    Err(e) => println!("Error {:?} when applying effects for {:?}", e, k),
-                };
-                res
-            });
+        let mut effects = HashMap::new();
+        for entry in p.get_effects().iter() {
+            let (k, v) = transform_entry_to_key_transform(entry);
+            effects.insert(k, v);
+        };
+        let r = self.apply_effect(ExecutionEffect(HashMap::new(), effects));
+        match r {
+            Ok(post_state_hash) => println!("Effects applied. New state hash is: {:?}", post_state_hash),
+            Err(_) => println!("Error {:?} when applying effects", r),
+        };
+
         let res = {
             let mut tmp_res = ipc::PostEffectsResult::new();
             match r {

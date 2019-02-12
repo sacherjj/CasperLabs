@@ -111,18 +111,8 @@ where
         exec(module, address, poststate_hash, &gas_limit, &*self.state.lock()).map_err(|e| e.into())
     }
 
-    //TODO: apply_effect shouldn't accept single tuples and return post state hash.
-    //Instead it should accept a sequence of transformations made in the block.
-    pub fn apply_effect(&self, block_hash: [u8;32], key: Key, eff: Transform) -> Result<(), Error> {
-        let effects = {
-            let mut m = HashMap::new();
-            m.insert(key, eff);
-            ExecutionEffect(HashMap::new(), m)
-        };
-        self.state.lock()
-            .commit(block_hash, effects)
-            .map(|_| ())
-            .map_err(|err| err.into())
+    pub fn apply_effect(&self, effects: ExecutionEffect) -> Result<[u8; 32], Error> {
+        self.state.lock().commit(effects).map_err(|err| err.into())
     }
 
     //TODO: inject gas counter, limit stack size etc
