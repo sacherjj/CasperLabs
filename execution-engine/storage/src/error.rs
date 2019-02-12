@@ -1,15 +1,19 @@
+use std::fmt;
+
 use common::bytesrepr;
 use common::key::Key;
 use rkv::error::StoreError;
-use std::fmt;
 use wasmi::HostError;
+
+use ::TreeRootHash;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     KeyNotFound { key: Key },
     TypeMismatch { expected: String, found: String },
-    RkvError, //TODO: catpture error better
+    RkvError, //TODO: capture error better
     BytesRepr(bytesrepr::Error),
+    RootNotFound(TreeRootHash),
 }
 
 impl fmt::Display for Error {

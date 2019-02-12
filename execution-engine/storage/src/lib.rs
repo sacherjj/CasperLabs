@@ -5,6 +5,7 @@ extern crate wasmi;
 
 pub mod error;
 pub mod gs;
+pub mod history;
 pub mod op;
 pub mod transform;
 mod utils;
@@ -19,4 +20,7 @@ extern crate tempfile;
 extern crate proptest;
 #[cfg(test)]
 extern crate gens;
+
+
+type TreeRootHash = [u8; 32];
 
