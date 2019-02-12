@@ -12,6 +12,8 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.GrpcExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
+import scala.concurrent.duration._
+import scala.util.control.NoStackTrace
 
 object Main {
 
@@ -49,13 +51,21 @@ object Main {
       case Run         => nodeProgram(conf)
     }
 
-    program.doOnFinish(
-      _ =>
-        Task.delay {
-          diagnosticsService.close()
-          System.exit(1)
-        }
-    )
+    program
+      .guarantee {
+        Task.delay(diagnosticsService.close())
+      }
+      .doOnFinish {
+        case Some(ex) =>
+          log.error(ex.getMessage, ex) *>
+            Task
+              .delay(System.exit(1))
+              .delayExecution(500.millis) // A bit of time for logs to flush.
+
+        case None =>
+          Task.delay(System.exit(0))
+      }
+
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
@@ -66,16 +76,19 @@ object Main {
         _       <- runtime.main
       } yield ()
 
+    // Return an error for logging and exit code to be done in `mainProgram`.
+    def raise(msg: String) =
+      Task.raiseError(new Exception(msg) with NoStackTrace)
+
     node.value >>= {
       case Right(_) =>
         Task.unit
       case Left(CouldNotConnectToBootstrap) =>
-        log.error("Node could not connect to bootstrap node.")
+        raise("Node could not connect to bootstrap node.")
       case Left(InitializationError(msg)) =>
-        log.error(msg)
-        Task.delay(System.exit(-1))
+        raise(msg)
       case Left(error) =>
-        log.error(s"Failed! Reason: '$error")
+        raise(s"Failed! Reason: '$error")
     }
   }
 }

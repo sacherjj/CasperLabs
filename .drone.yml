@@ -52,12 +52,14 @@ pipeline:
     <<: *buildenv
     commands:
       - cd execution-engine/engine
+      - ~/.cargo/bin/cargo update
       - ~/.cargo/bin/cargo build
 
   compile-rust-comm:
     <<: *buildenv
     commands:
       - cd execution-engine/comm
+      - ~/.cargo/bin/cargo update
       - ~/.cargo/bin/cargo run --bin grpc-protoc
       - ~/.cargo/bin/cargo build
 
@@ -72,12 +74,36 @@ pipeline:
     commands:
       - sbt test
 
+  docker-build-node-and-client:
+    <<: *sbtenv
+    commands:
+      - sbt node/docker:publishLocal client/docker:publishLocal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  run-integration-tests:
+    <<: *sbtenv
+    commands:
+      - python3 -m pip install pipenv dataclasses typing_extensions
+      - cd integration-testing
+      - ./run_tests.sh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp:/tmp
+
+  cleanup:
+    <<: *sbtenv
+    commands:
+      - docker images | grep none | awk '{print $3;}' | xargs docker rmi
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
   # push
 
   package:
     <<: *sbtenv
     commands:
-      - sbt node/docker:publishLocal node/debian:packageBin node/universal:packageZipTarball
+      - sbt node/debian:packageBin node/universal:packageZipTarball
       - mkdir -p /artifacts/${DRONE_BRANCH}
       - cp node/target/node_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
     volumes:

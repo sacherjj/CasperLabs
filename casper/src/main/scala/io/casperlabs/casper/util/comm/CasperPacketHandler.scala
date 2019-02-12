@@ -45,6 +45,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
     if (conf.approveGenesis) {
       for {
+        _              <- Log[F].info("Starting in approve genesis mode")
         timestamp      <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
         wallets        <- Genesis.getWallets[F](conf.genesisPath, conf.walletsFile)
         bonds          <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
@@ -71,6 +72,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       } yield new CasperPacketHandlerImpl[F](gv)
     } else if (conf.createGenesis) {
       for {
+        _              <- Log[F].info("Starting in create genesis mode")
         bonds          <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
         runtimeManager = RuntimeManager[F](executionEngineService, bonds)
         genesis <- Genesis[F](
@@ -116,9 +118,12 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       } yield new CasperPacketHandlerImpl[F](standalone)
     } else {
       for {
+        _ <- Log[F].info("Starting in default mode")
+        // FIXME: The bonds should probably be taken from the approved block, but that's not implemented.
+        bonds          <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
         validators     <- CasperConf.parseValidatorsFile[F](conf.knownValidatorsFile)
         validatorId    <- ValidatorIdentity.fromConfig[F](conf)
-        runtimeManager = RuntimeManager[F](executionEngineService, bonds = Map.empty) // Will take bonds from approved block.
+        runtimeManager = RuntimeManager[F](executionEngineService, bonds)
         bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]](
                       new BootstrapCasperHandler(
                         runtimeManager,
