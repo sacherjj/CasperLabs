@@ -20,9 +20,9 @@ impl LmdbGs {
     pub fn new(p: &Path) -> Result<LmdbGs, Error> {
         let env = Manager::singleton()
             .write()
-            .map_err(|_| Error::RkvError)
+            .map_err(|_| Error::RkvError(String::from("Error while creating LMDB env.")))
             .and_then(|mut r| r.get_or_create(p, Rkv::new).map_err(|e| e.into()))?;
-        let store = env.read().map_err(|_| Error::RkvError).and_then(|r| {
+        let store = env.read().map_err(|_| Error::RkvError(String::from("Error when creating LMDB store."))).and_then(|r| {
             r.open_single(Some("global_state"), StoreOptions::create())
                 .map_err(|e| e.into())
         })?;
@@ -32,7 +32,7 @@ impl LmdbGs {
     pub fn read(&self, k: &Key) -> Result<Value, Error> {
         self.env
             .read()
-            .map_err(|_| Error::RkvError)
+            .map_err(|_| Error::RkvError(String::from("Couldn't get read lock to LMDB env.")))
             .and_then(|rkv| {
                 let r = rkv.read()?;
                 let maybe_curr = self.store.get(&r, k)?;
@@ -45,7 +45,7 @@ impl LmdbGs {
                     }
                     //If we always store values as Blobs this case will never come
                     //up. TODO: Use other variants of rkb::Value (e.g. I64, Str)?
-                    Some(_) => Err(Error::RkvError),
+                    Some(_) => Err(Error::RkvError(String::from("Value stored in LMDB was != Blob"))),
                 }
             })
     }
@@ -56,7 +56,7 @@ impl LmdbGs {
     {
         self.env
             .read()
-            .map_err(|_| Error::RkvError)
+            .map_err(|_| Error::RkvError(String::from("Couldn't get read lock to LMDB env.")))
             .and_then(|rkv| {
                 let mut w = rkv.write()?;
 

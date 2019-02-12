@@ -11,7 +11,7 @@ use ::TreeRootHash;
 pub enum Error {
     KeyNotFound { key: Key },
     TypeMismatch { expected: String, found: String },
-    RkvError, //TODO: capture error better
+    RkvError(String), //TODO: capture error better
     BytesRepr(bytesrepr::Error),
     RootNotFound(TreeRootHash),
 }
@@ -25,8 +25,8 @@ impl fmt::Display for Error {
 impl HostError for Error {}
 
 impl From<StoreError> for Error {
-    fn from(_e: StoreError) -> Self {
-        Error::RkvError
+    fn from(e: StoreError) -> Self {
+        Error::RkvError(String::from(format!("StoreError\t{:?}", e)))
     }
 }
 

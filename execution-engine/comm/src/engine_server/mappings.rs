@@ -1,5 +1,6 @@
-use common::bytesrepr;
 use std::collections::BTreeMap;
+
+use common::bytesrepr;
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> storage::transform::Transform {
@@ -154,9 +155,16 @@ fn transform_to_ipc(tr: &storage::transform::Transform) -> super::ipc::Transform
                     type_miss.set_found(found.to_string());
                     stor_err.set_type_mismatch(type_miss);
                 }
-                storage::error::Error::RkvError => {
-                    stor_err.set_rkv(super::ipc::RkvError::new());
-                }
+                storage::error::Error::RkvError(msg) => {
+                    let mut rkv_error = super::ipc::RkvError::new();
+                    rkv_error.set_error_msg(msg.to_owned());
+                    stor_err.set_rkv(rkv_error);
+                },
+                storage::error::Error::RootNotFound(root) => {
+                    let mut rkv_error = super::ipc::RkvError::new();
+                    rkv_error.set_error_msg(format!("{:?} root not found", root));
+                    stor_err.set_rkv(rkv_error);
+                },
                 storage::error::Error::BytesRepr(e) => match e {
                     bytesrepr::Error::EarlyEndOfStream => {
                         let mut bytes_repr = super::ipc::BytesReprError::new();
