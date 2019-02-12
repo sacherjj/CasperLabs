@@ -113,14 +113,14 @@ where
 
     //TODO: apply_effect shouldn't accept single tuples and return post state hash.
     //Instead it should accept a sequence of transformations made in the block.
-    pub fn apply_effect(&self, key: Key, eff: Transform) -> Result<(), Error> {
+    pub fn apply_effect(&self, block_hash: [u8;32], key: Key, eff: Transform) -> Result<(), Error> {
         let effects = {
             let mut m = HashMap::new();
             m.insert(key, eff);
             ExecutionEffect(HashMap::new(), m)
         };
         self.state.lock()
-            .commit([0; 32], effects)
+            .commit(block_hash, effects)
             .map(|_| ())
             .map_err(|err| err.into())
     }

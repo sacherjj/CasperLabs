@@ -14,16 +14,18 @@ pub struct TrackingCopy<'a, R: DbReader> {
     ops: HashMap<Key, Op>,
     fns: HashMap<Key, Transform>,
     rng: rand::rngs::StdRng,
+    block_hash: [u8; 32],
 }
 
 impl<'a, R: DbReader> TrackingCopy<'a, R> {
-    pub fn new(reader: &'a R) -> TrackingCopy<R> {
+    pub fn new(reader: &'a R, block_hash: [u8;32]) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
             cache: HashMap::new(),
             ops: HashMap::new(),
             fns: HashMap::new(),
             rng: rand::rngs::StdRng::from_entropy(),
+            block_hash: block_hash,
         }
     }
 
@@ -134,7 +136,7 @@ mod tests {
     #[test]
     fn tracking_copy_new() {
         let db = CountingDb::new();
-        let tc = TrackingCopy::new(&db);
+        let tc = TrackingCopy::new(&db, [0u8;32]);
 
         assert_eq!(tc.cache.is_empty(), true);
         assert_eq!(tc.ops.is_empty(), true);
@@ -144,7 +146,7 @@ mod tests {
     #[test]
     fn tracking_copy_new_uref() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(&db, [0u8;32]);
 
         //`new_uref` must return a key of type uref
         assert_matches!(tc.new_uref(), Key::URef(_));
@@ -153,7 +155,7 @@ mod tests {
     #[test]
     fn trackng_copy_caching() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(&db, [0u8;32]);
         let k = Key::Hash([0u8; 32]);
 
         let zero = Ok(Value::Int32(0));
@@ -172,7 +174,7 @@ mod tests {
     #[test]
     fn tracking_copy_read() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(&db, [0u8;32]);
         let k = Key::Hash([0u8; 32]);
 
         let zero = Ok(Value::Int32(0));
@@ -189,7 +191,7 @@ mod tests {
     #[test]
     fn tracking_copy_write() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(&db, [0u8;32]);
         let k = Key::Hash([0u8; 32]);
 
         let one = Value::Int32(1);
@@ -222,7 +224,7 @@ mod tests {
     #[test]
     fn tracking_copy_add_i32() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(&db, [0u8;32]);
         let k = Key::Hash([0u8; 32]);
 
         let three = Value::Int32(3);
@@ -252,7 +254,7 @@ mod tests {
         //DB now holds an `Account` so that we can test adding a `NamedKey`
         let account = common::value::Account::new([0u8; 32], 0u64, BTreeMap::new());
         let db = CountingDb::new_init(Value::Acct(account));
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(&db, [0u8;32]);
         let k = Key::Hash([0u8; 32]);
 
         let named_key = Value::NamedKey("test".to_string(), tc.new_uref());

@@ -48,12 +48,13 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         _o: ::grpc::RequestOptions,
         p: ipc::CommutativeEffects,
     ) -> grpc::SingleResponse<ipc::PostEffectsResult> {
+        let poststate_hash = [0u8; 32];
         let r: Result<(), execution_engine::engine::Error> = p
             .get_effects()
             .iter()
             .map(|e| transform_entry_to_key_transform(e))
             .try_fold((), |_, (k, t)| {
-                let res = self.apply_effect(k, t);
+                let res = self.apply_effect(poststate_hash, k, t);
                 match &res {
                     //TODO: instead of println! this should be logged
                     Ok(_) => println!("Applied effects for {:?}", k),

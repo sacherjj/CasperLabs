@@ -28,12 +28,12 @@ impl DbReader for InMemGS {
 }
 
 impl History<Self> for InMemGS {
-    fn checkout_multiple(&self, root_hashes: &[[u8; 32]]) -> Result<TrackingCopy<InMemGS>, Error> {
-        Ok(TrackingCopy::new(self))
+    fn checkout_multiple(&self, block_hashes: &[[u8; 32]]) -> Result<TrackingCopy<InMemGS>, Error> {
+        unimplemented!("checkout_multiple doesn't work yet b/c TrackingCopy is able only to build on single block.")
     }
 
-    fn checkout(&self, root_hash: &[u8; 32]) -> Result<TrackingCopy<InMemGS>, Error> {
-        Ok(TrackingCopy::new(self))
+    fn checkout(&self, block_hash: [u8; 32]) -> Result<TrackingCopy<InMemGS>, Error> {
+        Ok(TrackingCopy::new(self, block_hash))
     }
 
     fn commit(&mut self, block_hash: [u8; 32], tracking_copy: ExecutionEffect) -> Result<[u8; 32], Error> {

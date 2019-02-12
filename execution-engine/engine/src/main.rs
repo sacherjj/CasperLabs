@@ -98,7 +98,7 @@ fn main() {
             Ok(ExecutionEffect(_, transform_map)) => {
                 for (key, transformation) in transform_map.iter() {
                     engine_state
-                        .apply_effect(*key, transformation.clone())
+                        .apply_effect(poststate_hash, *key, transformation.clone())
                         .expect(&format!("Error when applying effects on {:?}", *key));
                 }
                 println!("Result for file {}: Success!", wasm_bytes.path);
