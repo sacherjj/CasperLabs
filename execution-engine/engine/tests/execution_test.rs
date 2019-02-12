@@ -11,8 +11,9 @@ use common::value;
 use execution_engine::execution::{Runtime, RuntimeContext};
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
-use std::collections::BTreeMap;
-use storage::gs::{inmem::*, DbReader, GlobalState, TrackingCopy};
+use std::collections::{HashMap, BTreeMap};
+use storage::gs::{inmem::*, DbReader, TrackingCopy, ExecutionEffect};
+use storage::history::*;
 use storage::transform::Transform;
 use wasm_prep::MAX_MEM_PAGES;
 use wasmi::memory_units::Pages;
@@ -29,7 +30,7 @@ struct MockEnv<'a> {
 
 impl<'b> MockEnv<'b> {
   pub fn new(key: Key, account: value::Account, gas_limit: u64, gs: &'b InMemGS) -> Self {
-        let tc = gs.tracking_copy().unwrap();
+        let tc = TrackingCopy::new(gs);
         let uref_lookup = mock_uref_lookup();
         let memory = MemoryInstance::alloc(Pages(17), Some(Pages(MAX_MEM_PAGES as usize)))
             .expect("Mocked memory should be able to be created.");
@@ -113,8 +114,11 @@ fn mock_gs(init_key: Key, init_account: &value::Account) -> InMemGS {
     let mut result = InMemGS::new();
     let transform = Transform::Write(value::Value::Acct(init_account.clone()));
 
+    let mut m = HashMap::new();
+    m.insert(init_key,  transform);
+    let effect = ExecutionEffect(HashMap::new(), m);
     result
-        .apply(init_key, transform)
+        .commit(effect)
         .expect("Creation of mocked account should be a success.");
 
     result
