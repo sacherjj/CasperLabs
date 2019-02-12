@@ -193,6 +193,9 @@ mod tests {
         let k = Key::Hash([0u8; 32]);
 
         let one = Value::Int32(1);
+        let two = Value::Int32(2);
+
+        //writing should work
         let write = tc.write(k, one.clone());
         assert_matches!(write, Ok(_));
         //write does not need to query the DB
@@ -204,6 +207,16 @@ mod tests {
         //write creates an Op
         assert_eq!(tc.ops.len(), 1);
         assert_eq!(tc.ops.get(&k), Some(&Op::Write));
+
+        //writing again should update the values
+        let write = tc.write(k, two.clone());
+        assert_matches!(write, Ok(_));
+        let db_value = db.count.get();
+        assert_eq!(db_value, 0);
+        assert_eq!(tc.fns.len(), 1);
+        assert_eq!(tc.fns.get(&k), Some(&Transform::Write(two)));
+        assert_eq!(tc.ops.len(), 1);
+        assert_eq!(tc.ops.get(&k), Some(&Op::Write));
     }
 
     #[test]
@@ -213,6 +226,8 @@ mod tests {
         let k = Key::Hash([0u8; 32]);
 
         let three = Value::Int32(3);
+
+        //adding should work
         let add = tc.add(k, three.clone());
         assert_matches!(add, Ok(_));
 
@@ -220,6 +235,14 @@ mod tests {
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::AddInt32(3)));
         //add creates an Op
+        assert_eq!(tc.ops.len(), 1);
+        assert_eq!(tc.ops.get(&k), Some(&Op::Add));
+
+        //adding again should update the values
+        let add = tc.add(k, three);
+        assert_matches!(add, Ok(_));
+        assert_eq!(tc.fns.len(), 1);
+        assert_eq!(tc.fns.get(&k), Some(&Transform::AddInt32(6)));
         assert_eq!(tc.ops.len(), 1);
         assert_eq!(tc.ops.get(&k), Some(&Op::Add));
     }
@@ -233,31 +256,89 @@ mod tests {
         let k = Key::Hash([0u8; 32]);
 
         let named_key = Value::NamedKey("test".to_string(), tc.new_uref());
-        let map = {
-          let mut builder: BTreeMap<String, Key> = BTreeMap::new();
-          //This is written as an `if`, but it is clear from the line
-          //where `named_key` is defined that it will alwways match
-          if let Value::NamedKey(name, key) = named_key.clone() {
-            builder.insert(name, key);
-          }
-          builder
-        };
+        let other_named_key = Value::NamedKey("test2".to_string(), tc.new_uref());
+        let mut map: BTreeMap<String, Key> = BTreeMap::new();
+        //This is written as an `if`, but it is clear from the line
+        //where `named_key` is defined that it will alwways match
+        if let Value::NamedKey(name, key) = named_key.clone() {
+            map.insert(name, key);
+        }
 
         //adding the wrong type should fail
         let failed_add = tc.add(k, Value::Int32(3));
-        assert_matches!(failed_add, Err(Error::TypeMismatch{ .. }));
+        assert_matches!(failed_add, Err(Error::TypeMismatch { .. }));
         assert_eq!(tc.ops.is_empty(), true);
         assert_eq!(tc.fns.is_empty(), true);
-        
 
         //adding correct type works
         let add = tc.add(k, named_key);
         assert_matches!(add, Ok(_));
         //add creates a Transfrom
         assert_eq!(tc.fns.len(), 1);
-        assert_eq!(tc.fns.get(&k), Some(&Transform::AddKeys(map)));
+        assert_eq!(tc.fns.get(&k), Some(&Transform::AddKeys(map.clone())));
         //add creates an Op
         assert_eq!(tc.ops.len(), 1);
         assert_eq!(tc.ops.get(&k), Some(&Op::Add));
+
+        //adding again updates the values
+        if let Value::NamedKey(name, key) = other_named_key.clone() {
+            map.insert(name, key);
+        }
+        let add = tc.add(k, other_named_key);
+        assert_matches!(add, Ok(_));
+        assert_eq!(tc.fns.len(), 1);
+        assert_eq!(tc.fns.get(&k), Some(&Transform::AddKeys(map)));
+        assert_eq!(tc.ops.len(), 1);
+        assert_eq!(tc.ops.get(&k), Some(&Op::Add));
+    }
+
+    #[test]
+    fn tracking_copy_rw() {
+        let db = CountingDb::new();
+        let mut tc = TrackingCopy::new(&db);
+        let k = Key::Hash([0u8; 32]);
+
+        //reading then writing should update the op
+        let value = Value::Int32(3);
+        let _ = tc.read(k);
+        let _ = tc.write(k, value.clone());
+        assert_eq!(tc.fns.len(), 1);
+        assert_eq!(tc.fns.get(&k), Some(&Transform::Write(value)));
+        assert_eq!(tc.ops.len(), 1);
+        assert_eq!(tc.ops.get(&k), Some(&Op::Write));
+    }
+
+    #[test]
+    fn tracking_copy_ra() {
+        let db = CountingDb::new();
+        let mut tc = TrackingCopy::new(&db);
+        let k = Key::Hash([0u8; 32]);
+
+        //reading then adding should update the op
+        let value = Value::Int32(3);
+        let _ = tc.read(k);
+        let _ = tc.add(k, value);
+        assert_eq!(tc.fns.len(), 1);
+        assert_eq!(tc.fns.get(&k), Some(&Transform::AddInt32(3)));
+        assert_eq!(tc.ops.len(), 1);
+        //this Op is correct because Read+Add = Write
+        assert_eq!(tc.ops.get(&k), Some(&Op::Write));
+    }
+
+    #[test]
+    fn tracking_copy_aw() {
+        let db = CountingDb::new();
+        let mut tc = TrackingCopy::new(&db);
+        let k = Key::Hash([0u8; 32]);
+
+        //adding then writing should update the op
+        let value = Value::Int32(3);
+        let write_value = Value::Int32(7);
+        let _ = tc.add(k, value);
+        let _ = tc.write(k, write_value.clone());
+        assert_eq!(tc.fns.len(), 1);
+        assert_eq!(tc.fns.get(&k), Some(&Transform::Write(write_value)));
+        assert_eq!(tc.ops.len(), 1);
+        assert_eq!(tc.ops.get(&k), Some(&Op::Write));
     }
 }
