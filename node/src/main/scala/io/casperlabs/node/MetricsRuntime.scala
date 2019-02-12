@@ -10,11 +10,26 @@ import io.casperlabs.node.diagnostics.JmxReporter
 import io.casperlabs.shared.Log
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
-import kamon.{Kamon, MetricReporter}
+import kamon._
 
 class MetricsRuntime[F[_]: Sync: Log](conf: Configuration, id: NodeIdentifier) {
 
-  def setupMetrics(metricsReporter: MetricReporter): F[Unit] =
+  def addReporter(enabled: Boolean, destination: String, reporter: => Reporter): F[Unit] =
+    if (enabled) {
+      Log[F].info(s"Reporting metrics to $destination.") *>
+        Sync[F].delay {
+          reporter match {
+            case reporter: MetricReporter =>
+              Kamon.addReporter(reporter)
+            case reporter: SpanReporter =>
+              Kamon.addReporter(reporter)
+          }
+        }
+    } else {
+      Log[F].info(s"Reporting metrics to $destination disabled.")
+    }
+
+  def setupMetrics(prometheusReporter: MetricReporter): F[Unit] =
     for {
       kamonConf <- buildKamonConf
       _ <- Sync[F].delay {
@@ -23,15 +38,14 @@ class MetricsRuntime[F[_]: Sync: Log](conf: Configuration, id: NodeIdentifier) {
                 .parseString(kamonConf)
                 .withFallback(Kamon.config())
             )
-
-            if (conf.kamon.influx.isDefined)
-              Kamon.addReporter(new kamon.influxdb.InfluxDBReporter())
-            if (conf.kamon.prometheus) Kamon.addReporter(metricsReporter)
-            if (conf.kamon.zipkin) Kamon.addReporter(new ZipkinReporter())
-
-            Kamon.addReporter(new JmxReporter())
-            SystemMetrics.startCollecting()
           }
+
+      _ <- addReporter(conf.kamon.influx.isDefined, "InfluxDB", new influxdb.InfluxDBReporter())
+      _ <- addReporter(conf.kamon.prometheus, "Prometheus", prometheusReporter)
+      _ <- addReporter(conf.kamon.zipkin, "Zipkin", new ZipkinReporter())
+      _ <- addReporter(true, "JMX", new JmxReporter())
+
+      _ <- Sync[F].delay(SystemMetrics.startCollecting())
     } yield ()
 
   private def buildInfluxConf(influx: Influx, auth: String) = {
