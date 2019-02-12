@@ -11,3 +11,7 @@ common = { path = "../common", features = ["std"] }
 
 [dev-dependencies]
 matches = "0.1.8"
+tempfile = "3.0.6"
+gens = { path = "../gens" }
+proptest = "0.8.7"
+

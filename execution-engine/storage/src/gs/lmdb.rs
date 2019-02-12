@@ -6,6 +6,7 @@ use gs::DbReader;
 use gs::{GlobalState, TrackingCopy};
 use rkv::store::single::SingleStore;
 use rkv::{Manager, Reader, Rkv, StoreOptions, Writer};
+use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use transform::Transform;
@@ -107,5 +108,47 @@ impl GlobalState for LmdbGs {
     }
     fn tracking_copy(&self) -> Result<TrackingCopy<Self>, Error> {
         Ok(TrackingCopy::new(self))
+    }
+}
+
+impl fmt::Debug for LmdbGs {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "LMDB({:?})", self.env)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gens::gens::*;
+    use gs::lmdb::LmdbGs;
+    use rkv::{Reader, Writer};
+    use tempfile::tempdir;
+
+    #[test]
+    fn lmdb_new() {
+        //Note: the directory created by `temp_dir`
+        //is automatically deleted when it goes out of scope.
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path();
+        let lmdb = LmdbGs::new(&path);
+
+        assert_matches!(lmdb, Ok(_));
+    }
+
+    #[test]
+    fn lmdb_rw() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path();
+        let lmdb = LmdbGs::new(&path).unwrap();
+
+        proptest!(|(k in key_arb(), v in value_arb())| {
+          let write_txn = |w: &mut Writer| lmdb.write(w, k, &v);
+          let read_txn = |r: &Reader| lmdb.read(&k, r);
+
+          let write = lmdb.with_writer(write_txn);
+          let read = lmdb.with_reader(read_txn);
+          assert_matches!(write, Ok(_));
+          prop_assert_eq!(read, Ok(v.clone()));
+        });
     }
 }
