@@ -28,6 +28,7 @@ node-%: .casperlabs/genesis
 node-%/up: node-% .make/docker/network
 	@# Go into the directory to pick up values from .env
 	cd node-$* && docker-compose up -d
+	./monitoring/refresh-targets.sh
 
 # Tear down node.
 node-%/down:
@@ -35,9 +36,19 @@ node-%/down:
 		cd node-$* && docker-compose down && cd - && \
 		rm -rf node-$* ; \
 	fi
+	./monitoring/refresh-targets.sh
+
+# Start common components.
+up: .make/docker/network
+	./monitoring/refresh-targets.sh
+	docker-compose -p casperlabs up -d
+
+# Stop common components.
+down:
+	docker-compose -p casperlabs down
 
 # Remove all node-N environments.
-clean: $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
+clean: down $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
 	docker network rm casperlabs || exit 0
 	@# Removing genesis created by docker, due to permissions.
 	docker run --rm \

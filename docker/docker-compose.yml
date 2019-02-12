@@ -1,0 +1,24 @@
+version: "3.5"
+
+networks:
+  casperlabs:
+    external: true
+
+services:
+
+  # Need to log in to DockerHub to pull the 3rd party images.
+
+  # Metrics available at http://localhost:9090
+  prometheus:
+    image: prom/prometheus:v2.7.1
+    container_name: prometheus
+    volumes:
+      - ${PWD}/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      # Mount the file which we'll keep refreshing any time nodes are created or removed.
+      - ${PWD}/monitoring/targets.yml:/etc/prometheus/targets.yml
+    ports:
+      - 9090:9090
+    networks:
+      - casperlabs
+
+
