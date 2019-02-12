@@ -2,6 +2,7 @@ extern crate common;
 extern crate rand;
 extern crate rkv;
 extern crate wasmi;
+extern crate parking_lot;
 
 pub mod error;
 pub mod gs;
