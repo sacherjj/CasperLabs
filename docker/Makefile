@@ -1,4 +1,5 @@
 CL_CASPER_NUM_VALIDATORS ?= 10
+CL_SERVER_HTTP_PORT ?= 40403
 
 # Don't remove directories created as dependencies.
 .SECONDARY:
@@ -38,6 +39,11 @@ node-%/down:
 	fi
 	./monitoring/refresh-targets.sh
 
+# Just a quick way to check whether the server published any Prometheus metrics yet.
+node-%/metrics:
+	docker run --rm --network casperlabs appropriate/curl -s http://node-$*:$(CL_SERVER_HTTP_PORT)/metrics
+
+
 # Start common components.
 up: .make/docker/network
 	./monitoring/refresh-targets.sh
@@ -46,6 +52,7 @@ up: .make/docker/network
 # Stop common components.
 down:
 	docker-compose -p casperlabs down
+
 
 # Remove all node-N environments.
 clean: down $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')

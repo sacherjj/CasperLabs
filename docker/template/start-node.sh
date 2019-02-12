@@ -10,12 +10,14 @@ if [ "$HOSTNAME" = "$BOOTSTRAP_HOSTNAME" ]; then
         --tls-key $HOME/.casperlabs/bootstrap/node.key.pem \
         --casper-validator-private-key $CL_VALIDATOR_PRIVATE_KEY \
         --casper-validator-public-key $CL_VALIDATOR_PUBLIC_KEY \
-        --grpc-socket $CL_GRPC_SOCKET
+        --grpc-socket $CL_GRPC_SOCKET \
+        --metrics-prometheus
 else
     exec ./bin/node run \
         --server-host $HOSTNAME \
         --server-bootstrap "casperlabs://${BOOTSTRAP_ID}@${BOOTSTRAP_HOSTNAME}?protocol=40400&discovery=40404" \
         --casper-validator-private-key $CL_VALIDATOR_PRIVATE_KEY \
         --casper-validator-public-key $CL_VALIDATOR_PUBLIC_KEY \
-        --grpc-socket $CL_GRPC_SOCKET
+        --grpc-socket $CL_GRPC_SOCKET \
+        --metrics-prometheus
 fi
