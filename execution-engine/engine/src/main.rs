@@ -11,6 +11,7 @@ use clap::{App, Arg};
 
 use execution_engine::engine::EngineState;
 use storage::gs::lmdb::LmdbGs;
+use storage::gs::inmem::InMemGS;
 use storage::gs::ExecutionEffect;
 
 #[derive(Debug)]
@@ -76,7 +77,7 @@ fn main() {
         address
     };
 
-    let poststate_hash = [0u8; 32];
+    let mut poststate_hash = [0u8; 32];
 
     let gas_limit: u64 = matches
         .value_of("gas-limit")
@@ -85,14 +86,18 @@ fn main() {
 
     let path = std::path::Path::new("./tmp/");
     //TODO: Better error handling?
-    let gs = LmdbGs::new(&path).unwrap();
+//    let gs = LmdbGs::new(&path).unwrap();
+    let gs = InMemGS::new();
     let engine_state = {
         let state = EngineState::new(gs);
-        state.with_mocked_account(account_addr);
+        let post_hash = state.with_mocked_account(account_addr);
+        println!("Hash after creating mock account {:?}", post_hash);
+        poststate_hash = post_hash;
         state
     };
 
     for wasm_bytes in wasm_files.iter() {
+        println!("Pre state hash: {:?}", poststate_hash);
         let result =
             engine_state.run_deploy(&wasm_bytes.bytes, account_addr, poststate_hash, &gas_limit);
         match result {
@@ -104,6 +109,7 @@ fn main() {
                     "Result for file {}: Success! New post state hash: {:?}",
                     wasm_bytes.path, res
                 );
+                poststate_hash = res; // we need to keep updating the post state hash after each deploy
             }
             Err(_) => println!("Result for file {}: {:?}", wasm_bytes.path, result),
         }

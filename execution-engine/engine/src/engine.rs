@@ -78,7 +78,7 @@ where
 {
     // To run, contracts need an existing account.
     // This function puts artificial entry in the GlobalState.
-    pub fn with_mocked_account(&self, account_addr: [u8; 20]) {
+    pub fn with_mocked_account(&self, account_addr: [u8; 20]) -> [u8; 32] {
         let transformations = {
             let account = value::Account::new([48u8; 32], 0, BTreeMap::new());
             let transform = Transform::Write(value::Value::Acct(account));
@@ -89,7 +89,7 @@ where
         self.state
             .lock()
             .commit(transformations)
-            .expect("Creation of mocked account should be a success.");
+            .expect("Creation of mocked account should be a success.")
     }
 
     pub fn new(state: G) -> EngineState<R, G> {
