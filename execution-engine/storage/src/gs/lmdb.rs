@@ -104,7 +104,7 @@ impl History<Self> for LmdbGs {
         Ok(TrackingCopy::new(self, block_hash))
     }
 
-    fn commit(&mut self, _block_hash: [u8; 32], tracking_copy: ExecutionEffect) -> Result<[u8; 32], Error> {
+    fn commit(&mut self, tracking_copy: ExecutionEffect) -> Result<[u8; 32], Error> {
         tracking_copy.1.into_iter()
             .try_fold((), |_, (k, t)| {
                 let maybe_curr = self.get(&k);

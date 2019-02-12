@@ -86,7 +86,7 @@ where
         };
         self.state
             .lock()
-            .commit([0;32], transformations)
+            .commit(transformations)
             .expect("Creation of mocked account should be a success.");
     }
 
