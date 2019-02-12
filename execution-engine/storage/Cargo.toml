@@ -9,6 +9,7 @@ rkv = "0.9.1"
 wasmi = "0.4.2"
 common = { path = "../common", features = ["std"] }
 parking_lot = "0.7.1"
+blake2 = "0.8"
 
 [dev-dependencies]
 matches = "0.1.8"
