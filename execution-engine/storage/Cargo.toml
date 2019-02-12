@@ -8,3 +8,6 @@ rand = "0.6.1"
 rkv = "0.9.1"
 wasmi = "0.4.2"
 common = { path = "../common", features = ["std"] }
+
+[dev-dependencies]
+matches = "0.1.8"

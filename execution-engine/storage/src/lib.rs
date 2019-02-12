@@ -8,3 +8,7 @@ pub mod gs;
 pub mod op;
 pub mod transform;
 mod utils;
+
+#[cfg(test)]
+#[macro_use]
+extern crate matches;

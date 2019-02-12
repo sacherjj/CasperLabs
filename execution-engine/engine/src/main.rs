@@ -80,6 +80,7 @@ fn main() {
         .expect("Provided gas limit value is not u64.");
 
     let path = std::path::Path::new("./tmp/");
+    //TODO: Better error handling?
     let gs = LmdbGs::new(&path).unwrap();
     let engine_state = {
         let state = EngineState::new(gs);
