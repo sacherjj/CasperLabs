@@ -3,6 +3,7 @@ use common::key::Key;
 use common::value::Value;
 use error::Error;
 use gs::*;
+use history::*;
 use std::collections::HashMap;
 
 pub struct InMemGS {
@@ -26,26 +27,39 @@ impl DbReader for InMemGS {
     }
 }
 
-impl GlobalState for InMemGS {
-    fn apply(&mut self, k: Key, t: Transform) -> Result<(), Error> {
-        let maybe_curr = self.store.remove(&k);
-        match maybe_curr {
-            None => match t {
-                Transform::Write(v) => {
-                    let _ = self.store.insert(k, v);
-                    Ok(())
-                }
-                _ => Err(Error::KeyNotFound { key: k }),
-            },
-            Some(curr) => {
-                let new_value = t.apply(curr)?;
-                let _ = self.store.insert(k, new_value);
-                Ok(())
-            }
-        }
-    }
-    fn tracking_copy(&self) -> Result<TrackingCopy<Self>, Error> {
+impl History<Self> for InMemGS {
+    fn checkout_multiple(&self, root_hashes: &[[u8; 32]]) -> Result<TrackingCopy<InMemGS>, Error> {
         Ok(TrackingCopy::new(self))
     }
+
+    fn checkout(&self, root_hash: &[u8; 32]) -> Result<TrackingCopy<InMemGS>, Error> {
+        Ok(TrackingCopy::new(self))
+    }
+
+    fn commit(&mut self, block_hash: [u8; 32], tracking_copy: ExecutionEffect) -> Result<[u8; 32], Error> {
+        tracking_copy.1.into_iter()
+            .try_fold((), |_, (k, t)| {
+                let maybe_curr = self.store.remove(&k);
+                match maybe_curr {
+                    None => match t {
+                        Transform::Write(v) => {
+                            let _ = self.store.insert(k, v);
+                            Ok(())
+                        }
+                        _ => Err(Error::KeyNotFound { key: k }),
+                    },
+                    Some(curr) => {
+                        let new_value = t.apply(curr)?;
+                        let _ = self.store.insert(k, new_value);
+                        Ok(())
+                    }
+                }
+            }).and_then(|_| self.get_root_hash())
+    }
+
+    fn get_root_hash(&self) -> Result<[u8; 32], Error> {
+        Ok([0u8;32])
+    }
 }
+
 

@@ -1,20 +1,21 @@
-use execution_engine::engine::EngineState;
 use std::marker::{Send, Sync};
-use storage::gs::GlobalState;
+
+use execution_engine::engine::EngineState;
+use ipc::DeployResult;
+use ipc_grpc::ExecutionEngineService;
+use mappings::*;
+use storage::gs::DbReader;
+use storage::history::*;
 
 pub mod mappings;
-use mappings::*;
-
 pub mod ipc;
 pub mod ipc_grpc;
 
-use ipc::DeployResult;
-use ipc_grpc::ExecutionEngineService;
 // Idea is that Engine will represent the core of the execution engine project.
 // It will act as an entry point for execution of Wasm binaries.
 // Proto definitions should be translated into domain objects when Engine's API is invoked.
 // This way core won't depend on comm (outer layer) leading to cleaner design.
-impl<G: GlobalState> ipc_grpc::ExecutionEngineService for EngineState<G> {
+impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineState<R, H> {
     fn send_deploy(
         &self,
         _o: ::grpc::RequestOptions,
@@ -22,7 +23,8 @@ impl<G: GlobalState> ipc_grpc::ExecutionEngineService for EngineState<G> {
     ) -> grpc::SingleResponse<ipc::DeployResult> {
         let mut addr = [0u8; 20];
         addr.copy_from_slice(&p.address);
-        match self.run_deploy(&p.session_code, addr, &(p.gas_limit as u64)) {
+        let poststate_hash = [0u8; 32];
+        match self.run_deploy(&p.session_code, addr, poststate_hash, &(p.gas_limit as u64)) {
             Ok(ee) => {
                 let mut res = DeployResult::new();
                 res.set_effects(execution_effect_to_ipc(ee));

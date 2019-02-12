@@ -5,16 +5,22 @@ use parity_wasm::elements::Module;
 use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use storage::error::Error as StorageError;
-use storage::gs::{ExecutionEffect, GlobalState};
+use storage::gs::{ExecutionEffect, DbReader};
+use storage::history::*;
 use storage::transform::Transform;
 use vm::wasm_costs::WasmCosts;
 use wasm_prep::process;
+use std::marker::PhantomData;
+use std::collections::HashMap;
 
-pub struct EngineState<G: GlobalState> {
+pub struct EngineState<R, H>
+    where R: DbReader,
+          H: History<R> {
     // Tracks the "state" of the blockchain (or is an interface to it).
     // I think it should be constrained with a lifetime parameter.
-    state: Mutex<G>,
+    state: Mutex<H>,
     wasm_costs: WasmCosts,
+    _phantom: PhantomData<R>,
 }
 
 #[derive(Debug)]
@@ -63,25 +69,32 @@ impl From<ExecutionError> for Error {
     }
 }
 
-impl<G> EngineState<G>
+impl<G, R> EngineState<R, G>
 where
-    G: GlobalState,
+    G: History<R>,
+    R: DbReader
 {
     // To run, contracts need an existing account.
-    // This function puts artifical entry in the GlobalState.
+    // This function puts artificial entry in the GlobalState.
     pub fn with_mocked_account(&self, account_addr: [u8; 20]) {
-        let account = value::Account::new([48u8; 32], 0, BTreeMap::new());
-        let transform = Transform::Write(value::Value::Acct(account));
+        let transformations = {
+            let account = value::Account::new([48u8; 32], 0, BTreeMap::new());
+            let transform = Transform::Write(value::Value::Acct(account));
+            let mut tf_map = HashMap::new();
+            tf_map.insert(Key::Account(account_addr), transform);
+            ExecutionEffect(HashMap::new(), tf_map)
+        };
         self.state
             .lock()
-            .apply(Key::Account(account_addr), transform)
+            .commit([0;32], transformations)
             .expect("Creation of mocked account should be a success.");
     }
 
-    pub fn new(state: G) -> EngineState<G> {
+    pub fn new(state: G) -> EngineState<R, G> {
         EngineState {
             state: Mutex::new(state),
             wasm_costs: WasmCosts::new(),
+            _phantom: PhantomData
         }
     }
 
@@ -91,14 +104,25 @@ where
         &self,
         module_bytes: &[u8],
         address: [u8; 20],
+        poststate_hash: [u8; 32],
         gas_limit: &u64,
     ) -> Result<ExecutionEffect, Error> {
         let module = self.preprocess_module(module_bytes, &self.wasm_costs)?;
-        exec(module, address, &gas_limit, &*self.state.lock()).map_err(|e| e.into())
+        exec(module, address, poststate_hash, &gas_limit, &*self.state.lock()).map_err(|e| e.into())
     }
 
+    //TODO: apply_effect shouldn't accept single tuples and return post state hash.
+    //Instead it should accept a sequence of transformations made in the block.
     pub fn apply_effect(&self, key: Key, eff: Transform) -> Result<(), Error> {
-        self.state.lock().apply(key, eff).map_err(|err| err.into())
+        let effects = {
+            let mut m = HashMap::new();
+            m.insert(key, eff);
+            ExecutionEffect(HashMap::new(), m)
+        };
+        self.state.lock()
+            .commit([0; 32], effects)
+            .map(|_| ())
+            .map_err(|err| err.into())
     }
 
     //TODO: inject gas counter, limit stack size etc

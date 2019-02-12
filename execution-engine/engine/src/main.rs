@@ -3,13 +3,15 @@ extern crate common;
 extern crate execution_engine;
 extern crate storage;
 
-use clap::{App, Arg};
-use execution_engine::engine::EngineState;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter::Iterator;
-use storage::gs::lmdb::LmdbGs;
+
+use clap::{App, Arg};
+
+use execution_engine::engine::EngineState;
 use storage::gs::ExecutionEffect;
+use storage::gs::lmdb::LmdbGs;
 
 #[derive(Debug)]
 struct Task {
@@ -74,6 +76,8 @@ fn main() {
         address
     };
 
+    let poststate_hash = [0u8; 32];
+
     let gas_limit: u64 = matches
         .value_of("gas-limit")
         .and_then(|v| v.parse::<u64>().ok())
@@ -89,7 +93,7 @@ fn main() {
     };
 
     for wasm_bytes in wasm_files.iter() {
-        let result = engine_state.run_deploy(&wasm_bytes.bytes, account_addr, &gas_limit);
+        let result = engine_state.run_deploy(&wasm_bytes.bytes, account_addr, poststate_hash, &gas_limit);
         match result {
             Ok(ExecutionEffect(_, transform_map)) => {
                 for (key, transformation) in transform_map.iter() {

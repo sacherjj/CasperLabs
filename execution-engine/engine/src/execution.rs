@@ -6,7 +6,8 @@ use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
 use storage::error::Error as StorageError;
-use storage::gs::{ExecutionEffect, GlobalState, TrackingCopy, DbReader};
+use storage::gs::{ExecutionEffect, TrackingCopy, DbReader};
+use storage::history::*;
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
@@ -842,17 +843,20 @@ fn sub_call<R: DbReader>(
     }
 }
 
-pub fn exec<G: GlobalState>(
+//TODO: add post state hash as a parameter.
+//It's required
+pub fn exec<R: DbReader, G: History<R>>(
     parity_module: Module,
     account_addr: [u8; 20],
+    poststate_hash: [u8; 32],
     gas_limit: &u64,
     gs: &G,
 ) -> Result<ExecutionEffect, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let acct_key = Key::Account(account_addr);
-    let value = gs.get(&acct_key)?;
+    let mut state = gs.checkout(&poststate_hash)?;
+    let value = state.get(&acct_key)?;
     let account = value.as_account();
-    let mut state = gs.tracking_copy()?;
     let mut known_urefs: HashSet<Key> = HashSet::new();
     for r in account.urefs_lookup().values() {
         known_urefs.insert(*r);
