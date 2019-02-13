@@ -5,7 +5,7 @@ use error::Error;
 use gs::DbReader;
 use gs::{GlobalState, TrackingCopy};
 use rkv::store::single::SingleStore;
-use rkv::{Manager, Reader, Rkv, StoreOptions, Writer};
+use rkv::{Manager, Rkv, StoreOptions};
 use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -29,44 +29,59 @@ impl LmdbGs {
         Ok(LmdbGs { store, env })
     }
 
-    pub fn with_reader<A, F: Fn(&Reader) -> Result<A, Error>>(&self, txn: F) -> Result<A, Error> {
-        self.env.read().map_err(|_| Error::RkvError).and_then(|r| {
-            let reader = r.read()?;
-            txn(&reader)
-        })
+    pub fn read(&self, k: &Key) -> Result<Value, Error> {
+        self.env
+            .read()
+            .map_err(|_| Error::RkvError)
+            .and_then(|rkv| {
+                let r = rkv.read()?;
+                let maybe_curr = self.store.get(&r, k)?;
+
+                match maybe_curr {
+                    None => Err(Error::KeyNotFound { key: *k }),
+                    Some(rkv::Value::Blob(bytes)) => {
+                        let value = deserialize(bytes)?;
+                        Ok(value)
+                    }
+                    //If we always store values as Blobs this case will never come
+                    //up. TODO: Use other variants of rkb::Value (e.g. I64, Str)?
+                    Some(_) => Err(Error::RkvError),
+                }
+            })
     }
 
-    pub fn with_writer<F: Fn(&mut Writer) -> Result<(), Error>>(
-        &self,
-        txn: F,
-    ) -> Result<(), Error> {
-        self.env.read().map_err(|_| Error::RkvError).and_then(|r| {
-            let mut writer = r.write()?;
-            let _ = txn(&mut writer)?;
-            let _ = writer.commit()?;
-            Ok(())
-        })
+    pub fn write<'a, I>(&self, mut kvs: I) -> Result<(), Error>
+    where
+        I: Iterator<Item = (Key, &'a Value)>,
+    {
+        self.env
+            .read()
+            .map_err(|_| Error::RkvError)
+            .and_then(|rkv| {
+                let mut w = rkv.write()?;
+
+                let result: Result<(), Error> = kvs.try_fold((), |_, (k, v)| {
+                    let bytes = v.to_bytes();
+                    let _ = self.store.put(&mut w, k, &rkv::Value::Blob(&bytes))?;
+                    Ok(())
+                });
+
+                match result {
+                    Ok(_) => {
+                        let _ = w.commit()?;
+                        Ok(())
+                    }
+                    e @ Err(_) => {
+                        w.abort();
+                        e
+                    }
+                }
+            })
     }
 
-    pub fn read(&self, k: &Key, r: &Reader) -> Result<Value, Error> {
-        let maybe_curr = self.store.get(r, k)?;
-
-        match maybe_curr {
-            None => Err(Error::KeyNotFound { key: *k }),
-            Some(rkv::Value::Blob(bytes)) => {
-                let value = deserialize(bytes)?;
-                Ok(value)
-            }
-            //If we always store values as Blobs this case will never come
-            //up. TODO: Use other variants of rkb::Value (e.g. I64, Str)?
-            Some(_) => Err(Error::RkvError),
-        }
-    }
-
-    pub fn write(&self, w: &mut Writer, k: Key, value: &Value) -> Result<(), Error> {
-        let bytes = value.to_bytes();
-        let _ = self.store.put(w, k, &rkv::Value::Blob(&bytes))?;
-        Ok(())
+    pub fn write_single(&self, k: Key, v: &Value) -> Result<(), Error> {
+        let iterator = std::iter::once((k, v));
+        self.write(iterator)
     }
 }
 
@@ -76,8 +91,7 @@ impl DbReader for LmdbGs {
         //i.e. just by creating a DbReader for LMDB it should create a `Reader`
         //to go with it. This would prevent the database from being modified while
         //another process was expecing to be able to read it.
-        let txn = |r: &Reader| self.read(k, r);
-        self.with_reader(txn)
+        self.read(k)
     }
 }
 
@@ -86,22 +100,12 @@ impl GlobalState for LmdbGs {
         let maybe_curr = self.get(&k);
         match maybe_curr {
             Err(Error::KeyNotFound { .. }) => match t {
-                Transform::Write(v) => {
-                    let txn = |writer: &mut Writer| {
-                        let _ = self.write(writer, k, &v)?;
-                        Ok(())
-                    };
-                    self.with_writer(txn)
-                }
+                Transform::Write(v) => self.write_single(k, &v),
                 _ => Err(Error::KeyNotFound { key: k }),
             },
             Ok(curr) => {
                 let new_value = t.apply(curr)?;
-                let txn = |writer: &mut Writer| {
-                    let _ = self.write(writer, k, &new_value)?;
-                    Ok(())
-                };
-                self.with_writer(txn)
+                self.write_single(k, &new_value)
             }
             Err(e) => Err(e),
         }
@@ -121,7 +125,6 @@ impl fmt::Debug for LmdbGs {
 mod tests {
     use gens::gens::*;
     use gs::lmdb::LmdbGs;
-    use rkv::{Reader, Writer};
     use tempfile::tempdir;
 
     #[test]
@@ -142,11 +145,8 @@ mod tests {
         let lmdb = LmdbGs::new(&path).unwrap();
 
         proptest!(|(k in key_arb(), v in value_arb())| {
-          let write_txn = |w: &mut Writer| lmdb.write(w, k, &v);
-          let read_txn = |r: &Reader| lmdb.read(&k, r);
-
-          let write = lmdb.with_writer(write_txn);
-          let read = lmdb.with_reader(read_txn);
+          let write = lmdb.write_single(k, &v);
+          let read = lmdb.read(&k);
           assert_matches!(write, Ok(_));
           prop_assert_eq!(read, Ok(v.clone()));
         });
