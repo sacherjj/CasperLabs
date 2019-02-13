@@ -1,6 +1,8 @@
 CL_CASPER_NUM_VALIDATORS ?= 10
 CL_SERVER_HTTP_PORT ?= 40403
 
+REFRESH_TARGETS := ./monitoring/prometheus/refresh-targets.sh
+
 # Don't remove directories created as dependencies.
 .SECONDARY:
 
@@ -29,7 +31,7 @@ node-%: .casperlabs/genesis
 node-%/up: node-% .make/docker/network
 	@# Go into the directory to pick up values from .env
 	cd node-$* && docker-compose up -d
-	./monitoring/refresh-targets.sh
+	$(REFRESH_TARGETS)
 
 # Tear down node.
 node-%/down:
@@ -37,7 +39,7 @@ node-%/down:
 		cd node-$* && docker-compose down && cd - && \
 		rm -rf node-$* ; \
 	fi
-	./monitoring/refresh-targets.sh
+	$(REFRESH_TARGETS)
 
 # Just a quick way to check whether the server published any Prometheus metrics yet.
 node-%/metrics:
@@ -46,7 +48,7 @@ node-%/metrics:
 
 # Start common components.
 up: .make/docker/network
-	./monitoring/refresh-targets.sh
+	$(REFRESH_TARGETS)
 	docker-compose -p casperlabs up -d
 
 # Stop common components.

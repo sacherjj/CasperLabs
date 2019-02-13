@@ -5,20 +5,29 @@ networks:
     external: true
 
 services:
-
-  # Need to log in to DockerHub to pull the 3rd party images.
-
   # Metrics available at http://localhost:9090
   prometheus:
     image: prom/prometheus:v2.7.1
     container_name: prometheus
     volumes:
-      - ${PWD}/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ${PWD}/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       # Mount the file which we'll keep refreshing any time nodes are created or removed.
-      - ${PWD}/monitoring/targets.yml:/etc/prometheus/targets.yml
+      - ${PWD}/monitoring/prometheus/targets.yml:/etc/prometheus/targets.yml
     ports:
-      - 9090:9090
+      - ${CL_PROMETHEUS_PORT}:9090
     networks:
       - casperlabs
 
-
+  # Dashboard available at http://localhost:3000
+  # login credentials are admin/admin
+  grafana:
+    image: grafana/grafana:5.4.3
+    container_name: grafana
+    volumes:
+      # http://docs.grafana.org/v5.0/administration/provisioning/
+      - ${PWD}/monitoring/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ${PWD}/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    ports:
+      - ${CL_GRAFANA_PORT}:3000
+    networks:
+      - casperlabs

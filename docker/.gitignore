@@ -1,4 +1,4 @@
 node-*
 .make
 .casperlabs/genesis
-monitoring/targets.yml
+monitoring/prometheus/targets.yml
