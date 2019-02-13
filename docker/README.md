@@ -42,7 +42,11 @@ $
 
 Running `make up` will install some common containers in the network, for example a [Prometheus](https://prometheus.io) server which will be available at http://localhost:9090. The list of [targets](http://localhost:9090/targets) will be updated every time we create or destroy nodes.
 
-Note that you'll need to do a `docker login` with your DockerHub username and password to be able to pull 3rd party images.
+To see some of the metrics in [Grafana](https://grafana.com/) go to http://localhost:3000 and log in with the credentials "admin/admin". The Block Gossiping dashboard displays charts that show how much overhead the communication has.
+
+You can slow the network down a bit by running `make delay` in one terminal while issuing deploys in another one. You should see that now it takes longer for nodes to catch up after a block is created; even just sending the deploy is going to take a bit more time.
+
+Note that you'll need to run `docker login` with your DockerHub username and password to be able to pull 3rd party images.
 
 
 ## Shut down the network
