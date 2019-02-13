@@ -50,6 +50,7 @@ pipeline:
 
   compile-rust-engine:
     <<: *buildenv
+    group: rust
     commands:
       - cd execution-engine/engine
       - ~/.cargo/bin/cargo update
@@ -57,6 +58,7 @@ pipeline:
 
   compile-rust-comm:
     <<: *buildenv
+    group: rust
     commands:
       - cd execution-engine/comm
       - ~/.cargo/bin/cargo update
@@ -65,12 +67,14 @@ pipeline:
 
   run-rust-tests:
     <<: *buildenv
+    group: test
     commands:
       - cd execution-engine/tests
       - ~/.cargo/bin/cargo test
 
   run-unit-tests:
     <<: *sbtenv
+    group: test
     commands:
       - sbt test
 
