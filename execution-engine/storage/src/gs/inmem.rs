@@ -101,8 +101,8 @@ impl History<Self> for InMemGS {
     fn get_root_hash(&self) -> Result<[u8; 32], Error> {
         let mut data: Vec<u8> = Vec::new();
         for (k, v) in self.store.lock().iter() {
-            data.clone_from(&k.to_bytes());
-            data.clone_from(&v.to_bytes());
+            data.extend(k.to_bytes());
+            data.extend(v.to_bytes());
         };
         let mut hasher = VarBlake2b::new(32).unwrap();
         hasher.input(data);
