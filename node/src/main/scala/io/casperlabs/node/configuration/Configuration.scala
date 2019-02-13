@@ -81,10 +81,13 @@ object Configuration {
     final case object Run         extends Command
   }
 
-  def parse(args: Array[String]): ValidatedNel[String, Configuration] = {
+  def parse(
+      args: Array[String],
+      envVars: Map[String, String]
+  ): ValidatedNel[String, Configuration] = {
     val either = for {
       defaults <- ConfigurationSoft.tryDefault
-      confSoft <- ConfigurationSoft.parse(args)
+      confSoft <- ConfigurationSoft.parse(args, envVars)
       command  <- Options.parseCommand(args, defaults)
     } yield parseToActual(command, defaults, confSoft)
 

@@ -4,9 +4,7 @@ import java.nio.file.Path
 
 import cats.syntax.either._
 import io.casperlabs.comm.PeerNode
-import io.casperlabs.node.configuration.ConfigurationSoft.LmdbBlockStore
-import io.casperlabs.shared.StoreType
-import io.casperlabs.shared.Merge
+import io.casperlabs.shared.{Merge, StoreType}
 import shapeless.LowPriority
 
 import scala.concurrent.duration.FiniteDuration
@@ -124,7 +122,10 @@ private[configuration] object ConfigurationSoft {
       .leftMap(_.getMessage)
       .flatMap(raw => TomlReader.parse(raw))
 
-  private[configuration] def parse(args: Array[String]): Either[String, ConfigurationSoft] =
+  private[configuration] def parse(
+      args: Array[String],
+      envVars: Map[String, String]
+  ): Either[String, ConfigurationSoft] =
     for {
       defaults               <- tryDefault
       cliConf                <- Options.parseConf(args, defaults)

@@ -420,19 +420,19 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
   }
 
   test("ConfigurationSoft.parse should properly parse default config resources") {
-    val Right(c) = ConfigurationSoft.parse(Array.empty[String])
+    val Right(c) = ConfigurationSoft.parse(Array.empty[String], Map.empty)
     c shouldEqual expectedFromResources
   }
 
   test("ConfigurationSoft.parse should properly parse TOML --config-file") {
     writeTestConfigFile()
-    val Right(c) = ConfigurationSoft.parse(Array("--config-file", configFilename))
+    val Right(c) = ConfigurationSoft.parse(Array("--config-file", configFilename), Map.empty)
     c shouldEqual expectedFromConfigFile
   }
 
   test("ConfigurationSoft.parse should properly parse CLI args") {
     writeTestConfigFile()
-    val Right(c) = ConfigurationSoft.parse(cliArgs)
+    val Right(c) = ConfigurationSoft.parse(cliArgs, Map.empty)
     c shouldEqual expectedFromCliArgs
   }
 
@@ -444,7 +444,10 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
         |zipkin = true
       """.stripMargin)
     val Right(c) =
-      ConfigurationSoft.parse(Array("--config-file", configFilename, "--grpc-port=100", "run"))
+      ConfigurationSoft.parse(
+        Array("--config-file", configFilename, "--grpc-port=100", "run"),
+        Map.empty
+      )
     val expected =
       expectedFromResources
         .copy(
