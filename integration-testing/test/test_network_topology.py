@@ -67,7 +67,6 @@ def complete_network(context: TestingContext) -> Generator[Network, None, None]:
             wait_for_approved_block_received(network, context.node_startup_timeout)
             yield network
 
-
 def test_metrics_api_socket(command_line_options_fixture, docker_client_fixture):
     with conftest.testing_context(command_line_options_fixture, docker_client_fixture) as context:
         with complete_network(context) as network:
@@ -110,7 +109,7 @@ def casper_propose_and_deploy(context, network):
     """
 
     token_size = 20
-    contract_name = 'contract.rho'
+    contract_name = 'helloname.wasm'
     for node in network.nodes:
         logging.info("Run test on node '{}'".format(node.name))
 

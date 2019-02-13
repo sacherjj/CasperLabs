@@ -163,7 +163,7 @@ class Node:
         self.background_logging.join()
 
     def deploy_contract(self, contract: str) -> Tuple[int, str]:
-        cmd = '{casperlabsnode_binary} deploy --from "0x1" --gas-limit 1000000 --gas-price 1 --nonce 0 {casperlabsnode_deploy_dir}/{contract}'.format(
+        cmd = '{casperlabsnode_binary} deploy --from "0x00000000000000000000" --gas-limit 1000000 --gas-price 1 --nonce 0 {casperlabsnode_deploy_dir}/{contract}'.format(
             casperlabsnode_binary=casperlabsnode_binary,
             casperlabsnode_deploy_dir=casperlabsnode_deploy_dir,
             contract=contract
@@ -505,8 +505,8 @@ def make_peer(
         "--server-bootstrap":       bootstrap_address,
         "--casper-validator-private-key":  key_pair.private_key,
         "--casper-validator-public-key":   key_pair.public_key,
-        "--casper-host":                   name,
-        "--prometheus":                    "",
+        "--server-host":                   name,
+        "--metrics-prometheus":            ""
     }
 
     container = make_node(
