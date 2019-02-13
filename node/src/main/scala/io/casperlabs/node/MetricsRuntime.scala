@@ -14,7 +14,7 @@ import kamon._
 
 class MetricsRuntime[F[_]: Sync: Log](conf: Configuration, id: NodeIdentifier) {
 
-  def addReporter(enabled: Boolean, destination: String, reporter: => Reporter): F[Unit] =
+  private def addReporter(enabled: Boolean, destination: String, reporter: => Reporter): F[Unit] =
     if (enabled) {
       Log[F].info(s"Reporting metrics to $destination.") *>
         Sync[F].delay {
