@@ -259,7 +259,7 @@ mod tests {
         let other_named_key = Value::NamedKey("test2".to_string(), tc.new_uref());
         let mut map: BTreeMap<String, Key> = BTreeMap::new();
         //This is written as an `if`, but it is clear from the line
-        //where `named_key` is defined that it will alwways match
+        //where `named_key` is defined that it will always match
         if let Value::NamedKey(name, key) = named_key.clone() {
             map.insert(name, key);
         }
