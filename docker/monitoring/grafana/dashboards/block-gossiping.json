@@ -67,7 +67,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Deploys",
+      "title": "Deploys Received",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -110,6 +110,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "Prometheus",
+      "description": "Blocks created by the node.",
       "fill": 1,
       "gridPos": {
         "h": 9,
@@ -152,7 +153,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Blocks Created",
+      "title": "Blocks Proposed",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -307,7 +308,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "Prometheus",
-      "description": "Number of blocks the node created or received from others",
+      "description": "Number of blocks the node created or received from others, i.e. the total it knows about.",
       "fill": 0,
       "gridPos": {
         "h": 9,
