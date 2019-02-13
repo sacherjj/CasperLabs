@@ -14,18 +14,16 @@ pub struct TrackingCopy<'a, R: DbReader> {
     ops: HashMap<Key, Op>,
     fns: HashMap<Key, Transform>,
     rng: rand::rngs::StdRng,
-    block_hash: [u8; 32],
 }
 
 impl<'a, R: DbReader> TrackingCopy<'a, R> {
-    pub fn new(reader: &'a R, block_hash: [u8;32]) -> TrackingCopy<R> {
+    pub fn new(reader: &'a R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
             cache: HashMap::new(),
             ops: HashMap::new(),
             fns: HashMap::new(),
             rng: rand::rngs::StdRng::from_entropy(),
-            block_hash: block_hash,
         }
     }
 

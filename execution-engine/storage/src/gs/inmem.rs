@@ -51,7 +51,7 @@ impl History<Self> for InMemGS {
         } else {
             let mut store = self.store.lock();
             *store = self.history.lock().get(&block_hash).unwrap().clone();
-            Ok(TrackingCopy::new(self, block_hash))
+            Ok(TrackingCopy::new(self))
         }
     }
 
