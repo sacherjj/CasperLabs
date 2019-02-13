@@ -8,7 +8,7 @@ use execution_engine::engine::EngineState;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter::Iterator;
-use storage::gs::inmem::InMemGS;
+use storage::gs::lmdb::LmdbGs;
 use storage::gs::ExecutionEffect;
 
 #[derive(Debug)]
@@ -79,7 +79,9 @@ fn main() {
         .and_then(|v| v.parse::<u64>().ok())
         .expect("Provided gas limit value is not u64.");
 
-    let gs = InMemGS::new();
+    let path = std::path::Path::new("./tmp/");
+    //TODO: Better error handling?
+    let gs = LmdbGs::new(&path).unwrap();
     let engine_state = {
         let state = EngineState::new(gs);
         state.with_mocked_account(account_addr);

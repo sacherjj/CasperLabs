@@ -12,26 +12,24 @@ use execution_engine::execution::{Runtime, RuntimeContext};
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
 use std::collections::BTreeMap;
+use storage::gs::{inmem::*, DbReader, GlobalState, TrackingCopy};
 use storage::transform::Transform;
-use storage::{GlobalState, InMemGS, InMemTC, TrackingCopy};
 use wasm_prep::MAX_MEM_PAGES;
 use wasmi::memory_units::Pages;
 use wasmi::{MemoryInstance, MemoryRef};
 
-struct MockEnv {
+struct MockEnv<'a> {
     key: Key,
     account: value::Account,
     uref_lookup: BTreeMap<String, Key>,
-    tc: InMemTC,
+    tc: TrackingCopy<'a, InMemGS>,
     gas_limit: u64,
     memory: MemoryRef,
 }
 
-impl MockEnv {
-    pub fn new(addr: [u8; 20], gas_limit: u64) -> Self {
-        let (key, account) = mock_account(addr);
-        let gs = mock_gs(key, &account);
-        let tc = gs.tracking_copy();
+impl<'b> MockEnv<'b> {
+  pub fn new(key: Key, account: value::Account, gas_limit: u64, gs: &'b InMemGS) -> Self {
+        let tc = gs.tracking_copy().unwrap();
         let uref_lookup = mock_uref_lookup();
         let memory = MemoryInstance::alloc(Pages(17), Some(Pages(MAX_MEM_PAGES as usize)))
             .expect("Mocked memory should be able to be created.");
@@ -46,7 +44,7 @@ impl MockEnv {
         }
     }
 
-    pub fn runtime<'a>(&'a mut self) -> Runtime<'a, InMemTC> {
+    pub fn runtime<'a>(&'a mut self) -> Runtime<'a, 'b, InMemGS> {
         let context = mock_context(&mut self.uref_lookup, &self.account, self.key);
         Runtime::new(
             self.memory.clone(),
@@ -87,9 +85,9 @@ impl WasmMemoryManager {
         }
     }
 
-    pub fn new_uref<'a, T: TrackingCopy + 'a>(
+    pub fn new_uref<'a, 'b, R: DbReader>(
         &mut self,
-        runtime: &mut Runtime<'a, T>,
+        runtime: &mut Runtime<'a, 'b, R>,
     ) -> Result<(u32, usize), wasmi::Trap> {
         let ptr = self.offset as u32;
 
@@ -138,8 +136,8 @@ fn mock_module() -> Module {
     module().build()
 }
 
-fn gs_write<'a, T: TrackingCopy>(
-    runtime: &mut Runtime<'a, T>,
+fn gs_write<'a, 'b, R: DbReader>(
+    runtime: &mut Runtime<'a, 'b, R>,
     key: (u32, usize),
     value: (u32, usize),
 ) -> Result<(), wasmi::Trap> {
@@ -148,7 +146,10 @@ fn gs_write<'a, T: TrackingCopy>(
 
 #[test]
 fn valid_uref() {
-    let mut env = MockEnv::new([0u8; 20], 0);
+    let addr = [0u8; 20];
+    let (key, account) = mock_account(addr);
+    let gs = mock_gs(key, &account);
+    let mut env = MockEnv::new(key, account, 0, &gs);
     let mut memory = env.memory_manager();
     let mut runtime = env.runtime();
 
@@ -169,7 +170,10 @@ fn valid_uref() {
 
 #[test]
 fn forged_uref() {
-    let mut env = MockEnv::new([0u8; 20], 0);
+    let addr = [0u8; 20];
+    let (key, account) = mock_account(addr);
+    let gs = mock_gs(key, &account);
+    let mut env = MockEnv::new(key, account, 0, &gs);
     let mut memory = env.memory_manager();
     let mut runtime = env.runtime();
 

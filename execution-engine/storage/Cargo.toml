@@ -5,5 +5,13 @@ authors = ["Michael Birch <birchmd@casperlabs.io>"]
 
 [dependencies]
 rand = "0.6.1"
+rkv = "0.9.1"
 wasmi = "0.4.2"
 common = { path = "../common", features = ["std"] }
+
+[dev-dependencies]
+matches = "0.1.8"
+tempfile = "3.0.6"
+gens = { path = "../gens" }
+proptest = "0.8.7"
+

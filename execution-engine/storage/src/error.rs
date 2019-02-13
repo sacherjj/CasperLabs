@@ -1,4 +1,6 @@
+use common::bytesrepr;
 use common::key::Key;
+use rkv::error::StoreError;
 use std::fmt;
 use wasmi::HostError;
 
@@ -6,6 +8,8 @@ use wasmi::HostError;
 pub enum Error {
     KeyNotFound { key: Key },
     TypeMismatch { expected: String, found: String },
+    RkvError, //TODO: catpture error better
+    BytesRepr(bytesrepr::Error),
 }
 
 impl fmt::Display for Error {
@@ -15,3 +19,15 @@ impl fmt::Display for Error {
 }
 
 impl HostError for Error {}
+
+impl From<StoreError> for Error {
+    fn from(_e: StoreError) -> Self {
+        Error::RkvError
+    }
+}
+
+impl From<bytesrepr::Error> for Error {
+    fn from(e: bytesrepr::Error) -> Self {
+        Error::BytesRepr(e)
+    }
+}
