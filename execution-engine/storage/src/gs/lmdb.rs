@@ -111,7 +111,7 @@ impl History<Self> for LmdbGs {
         Ok(TrackingCopy::new(self))
     }
 
-    fn commit(&mut self, effects: HashMap<Key, Transform>) -> Result<[u8; 32], Error> {
+    fn commit(&self, effects: HashMap<Key, Transform>) -> Result<[u8; 32], Error> {
         effects
             .into_iter()
             .try_fold((), |_, (k, t)| {
