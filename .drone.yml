@@ -91,15 +91,6 @@ pipeline:
   ##     - /var/run/docker.sock:/var/run/docker.sock
   ##     - /tmp:/tmp
 
-  cleanup:
-    <<: *sbtenv
-    commands:
-      - docker images | grep none | awk '{print $3;}' | xargs docker rmi
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    when:
-      status: [ failure, success ]
-
   # push
 
   package:
@@ -128,6 +119,17 @@ pipeline:
       - /artifacts/:/artifacts/
     when:
       event: [ push, tag ]
+
+
+  cleanup:
+    <<: *sbtenv
+    commands:
+      - docker images | grep none | awk '{print $3;}' | xargs docker rmi || true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      status: [ failure, success ]
+
 
   notify:
     image: plugins/slack
