@@ -40,13 +40,20 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
   def apply[F[_]](implicit ev: CasperPacketHandler[F]): CasperPacketHandler[F] = ev
 
+  /** Export a base 0 value so we have non-empty series for charts. */
+  def establishMetrics[F[_]: Monad: Metrics]: F[Unit] =
+    for {
+      _ <- Metrics[F].incrementCounter("blocks-received", 0)
+      _ <- Metrics[F].incrementCounter("blocks-received-again", 0)
+    } yield ()
+
   def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage](
       conf: CasperConf,
       delay: FiniteDuration,
       executionEngineService: ExecutionEngineService[F],
       toTask: F[_] => Task[_]
-  )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
-    if (conf.approveGenesis) {
+  )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] = {
+    val handler: F[CasperPacketHandler[F]] = if (conf.approveGenesis) {
       for {
         _              <- Log[F].info("Starting in approve genesis mode")
         timestamp      <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
@@ -144,6 +151,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
             }
       } yield casperPacketHandler
     }
+    establishMetrics[F] *> handler
+  }
 
   trait CasperPacketHandlerInternal[F[_]] {
     def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit]

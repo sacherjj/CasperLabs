@@ -74,7 +74,7 @@ object GrpcServer {
       grpcExecutor: Scheduler,
       blockApiLock: Semaphore[F]
   )(implicit worker: Scheduler): F[GrpcServer] =
-    Sync[F].delay {
+    DeployGrpcService.instance(blockApiLock) map { inst =>
       GrpcServer(
         NettyServerBuilder
           .forPort(port)
@@ -82,7 +82,7 @@ object GrpcServer {
           .maxMessageSize(maxMessageSize)
           .addService(
             CasperMessageGrpcMonix
-              .bindService(DeployGrpcService.instance(blockApiLock), grpcExecutor)
+              .bindService(inst, grpcExecutor)
           )
           .build
       )
