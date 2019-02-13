@@ -163,7 +163,7 @@ class Node:
         self.background_logging.join()
 
     def deploy_contract(self, contract: str) -> Tuple[int, str]:
-        cmd = '{casperlabsnode_binary} deploy --from "0x00000000000000000000" --gas-limit 1000000 --gas-price 1 --nonce 0 {casperlabsnode_deploy_dir}/{contract}'.format(
+        cmd = '{casperlabsnode_binary} deploy --from "00000000000000000000" --gas-limit 1000000 --gas-price 1 --nonce 0 {casperlabsnode_deploy_dir}/{contract}'.format(
             casperlabsnode_binary=casperlabsnode_binary,
             casperlabsnode_deploy_dir=casperlabsnode_deploy_dir,
             contract=contract
