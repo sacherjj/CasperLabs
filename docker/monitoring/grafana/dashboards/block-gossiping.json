@@ -15,7 +15,6 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 1,
   "links": [],
   "panels": [
     {
@@ -228,7 +227,10 @@
       "seriesOverrides": [
         {
           "alias": "Efficiency",
+          "dashes": true,
+          "fill": 0,
           "stack": false,
+          "steppedLine": true,
           "yaxis": 2
         }
       ],
@@ -386,6 +388,7 @@
       }
     }
   ],
+  "refresh": "5s",
   "schemaVersion": 16,
   "style": "dark",
   "tags": [],
@@ -393,7 +396,7 @@
     "list": []
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {
@@ -424,5 +427,5 @@
   "timezone": "",
   "title": "Block Gossiping",
   "uid": "c18uWEXik",
-  "version": 5
+  "version": 1
 }

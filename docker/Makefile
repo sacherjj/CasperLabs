@@ -6,6 +6,18 @@ REFRESH_TARGETS := ./monitoring/prometheus/refresh-targets.sh
 # Don't remove directories created as dependencies.
 .SECONDARY:
 
+# Remove all node-N environments.
+clean: down $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
+	docker network rm casperlabs || exit 0
+	@# Removing genesis created by docker, due to permissions.
+	docker run --rm \
+		-v ${PWD}/.casperlabs:/root/.casperlabs \
+		--entrypoint sh \
+		io.casperlabs/node:latest \
+		-c "rm -rf /root/.casperlabs/genesis"
+	rm -rf .make
+
+
 # Create a new node environment by linking to the template docker-complse.yml file.
 node-%: .casperlabs/genesis
 	$(eval N = $*)
@@ -56,16 +68,17 @@ down:
 	docker-compose -p casperlabs down
 
 
-# Remove all node-N environments.
-clean: down $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
-	docker network rm casperlabs || exit 0
-	@# Removing genesis created by docker, due to permissions.
-	docker run --rm \
-		-v ${PWD}/.casperlabs:/root/.casperlabs \
-		--entrypoint sh \
-		io.casperlabs/node:latest \
-		-c "rm -rf /root/.casperlabs/genesis"
-	rm -rf .make
+# Slow down traffic between nodes to simulate network effects and large blocks.
+# If we slow it down too much then the client won't be able to connect though.
+# https://alexei-led.github.io/post/pumba_docker_netem/
+delay:
+	docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock gaiaadm/pumba \
+	    netem --duration 5m --interface eth0 \
+	      delay \
+	        --time 500 \
+	        --jitter 100 \
+	        --distribution normal \
+	      re2:^node
 
 
 .make/docker/network:

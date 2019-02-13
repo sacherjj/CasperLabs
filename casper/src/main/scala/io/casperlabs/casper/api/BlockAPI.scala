@@ -27,7 +27,7 @@ object BlockAPI {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "block-api")
 
-  /** Export base 0 values so we have non-empty series for expressions on charts. */
+  /** Export base 0 values so we have non-empty series for charts. */
   def establishMetrics[F[_]: Monad: Metrics] =
     for {
       _ <- Metrics[F].incrementCounter("deploys", 0)
