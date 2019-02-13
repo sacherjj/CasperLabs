@@ -151,7 +151,7 @@ mod tests {
     }
 
     #[test]
-    fn trackng_copy_caching() {
+    fn tracking_copy_caching() {
         let db = CountingDb::new();
         let mut tc = TrackingCopy::new(&db);
         let k = Key::Hash([0u8; 32]);
