@@ -106,14 +106,14 @@ where
         &self,
         module_bytes: &[u8],
         address: [u8; 20],
-        poststate_hash: [u8; 32],
+        prestate_hash: [u8; 32],
         gas_limit: &u64,
     ) -> Result<ExecutionEffect, Error> {
         let module = self.preprocess_module(module_bytes, &self.wasm_costs)?;
         exec(
             module,
             address,
-            poststate_hash,
+            prestate_hash,
             &gas_limit,
             &*self.state.lock(),
         )

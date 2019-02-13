@@ -38,19 +38,32 @@ impl DbReader for InMemGS {
 }
 
 impl History<Self> for InMemGS {
-    fn checkout_multiple(&self, block_hashes: &[[u8; 32]]) -> Result<TrackingCopy<InMemGS>, Error> {
-        unimplemented!("checkout_multiple doesn't work yet b/c TrackingCopy is able only to build on single block.")
+    fn checkout_multiple(&self, prestate_hashes: Vec<[u8; 32]>) -> Result<TrackingCopy<InMemGS>, Error> {
+        let missing_root = prestate_hashes.iter().find(|root| !self.history.lock().contains_key(root.clone()));
+        match missing_root {
+            Some(missing) => Err(Error::RootNotFound(missing.clone())),
+            None => {
+                let mut new_root: HashMap<Key, Value> = HashMap::new();
+                for root in prestate_hashes.iter() {
+                    let snapshot = self.history.lock().get(root).unwrap().clone();
+                    new_root.extend(snapshot);
+                };
+                let mut store = self.store.lock();
+                *store = new_root;
+                Ok(TrackingCopy::new(self))
+            }
+        }
     }
 
     /// **WARNING**
     /// This will drop any changes made to `active_store` and replace it with
     /// the state under passed hash.
-    fn checkout(&self, block_hash: [u8; 32]) -> Result<TrackingCopy<InMemGS>, Error> {
-        if(!self.history.lock().contains_key(&block_hash)) {
-            Err(Error::RootNotFound(block_hash))
+    fn checkout(&self, prestate_hash: [u8; 32]) -> Result<TrackingCopy<InMemGS>, Error> {
+        if(!self.history.lock().contains_key(&prestate_hash)) {
+            Err(Error::RootNotFound(prestate_hash))
         } else {
             let mut store = self.store.lock();
-            *store = self.history.lock().get(&block_hash).unwrap().clone();
+            *store = self.history.lock().get(&prestate_hash).unwrap().clone();
             Ok(TrackingCopy::new(self))
         }
     }
@@ -77,7 +90,7 @@ impl History<Self> for InMemGS {
             .and_then(|_| {
                 //TODO(mateusz.gorski): Awful waste of time and space
                 let active_store = self.store.lock().clone();
-                let hash = self.get_root_hash().unwrap();
+                let hash = self.get_root_hash()?;
                 self.history.lock().insert(hash, active_store);
                 Ok(hash)
             })

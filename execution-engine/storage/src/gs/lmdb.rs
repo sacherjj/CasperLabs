@@ -96,12 +96,12 @@ impl DbReader for LmdbGs {
 }
 
 impl History<Self> for LmdbGs {
-    fn checkout_multiple(&self, block_hashes: &[[u8; 32]]) -> Result<TrackingCopy<LmdbGs>, Error> {
+    fn checkout_multiple(&self, prestate_hashes: Vec<[u8; 32]>) -> Result<TrackingCopy<LmdbGs>, Error> {
         unimplemented!("checkout_multiple doesn't work yet b/c TrackingCopy is able only to build on single block.")
     }
 
-    fn checkout(&self, block_hash: [u8; 32]) -> Result<TrackingCopy<LmdbGs>, Error> {
-        Ok(TrackingCopy::new(self, block_hash))
+    fn checkout(&self, prestate_hash: [u8; 32]) -> Result<TrackingCopy<LmdbGs>, Error> {
+        Ok(TrackingCopy::new(self))
     }
 
     fn commit(&mut self, tracking_copy: ExecutionEffect) -> Result<[u8; 32], Error> {

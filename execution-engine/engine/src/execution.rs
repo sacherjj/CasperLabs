@@ -848,13 +848,13 @@ fn sub_call<R: DbReader>(
 pub fn exec<R: DbReader, G: History<R>>(
     parity_module: Module,
     account_addr: [u8; 20],
-    poststate_hash: [u8; 32],
+    prestate_hash: [u8; 32],
     gas_limit: &u64,
     gs: &G,
 ) -> Result<ExecutionEffect, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let acct_key = Key::Account(account_addr);
-    let mut state = gs.checkout(poststate_hash)?;
+    let mut state = gs.checkout(prestate_hash)?;
     let value = state.get(&acct_key)?;
     let account = value.as_account();
     let mut known_urefs: HashSet<Key> = HashSet::new();
