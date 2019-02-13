@@ -103,7 +103,7 @@ fn main() {
         match result {
             Ok(effects) => {
                 let res = engine_state
-                    .apply_effect(effects)
+                    .apply_effect(effects.1)
                     .expect(&format!("Error when applying effects."));
                 println!(
                     "Result for file {}: Success! New post state hash: {:?}",

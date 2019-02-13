@@ -116,9 +116,8 @@ fn mock_gs(init_key: Key, init_account: &value::Account) -> InMemGS {
 
     let mut m = HashMap::new();
     m.insert(init_key, transform);
-    let effect = ExecutionEffect(HashMap::new(), m);
     result
-        .commit(effect)
+        .commit(m)
         .expect("Creation of mocked account should be a success.");
 
     result

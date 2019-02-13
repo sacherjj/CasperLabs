@@ -9,6 +9,7 @@ use rkv::{Manager, Rkv, StoreOptions};
 use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
+use std::collections::HashMap;
 use transform::Transform;
 
 pub struct LmdbGs {
@@ -110,9 +111,8 @@ impl History<Self> for LmdbGs {
         Ok(TrackingCopy::new(self))
     }
 
-    fn commit(&mut self, tracking_copy: ExecutionEffect) -> Result<[u8; 32], Error> {
-        tracking_copy
-            .1
+    fn commit(&mut self, effects: HashMap<Key, Transform>) -> Result<[u8; 32], Error> {
+        effects
             .into_iter()
             .try_fold((), |_, (k, t)| {
                 let maybe_curr = self.get(&k);

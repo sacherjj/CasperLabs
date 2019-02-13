@@ -54,7 +54,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
             let (k, v) = transform_entry_to_key_transform(entry);
             effects.insert(k, v);
         }
-        let r = self.apply_effect(ExecutionEffect(HashMap::new(), effects));
+        let r = self.apply_effect(effects);
         match r {
             Ok(post_state_hash) => {
                 println!("Effects applied. New state hash is: {:?}", post_state_hash)

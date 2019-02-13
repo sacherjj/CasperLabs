@@ -84,7 +84,7 @@ where
             let transform = Transform::Write(value::Value::Acct(account));
             let mut tf_map = HashMap::new();
             tf_map.insert(Key::Account(account_addr), transform);
-            ExecutionEffect(HashMap::new(), tf_map)
+            tf_map
         };
         self.state
             .lock()
@@ -120,7 +120,7 @@ where
         .map_err(|e| e.into())
     }
 
-    pub fn apply_effect(&self, effects: ExecutionEffect) -> Result<[u8; 32], Error> {
+    pub fn apply_effect(&self, effects: HashMap<Key, Transform>) -> Result<[u8; 32], Error> {
         self.state.lock().commit(effects).map_err(|err| err.into())
     }
 

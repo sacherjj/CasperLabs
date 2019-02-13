@@ -73,9 +73,8 @@ impl History<Self> for InMemGS {
         }
     }
 
-    fn commit(&mut self, tracking_copy: ExecutionEffect) -> Result<[u8; 32], Error> {
-        tracking_copy
-            .1
+    fn commit(&mut self, effects: HashMap<Key, Transform>) -> Result<[u8; 32], Error> {
+        effects
             .into_iter()
             .try_fold((), |_, (k, t)| {
                 let maybe_curr = self.store.lock().remove(&k);
