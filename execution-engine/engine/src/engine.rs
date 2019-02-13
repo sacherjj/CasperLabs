@@ -1,21 +1,19 @@
 use common::key::Key;
 use common::value;
-use core::marker::PhantomData;
 use execution::{exec, Error as ExecutionError};
 use parity_wasm::elements::Module;
 use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use storage::error::Error as StorageError;
-use storage::gs::{ExecutionEffect, GlobalState, TrackingCopy};
+use storage::gs::{ExecutionEffect, GlobalState};
 use storage::transform::Transform;
 use vm::wasm_costs::WasmCosts;
 use wasm_prep::process;
 
-pub struct EngineState<T: TrackingCopy, G: GlobalState<T>> {
+pub struct EngineState<G: GlobalState> {
     // Tracks the "state" of the blockchain (or is an interface to it).
     // I think it should be constrained with a lifetime parameter.
     state: Mutex<G>,
-    phantom: PhantomData<T>, //necessary to make the compiler not complain that I don't use T, even though G uses it.
     wasm_costs: WasmCosts,
 }
 
@@ -65,10 +63,9 @@ impl From<ExecutionError> for Error {
     }
 }
 
-impl<T, G> EngineState<T, G>
+impl<G> EngineState<G>
 where
-    T: TrackingCopy,
-    G: GlobalState<T>,
+    G: GlobalState,
 {
     // To run, contracts need an existing account.
     // This function puts artifical entry in the GlobalState.
@@ -81,10 +78,9 @@ where
             .expect("Creation of mocked account should be a success.");
     }
 
-    pub fn new(state: G) -> EngineState<T, G> {
+    pub fn new(state: G) -> EngineState<G> {
         EngineState {
             state: Mutex::new(state),
-            phantom: PhantomData,
             wasm_costs: WasmCosts::new(),
         }
     }
