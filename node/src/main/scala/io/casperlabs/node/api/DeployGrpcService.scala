@@ -17,13 +17,14 @@ import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.Taskable
 import io.casperlabs.graphz.{GraphSerializer, Graphz, StringSerializer}
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
 private[api] object DeployGrpcService {
-  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler

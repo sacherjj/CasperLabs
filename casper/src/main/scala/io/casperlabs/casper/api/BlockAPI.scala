@@ -15,21 +15,31 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.catscontrib.ski._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b512Random
 import io.casperlabs.graphz._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
-import io.casperlabs.catscontrib.ski._
 
 object BlockAPI {
 
-  def deploy[F[_]: Monad: MultiParentCasperRef: Log](d: DeployData): F[DeployServiceResponse] = {
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CasperMetricsSource, "block-api")
+
+  def deploy[F[_]: Monad: MultiParentCasperRef: Log: Metrics](
+      d: DeployData
+  ): F[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
       for {
+        _ <- Metrics[F].incrementCounter("deploys")
         r <- MultiParentCasper[F].deploy(d)
         re <- r match {
-               case Right(_)  => DeployServiceResponse(success = true, "Success!").pure[F]
-               case Left(err) => DeployServiceResponse(success = false, err.getMessage).pure[F]
+               case Right(_) =>
+                 Metrics[F].incrementCounter("deploys-success") *>
+                   DeployServiceResponse(success = true, "Success!").pure[F]
+               case Left(err) =>
+                 DeployServiceResponse(success = false, err.getMessage).pure[F]
              }
       } yield re
 
@@ -43,7 +53,7 @@ object BlockAPI {
       )
   }
 
-  def createBlock[F[_]: Concurrent: MultiParentCasperRef: Log](
+  def createBlock[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics](
       blockApiLock: Semaphore[F]
   ): F[DeployServiceResponse] = {
     val errorMessage = "Could not create block."
@@ -52,6 +62,7 @@ object BlockAPI {
         Sync[F].bracket(blockApiLock.tryAcquire) {
           case true =>
             for {
+              _          <- Metrics[F].incrementCounter("create-blocks")
               maybeBlock <- casper.createBlock
               result <- maybeBlock match {
                          case err: NoBlock =>
@@ -60,9 +71,10 @@ object BlockAPI {
                              s"Error while creating block: $err"
                            ).pure[F]
                          case Created(block) =>
-                           casper
-                             .addBlock(block, ignoreDoppelgangerCheck[F])
-                             .map(addResponse(_, block))
+                           Metrics[F].incrementCounter("create-blocks-success") *>
+                             casper
+                               .addBlock(block, ignoreDoppelgangerCheck[F])
+                               .map(addResponse(_, block))
                        }
             } yield result
           case false =>
@@ -139,8 +151,7 @@ object BlockAPI {
     )
   }
 
-  private def getFlattenedBlockInfosUntilDepth[
-      F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+  private def getFlattenedBlockInfosUntilDepth[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int,
       dag: BlockDagRepresentation[F]
   ): F[List[BlockInfoWithoutTuplespace]] =
@@ -202,7 +213,7 @@ object BlockAPI {
             BlockQueryResponse(
               status = "Success",
               blockInfo = Some(blockInfo)
-          )
+            )
         )
 
     MultiParentCasperRef.withCasper[F, BlockQueryResponse](
@@ -298,8 +309,7 @@ object BlockAPI {
   private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage
   ): F[BlockInfo] = getBlockInfo[BlockInfo, F](block, constructBlockInfo[F])
-  private def getBlockInfoWithoutTuplespace[
-      F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+  private def getBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage
   ): F[BlockInfoWithoutTuplespace] =
     getBlockInfo[BlockInfoWithoutTuplespace, F](block, constructBlockInfoWithoutTuplespace[F])
@@ -334,8 +344,7 @@ object BlockAPI {
         shardId = block.shardId
       )
 
-  private def constructBlockInfoWithoutTuplespace[
-      F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+  private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,
       version: Long,
       deployCount: Int,

@@ -38,6 +38,10 @@ Response: Success! Block f876efed8d... created and added.
 $
 ```
 
+## Monitoring
+
+Running `make up` will install some common containers in the network, for example a [Prometheus](https://prometheus.io) server which will be available at http://localhost:9090. The list of [targets](http://localhost:9090/targets) will be updated every time we create or destroy nodes.
+
 
 ## Shut down the network
 
