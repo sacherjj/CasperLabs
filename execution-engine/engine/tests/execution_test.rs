@@ -11,8 +11,8 @@ use common::value;
 use execution_engine::execution::{Runtime, RuntimeContext};
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
-use std::collections::{HashMap, BTreeMap};
-use storage::gs::{inmem::*, DbReader, TrackingCopy, ExecutionEffect};
+use std::collections::{BTreeMap, HashMap};
+use storage::gs::{inmem::*, DbReader, ExecutionEffect, TrackingCopy};
 use storage::history::*;
 use storage::transform::Transform;
 use wasm_prep::MAX_MEM_PAGES;
@@ -29,7 +29,7 @@ struct MockEnv<'a> {
 }
 
 impl<'b> MockEnv<'b> {
-  pub fn new(key: Key, account: value::Account, gas_limit: u64, gs: &'b InMemGS) -> Self {
+    pub fn new(key: Key, account: value::Account, gas_limit: u64, gs: &'b InMemGS) -> Self {
         let tc = TrackingCopy::new(gs);
         let uref_lookup = mock_uref_lookup();
         let memory = MemoryInstance::alloc(Pages(17), Some(Pages(MAX_MEM_PAGES as usize)))
@@ -115,7 +115,7 @@ fn mock_gs(init_key: Key, init_account: &value::Account) -> InMemGS {
     let transform = Transform::Write(value::Value::Acct(init_account.clone()));
 
     let mut m = HashMap::new();
-    m.insert(init_key,  transform);
+    m.insert(init_key, transform);
     let effect = ExecutionEffect(HashMap::new(), m);
     result
         .commit(effect)

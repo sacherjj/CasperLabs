@@ -10,8 +10,8 @@ use std::iter::Iterator;
 use clap::{App, Arg};
 
 use execution_engine::engine::EngineState;
-use storage::gs::lmdb::LmdbGs;
 use storage::gs::inmem::InMemGS;
+use storage::gs::lmdb::LmdbGs;
 use storage::gs::ExecutionEffect;
 
 #[derive(Debug)]
@@ -86,7 +86,7 @@ fn main() {
 
     let path = std::path::Path::new("./tmp/");
     //TODO: Better error handling?
-//    let gs = LmdbGs::new(&path).unwrap();
+    //    let gs = LmdbGs::new(&path).unwrap();
     let gs = InMemGS::new();
     let engine_state = {
         let state = EngineState::new(gs);

@@ -1,22 +1,22 @@
 use crate::transform::Transform;
+use blake2::digest::{Input, VariableOutput};
+use blake2::VarBlake2b;
+use common::bytesrepr::*;
 use common::key::Key;
 use common::value::Value;
-use common::bytesrepr::*;
 use error::Error;
 use gs::*;
 use history::*;
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::Mutex;
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
 
 /// In memory representation of the versioned global state
 /// store - stores a snapshot of the global state at the specific block
 /// history - stores all the snapshots of the global state
 pub struct InMemGS {
     store: Arc<Mutex<HashMap<Key, Value>>>,
-    history: Arc<Mutex<HashMap<[u8;32], HashMap<Key,Value>>>>,
+    history: Arc<Mutex<HashMap<[u8; 32], HashMap<Key, Value>>>>,
 }
 
 impl InMemGS {
@@ -38,8 +38,13 @@ impl DbReader for InMemGS {
 }
 
 impl History<Self> for InMemGS {
-    fn checkout_multiple(&self, prestate_hashes: Vec<[u8; 32]>) -> Result<TrackingCopy<InMemGS>, Error> {
-        let missing_root = prestate_hashes.iter().find(|root| !self.history.lock().contains_key(root.clone()));
+    fn checkout_multiple(
+        &self,
+        prestate_hashes: Vec<[u8; 32]>,
+    ) -> Result<TrackingCopy<InMemGS>, Error> {
+        let missing_root = prestate_hashes
+            .iter()
+            .find(|root| !self.history.lock().contains_key(root.clone()));
         match missing_root {
             Some(missing) => Err(Error::RootNotFound(missing.clone())),
             None => {
@@ -47,7 +52,7 @@ impl History<Self> for InMemGS {
                 for root in prestate_hashes.iter() {
                     let snapshot = self.history.lock().get(root).unwrap().clone();
                     new_root.extend(snapshot);
-                };
+                }
                 let mut store = self.store.lock();
                 *store = new_root;
                 Ok(TrackingCopy::new(self))
@@ -59,7 +64,7 @@ impl History<Self> for InMemGS {
     /// This will drop any changes made to `active_store` and replace it with
     /// the state under passed hash.
     fn checkout(&self, prestate_hash: [u8; 32]) -> Result<TrackingCopy<InMemGS>, Error> {
-        if(!self.history.lock().contains_key(&prestate_hash)) {
+        if (!self.history.lock().contains_key(&prestate_hash)) {
             Err(Error::RootNotFound(prestate_hash))
         } else {
             let mut store = self.store.lock();
@@ -69,7 +74,9 @@ impl History<Self> for InMemGS {
     }
 
     fn commit(&mut self, tracking_copy: ExecutionEffect) -> Result<[u8; 32], Error> {
-        tracking_copy.1.into_iter()
+        tracking_copy
+            .1
+            .into_iter()
             .try_fold((), |_, (k, t)| {
                 let maybe_curr = self.store.lock().remove(&k);
                 match maybe_curr {
@@ -103,7 +110,7 @@ impl History<Self> for InMemGS {
         for (k, v) in self.store.lock().iter() {
             data.extend(k.to_bytes());
             data.extend(v.to_bytes());
-        };
+        }
         let mut hasher = VarBlake2b::new(32).unwrap();
         hasher.input(data);
         let mut hash_bytes = [0; 32];
@@ -111,5 +118,3 @@ impl History<Self> for InMemGS {
         Ok(hash_bytes)
     }
 }
-
-

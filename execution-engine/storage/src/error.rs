@@ -5,7 +5,7 @@ use common::key::Key;
 use rkv::error::StoreError;
 use wasmi::HostError;
 
-use ::TreeRootHash;
+use TreeRootHash;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {

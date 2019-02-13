@@ -159,12 +159,12 @@ fn transform_to_ipc(tr: &storage::transform::Transform) -> super::ipc::Transform
                     let mut rkv_error = super::ipc::RkvError::new();
                     rkv_error.set_error_msg(msg.to_owned());
                     stor_err.set_rkv(rkv_error);
-                },
+                }
                 storage::error::Error::RootNotFound(root) => {
                     let mut rkv_error = super::ipc::RkvError::new();
                     rkv_error.set_error_msg(format!("{:?} root not found", root));
                     stor_err.set_rkv(rkv_error);
-                },
+                }
                 storage::error::Error::BytesRepr(e) => match e {
                     bytesrepr::Error::EarlyEndOfStream => {
                         let mut bytes_repr = super::ipc::BytesReprError::new();

@@ -2,7 +2,7 @@ use common::bytesrepr::{deserialize, ToBytes};
 use common::key::Key;
 use common::value::Value;
 use error::Error;
-use gs::{DbReader, TrackingCopy, ExecutionEffect};
+use gs::{DbReader, ExecutionEffect, TrackingCopy};
 use history::*;
 use rkv::store::single::SingleStore;
 use rkv::{Manager, Rkv, StoreOptions};
@@ -22,10 +22,13 @@ impl LmdbGs {
             .write()
             .map_err(|_| Error::RkvError(String::from("Error while creating LMDB env.")))
             .and_then(|mut r| r.get_or_create(p, Rkv::new).map_err(|e| e.into()))?;
-        let store = env.read().map_err(|_| Error::RkvError(String::from("Error when creating LMDB store."))).and_then(|r| {
-            r.open_single(Some("global_state"), StoreOptions::create())
-                .map_err(|e| e.into())
-        })?;
+        let store = env
+            .read()
+            .map_err(|_| Error::RkvError(String::from("Error when creating LMDB store.")))
+            .and_then(|r| {
+                r.open_single(Some("global_state"), StoreOptions::create())
+                    .map_err(|e| e.into())
+            })?;
         Ok(LmdbGs { store, env })
     }
 
@@ -96,7 +99,10 @@ impl DbReader for LmdbGs {
 }
 
 impl History<Self> for LmdbGs {
-    fn checkout_multiple(&self, prestate_hashes: Vec<[u8; 32]>) -> Result<TrackingCopy<LmdbGs>, Error> {
+    fn checkout_multiple(
+        &self,
+        prestate_hashes: Vec<[u8; 32]>,
+    ) -> Result<TrackingCopy<LmdbGs>, Error> {
         unimplemented!("checkout_multiple doesn't work yet b/c TrackingCopy is able only to build on single block.")
     }
 
@@ -105,7 +111,9 @@ impl History<Self> for LmdbGs {
     }
 
     fn commit(&mut self, tracking_copy: ExecutionEffect) -> Result<[u8; 32], Error> {
-        tracking_copy.1.into_iter()
+        tracking_copy
+            .1
+            .into_iter()
             .try_fold((), |_, (k, t)| {
                 let maybe_curr = self.get(&k);
                 match maybe_curr {
@@ -124,7 +132,7 @@ impl History<Self> for LmdbGs {
     }
 
     fn get_root_hash(&self) -> Result<[u8; 32], Error> {
-        Ok([0u8;32])
+        Ok([0u8; 32])
     }
 }
 

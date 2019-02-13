@@ -6,7 +6,7 @@ use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
 use storage::error::Error as StorageError;
-use storage::gs::{ExecutionEffect, TrackingCopy, DbReader};
+use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
 use storage::history::*;
 use wasmi::memory_units::Pages;
 use wasmi::{

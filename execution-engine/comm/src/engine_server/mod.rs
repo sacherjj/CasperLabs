@@ -4,13 +4,13 @@ use execution_engine::engine::EngineState;
 use ipc::DeployResult;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
+use std::collections::HashMap;
 use storage::gs::{DbReader, ExecutionEffect};
 use storage::history::*;
-use std::collections::HashMap;
 
-pub mod mappings;
 pub mod ipc;
 pub mod ipc_grpc;
+pub mod mappings;
 
 // Idea is that Engine will represent the core of the execution engine project.
 // It will act as an entry point for execution of Wasm binaries.
@@ -53,10 +53,12 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         for entry in p.get_effects().iter() {
             let (k, v) = transform_entry_to_key_transform(entry);
             effects.insert(k, v);
-        };
+        }
         let r = self.apply_effect(ExecutionEffect(HashMap::new(), effects));
         match r {
-            Ok(post_state_hash) => println!("Effects applied. New state hash is: {:?}", post_state_hash),
+            Ok(post_state_hash) => {
+                println!("Effects applied. New state hash is: {:?}", post_state_hash)
+            }
             Err(_) => println!("Error {:?} when applying effects", r),
         };
 
