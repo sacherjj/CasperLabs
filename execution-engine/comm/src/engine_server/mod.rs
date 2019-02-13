@@ -76,6 +76,28 @@ impl<G: GlobalState> ipc_grpc::ExecutionEngineService for EngineState<G> {
         };
         grpc::SingleResponse::completed(res)
     }
+
+    fn exec(
+        &self,
+        _o: ::grpc::RequestOptions,
+        _p: ipc::ExecRequest,
+    ) -> grpc::SingleResponse<ipc::ExecResponse> {
+        //TODO: give correct implementation
+        let mut response = ipc::ExecResponse::new();
+        response.set_missing_parents(ipc::MultipleRootsNotFound::new());
+        grpc::SingleResponse::completed(response)
+    }
+
+    fn commit(
+        &self,
+        _o: ::grpc::RequestOptions,
+        _p: ipc::CommitRequest,
+    ) -> grpc::SingleResponse<ipc::CommitResponse> {
+        //TODO: give correct implementation
+        let mut response = ipc::CommitResponse::new();
+        response.set_missing_prestate(ipc::RootNotFound::new());
+        grpc::SingleResponse::completed(response)
+    }
 }
 
 pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(

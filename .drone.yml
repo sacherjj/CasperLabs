@@ -97,6 +97,8 @@ pipeline:
       - docker images | grep none | awk '{print $3;}' | xargs docker rmi
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      status: [ failure, success ]
 
   # push
 
