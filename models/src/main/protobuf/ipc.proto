@@ -14,6 +14,50 @@ message Deploy {
     bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
 }
 
+message ExecRequest {
+    repeated bytes parent_state_hashes = 1;
+    repeated Deploy deploys = 2;
+}
+
+message ExecResponse {
+    oneof result {
+        ExecResult success = 1;
+        //if one or more parent hashes not found
+        MultipleRootsNotFound missing_parents = 2; 
+    }
+}
+
+message ExecResult {
+    bytes prestate_hash = 1;
+    repeated DeployResult deploy_results = 2;
+}
+
+message RootNotFound {
+    bytes hash = 1;
+}
+
+//this message is needed because `oneof` variants cannot include the `repeated` keyword
+message MultipleRootsNotFound {
+    repeated RootNotFound missing_hashes = 1;
+}
+
+message CommitRequest {
+    bytes prestate_hash = 1;
+    repeated TransformEntry effects = 2;
+}
+
+message CommitResult {
+  bytes poststate_hash = 1;
+}
+
+message CommitResponse {
+    oneof result {
+        CommitResult success = 1;
+        RootNotFound missing_prestate = 2;
+        PostEffectsError failed_transform = 3;
+    }
+}
+
 // Describes operation that are allowed to do on a value under a key.
 message Op {
     oneof op_instance {
@@ -138,6 +182,7 @@ message TransformEntry {
 message ExecutionEffect {
     repeated OpEntry op_map = 1;
     repeated TransformEntry transform_map = 2;
+    int32 cost = 3;
 }
  
 //TODO: be more specific about errors
@@ -161,6 +206,7 @@ message DeployResult {
     }
 }
  
+//TODO: delete this message definition when no longer used 
 // Map of effects to execute
 // Sent from the consensus layer to Execute Engine.
 // Contains a set of transformations that are safe to apply in parallel, because of their commutative nature.
@@ -168,12 +214,17 @@ message CommutativeEffects {
     repeated TransformEntry effects = 1;
 }
  
-message Done {}
+//TODO: delete this message definition when no longer used 
+message Done {
+    bytes poststate_hash = 1;
+}
+
 //TODO: be more specific about errors
 message PostEffectsError {
     string message = 1;
 }
- 
+
+//TODO: delete this message definition when no longer used 
 message PostEffectsResult {
     oneof result {
         Done success = 1;
@@ -184,6 +235,11 @@ message PostEffectsResult {
 // Definition of the service.
 // ExecutionEngine implements server part while Consensus implements client part.
 service ExecutionEngineService {
+    //TODO: delete these method definitions when no longer used 
     rpc SendDeploy (Deploy) returns (DeployResult) {}
     rpc ExecuteEffects (CommutativeEffects) returns (PostEffectsResult) {}
+
+
+    rpc exec (ExecRequest) returns (ExecResponse) {}
+    rpc commit (CommitRequest) returns (CommitResponse) {}
 }

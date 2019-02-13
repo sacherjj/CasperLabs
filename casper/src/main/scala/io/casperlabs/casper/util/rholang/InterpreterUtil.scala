@@ -239,6 +239,7 @@ object InterpreterUtil {
       }
     } yield blockHashesToApply
 
+  // Remainder: This is used only in tests
   private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: ExecutionEngineService: Log](
       b: BlockMessage,
       genesis: BlockMessage,
