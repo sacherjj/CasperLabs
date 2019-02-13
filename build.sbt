@@ -319,11 +319,14 @@ lazy val smartContracts = (project in file("smart-contracts"))
   .dependsOn(shared, models)
 
 lazy val client = (project in file("client"))
-  .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+  .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(commonSettings: _*)
   .settings(
     name := "client",
     version := nodeAndClientVersion,
+    maintainer := "CasperLabs, LLC. <info@casperlabs.io>",
+    packageSummary := "CasperLabs Client",
+    packageDescription := "CasperLabs Client - the client for interaction with the CasperLabs Node server software.",
     libraryDependencies ++= commonDependencies ++ Seq(scallop, grpcNetty),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.client",
@@ -379,7 +382,27 @@ lazy val client = (project in file("client"))
           )
         fi
       }
-    """
+    """,
+    /* Debian */
+    debianPackageDependencies in Debian ++= Seq(
+      "openjdk-11-jre-headless",
+      "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)", //ubuntu & debian
+      "bash (>= 2.05a-11)"
+    ),
+    /* Redhat */
+    rpmVendor := "casperlabs.io",
+    rpmUrl := Some("https://casperlabs.io"),
+    rpmLicense := Some("Apache 2.0"),
+    packageArchitecture in Rpm := "noarch",
+    rpmPrerequisites := Seq(
+      /*
+       * https://access.redhat.com/articles/1299013
+       * Red Hat will skip Java SE 9 and 10, and ship an OpenJDK distribution based on Java SE 11.
+       */
+      "java-1.8.0-openjdk-headless >= 1.8.0.171",
+      //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
+      "openssl"
+    )
   )
   .dependsOn(shared, models)
 
