@@ -1,12 +1,11 @@
+import dataclasses
 import os
 import random
 import string
-import typing
 import tempfile
-import dataclasses
+import typing
 
 from docker.client import DockerClient
-
 
 
 @dataclasses.dataclass(eq=True, frozen=True)
@@ -42,11 +41,8 @@ def make_tempfile(prefix: str, content: str) -> str:
 
     return path
 
-
 def make_tempdir(prefix: str) -> str:
     return tempfile.mkdtemp(dir="/tmp", prefix=prefix)
-
-
 
 class Network:
     def __init__(self, network, bootstrap, peers):

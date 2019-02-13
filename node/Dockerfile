@@ -6,7 +6,8 @@ LABEL MAINTAINER="CasperLabs, LLC. <info@casperlabs.io>"
 USER root
 WORKDIR /opt/docker
 # HOME points to /root
-RUN mkdir -p /root/.casperlabs
+RUN mkdir -p /root/.casperlabs/genesis
+RUN mkdir -p /root/.casperlabs/deploy
 ENTRYPOINT ["bin/casperlabs-node"]
 CMD ["run"]
 

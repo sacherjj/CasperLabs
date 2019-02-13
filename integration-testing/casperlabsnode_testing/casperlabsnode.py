@@ -1,33 +1,30 @@
-import re
-import os
-import shlex
-import logging
-import threading
 import contextlib
-from typing import Generator
+import logging
+import os
+import random
+import re
+import shlex
+import string
+import threading
+from multiprocessing import Process, Queue
+from queue import Empty
+from typing import TYPE_CHECKING, Dict, Generator, List, Optional, Tuple, Union
 
 import pytest
 from docker.client import DockerClient
 from docker.errors import ContainerError
+
 import conftest
 from casperlabsnode_testing.common import (
-    random_string,
-    make_tempfile,
-    make_tempdir,
     TestingContext,
+    make_tempdir,
+    random_string,
 )
-from casperlabsnode_testing.wait import (
-    wait_for_node_started,
-)
+from casperlabsnode_testing.wait import wait_for_node_started
 
-from multiprocessing import Queue, Process
-from queue import Empty
-
-from typing import Dict, List, Tuple, Union, TYPE_CHECKING, Optional, Generator, Callable
 
 if TYPE_CHECKING:
     from conftest import KeyPair
-    from docker.client import DockerClient
     from docker.models.containers import Container
     from logging import Logger
     from threading import Event
@@ -36,19 +33,27 @@ TAG = os.environ.get(
     "DRONE_BUILD_NUMBER",
     None)
 if TAG is None:
-    TAG = "latest"
+    TAG = "test"
 else:
     TAG = "DRONE-" + TAG
 DEFAULT_IMAGE = os.environ.get(
     "DEFAULT_IMAGE",
-    "casperlabs-integration-testing:{}".format(TAG))
+    "casperlabs/node:{}".format(TAG))
+
+DEFAULT_ENGINE_IMAGE = "casperlabs/execution-engine:test"
 
 casperlabsnode_binary = '/opt/docker/bin/bootstrap'
 casperlabsnode_directory = "/root/.casperlabs"
 casperlabsnode_deploy_dir = "{}/deploy".format(casperlabsnode_directory)
+casperlabsnode_genesis_folder = '{}/genesis/'.format(casperlabsnode_directory)
 casperlabsnode_bonds_file = '{}/genesis/bonds.txt'.format(casperlabsnode_directory)
 casperlabsnode_certificate = '{}/node.certificate.pem'.format(casperlabsnode_directory)
 casperlabsnode_key = '{}/node.key.pem'.format(casperlabsnode_directory)
+casperlabsnode_sockets = '{}/sockets'.format(casperlabsnode_directory)
+casperlabsnode_bootstrap_folder = "{}/bootstrap".format(casperlabsnode_directory)
+
+grpc_socket_file = "{}/.casper-node.sock".format(casperlabsnode_sockets)
+execution_engine_command = ".casperlabs/sockets/.casper-node.sock"
 
 
 class InterruptedException(Exception):
@@ -118,7 +123,7 @@ def extract_block_hash_from_propose_output(propose_output: str):
 
 class Node:
     def __init__(self, container: "Container", deploy_dir: str, docker_client: "DockerClient", timeout: int,
-                 network: str) -> None:
+                 network: str, volume: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = casperlabsnode_deploy_dir
@@ -126,6 +131,7 @@ class Node:
         self.docker_client = docker_client
         self.timeout = timeout
         self.network = network
+        self.volume = volume
         self.terminate_background_logging_event = threading.Event()
         self.background_logging = LoggingThread(
             container=container,
@@ -152,10 +158,12 @@ class Node:
 
     def get_metrics(self) -> Tuple[int, str]:
         cmd = 'curl -s http://localhost:40403/metrics'
-        return self.exec_run(cmd=cmd)
+        output = self.exec_run(cmd=cmd)
+        return output
 
     def get_metrics_strict(self):
-        return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
+        output = self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
+        return output
 
     def cleanup(self) -> None:
         self.container.remove(force=True, v=True)
@@ -163,7 +171,7 @@ class Node:
         self.background_logging.join()
 
     def deploy_contract(self, contract: str) -> Tuple[int, str]:
-        cmd = '{casperlabsnode_binary} deploy --from "0x1" --gas-limit 1000000 --gas-price 1 --nonce 0 {casperlabsnode_deploy_dir}/{contract}'.format(
+        cmd = '{casperlabsnode_binary} deploy --from "00000000000000000000" --gas-limit 1000000 --gas-price 1 --nonce 0 {casperlabsnode_deploy_dir}/{contract}'.format(
             casperlabsnode_binary=casperlabsnode_binary,
             casperlabsnode_deploy_dir=casperlabsnode_deploy_dir,
             contract=contract
@@ -226,30 +234,30 @@ class Node:
     def call_casperlabsnode(self, *node_args: str, stderr: bool = True) -> str:
         return self.shell_out(casperlabsnode_binary, *node_args, stderr=stderr)
 
-    def invoke_client(self, command: str, volumes: Dict[str, Dict[str, str]]=None) -> str:
+    def invoke_client(self, command: str, volumes: Dict[str, Dict[str, str]] = None) -> str:
         if volumes is None:
             volumes = {}
         try:
             logging.info("COMMAND {}".format(command))
             output = self.docker_client.containers.run(
-                image="casperlabs/client:{}".format(TAG),
+                image="casperlabs/client:latest",
                 auto_remove=True,
-                name="client-{}".format(TAG),
+                name="client-{}-latest".format(
+                    ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(5)),
+                ),
                 command=command,
                 network=self.network,
                 volumes=volumes
-            ).decode("utf-8")
+            ).decode('utf-8')
             logging.debug("OUTPUT {}".format(output))
             return output
         except ContainerError as err:
-            logging.warning("EXITED code={} command='{}' output='{}'".format(err.exit_status, err.command, err.stderr))
+            logging.warning("EXITED code={} command='{}' stderr='{}'".format(err.exit_status, err.command, err.stderr))
             raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
 
-    def deploy(self, session_code: str, payment_code:str="payment.wasm",
-               from_address:str="00000000000000000000", gas_limit:int=1000000,
-               gas_price:int=1, nonce:int=0) -> str:
-        session_code_full_path = "/tmp/resources/{}".format(session_code)
-        payment_code_full_path = "/tmp/resources/{}".format(payment_code)
+    def deploy(self, session_code: str, payment_code: str,
+               from_address: str = "00000000000000000000", gas_limit: int = 1000000,
+               gas_price: int = 1, nonce: int = 0) -> str:
 
         command = " ".join([
             "--host",
@@ -259,21 +267,16 @@ class Node:
             "--gas-limit", str(gas_limit),
             "--gas-price", str(gas_price),
             "--nonce", str(nonce),
-            "--session=/session.wasm",
-            "--payment=/payment.wasm"
+            "--session=/data/helloname.wasm",
+            "--payment=/data/helloname.wasm"
         ])
 
         volumes = {
-            session_code_full_path: {
-                "bind": "/session.wasm",
-                "mode": "ro"
-            },
-            payment_code_full_path: {
-                "bind": "/payment.wasm",
+            "/tmp/resources/": {
+                "bind": "/data",
                 "mode": "ro"
             }
         }
-
         return self.invoke_client(command, volumes)
 
     def deploy_string(self, rholang_code: str) -> str:
@@ -293,11 +296,10 @@ class Node:
 
     def generate_faucet_bonding_deploys(self, bond_amount: int, private_key: str, public_key: str) -> str:
         return self.call_casperlabsnode('generateFaucetBondingDeploys',
-            '--amount={}'.format(bond_amount),
-            '--private-key={}'.format(private_key),
-            '--public-key={}'.format(public_key),
-            '--sig-algorithm=ed25519',
-        )
+                                        '--amount={}'.format(bond_amount),
+                                        '--private-key={}'.format(private_key),
+                                        '--public-key={}'.format(public_key),
+                                        '--sig-algorithm=ed25519')
 
     def cat_forward_file(self, public_key: str) -> str:
         return self.shell_out('cat', '/opt/docker/forward_{}.rho'.format(public_key))
@@ -332,9 +334,12 @@ class LoggingThread(threading.Thread):
             pass
 
 
-def make_container_command(container_command: str, container_command_options: Dict):
+def make_container_command(container_command: str, container_command_options: Dict, is_bootstrap: bool):
     opts = ['{} {}'.format(option, argument) for option, argument in container_command_options.items()]
-    result = '{} {}'.format(container_command, ' '.join(opts))
+    if is_bootstrap:
+        result = '{} -s {}'.format(container_command, ' '.join(opts))
+    else:
+        result = '{} {}'.format(container_command, ' '.join(opts))
     return result
 
 
@@ -343,52 +348,55 @@ def make_node(
     docker_client: "DockerClient",
     name: str,
     network: str,
+    socket_volume: str,
     bonds_file: str,
     container_command: str,
     container_command_options: Dict,
     command_timeout: int,
-    extra_volumes: List[str],
+    extra_volumes: Dict[str, Dict[str, str]],
     allowed_peers: Optional[List[str]],
+    allowed_engines: Optional[List[str]],
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
+    is_bootstrap: bool = False
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
-    deploy_dir = make_tempdir("casperlabs-integration-test")
+    deploy_dir = make_tempdir(prefix="resources/")
+    # end slash is necessary to create in format /tmp/resources/xxxxxxxx
 
-    hosts_allow_file_content = \
-        "ALL:ALL" if allowed_peers is None else "\n".join("ALL: {}".format(peer) for peer in allowed_peers)
-
-    hosts_allow_file = make_tempfile("hosts-allow-{}".format(name), hosts_allow_file_content)
-    hosts_deny_file = make_tempfile("hosts-deny-{}".format(name), "ALL: ALL")
-
-    # container_command_options['--server-data-dir'] = casperlabsnode_directory
-    # container_command_options['--casper-bonds-file'] = casperlabsnode_bonds_file
-    command = make_container_command(container_command, container_command_options)
+    command = make_container_command(container_command, container_command_options, is_bootstrap)
 
     env = {
-        'RUST_BACKTRACE':'full'
+        'RUST_BACKTRACE': 'full'
     }
     java_options = os.environ.get('_JAVA_OPTIONS')
     if java_options is not None:
         env['_JAVA_OPTIONS'] = java_options
     logging.debug('Using _JAVA_OPTIONS: {}'.format(java_options))
 
-    volumes = [
-        "{}:/etc/hosts.allow".format(hosts_allow_file),
-        "{}:/etc/hosts.deny".format(hosts_deny_file),
-        "{}:{}".format(bonds_file, casperlabsnode_bonds_file),
-        "{}:{}".format(deploy_dir, casperlabsnode_deploy_dir),
-    ]
-
+    volumes = {
+        deploy_dir: {
+            "bind": casperlabsnode_deploy_dir,
+            "mode": "rw"
+        },
+        socket_volume: {
+            "bind": casperlabsnode_sockets,
+            "mode": "rw"
+        }
+    }
+    result_volumes = {}
+    result_volumes.update(volumes)
+    result_volumes.update(extra_volumes)
     container = docker_client.containers.run(
         image,
         name=name,
         user='root',
+        auto_remove=False,
         detach=True,
         mem_limit=mem_limit,
         network=network,
-        volumes=volumes + extra_volumes,
+        volumes=result_volumes,
         command=command,
         hostname=name,
         environment=env,
@@ -400,12 +408,13 @@ def make_node(
         docker_client,
         command_timeout,
         network,
+        socket_volume
     )
 
     return node
 
 
-def get_absolute_path_for_mounting(relative_path: str, mount_dir: Optional[str]=None)-> str:
+def get_absolute_path_for_mounting(relative_path: str, mount_dir: Optional[str] = None) -> str:
     """Drone runs each job in a new Docker container FOO. That Docker
     container has a new filesystem. Anything in that container can read
     anything in that filesystem. To read files from HOST, it has to be shared
@@ -428,52 +437,95 @@ def make_bootstrap_node(
     *,
     docker_client: "DockerClient",
     network: str,
+    socket_volume: str,
     bonds_file: str,
     key_pair: "KeyPair",
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
+    allowed_engines: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
     cli_options: Optional[Dict] = None,
     container_name: Optional[str] = None,
     mount_dir: Optional[str] = None,
 ) -> Node:
-    key_file = "/tmp/resources/bootstrap_certificate/node.key.pem"
-    cert_file = "/tmp/resources/bootstrap_certificate/node.certificate.pem"
+
+    genesis_folder = "/tmp/resources/genesis"
+    bootstrap_folder = "/tmp/resources/bootstrap_certificate"
 
     name = "{node_name}.{network_name}".format(
         node_name='bootstrap' if container_name is None else container_name,
         network_name=network,
     )
     container_command_options = {
-        "--server-port":                   40400,
-        "--server-standalone":             "",
-        "--casper-validator-private-key":  key_pair.private_key,
-        "--casper-validator-public-key":   key_pair.public_key,
-        "--casper-has-faucet":             "",
-        "--server-host":                   name,
-        "--metrics-prometheus":            "",
+        "--casper-validator-private-key": key_pair.private_key,
+        "--casper-has-faucet": "",
+        "--server-host": name,
+        "--metrics-prometheus": "",
+        "--server-data-dir=/root/.casperlabs": "",
+        "--grpc-socket": grpc_socket_file
     }
-
     if cli_options is not None:
         container_command_options.update(cli_options)
 
-    volumes = [
-        "{}:{}".format(cert_file, casperlabsnode_certificate),
-        "{}:{}".format(key_file, casperlabsnode_key)
-    ]
+    volumes = {
+        bootstrap_folder: {
+            "bind": casperlabsnode_bootstrap_folder,
+            "mode": "rw"
+        },
+        genesis_folder: {
+            "bind": casperlabsnode_genesis_folder,
+            "mode": "rw"
+        }
+    }
 
     container = make_node(
         docker_client=docker_client,
         name=name,
         network=network,
+        socket_volume=socket_volume,
         bonds_file=bonds_file,
         container_command='run',
         container_command_options=container_command_options,
         command_timeout=command_timeout,
         extra_volumes=volumes,
         allowed_peers=allowed_peers,
+        allowed_engines=allowed_engines,
         mem_limit=mem_limit if mem_limit is not None else '4G',
+        is_bootstrap=True
+    )
+    return container
+
+
+def make_execution_engine(
+    *,
+    docker_client: "DockerClient",
+    network: str,
+    socket_volume: str,
+    command_timeout: int,
+    name: str,
+    command: str,
+    image: str = DEFAULT_ENGINE_IMAGE,
+    container_name: Optional[str] = None,
+    allowed_peers: Optional[List[str]] = None,
+    allowed_engines: Optional[List[str]] = None
+):
+    name = make_engine_name(network, name)
+    volumes = {
+        socket_volume: {
+            "bind": "/opt/docker/.casperlabs/sockets",
+            "mode": "rw"
+        }
+    }
+    container = docker_client.containers.run(
+        image,
+        name=name,
+        user='root',
+        detach=True,
+        command=command,
+        network=network,
+        volumes=volumes,
+        hostname=name,
     )
     return container
 
@@ -482,43 +534,50 @@ def make_peer_name(network: str, i: Union[int, str]) -> str:
     return "peer{i}.{network}".format(i=i, network=network)
 
 
+def make_engine_name(network: str, i: Union[int, str]) -> str:
+    return "engine{i}.{network}".format(i=i, network=network)
+
+
 def make_peer(
     *,
     docker_client: "DockerClient",
     network: str,
+    socket_volume: str,
     name: str,
     bonds_file: str,
     command_timeout: int,
     bootstrap: Node,
     key_pair: "KeyPair",
     allowed_peers: Optional[List[str]] = None,
+    allowed_engines: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
     name = make_peer_name(network, name)
-
     bootstrap_address = bootstrap.get_casperlabsnode_address()
 
     container_command_options = {
-        "--server-bootstrap":       bootstrap_address,
-        "--casper-validator-private-key":  key_pair.private_key,
-        "--casper-validator-public-key":   key_pair.public_key,
-        "--casper-host":                   name,
-        "--prometheus":                    "",
+        "--server-bootstrap": bootstrap_address,
+        "--casper-validator-private-key": key_pair.private_key,
+        "--server-host": name,
+        "--metrics-prometheus": "",
+        "--grpc-socket": grpc_socket_file
     }
 
     container = make_node(
         docker_client=docker_client,
         name=name,
         network=network,
+        socket_volume=socket_volume,
         bonds_file=bonds_file,
         container_command='run',
         container_command_options=container_command_options,
         command_timeout=command_timeout,
         extra_volumes=[],
         allowed_peers=allowed_peers,
+        allowed_engines=allowed_engines,
         mem_limit=mem_limit if not None else '4G',
     )
     return container
@@ -529,6 +588,7 @@ def started_peer(
     *,
     context,
     network,
+    socket_volume,
     name,
     bootstrap,
     key_pair,
@@ -536,6 +596,7 @@ def started_peer(
     peer = make_peer(
         docker_client=context.docker,
         network=network,
+        socket_volume=socket_volume,
         name=name,
         bonds_file=context.bonds_file,
         bootstrap=bootstrap,
@@ -558,26 +619,47 @@ def create_peer_nodes(
     key_pairs: List["KeyPair"],
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
+    allowed_engines: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
-) -> List[Node]:
+):
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
     if allowed_peers is None:
         allowed_peers = [bootstrap.name] + [make_peer_name(network, i) for i in range(0, len(key_pairs))]
 
+    if allowed_engines is None:
+        allowed_engines = ["enginebootstrap.{}".format(network)] + [make_engine_name(network, i) for i in range(0, len(key_pairs))]
+
     result = []
+    execution_engines = []
     try:
         for i, key_pair in enumerate(key_pairs):
+            volume_name = "casperlabs{}".format(random_string(5).lower())
+            docker_client.volumes.create(name=volume_name, driver="local")
+            engine = make_execution_engine(
+                docker_client=docker_client,
+                name=str(i),
+                command=execution_engine_command,
+                network=network,
+                socket_volume=volume_name,
+                allowed_engines=allowed_engines,
+                allowed_peers=allowed_peers,
+                command_timeout=command_timeout,
+            )
+            execution_engines.append(engine)
+
             peer_node = make_peer(
                 docker_client=docker_client,
                 network=network,
+                socket_volume=volume_name,
                 name=str(i),
                 bonds_file=bonds_file,
                 command_timeout=command_timeout,
                 bootstrap=bootstrap,
                 key_pair=key_pair,
                 allowed_peers=allowed_peers,
+                allowed_engines=allowed_engines,
                 image=image,
                 mem_limit=mem_limit if mem_limit is not None else '4G',
             )
@@ -585,13 +667,18 @@ def create_peer_nodes(
     except:
         for node in result:
             node.cleanup()
+        for _engine in execution_engines:
+            _engine.remove(force=True, v=True)
+        for _volume in docker_client.volumes.list():
+            if _volume.name.startswith("casperlabs"):
+                _volume.remove()
         raise
-    return result
+    return result, execution_engines
 
 
 @contextlib.contextmanager
 def docker_network(docker_client: "DockerClient") -> Generator[str, None, None]:
-    network_name = "casperlabs-{}".format(random_string(5).lower())
+    network_name = "casperlabs{}".format(random_string(5).lower())
     docker_client.networks.create(network_name, driver="bridge")
     try:
         yield network_name
@@ -602,10 +689,31 @@ def docker_network(docker_client: "DockerClient") -> Generator[str, None, None]:
 
 
 @contextlib.contextmanager
-def started_bootstrap_node(*, context: TestingContext, network, container_name: str = None, cli_options=None, mount_dir: str = None) -> Generator[Node, None, None]:
+def docker_volume(docker_client: "DockerClient") -> Generator[str, None, None]:
+    volume_name = "casperlabs{}".format(random_string(5).lower())
+    docker_client.volumes.create(name=volume_name, driver="local")
+    try:
+        yield volume_name
+    finally:
+        for volume in docker_client.volumes.list():
+            if volume_name == volume.name:
+                volume.remove()
+
+
+@contextlib.contextmanager
+def started_bootstrap_node(*, context: TestingContext, network: str, socket_volume: str, container_name: str = None, cli_options=None, mount_dir: str = None) -> Generator[Node, None, None]:
+    engine = make_execution_engine(
+        docker_client=context.docker,
+        name="bootstrap",
+        command=execution_engine_command,
+        network=network,
+        socket_volume=socket_volume,
+        command_timeout=context.command_timeout,
+    )
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
         network=network,
+        socket_volume=socket_volume,
         bonds_file=context.bonds_file,
         key_pair=context.bootstrap_keypair,
         command_timeout=context.command_timeout,
@@ -616,14 +724,21 @@ def started_bootstrap_node(*, context: TestingContext, network, container_name: 
         wait_for_node_started(bootstrap_node, context.node_startup_timeout)
         yield bootstrap_node
     finally:
+        engine.remove(force=True, v=True)
         bootstrap_node.cleanup()
 
 
 @contextlib.contextmanager
 def docker_network_with_started_bootstrap(context, *, container_name=None, cli_options=None):
     with docker_network(context.docker) as network:
-        with started_bootstrap_node(context=context, network=network, container_name=container_name, cli_options=cli_options, mount_dir=context.mount_dir) as node:
-            yield node
+        with docker_volume(context.docker) as volume:
+            with started_bootstrap_node(context=context,
+                                        network=network,
+                                        socket_volume=volume,
+                                        container_name=container_name,
+                                        cli_options=cli_options,
+                                        mount_dir=context.mount_dir) as node:
+                yield node
 
 
 @pytest.yield_fixture(scope='module')
