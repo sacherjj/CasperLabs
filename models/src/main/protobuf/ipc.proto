@@ -12,6 +12,7 @@ message Deploy {
     int64 nonce = 7;
     string sig_algorithm = 8; // name of the algorithm used for signing
     bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
+    bytes prestate_hash = 10;
 }
 
 // Describes operation that are allowed to do on a value under a key.
@@ -138,6 +139,7 @@ message TransformEntry {
 message ExecutionEffect {
     repeated OpEntry op_map = 1;
     repeated TransformEntry transform_map = 2;
+    int32 cost = 3;
 }
  
 //TODO: be more specific about errors
@@ -168,7 +170,10 @@ message CommutativeEffects {
     repeated TransformEntry effects = 1;
 }
  
-message Done {}
+message Done {
+    bytes poststate_hash = 1;
+}
+
 //TODO: be more specific about errors
 message PostEffectsError {
     string message = 1;
