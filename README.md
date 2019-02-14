@@ -52,7 +52,7 @@ Execute `sbt client/rpm:packageBin`. Resulted `.deb` package will be placed in t
 * java-11-openjdk-headless
 * openssl
 
-Install using `sudo rpm -U client/target/rpm/RPMS/casperlabs-client-0.0.1.noarch.rpm`.
+Install using `sudo rpm -U client/target/rpm/RPMS/noarch/casperlabs-client-0.0.1.noarch.rpm`.
 
 After installation run `casperlabs-client -- --help` for printing help message.
 
