@@ -102,7 +102,7 @@ pipeline:
 
   # push
 
-  package-client-deb:
+  package-client-deb-universal:
     <<: *sbtenv
     commands:
       - sbt client/debian:packageBin client/universal:packageZipTarball
@@ -129,7 +129,7 @@ pipeline:
     when:
       event: [ push, tag ]
 
-  package-node-deb:
+  package-node-deb-universal:
     <<: *sbtenv
     commands:
       - sbt node/debian:packageBin node/universal:packageZipTarball
