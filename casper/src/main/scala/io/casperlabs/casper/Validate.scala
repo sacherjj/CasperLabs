@@ -578,7 +578,7 @@ object Validate {
   ): F[Either[BlockStatus, ValidBlock]] = {
     val blockPreState  = ProtoUtil.preStateHash(block)
     val blockPostState = ProtoUtil.postStateHash(block)
-    if (preStateHash == blockPostState) {
+    if (preStateHash == blockPreState) {
       for {
         possiblePostState <- ExecutionEngineService[F].commit(
                               preStateHash,

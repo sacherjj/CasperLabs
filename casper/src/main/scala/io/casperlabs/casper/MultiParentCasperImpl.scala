@@ -226,7 +226,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   //The reason we needed both in RChain was because rholang was submitted as source
   //code and parsed by the node. Now we just accept wasm code directly. We still need
   //to verify the wasm code for correctness though.
-  //TODO: verify wasm code correctness
+  //TODO: verify wasm code correctness (done in rust but should be immediate so that we fail fast)
+  //TODO: verify sig immediately (again, so we fail fast)
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
     addDeploy(Deploy(d.sessionCode, Some(d))).map(_ => Right(()))
 
@@ -419,20 +420,30 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       dag                  <- blockDag
       postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
       s                    <- Cell[F, CasperState].read
-      //temporary function for getting transforms for blocks
-      f = (b: BlockMetadata) =>
-        s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
-      processedHash                <- ExecEngineUtil.effectsForBlock(b, dag, f)
-      (preStateHash, blockEffects) = processedHash
-      postTransactionsCheckStatus <- postValidationStatus.traverse(
-                                      _ =>
+      processedHash <- postValidationStatus.traverse {
+                        case _ =>
+                          //temporary function for getting transforms for blocks
+                          val f = (b: BlockMetadata) =>
+                            s.transforms
+                              .getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry])
+                              .pure[F]
+                          ExecEngineUtil
+                            .effectsForBlock(b, dag, f)
+                            .attempt
+                            .map(_.bimap(_ => InvalidTransaction, identity))
+                      }
+      blockEffects = processedHash.joinRight.fold[Seq[ipc.TransformEntry]](_ => Seq.empty, {
+        case (_, effs) => effs
+      })
+      postTransactionsCheckStatus <- processedHash.joinRight.traverse {
+                                      case (preStateHash, blockEffects) =>
                                         Validate.transactions[F](
                                           b,
                                           dag,
                                           preStateHash,
                                           blockEffects
                                         )
-                                    )
+                                    }
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
                                _ => Validate.bondsCache[F](b, ProtoUtil.bonds(genesis))
                              )

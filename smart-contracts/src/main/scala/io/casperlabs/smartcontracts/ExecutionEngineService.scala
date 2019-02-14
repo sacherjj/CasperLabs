@@ -118,4 +118,39 @@ object ExecutionEngineService {
       ): F[Either[Throwable, ByteString]] = ByteString.EMPTY.asRight[Throwable].pure
       override def close(): F[Unit]       = ().pure
     }
+
+  def simpleApi[F[_]: Applicative](): ExecutionEngineService[F] =
+    new ExecutionEngineService[F] {
+      private val zero          = Array.fill(32)(0.toByte)
+      private val key           = Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFrom(zero))))
+      private val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
+      private val op            = Op(Op.OpInstance.Read(ReadOp()))
+      private val transforEntry = TransformEntry(Some(key), Some(transform))
+      private val opEntry       = OpEntry(Some(key), Some(op))
+      private val ee            = ExecutionEffect(Seq(opEntry), Seq(transforEntry), 0)
+
+      override def emptyStateHash: ByteString = ByteString.copyFrom(zero)
+
+      override def exec(
+          prestate: ByteString,
+          deploys: Seq[Deploy]
+      ): F[Either[Throwable, Seq[DeployResult]]] =
+        deploys.map(_ => DeployResult(DeployResult.Result.Effects(ee))).asRight[Throwable].pure
+
+      override def commit(
+          prestate: ByteString,
+          effects: Seq[TransformEntry]
+      ): F[Either[Throwable, ByteString]] = {
+        val arr = if (prestate.isEmpty) zero.clone() else prestate.toByteArray
+        val maybeIndex = arr.zipWithIndex
+          .find { case (b, _) => b < Byte.MaxValue }
+          .map { case (_, i) => i }
+        val newArr = maybeIndex
+          .fold(zero)(i => { arr.update(i, (arr(i) + 1).toByte); arr })
+
+        ByteString.copyFrom(newArr).asRight[Throwable].pure[F]
+      }
+
+      override def close(): F[Unit] = ().pure
+    }
 }

@@ -16,8 +16,6 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 object ExecEngineUtil {
   type StateHash = ByteString
 
-  //TODO: This function should not be needed; ipc.deploy and protocol.deploy are
-  //redundant and we should not have both.
   private def deploy2deploy(d: protocol.Deploy): Deploy =
     d.raw.fold(Deploy()) {
       case protocol.DeployData(

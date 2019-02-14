@@ -423,7 +423,7 @@ class InterpreterUtilTest
       }
   }
 
-  it should "return result of deploying even if one of the programs withing the deployment throws an error" in
+  it should "return result of deploying even if one of the programs withing the deployment throws an error" ignore
     withStorage { implicit blockStore => implicit blockDagStorage =>
       //deploy each Rholang program separately and record its cost
       val deploy1 =

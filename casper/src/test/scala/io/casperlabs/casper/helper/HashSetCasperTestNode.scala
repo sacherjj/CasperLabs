@@ -77,7 +77,7 @@ class HashSetCasperTestNode[F[_]](
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
-  val casperSmartContractsApi = ExecutionEngineService.noOpApi[F]()
+  val casperSmartContractsApi = ExecutionEngineService.simpleApi[F]()
 
   val bonds = genesis.body
     .flatMap(_.state.map(_.bonds.map(b => b.validator.toByteArray -> b.stake).toMap))

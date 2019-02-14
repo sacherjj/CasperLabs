@@ -573,7 +573,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "ask peers for blocks it is missing" in {
+  it should "ask peers for blocks it is missing" in effectTest {
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
       deployDatas = Vector(
@@ -1033,7 +1033,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       Created(block)    = createBlockResult
     } yield {
       cancelUntilFixed("FIXME: Implement cost accounting!")
-      assert(block.body.get.deploys.head.errored)
+      //assert(block.body.get.deploys.head.errored)
     }
   }
 
@@ -1116,9 +1116,9 @@ object HashSetCasperTest {
   ): BlockMessage = {
     implicit val logEff         = new LogStub[Task]()
     val initial                 = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "casperlabs")
-    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+    val casperSmartContractsApi = ExecutionEngineService.simpleApi[Task]()
     val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
-    val emptyStateHash          = runtimeManager.emptyStateHash
+    val emptyStateHash          = casperSmartContractsApi.emptyStateHash
     val validators              = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val genesis = Genesis
       .withContracts(

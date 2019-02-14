@@ -366,16 +366,6 @@ class ValidateTest
         result <- mkRuntimeManager("casper-util-test")
                    .use { runtimeManager =>
                      for {
-                       _   <- updateChainWithBlockStateUpdate[Task](0, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](1, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](2, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](3, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](4, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](5, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](6, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](7, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](8, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](9, b0, runtimeManager)
                        dag <- blockDagStorage.getRepresentation
 
                        // Valid
