@@ -1,6 +1,5 @@
 package io.casperlabs.smartcontracts
 
-import java.io.Closeable
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
@@ -18,17 +17,24 @@ import io.netty.channel.kqueue.{KQueueDomainSocketChannel, KQueueEventLoopGroup}
 import io.netty.channel.unix.DomainSocketAddress
 import simulacrum.typeclass
 
+import com.google.protobuf.ByteString
+import monix.eval.Task
+
 import scala.util.Either
 
 @typeclass trait ExecutionEngineService[F[_]] {
-  def sendDeploy(deploy: Deploy): F[Either[Throwable, ExecutionEffect]]
-  def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]]
-  def close(): Unit
+  //TODO: should this be effectful?
+  def emptyStateHash: ByteString
+  def exec(
+      prestate: ByteString,
+      deploys: Seq[Deploy]
+  ): F[Either[Throwable, Seq[DeployResult]]]
+  def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
+  def close(): F[Unit]
 }
 
 class GrpcExecutionEngineService[F[_]: Monad: ToAbstractContext](addr: Path, maxMessageSize: Int)
-    extends ExecutionEngineService[F]
-    with Closeable {
+    extends ExecutionEngineService[F] {
 
   private val channelType =
     if (Epoll.isAvailable) classOf[EpollDomainSocketChannel] else classOf[KQueueDomainSocketChannel]
@@ -47,49 +53,69 @@ class GrpcExecutionEngineService[F[_]: Monad: ToAbstractContext](addr: Path, max
 
   private val stub: IpcGrpcMonix.ExecutionEngineServiceStub = IpcGrpcMonix.stub(channel)
 
-  override def close(): Unit = {
-    val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
-    if (!terminated) {
-      println(
-        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
-      )
-      channel.awaitTermination(10, TimeUnit.SECONDS)
-    }
-  }
-  override def sendDeploy(deploy: Deploy): F[Either[Throwable, ExecutionEffect]] =
-    ToAbstractContext[F].fromTask(stub.sendDeploy(deploy)).map { response =>
-      response.result match {
-        case DeployResult.Result.Empty           => Left(new SmartContractEngineError("empty response"))
-        case DeployResult.Result.Effects(effect) => Right(effect)
-        case DeployResult.Result.Error(error) =>
-          Left(new SmartContractEngineError(error.toProtoString))
+  override def emptyStateHash: ByteString = ByteString.copyFrom(Array.fill(32)(0.toByte))
+
+  override def close(): F[Unit] =
+    ToAbstractContext[F].fromTask(Task.delay {
+      val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
+      if (!terminated) {
+        println(
+          "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
+        )
+        channel.awaitTermination(10, TimeUnit.SECONDS)
       }
+    })
+
+  override def exec(
+      prestate: ByteString,
+      deploys: Seq[Deploy]
+  ): F[Either[Throwable, Seq[DeployResult]]] =
+    ToAbstractContext[F].fromTask(stub.exec(ExecRequest(Seq(prestate), deploys)).attempt).map {
+      case Left(err) => Left(err)
+      case Right(ExecResponse(result)) =>
+        result match {
+          case ExecResponse.Result.Success(ExecResult(_, deployResults)) =>
+            Right(deployResults)
+          //TODO: Capture errors better than just as a string
+          case ExecResponse.Result.Empty => Left(new SmartContractEngineError("empty response"))
+          case ExecResponse.Result.MissingParents(MultipleRootsNotFound(missing)) =>
+            Left(new SmartContractEngineError(s"Missing states: ${missing.mkString(",")}"))
+        }
     }
 
-  override def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]] =
+  override def commit(
+      prestate: ByteString,
+      effects: Seq[TransformEntry]
+  ): F[Either[Throwable, ByteString]] =
     ToAbstractContext[F]
-      .fromTask(stub.executeEffects(c))
-      .map(
-        response =>
-          response.result match {
-            case PostEffectsResult.Result.Empty =>
-              Left(new SmartContractEngineError("empty response"))
-            case PostEffectsResult.Result.Success(v) => Right(v)
-            case PostEffectsResult.Result.Error(effectsError) =>
-              Left(new SmartContractEngineError(effectsError.toProtoString))
+      .fromTask(stub.commit(CommitRequest(prestate, effects)).attempt)
+      .map {
+        case Left(err) => Left(err)
+        case Right(CommitResponse(result)) =>
+          result match {
+            case CommitResponse.Result.Success(CommitResult(poststateHash)) => Right(poststateHash)
+            case CommitResponse.Result.Empty                                => Left(new SmartContractEngineError("empty response"))
+            case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
+              Left(new SmartContractEngineError(s"Missing pre-state: $hash"))
+            case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
+              Left(new SmartContractEngineError(s"Error executing transform: $message"))
           }
-      )
+      }
 }
 
 object ExecutionEngineService {
   def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
-      override def sendDeploy(d: Deploy): F[Either[Throwable, ExecutionEffect]] =
-        ExecutionEffect().asRight[Throwable].pure
-
-      override def executeEffects(c: CommutativeEffects): F[Either[Throwable, Done]] =
-        Done().asRight[Throwable].pure
-
-      override def close(): Unit = ()
+      override def emptyStateHash: ByteString = ByteString.EMPTY
+      override def exec(
+          prestate: ByteString,
+          deploys: Seq[Deploy]
+      ): F[Either[Throwable, Seq[DeployResult]]] =
+        Seq.empty[DeployResult].asRight[Throwable].pure
+      override def commit(
+          prestate: ByteString,
+          effects: Seq[TransformEntry]
+      ): F[Either[Throwable, ByteString]] = ByteString.EMPTY.asRight[Throwable].pure
+      override def close(): F[Unit]       = ().pure
     }
 }

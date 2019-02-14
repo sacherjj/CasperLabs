@@ -16,6 +16,12 @@ import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.shared._
 import monix.execution.Scheduler
 
+import io.casperlabs.ipc
+import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.blockstorage.BlockMetadata
+import io.casperlabs.casper.protocol.Bond
+
 import scala.util.{Success, Try}
 
 object Validate {
@@ -567,24 +573,47 @@ object Validate {
   def transactions[F[_]: Sync: Log: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager[F]
+      ee: ExecutionEngineService[F],
+      transforms: BlockMetadata => F[Seq[ipc.TransformEntry]]
   ): F[Either[BlockStatus, ValidBlock]] =
-    Sync[F].pure[Either[BlockStatus, ValidBlock]](Right(Valid))
-  // TODO: bring this back when validation works again
-  // for {
-  //   maybeStateHash <- InterpreterUtil
-  //                      .validateBlockCheckpoint[F](
-  //                        block,
-  //                        dag,
-  //                        runtimeManager
-  //                      )
-  // } yield
-  //   maybeStateHash match {
-  //     case Left(ex)       => Left(ex)
-  //     case Right(Some(_)) => Right(Valid)
-  //     case Right(None)    => Left(InvalidTransaction)
-  //   }
+    for {
+      parents        <- ProtoUtil.unsafeGetParents[F](block)
+      deploys        = ProtoUtil.deploys(block)
+      blockPreState  = ProtoUtil.preStateHash(block)
+      blockPostState = ProtoUtil.postStateHash(block)
+      possiblePreStateHash <- ExecEngineUtil.processDeploys(
+                               parents,
+                               dag,
+                               ee,
+                               deploys.flatMap(_.deploy),
+                               transforms
+                             )
+      possiblePostStateHash <- possiblePreStateHash traverse {
+                                case (preStateHash, processedDeploys) =>
+                                  if (preStateHash == blockPreState) {
+                                    val commutingEffects =
+                                      ExecEngineUtil.commutingEffects(processedDeploys)
+                                    ee.commit(
+                                      preStateHash,
+                                      commutingEffects.flatMap(_.transformMap)
+                                    )
+                                  } else {
+                                    //TODO: could perhaps not have exception here
+                                    Sync[F].pure[Either[Throwable, StateHash]](
+                                      Left(new Exception("Bad prestate"))
+                                    )
+                                  }
+                              }
+    } yield
+      possiblePostStateHash.joinRight match {
+        case Left(_) => Left(InvalidTransaction)
+        case Right(postStateHash) =>
+          if (blockPostState == postStateHash) {
+            Right(Valid)
+          } else {
+            Left(InvalidTransaction)
+          }
+      }
 
   /**
     * If block contains an invalid justification block B and the creator of B is still bonded,
@@ -613,21 +642,19 @@ object Validate {
 
   def bondsCache[F[_]: Monad: Log](
       b: BlockMessage,
-      runtimeManager: RuntimeManager[F]
+      computedBonds: Seq[Bond]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
       case Some(tuplespaceHash) =>
-        runtimeManager.computeBonds(tuplespaceHash) flatMap { computedBonds =>
-          if (bonds.toSet == computedBonds.toSet) {
-            Applicative[F].pure(Right(Valid))
-          } else {
-            for {
-              _ <- Log[F].warn(
-                    "Bonds in proof of stake contract do not match block's bond cache."
-                  )
-            } yield Left(InvalidBondsCache)
-          }
+        if (bonds.toSet == computedBonds.toSet) {
+          Applicative[F].pure(Right(Valid))
+        } else {
+          for {
+            _ <- Log[F].warn(
+                  "Bonds in proof of stake contract do not match block's bond cache."
+                )
+          } yield Left(InvalidBondsCache)
         }
       case None =>
         for {

@@ -32,6 +32,9 @@ import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
 import io.casperlabs.shared.AttemptOps._
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.ipc
+import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
@@ -45,14 +48,17 @@ import io.casperlabs.catscontrib.TaskContrib._
 final case class CasperState(
     seenBlockHashes: Set[BlockHash] = Set.empty[BlockHash],
     blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
-    deployHistory: Set[(Deploy, ExecutionEffect)] = Set.empty[(Deploy, ExecutionEffect)],
+    deployHistory: Set[Deploy] = Set.empty[Deploy],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
+    equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord],
+    //TODO: store this info in the BlockDagRepresentation instead
+    transforms: Map[BlockHash, Seq[ipc.TransformEntry]] =
+      Map.empty[BlockHash, Seq[ipc.TransformEntry]]
 )
 
 class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
-    runtimeManager: RuntimeManager[F],
+    executionEngineService: ExecutionEngineService[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -69,7 +75,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   //TODO: Extract hardcoded version
   private val version = 1L
 
-  private val emptyStateHash = runtimeManager.emptyStateHash
+  private val emptyStateHash = executionEngineService.emptyStateHash
 
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
@@ -186,9 +192,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       stateBefore        <- Cell[F, CasperState].read
       initialHistorySize = stateBefore.deployHistory.size
       _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployHistory = s.deployHistory.filterNot {
-              case (d, _) => deploysToRemove(d)
-            })
+            s.copy(deployHistory = s.deployHistory.filterNot(deploysToRemove))
           }
       stateAfter     <- Cell[F, CasperState].read
       deploysRemoved = initialHistorySize - stateAfter.deployHistory.size
@@ -221,27 +225,18 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       bufferContains     = state.blockBuffer.exists(_.blockHash == b.blockHash)
     } yield (blockStoreContains || bufferContains)
 
+  //TODO: `Deploy` is now redundant with `DeployData`, so we should remove it.
+  //The reason we needed both in RChain was because rholang was submitted as source
+  //code and parsed by the node. Now we just accept wasm code directly. We still need
+  //to verify the wasm code for correctness though.
+  //TODO: verify wasm code correctness
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
-    runtimeManager
-      .sendDeploy(
-        ProtoUtil.deployDataToEEDeploy(d)
-      )
-      .flatMap {
-        case Right(effects: ExecutionEffect) =>
-          addDeploy(
-            Deploy(
-              sessionCode = d.sessionCode,
-              raw = Some(d)
-            ),
-            effects
-          ).as(Right(()))
-        case Left(err) => new Throwable(s"Error in parsing term: \n$err").asLeft[Unit].pure[F]
-      }
+    addDeploy(Deploy(d.sessionCode, Some(d))).map(_ => Right(()))
 
-  def addDeploy(deploy: Deploy, ee: ExecutionEffect): F[Unit] =
+  def addDeploy(deploy: Deploy): F[Unit] =
     for {
       _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployHistory = s.deployHistory + (deploy -> ee))
+            s.copy(deployHistory = s.deployHistory + deploy)
           }
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield ()
@@ -307,7 +302,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   private def remDeploys(
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage]
-  ): F[Seq[(Deploy, ExecutionEffect)]] =
+  ): F[Seq[Deploy]] =
     for {
       state <- Cell[F, CasperState].read
       hist  = state.deployHistory
@@ -320,89 +315,89 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
                 .flatten
             }
             .toList
-      deploy = d.flatten
-      result = (hist.toMap -- deploy).toSeq
+      deploy = d.flatten.toSet
+      result = (hist.diff(deploy)).toSeq
     } yield result
 
+  //TODO: Need to specify SEQ vs PAR type block?
   private def createProposal(
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage],
-      r: Seq[(Deploy, ExecutionEffect)],
+      r: Seq[Deploy],
       justifications: Seq[Justification]
   ): F[CreateBlockStatus] =
     for {
       now <- Time[F].currentMillis
-      possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](
+      s   <- Cell[F, CasperState].read
+      //temporary function for getting transforms for blocks
+      f = (b: BlockMetadata) =>
+        s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
+      possibleProcessedDeploys <- ExecEngineUtil.processDeploys(
                                    p,
-                                   r,
                                    dag,
-                                   runtimeManager,
-                                   Some(now)
+                                   executionEngineService,
+                                   r,
+                                   f
                                  )
-      result <- possibleProcessedDeploys match {
+      possibleStatus <- possibleProcessedDeploys traverse {
+                         case (preStateHash, processedDeploys) =>
+                           val deployLookup     = processedDeploys.zip(r).toMap
+                           val commutingEffects = ExecEngineUtil.commutingEffects(processedDeploys)
+                           val deploysForBlock = commutingEffects.map(eff => {
+                             val deploy =
+                               deployLookup(ipc.DeployResult(ipc.DeployResult.Result.Effects(eff)))
+                             protocol.ProcessedDeploy(
+                               Some(deploy),
+                               eff.cost,
+                               false
+                             )
+                           })
+                           val maxBlockNumber = p.foldLeft(-1L) {
+                             case (acc, b) => math.max(acc, blockNumber(b))
+                           }
+                           //TODO: how to handle bonds?
+                           val newBonds = ProtoUtil.bonds(p.head)
+                           executionEngineService
+                             .commit(preStateHash, commutingEffects.flatMap(_.transformMap))
+                             .map(_.map(postStateHash => {
+
+                               val postState = RChainState()
+                                 .withPreStateHash(preStateHash)
+                                 .withPostStateHash(postStateHash)
+                                 .withBonds(newBonds)
+                                 .withBlockNumber(maxBlockNumber + 1)
+
+                               val body = Body()
+                                 .withState(postState)
+                                 .withDeploys(deploysForBlock)
+                               val header = blockHeader(body, p.map(_.blockHash), version, now)
+                               val block  = unsignedBlockProto(body, header, justifications, shardId)
+                               (commutingEffects, CreateBlockStatus.created(block))
+                             }))
+                       }
+      result <- possibleStatus.joinRight match {
+                 case Right((effs, status @ Created(block))) =>
+                   val number     = block.body.get.state.get.blockNumber
+                   val transforms = effs.flatMap(_.transformMap)
+                   val msgBody = transforms
+                     .map(t => {
+                       val k    = PrettyPrinter.buildString(t.key.get)
+                       val tStr = PrettyPrinter.buildString(t.transform.get)
+                       s"$k :: $tStr"
+                     })
+                     .mkString("\n")
+                   Log[F]
+                     .info(s"Block #$number created with effects:\n$msgBody")
+                     .map[CreateBlockStatus](_ => status)
+                 case Right((_, other)) => other.pure[F]
                  case Left(ex) =>
                    Log[F]
                      .error(
                        s"Critical error encountered while processing deploys: ${ex.getMessage}"
                      )
                      .map(_ => CreateBlockStatus.internalDeployError(ex))
-
-                 case Right((preStateHash, postStateHash, processedDeploys)) =>
-                   val (internalErrors, persistableDeploys) =
-                     processedDeploys.partition(_.result.isInternalError)
-                   internalErrors.toList
-                     .traverse {
-                       case InternalProcessedDeploy(deploy, _, InternalErrors(errors)) =>
-                         val errorsMessage = errors.map(_.getMessage).mkString("\n")
-                         Log[F].error(
-                           s"Internal error encountered while processing deploy ${PrettyPrinter
-                             .buildString(deploy)}: $errorsMessage"
-                         )
-                       case _ => ().pure[F]
-                     }
-                     .flatMap(_ => {
-                       val maxBlockNumber: Long =
-                         p.foldLeft(-1L) {
-                           case (acc, b) => math.max(acc, blockNumber(b))
-                         }
-
-                       runtimeManager
-                         .computeBonds(postStateHash)
-                         .map {
-                           newBonds =>
-                             val postState = RChainState()
-                               .withPreStateHash(preStateHash)
-                               .withPostStateHash(postStateHash)
-                               .withBonds(newBonds)
-                               .withBlockNumber(maxBlockNumber + 1)
-
-                             val body = Body()
-                               .withState(postState)
-                               .withDeploys(
-                                 persistableDeploys.map(ProcessedDeployUtil.fromInternal)
-                               )
-                             val header = blockHeader(body, p.map(_.blockHash), version, now)
-                             val block  = unsignedBlockProto(body, header, justifications, shardId)
-                             CreateBlockStatus.created(block)
-                         }
-                     })
-                     .flatMap[CreateBlockStatus] {
-                       case status @ Created(block) =>
-                         val number     = block.body.get.state.get.blockNumber
-                         val transforms = r.flatMap(_._2.transformMap)
-                         val msgBody = transforms
-                           .map(t => {
-                             val k    = PrettyPrinter.buildString(t.key.get)
-                             val tStr = PrettyPrinter.buildString(t.transform.get)
-                             s"$k :: $tStr"
-                           })
-                           .mkString("\n")
-                         Log[F]
-                           .info(s"Block #$number created with effects:\n$msgBody")
-                           .map(_ => status)
-                       case other => other.pure[F]
-                     }
                }
+
     } yield result
 
   def blockDag: F[BlockDagRepresentation[F]] =
@@ -435,20 +430,22 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       _                    <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
       dag                  <- blockDag
       postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
+      s                    <- Cell[F, CasperState].read
+      //temporary function for getting transforms for blocks
+      f = (b: BlockMetadata) =>
+        s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
                                         Validate.transactions[F](
                                           b,
                                           dag,
-                                          emptyStateHash,
-                                          runtimeManager
+                                          executionEngineService,
+                                          f
                                         )
                                     )
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
-                               _ => Validate.bondsCache[F](b, runtimeManager)
+                               _ => Validate.bondsCache[F](b, ProtoUtil.bonds(genesis))
                              )
-
-      s <- Cell[F, CasperState].read
       postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(
                                           _ =>
                                             Validate
@@ -598,8 +595,25 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
 
   private def addToState(block: BlockMessage): F[Unit] =
     for {
-      _ <- BlockStore[F].put(block.blockHash, block)
-      _ <- BlockDagStorage[F].insert(block)
+      _   <- BlockStore[F].put(block.blockHash, block)
+      _   <- BlockDagStorage[F].insert(block)
+      s   <- Cell[F, CasperState].read
+      dag <- blockDag
+      //temporary function for getting transforms for blocks
+      f = (b: BlockMetadata) =>
+        s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
+      possibleEffects <- ExecEngineUtil.effectsForBlock(
+                          block,
+                          dag,
+                          executionEngineService,
+                          f
+                        )
+      effects = possibleEffects.fold(_ => Seq.empty[ipc.TransformEntry], identity)
+      hash    = block.blockHash
+      _ <- Cell[F, CasperState].modify { s =>
+            s.copy(transforms = s.transforms + (hash -> effects))
+          }
+
     } yield ()
 
   private def reAttemptBuffer: F[Unit] =
@@ -658,8 +672,9 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       })
     }
 
+  //TODO: Delete this method
   def getRuntimeManager: F[Option[RuntimeManager[F]]] =
-    Applicative[F].pure(Some(runtimeManager))
+    Applicative[F].pure(None)
 
   def fetchDependencies: F[Unit] =
     for {

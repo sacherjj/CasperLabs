@@ -13,6 +13,7 @@ import io.casperlabs.models._
 import io.casperlabs.shared.{Log, LogSource}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
+//TODO: Delete this class
 class RuntimeManager[F[_]: Concurrent] private (
     val executionEngineService: ExecutionEngineService[F],
     val emptyStateHash: StateHash,
@@ -33,34 +34,19 @@ class RuntimeManager[F[_]: Concurrent] private (
       hash: StateHash,
       terms: Seq[(Deploy, ExecutionEffect)],
       time: Option[Long] = None
-  )(implicit log: Log[F]): F[(StateHash, Seq[InternalProcessedDeploy])] = {
-    // todo using maximum commutative rules
-    val commutativeEffects = CommutativeEffects(terms.flatMap(_._2.transformMap))
-
-    log.debug("FIXME: Implement cost accounting!") *>
-      executionEngineService
-        .executeEffects(commutativeEffects)
-        .map {
-          case Right(_) =>
-            (hash, terms.map {
-              case (deploy, _) =>
-                InternalProcessedDeploy(deploy, 0, Succeeded)
-            })
-          case Left(err) =>
-            (hash, terms.map {
-              case (deploy, _) =>
-                InternalProcessedDeploy(deploy, 0, DeployResult.fromErrors(err))
-            })
-        }
-  }
+  )(implicit log: Log[F]): F[(StateHash, Seq[InternalProcessedDeploy])] =
+    //replaced by ExecEngineUtil
+    (ByteString.EMPTY, Seq.empty[InternalProcessedDeploy]).pure
 
   // todo this should be complemented
   def computeBonds(hash: StateHash)(implicit log: Log[F]): F[Seq[Bond]] =
     // FIXME: Implement bonds!
     initialBonds.pure[F]
 
+  //replaced by ExecEngineUtil
   def sendDeploy(d: IPCDeploy): F[Either[Throwable, ExecutionEffect]] =
-    executionEngineService.sendDeploy(d)
+    Concurrent[F]
+      .pure[Either[Throwable, ExecutionEffect]](Left(new Exception("CLASS TO BE DELETED")))
 }
 
 object RuntimeManager {

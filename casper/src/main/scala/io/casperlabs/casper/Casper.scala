@@ -104,7 +104,7 @@ sealed abstract class MultiParentCasperInstances {
     } yield {
       implicit val state = casperState
       new MultiParentCasperImpl[F](
-        runtimeManager,
+        runtimeManager.executionEngineService,
         validatorId,
         genesis,
         postGenesisStateHash,

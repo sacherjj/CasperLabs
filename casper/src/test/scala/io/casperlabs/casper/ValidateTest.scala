@@ -575,6 +575,7 @@ class ValidateTest
       val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
       val bonds           = HashSetCasperTest.createBonds(validators)
       val genesis         = HashSetCasperTest.createGenesis(bonds)
+      val genesisBonds    = ProtoUtil.bonds(genesis)
 
       val storageDirectory        = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long       = 1024L * 1024
@@ -584,12 +585,12 @@ class ValidateTest
       for {
         dag               <- blockDagStorage.getRepresentation
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
-        _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
+        _                 <- Validate.bondsCache[Task](genesis, genesisBonds) shouldBeF Right(Valid)
         modifiedBonds     = Seq.empty[Bond]
         modifiedPostState = genesis.getBody.getState.withBonds(modifiedBonds)
         modifiedBody      = genesis.getBody.withState(modifiedPostState)
         modifiedGenesis   = genesis.withBody(modifiedBody)
-        result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
+        result <- Validate.bondsCache[Task](modifiedGenesis, genesisBonds) shouldBeF Left(
                    InvalidBondsCache
                  )
       } yield result
