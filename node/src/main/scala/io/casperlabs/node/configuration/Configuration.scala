@@ -103,17 +103,17 @@ object Configuration {
       parseCasper(default, confSoft),
       parseBlockStorage(default, confSoft),
       parseBlockDagStorage(default, confSoft),
-      parseKamon(default)
+      parseKamon(confSoft)
     ).mapN(Configuration(command, _, _, _, _, _, _, _))
 
   private def parseKamon(
-      soft: ConfigurationSoft
+      conf: ConfigurationSoft
   ): ValidatedNel[String, Kamon] = {
-    val influx = parseInflux(soft).toOption
+    val influx = parseInflux(conf).toOption
     (
-      optToValidated(soft.metrics.flatMap(_.prometheus), "Kamon.prometheus"),
-      optToValidated(soft.metrics.flatMap(_.zipkin), "Kamon.zipkin"),
-      optToValidated(soft.metrics.flatMap(_.sigar), "Kamon.sigar")
+      optToValidated(conf.metrics.flatMap(_.prometheus), "Kamon.prometheus"),
+      optToValidated(conf.metrics.flatMap(_.zipkin), "Kamon.zipkin"),
+      optToValidated(conf.metrics.flatMap(_.sigar), "Kamon.sigar")
     ) mapN (Kamon(_, influx, _, _))
   }
 
