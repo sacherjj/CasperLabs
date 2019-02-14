@@ -326,6 +326,7 @@ lazy val client = (project in file("client"))
     version := nodeAndClientVersion,
     maintainer := "CasperLabs, LLC. <info@casperlabs.io>",
     packageName := "casperlabs-client",
+    packageName in Docker := "client",
     executableScriptName := "casperlabs-client",
     packageSummary := "CasperLabs Client",
     packageDescription := "CLI tool for interaction with the CasperLabs Node",
