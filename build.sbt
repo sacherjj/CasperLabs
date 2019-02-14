@@ -402,7 +402,8 @@ lazy val client = (project in file("client"))
       "java-1.8.0-openjdk-headless >= 1.8.0.171",
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
-    )
+    ),
+    rpmAutoreq := "no"
   )
   .dependsOn(shared, models)
 
