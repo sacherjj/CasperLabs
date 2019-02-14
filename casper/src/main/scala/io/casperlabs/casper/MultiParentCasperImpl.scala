@@ -57,8 +57,7 @@ final case class CasperState(
       Map.empty[BlockHash, Seq[ipc.TransformEntry]]
 )
 
-class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
-    executionEngineService: ExecutionEngineService[F],
+class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -74,8 +73,6 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
 
   //TODO: Extract hardcoded version
   private val version = 1L
-
-  private val emptyStateHash = executionEngineService.emptyStateHash
 
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
@@ -326,79 +323,70 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       r: Seq[Deploy],
       justifications: Seq[Justification]
   ): F[CreateBlockStatus] =
-    for {
+    (for {
       now <- Time[F].currentMillis
       s   <- Cell[F, CasperState].read
       //temporary function for getting transforms for blocks
       f = (b: BlockMetadata) =>
         s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
-      possibleProcessedDeploys <- ExecEngineUtil.processDeploys(
-                                   p,
-                                   dag,
-                                   executionEngineService,
-                                   r,
-                                   f
-                                 )
-      possibleStatus <- possibleProcessedDeploys traverse {
-                         case (preStateHash, processedDeploys) =>
-                           val deployLookup     = processedDeploys.zip(r).toMap
-                           val commutingEffects = ExecEngineUtil.commutingEffects(processedDeploys)
-                           val deploysForBlock = commutingEffects.map(eff => {
-                             val deploy =
-                               deployLookup(ipc.DeployResult(ipc.DeployResult.Result.Effects(eff)))
-                             protocol.ProcessedDeploy(
-                               Some(deploy),
-                               eff.cost,
-                               false
-                             )
-                           })
-                           val maxBlockNumber = p.foldLeft(-1L) {
-                             case (acc, b) => math.max(acc, blockNumber(b))
-                           }
-                           //TODO: how to handle bonds?
-                           val newBonds = ProtoUtil.bonds(p.head)
-                           executionEngineService
-                             .commit(preStateHash, commutingEffects.flatMap(_.transformMap))
-                             .map(_.map(postStateHash => {
+      processedHash <- ExecEngineUtil.processDeploys(
+                        p,
+                        dag,
+                        r,
+                        f
+                      )
+      (preStateHash, processedDeploys) = processedHash
+      deployLookup                     = processedDeploys.zip(r).toMap
+      commutingEffects                 = ExecEngineUtil.commutingEffects(processedDeploys)
+      deploysForBlock = commutingEffects.map(eff => {
+        val deploy = deployLookup(ipc.DeployResult(ipc.DeployResult.Result.Effects(eff)))
+        protocol.ProcessedDeploy(
+          Some(deploy),
+          eff.cost,
+          false
+        )
+      })
+      maxBlockNumber = p.foldLeft(-1L) {
+        case (acc, b) => math.max(acc, blockNumber(b))
+      }
+      //TODO: compute bonds properly
+      newBonds              = ProtoUtil.bonds(p.head)
+      transforms            = commutingEffects.flatMap(_.transformMap)
+      possiblePostStateHash <- ExecutionEngineService[F].commit(preStateHash, transforms)
+      postStateHash <- possiblePostStateHash match {
+                        case Left(ex)    => Sync[F].raiseError(ex)
+                        case Right(hash) => hash.pure[F]
+                      }
+      number = maxBlockNumber + 1
+      postState = RChainState()
+        .withPreStateHash(preStateHash)
+        .withPostStateHash(postStateHash)
+        .withBonds(newBonds)
+        .withBlockNumber(number)
 
-                               val postState = RChainState()
-                                 .withPreStateHash(preStateHash)
-                                 .withPostStateHash(postStateHash)
-                                 .withBonds(newBonds)
-                                 .withBlockNumber(maxBlockNumber + 1)
+      body = Body()
+        .withState(postState)
+        .withDeploys(deploysForBlock)
+      header = blockHeader(body, p.map(_.blockHash), version, now)
+      block  = unsignedBlockProto(body, header, justifications, shardId)
 
-                               val body = Body()
-                                 .withState(postState)
-                                 .withDeploys(deploysForBlock)
-                               val header = blockHeader(body, p.map(_.blockHash), version, now)
-                               val block  = unsignedBlockProto(body, header, justifications, shardId)
-                               (commutingEffects, CreateBlockStatus.created(block))
-                             }))
-                       }
-      result <- possibleStatus.joinRight match {
-                 case Right((effs, status @ Created(block))) =>
-                   val number     = block.body.get.state.get.blockNumber
-                   val transforms = effs.flatMap(_.transformMap)
-                   val msgBody = transforms
-                     .map(t => {
-                       val k    = PrettyPrinter.buildString(t.key.get)
-                       val tStr = PrettyPrinter.buildString(t.transform.get)
-                       s"$k :: $tStr"
-                     })
-                     .mkString("\n")
-                   Log[F]
-                     .info(s"Block #$number created with effects:\n$msgBody")
-                     .map[CreateBlockStatus](_ => status)
-                 case Right((_, other)) => other.pure[F]
-                 case Left(ex) =>
-                   Log[F]
-                     .error(
-                       s"Critical error encountered while processing deploys: ${ex.getMessage}"
-                     )
-                     .map(_ => CreateBlockStatus.internalDeployError(ex))
-               }
-
-    } yield result
+      msgBody = transforms
+        .map(t => {
+          val k    = PrettyPrinter.buildString(t.key.get)
+          val tStr = PrettyPrinter.buildString(t.transform.get)
+          s"$k :: $tStr"
+        })
+        .mkString("\n")
+      _ <- Log[F]
+            .info(s"Block #$number created with effects:\n$msgBody")
+    } yield CreateBlockStatus.created(block)).handleErrorWith(
+      ex =>
+        Log[F]
+          .error(
+            s"Critical error encountered while processing deploys: ${ex.getMessage}"
+          )
+          .map(_ => CreateBlockStatus.internalDeployError(ex))
+    )
 
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
@@ -434,13 +422,15 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       //temporary function for getting transforms for blocks
       f = (b: BlockMetadata) =>
         s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
+      processedHash                <- ExecEngineUtil.effectsForBlock(b, dag, f)
+      (preStateHash, blockEffects) = processedHash
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
                                         Validate.transactions[F](
                                           b,
                                           dag,
-                                          executionEngineService,
-                                          f
+                                          preStateHash,
+                                          blockEffects
                                         )
                                     )
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
@@ -470,15 +460,19 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
                                           .checkEquivocations[F](s.dependencyDag, b, dag)
                                     )
       status = postEquivocationCheckStatus.joinRight.merge
-      _      <- addEffects(status, b)
+      _      <- addEffects(status, b, blockEffects)
     } yield status
 
   // TODO: Handle slashing
-  private def addEffects(status: BlockStatus, block: BlockMessage): F[Unit] =
+  private def addEffects(
+      status: BlockStatus,
+      block: BlockMessage,
+      transforms: Seq[ipc.TransformEntry]
+  ): F[Unit] =
     status match {
       //Add successful! Send block to peers, log success, try to add other blocks
       case Valid =>
-        addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
+        addToState(block, transforms) *> CommUtil.sendBlock[F](block) *> Log[F].info(
           s"Added ${PrettyPrinter.buildString(block.blockHash)}"
         )
       case MissingBlocks => {
@@ -502,7 +496,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
             s.copy(equivocationsTracker = s.equivocationsTracker + (newEquivocationRecord))
           }
         } *>
-          addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
+          addToState(block, transforms) *> CommUtil.sendBlock[F](block) *> Log[F].info(
           s"Added admissible equivocation child block ${PrettyPrinter.buildString(block.blockHash)}"
         )
       case IgnorableEquivocation =>
@@ -515,33 +509,33 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
           s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
         )
       case InvalidUnslashableBlock =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case InvalidFollows =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case InvalidBlockNumber =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case InvalidParents =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case JustificationRegression =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case InvalidSequenceNumber =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case NeglectedInvalidBlock =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case NeglectedEquivocation =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case InvalidTransaction =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case InvalidBondsCache =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case InvalidRepeatDeploy =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case InvalidShardId =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case InvalidBlockHash =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case InvalidDeployCount =>
-        handleInvalidBlockEffect(status, block)
+        handleInvalidBlockEffect(status, block, transforms)
       case Processing =>
         throw new RuntimeException(s"A block should not be processing at this stage.")
       case BlockException(ex) =>
@@ -581,7 +575,11 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   private def requestMissingDependency(hash: BlockHash) =
     CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
 
-  private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =
+  private def handleInvalidBlockEffect(
+      status: BlockStatus,
+      block: BlockMessage,
+      effects: Seq[ipc.TransformEntry]
+  ): F[Unit] =
     for {
       _ <- Log[F].warn(
             s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
@@ -590,26 +588,14 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       _ <- Cell[F, CasperState].modify { s =>
             s.copy(invalidBlockTracker = s.invalidBlockTracker + block.blockHash)
           }
-      _ <- addToState(block)
+      _ <- addToState(block, effects)
     } yield ()
 
-  private def addToState(block: BlockMessage): F[Unit] =
+  private def addToState(block: BlockMessage, effects: Seq[ipc.TransformEntry]): F[Unit] =
     for {
-      _   <- BlockStore[F].put(block.blockHash, block)
-      _   <- BlockDagStorage[F].insert(block)
-      s   <- Cell[F, CasperState].read
-      dag <- blockDag
-      //temporary function for getting transforms for blocks
-      f = (b: BlockMetadata) =>
-        s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
-      possibleEffects <- ExecEngineUtil.effectsForBlock(
-                          block,
-                          dag,
-                          executionEngineService,
-                          f
-                        )
-      effects = possibleEffects.fold(_ => Seq.empty[ipc.TransformEntry], identity)
-      hash    = block.blockHash
+      _    <- BlockStore[F].put(block.blockHash, block)
+      _    <- BlockDagStorage[F].insert(block)
+      hash = block.blockHash
       _ <- Cell[F, CasperState].modify { s =>
             s.copy(transforms = s.transforms + (hash -> effects))
           }

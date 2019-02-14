@@ -15,6 +15,7 @@ import io.casperlabs.models._
 import io.casperlabs.shared.{Log, LogSource}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
+//TODO: Delete this object because it is no longer needed
 object InterpreterUtil {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)

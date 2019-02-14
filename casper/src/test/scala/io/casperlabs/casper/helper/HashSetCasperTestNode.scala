@@ -93,8 +93,8 @@ class HashSetCasperTestNode[F[_]](
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
+  implicit val ee = runtimeManager.executionEngineService
   implicit val casperEff = new MultiParentCasperImpl[F](
-    runtimeManager.executionEngineService,
     Some(validatorId),
     genesis,
     postGenesisStateHash,

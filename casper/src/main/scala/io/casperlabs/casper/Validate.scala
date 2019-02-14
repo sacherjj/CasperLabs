@@ -570,50 +570,36 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Sync: Log: BlockStore](
+  def transactions[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      ee: ExecutionEngineService[F],
-      transforms: BlockMetadata => F[Seq[ipc.TransformEntry]]
-  ): F[Either[BlockStatus, ValidBlock]] =
-    for {
-      parents        <- ProtoUtil.unsafeGetParents[F](block)
-      deploys        = ProtoUtil.deploys(block)
-      blockPreState  = ProtoUtil.preStateHash(block)
-      blockPostState = ProtoUtil.postStateHash(block)
-      possiblePreStateHash <- ExecEngineUtil.processDeploys(
-                               parents,
-                               dag,
-                               ee,
-                               deploys.flatMap(_.deploy),
-                               transforms
-                             )
-      possiblePostStateHash <- possiblePreStateHash traverse {
-                                case (preStateHash, processedDeploys) =>
-                                  if (preStateHash == blockPreState) {
-                                    val commutingEffects =
-                                      ExecEngineUtil.commutingEffects(processedDeploys)
-                                    ee.commit(
-                                      preStateHash,
-                                      commutingEffects.flatMap(_.transformMap)
-                                    )
-                                  } else {
-                                    //TODO: could perhaps not have exception here
-                                    Sync[F].pure[Either[Throwable, StateHash]](
-                                      Left(new Exception("Bad prestate"))
-                                    )
-                                  }
-                              }
-    } yield
-      possiblePostStateHash.joinRight match {
-        case Left(_) => Left(InvalidTransaction)
-        case Right(postStateHash) =>
-          if (blockPostState == postStateHash) {
-            Right(Valid)
-          } else {
-            Left(InvalidTransaction)
-          }
-      }
+      preStateHash: StateHash,
+      effects: Seq[ipc.TransformEntry]
+  ): F[Either[BlockStatus, ValidBlock]] = {
+    val blockPreState  = ProtoUtil.preStateHash(block)
+    val blockPostState = ProtoUtil.postStateHash(block)
+    if (preStateHash == blockPostState) {
+      for {
+        possiblePostState <- ExecutionEngineService[F].commit(
+                              preStateHash,
+                              effects
+                            )
+      } yield
+        possiblePostState match {
+          //TODO: distinguish "internal errors" and "user errors"
+          case Left(_) => Left(InvalidTransaction)
+          case Right(postStateHash) =>
+            if (postStateHash == blockPostState) {
+              Right(Valid)
+            } else {
+              Left(InvalidTransaction)
+            }
+        }
+    } else {
+      //TODO: InvalidPrestate variant?
+      Sync[F].pure[Either[BlockStatus, ValidBlock]](Left(InvalidTransaction))
+    }
+  }
 
   /**
     * If block contains an invalid justification block B and the creator of B is still bonded,
