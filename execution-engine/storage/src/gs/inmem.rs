@@ -38,28 +38,6 @@ impl DbReader for InMemGS {
 }
 
 impl History<Self> for InMemGS {
-    fn checkout_multiple(
-        &self,
-        prestate_hashes: Vec<[u8; 32]>,
-    ) -> Result<TrackingCopy<InMemGS>, Error> {
-        let missing_root = prestate_hashes
-            .iter()
-            .find(|root| !self.history.lock().contains_key(root.clone()));
-        match missing_root {
-            Some(missing) => Err(Error::RootNotFound(missing.clone())),
-            None => {
-                let mut new_root: HashMap<Key, Value> = HashMap::new();
-                for root in prestate_hashes.iter() {
-                    let snapshot = self.history.lock().get(root).unwrap().clone();
-                    new_root.extend(snapshot);
-                }
-                let mut store = self.active_state.lock();
-                *store = new_root;
-                Ok(TrackingCopy::new(self))
-            }
-        }
-    }
-
     /// **WARNING**
     /// This will drop any changes made to `active_store` and replace it with
     /// the state under passed hash.

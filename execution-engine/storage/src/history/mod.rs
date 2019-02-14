@@ -6,8 +6,6 @@ use common::key::Key;
 use super::transform::Transform;
 
 pub trait History<R: DbReader> {
-    /// Checkouts to the state that is a result of merging multiple blocks.
-    fn checkout_multiple(&self, prestate_hashes: Vec<[u8; 32]>) -> Result<TrackingCopy<R>, Error>;
     /// Checkouts to the post state of a specific block.
     fn checkout(&self, prestate_hash: [u8; 32]) -> Result<TrackingCopy<R>, Error>;
     /// Applies changes and returns a new post state hash.
