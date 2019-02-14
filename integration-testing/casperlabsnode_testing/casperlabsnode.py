@@ -1,29 +1,37 @@
-import re
-import os
-import shlex
-import logging
-import threading
 import contextlib
-from typing import Generator
+import logging
+import os
+import random
+import re
+import shlex
+import string
+import threading
+from multiprocessing import Process, Queue
+from queue import Empty
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import pytest
 from docker.client import DockerClient
 from docker.errors import ContainerError
+
 import conftest
 from casperlabsnode_testing.common import (
-    random_string,
-    make_tempfile,
-    make_tempdir,
     TestingContext,
+    make_tempdir,
+    make_tempfile,
+    random_string,
 )
-from casperlabsnode_testing.wait import (
-    wait_for_node_started,
-)
+from casperlabsnode_testing.wait import wait_for_node_started
 
-from multiprocessing import Queue, Process
-from queue import Empty
-
-from typing import Dict, List, Tuple, Union, TYPE_CHECKING, Optional, Generator, Callable
 
 if TYPE_CHECKING:
     from conftest import KeyPair
@@ -152,10 +160,14 @@ class Node:
 
     def get_metrics(self) -> Tuple[int, str]:
         cmd = 'curl -s http://localhost:40403/metrics'
-        return self.exec_run(cmd=cmd)
+        output = self.exec_run(cmd=cmd)
+        logging.info("THE curl output in get_metrics is :{}".format(repr(output)))
+        return output
 
     def get_metrics_strict(self):
-        return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
+        output = self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
+        logging.info("THE curl output in get_metrics_strict is :{}".format(repr(output)))
+        return output
 
     def cleanup(self) -> None:
         self.container.remove(force=True, v=True)
@@ -234,15 +246,20 @@ class Node:
             output = self.docker_client.containers.run(
                 image="io.casperlabs/client:{}".format(TAG),
                 auto_remove=True,
-                name="client-{}".format(TAG),
+                name="client-{}-{}".format(
+                    ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(5)),
+                    TAG
+                ),
+                user='root',
                 command=command,
                 network=self.network,
-                volumes=volumes
-            ).decode("utf-8")
-            logging.debug("OUTPUT {}".format(output))
-            return output
+                volumes=volumes,
+                detach=True
+                )
+            logging.debug("OUTPUT {}".format(output.logs()))
+            return output.logs()
         except ContainerError as err:
-            logging.warning("EXITED code={} command='{}' output='{}'".format(err.exit_status, err.command, err.stderr))
+            logging.warning("EXITED code={} command='{}' stderr='{}'".format(err.exit_status, err.command, err.stderr))
             raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
 
     def deploy(self, session_code: str, payment_code:str="payment.wasm",

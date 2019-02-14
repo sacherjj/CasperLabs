@@ -1,4 +1,4 @@
 #!/bin/bash
 mkdir /root/.casperlabs
 ./engine-grpc-server /root/.casperlabs/.casper-node.sock &
-./node "$@"
+./casperlabs-node "$@"

@@ -52,7 +52,7 @@ class HasAtLeastPeers:
     def __init__(self, node: 'Node', minimum_peers_number: int) -> None:
         self.node = node
         self.minimum_peers_number = minimum_peers_number
-        self.metric_regex = re.compile(r"^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+        self.metric_regex = re.compile(r"^casperlabs_comm_discovery_kademlia_peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
 
     def __str__(self) -> str:
         args = ', '.join(repr(a) for a in (self.node.name, self.minimum_peers_number))
@@ -62,6 +62,7 @@ class HasAtLeastPeers:
         output = self.node.get_metrics_strict()
         match = self.metric_regex.search(output)
         if match is None:
+            logging.error("HasAtLeastPeers failed. The minimum peers are :{}".format(self.minimum_peers_number))
             return False
         peers = int(match[1])
         return peers >= self.minimum_peers_number
