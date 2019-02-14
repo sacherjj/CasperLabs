@@ -265,7 +265,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         _ <- Log[F].info(
               s"${p.size} parents out of ${orderedHeads.size} latest blocks will be used."
             )
-        r                <- remDeploys(dag, p)
+        r                <- remainingDeploys(dag, p)
         bondedValidators = bonds(p.head).map(_.validator).toSet
         //We ensure that only the justifications given in the block are those
         //which are bonded validators in the chosen parent. This is safe because
@@ -296,7 +296,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     } yield blockMessage
 
   // TODO: Optimize for large number of deploys accumulated over history
-  private def remDeploys(
+  private def remainingDeploys(
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage]
   ): F[Seq[Deploy]] =
@@ -337,7 +337,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
                       )
       (preStateHash, processedDeploys) = processedHash
       deployLookup                     = processedDeploys.zip(r).toMap
-      commutingEffects                 = ExecEngineUtil.commutingEffects(processedDeploys)
+      commutingEffects                 = ExecEngineUtil.findCommutingEffects(processedDeploys)
       deploysForBlock = commutingEffects.map(eff => {
         val deploy = deployLookup(ipc.DeployResult(ipc.DeployResult.Result.Effects(eff)))
         protocol.ProcessedDeploy(

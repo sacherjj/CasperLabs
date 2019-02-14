@@ -64,7 +64,7 @@ object ExecEngineUtil {
 
   //TODO: actually find which ones commute
   //TODO: How to handle errors?
-  def commutingEffects(processedDeploys: Seq[DeployResult]): Seq[ExecutionEffect] =
+  def findCommutingEffects(processedDeploys: Seq[DeployResult]): Seq[ExecutionEffect] =
     processedDeploys.flatMap {
       case DeployResult(DeployResult.Result.Empty)        => None
       case DeployResult(DeployResult.Result.Error(_))     => None
@@ -86,7 +86,7 @@ object ExecEngineUtil {
                         transforms
                       )
       (prestate, processedDeploys) = processedHash
-    } yield (prestate, commutingEffects(processedDeploys).flatMap(_.transformMap))
+    } yield (prestate, findCommutingEffects(processedDeploys).flatMap(_.transformMap))
 
   private def computePrestate[F[_]: Sync: ExecutionEngineService](
       parents: List[BlockMessage],
