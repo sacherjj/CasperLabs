@@ -283,7 +283,7 @@ lazy val node = (project in file("node"))
        * https://access.redhat.com/articles/1299013
        * Red Hat will skip Java SE 9 and 10, and ship an OpenJDK distribution based on Java SE 11.
        */
-      "java-1.8.0-openjdk-headless >= 1.8.0.171",
+      "java-11-openjdk-headless >= 11.0.1.13",
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
     )
@@ -401,7 +401,7 @@ lazy val client = (project in file("client"))
        * https://access.redhat.com/articles/1299013
        * Red Hat will skip Java SE 9 and 10, and ship an OpenJDK distribution based on Java SE 11.
        */
-      "java-1.8.0-openjdk-headless >= 1.8.0.171",
+      "java-11-openjdk-headless >= 11.0.1.13",
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
     ),
