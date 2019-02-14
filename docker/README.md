@@ -51,7 +51,7 @@ Note that you'll need to run `docker login` with your DockerHub username and pas
 
 ## Visualizing the DAG
 
-You'll need to `sudo apt-get install graphviz` to run the following code.
+You'll need to `sudo apt-get install graphviz` to run the following code:
 
 ```sh
 ./client.sh node-0 vdag --showJustificationlines --depth 25 \
@@ -59,6 +59,12 @@ You'll need to `sudo apt-get install graphviz` to run the following code.
     && xdg-open /tmp/cl-dag.png
 ```
 
+Alterinatively if you don't wish to install `graphviz` on your machine you can use just the browser:
+
+```sh
+google-chrome --new-window https://dreampuf.github.io/GraphvizOnline/#\
+    $(python -c "import urllib; print urllib.quote('''$(./client.sh node-0 vdag --showJustificationlines --depth 25)''')")
+```
 
 ## Shut down the network
 
