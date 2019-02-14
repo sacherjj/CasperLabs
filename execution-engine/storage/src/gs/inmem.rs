@@ -15,15 +15,15 @@ use std::sync::Arc;
 /// store - stores a snapshot of the global state at the specific block
 /// history - stores all the snapshots of the global state
 pub struct InMemGS {
-    active_state: Arc<Mutex<HashMap<Key, Value>>>,
-    history: Arc<Mutex<HashMap<[u8; 32], HashMap<Key, Value>>>>,
+    active_state: Mutex<HashMap<Key, Value>>,
+    history: Mutex<HashMap<[u8; 32], HashMap<Key, Value>>>,
 }
 
 impl InMemGS {
     pub fn new() -> InMemGS {
         InMemGS {
-            active_state: Arc::new(Mutex::new(HashMap::new())),
-            history: Arc::new(Mutex::new(HashMap::new())),
+            active_state: Mutex::new(HashMap::new()),
+            history: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -121,8 +121,8 @@ mod tests {
         let mut history = HashMap::new();
         history.insert(EMPTY_ROOT, map);
         InMemGS {
-            active_state: Arc::new(Mutex::new(HashMap::new())),
-            history: Arc::new(Mutex::new(history)),
+            active_state: Mutex::new(HashMap::new()),
+            history: Mutex::new(history),
         }
     }
 
