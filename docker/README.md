@@ -4,7 +4,7 @@ The idea is to create many nodes with commands like `make node-0/up`, `make node
 
 Then we can slow down the network between `node-*` containers with https://alexei-led.github.io/post/pumba_docker_netem/ and see what happens.
 
-To deploy we'll have to `docker run --network casperlabs io.casperlabs/client` and pass it the WASM files; `client.sh` provides is a convenience wrapper for that.
+To deploy we'll have to `docker run --network casperlabs io.casperlabs/client` and pass it the WASM files. `client.sh` provides is a convenience wrapper for interacting with the network; run `./client.sh node-0 --help` to see what it can do.
 
 
 ## Build docker images
@@ -47,6 +47,17 @@ To see some of the metrics in [Grafana](https://grafana.com/) go to http://local
 You can slow the network down a bit by running `make delay` in one terminal while issuing deploys in another one. You should see that now it takes longer for nodes to catch up after a block is created; even just sending the deploy is going to take a bit more time.
 
 Note that you'll need to run `docker login` with your DockerHub username and password to be able to pull 3rd party images.
+
+
+## Visualizing the DAG
+
+You'll need to `sudo apt-get install graphviz` to run the following code.
+
+```sh
+./client.sh node-0 vdag --showJustificationlines --depth 25 \
+    | dot -Tpng -o /tmp/cl-dag.png \
+    && xdg-open /tmp/cl-dag.png
+```
 
 
 ## Shut down the network

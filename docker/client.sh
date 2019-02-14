@@ -14,6 +14,10 @@ set -e
 #     --session /data/helloname.wasm \
 #     --payment /data/helloname.wasm
 
+if [ $# -lt 2 ]; then
+    echo "usage: ./client.sh <node-id> <command> [OPTION...]" && exit 1
+fi
+
 NODE=$1; shift
 CMD=$1; shift
 
@@ -28,15 +32,18 @@ case "$CMD" in
             --host $NODE --port 40401 deploy $@
         ;;
 
-    "propose")
+    --*)
+        # --help doesn't like --host and --port
         docker run --rm \
             --network casperlabs \
             io.casperlabs/client:latest \
-            --host $NODE --port 40401 propose
+            $CMD
         ;;
 
     *)
-        echo "usage: ./client.sh <node-id> [deploy|propose] [OPTION...]"
-        exit 1
+        docker run --rm \
+            --network casperlabs \
+            io.casperlabs/client:latest \
+            --host $NODE --port 40401 $CMD $@
         ;;
 esac
