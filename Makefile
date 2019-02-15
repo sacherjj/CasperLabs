@@ -52,6 +52,10 @@ cargo-publish-all: \
 
 cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{print $$1"/clean"}')
 
+# Sometimes some transitive dependencies don't update and we can't compile until we run update explicitly.
+cargo/update:
+	cd execution-engine/comm && cargo update
+
 %/Cargo.toml/clean:
 	cd $* && cargo clean
 
@@ -123,6 +127,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		.make/protoc-install \
 		$(shell find . -type f -iregex '.*\.proto')
 	cd execution-engine/comm && \
+	cargo update && \
 	cargo run --bin grpc-protoc
 	touch $@
 
@@ -132,6 +137,7 @@ execution-engine/comm/target/release/engine-grpc-server: \
 		.make/rust-proto \
 		$(shell find . -type f -iregex '.*/src/.*\.rs')
 	cd execution-engine/comm && \
+	cargo update && \
 	cargo build --release
 
 # Miscellaneous tools to install once.

@@ -9,7 +9,7 @@ wasmi = "0.4.2"
 parity-wasm = "0.31"
 pwasm-utils = "0.6"
 storage = { path = "../storage" }
-common = { path = "../common", features = ["std"] }
+common = { path = "../common", features = ["std"], package = "casperlabs-contract-ffi" }
 wasm-prep = { path = "../wasm-prep" }
 vm = { path = "../vm" }
 clap = "2.32.0"
