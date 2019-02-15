@@ -8,16 +8,16 @@ use error::Error;
 use gs::*;
 use history::*;
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-pub struct InMemGS(Arc<HashMap<Key, Value>>);
+pub struct InMemGS(Arc<BTreeMap<Key, Value>>);
 
 /// In memory representation of the versioned global state
 /// store - stores a snapshot of the global state at the specific block
 /// history - stores all the snapshots of the global state
 pub struct InMemHist {
-    history: HashMap<[u8; 32], Arc<HashMap<Key, Value>>>,
+    history: HashMap<[u8; 32], Arc<BTreeMap<Key, Value>>>,
 }
 
 impl InMemHist {
@@ -29,7 +29,7 @@ impl InMemHist {
 
     //TODO(mateusz.gorski): I know this is not efficient and we should be caching these values
     //but for the time being it should be enough.
-    fn get_root_hash(state: &HashMap<Key, Value>) -> [u8; 32] {
+    fn get_root_hash(state: &BTreeMap<Key, Value>) -> [u8; 32] {
         let mut data: Vec<u8> = Vec::new();
         for (k, v) in state.iter() {
             data.extend(k.to_bytes());
@@ -75,7 +75,7 @@ impl History<InMemGS> for InMemHist {
                 .get(&prestate_hash)
                 .ok_or(Error::RootNotFound(prestate_hash))?;
 
-            Ok::<HashMap<Key, Value>, Error>(HashMap::clone(&arc))
+            Ok::<BTreeMap<Key, Value>, Error>(BTreeMap::clone(&arc))
         }?;
 
         effects
