@@ -52,10 +52,6 @@ cargo-publish-all: \
 
 cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{print $$1"/clean"}')
 
-# Sometimes some transitive dependencies don't update and we can't compile until we run update explicitly.
-cargo/update:
-	cd execution-engine/comm && cargo update
-
 %/Cargo.toml/clean:
 	cd $* && cargo clean
 
@@ -118,7 +114,7 @@ cargo/update:
 	mkdir -p $(dir $@) && touch $@
 
 .make/cargo-package/%: $(shell find $* -type f -iregex ".*/Cargo\.toml\|.*\.rs") .make/rustup-update
-	cd $* && cargo package
+	cd $* && cargo update && cargo package
 	mkdir -p $(dir $@) && touch $@
 
 
