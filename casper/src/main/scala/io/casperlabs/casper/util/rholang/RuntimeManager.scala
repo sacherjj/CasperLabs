@@ -36,7 +36,7 @@ class RuntimeManager[F[_]: Concurrent] private (
       time: Option[Long] = None
   )(implicit log: Log[F]): F[(StateHash, Seq[InternalProcessedDeploy])] =
     //replaced by ExecEngineUtil
-    (ByteString.EMPTY, Seq.empty[InternalProcessedDeploy]).pure
+    (ByteString.copyFrom(Array.fill(32)(0.toByte)), Seq.empty[InternalProcessedDeploy]).pure
 
   // todo this should be complemented
   def computeBonds(hash: StateHash)(implicit log: Log[F]): F[Seq[Bond]] =
