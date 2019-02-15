@@ -10,9 +10,7 @@ use std::iter::Iterator;
 use clap::{App, Arg};
 
 use execution_engine::engine::EngineState;
-use storage::gs::inmem::InMemGS;
-use storage::gs::lmdb::LmdbGs;
-use storage::gs::ExecutionEffect;
+use storage::gs::inmem::InMemHist;
 
 #[derive(Debug)]
 struct Task {
@@ -77,7 +75,7 @@ fn main() {
         address
     };
 
-    let mut poststate_hash = [0u8; 32];
+    let mut state_hash = [0u8; 32];
 
     let gas_limit: u64 = matches
         .value_of("gas-limit")
@@ -91,29 +89,29 @@ fn main() {
     let path = std::path::Path::new("./tmp/");
     //TODO: Better error handling?
     //    let gs = LmdbGs::new(&path).unwrap();
-    let gs = InMemGS::new();
+    let gs = InMemHist::new(&state_hash);
     let engine_state = {
         let state = EngineState::new(gs);
-        let post_hash = state.with_mocked_account(account_addr);
+        let post_hash = state.with_mocked_account(state_hash, account_addr);
         println!("Hash after creating mock account {:?}", post_hash);
-        poststate_hash = post_hash;
+        state_hash = post_hash;
         state
     };
 
     for wasm_bytes in wasm_files.iter() {
-        println!("Pre state hash: {:?}", poststate_hash);
+        println!("Pre state hash: {:?}", state_hash);
         let result =
             engine_state.run_deploy(&wasm_bytes.bytes, account_addr, timestamp, nonce, state_hash, &gas_limit);
         match result {
             Ok(effects) => {
                 let res = engine_state
-                    .apply_effect(effects.1)
+                    .apply_effect(state_hash, effects.1)
                     .expect(&format!("Error when applying effects."));
                 println!(
                     "Result for file {}: Success! New post state hash: {:?}",
                     wasm_bytes.path, res
                 );
-                poststate_hash = res; // we need to keep updating the post state hash after each deploy
+                state_hash = res; // we need to keep updating the post state hash after each deploy
             }
             Err(_) => println!("Result for file {}: {:?}", wasm_bytes.path, result),
         }

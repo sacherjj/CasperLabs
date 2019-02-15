@@ -78,7 +78,7 @@ where
 {
     // To run, contracts need an existing account.
     // This function puts artificial entry in the GlobalState.
-    pub fn with_mocked_account(&self, account_addr: [u8; 20]) -> [u8; 32] {
+    pub fn with_mocked_account(&self, prestate_hash: [u8;32], account_addr: [u8; 20]) -> [u8; 32] {
         let transformations = {
             let account = value::Account::new([48u8; 32], 0, BTreeMap::new());
             let transform = Transform::Write(value::Value::Acct(account));
@@ -88,7 +88,7 @@ where
         };
         self.state
             .lock()
-            .commit(transformations)
+            .commit(prestate_hash, transformations)
             .expect("Creation of mocked account should be a success.")
     }
 
@@ -124,8 +124,8 @@ where
         .map_err(|e| e.into())
     }
 
-    pub fn apply_effect(&self, effects: HashMap<Key, Transform>) -> Result<[u8; 32], Error> {
-        self.state.lock().commit(effects).map_err(|err| err.into())
+    pub fn apply_effect(&self, prestate_hash: [u8;32], effects: HashMap<Key, Transform>) -> Result<[u8; 32], Error> {
+        self.state.lock().commit(prestate_hash, effects).map_err(|err| err.into())
     }
 
     //TODO: inject gas counter, limit stack size etc
