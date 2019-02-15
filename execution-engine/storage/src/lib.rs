@@ -1,7 +1,6 @@
 extern crate blake2;
 extern crate common;
 extern crate parking_lot;
-extern crate rand;
 extern crate rkv;
 extern crate wasmi;
 

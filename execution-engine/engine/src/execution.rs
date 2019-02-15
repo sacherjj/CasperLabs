@@ -20,6 +20,9 @@ use parity_wasm::elements::{Error as ParityWasmError, Module};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
+use rand_chacha::ChaChaRng;
+use rand::{RngCore, SeedableRng};
+use byteorder::{ByteOrder, LittleEndian};
 
 #[derive(Debug)]
 pub enum Error {
@@ -129,10 +132,10 @@ impl<'a> RuntimeContext<'a> {
     }
 }
 
-pub struct Runtime<'a, 'b, R: DbReader> {
+pub struct Runtime<'a, R: DbReader> {
     args: Vec<Vec<u8>>,
     memory: MemoryRef,
-    state: &'a mut TrackingCopy<'b, R>,
+    state: &'a mut TrackingCopy<R>,
     module: Module,
     result: Vec<u8>,
     host_buf: Vec<u8>,
@@ -140,16 +143,21 @@ pub struct Runtime<'a, 'b, R: DbReader> {
     gas_counter: u64,
     gas_limit: &'a u64,
     context: RuntimeContext<'a>,
+    rng: ChaChaRng,
 }
 
-impl<'a, 'b, R: DbReader> Runtime<'a, 'b, R> {
+impl<'a, R: DbReader> Runtime<'a, R> {
     pub fn new(
         memory: MemoryRef,
-        state: &'a mut TrackingCopy<'b, R>,
+        state: &'a mut TrackingCopy<R>,
         module: Module,
         gas_limit: &'a u64,
+        account_addr: [u8;20],
+        nonce: i64,
+        timestamp: i64,
         context: RuntimeContext<'a>,
     ) -> Self {
+        let rng = create_rng(&account_addr, timestamp, nonce);
         Runtime {
             args: Vec::new(),
             memory,
@@ -161,6 +169,7 @@ impl<'a, 'b, R: DbReader> Runtime<'a, 'b, R> {
             gas_counter: 0,
             gas_limit,
             context,
+            rng,
         }
     }
 
@@ -442,7 +451,9 @@ impl<'a, 'b, R: DbReader> Runtime<'a, 'b, R> {
     }
 
     pub fn new_uref(&mut self, key_ptr: u32) -> Result<(), Trap> {
-        let key = self.state.new_uref();
+        let mut key = [0u8;32];
+        self.rng.fill_bytes(&mut key);
+        let key = Key::URef(key);
         self.context.insert_uref(key);
         self.memory
             .set(key_ptr, &key.to_bytes())
@@ -472,7 +483,7 @@ const GAS_FUNC_INDEX: usize = 14;
 const HAS_UREF_FUNC_INDEX: usize = 15;
 const ADD_UREF_FUNC_INDEX: usize = 16;
 
-impl<'a, 'b, R: DbReader> Externals for Runtime<'a, 'b, R> {
+impl<'a, R: DbReader> Externals for Runtime<'a, R> {
     fn invoke_index(
         &mut self,
         index: usize,
@@ -819,6 +830,7 @@ fn sub_call<R: DbReader>(
             account: current_runtime.context.account,
             base_key: key,
         },
+        rng: current_runtime.rng.clone(),
     };
 
     let result = instance.invoke_export("call", &[], &mut runtime);
@@ -843,11 +855,22 @@ fn sub_call<R: DbReader>(
     }
 }
 
-//TODO: add post state hash as a parameter.
-//It's required
+fn create_rng(account_addr: &[u8; 20], timestamp: i64, nonce: i64) -> ChaChaRng {
+    let mut seed: [u8; 32] = [0u8;32]; 
+    let mut data: Vec<u8> = Vec::new();
+    let hasher = VarBlake2b::new(32).unwrap();
+    data.extend(account_addr);
+    LittleEndian::write_i64(&mut data, timestamp);
+    LittleEndian::write_i64(&mut data, nonce);
+    hasher.variable_result(|hash| seed.clone_from_slice(hash));
+    ChaChaRng::from_seed(seed)
+}
+
 pub fn exec<R: DbReader, G: History<R>>(
     parity_module: Module,
     account_addr: [u8; 20],
+    timestamp: i64,
+    nonce: i64,
     prestate_hash: [u8; 32],
     gas_limit: &u64,
     gs: &G,
@@ -861,6 +884,7 @@ pub fn exec<R: DbReader, G: History<R>>(
     for r in account.urefs_lookup().values() {
         known_urefs.insert(*r);
     }
+    let rng = create_rng(&account_addr, timestamp, nonce);
     let mut runtime = Runtime {
         args: Vec::new(),
         memory,
@@ -877,6 +901,7 @@ pub fn exec<R: DbReader, G: History<R>>(
             account: &account,
             base_key: acct_key,
         },
+        rng: rng,
     };
     let _ = instance.invoke_export("call", &[], &mut runtime)?;
 

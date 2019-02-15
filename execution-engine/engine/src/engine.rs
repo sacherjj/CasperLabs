@@ -106,6 +106,8 @@ where
         &self,
         module_bytes: &[u8],
         address: [u8; 20],
+        timestamp: i64,
+        nonce: i64,
         prestate_hash: [u8; 32],
         gas_limit: &u64,
     ) -> Result<ExecutionEffect, Error> {
@@ -113,6 +115,8 @@ where
         exec(
             module,
             address,
+            timestamp,
+            nonce,
             prestate_hash,
             &gas_limit,
             &*self.state.lock(),

@@ -3,7 +3,6 @@ use common::value::Value;
 use error::Error;
 use gs::{DbReader, ExecutionEffect};
 use op::Op;
-use rand::{FromEntropy, RngCore};
 use std::collections::{BTreeMap, HashMap};
 use transform::Transform;
 use utils::add;
@@ -13,7 +12,6 @@ pub struct TrackingCopy<R: DbReader> {
     cache: HashMap<Key, Value>,
     ops: HashMap<Key, Op>,
     fns: HashMap<Key, Transform>,
-    rng: rand::rngs::StdRng,
 }
 
 impl<R: DbReader> TrackingCopy<R> {
@@ -23,14 +21,7 @@ impl<R: DbReader> TrackingCopy<R> {
             cache: HashMap::new(),
             ops: HashMap::new(),
             fns: HashMap::new(),
-            rng: rand::rngs::StdRng::from_entropy(),
         }
-    }
-
-    pub fn new_uref(&mut self) -> Key {
-        let mut key = [0u8; 32];
-        self.rng.fill_bytes(&mut key);
-        Key::URef(key)
     }
 
     pub fn get(&mut self, k: &Key) -> Result<Value, Error> {
