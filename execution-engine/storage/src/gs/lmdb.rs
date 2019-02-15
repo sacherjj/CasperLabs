@@ -2,7 +2,7 @@ use common::bytesrepr::{deserialize, ToBytes};
 use common::key::Key;
 use common::value::Value;
 use error::Error;
-use gs::{DbReader, ExecutionEffect, TrackingCopy};
+use gs::{DbReader, TrackingCopy};
 use history::*;
 use rkv::store::single::SingleStore;
 use rkv::{Manager, Rkv, StoreOptions};
@@ -100,33 +100,14 @@ impl DbReader for LmdbGs {
 }
 
 impl History<Self> for LmdbGs {
-    fn checkout(&self, prestate_hash: [u8; 32]) -> Result<TrackingCopy<LmdbGs>, Error> {
-        Ok(TrackingCopy::new(self))
+    fn checkout(&self, _prestate_hash: [u8; 32]) -> Result<TrackingCopy<LmdbGs>, Error> {
+        unimplemented!("LMDB History not implemented")
     }
 
-    fn commit(&self, effects: HashMap<Key, Transform>) -> Result<[u8; 32], Error> {
-        effects
-            .into_iter()
-            .try_fold((), |_, (k, t)| {
-                let maybe_curr = self.get(&k);
-                match maybe_curr {
-                    Err(Error::KeyNotFound { .. }) => match t {
-                        Transform::Write(v) => self.write_single(k, &v),
-                        _ => Err(Error::KeyNotFound { key: k }),
-                    },
-                    Ok(curr) => {
-                        let new_value = t.apply(curr)?;
-                        self.write_single(k, &new_value)
-                    }
-                    Err(e) => Err(e),
-                }
-            })
-            .and_then(|_| self.get_root_hash())
+    fn commit(&mut self, _prestate_hash: [u8; 32], _effects: HashMap<Key, Transform>) -> Result<[u8; 32], Error> {
+      unimplemented!("LMDB History not implemented")
     }
 
-    fn get_root_hash(&self) -> Result<[u8; 32], Error> {
-        Ok([0u8; 32])
-    }
 }
 
 impl fmt::Debug for LmdbGs {
