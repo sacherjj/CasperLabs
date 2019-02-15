@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.{Applicative, Monad}
 import cats.implicits._
+import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.util.TopologicalSortUtil
 import io.casperlabs.blockstorage.{
@@ -13,6 +14,7 @@ import io.casperlabs.blockstorage.{
   BlockStore
 }
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.Validate.ValidateErrorWrapper
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
@@ -24,7 +26,7 @@ import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.ipc.ExecutionEffect
+import io.casperlabs.ipc.{ExecutionEffect, TransformEntry}
 import io.casperlabs.models.{InternalErrors, InternalProcessedDeploy}
 import io.casperlabs.shared._
 import monix.eval.Task
@@ -35,6 +37,7 @@ import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.ipc
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
@@ -407,6 +410,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         .sum
         .toFloat / weightMapTotal(weights))
 
+  implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
+
   /*
    * TODO: Pass in blockDag. We should only call _blockDag.get at one location.
    * This would require returning the updated block DAG with the block status.
@@ -414,65 +419,58 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
    * We want to catch equivocations only after we confirm that the block completing
    * the equivocation is otherwise valid.
    */
-  private def attemptAdd(b: BlockMessage): F[BlockStatus] =
-    for {
-      _                    <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
-      dag                  <- blockDag
-      postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
-      s                    <- Cell[F, CasperState].read
-      processedHash <- postValidationStatus.traverse {
-                        case _ =>
-                          //temporary function for getting transforms for blocks
-                          val f = (b: BlockMetadata) =>
-                            s.transforms
-                              .getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry])
-                              .pure[F]
-                          ExecEngineUtil
-                            .effectsForBlock(b, dag, f)
-                            .attempt
-                            .map(_.bimap(_ => InvalidTransaction, identity))
-                      }
-      blockEffects = processedHash.joinRight.fold[Seq[ipc.TransformEntry]](_ => Seq.empty, {
-        case (_, effs) => effs
-      })
-      postTransactionsCheckStatus <- processedHash.joinRight.traverse {
-                                      case (preStateHash, blockEffects) =>
-                                        Validate.transactions[F](
-                                          b,
-                                          dag,
-                                          preStateHash,
-                                          blockEffects
-                                        )
-                                    }
-      postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
-                               _ => Validate.bondsCache[F](b, ProtoUtil.bonds(genesis))
-                             )
-      postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(
-                                          _ =>
-                                            Validate
-                                              .neglectedInvalidBlock[F](
-                                                b,
-                                                s.invalidBlockTracker
-                                              )
-                                        )
-      postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
-                                               .traverse(
-                                                 _ =>
-                                                   EquivocationDetector
-                                                     .checkNeglectedEquivocationsWithUpdate[F](
-                                                       b,
-                                                       dag,
-                                                       genesis
-                                                     )
-                                               )
-      postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
-                                      _ =>
-                                        EquivocationDetector
-                                          .checkEquivocations[F](s.dependencyDag, b, dag)
-                                    )
-      status = postEquivocationCheckStatus.joinRight.merge
-      _      <- addEffects(status, b, blockEffects)
-    } yield status
+  private def attemptAdd(b: BlockMessage): F[BlockStatus] = {
+    val validationStatus = (for {
+      _   <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
+      dag <- blockDag
+      _   <- Validate.blockSummary[F](b, genesis, dag, shardId)
+      s   <- Cell[F, CasperState].read
+      //temporary function for getting transforms for blocks
+      f = (b: BlockMetadata) =>
+        Sync[F].delay(
+          s.transforms
+            .getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry])
+        )
+      processedHash <- ExecEngineUtil
+                        .effectsForBlock(b, dag, f)
+                        .recoverWith {
+                          case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
+                        }
+      (preStateHash, blockEffects) = processedHash
+      _ <- Validate.transactions[F](
+            b,
+            dag,
+            preStateHash,
+            blockEffects
+          )
+      _ <- Validate.bondsCache[F](b, ProtoUtil.bonds(genesis))
+      _ <- Validate
+            .neglectedInvalidBlock[F](
+              b,
+              s.invalidBlockTracker
+            )
+      _ <- EquivocationDetector
+            .checkNeglectedEquivocationsWithUpdate[F](
+              b,
+              dag,
+              genesis
+            )
+      _ <- EquivocationDetector.checkEquivocations[F](s.dependencyDag, b, dag)
+    } yield blockEffects).attempt
+
+    validationStatus.flatMap {
+      case Right(effects)                      => addEffects(Valid, b, effects).as(Valid)
+      case Left(ValidateErrorWrapper(invalid)) => addEffects(invalid, b, Seq.empty).as(invalid)
+      case Left(unexpected) =>
+        for {
+          _ <- Log[F].error(
+                s"Unexpected exception during validation of the block ${Base16.encode(b.blockHash.toByteArray)}",
+                unexpected
+              )
+          _ <- Sync[F].raiseError[BlockStatus](unexpected)
+        } yield BlockException(unexpected)
+    }
+  }
 
   // TODO: Handle slashing
   private def addEffects(
