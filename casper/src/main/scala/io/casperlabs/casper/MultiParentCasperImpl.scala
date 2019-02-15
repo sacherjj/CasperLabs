@@ -396,7 +396,6 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     } yield
       (tracker
         .map(_.equivocator)
-        .toSet
         .flatMap(weights.get)
         .sum
         .toFloat / weightMapTotal(weights))
