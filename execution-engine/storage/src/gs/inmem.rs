@@ -21,8 +21,15 @@ pub struct InMemHist {
 
 impl InMemHist {
     pub fn new(empty_root_hash: &[u8; 32]) -> InMemHist {
+        InMemHist::new_initialized(empty_root_hash, BTreeMap::new())
+    }
+
+    pub fn new_initialized(
+        empty_root_hash: &[u8; 32],
+        init_state: BTreeMap<Key, Value>,
+    ) -> InMemHist {
         let mut hist: HashMap<[u8; 32], Arc<BTreeMap<Key, Value>>> = HashMap::new();
-        hist.insert(empty_root_hash.clone(), Arc::new(BTreeMap::new()));
+        hist.insert(empty_root_hash.clone(), Arc::new(init_state));
         InMemHist { history: hist }
     }
 

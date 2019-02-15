@@ -89,14 +89,9 @@ fn main() {
     //let path = std::path::Path::new("./tmp/");
     //TODO: Better error handling?
     //    let gs = LmdbGs::new(&path).unwrap();
-    let gs = InMemHist::new(&state_hash);
-    let engine_state = {
-        let state = EngineState::new(gs);
-        let post_hash = state.with_mocked_account(state_hash, account_addr);
-        println!("Hash after creating mock account {:?}", post_hash);
-        state_hash = post_hash;
-        state
-    };
+    let init_state = storage::gs::mocked_account(account_addr);
+    let gs = InMemHist::new_initialized(&state_hash, init_state);
+    let engine_state = EngineState::new(gs);
 
     for wasm_bytes in wasm_files.iter() {
         println!("Pre state hash: {:?}", state_hash);

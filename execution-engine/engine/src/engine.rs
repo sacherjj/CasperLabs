@@ -1,9 +1,7 @@
 use common::key::Key;
-use common::value;
 use execution::{exec, Error as ExecutionError};
 use parity_wasm::elements::Module;
 use parking_lot::Mutex;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use storage::error::Error as StorageError;
@@ -76,22 +74,6 @@ where
     G: History<R>,
     R: DbReader,
 {
-    // To run, contracts need an existing account.
-    // This function puts artificial entry in the GlobalState.
-    pub fn with_mocked_account(&self, prestate_hash: [u8; 32], account_addr: [u8; 20]) -> [u8; 32] {
-        let transformations = {
-            let account = value::Account::new([48u8; 32], 0, BTreeMap::new());
-            let transform = Transform::Write(value::Value::Acct(account));
-            let mut tf_map = HashMap::new();
-            tf_map.insert(Key::Account(account_addr), transform);
-            tf_map
-        };
-        self.state
-            .lock()
-            .commit(prestate_hash, transformations)
-            .expect("Creation of mocked account should be a success.")
-    }
-
     pub fn new(state: G) -> EngineState<R, G> {
         EngineState {
             state: Mutex::new(state),
