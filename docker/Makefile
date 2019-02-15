@@ -37,7 +37,10 @@ node-%: .casperlabs/genesis
 	echo CL_VALIDATOR_PRIVATE_KEY=$(shell cat "$(KEY_FILE)") >> $(ENV)
 
 	@# Link Dockerfile so we can change it and reapply.
-	ln -s ${PWD}/template/docker-compose.yml node-$(N)/docker-compose.yml
+	@#ln -s ${PWD}/template/docker-compose.yml node-$(N)/docker-compose.yml
+	@#Alternatively just make a copy so you can edit it independently.
+	cp ${PWD}/template/docker-compose.yml node-$(N)/docker-compose.yml
+
 
 # Start node.
 node-%/up: node-% .make/docker/network
