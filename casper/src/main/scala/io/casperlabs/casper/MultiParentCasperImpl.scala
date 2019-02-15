@@ -1,12 +1,11 @@
 package io.casperlabs.casper
 
+import cats.Applicative
 import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.{Applicative, Monad}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.util.TopologicalSortUtil
 import io.casperlabs.blockstorage.{
   BlockDagRepresentation,
   BlockDagStorage,
@@ -19,25 +18,17 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
-import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.rholang._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.ipc.{ExecutionEffect, TransformEntry}
-import io.casperlabs.models.{InternalErrors, InternalProcessedDeploy}
-import io.casperlabs.shared._
-import monix.eval.Task
-import monix.execution.Scheduler
-import monix.execution.atomic.AtomicAny
-import io.casperlabs.shared.AttemptOps._
-import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.ipc
+import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl

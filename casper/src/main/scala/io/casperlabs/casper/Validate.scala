@@ -7,20 +7,15 @@ import cats.{Applicative, Functor, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
+import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage, Bond, Justification}
 import io.casperlabs.casper.util.ProtoUtil.bonds
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
-import io.casperlabs.shared._
-import monix.execution.Scheduler
 import io.casperlabs.ipc
+import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.blockstorage.BlockMetadata
-import io.casperlabs.casper.protocol.Bond
 
 import scala.util.{Success, Try}
 
