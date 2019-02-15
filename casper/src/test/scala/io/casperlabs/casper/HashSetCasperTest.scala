@@ -24,7 +24,7 @@ import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps.RichPath
-import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.smartcontracts.{ExecutionEngineService, ExecutionEngineServiceInstances}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -1116,7 +1116,7 @@ object HashSetCasperTest {
   ): BlockMessage = {
     implicit val logEff         = new LogStub[Task]()
     val initial                 = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "casperlabs")
-    val casperSmartContractsApi = ExecutionEngineService.simpleApi[Task]()
+    val casperSmartContractsApi = ExecutionEngineServiceInstances.simpleApi[Task]()
     val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
     val emptyStateHash          = casperSmartContractsApi.emptyStateHash
     val validators              = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq

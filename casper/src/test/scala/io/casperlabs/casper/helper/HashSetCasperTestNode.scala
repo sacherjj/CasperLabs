@@ -35,7 +35,7 @@ import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.{Cell, Log}
 import io.casperlabs.shared.PathOps.RichPath
-import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.smartcontracts.{ExecutionEngineService, ExecutionEngineServiceInstances}
 import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -77,7 +77,7 @@ class HashSetCasperTestNode[F[_]](
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
-  val casperSmartContractsApi = ExecutionEngineService.simpleApi[F]()
+  val casperSmartContractsApi = ExecutionEngineServiceInstances.simpleApi[F]()
 
   val bonds = genesis.body
     .flatMap(_.state.map(_.bonds.map(b => b.validator.toByteArray -> b.stake).toMap))
