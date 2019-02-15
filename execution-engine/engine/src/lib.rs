@@ -7,6 +7,9 @@ extern crate storage;
 extern crate vm;
 extern crate wasm_prep;
 extern crate wasmi;
+extern crate byteorder;
+extern crate rand_chacha;
+extern crate rand;
 
 pub mod argsparser;
 pub mod engine;

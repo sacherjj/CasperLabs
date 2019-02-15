@@ -1,10 +1,12 @@
+extern crate blake2;
 extern crate common;
-extern crate rand;
+extern crate parking_lot;
 extern crate rkv;
 extern crate wasmi;
 
 pub mod error;
 pub mod gs;
+pub mod history;
 pub mod op;
 pub mod transform;
 mod utils;
@@ -20,3 +22,4 @@ extern crate proptest;
 #[cfg(test)]
 extern crate gens;
 
+type TreeRootHash = [u8; 32];

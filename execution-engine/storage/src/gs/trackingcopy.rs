@@ -3,37 +3,28 @@ use common::value::Value;
 use error::Error;
 use gs::{DbReader, ExecutionEffect};
 use op::Op;
-use rand::{FromEntropy, RngCore};
 use std::collections::{BTreeMap, HashMap};
 use transform::Transform;
 use utils::add;
 
-pub struct TrackingCopy<'a, R: DbReader> {
-    reader: &'a R,
+pub struct TrackingCopy<R: DbReader> {
+    reader: R,
     cache: HashMap<Key, Value>,
     ops: HashMap<Key, Op>,
     fns: HashMap<Key, Transform>,
-    rng: rand::rngs::StdRng,
 }
 
-impl<'a, R: DbReader> TrackingCopy<'a, R> {
-    pub fn new(reader: &'a R) -> TrackingCopy<R> {
+impl<R: DbReader> TrackingCopy<R> {
+    pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
             cache: HashMap::new(),
             ops: HashMap::new(),
             fns: HashMap::new(),
-            rng: rand::rngs::StdRng::from_entropy(),
         }
     }
 
-    pub fn new_uref(&mut self) -> Key {
-        let mut key = [0u8; 32];
-        self.rng.fill_bytes(&mut key);
-        Key::URef(key)
-    }
-
-    fn get(&mut self, k: &Key) -> Result<Value, Error> {
+    pub fn get(&mut self, k: &Key) -> Result<Value, Error> {
         //TODO: this remove+insert should not be necessary, but I can't get the borrow checker to agree
         let maybe_value = self.cache.remove(k);
         match maybe_value {
@@ -97,6 +88,7 @@ mod tests {
     use std::cell::Cell;
     use std::collections::BTreeMap;
     use transform::Transform;
+    use std::rc::Rc;
 
     struct CountingDb {
         count: Cell<i32>,
@@ -131,10 +123,16 @@ mod tests {
         }
     }
 
+    impl DbReader for Rc<CountingDb> {
+      fn get(&self, k: &Key) -> Result<Value, Error> {
+        CountingDb::get(self, k)
+      }
+    }
+
     #[test]
     fn tracking_copy_new() {
         let db = CountingDb::new();
-        let tc = TrackingCopy::new(&db);
+        let tc = TrackingCopy::new(db);
 
         assert_eq!(tc.cache.is_empty(), true);
         assert_eq!(tc.ops.is_empty(), true);
@@ -144,16 +142,17 @@ mod tests {
     #[test]
     fn tracking_copy_new_uref() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(db);
 
         //`new_uref` must return a key of type uref
         assert_matches!(tc.new_uref(), Key::URef(_));
     }
 
     #[test]
-    fn trackng_copy_caching() {
+    fn tracking_copy_caching() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let db_ref = Rc::new(db);
+        let mut tc = TrackingCopy::new(db_ref.clone());
         let k = Key::Hash([0u8; 32]);
 
         let zero = Ok(Value::Int32(0));
@@ -164,7 +163,7 @@ mod tests {
         //second read; should use cache instead
         //of going back to the DB
         let value = tc.read(k);
-        let db_value = db.count.get();
+        let db_value = db_ref.count.get();
         assert_eq!(value, zero);
         assert_eq!(db_value, 1);
     }
@@ -172,7 +171,7 @@ mod tests {
     #[test]
     fn tracking_copy_read() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         let zero = Ok(Value::Int32(0));
@@ -189,7 +188,8 @@ mod tests {
     #[test]
     fn tracking_copy_write() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let db_ref = Rc::new(db);
+        let mut tc = TrackingCopy::new(db_ref.clone());
         let k = Key::Hash([0u8; 32]);
 
         let one = Value::Int32(1);
@@ -199,7 +199,7 @@ mod tests {
         let write = tc.write(k, one.clone());
         assert_matches!(write, Ok(_));
         //write does not need to query the DB
-        let db_value = db.count.get();
+        let db_value = db_ref.count.get();
         assert_eq!(db_value, 0);
         //write creates a Transfrom
         assert_eq!(tc.fns.len(), 1);
@@ -211,7 +211,7 @@ mod tests {
         //writing again should update the values
         let write = tc.write(k, two.clone());
         assert_matches!(write, Ok(_));
-        let db_value = db.count.get();
+        let db_value = db_ref.count.get();
         assert_eq!(db_value, 0);
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::Write(two)));
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn tracking_copy_add_i32() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         let three = Value::Int32(3);
@@ -252,7 +252,7 @@ mod tests {
         //DB now holds an `Account` so that we can test adding a `NamedKey`
         let account = common::value::Account::new([0u8; 32], 0u64, BTreeMap::new());
         let db = CountingDb::new_init(Value::Acct(account));
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         let named_key = Value::NamedKey("test".to_string(), tc.new_uref());
@@ -295,7 +295,7 @@ mod tests {
     #[test]
     fn tracking_copy_rw() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         //reading then writing should update the op
@@ -311,7 +311,7 @@ mod tests {
     #[test]
     fn tracking_copy_ra() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         //reading then adding should update the op
@@ -328,7 +328,7 @@ mod tests {
     #[test]
     fn tracking_copy_aw() {
         let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(&db);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         //adding then writing should update the op

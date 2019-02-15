@@ -11,25 +11,26 @@ use common::value;
 use execution_engine::execution::{Runtime, RuntimeContext};
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
-use std::collections::BTreeMap;
-use storage::gs::{inmem::*, DbReader, GlobalState, TrackingCopy};
+use std::collections::{BTreeMap, HashMap};
+use storage::gs::{inmem::*, DbReader, ExecutionEffect, TrackingCopy};
+use storage::history::*;
 use storage::transform::Transform;
 use wasm_prep::MAX_MEM_PAGES;
 use wasmi::memory_units::Pages;
 use wasmi::{MemoryInstance, MemoryRef};
 
-struct MockEnv<'a> {
+struct MockEnv {
     key: Key,
     account: value::Account,
     uref_lookup: BTreeMap<String, Key>,
-    tc: TrackingCopy<'a, InMemGS>,
+    tc: TrackingCopy<InMemGS>,
     gas_limit: u64,
     memory: MemoryRef,
 }
 
-impl<'b> MockEnv<'b> {
-  pub fn new(key: Key, account: value::Account, gas_limit: u64, gs: &'b InMemGS) -> Self {
-        let tc = gs.tracking_copy().unwrap();
+impl MockEnv {
+    pub fn new(key: Key, account: value::Account, gas_limit: u64, gs: InMemHist) -> Self {
+        let tc = TrackingCopy::new(gs);
         let uref_lookup = mock_uref_lookup();
         let memory = MemoryInstance::alloc(Pages(17), Some(Pages(MAX_MEM_PAGES as usize)))
             .expect("Mocked memory should be able to be created.");
@@ -44,13 +45,16 @@ impl<'b> MockEnv<'b> {
         }
     }
 
-    pub fn runtime<'a>(&'a mut self) -> Runtime<'a, 'b, InMemGS> {
+    pub fn runtime<'a>(&'a mut self, address: [u8;20], timestamp: i64, nonce: i64) -> Runtime<'a, InMemGS> {
         let context = mock_context(&mut self.uref_lookup, &self.account, self.key);
         Runtime::new(
             self.memory.clone(),
             &mut self.tc,
             mock_module(),
             &self.gas_limit,
+            address,
+            nonce,
+            timestamp,
             context,
         )
     }
@@ -85,9 +89,9 @@ impl WasmMemoryManager {
         }
     }
 
-    pub fn new_uref<'a, 'b, R: DbReader>(
+    pub fn new_uref<'a, R: DbReader>(
         &mut self,
-        runtime: &mut Runtime<'a, 'b, R>,
+        runtime: &mut Runtime<'a, R>,
     ) -> Result<(u32, usize), wasmi::Trap> {
         let ptr = self.offset as u32;
 
@@ -109,12 +113,14 @@ fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
     (key, account)
 }
 
-fn mock_gs(init_key: Key, init_account: &value::Account) -> InMemGS {
-    let mut result = InMemGS::new();
+fn mock_gs(init_key: Key, init_account: &value::Account) -> InMemHist {
+    let mut result = InMemHist::new(&[0u8;32]);
     let transform = Transform::Write(value::Value::Acct(init_account.clone()));
 
+    let mut m = HashMap::new();
+    m.insert(init_key, transform);
     result
-        .apply(init_key, transform)
+        .commit([0u8;32], m)
         .expect("Creation of mocked account should be a success.");
 
     result
@@ -136,8 +142,8 @@ fn mock_module() -> Module {
     module().build()
 }
 
-fn gs_write<'a, 'b, R: DbReader>(
-    runtime: &mut Runtime<'a, 'b, R>,
+fn gs_write<'a, R: DbReader>(
+    runtime: &mut Runtime<'a, R>,
     key: (u32, usize),
     value: (u32, usize),
 ) -> Result<(), wasmi::Trap> {
@@ -147,11 +153,13 @@ fn gs_write<'a, 'b, R: DbReader>(
 #[test]
 fn valid_uref() {
     let addr = [0u8; 20];
+    let timestamp: i64 = 1000;
+    let nonce: i64 = 1;
     let (key, account) = mock_account(addr);
     let gs = mock_gs(key, &account);
-    let mut env = MockEnv::new(key, account, 0, &gs);
+    let mut env = MockEnv::new(key, account, 0, gs);
     let mut memory = env.memory_manager();
-    let mut runtime = env.runtime();
+    let mut runtime = env.runtime(addr, timestamp, nonce);
 
     //create a valid uref in wasm memory via new_uref
     let uref = memory

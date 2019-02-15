@@ -175,7 +175,9 @@ message BytesReprError {
 message EarlyEndOfStream {}
 message FormattingError {}
 message LeftOverBytes {}
-message RkvError {}
+message RkvError {
+    string error_msg = 1;
+}
 
 // Models key value pair of (key, op) entry.
 // Required b/c protobuff doesn't support maps natively
