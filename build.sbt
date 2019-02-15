@@ -268,6 +268,7 @@ lazy val node = (project in file("node"))
       )
     },
     /* Debian */
+    name in Debian := "casperlabs-node",
     debianPackageDependencies in Debian ++= Seq(
       "openjdk-11-jre-headless",
       "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)", //ubuntu & debian
@@ -391,6 +392,7 @@ lazy val client = (project in file("client"))
       }
     """,
     /* Debian */
+    name in Debian := "casperlabs-client",
     debianPackageDependencies in Debian ++= Seq(
       "openjdk-11-jre-headless",
       "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)", //ubuntu & debian
