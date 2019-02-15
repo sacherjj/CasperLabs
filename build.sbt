@@ -178,6 +178,9 @@ lazy val node = (project in file("node"))
     version := nodeAndClientVersion,
     name := "node",
     maintainer := "CasperLabs, LLC. <info@casperlabs.io>",
+    packageName := "casperlabs-node",
+    packageName in Docker := "node",
+    executableScriptName := "casperlabs-node",
     packageSummary := "CasperLabs Node",
     packageDescription := "CasperLabs Node - the Casperlabs blockchain node server software.",
     libraryDependencies ++=
@@ -286,7 +289,8 @@ lazy val node = (project in file("node"))
       "java-11-openjdk-headless >= 11.0.1.13",
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
-    )
+    ),
+    rpmAutoreq := "no"
   )
   .dependsOn(casper, comm, crypto, smartContracts)
 

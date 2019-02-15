@@ -129,7 +129,7 @@ pipeline:
     commands:
       - sbt node/debian:packageBin node/universal:packageZipTarball
       - mkdir -p /artifacts/${DRONE_BRANCH}
-      - cp node/target/node_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
+      - cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
     volumes:
       - /var/cache/cl-build/.sbt:/root/.sbt
       - /var/cache/cl-build/.ivy2:/root/.ivy2
@@ -143,7 +143,7 @@ pipeline:
     commands:
       - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
       - mkdir -p /artifacts/${DRONE_BRANCH}
-      - cp node/target/rpm/RPMS/noarch/node-*.noarch.rpm /artifacts/${DRONE_BRANCH}
+      - cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm /artifacts/${DRONE_BRANCH}
     volumes:
       - /var/cache/cl-build/.sbt:/root/.sbt
       - /var/cache/cl-build/.ivy2:/root/.ivy2
