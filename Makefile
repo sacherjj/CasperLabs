@@ -11,6 +11,16 @@ $(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -Po $(SEMVER_REGEX) | tail -n 1 
 # https://stackoverflow.com/questions/5426934/why-this-makefile-removes-my-goal
 .SECONDARY:
 
+all: \
+	docker-build-all \
+	docker-push-all \
+	cargo-publish-all
+
+clean: cargo/clean
+	sbt clean
+	rm -rf .make
+
+
 docker-build-all: \
 	docker-build/node \
 	docker-build/client \
@@ -35,10 +45,15 @@ docker-push/%:
 		docker push $(DOCKER_USERNAME)/$(PROJECT):latest ; \
 	fi
 
-clean:
-	sbt clean
-	cd execution-engine/comm && cargo clean
-	rm -rf .make
+
+# We need to publish the libraries the contracts are supposed to use.
+cargo-publish-all: \
+	.make/cargo-publish/execution-engine/common
+
+cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{print $$1"/clean"}')
+
+%/Cargo.toml/clean:
+	cd $* && cargo clean
 
 
 # Build the `latest` docker image for local testing. Works with Scala.
@@ -76,12 +91,30 @@ clean:
 	rm -rf $(RELEASE)/Dockerfile
 	mkdir -p $(dir $@) && touch $@
 
+# Make a node that has some extras installed for testing.
+.make/docker-build/test/node: \
+		.make/docker-build/universal/node \
+		docker/test-node.Dockerfile
+	docker build -f docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test docker
+	mkdir -p $(dir $@) && touch $@
+
 
 # Refresh Scala build artifacts if source was changed.
 .make/sbt-stage/%: .make \
 		$(shell find . -type f -iregex '.*/src/.*\.scala\|.*\.sbt')
 	$(eval PROJECT = $*)
 	sbt -mem 5000 $(PROJECT)/universal:stage
+	mkdir -p $(dir $@) && touch $@
+
+
+.make/cargo-publish/%: .make/cargo-package/%
+	@#https://doc.rust-lang.org/cargo/reference/publishing.html
+	@#After a package is first published to crates.io run `cargo owner --add github:CasperLabs:crate-owners` once to allow others to push.
+	cd $* && cargo publish
+	mkdir -p $(dir $@) && touch $@
+
+.make/cargo-package/%: $(shell find $* -type f -iregex ".*/Cargo\.toml\|.*\.rs") .make/rustup-update
+	cd $* && cargo package
 	mkdir -p $(dir $@) && touch $@
 
 
@@ -92,14 +125,6 @@ clean:
 	cd execution-engine/comm && \
 	cargo run --bin grpc-protoc
 	touch $@
-
-
-# Make a node that has some extras installed for testing.
-.make/docker-build/test/node: \
-		.make/docker-build/universal/node \
-		docker/test-node.Dockerfile
-	docker build -f docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test docker
-	mkdir -p $(dir $@) && touch $@
 
 
 # Build the execution engine executable.
