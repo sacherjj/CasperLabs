@@ -91,6 +91,11 @@ object Configuration {
     either.fold(_.invalidNel[Configuration], identity)
   }
 
+  /**
+    * All [[java.nio.file.Path]] fields must be wrapped into [[io.casperlabs.node.configuration.Configuration.adjustPath]].
+    *
+    * Otherwise a Path field will not respect server.dataDir changes.
+    */
   private def parseToActual(
       command: Command,
       default: ConfigurationSoft,
@@ -98,7 +103,7 @@ object Configuration {
   ): ValidatedNel[String, Configuration] =
     (
       parseServer(confSoft),
-      parseGrpcServer(confSoft),
+      parseGrpcServer(default, confSoft),
       parseTls(default, confSoft),
       parseCasper(default, confSoft),
       parseBlockStorage(default, confSoft),
@@ -166,11 +171,13 @@ object Configuration {
     }
 
   private def parseGrpcServer(
+      default: ConfigurationSoft,
       confSoft: ConfigurationSoft
   ): ValidatedNel[String, Configuration.GrpcServer] =
     (
       optToValidated(confSoft.grpc.flatMap(_.host), "GrpcServer.host"),
-      optToValidated(confSoft.grpc.flatMap(_.socket), "GrpcServer.socket"),
+      optToValidated(adjustPath(confSoft, confSoft.grpc.flatMap(_.socket), default),
+                     "GrpcServer.socket"),
       optToValidated(confSoft.grpc.flatMap(_.portExternal), "GrpcServer.portExternal"),
       optToValidated(confSoft.grpc.flatMap(_.portInternal), "GrpcServer.portInternal")
     ).mapN(Configuration.GrpcServer.apply)
@@ -180,6 +187,8 @@ object Configuration {
       confSoft: ConfigurationSoft
   ): ValidatedNel[String, Configuration.Tls] =
     (
+      optToValidated(default.server.flatMap(_.dataDir), "Default Server.dataDir"),
+      optToValidated(confSoft.server.flatMap(_.dataDir), "Server.dataDir"),
       optToValidated(confSoft.tls.flatMap(_.certificate), "Default Tls.certificate"),
       optToValidated(confSoft.tls.flatMap(_.key), "Default Tls.key"),
       optToValidated(
@@ -188,18 +197,35 @@ object Configuration {
       ),
       optToValidated(adjustPath(confSoft, confSoft.tls.flatMap(_.key), default), "Tls.key"),
       optToValidated(confSoft.tls.flatMap(_.secureRandomNonBlocking), "Tls.secureRandomNonBlocking")
-    ).mapN((defaultCertificate, defaultKey, certificate, key, secureRandomNonBlocking) => {
-      val isCertificateCustomLocation = certificate != defaultCertificate
-      val isKeyCustomLocation         = key != defaultKey
+    ).mapN(
+      (
+          defaultDataDir,
+          dataDir,
+          defaultCertificate,
+          defaultKey,
+          certificate,
+          key,
+          secureRandomNonBlocking
+      ) => {
+        val isCertificateCustomLocation =
+          certificate.toAbsolutePath.toString
+            .stripPrefix(dataDir.toAbsolutePath.toString) !=
+            defaultCertificate.toAbsolutePath.toString
+              .stripPrefix(defaultDataDir.toAbsolutePath.toString)
+        val isKeyCustomLocation = key.toAbsolutePath.toString
+          .stripPrefix(dataDir.toAbsolutePath.toString) !=
+          defaultKey.toAbsolutePath.toString
+            .stripPrefix(defaultDataDir.toAbsolutePath.toString)
 
-      Configuration.Tls(
-        certificate,
-        key,
-        isCertificateCustomLocation,
-        isKeyCustomLocation,
-        secureRandomNonBlocking
-      )
-    })
+        Configuration.Tls(
+          certificate,
+          key,
+          isCertificateCustomLocation,
+          isKeyCustomLocation,
+          secureRandomNonBlocking
+        )
+      }
+    )
 
   private def parseCasper(
       default: ConfigurationSoft,
