@@ -118,7 +118,7 @@ where
             timestamp,
             nonce,
             prestate_hash,
-            &gas_limit,
+            gas_limit,
             &*self.state.lock(),
         )
         .map_err(|e| e.into())

@@ -1,11 +1,11 @@
 use std::marker::{Send, Sync};
 
 use execution_engine::engine::EngineState;
-use ipc::DeployResult;
+use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
 use std::collections::HashMap;
-use storage::gs::{DbReader, ExecutionEffect};
+use storage::gs::DbReader;
 use storage::history::*;
 
 pub mod ipc;
@@ -20,86 +20,104 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
     fn send_deploy(
         &self,
         _o: ::grpc::RequestOptions,
-        p: ipc::Deploy,
+        _p: ipc::Deploy,
     ) -> grpc::SingleResponse<ipc::DeployResult> {
-        let mut addr = [0u8; 20];
-        addr.copy_from_slice(&p.address);
-        let poststate_hash = [0u8; 32];
-        match self.run_deploy(&p.session_code, addr, poststate_hash, &(p.gas_limit as u64)) {
-            Ok(ee) => {
-                let mut res = DeployResult::new();
-                res.set_effects(execution_effect_to_ipc(ee));
-                grpc::SingleResponse::completed(res)
-            }
-            //TODO better error handling
-            Err(ee_error) => {
-                let mut res = DeployResult::new();
-                let mut err = ipc::DeployError::new();
-                let mut wasm_err = ipc::WasmError::new();
-                wasm_err.set_message(format!("{:?}", ee_error));
-                err.set_wasmErr(wasm_err);
-                res.set_error(err);
-                grpc::SingleResponse::completed(res)
-            }
-        }
+        let mut res = DeployResult::new();
+        let mut err = ipc::DeployError::new();
+        let mut wasm_err = ipc::WasmError::new();
+        wasm_err.set_message("".to_owned());
+        err.set_wasmErr(wasm_err);
+        res.set_error(err);
+        grpc::SingleResponse::completed(res)
     }
 
     fn execute_effects(
         &self,
         _o: ::grpc::RequestOptions,
-        p: ipc::CommutativeEffects,
+        _p: ipc::CommutativeEffects,
     ) -> grpc::SingleResponse<ipc::PostEffectsResult> {
-        let mut effects = HashMap::new();
-        for entry in p.get_effects().iter() {
-            let (k, v) = transform_entry_to_key_transform(entry);
-            effects.insert(k, v);
-        }
-        let r = self.apply_effect(effects);
-        match r {
-            Ok(post_state_hash) => {
-                println!("Effects applied. New state hash is: {:?}", post_state_hash)
-            }
-            Err(_) => println!("Error {:?} when applying effects", r),
-        };
-
-        let res = {
-            let mut tmp_res = ipc::PostEffectsResult::new();
-            match r {
-                Ok(_) => {
-                    tmp_res.set_success(ipc::Done::new());
-                    tmp_res
-                }
-                Err(e) => {
-                    let mut err = ipc::PostEffectsError::new();
-                    err.set_message(format!("{:?}", e));
-                    tmp_res.set_error(err);
-                    tmp_res
-                }
-            }
-        };
-        grpc::SingleResponse::completed(res)
+        let mut tmp_res = ipc::PostEffectsResult::new();
+        let mut err = ipc::PostEffectsError::new();
+        err.set_message("".to_owned());
+        tmp_res.set_error(err);
+        grpc::SingleResponse::completed(tmp_res)
     }
 
     fn exec(
         &self,
         _o: ::grpc::RequestOptions,
-        _p: ipc::ExecRequest,
+        p: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
-        //TODO: give correct implementation
-        let mut response = ipc::ExecResponse::new();
-        response.set_missing_parents(ipc::MultipleRootsNotFound::new());
-        grpc::SingleResponse::completed(response)
+        let mut prestate_hash = [0u8;32];
+        prestate_hash.copy_from_slice(&p.get_parent_state_hashes()[0]);
+        let deploys = p.get_deploys();
+        let mut exec_response = ipc::ExecResponse::new();
+        let mut exec_result = ipc::ExecResult::new();
+        let mut deploy_results: Vec<DeployResult> = Vec::new();
+        for deploy in deploys.into_iter() {
+            let module_bytes = &deploy.session_code;
+            let mut address: [u8; 20] = [0u8; 20];
+            address.copy_from_slice(&deploy.address);
+            let timestamp = deploy.timestamp;
+            let nonce = deploy.nonce;
+            let gas_limit = deploy.gas_limit as u64;
+            match self.run_deploy(module_bytes, address, timestamp, nonce, prestate_hash, &gas_limit) {
+                Ok(effects) => {
+                    let ipc_ee = execution_effect_to_ipc(effects);
+                    let mut deploy_result = ipc::DeployResult::new();
+                    deploy_result.set_effects(ipc_ee);
+                    deploy_results.push(deploy_result);
+                },
+                Err(err) => {
+                    //TODO(mateusz.gorski) Better error handling and tests!
+                    let mut deploy_result = ipc::DeployResult::new();
+                    let mut error = ipc::DeployError::new();
+                    let mut wasm_error = ipc::WasmError::new();
+                    wasm_error.set_message(format!("{:?}", err));
+                    error.set_wasmErr(wasm_error);
+                    deploy_result.set_error(error);
+                    deploy_results.push(deploy_result);
+                },
+            };
+        };
+        exec_result.set_prestate_hash(prestate_hash.to_vec());
+        exec_result.set_deploy_results(protobuf::RepeatedField::from_vec(deploy_results));
+        exec_response.set_success(exec_result);
+        grpc::SingleResponse::completed(exec_response)
     }
 
     fn commit(
         &self,
         _o: ::grpc::RequestOptions,
-        _p: ipc::CommitRequest,
+        p: ipc::CommitRequest,
     ) -> grpc::SingleResponse<ipc::CommitResponse> {
-        //TODO: give correct implementation
-        let mut response = ipc::CommitResponse::new();
-        response.set_missing_prestate(ipc::RootNotFound::new());
-        grpc::SingleResponse::completed(response)
+        let mut prestate_hash = [0u8;32];
+        prestate_hash.copy_from_slice(&p.get_prestate_hash());
+        let mut effects = HashMap::new();
+        for entry in p.get_effects().iter() {
+            let (k, v) = transform_entry_to_key_transform(entry);
+            effects.insert(k, v);
+        }
+        let r = self.apply_effect(prestate_hash, effects);
+        let result = {
+            let mut tmp_res = ipc::CommitResponse::new();
+            match r {
+                Ok(post_state_hash) => {
+                    println!("Effects applied. New state hash is: {:?}", post_state_hash);
+                    let mut commit_result = ipc::CommitResult::new();
+                    commit_result.set_poststate_hash(post_state_hash.to_vec());
+                    tmp_res.set_success(commit_result);
+                },
+                Err(e) => {
+                    println!("Error {:?} when applying effects", e);
+                    let mut err = ipc::PostEffectsError::new();
+                    err.set_message(format!("{:?}", e));
+                    tmp_res.set_failed_transform(err);
+                },
+            };
+            tmp_res
+        };
+        grpc::SingleResponse::completed(result)
     }
 }
 
