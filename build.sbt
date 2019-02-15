@@ -354,7 +354,7 @@ lazy val client = (project in file("client"))
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
         Cmd("USER", "root"),
-        ExecCmd("ENTRYPOINT", "bin/client"),
+        ExecCmd("ENTRYPOINT", "bin/casperlabs-client"),
         ExecCmd("CMD", "run")
       )
     },
