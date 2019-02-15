@@ -48,7 +48,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         _o: ::grpc::RequestOptions,
         p: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
-        let mut prestate_hash = [0u8;32];
+        let mut prestate_hash = [0u8; 32];
         prestate_hash.copy_from_slice(&p.get_parent_state_hashes()[0]);
         let deploys = p.get_deploys();
         let mut exec_response = ipc::ExecResponse::new();
@@ -61,13 +61,20 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
-            match self.run_deploy(module_bytes, address, timestamp, nonce, prestate_hash, &gas_limit) {
+            match self.run_deploy(
+                module_bytes,
+                address,
+                timestamp,
+                nonce,
+                prestate_hash,
+                &gas_limit,
+            ) {
                 Ok(effects) => {
                     let ipc_ee = execution_effect_to_ipc(effects);
                     let mut deploy_result = ipc::DeployResult::new();
                     deploy_result.set_effects(ipc_ee);
                     deploy_results.push(deploy_result);
-                },
+                }
                 Err(err) => {
                     //TODO(mateusz.gorski) Better error handling and tests!
                     let mut deploy_result = ipc::DeployResult::new();
@@ -77,9 +84,9 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                     error.set_wasmErr(wasm_error);
                     deploy_result.set_error(error);
                     deploy_results.push(deploy_result);
-                },
+                }
             };
-        };
+        }
         exec_result.set_prestate_hash(prestate_hash.to_vec());
         exec_result.set_deploy_results(protobuf::RepeatedField::from_vec(deploy_results));
         exec_response.set_success(exec_result);
@@ -91,7 +98,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         _o: ::grpc::RequestOptions,
         p: ipc::CommitRequest,
     ) -> grpc::SingleResponse<ipc::CommitResponse> {
-        let mut prestate_hash = [0u8;32];
+        let mut prestate_hash = [0u8; 32];
         prestate_hash.copy_from_slice(&p.get_prestate_hash());
         let mut effects = HashMap::new();
         for entry in p.get_effects().iter() {
@@ -107,13 +114,13 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                     let mut commit_result = ipc::CommitResult::new();
                     commit_result.set_poststate_hash(post_state_hash.to_vec());
                     tmp_res.set_success(commit_result);
-                },
+                }
                 Err(e) => {
                     println!("Error {:?} when applying effects", e);
                     let mut err = ipc::PostEffectsError::new();
                     err.set_message(format!("{:?}", e));
                     tmp_res.set_failed_transform(err);
-                },
+                }
             };
             tmp_res
         };

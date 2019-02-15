@@ -86,7 +86,7 @@ fn main() {
     let timestamp: i64 = 100000;
     let nonce: i64 = 1;
 
-    let path = std::path::Path::new("./tmp/");
+    //let path = std::path::Path::new("./tmp/");
     //TODO: Better error handling?
     //    let gs = LmdbGs::new(&path).unwrap();
     let gs = InMemHist::new(&state_hash);
@@ -100,8 +100,14 @@ fn main() {
 
     for wasm_bytes in wasm_files.iter() {
         println!("Pre state hash: {:?}", state_hash);
-        let result =
-            engine_state.run_deploy(&wasm_bytes.bytes, account_addr, timestamp, nonce, state_hash, &gas_limit);
+        let result = engine_state.run_deploy(
+            &wasm_bytes.bytes,
+            account_addr,
+            timestamp,
+            nonce,
+            state_hash,
+            &gas_limit,
+        );
         match result {
             Ok(effects) => {
                 let res = engine_state

@@ -16,13 +16,13 @@ use wasmi::{
 };
 
 use argsparser::Args;
+use byteorder::{ByteOrder, LittleEndian};
 use parity_wasm::elements::{Error as ParityWasmError, Module};
+use rand::{RngCore, SeedableRng};
+use rand_chacha::ChaChaRng;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
-use rand_chacha::ChaChaRng;
-use rand::{RngCore, SeedableRng};
-use byteorder::{ByteOrder, LittleEndian};
 
 #[derive(Debug)]
 pub enum Error {
@@ -152,7 +152,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         state: &'a mut TrackingCopy<R>,
         module: Module,
         gas_limit: &'a u64,
-        account_addr: [u8;20],
+        account_addr: [u8; 20],
         nonce: i64,
         timestamp: i64,
         context: RuntimeContext<'a>,
@@ -451,7 +451,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
     }
 
     pub fn new_uref(&mut self, key_ptr: u32) -> Result<(), Trap> {
-        let mut key = [0u8;32];
+        let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
         let key = Key::URef(key);
         self.context.insert_uref(key);
@@ -856,7 +856,7 @@ fn sub_call<R: DbReader>(
 }
 
 fn create_rng(account_addr: &[u8; 20], timestamp: i64, nonce: i64) -> ChaChaRng {
-    let mut seed: [u8; 32] = [0u8;32]; 
+    let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let hasher = VarBlake2b::new(32).unwrap();
     data.extend(account_addr);

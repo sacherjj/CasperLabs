@@ -87,8 +87,8 @@ mod tests {
     use op::Op;
     use std::cell::Cell;
     use std::collections::BTreeMap;
-    use transform::Transform;
     use std::rc::Rc;
+    use transform::Transform;
 
     struct CountingDb {
         count: Cell<i32>,
@@ -124,9 +124,9 @@ mod tests {
     }
 
     impl DbReader for Rc<CountingDb> {
-      fn get(&self, k: &Key) -> Result<Value, Error> {
-        CountingDb::get(self, k)
-      }
+        fn get(&self, k: &Key) -> Result<Value, Error> {
+            CountingDb::get(self, k)
+        }
     }
 
     #[test]
@@ -137,15 +137,6 @@ mod tests {
         assert_eq!(tc.cache.is_empty(), true);
         assert_eq!(tc.ops.is_empty(), true);
         assert_eq!(tc.fns.is_empty(), true);
-    }
-
-    #[test]
-    fn tracking_copy_new_uref() {
-        let db = CountingDb::new();
-        let mut tc = TrackingCopy::new(db);
-
-        //`new_uref` must return a key of type uref
-        assert_matches!(tc.new_uref(), Key::URef(_));
     }
 
     #[test]
@@ -254,9 +245,11 @@ mod tests {
         let db = CountingDb::new_init(Value::Acct(account));
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
+        let u1 = Key::URef([1u8; 32]);
+        let u2 = Key::URef([2u8; 32]);
 
-        let named_key = Value::NamedKey("test".to_string(), tc.new_uref());
-        let other_named_key = Value::NamedKey("test2".to_string(), tc.new_uref());
+        let named_key = Value::NamedKey("test".to_string(), u1);
+        let other_named_key = Value::NamedKey("test2".to_string(), u2);
         let mut map: BTreeMap<String, Key> = BTreeMap::new();
         //This is written as an `if`, but it is clear from the line
         //where `named_key` is defined that it will always match

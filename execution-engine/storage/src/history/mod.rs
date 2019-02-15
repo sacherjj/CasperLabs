@@ -19,4 +19,4 @@ pub trait History<R: DbReader> {
     ) -> Result<TreeRootHash, Error>;
 }
 
-pub const EMPTY_ROOT_HASH: [u8;32] = [0u8;32];
+pub const EMPTY_ROOT_HASH: [u8; 32] = [0u8; 32];
