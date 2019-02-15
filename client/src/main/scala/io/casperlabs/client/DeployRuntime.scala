@@ -73,7 +73,7 @@ object DeployRuntime {
       _ <- result.joinRight match {
             case Left(ex) =>
               Sync[F].delay {
-                println(processError(ex).getMessage)
+                System.err.println(processError(ex).getMessage)
                 System.exit(1)
               }
             case Right(msg) => Sync[F].delay(println(msg))

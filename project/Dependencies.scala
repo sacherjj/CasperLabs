@@ -4,12 +4,11 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
-  val circeVersion  = "0.10.0"
-  val http4sVersion = "0.19.0"
-  val kamonVersion  = "1.1.3"
+  val circeVersion   = "0.10.0"
+  val http4sVersion  = "0.19.0"
+  val kamonVersion   = "1.1.3"
   val catsVersion    = "1.5.0"
   val catsMtlVersion = "0.4.0"
-
 
   // format: off
   val bitcoinjCore           = "org.bitcoinj"               % "bitcoinj-core"                   % "0.14.6"
@@ -32,7 +31,7 @@ object Dependencies {
   val http4sCirce            = "org.http4s"                 %% "http4s-circe"                   % http4sVersion
   val http4sDSL              = "org.http4s"                 %% "http4s-dsl"                     % http4sVersion
   val jaxb                   = "javax.xml.bind"             % "jaxb-api"                        % "2.3.1"
-  val jline               = ("org.scala-lang"             % "jline"                     % "2.10.7")
+  val jline                  = ("org.scala-lang"            % "jline"                           % "2.10.7")
     .exclude("org.fusesource.jansi", "jansi")
   // see https://jitpack.io/#rchain/kalium
   val kalium                 = "com.github.rchain"          % "kalium"                          % "0.8.1"
@@ -45,6 +44,7 @@ object Dependencies {
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
   val lmdbjava               = "org.lmdbjava"               % "lmdbjava"                        % "0.6.1"
   val logbackClassic         = "ch.qos.logback"             % "logback-classic"                 % "1.2.3"
+  val janino                 = "org.codehaus.janino"        % "janino"                          % "3.0.12"
   val lz4                    = "org.lz4"                    % "lz4-java"                        % "1.5.0"
   val monix                  = "io.monix"                   %% "monix"                          % "3.0.0-RC2"
   val scalaLogging           = "com.typesafe.scala-logging" %% "scala-logging"                  % "3.9.0"
@@ -101,7 +101,7 @@ object Dependencies {
 
   private val testing = Seq(scalactic, scalatest, scalacheck)
 
-  private val logging = Seq(scalaLogging, logbackClassic)
+  private val logging = Seq(scalaLogging, logbackClassic, janino)
 
   private val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)

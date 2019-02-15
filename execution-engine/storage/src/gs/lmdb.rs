@@ -2,13 +2,14 @@ use common::bytesrepr::{deserialize, ToBytes};
 use common::key::Key;
 use common::value::Value;
 use error::Error;
-use gs::DbReader;
-use gs::{GlobalState, TrackingCopy};
+use gs::{DbReader, TrackingCopy};
+use history::*;
 use rkv::store::single::SingleStore;
 use rkv::{Manager, Rkv, StoreOptions};
 use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
+use std::collections::HashMap;
 use transform::Transform;
 
 pub struct LmdbGs {
@@ -20,19 +21,22 @@ impl LmdbGs {
     pub fn new(p: &Path) -> Result<LmdbGs, Error> {
         let env = Manager::singleton()
             .write()
-            .map_err(|_| Error::RkvError)
+            .map_err(|_| Error::RkvError(String::from("Error while creating LMDB env.")))
             .and_then(|mut r| r.get_or_create(p, Rkv::new).map_err(|e| e.into()))?;
-        let store = env.read().map_err(|_| Error::RkvError).and_then(|r| {
-            r.open_single(Some("global_state"), StoreOptions::create())
-                .map_err(|e| e.into())
-        })?;
+        let store = env
+            .read()
+            .map_err(|_| Error::RkvError(String::from("Error when creating LMDB store.")))
+            .and_then(|r| {
+                r.open_single(Some("global_state"), StoreOptions::create())
+                    .map_err(|e| e.into())
+            })?;
         Ok(LmdbGs { store, env })
     }
 
     pub fn read(&self, k: &Key) -> Result<Value, Error> {
         self.env
             .read()
-            .map_err(|_| Error::RkvError)
+            .map_err(|_| Error::RkvError(String::from("Couldn't get read lock to LMDB env.")))
             .and_then(|rkv| {
                 let r = rkv.read()?;
                 let maybe_curr = self.store.get(&r, k)?;
@@ -45,7 +49,7 @@ impl LmdbGs {
                     }
                     //If we always store values as Blobs this case will never come
                     //up. TODO: Use other variants of rkb::Value (e.g. I64, Str)?
-                    Some(_) => Err(Error::RkvError),
+                    Some(_) => Err(Error::RkvError(String::from("Value stored in LMDB was != Blob"))),
                 }
             })
     }
@@ -56,7 +60,7 @@ impl LmdbGs {
     {
         self.env
             .read()
-            .map_err(|_| Error::RkvError)
+            .map_err(|_| Error::RkvError(String::from("Couldn't get read lock to LMDB env.")))
             .and_then(|rkv| {
                 let mut w = rkv.write()?;
 
@@ -95,24 +99,15 @@ impl DbReader for LmdbGs {
     }
 }
 
-impl GlobalState for LmdbGs {
-    fn apply(&mut self, k: Key, t: Transform) -> Result<(), Error> {
-        let maybe_curr = self.get(&k);
-        match maybe_curr {
-            Err(Error::KeyNotFound { .. }) => match t {
-                Transform::Write(v) => self.write_single(k, &v),
-                _ => Err(Error::KeyNotFound { key: k }),
-            },
-            Ok(curr) => {
-                let new_value = t.apply(curr)?;
-                self.write_single(k, &new_value)
-            }
-            Err(e) => Err(e),
-        }
+impl History<Self> for LmdbGs {
+    fn checkout(&self, _prestate_hash: [u8; 32]) -> Result<TrackingCopy<LmdbGs>, Error> {
+        unimplemented!("LMDB History not implemented")
     }
-    fn tracking_copy(&self) -> Result<TrackingCopy<Self>, Error> {
-        Ok(TrackingCopy::new(self))
+
+    fn commit(&mut self, _prestate_hash: [u8; 32], _effects: HashMap<Key, Transform>) -> Result<[u8; 32], Error> {
+      unimplemented!("LMDB History not implemented")
     }
+
 }
 
 impl fmt::Debug for LmdbGs {

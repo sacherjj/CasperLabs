@@ -2,7 +2,7 @@ use super::alloc::vec::Vec;
 use super::bytesrepr::{Error, FromBytes, ToBytes};
 
 #[repr(C)]
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub enum Key {
     Account([u8; 20]),
     Hash([u8; 32]),

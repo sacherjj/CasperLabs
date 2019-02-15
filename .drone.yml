@@ -50,6 +50,7 @@ pipeline:
 
   compile-rust-engine:
     <<: *buildenv
+    group: rust
     commands:
       - cd execution-engine/engine
       - ~/.cargo/bin/cargo update
@@ -57,6 +58,7 @@ pipeline:
 
   compile-rust-comm:
     <<: *buildenv
+    group: rust
     commands:
       - cd execution-engine/comm
       - ~/.cargo/bin/cargo update
@@ -65,12 +67,14 @@ pipeline:
 
   run-rust-tests:
     <<: *buildenv
+    group: test
     commands:
       - cd execution-engine/tests
       - ~/.cargo/bin/cargo test
 
   run-unit-tests:
     <<: *sbtenv
+    group: test
     commands:
       - sbt test
 
@@ -93,12 +97,12 @@ pipeline:
 
   # push
 
-  package:
+  package-client-deb-universal:
     <<: *sbtenv
     commands:
-      - sbt node/debian:packageBin node/universal:packageZipTarball
+      - sbt client/debian:packageBin client/universal:packageZipTarball
       - mkdir -p /artifacts/${DRONE_BRANCH}
-      - cp node/target/node_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
+      - cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
     volumes:
       - /var/cache/cl-build/.sbt:/root/.sbt
       - /var/cache/cl-build/.ivy2:/root/.ivy2
@@ -107,12 +111,39 @@ pipeline:
     when:
       event: [ push, tag ]
 
-  package-rpm:
+  package-client-rpm:
+    <<: *sbtenv
+    commands:
+      - env JAVAC_VERSION=1.8 sbt clean compile doc client/rpm:packageBin
+      - mkdir -p /artifacts/${DRONE_BRANCH}
+      - cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm /artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+      - /artifacts/:/artifacts/
+    when:
+      event: [ push, tag ]
+
+  package-node-deb-universal:
+    <<: *sbtenv
+    commands:
+      - sbt node/debian:packageBin node/universal:packageZipTarball
+      - mkdir -p /artifacts/${DRONE_BRANCH}
+      - cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /artifacts/:/artifacts/
+    when:
+      event: [ push, tag ]
+
+  package-node-rpm:
     <<: *sbtenv
     commands:
       - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
       - mkdir -p /artifacts/${DRONE_BRANCH}
-      - cp node/target/rpm/RPMS/noarch/node-*.noarch.rpm /artifacts/${DRONE_BRANCH}
+      - cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm /artifacts/${DRONE_BRANCH}
     volumes:
       - /var/cache/cl-build/.sbt:/root/.sbt
       - /var/cache/cl-build/.ivy2:/root/.ivy2

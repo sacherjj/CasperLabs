@@ -14,14 +14,6 @@ pub use self::trackingcopy::TrackingCopy;
 #[derive(Debug)]
 pub struct ExecutionEffect(pub HashMap<Key, Op>, pub HashMap<Key, Transform>);
 
-pub trait GlobalState
-where
-    Self: DbReader + Sized,
-{
-    fn apply(&mut self, k: Key, t: Transform) -> Result<(), Error>;
-    fn tracking_copy(&self) -> Result<TrackingCopy<Self>, Error>;
-}
-
 pub trait DbReader {
     fn get(&self, k: &Key) -> Result<Value, Error>;
 }

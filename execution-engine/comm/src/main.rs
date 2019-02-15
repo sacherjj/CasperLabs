@@ -10,7 +10,8 @@ pub mod engine_server;
 use clap::{App, Arg};
 use engine_server::*;
 use execution_engine::engine::EngineState;
-use storage::gs::inmem::InMemGS;
+use storage::gs::inmem::InMemHist;
+use storage::history::EMPTY_ROOT_HASH;
 
 fn main() {
     let matches = App::new("Execution engine server")
@@ -24,8 +25,8 @@ fn main() {
         std::fs::remove_file(socket_path).expect("Remove old socket file.");
     }
 
-    let engine_state = EngineState::new(InMemGS::new());
-    engine_state.with_mocked_account([48u8; 20]);
+    let engine_state = EngineState::new(InMemHist::new(&EMPTY_ROOT_HASH));
+    engine_state.with_mocked_account(EMPTY_ROOT_HASH, [48u8; 20]);
     let server_builder = engine_server::new(socket, engine_state);
     let _server = server_builder.build().expect("Start server");
 
