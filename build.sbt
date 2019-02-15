@@ -178,6 +178,9 @@ lazy val node = (project in file("node"))
     version := nodeAndClientVersion,
     name := "node",
     maintainer := "CasperLabs, LLC. <info@casperlabs.io>",
+    packageName := "casperlabs-node",
+    packageName in Docker := "node",
+    executableScriptName := "casperlabs-node",
     packageSummary := "CasperLabs Node",
     packageDescription := "CasperLabs Node - the Casperlabs blockchain node server software.",
     libraryDependencies ++=
@@ -212,7 +215,7 @@ lazy val node = (project in file("node"))
      *    initializes all useful variables (like $java_version).
      *
      * This won't work if someone passes -no-version-check command line
-     * argument to casperlabsnode. They most probably know what they're doing.
+     * argument to casperlabs-node. They most probably know what they're doing.
      *
      * https://unix.stackexchange.com/a/29742/124070
      * Thanks Gilles!
@@ -259,9 +262,9 @@ lazy val node = (project in file("node"))
     },
     /* Packaging */
     linuxPackageMappings ++= {
-      val file = baseDirectory.value / "casperlabsnode.service"
+      val file = baseDirectory.value / "casperlabs-node.service"
       Seq(
-        packageMapping(file -> "/lib/systemd/system/casperlabsnode.service")
+        packageMapping(file -> "/lib/systemd/system/casperlabs-node.service")
       )
     },
     /* Debian */
@@ -286,7 +289,8 @@ lazy val node = (project in file("node"))
       "java-11-openjdk-headless >= 11.0.1.13",
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
-    )
+    ),
+    rpmAutoreq := "no"
   )
   .dependsOn(casper, comm, crypto, smartContracts)
 
@@ -366,7 +370,7 @@ lazy val client = (project in file("client"))
      *    initializes all useful variables (like $java_version).
      *
      * This won't work if someone passes -no-version-check command line
-     * argument to casperlabsnode. They most probably know what they're doing.
+     * argument to casperlabs-node. They most probably know what they're doing.
      *
      * https://unix.stackexchange.com/a/29742/124070
      * Thanks Gilles!
