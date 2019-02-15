@@ -97,7 +97,34 @@ pipeline:
 
   # push
 
-  package:
+  package-client-deb-universal:
+    <<: *sbtenv
+    commands:
+      - sbt client/debian:packageBin client/universal:packageZipTarball
+      - mkdir -p /artifacts/${DRONE_BRANCH}
+      - cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /artifacts/:/artifacts/
+    when:
+      event: [ push, tag ]
+
+  package-client-rpm:
+    <<: *sbtenv
+    commands:
+      - env JAVAC_VERSION=1.8 sbt clean compile doc client/rpm:packageBin
+      - mkdir -p /artifacts/${DRONE_BRANCH}
+      - cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm /artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+      - /artifacts/:/artifacts/
+    when:
+      event: [ push, tag ]
+
+  package-node-deb-universal:
     <<: *sbtenv
     commands:
       - sbt node/debian:packageBin node/universal:packageZipTarball
@@ -111,7 +138,7 @@ pipeline:
     when:
       event: [ push, tag ]
 
-  package-rpm:
+  package-node-rpm:
     <<: *sbtenv
     commands:
       - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
