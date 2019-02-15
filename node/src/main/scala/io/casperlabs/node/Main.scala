@@ -17,8 +17,8 @@ import scala.util.control.NoStackTrace
 
 object Main {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-  private implicit val log: Log[Task]       = effects.log
+  private implicit lazy val logSource: LogSource = LogSource(this.getClass)
+  private implicit lazy val log: Log[Task]       = effects.log
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.computation(
@@ -30,10 +30,18 @@ object Main {
     val exec: Task[Unit] =
       for {
         conf <- Task(Configuration.parse(args))
-        _    <- conf.fold(errors => log.error(errors.mkString_("", "\n", "")), mainProgram)
+        _ <- conf
+              .fold(
+                errors => log.error(errors.mkString_("", "\n", "")),
+                conf => updateLoggingProps(conf) >> mainProgram(conf)
+              )
       } yield ()
 
     exec.unsafeRunSync
+  }
+
+  private def updateLoggingProps(conf: Configuration): Task[Unit] = Task {
+    sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
   }
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
