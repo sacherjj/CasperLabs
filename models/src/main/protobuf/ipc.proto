@@ -10,37 +10,26 @@ message Deploy {
     int64 gas_limit = 5;
     int64 gas_price = 6;
     int64 nonce = 7;
-    string sig_algorithm = 8; // name of the algorithm used for signing
-    bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
 }
 
 message ExecRequest {
-    //TODO: don't need `repeated`, only need single pre-state after all
-    repeated bytes parent_state_hashes = 1;
+    bytes parent_state_hash = 1;
     repeated Deploy deploys = 2;
 }
 
 message ExecResponse {
     oneof result {
         ExecResult success = 1;
-        //if one or more parent hashes not found
-        MultipleRootsNotFound missing_parents = 2; 
+        RootNotFound missing_parent = 2;
     }
 }
 
 message ExecResult {
-    //TODO: remove field, not needed since we will always privide single pre-state
-    bytes prestate_hash = 1;
     repeated DeployResult deploy_results = 2;
 }
 
 message RootNotFound {
     bytes hash = 1;
-}
-
-//this message is needed because `oneof` variants cannot include the `repeated` keyword
-message MultipleRootsNotFound {
-    repeated RootNotFound missing_hashes = 1;
 }
 
 message CommitRequest {
@@ -222,41 +211,15 @@ message DeployResult {
         DeployError error = 2;
     }
 }
- 
-//TODO: delete this message definition when no longer used 
-// Map of effects to execute
-// Sent from the consensus layer to Execute Engine.
-// Contains a set of transformations that are safe to apply in parallel, because of their commutative nature.
-message CommutativeEffects {
-    repeated TransformEntry effects = 1;
-}
- 
-//TODO: delete this message definition when no longer used 
-message Done {
-    bytes poststate_hash = 1;
-}
 
 //TODO: be more specific about errors
 message PostEffectsError {
     string message = 1;
 }
 
-//TODO: delete this message definition when no longer used 
-message PostEffectsResult {
-    oneof result {
-        Done success = 1;
-        PostEffectsError error = 2;
-    }
-}
- 
 // Definition of the service.
 // ExecutionEngine implements server part while Consensus implements client part.
 service ExecutionEngineService {
-    //TODO: delete these method definitions when no longer used 
-    rpc SendDeploy (Deploy) returns (DeployResult) {}
-    rpc ExecuteEffects (CommutativeEffects) returns (PostEffectsResult) {}
-
-
     rpc exec (ExecRequest) returns (ExecResponse) {}
     rpc commit (CommitRequest) returns (CommitResponse) {}
 }

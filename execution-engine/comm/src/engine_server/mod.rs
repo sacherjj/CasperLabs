@@ -17,39 +17,13 @@ pub mod mappings;
 // Proto definitions should be translated into domain objects when Engine's API is invoked.
 // This way core won't depend on comm (outer layer) leading to cleaner design.
 impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineState<R, H> {
-    fn send_deploy(
-        &self,
-        _o: ::grpc::RequestOptions,
-        _p: ipc::Deploy,
-    ) -> grpc::SingleResponse<ipc::DeployResult> {
-        let mut res = DeployResult::new();
-        let mut err = ipc::DeployError::new();
-        let mut wasm_err = ipc::WasmError::new();
-        wasm_err.set_message("".to_owned());
-        err.set_wasmErr(wasm_err);
-        res.set_error(err);
-        grpc::SingleResponse::completed(res)
-    }
-
-    fn execute_effects(
-        &self,
-        _o: ::grpc::RequestOptions,
-        _p: ipc::CommutativeEffects,
-    ) -> grpc::SingleResponse<ipc::PostEffectsResult> {
-        let mut tmp_res = ipc::PostEffectsResult::new();
-        let mut err = ipc::PostEffectsError::new();
-        err.set_message("".to_owned());
-        tmp_res.set_error(err);
-        grpc::SingleResponse::completed(tmp_res)
-    }
-
     fn exec(
         &self,
         _o: ::grpc::RequestOptions,
         p: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
         let mut prestate_hash = [0u8; 32];
-        prestate_hash.copy_from_slice(&p.get_parent_state_hashes()[0]);
+        prestate_hash.copy_from_slice(&p.get_parent_state_hash());
         let deploys = p.get_deploys();
         let mut exec_response = ipc::ExecResponse::new();
         let mut exec_result = ipc::ExecResult::new();
@@ -87,7 +61,6 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                 }
             };
         }
-        exec_result.set_prestate_hash(prestate_hash.to_vec());
         exec_result.set_deploy_results(protobuf::RepeatedField::from_vec(deploy_results));
         exec_response.set_success(exec_result);
         grpc::SingleResponse::completed(exec_response)
