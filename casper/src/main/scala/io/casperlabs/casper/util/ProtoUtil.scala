@@ -545,14 +545,6 @@ object ProtoUtil {
     signature = dd.signature
   )
 
-  /**
-    * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
-    * Because we enforce that a deployment must be unique on the user, timestamp pair, we leave
-    * only those fields. This allows users to more readily pre-generate names for signing.
-    */
-  def stripDeployData(d: DeployData): DeployData =
-    DeployData().withUser(d.user).withTimestamp(d.timestamp)
-
   def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {
     val missingParents = parentHashes(b).toSet
     val missingJustifications = b.justifications
