@@ -540,9 +540,7 @@ object ProtoUtil {
     paymentCode = dd.paymentCode,
     gasLimit = dd.gasLimit,
     gasPrice = dd.gasPrice,
-    nonce = dd.nonce,
-    sigAlgorithm = dd.sigAlgorithm,
-    signature = dd.signature
+    nonce = dd.nonce
   )
 
   def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {

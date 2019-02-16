@@ -8,7 +8,7 @@ import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
-import io.casperlabs.ipc.{CommutativeEffects, ExecutionEffect, Deploy => IPCDeploy}
+import io.casperlabs.ipc.{ExecutionEffect, Deploy => IPCDeploy}
 import io.casperlabs.models._
 import io.casperlabs.shared.{Log, LogSource}
 import io.casperlabs.smartcontracts.ExecutionEngineService

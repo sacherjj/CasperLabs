@@ -176,8 +176,10 @@ object Configuration {
   ): ValidatedNel[String, Configuration.GrpcServer] =
     (
       optToValidated(confSoft.grpc.flatMap(_.host), "GrpcServer.host"),
-      optToValidated(adjustPath(confSoft, confSoft.grpc.flatMap(_.socket), default),
-                     "GrpcServer.socket"),
+      optToValidated(
+        adjustPath(confSoft, confSoft.grpc.flatMap(_.socket), default),
+        "GrpcServer.socket"
+      ),
       optToValidated(confSoft.grpc.flatMap(_.portExternal), "GrpcServer.portExternal"),
       optToValidated(confSoft.grpc.flatMap(_.portInternal), "GrpcServer.portInternal")
     ).mapN(Configuration.GrpcServer.apply)

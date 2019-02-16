@@ -26,8 +26,8 @@ object ExecEngineUtil {
           gasLimit,
           gasPrice,
           nonce,
-          sigAlgorithm,
-          sig,
+          _,
+          _,
           _
           ) =>
         Deploy(
@@ -37,9 +37,7 @@ object ExecEngineUtil {
           pCode,
           gasLimit,
           gasPrice,
-          nonce,
-          sigAlgorithm,
-          sig
+          nonce
         )
     }
 

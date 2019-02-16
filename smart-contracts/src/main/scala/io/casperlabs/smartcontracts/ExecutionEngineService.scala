@@ -16,8 +16,8 @@ import io.netty.channel.epoll.{Epoll, EpollDomainSocketChannel, EpollEventLoopGr
 import io.netty.channel.kqueue.{KQueueDomainSocketChannel, KQueueEventLoopGroup}
 import io.netty.channel.unix.DomainSocketAddress
 import simulacrum.typeclass
-
 import com.google.protobuf.ByteString
+import io.casperlabs.crypto.codec.Base16
 import monix.eval.Task
 
 import scala.util.Either
@@ -70,16 +70,18 @@ class GrpcExecutionEngineService[F[_]: Monad: ToAbstractContext](addr: Path, max
       prestate: ByteString,
       deploys: Seq[Deploy]
   ): F[Either[Throwable, Seq[DeployResult]]] =
-    ToAbstractContext[F].fromTask(stub.exec(ExecRequest(Seq(prestate), deploys)).attempt).map {
+    ToAbstractContext[F].fromTask(stub.exec(ExecRequest(prestate, deploys)).attempt).map {
       case Left(err) => Left(err)
       case Right(ExecResponse(result)) =>
         result match {
-          case ExecResponse.Result.Success(ExecResult(_, deployResults)) =>
+          case ExecResponse.Result.Success(ExecResult(deployResults)) =>
             Right(deployResults)
           //TODO: Capture errors better than just as a string
           case ExecResponse.Result.Empty => Left(new SmartContractEngineError("empty response"))
-          case ExecResponse.Result.MissingParents(MultipleRootsNotFound(missing)) =>
-            Left(new SmartContractEngineError(s"Missing states: ${missing.mkString(",")}"))
+          case ExecResponse.Result.MissingParent(RootNotFound(missing)) =>
+            Left(
+              new SmartContractEngineError(s"Missing states: ${Base16.encode(missing.toByteArray)}")
+            )
         }
     }
 
