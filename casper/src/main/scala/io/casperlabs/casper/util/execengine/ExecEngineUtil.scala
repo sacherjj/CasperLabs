@@ -3,9 +3,7 @@ package io.casperlabs.casper.util.execengine
 import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
-
 import com.google.protobuf.ByteString
-
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
 import io.casperlabs.casper.protocol
 import io.casperlabs.casper.protocol.BlockMessage

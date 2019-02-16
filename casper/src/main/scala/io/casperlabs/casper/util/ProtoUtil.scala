@@ -1,21 +1,20 @@
 package io.casperlabs.casper.util
 
-import cats.{Applicative, Monad}
 import cats.implicits._
+import cats.{Applicative, Monad}
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.protocol.{DeployData, _}
 import io.casperlabs.casper.util.implicits._
-import io.casperlabs.casper.PrettyPrinter
-import io.casperlabs.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.ipc.{Deploy => EEDeploy}
+import io.casperlabs.shared.{Log, Time}
 
-import scala.collection.{immutable, BitSet}
+import scala.collection.immutable
 
 object ProtoUtil {
   /*
