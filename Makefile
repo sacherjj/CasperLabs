@@ -107,14 +107,24 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	mkdir -p $(dir $@) && touch $@
 
 
+# Re-package cargo if any Rust source code changes (to account for transitive dependencies).
+.make/cargo-package/%: \
+		$(shell find . -type f -iregex ".*/Cargo\.toml\|.*/src/.*\.rs" | grep -v target)
+	cd $* && cargo update && cargo package
+	mkdir -p $(dir $@) && touch $@
+
 .make/cargo-publish/%: .make/cargo-package/%
 	@#https://doc.rust-lang.org/cargo/reference/publishing.html
 	@#After a package is first published to crates.io run `cargo owner --add github:CasperLabs:crate-owners` once to allow others to push.
-	cd $* && cargo publish
-	mkdir -p $(dir $@) && touch $@
-
-.make/cargo-package/%: $(shell find $* -type f -iregex ".*/Cargo\.toml\|.*\.rs") .make/rustup-update
-	cd $* && cargo update && cargo package
+	@#Cargo returns an error if the package has already been published, so we can't break code, we have to publish a newer version.
+	cd $* && \
+	RESULT=$$(cargo publish 2>&1) ; \
+	CODE=$$? ; \
+	if echo $$RESULT | grep -q "already uploaded" ; then \
+		echo "already uploaded" && exit 0 ; \
+	else \
+		echo $$RESULT && exit $$CODE ; \
+	fi
 	mkdir -p $(dir $@) && touch $@
 
 
@@ -131,7 +141,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Build the execution engine executable.
 execution-engine/comm/target/release/engine-grpc-server: \
 		.make/rust-proto \
-		$(shell find . -type f -iregex '.*/src/.*\.rs')
+		$(shell find . -type f -iregex '.*/Cargo\.toml\.*/src/.*\.rs')
 	cd execution-engine/comm && \
 	cargo update && \
 	cargo build --release
