@@ -6,10 +6,10 @@ use gs::{DbReader, TrackingCopy};
 use history::*;
 use rkv::store::single::SingleStore;
 use rkv::{Manager, Rkv, StoreOptions};
+use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
-use std::collections::HashMap;
 use transform::Transform;
 
 pub struct LmdbGs {
@@ -49,7 +49,9 @@ impl LmdbGs {
                     }
                     //If we always store values as Blobs this case will never come
                     //up. TODO: Use other variants of rkb::Value (e.g. I64, Str)?
-                    Some(_) => Err(Error::RkvError(String::from("Value stored in LMDB was != Blob"))),
+                    Some(_) => Err(Error::RkvError(String::from(
+                        "Value stored in LMDB was != Blob",
+                    ))),
                 }
             })
     }
@@ -104,10 +106,13 @@ impl History<Self> for LmdbGs {
         unimplemented!("LMDB History not implemented")
     }
 
-    fn commit(&mut self, _prestate_hash: [u8; 32], _effects: HashMap<Key, Transform>) -> Result<[u8; 32], Error> {
-      unimplemented!("LMDB History not implemented")
+    fn commit(
+        &mut self,
+        _prestate_hash: [u8; 32],
+        _effects: HashMap<Key, Transform>,
+    ) -> Result<[u8; 32], Error> {
+        unimplemented!("LMDB History not implemented")
     }
-
 }
 
 impl fmt::Debug for LmdbGs {

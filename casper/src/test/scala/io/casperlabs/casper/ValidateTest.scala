@@ -9,7 +9,6 @@ import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._
-import io.casperlabs.casper.protocol.Event.EventInstance
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -24,9 +23,8 @@ import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, BeforeAndAfterEach, FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
-import scala.concurrent.duration._
 import scala.collection.immutable.HashMap
 
 class ValidateTest
@@ -35,9 +33,15 @@ class ValidateTest
     with BeforeAndAfterEach
     with BlockGenerator
     with BlockDagStorageFixture {
-  implicit val log   = new LogStub[Task]
-  implicit val absId = ToAbstractContext.idToAbstractContext
-  val ed25519        = "ed25519"
+  implicit val log              = new LogStub[Task]
+  implicit val absId            = ToAbstractContext.idToAbstractContext
+  implicit val raiseValidateErr = Validate.raiseValidateErrorThroughSync[Task]
+  // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
+  // When raise errors we wrap them with Throwable so we need to do the same here.
+  implicit def wrapWithThrowable[A <: InvalidBlock](err: A): Throwable =
+    Validate.ValidateErrorWrapper(err)
+
+  val ed25519 = "ed25519"
 
   override def beforeEach(): Unit = {
     log.reset()
@@ -173,10 +177,12 @@ class ValidateTest
         block                   <- blockDagStorage.lookupByIdUnsafe(0)
         modifiedTimestampHeader = block.header.get.withTimestamp(99999999)
         dag                     <- blockDagStorage.getRepresentation
-        _ <- Validate.timestamp[Task](
-              block.withHeader(modifiedTimestampHeader),
-              dag
-            ) shouldBeF InvalidUnslashableBlock.asLeft[ValidBlock]
+        _ <- Validate
+              .timestamp[Task](
+                block.withHeader(modifiedTimestampHeader),
+                dag
+              )
+              .attempt shouldBeF Left(InvalidUnslashableBlock)
         _      <- Validate.timestamp[Task](block, dag) shouldBeF Valid.asRight[InvalidBlock]
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("block timestamp") should be(true)
@@ -190,11 +196,13 @@ class ValidateTest
         block                   <- blockDagStorage.lookupByIdUnsafe(1)
         modifiedTimestampHeader = block.header.get.withTimestamp(-1)
         dag                     <- blockDagStorage.getRepresentation
-        _ <- Validate.timestamp[Task](
-              block.withHeader(modifiedTimestampHeader),
-              dag
-            ) shouldBeF Left(InvalidUnslashableBlock)
-        _      <- Validate.timestamp[Task](block, dag) shouldBeF Right(Valid)
+        _ <- Validate
+              .timestamp[Task](
+                block.withHeader(modifiedTimestampHeader),
+                dag
+              )
+              .attempt shouldBeF Left(InvalidUnslashableBlock)
+        _      <- Validate.timestamp[Task](block, dag).attempt shouldBeF Right(Valid)
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("block timestamp") should be(true)
       } yield result
@@ -203,10 +211,12 @@ class ValidateTest
   "Block number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _      <- createChain[Task](1)
-        block  <- blockDagStorage.lookupByIdUnsafe(0)
-        _      <- Validate.blockNumber[Task](block.withBlockNumber(1)) shouldBeF Left(InvalidBlockNumber)
-        _      <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
+        _     <- createChain[Task](1)
+        block <- blockDagStorage.lookupByIdUnsafe(0)
+        _ <- Validate.blockNumber[Task](block.withBlockNumber(1)).attempt shouldBeF Left(
+              InvalidBlockNumber
+            )
+        _      <- Validate.blockNumber[Task](block) shouldBeF Unit
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no parents") should be(true)
       } yield result
@@ -216,16 +226,16 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       val n = 6
       for {
-        _  <- createChain[Task](n)
-        a0 <- blockDagStorage.lookupByIdUnsafe(0) >>= Validate.blockNumber[Task]
-        a1 <- blockDagStorage.lookupByIdUnsafe(1) >>= Validate.blockNumber[Task]
-        a2 <- blockDagStorage.lookupByIdUnsafe(2) >>= Validate.blockNumber[Task]
-        a3 <- blockDagStorage.lookupByIdUnsafe(3) >>= Validate.blockNumber[Task]
-        a4 <- blockDagStorage.lookupByIdUnsafe(4) >>= Validate.blockNumber[Task]
-        a5 <- blockDagStorage.lookupByIdUnsafe(5) >>= Validate.blockNumber[Task]
+        _ <- createChain[Task](n)
+        _ <- blockDagStorage.lookupByIdUnsafe(0) >>= Validate.blockNumber[Task]
+        _ <- blockDagStorage.lookupByIdUnsafe(1) >>= Validate.blockNumber[Task]
+        _ <- blockDagStorage.lookupByIdUnsafe(2) >>= Validate.blockNumber[Task]
+        _ <- blockDagStorage.lookupByIdUnsafe(3) >>= Validate.blockNumber[Task]
+        _ <- blockDagStorage.lookupByIdUnsafe(4) >>= Validate.blockNumber[Task]
+        _ <- blockDagStorage.lookupByIdUnsafe(5) >>= Validate.blockNumber[Task]
         _ <- (0 until n).toList.forallM[Task] { i =>
               (blockDagStorage.lookupByIdUnsafe(i) >>= Validate.blockNumber[Task])
-                .map(_ == Right(Valid))
+                .map(_ => true)
             } shouldBeF true
         result = log.warns should be(Nil)
       } yield result
@@ -249,8 +259,8 @@ class ValidateTest
         b1 <- createBlockWithNumber(3)
         b2 <- createBlockWithNumber(7)
         b3 <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
-        _  <- Validate.blockNumber[Task](b3) shouldBeF Right(Valid)
-        result <- Validate.blockNumber[Task](b3.withBlockNumber(4)) shouldBeF Left(
+        _  <- Validate.blockNumber[Task](b3) shouldBeF Unit
+        result <- Validate.blockNumber[Task](b3.withBlockNumber(4)).attempt shouldBeF Left(
                    InvalidBlockNumber
                  )
       } yield result
@@ -262,10 +272,10 @@ class ValidateTest
         _     <- createChain[Task](1)
         block <- blockDagStorage.lookupByIdUnsafe(0)
         dag   <- blockDagStorage.getRepresentation
-        _ <- Validate.sequenceNumber[Task](block.withSeqNum(1), dag) shouldBeF Left(
+        _ <- Validate.sequenceNumber[Task](block.withSeqNum(1), dag).attempt shouldBeF Left(
               InvalidSequenceNumber
             )
-        _      <- Validate.sequenceNumber[Task](block, dag) shouldBeF Right(Valid)
+        _      <- Validate.sequenceNumber[Task](block, dag) shouldBeF Unit
         result = log.warns.size should be(1)
       } yield result
   }
@@ -276,7 +286,7 @@ class ValidateTest
         _     <- createChain[Task](2)
         block <- blockDagStorage.lookupByIdUnsafe(1)
         dag   <- blockDagStorage.getRepresentation
-        _ <- Validate.sequenceNumber[Task](block.withSeqNum(1), dag) shouldBeF Left(
+        _ <- Validate.sequenceNumber[Task](block.withSeqNum(1), dag).attempt shouldBeF Left(
               InvalidSequenceNumber
             )
         result = log.warns.size should be(1)
@@ -298,7 +308,7 @@ class ValidateTest
                              block,
                              dag
                            )
-                } yield result == Right(Valid)
+                } yield true
             ) shouldBeF true
         result = log.warns should be(Nil)
       } yield result
@@ -366,16 +376,6 @@ class ValidateTest
         result <- mkRuntimeManager("casper-util-test")
                    .use { runtimeManager =>
                      for {
-                       _   <- updateChainWithBlockStateUpdate[Task](0, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](1, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](2, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](3, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](4, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](5, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](6, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](7, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](8, b0, runtimeManager)
-                       _   <- updateChainWithBlockStateUpdate[Task](9, b0, runtimeManager)
                        dag <- blockDagStorage.getRepresentation
 
                        // Valid
@@ -388,9 +388,9 @@ class ValidateTest
                        _ <- Validate.parents[Task](b6, b0, dag)
 
                        // Not valid
-                       _ <- Validate.parents[Task](b7, b0, dag)
-                       _ <- Validate.parents[Task](b8, b0, dag)
-                       _ <- Validate.parents[Task](b9, b0, dag)
+                       _ <- Validate.parents[Task](b7, b0, dag).attempt
+                       _ <- Validate.parents[Task](b8, b0, dag).attempt
+                       _ <- Validate.parents[Task](b9, b0, dag).attempt
 
                        _ = log.warns should have size (3)
                        result = log.warns.forall(
@@ -419,12 +419,14 @@ class ValidateTest
                         "ed25519",
                         "rchain"
                       )
-        _ <- Validate.blockSummary[Task](
-              signedBlock,
-              BlockMessage(),
-              dag,
-              "rchain"
-            ) shouldBeF Left(InvalidBlockNumber)
+        _ <- Validate
+              .blockSummary[Task](
+                signedBlock,
+                BlockMessage(),
+                dag,
+                "rchain"
+              )
+              .attempt shouldBeF Left(InvalidBlockNumber)
         result = log.warns.size should be(1)
       } yield result
   }
@@ -491,15 +493,17 @@ class ValidateTest
                              genesis,
                              dag
                            )
-                } yield result == Right(Valid)
+                } yield true
             ) shouldBeF true
         blockId7 <- blockDagStorage.lookupByIdUnsafe(7)
         dag      <- blockDagStorage.getRepresentation
-        _ <- Validate.justificationFollows[Task](
-              blockId7,
-              genesis,
-              dag
-            ) shouldBeF Left(InvalidFollows)
+        _ <- Validate
+              .justificationFollows[Task](
+                blockId7,
+                genesis,
+                dag
+              )
+              .attempt shouldBeF Left(InvalidFollows)
         _      = log.warns.size shouldBe 1
         result = log.warns.forall(_.contains("do not match the bonded validators")) shouldBe true
       } yield result
@@ -550,7 +554,7 @@ class ValidateTest
                              b0,
                              dag
                            )
-                } yield result == Right(Valid)
+                } yield true
             ) shouldBeF true
         // The justification block for validator 0 should point to b2 or above.
         justificationsWithRegression = Seq(
@@ -561,11 +565,13 @@ class ValidateTest
           .withSender(validators(1))
           .withJustifications(justificationsWithRegression)
         dag <- blockDagStorage.getRepresentation
-        _ <- Validate.justificationRegressions[Task](
-              blockWithJustificationRegression,
-              b0,
-              dag
-            ) shouldBeF Left(JustificationRegression)
+        _ <- Validate
+              .justificationRegressions[Task](
+                blockWithJustificationRegression,
+                b0,
+                dag
+              )
+              .attempt shouldBeF Left(JustificationRegression)
         result = log.warns.size shouldBe 1
       } yield result
   }
@@ -575,6 +581,7 @@ class ValidateTest
       val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
       val bonds           = HashSetCasperTest.createBonds(validators)
       val genesis         = HashSetCasperTest.createGenesis(bonds)
+      val genesisBonds    = ProtoUtil.bonds(genesis)
 
       val storageDirectory        = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long       = 1024L * 1024
@@ -584,12 +591,12 @@ class ValidateTest
       for {
         dag               <- blockDagStorage.getRepresentation
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
-        _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
+        _                 <- Validate.bondsCache[Task](genesis, genesisBonds) shouldBeF Unit
         modifiedBonds     = Seq.empty[Bond]
         modifiedPostState = genesis.getBody.getState.withBonds(modifiedBonds)
         modifiedBody      = genesis.getBody.withState(modifiedPostState)
         modifiedGenesis   = genesis.withBody(modifiedBody)
-        result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
+        result <- Validate.bondsCache[Task](modifiedGenesis, genesisBonds).attempt shouldBeF Left(
                    InvalidBondsCache
                  )
       } yield result
@@ -627,10 +634,12 @@ class ValidateTest
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
-        _       <- Validate.blockHash[Task](genesis) shouldBeF Right(Valid)
-        result <- Validate.blockHash[Task](
-                   genesis.withBlockHash(ByteString.copyFromUtf8("123"))
-                 ) shouldBeF Left(InvalidBlockHash)
+        _       <- Validate.blockHash[Task](genesis) shouldBeF Unit
+        result <- Validate
+                   .blockHash[Task](
+                     genesis.withBlockHash(ByteString.copyFromUtf8("123"))
+                   )
+                   .attempt shouldBeF Left(InvalidBlockHash)
       } yield result
   }
 
@@ -641,10 +650,12 @@ class ValidateTest
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
-        _       <- Validate.deployCount[Task](genesis) shouldBeF Right(Valid)
-        result <- Validate.deployCount[Task](
-                   genesis.withHeader(genesis.header.get.withDeployCount(100))
-                 ) shouldBeF Left(InvalidDeployCount)
+        _       <- Validate.deployCount[Task](genesis) shouldBeF Unit
+        result <- Validate
+                   .deployCount[Task](
+                     genesis.withHeader(genesis.header.get.withDeployCount(100))
+                   )
+                   .attempt shouldBeF Left(InvalidDeployCount)
       } yield result
   }
 

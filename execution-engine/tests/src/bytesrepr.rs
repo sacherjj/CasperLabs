@@ -1,7 +1,7 @@
 use common::bytesrepr::*;
+use gens::gens::*;
 use proptest::collection::vec;
 use proptest::prelude::*;
-use gens::gens::*;
 
 fn test_serialization_roundtrip<T: ToBytes + FromBytes + PartialEq + std::fmt::Debug>(
     el: &T,

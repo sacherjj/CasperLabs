@@ -12,7 +12,7 @@ use execution_engine::execution::{Runtime, RuntimeContext};
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
 use std::collections::{BTreeMap, HashMap};
-use storage::gs::{inmem::*, DbReader, ExecutionEffect, TrackingCopy};
+use storage::gs::{inmem::*, DbReader, TrackingCopy};
 use storage::history::*;
 use storage::transform::Transform;
 use wasm_prep::MAX_MEM_PAGES;
@@ -29,8 +29,12 @@ struct MockEnv {
 }
 
 impl MockEnv {
-    pub fn new(key: Key, account: value::Account, gas_limit: u64, gs: InMemHist) -> Self {
-        let tc = TrackingCopy::new(gs);
+    pub fn new(
+        key: Key,
+        account: value::Account,
+        gas_limit: u64,
+        tc: TrackingCopy<InMemGS>,
+    ) -> Self {
         let uref_lookup = mock_uref_lookup();
         let memory = MemoryInstance::alloc(Pages(17), Some(Pages(MAX_MEM_PAGES as usize)))
             .expect("Mocked memory should be able to be created.");
@@ -45,7 +49,12 @@ impl MockEnv {
         }
     }
 
-    pub fn runtime<'a>(&'a mut self, address: [u8;20], timestamp: i64, nonce: i64) -> Runtime<'a, InMemGS> {
+    pub fn runtime<'a>(
+        &'a mut self,
+        address: [u8; 20],
+        timestamp: i64,
+        nonce: i64,
+    ) -> Runtime<'a, InMemGS> {
         let context = mock_context(&mut self.uref_lookup, &self.account, self.key);
         Runtime::new(
             self.memory.clone(),
@@ -113,17 +122,18 @@ fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
     (key, account)
 }
 
-fn mock_gs(init_key: Key, init_account: &value::Account) -> InMemHist {
-    let mut result = InMemHist::new(&[0u8;32]);
+fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS> {
+    let root_hash = storage::history::EMPTY_ROOT_HASH;
+    let mut hist = InMemHist::new(&root_hash);
     let transform = Transform::Write(value::Value::Acct(init_account.clone()));
 
     let mut m = HashMap::new();
     m.insert(init_key, transform);
-    result
-        .commit([0u8;32], m)
+    hist.commit([0u8; 32], m)
         .expect("Creation of mocked account should be a success.");
 
-    result
+    hist.checkout(root_hash)
+        .expect("Checkout of root hash should be a success.")
 }
 
 fn mock_context<'a>(
@@ -156,8 +166,8 @@ fn valid_uref() {
     let timestamp: i64 = 1000;
     let nonce: i64 = 1;
     let (key, account) = mock_account(addr);
-    let gs = mock_gs(key, &account);
-    let mut env = MockEnv::new(key, account, 0, gs);
+    let tc = mock_tc(key, &account);
+    let mut env = MockEnv::new(key, account, 0, tc);
     let mut memory = env.memory_manager();
     let mut runtime = env.runtime(addr, timestamp, nonce);
 
@@ -179,11 +189,13 @@ fn valid_uref() {
 #[test]
 fn forged_uref() {
     let addr = [0u8; 20];
+    let timestamp: i64 = 1000;
+    let nonce: i64 = 1;
     let (key, account) = mock_account(addr);
-    let gs = mock_gs(key, &account);
-    let mut env = MockEnv::new(key, account, 0, &gs);
+    let tc = mock_tc(key, &account);
+    let mut env = MockEnv::new(key, account, 0, tc);
     let mut memory = env.memory_manager();
-    let mut runtime = env.runtime();
+    let mut runtime = env.runtime(addr, timestamp, nonce);
 
     //create a forged uref
     let uref = memory

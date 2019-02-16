@@ -15,6 +15,7 @@ message Deploy {
 }
 
 message ExecRequest {
+    //TODO: don't need `repeated`, only need single pre-state after all
     repeated bytes parent_state_hashes = 1;
     repeated Deploy deploys = 2;
 }
@@ -28,6 +29,7 @@ message ExecResponse {
 }
 
 message ExecResult {
+    //TODO: remove field, not needed since we will always privide single pre-state
     bytes prestate_hash = 1;
     repeated DeployResult deploy_results = 2;
 }

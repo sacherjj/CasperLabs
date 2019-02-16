@@ -2,6 +2,7 @@ package io.casperlabs.casper
 
 import cats.{Applicative, Monad}
 import cats.implicits._
+import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
@@ -64,34 +65,35 @@ object EquivocationDetector {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def checkEquivocations[F[_]: Monad: Log](
+  def checkEquivocations[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[Either[InvalidBlock, ValidBlock]] =
+  ): F[Unit] =
     for {
       maybeLatestMessageOfCreatorHash <- dag.latestMessageHash(block.sender)
       maybeCreatorJustification       = creatorJustificationHash(block)
       isNotEquivocation               = maybeCreatorJustification == maybeLatestMessageOfCreatorHash
-      result <- if (isNotEquivocation) {
-                 Applicative[F].pure(Right(Valid))
-               } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
-                 Applicative[F].pure(Left(AdmissibleEquivocation))
-               } else {
-                 for {
-                   sender <- PrettyPrinter.buildString(block.sender).pure[F]
-                   creatorJustificationHash = PrettyPrinter.buildString(
-                     maybeCreatorJustification.getOrElse(ByteString.EMPTY)
-                   )
-                   latestMessageOfCreator = PrettyPrinter.buildString(
-                     maybeLatestMessageOfCreatorHash.getOrElse(ByteString.EMPTY)
-                   )
-                   _ <- Log[F].warn(
-                         s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator"
-                       )
-                 } yield Left(IgnorableEquivocation)
-               }
-    } yield result
+      _ <- if (isNotEquivocation) {
+            Applicative[F].unit
+          } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
+            FunctorRaise[F, InvalidBlock].raise[Unit](AdmissibleEquivocation)
+          } else {
+            for {
+              sender <- PrettyPrinter.buildString(block.sender).pure[F]
+              creatorJustificationHash = PrettyPrinter.buildString(
+                maybeCreatorJustification.getOrElse(ByteString.EMPTY)
+              )
+              latestMessageOfCreator = PrettyPrinter.buildString(
+                maybeLatestMessageOfCreatorHash.getOrElse(ByteString.EMPTY)
+              )
+              _ <- Log[F].warn(
+                    s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator"
+                  )
+              _ <- FunctorRaise[F, InvalidBlock].raise[Unit](IgnorableEquivocation)
+            } yield ()
+          }
+    } yield ()
 
   private def requestedAsDependency(
       block: BlockMessage,
@@ -105,23 +107,21 @@ object EquivocationDetector {
     } yield maybeCreatorJustification.latestBlockHash
 
   // See summary of algorithm above
-  def checkNeglectedEquivocationsWithUpdate[F[_]: Monad: BlockStore](
+  def checkNeglectedEquivocationsWithUpdate[F[_]: Monad: BlockStore: FunctorRaise[
+    ?[_],
+    InvalidBlock
+  ]](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
-  )(implicit state: Cell[F, CasperState]): F[Either[InvalidBlock, ValidBlock]] =
-    for {
-      neglectedEquivocationDetected <- isNeglectedEquivocationDetectedWithUpdate[F](
-                                        block,
-                                        dag,
-                                        genesis
-                                      )
-      status = if (neglectedEquivocationDetected) {
-        Left(NeglectedEquivocation)
-      } else {
-        Right(Valid)
-      }
-    } yield status
+  )(implicit state: Cell[F, CasperState]): F[Unit] =
+    Monad[F].ifM(
+      isNeglectedEquivocationDetectedWithUpdate[F](
+        block,
+        dag,
+        genesis
+      )
+    )(FunctorRaise[F, InvalidBlock].raise[Unit](NeglectedEquivocation), Monad[F].unit)
 
   private def isNeglectedEquivocationDetectedWithUpdate[F[_]: Monad: BlockStore](
       block: BlockMessage,

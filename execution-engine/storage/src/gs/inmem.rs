@@ -7,7 +7,6 @@ use common::value::Value;
 use error::Error;
 use gs::*;
 use history::*;
-use parking_lot::Mutex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
@@ -21,12 +20,17 @@ pub struct InMemHist {
 }
 
 impl InMemHist {
-    pub fn new(empty_root_hash: &[u8;32]) -> InMemHist {
-        let mut hist: HashMap<[u8;32], Arc<BTreeMap<Key, Value>>> = HashMap::new();
-        hist.insert(empty_root_hash.clone(),  Arc::new(BTreeMap::new()));
-        InMemHist {
-            history: hist,
-        }
+    pub fn new(empty_root_hash: &[u8; 32]) -> InMemHist {
+        InMemHist::new_initialized(empty_root_hash, BTreeMap::new())
+    }
+
+    pub fn new_initialized(
+        empty_root_hash: &[u8; 32],
+        init_state: BTreeMap<Key, Value>,
+    ) -> InMemHist {
+        let mut hist: HashMap<[u8; 32], Arc<BTreeMap<Key, Value>>> = HashMap::new();
+        hist.insert(empty_root_hash.clone(), Arc::new(init_state));
+        InMemHist { history: hist }
     }
 
     //TODO(mateusz.gorski): I know this is not efficient and we should be caching these values
@@ -111,10 +115,6 @@ impl History<InMemGS> for InMemHist {
 mod tests {
     use error::*;
     use gs::inmem::*;
-    use gs::*;
-    use history::*;
-    use op::Op;
-    use parking_lot::Mutex;
     use std::sync::Arc;
     use transform::Transform;
 
@@ -125,14 +125,12 @@ mod tests {
     const EMPTY_ROOT: [u8; 32] = [0u8; 32];
 
     fn prepopulated_hist() -> InMemHist {
-        let mut map = HashMap::new();
+        let mut map = BTreeMap::new();
         map.insert(KEY1, VALUE1.clone());
         map.insert(KEY2, VALUE2.clone());
         let mut history = HashMap::new();
         history.insert(EMPTY_ROOT, Arc::new(map));
-        InMemHist {
-            history: history,
-        }
+        InMemHist { history: history }
     }
 
     fn checkout<R: DbReader, H: History<R>>(hist: &H, hash: [u8; 32]) -> TrackingCopy<R> {
@@ -141,33 +139,14 @@ mod tests {
         res.unwrap()
     }
 
-    fn commit<R: DbReader, H: History<R>>(hist: &mut H, hash: [u8; 32], effects: HashMap<Key, Transform>) -> [u8; 32] {
+    fn commit<R: DbReader, H: History<R>>(
+        hist: &mut H,
+        hash: [u8; 32],
+        effects: HashMap<Key, Transform>,
+    ) -> [u8; 32] {
         let res = hist.commit(hash, effects);
         assert!(res.is_ok());
         res.unwrap()
-    }
-
-    /// Returns new hash of the tree that is the result of
-    /// checking out to the supplied hash and applying the effects.
-    fn checkout_commit<R: DbReader, H: History<R>>(
-        h: &mut H,
-        hash: [u8; 32],
-        effects: HashMap<Key, (Op, Value)>,
-    ) -> [u8; 32] {
-        let mut tc = checkout(h, hash);
-        for (k, (op, v)) in effects.into_iter() {
-            match op {
-                Op::Write => tc
-                    .write(k, v)
-                    .expect("Write to TrackingCopy in test should be a success."),
-                Op::Add => tc
-                    .add(k, v)
-                    .expect("Add to TrackingCopy in test should be a success."),
-                _ => {}
-            }
-        }
-        let effects = tc.effect();
-        commit(h, hash, effects.1)
     }
 
     #[test]
@@ -199,9 +178,11 @@ mod tests {
         // and values that are living under new hash are as expected.
         let mut hist = prepopulated_hist();
         let mut tc = checkout(&hist, EMPTY_ROOT);
-        tc.add(KEY1, Value::Int32(1));
+        let add_res = tc.add(KEY1, Value::Int32(1));
+        assert!(add_res.is_ok());
         let new_v2 = Value::String("I am String now!".to_owned());
-        tc.write(KEY2, new_v2.clone());
+        let write_res = tc.write(KEY2, new_v2.clone());
+        assert!(write_res.is_ok());
         let effects = tc.effect();
         // commit changes from the tracking copy
         let hash_res = commit(&mut hist, EMPTY_ROOT, effects.1);
@@ -219,12 +200,14 @@ mod tests {
         // and validates that it doesn't contain commited changes
         let mut gs = prepopulated_hist();
         let mut tc = checkout(&gs, EMPTY_ROOT);
-        tc.add(KEY1, Value::Int32(1));
+        let add_res = tc.add(KEY1, Value::Int32(1));
+        assert!(add_res.is_ok());
         let new_v2 = Value::String("I am String now!".to_owned());
-        tc.write(KEY2, new_v2.clone());
+        let write_res = tc.write(KEY2, new_v2.clone());
+        assert!(write_res.is_ok());
         let effects = tc.effect();
         // commit changes from the tracking copy
-        let hash_res = commit(&mut gs, EMPTY_ROOT, effects.1);
+        let _ = commit(&mut gs, EMPTY_ROOT, effects.1);
         // checkout to the empty root hash
         let mut tc_2 = checkout(&gs, EMPTY_ROOT);
         assert_eq!(tc_2.get(&KEY1).unwrap(), VALUE1);
