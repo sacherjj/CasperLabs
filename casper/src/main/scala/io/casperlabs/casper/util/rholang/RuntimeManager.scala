@@ -36,7 +36,7 @@ class RuntimeManager[F[_]: Concurrent] private (
       time: Option[Long] = None
   )(implicit log: Log[F]): F[(StateHash, Seq[InternalProcessedDeploy])] =
     //replaced by ExecEngineUtil
-    (ByteString.copyFrom(Array.fill(32)(0.toByte)), Seq.empty[InternalProcessedDeploy]).pure
+    (RuntimeManager.emptyStateHash, Seq.empty[InternalProcessedDeploy]).pure
 
   // todo this should be complemented
   def computeBonds(hash: StateHash)(implicit log: Log[F]): F[Seq[Bond]] =
@@ -52,8 +52,7 @@ class RuntimeManager[F[_]: Concurrent] private (
 object RuntimeManager {
   type StateHash = ByteString
 
-  //TODO define 'emptyStateHash'
-  private val emptyStateHash = ByteString.EMPTY
+  private[rholang] val emptyStateHash = ByteString.copyFrom(Array.fill(32)(0.toByte))
 
   def fromExecutionEngineService[F[_]: Concurrent](
       executionEngineService: ExecutionEngineService[F]

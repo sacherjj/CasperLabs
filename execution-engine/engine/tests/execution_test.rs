@@ -123,7 +123,7 @@ fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
 }
 
 fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS> {
-    let root_hash = [0u8; 32];
+    let root_hash = storage::history::EMPTY_ROOT_HASH;
     let mut hist = InMemHist::new(&root_hash);
     let transform = Transform::Write(value::Value::Acct(init_account.clone()));
 
