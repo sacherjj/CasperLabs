@@ -3,7 +3,10 @@ import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.ipc
+import io.casperlabs.ipc.{Deploy, DeployResult, TransformEntry}
+import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import org.scalatest.Assertions
 
 object EEServiceGenerator {
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
@@ -42,6 +45,28 @@ object EEServiceGenerator {
 
         ByteString.copyFrom(newArr).asRight[Throwable].pure[F]
       }
+
+      override def close(): F[Unit] = ().pure[F]
+    }
+
+  def passiveEEApi[F[_]: Applicative](): ExecutionEngineService[F] =
+    new ExecutionEngineService[F] {
+      override def emptyStateHash: ByteString = ByteString.EMPTY
+      override def exec(
+          prestate: ByteString,
+          deploys: Seq[Deploy]
+      ): F[Either[Throwable, Seq[DeployResult]]] =
+        Either
+          .left[Throwable, Seq[DeployResult]](
+            new SmartContractEngineError("Error when exec deploys")
+          )
+          .pure[F]
+
+      override def commit(
+          prestate: ByteString,
+          effects: Seq[TransformEntry]
+      ): F[Either[Throwable, ByteString]] =
+        Assertions.fail("when failed to exec deploys, this function should not be called")
 
       override def close(): F[Unit] = ().pure[F]
     }

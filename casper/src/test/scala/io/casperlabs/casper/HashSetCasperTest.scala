@@ -1056,6 +1056,24 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield assert(!block.body.get.deploys.head.errored)
   }
 
+  it should "failed to create block when EE failed to work" in effectTest {
+    val passiveEEApi = EEServiceGenerator.passiveEEApi[Effect]()
+    val node = HashSetCasperTestNode.standaloneEff(
+      genesis,
+      validatorKeys.head,
+      executionEngineService = passiveEEApi
+    )
+    import node._
+    implicit val timeEff = new LogicalTime[Effect]
+    for {
+      deployData <- ProtoUtil.basicDeployData[Effect](0).map(_.withGasLimit(100))
+      _          <- node.casperEff.deploy(deployData)
+
+      createBlockResult <- MultiParentCasper[Effect].createBlock
+      Created(block)    = createBlockResult
+    } yield assert(!block.body.get.deploys.head.errored)
+  }
+
   private def buildBlockWithInvalidJustification(
       nodes: IndexedSeq[HashSetCasperTestNode[Effect]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],

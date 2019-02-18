@@ -67,7 +67,8 @@ class HashSetCasperTestNode[F[_]](
     val blockDagStorage: BlockDagStorage[F],
     val metricEff: Metrics[F],
     val abF: ToAbstractContext[F],
-    val casperState: Cell[F, CasperState]
+    val casperState: Cell[F, CasperState],
+    val casperSmartContractsApi: ExecutionEngineService[F]
 ) {
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
@@ -78,8 +79,6 @@ class HashSetCasperTestNode[F[_]](
   implicit val transportLayerEff  = tle
   implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
   implicit val rpConfAsk          = createRPConfAsk[F](local)
-
-  val casperSmartContractsApi = EEServiceGenerator.simpleEEApi[F]()
 
   val bonds = genesis.body
     .flatMap(_.state.map(_.bonds.map(b => b.validator.toByteArray -> b.stake).toMap))
@@ -95,7 +94,6 @@ class HashSetCasperTestNode[F[_]](
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
-  implicit val ee = runtimeManager.executionEngineService
   implicit val casperEff = new MultiParentCasperImpl[F](
     Some(validatorId),
     genesis,
@@ -158,7 +156,8 @@ object HashSetCasperTestNode {
       implicit
       errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
-      absF: ToAbstractContext[F]
+      absF: ToAbstractContext[F],
+      executionEngineService: ExecutionEngineService[F]
   ): F[HashSetCasperTestNode[F]] = {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
@@ -204,7 +203,8 @@ object HashSetCasperTestNode {
         blockDagStorage,
         metricEff,
         absF,
-        casperState
+        casperState,
+        executionEngineService
       )
       result <- node.initialize.map(_ => node)
     } yield result
@@ -214,14 +214,17 @@ object HashSetCasperTestNode {
       genesis: BlockMessage,
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Float = 0f,
+      executionEngineService: ExecutionEngineService[Effect] =
+        EEServiceGenerator.simpleEEApi[Effect]()
   )(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
     standaloneF[Effect](genesis, sk, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
-      ToAbstractContext[Effect]
+      ToAbstractContext[Effect],
+      executionEngineService
     ).value.unsafeRunSync.right.get
 
   def networkF[F[_]](
@@ -232,7 +235,8 @@ object HashSetCasperTestNode {
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
-      absF: ToAbstractContext[F]
+      absF: ToAbstractContext[F],
+      executionEngineService: ExecutionEngineService[F]
   ): F[IndexedSeq[HashSetCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
@@ -292,7 +296,8 @@ object HashSetCasperTestNode {
                 blockDagStorage,
                 metricEff,
                 absF,
-                casperState
+                casperState,
+                executionEngineService
               )
             } yield node
         }
@@ -324,12 +329,15 @@ object HashSetCasperTestNode {
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Float = 0f,
+      executionEngineService: ExecutionEngineService[Effect] =
+        EEServiceGenerator.simpleEEApi[Effect]()
   ): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
     networkF[Effect](sks, genesis, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
-      ToAbstractContext[Effect]
+      ToAbstractContext[Effect],
+      executionEngineService
     )
 
   val appErrId = new ApplicativeError[Id, CommError] {
