@@ -6,7 +6,7 @@ import cats.data.EitherT
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import io.casperlabs.casper._
-import io.casperlabs.casper.helper.HashSetCasperTestNode
+import io.casperlabs.casper.helper.{EEServiceGenerator, HashSetCasperTestNode}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.rholang._
@@ -75,6 +75,48 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     response1.success shouldBe true
     response2.success shouldBe false
     response2.message shouldBe "Error: There is another propose in progress."
+
+    node.tearDown()
+  }
+
+  it should "failed creating block when ExecutionEngine.exec failed" in {
+    implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
+    implicit val time = new Time[Task] {
+      private val timer                               = Task.timer
+      def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
+      def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
+      def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
+    }
+    val node = HashSetCasperTestNode.standaloneEff(
+      genesis,
+      validatorKeys.head,
+      executionEngineService = EEServiceGenerator.passiveEEApi[Effect]()
+    )
+    val deploys = List(
+      "@0!(0) | for(_ <- @0){ @1!(1) }"
+    ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+
+    implicit val logEff = new LogStub[Effect]
+
+    def testProgram(blockApiLock: Semaphore[Effect])(
+        implicit casperRef: MultiParentCasperRef[Effect]
+    ): Effect[DeployServiceResponse] = EitherT.liftF(
+      for {
+        t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI
+               .createBlock[Effect](blockApiLock)).value.start
+        r1 <- t1.join
+      } yield r1.right.get
+    )
+
+    val response1 = (for {
+      casperRef    <- MultiParentCasperRef.of[Effect]
+      _            <- casperRef.set(node.casperEff)
+      blockApiLock <- Semaphore[Effect](1)
+      result       <- testProgram(blockApiLock)(casperRef)
+    } yield result).value.unsafeRunSync.right.get
+
+    response1.success shouldBe false
+    response1.message.contains("Error while creating block") shouldBe true
 
     node.tearDown()
   }
