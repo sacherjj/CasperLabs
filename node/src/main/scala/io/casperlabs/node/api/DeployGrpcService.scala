@@ -58,7 +58,7 @@ private[api] object DeployGrpcService {
               (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
               stringify
             )
-            .map(graph => VisualizeBlocksResponse(graph))
+            .map(graph => VisualizeBlocksResponse("Success", graph))
         )
       }
 

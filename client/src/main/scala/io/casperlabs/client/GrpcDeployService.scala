@@ -41,7 +41,7 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
 
   def visualizeDag(q: VisualizeDagQuery): Task[Either[Throwable, String]] =
     stub.visualizeDag(q).map { response =>
-      if (response.status == "Success") Right(response.toProtoString)
+      if (response.status == "Success") Right(response.content)
       else Left(new RuntimeException(response.status))
     }
 

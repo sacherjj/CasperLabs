@@ -67,7 +67,7 @@ object DeployRuntime {
     )
   }
 
-  private def gracefulExit[F[_]: Sync, A](program: F[Either[Throwable, String]]): F[Unit] =
+  private def gracefulExit[F[_]: Sync](program: F[Either[Throwable, String]]): F[Unit] =
     for {
       result <- Sync[F].attempt(program)
       _ <- result.joinRight match {
