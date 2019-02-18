@@ -55,12 +55,16 @@ clean: $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
 # Generate keys and bonds.
 .casperlabs/genesis:
 	@# Start a node to generate keys.
-	@# The node will fail before it would print the ID corresponding to the
-	@# keys as there's no gRPC socket to connect to, so the bootstrap keys
-	@# and node ID are still hardcoded.
-	docker run --rm \
+	docker run --rm -d \
+		--name make-genesis \
 		-v ${PWD}/.casperlabs/genesis:/root/.casperlabs/genesis \
 		io.casperlabs/node:latest \
-		run -s --casper-num-validators $(CL_CASPER_NUM_VALIDATORS) \
-		> /dev/null 2>&1 || exit 0
+		run -s --casper-num-validators $(CL_CASPER_NUM_VALIDATORS)
+	@# Wait until the node is running, so we know it generated the files.
+	(docker logs -f make-genesis &) | grep -m 1 "Listening for traffic"
+	@# If we captured the log line and parsed it we could get the ID of the node
+	@# from casperlabs://<id>@78.x.x.x?protocol=... and use it with the generated
+	@# SSL keys instead of the hardcoded ones.
+	docker stop make-genesis
+	@# Check that the file we wanted exists.
 	[ -f .casperlabs/genesis/bonds.txt ]
