@@ -26,7 +26,7 @@ impl HostError for Error {}
 
 impl From<StoreError> for Error {
     fn from(e: StoreError) -> Self {
-        Error::RkvError(String::from(format!("StoreError\t{:?}", e)))
+        Error::RkvError(e.to_string())
     }
 }
 
