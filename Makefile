@@ -85,7 +85,7 @@ clean:
 
 
 .make/rust-proto: .make \
-		.make/rustup-update .make/protoc-install \
+		.make/protoc-install \
 		$(shell find . -type f -iregex '.*\.proto')
 	cd execution-engine/comm && \
 	cargo run --bin grpc-protoc
@@ -102,12 +102,6 @@ execution-engine/comm/target/release/engine-grpc-server: \
 
 .make:
 	mkdir .make
-
-.make/rustup-update: .make
-	rustup update
-	rustup toolchain install nightly
-	rustup target add wasm32-unknown-unknown --toolchain nightly
-	touch $@
 
 .make/protoc-install: .make
 	if [ -z "$$(which protoc)" ]; then \
