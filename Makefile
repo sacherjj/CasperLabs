@@ -11,6 +11,21 @@ $(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -Po $(SEMVER_REGEX) | tail -n 1 
 # https://stackoverflow.com/questions/5426934/why-this-makefile-removes-my-goal
 .SECONDARY:
 
+# Build all artifacts locally.
+all: \
+	docker-build-all \
+	cargo-package-all
+
+# Push the local artifacts to repositories.
+publish: \
+	docker-push-all \
+	cargo-publish-all
+
+clean: cargo/clean
+	sbt clean
+	rm -rf .make
+
+
 docker-build-all: \
 	docker-build/node \
 	docker-build/client \
@@ -27,7 +42,7 @@ docker-build/execution-engine: .make/docker-build/execution-engine
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
-docker-push/%:
+docker-push/%: docker-build/%
 	$(eval PROJECT = $*)
 	docker tag $(DOCKER_USERNAME)/$(PROJECT):latest $(DOCKER_USERNAME)/$(PROJECT):$(VER)
 	docker push $(DOCKER_USERNAME)/$(PROJECT):$(VER)
@@ -35,10 +50,18 @@ docker-push/%:
 		docker push $(DOCKER_USERNAME)/$(PROJECT):latest ; \
 	fi
 
-clean:
-	sbt clean
-	cd execution-engine/comm && cargo clean
-	rm -rf .make
+
+cargo-package-all: \
+	.make/cargo-package/execution-engine/common
+
+# We need to publish the libraries the contracts are supposed to use.
+cargo-publish-all: \
+	.make/cargo-publish/execution-engine/common
+
+cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{print $$1"/clean"}')
+
+%/Cargo.toml/clean:
+	cd $* && cargo clean
 
 
 # Build the `latest` docker image for local testing. Works with Scala.
@@ -76,6 +99,13 @@ clean:
 	rm -rf $(RELEASE)/Dockerfile
 	mkdir -p $(dir $@) && touch $@
 
+# Make a node that has some extras installed for testing.
+.make/docker-build/test/node: \
+		.make/docker-build/universal/node \
+		docker/test-node.Dockerfile
+	docker build -f docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test docker
+	mkdir -p $(dir $@) && touch $@
+
 
 # Refresh Scala build artifacts if source was changed.
 .make/sbt-stage/%: .make \
@@ -85,28 +115,43 @@ clean:
 	mkdir -p $(dir $@) && touch $@
 
 
+# Re-package cargo if any Rust source code changes (to account for transitive dependencies).
+.make/cargo-package/%: \
+		$(shell find . -type f -iregex ".*/Cargo\.toml\|.*/src/.*\.rs" | grep -v target)
+	cd $* && cargo update && cargo package
+	mkdir -p $(dir $@) && touch $@
+
+.make/cargo-publish/%: .make/cargo-package/%
+	@#https://doc.rust-lang.org/cargo/reference/publishing.html
+	@#After a package is first published to crates.io run `cargo owner --add github:CasperLabs:crate-owners` once to allow others to push.
+	@#Cargo returns an error if the package has already been published, so we can't break code, we have to publish a newer version.
+	cd $* && \
+	RESULT=$$(cargo publish 2>&1) ; \
+	CODE=$$? ; \
+	if echo $$RESULT | grep -q "already uploaded" ; then \
+		echo "already uploaded" && exit 0 ; \
+	else \
+		echo $$RESULT && exit $$CODE ; \
+	fi
+	mkdir -p $(dir $@) && touch $@
+
+
 # Compile gRPC interfaces for the Execution Engine.
 .make/rust-proto: .make \
 		.make/protoc-install \
 		$(shell find . -type f -iregex '.*\.proto')
 	cd execution-engine/comm && \
+	cargo update && \
 	cargo run --bin grpc-protoc
 	touch $@
-
-
-# Make a node that has some extras installed for testing.
-.make/docker-build/test/node: \
-		.make/docker-build/universal/node \
-		docker/test-node.Dockerfile
-	docker build -f docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test docker
-	mkdir -p $(dir $@) && touch $@
 
 
 # Build the execution engine executable.
 execution-engine/comm/target/release/engine-grpc-server: \
 		.make/rust-proto \
-		$(shell find . -type f -iregex '.*/src/.*\.rs')
+		$(shell find . -type f -iregex ".*/Cargo\.toml\|.*/src/.*\.rs" | grep -v target)
 	cd execution-engine/comm && \
+	cargo update && \
 	cargo build --release
 
 # Miscellaneous tools to install once.
