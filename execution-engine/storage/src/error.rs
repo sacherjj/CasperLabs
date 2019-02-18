@@ -11,9 +11,11 @@ use TreeRootHash;
 pub enum Error {
     KeyNotFound { key: Key },
     TypeMismatch { expected: String, found: String },
+    RootNotFound(TreeRootHash),
+    //mateusz.gorski: I think that these errors should revert any changes made
+    //to Global State and most probably kill the node.
     RkvError(String), //TODO: capture error better
     BytesRepr(bytesrepr::Error),
-    RootNotFound(TreeRootHash),
 }
 
 impl fmt::Display for Error {
