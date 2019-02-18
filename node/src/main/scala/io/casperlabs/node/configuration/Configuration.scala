@@ -96,7 +96,7 @@ object Configuration {
     *
     * Otherwise a Path field will not respect server.dataDir changes.
     */
-  private def parseToActual(
+  private[configuration] def parseToActual(
       command: Command,
       default: ConfigurationSoft,
       confSoft: ConfigurationSoft
@@ -244,7 +244,8 @@ object Configuration {
       adjustPathAsString(confSoft, confSoft.casper.flatMap(_.bondsFile), default).validNel[String],
       confSoft.casper.flatMap(_.knownValidatorsFile).validNel[String],
       optToValidated(confSoft.casper.flatMap(_.numValidators), "Casper.numValidators"),
-      optToValidated(confSoft.casper.flatMap(_.genesisPath), "Casper.genesisPath"),
+      optToValidated(adjustPath(confSoft, confSoft.casper.flatMap(_.genesisPath), default),
+                     "Casper.genesisPath"),
       adjustPathAsString(confSoft, confSoft.casper.flatMap(_.walletsFile), default)
         .validNel[String],
       optToValidated(confSoft.casper.flatMap(_.minimumBond), "Casper.minimumBond"),
