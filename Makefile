@@ -11,8 +11,13 @@ $(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -Po $(SEMVER_REGEX) | tail -n 1 
 # https://stackoverflow.com/questions/5426934/why-this-makefile-removes-my-goal
 .SECONDARY:
 
+# Build all artifacts locally.
 all: \
 	docker-build-all \
+	cargo-package-all
+
+# Push the local artifacts to repositories.
+publish: \
 	docker-push-all \
 	cargo-publish-all
 
@@ -37,7 +42,7 @@ docker-build/execution-engine: .make/docker-build/execution-engine
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
-docker-push/%:
+docker-push/%: docker-build/%
 	$(eval PROJECT = $*)
 	docker tag $(DOCKER_USERNAME)/$(PROJECT):latest $(DOCKER_USERNAME)/$(PROJECT):$(VER)
 	docker push $(DOCKER_USERNAME)/$(PROJECT):$(VER)
@@ -45,6 +50,9 @@ docker-push/%:
 		docker push $(DOCKER_USERNAME)/$(PROJECT):latest ; \
 	fi
 
+
+cargo-package-all: \
+	.make/cargo-package/execution-engine/common
 
 # We need to publish the libraries the contracts are supposed to use.
 cargo-publish-all: \
@@ -141,7 +149,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Build the execution engine executable.
 execution-engine/comm/target/release/engine-grpc-server: \
 		.make/rust-proto \
-		$(shell find . -type f -iregex '.*/Cargo\.toml\.*/src/.*\.rs')
+		$(shell find . -type f -iregex ".*/Cargo\.toml\|.*/src/.*\.rs" | grep -v target)
 	cd execution-engine/comm && \
 	cargo update && \
 	cargo build --release
