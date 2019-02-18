@@ -9,7 +9,12 @@ import io.casperlabs.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
-import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, BlockUtil, HashSetCasperTestNode}
+import io.casperlabs.casper.helper.{
+  BlockDagStorageTestFixture,
+  BlockUtil,
+  EEServiceGenerator,
+  HashSetCasperTestNode
+}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.rholang.RuntimeManager
@@ -1116,7 +1121,7 @@ object HashSetCasperTest {
   ): BlockMessage = {
     implicit val logEff         = new LogStub[Task]()
     val initial                 = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "casperlabs")
-    val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task]()
+    val casperSmartContractsApi = EEServiceGenerator.simpleEEApi[Task]()
     val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
     val emptyStateHash          = casperSmartContractsApi.emptyStateHash
     val validators              = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
