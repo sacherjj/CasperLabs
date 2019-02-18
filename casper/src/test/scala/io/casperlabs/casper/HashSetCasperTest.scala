@@ -1069,9 +1069,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       deployData <- ProtoUtil.basicDeployData[Effect](0).map(_.withGasLimit(100))
       _          <- node.casperEff.deploy(deployData)
 
-      createBlockResult <- MultiParentCasper[Effect].createBlock
-      Created(block)    = createBlockResult
-    } yield assert(!block.body.get.deploys.head.errored)
+      createBlockResult        <- MultiParentCasper[Effect].createBlock
+      InternalDeployError(err) = createBlockResult
+    } yield assert(err.getMessage.startsWith("Error when exec deploys"))
   }
 
   private def buildBlockWithInvalidJustification(
