@@ -25,10 +25,8 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         let mut prestate_hash = [0u8; 32];
         prestate_hash.copy_from_slice(&p.get_parent_state_hash());
         let deploys = p.get_deploys();
-        let mut exec_response = ipc::ExecResponse::new();
-        let mut exec_result = ipc::ExecResult::new();
         let mut deploy_results: Vec<DeployResult> = Vec::new();
-        for deploy in deploys.into_iter() {
+        let fold_result: Result<(), RootNotFound> = deploys.iter().try_fold((), |_, deploy| {
             let module_bytes = &deploy.session_code;
             let mut address: [u8; 20] = [0u8; 20];
             address.copy_from_slice(&deploy.address);
@@ -48,6 +46,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                     let mut deploy_result = ipc::DeployResult::new();
                     deploy_result.set_effects(ipc_ee);
                     deploy_results.push(deploy_result);
+                    Ok(())
                 }
                 Err(err) => {
                     //TODO(mateusz.gorski) Better error handling and tests!
@@ -58,12 +57,23 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                     error.set_wasmErr(wasm_error);
                     deploy_result.set_error(error);
                     deploy_results.push(deploy_result);
+                    Ok(())
                 }
-            };
+            }
+        });
+        let mut exec_response = ipc::ExecResponse::new();
+        match fold_result {
+            Ok(_) => {
+                let mut exec_result = ipc::ExecResult::new();
+                exec_result.set_deploy_results(protobuf::RepeatedField::from_vec(deploy_results));
+                exec_response.set_success(exec_result);
+                grpc::SingleResponse::completed(exec_response)
+            }
+            Err(error) => {
+                exec_response.set_missing_parent(error);
+                grpc::SingleResponse::completed(exec_response)
+            }
         }
-        exec_result.set_deploy_results(protobuf::RepeatedField::from_vec(deploy_results));
-        exec_response.set_success(exec_result);
-        grpc::SingleResponse::completed(exec_response)
     }
 
     fn commit(
