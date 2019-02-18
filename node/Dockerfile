@@ -7,7 +7,7 @@ USER root
 WORKDIR /opt/docker
 # HOME points to /root
 RUN mkdir -p /root/.casperlabs
-ENTRYPOINT ["bin/node"]
+ENTRYPOINT ["bin/casperlabs-node"]
 CMD ["run"]
 
 

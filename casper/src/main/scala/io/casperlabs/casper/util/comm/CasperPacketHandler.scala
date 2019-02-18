@@ -35,15 +35,25 @@ import scala.util.Try
 object CasperPacketHandler extends CasperPacketHandlerInstances {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CasperMetricsSource, "packet-handler")
+
   def apply[F[_]](implicit ev: CasperPacketHandler[F]): CasperPacketHandler[F] = ev
+
+  /** Export a base 0 value so we have non-empty series for charts. */
+  def establishMetrics[F[_]: Monad: Metrics]: F[Unit] =
+    for {
+      _ <- Metrics[F].incrementCounter("blocks-received", 0)
+      _ <- Metrics[F].incrementCounter("blocks-received-again", 0)
+    } yield ()
 
   def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage](
       conf: CasperConf,
       delay: FiniteDuration,
       executionEngineService: ExecutionEngineService[F],
       toTask: F[_] => Task[_]
-  )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
-    if (conf.approveGenesis) {
+  )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] = {
+    val handler: F[CasperPacketHandler[F]] = if (conf.approveGenesis) {
       for {
         _              <- Log[F].info("Starting in approve genesis mode")
         timestamp      <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
@@ -141,6 +151,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
             }
       } yield casperPacketHandler
     }
+    establishMetrics[F] *> handler
+  }
 
   trait CasperPacketHandlerInternal[F[_]] {
     def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit]
@@ -253,7 +265,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   }
 
   object StandaloneCasperHandler {
-    def approveBlockInterval[F[_]: Concurrent: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage](
+    def approveBlockInterval[F[_]: Concurrent: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Metrics: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage](
         interval: FiniteDuration,
         shardId: String,
         runtimeManager: RuntimeManager[F],
@@ -341,7 +353,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     *
     * In the future it will be possible to create checkpoint with new [[ApprovedBlock]].
     **/
-  class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler](
+  class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler](
       private val casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock
   ) extends CasperPacketHandlerInternal[F] {
@@ -365,11 +377,18 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
     override def handleBlockMessage(peer: PeerNode, b: BlockMessage): F[Unit] =
       for {
+        _          <- Metrics[F].incrementCounter("blocks-received")
         isOldBlock <- MultiParentCasper[F].contains(b)
         _ <- if (isOldBlock) {
-              Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
+              for {
+                _ <- Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
+                _ <- Metrics[F].incrementCounter("blocks-received-again")
+              } yield ()
             } else {
-              handleNewBlock[F](peer, b)
+              for {
+                _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
+                _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger[F](peer, _, _))
+              } yield ()
             }
       } yield ()
 
@@ -419,7 +438,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       Log[F].info(s"No approved block available on node ${na.nodeIdentifer}")
   }
 
-  class CasperPacketHandlerImpl[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef](
+  class CasperPacketHandlerImpl[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef](
       private val cphI: Ref[F, CasperPacketHandlerInternal[F]]
   ) extends CasperPacketHandler[F] {
 
@@ -501,15 +520,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
         }
   }
-
-  private def handleNewBlock[F[_]: Monad: MultiParentCasper: TransportLayer: Log: Time: ErrorHandler](
-      peer: PeerNode,
-      b: BlockMessage
-  ): F[Unit] =
-    for {
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-      _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger[F](peer, _, _))
-    } yield ()
 
   private def handleDoppelganger[F[_]: Monad: Log](
       peer: PeerNode,

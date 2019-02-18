@@ -2,15 +2,13 @@ package io.casperlabs.casper.util.rholang
 
 import cats.effect.Concurrent
 import cats.syntax.applicative._
-import cats.syntax.apply._
 import cats.syntax.either._
-import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
-import io.casperlabs.ipc.{CommutativeEffects, ExecutionEffect, Deploy => IPCDeploy}
+import io.casperlabs.ipc.{ExecutionEffect, Deploy => IPCDeploy}
 import io.casperlabs.models._
-import io.casperlabs.shared.{Log, LogSource}
+import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 //TODO: Delete this class

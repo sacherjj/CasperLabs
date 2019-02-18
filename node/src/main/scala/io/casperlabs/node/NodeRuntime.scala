@@ -137,7 +137,7 @@ class NodeRuntime private[node] (
                         blockStore
                       )
     _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
+    oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
     abs = new ToAbstractContext[Effect] {
       def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
     }
@@ -205,6 +205,7 @@ class NodeRuntime private[node] (
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       multiParentCasperRef: MultiParentCasperRef[Effect],
+      metrics: Metrics[Task],
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task],

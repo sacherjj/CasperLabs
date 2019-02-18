@@ -1,21 +1,20 @@
 package io.casperlabs.casper.util
 
-import cats.{Applicative, Monad}
 import cats.implicits._
+import cats.{Applicative, Monad}
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.protocol.{DeployData, _}
 import io.casperlabs.casper.util.implicits._
-import io.casperlabs.casper.PrettyPrinter
-import io.casperlabs.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.ipc.{Deploy => EEDeploy}
+import io.casperlabs.shared.{Log, Time}
 
-import scala.collection.{immutable, BitSet}
+import scala.collection.immutable
 
 object ProtoUtil {
   /*
@@ -540,18 +539,8 @@ object ProtoUtil {
     paymentCode = dd.paymentCode,
     gasLimit = dd.gasLimit,
     gasPrice = dd.gasPrice,
-    nonce = dd.nonce,
-    sigAlgorithm = dd.sigAlgorithm,
-    signature = dd.signature
+    nonce = dd.nonce
   )
-
-  /**
-    * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
-    * Because we enforce that a deployment must be unique on the user, timestamp pair, we leave
-    * only those fields. This allows users to more readily pre-generate names for signing.
-    */
-  def stripDeployData(d: DeployData): DeployData =
-    DeployData().withUser(d.user).withTimestamp(d.timestamp)
 
   def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {
     val missingParents = parentHashes(b).toSet

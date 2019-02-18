@@ -257,7 +257,7 @@ lazy val node = (project in file("node"))
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
         Cmd("USER", "root"),
-        ExecCmd("ENTRYPOINT", "bin/node"),
+        ExecCmd("ENTRYPOINT", "bin/casperlabs-node"),
         ExecCmd("CMD", "run")
       )
     },

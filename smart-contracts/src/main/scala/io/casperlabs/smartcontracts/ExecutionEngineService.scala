@@ -3,11 +3,13 @@ package io.casperlabs.smartcontracts
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
-import cats.{Applicative, Monad}
 import cats.syntax.applicative._
 import cats.syntax.either._
 import cats.syntax.functor._
+import cats.{Applicative, Monad}
+import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib.ToAbstractContext
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
 import io.grpc.ManagedChannel
@@ -15,10 +17,8 @@ import io.grpc.netty.NettyChannelBuilder
 import io.netty.channel.epoll.{Epoll, EpollDomainSocketChannel, EpollEventLoopGroup}
 import io.netty.channel.kqueue.{KQueueDomainSocketChannel, KQueueEventLoopGroup}
 import io.netty.channel.unix.DomainSocketAddress
-import simulacrum.typeclass
-
-import com.google.protobuf.ByteString
 import monix.eval.Task
+import simulacrum.typeclass
 
 import scala.util.Either
 
@@ -71,16 +71,18 @@ class GrpcExecutionEngineService[F[_]: Monad: ToAbstractContext](addr: Path, max
       prestate: ByteString,
       deploys: Seq[Deploy]
   ): F[Either[Throwable, Seq[DeployResult]]] =
-    ToAbstractContext[F].fromTask(stub.exec(ExecRequest(Seq(prestate), deploys)).attempt).map {
+    ToAbstractContext[F].fromTask(stub.exec(ExecRequest(prestate, deploys)).attempt).map {
       case Left(err) => Left(err)
       case Right(ExecResponse(result)) =>
         result match {
-          case ExecResponse.Result.Success(ExecResult(_, deployResults)) =>
+          case ExecResponse.Result.Success(ExecResult(deployResults)) =>
             Right(deployResults)
           //TODO: Capture errors better than just as a string
           case ExecResponse.Result.Empty => Left(new SmartContractEngineError("empty response"))
-          case ExecResponse.Result.MissingParents(MultipleRootsNotFound(missing)) =>
-            Left(new SmartContractEngineError(s"Missing states: ${missing.mkString(",")}"))
+          case ExecResponse.Result.MissingParent(RootNotFound(missing)) =>
+            Left(
+              new SmartContractEngineError(s"Missing states: ${Base16.encode(missing.toByteArray)}")
+            )
         }
     }
 

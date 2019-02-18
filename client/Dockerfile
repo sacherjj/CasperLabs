@@ -5,7 +5,7 @@ LABEL MAINTAINER="CasperLabs, LLC. <info@casperlabs.io>"
 
 USER root 
 WORKDIR /opt/docker 
-ENTRYPOINT ["bin/client"]
+ENTRYPOINT ["bin/casperlabs-client"]
 CMD ["run"]
 
 # Copy dependencies that rarely change.

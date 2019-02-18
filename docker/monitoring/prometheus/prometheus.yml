@@ -1,0 +1,10 @@
+scrape_configs:
+- job_name: node
+  scrape_interval: 5s
+  # Timeout can't be higher than the interval.
+  # If we slow down the network too much we can't gather metrics.
+  scrape_timeout: 5s
+  file_sd_configs:
+  - files:
+    - /etc/prometheus/targets.yml
+    refresh_interval: 15s

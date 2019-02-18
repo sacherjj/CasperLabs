@@ -84,15 +84,15 @@ class BlocksResponseAPITest
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
                        )
-        logEff            = new LogStub[Task]
-        casperRef         <- MultiParentCasperRef.of[Task]
-        _                 <- casperRef.set(casperEffect)
-        turanOracleEffect = SafetyOracle.turanOracle[Task]
+        logEff             = new LogStub[Task]
+        casperRef          <- MultiParentCasperRef.of[Task]
+        _                  <- casperRef.set(casperEffect)
+        cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
         blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
                            logEff,
-                           turanOracleEffect,
+                           cliqueOracleEffect,
                            blockStore
                          )
       } yield blocksResponse.length should be(5)
@@ -150,15 +150,15 @@ class BlocksResponseAPITest
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
                        )
-        logEff            = new LogStub[Task]
-        casperRef         <- MultiParentCasperRef.of[Task]
-        _                 <- casperRef.set(casperEffect)
-        turanOracleEffect = SafetyOracle.turanOracle[Task]
+        logEff             = new LogStub[Task]
+        casperRef          <- MultiParentCasperRef.of[Task]
+        _                  <- casperRef.set(casperEffect)
+        cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
         blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
                            logEff,
-                           turanOracleEffect,
+                           cliqueOracleEffect,
                            blockStore
                          )
       } yield
@@ -216,15 +216,15 @@ class BlocksResponseAPITest
                        HashMap.empty[BlockHash, BlockMessage],
                        tips
                      )
-      logEff            = new LogStub[Task]
-      casperRef         <- MultiParentCasperRef.of[Task]
-      _                 <- casperRef.set(casperEffect)
-      turanOracleEffect = SafetyOracle.turanOracle[Task]
+      logEff             = new LogStub[Task]
+      casperRef          <- MultiParentCasperRef.of[Task]
+      _                  <- casperRef.set(casperEffect)
+      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
       blocksResponse <- BlockAPI.showBlocks[Task](2)(
                          Sync[Task],
                          casperRef,
                          logEff,
-                         turanOracleEffect,
+                         cliqueOracleEffect,
                          blockStore
                        )
     } yield

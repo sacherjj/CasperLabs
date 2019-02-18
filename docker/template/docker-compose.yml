@@ -22,7 +22,7 @@ services:
   # and pick one particular node.
 
   node:
-    image: io.casperlabs/node:latest
+    image: io.casperlabs/node:test
     container_name: node-${NODE_NUMBER}
     hostname: node-${NODE_NUMBER}
     volumes:

@@ -6,6 +6,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 
 import scala.collection.immutable.{HashMap, HashSet}
@@ -16,8 +17,12 @@ class CliqueOracleTest
     with BlockGenerator
     with BlockDagStorageFixture {
 
+  behavior of "Clique Oracle"
+
+  implicit val logEff = new LogStub[Task]
+
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
-  "Turan Oracle" should "detect finality as appropriate" in withStorage {
+  it should "detect finality as appropriate" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("Validator One")
       val v2     = generateValidator("Validator Two")
@@ -25,7 +30,7 @@ class CliqueOracleTest
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
 
-      implicit val turanOracleEffect = SafetyOracle.turanOracle[Task]
+      implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
 
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
@@ -73,18 +78,18 @@ class CliqueOracleTest
              )
         dag                   <- blockDagStorage.getRepresentation
         genesisFaultTolerance <- SafetyOracle[Task].normalizedFaultTolerance(dag, genesis.blockHash)
-        _                     = assert(genesisFaultTolerance == 1)
+        _                     = assert(genesisFaultTolerance === 1f +- 0.01f)
         b2FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b2.blockHash)
-        _                     = assert(b2FaultTolerance == 1)
+        _                     = assert(b2FaultTolerance === 1f +- 0.01f)
         b3FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b3.blockHash)
-        _                     = assert(b3FaultTolerance == -1)
+        _                     = assert(b3FaultTolerance === -1f +- 0.01f)
         b4FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b4.blockHash)
-        result                = assert(b4FaultTolerance == -0.2f) // Clique oracle would be 0.2f
+        result                = assert(b4FaultTolerance === 0.2f +- 0.01f)
       } yield result
   }
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
-  "Turan Oracle" should "detect possible disagreements appropriately" in withStorage {
+  it should "detect possible disagreements appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("Validator One")
       val v2     = generateValidator("Validator Two")
@@ -94,7 +99,7 @@ class CliqueOracleTest
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-      implicit val turanOracleEffect = SafetyOracle.turanOracle[Task]
+      implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](
@@ -143,13 +148,13 @@ class CliqueOracleTest
         dag <- blockDagStorage.getRepresentation
 
         genesisFaultTolerance <- SafetyOracle[Task].normalizedFaultTolerance(dag, genesis.blockHash)
-        _                     = assert(genesisFaultTolerance == 1)
+        _                     = assert(genesisFaultTolerance === 1f +- 0.01f)
         b2FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b2.blockHash)
-        _                     = assert(b2FaultTolerance == -0.5f)
+        _                     = assert(b2FaultTolerance === -1f / 6 +- 0.01f)
         b3FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b3.blockHash)
-        _                     = assert(b3FaultTolerance == -1f)
+        _                     = assert(b3FaultTolerance === -1f +- 0.01f)
         b4FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b4.blockHash)
-        result                = assert(b4FaultTolerance == -0.5f)
+        result                = assert(b4FaultTolerance === -1f / 6 +- 0.01f)
       } yield result
   }
 }
