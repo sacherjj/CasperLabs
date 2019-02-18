@@ -2,10 +2,11 @@ package io.casperlabs.casper.util.comm
 
 import io.casperlabs.casper.HashSetCasperTest
 import io.casperlabs.casper.genesis.contracts._
-import io.casperlabs.casper.helper.HashSetCasperTestNode
+import io.casperlabs.casper.helper.{EEServiceGenerator, HashSetCasperTestNode}
 import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.transport
 import io.casperlabs.crypto.signatures.Ed25519
@@ -17,7 +18,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
 
   private implicit val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
 
-  "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
+  "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in effectTest {
     val n                          = 8
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = Map(validatorPk -> 10L)
