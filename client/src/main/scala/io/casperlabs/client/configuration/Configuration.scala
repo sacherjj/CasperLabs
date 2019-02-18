@@ -27,7 +27,6 @@ final case class VisualizeDag(port: Int, host: String, depth: Int, showJustifica
 final case class Query(
     port: Int,
     host: String,
-    socket: String,
     blockHash: String,
     keyType: String,
     key: String,
@@ -69,7 +68,6 @@ object Configuration {
         Query(
           options.port(),
           options.host(),
-          options.query.socket(),
           options.query.blockHash(),
           options.query.keyType(),
           options.query.key(),

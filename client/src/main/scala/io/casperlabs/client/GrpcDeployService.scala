@@ -39,6 +39,14 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
       else Left(new RuntimeException(response.status))
     }
 
+  def queryState(q: QueryStateRequest): Task[Either[Throwable, String]] =
+    stub
+      .queryState(q)
+      .attempt
+      .map(_.map {
+        case QueryStateResponse(msg) => msg
+      })
+
   def visualizeDag(q: VisualizeDagQuery): Task[Either[Throwable, String]] =
     stub.visualizeDag(q).attempt.map(_.map(_.content))
 

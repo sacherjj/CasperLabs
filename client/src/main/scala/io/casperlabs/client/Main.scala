@@ -55,37 +55,18 @@ object Main {
       case VisualizeDag(_, _, depth, showJustificationLines) =>
         DeployRuntime.visualizeDag(depth, showJustificationLines)
 
-      case Query(_, _, socket, hash, keyType, keyValue, path) =>
-        DeployService[F].showBlock(protocol.BlockQuery(hash)).flatMap {
-          case err @ Left(_) =>
-            DeployRuntime.gracefulExit(Sync[F].pure[Either[Throwable, String]](err))
-          case Right(blockDesc) =>
-            //TODO: should be able to get the result directly instead of parsing output
-            val state = blockDesc
-              .split("\n")
-              .map(_.trim)
-              .find(_.startsWith("tupleSpaceHash"))
-              .get
-              .split("\"")(1)
-
-            val socketP   = java.nio.file.Paths.get(socket)
-            val ee        = new GrpcExecutionEngineService(socketP, 4 * 1024 * 1024)
-            val stateHash = ByteString.copyFrom(Base16.decode(state))
-            val keyBytes  = ByteString.copyFrom(Base16.decode(keyValue))
-            val key = keyType.toLowerCase match {
-              case "hash" =>
-                ipc.Key(ipc.Key.KeyInstance.Hash(ipc.KeyHash(keyBytes)))
-              case "uref" =>
-                ipc.Key(ipc.Key.KeyInstance.Uref(ipc.KeyURef(keyBytes)))
-              case "address" =>
-                ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes)))
-            }
-            val f = for {
-              result   <- ee.query(stateHash, key, path)
-              response = result.map(_.toProtoString)
-              _        <- ee.close()
-            } yield response
-            DeployRuntime.gracefulExit(f)
+      case Query(_, _, hash, keyType, keyValue, path) =>
+        val keyBytes = ByteString.copyFrom(Base16.decode(keyValue))
+        val key = keyType.toLowerCase match {
+          case "hash" =>
+            ipc.Key(ipc.Key.KeyInstance.Hash(ipc.KeyHash(keyBytes)))
+          case "uref" =>
+            ipc.Key(ipc.Key.KeyInstance.Uref(ipc.KeyURef(keyBytes)))
+          case "address" =>
+            ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes)))
         }
+        DeployRuntime.gracefulExit(
+          DeployService[F].queryState(protocol.QueryStateRequest(hash, key.toByteString, path))
+        )
     }
 }

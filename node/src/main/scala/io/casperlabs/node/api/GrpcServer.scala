@@ -24,6 +24,8 @@ import io.grpc.netty.NettyServerBuilder
 import monix.eval.Task
 import monix.execution.Scheduler
 
+import io.casperlabs.smartcontracts.ExecutionEngineService
+
 class GrpcServer(server: Server) {
   def start: Task[Unit] = Task.delay(server.start())
 
@@ -68,7 +70,7 @@ object GrpcServer {
       )
     }
 
-  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable](
+  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable: ExecutionEngineService](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,

@@ -32,8 +32,22 @@ service DeployService {
     }
     rpc findBlockWithDeploy (FindDeployInBlockQuery) returns (BlockQueryResponse) {
     }
+    rpc queryState (QueryStateRequest) returns (QueryStateResponse) {}
+    //TODO: delete this
     rpc previewPrivateNames (PrivateNamePreviewQuery) returns (PrivateNamePreviewResponse) {
     }
+}
+
+message QueryStateRequest {
+    string block_hash = 1;
+    //TODO: should be Key ADT
+    bytes base_key = 2;
+    string path = 3;
+}
+
+message QueryStateResponse {
+    //TODO: should mimic ipc version
+    string result = 1;
 }
 
 message DeployData {

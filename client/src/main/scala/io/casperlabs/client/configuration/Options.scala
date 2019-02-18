@@ -117,12 +117,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       "Query a value in the global state."
     )
 
-    val socket = opt[String](
-      name = "socket",
-      descr = "Path to socket file used for Rust/Scala IPC",
-      required = true
-    )
-
     val blockHash =
       opt[String](
         name = "block-hash",

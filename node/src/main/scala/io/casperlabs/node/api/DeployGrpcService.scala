@@ -17,14 +17,19 @@ import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.Taskable
 import io.casperlabs.graphz.{GraphSerializer, Graphz, StringSerializer}
+import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
+import com.google.protobuf.ByteString
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.smartcontracts.ExecutionEngineService
+
 private[api] object DeployGrpcService {
-  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable](
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable: ExecutionEngineService](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
@@ -41,6 +46,26 @@ private[api] object DeployGrpcService {
 
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
         defer(BlockAPI.showBlock[F](q))
+
+      override def queryState(q: QueryStateRequest): Task[QueryStateResponse] = q match {
+        case QueryStateRequest(blockHash, keyBytes, path) =>
+          val f = for {
+            bq <- BlockAPI.showBlock[F](BlockQuery(blockHash))
+            state <- bq.blockInfo.fold[F[String]](
+                      Concurrent[F].raiseError(new Exception(s"Block $blockHash not found!"))
+                    ) { info =>
+                      info.tupleSpaceHash.pure[F]
+                    }
+            stateHash        = ByteString.copyFrom(Base16.decode(state))
+            key              <- Concurrent[F].delay(ipc.Key.parseFrom(keyBytes.toByteArray))
+            possibleResponse <- ExecutionEngineService[F].query(stateHash, key, path)
+            response <- possibleResponse match {
+                         case Left(err)    => Concurrent[F].raiseError(err)
+                         case Right(value) => value.toProtoString.pure[F]
+                       }
+          } yield QueryStateResponse(response)
+          defer(f)
+      }
 
       // TODO handle potentiall errors (at least by returning proper response)
       override def visualizeDag(q: VisualizeDagQuery): Task[VisualizeBlocksResponse] = {
