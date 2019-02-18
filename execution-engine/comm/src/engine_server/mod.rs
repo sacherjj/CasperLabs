@@ -43,6 +43,37 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         grpc::SingleResponse::completed(tmp_res)
     }
 
+    fn query(
+        &self,
+        _o: ::grpc::RequestOptions,
+        p: ipc::QueryRequest,
+    ) -> grpc::SingleResponse<ipc::QueryResponse> {
+        let mut state_hash = [0u8; 32];
+        state_hash.copy_from_slice(&p.get_state_hash());
+        let key = ipc_to_key(p.get_base_key());
+        let path = p.get_path();
+
+        println!("Querying...");
+        let response = match self.query_state(state_hash, key, path) {
+            Err(err) => {
+                let mut result = ipc::QueryResponse::new();
+                let error = format!("{:?}", err);
+                println!("Error: {}", error);
+                result.set_failure(error);
+                result
+            }
+
+            Ok(value) => {
+                println!("Success: {:?}", value);
+                let mut result = ipc::QueryResponse::new();
+                result.set_success(value_to_ipc(&value));
+                result
+            }
+        };
+
+        grpc::SingleResponse::completed(response)
+    }
+
     fn exec(
         &self,
         _o: ::grpc::RequestOptions,

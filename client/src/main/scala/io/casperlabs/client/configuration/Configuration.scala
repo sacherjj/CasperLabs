@@ -24,6 +24,16 @@ final case class ShowBlocks(port: Int, host: String, depth: Int)  extends Config
 final case class VisualizeDag(port: Int, host: String, depth: Int, showJustificationLines: Boolean)
     extends Configuration
 
+final case class Query(
+    port: Int,
+    host: String,
+    socket: String,
+    blockHash: String,
+    keyType: String,
+    key: String,
+    path: String
+) extends Configuration
+
 object Configuration {
   def parse(args: Array[String]): Option[Configuration] = {
     val options = Options(args)
@@ -54,6 +64,16 @@ object Configuration {
           options.host(),
           options.visualizeBlocks.depth(),
           options.visualizeBlocks.showJustificationLines()
+        )
+      case options.query =>
+        Query(
+          options.port(),
+          options.host(),
+          options.query.socket(),
+          options.query.blockHash(),
+          options.query.keyType(),
+          options.query.key(),
+          options.query.path()
         )
     }
   }

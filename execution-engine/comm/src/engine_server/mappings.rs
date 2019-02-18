@@ -72,6 +72,57 @@ fn ipc_transform_to_transform(tr: &super::ipc::Transform) -> storage::transform:
     }
 }
 
+pub fn value_to_ipc(v: &common::value::Value) -> super::ipc::Value {
+    let mut tv = super::ipc::Value::new();
+    match v {
+        common::value::Value::Int32(i) => {
+            tv.set_integer(*i);
+        }
+        common::value::Value::ByteArray(arr) => {
+            tv.set_byte_arr(arr.clone());
+        }
+        common::value::Value::ListInt32(list) => {
+            let mut int_list = super::ipc::IntList::new();
+            int_list.set_list(list.clone());
+            tv.set_int_list(int_list);
+        }
+        common::value::Value::String(string) => {
+            tv.set_string_val(string.clone());
+        }
+        common::value::Value::ListString(list_string) => {
+            let mut string_list = super::ipc::StringList::new();
+            string_list.set_list(protobuf::RepeatedField::from_ref(list_string));
+            tv.set_string_list(string_list);
+        }
+        common::value::Value::NamedKey(name, key) => {
+            let named_key = {
+                let mut nk = super::ipc::NamedKey::new();
+                nk.set_name(name.to_string());
+                nk.set_key(key_to_ipc(key));
+                nk
+            };
+            tv.set_named_key(named_key);
+        }
+        common::value::Value::Acct(account) => {
+            let mut acc = super::ipc::Account::new();
+            acc.set_pub_key(account.pub_key().to_vec());
+            //TODO update proto; change nonce to u64
+            acc.set_nonce(account.nonce() as i64);
+            let urefs = urefs_map_to_ipc_vec(account.urefs_lookup());
+            acc.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
+            tv.set_account(acc);
+        }
+        common::value::Value::Contract { bytes, known_urefs } => {
+            let mut contr = super::ipc::Contract::new();
+            let urefs = urefs_map_to_ipc_vec(known_urefs);
+            contr.set_body(bytes.clone());
+            contr.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
+            tv.set_contract(contr);
+        }
+    };
+    tv
+}
+
 /// Transforms domain storage::transform::Transform into gRPC Transform.
 fn transform_to_ipc(tr: &storage::transform::Transform) -> super::ipc::Transform {
     let mut t = super::ipc::Transform::new();
@@ -81,53 +132,7 @@ fn transform_to_ipc(tr: &storage::transform::Transform) -> super::ipc::Transform
         }
         storage::transform::Transform::Write(v) => {
             let mut tw = super::ipc::TransformWrite::new();
-            let mut tv = super::ipc::Value::new();
-            match v {
-                common::value::Value::Int32(i) => {
-                    tv.set_integer(*i);
-                }
-                common::value::Value::ByteArray(arr) => {
-                    tv.set_byte_arr(arr.clone());
-                }
-                common::value::Value::ListInt32(list) => {
-                    let mut int_list = super::ipc::IntList::new();
-                    int_list.set_list(list.clone());
-                    tv.set_int_list(int_list);
-                }
-                common::value::Value::String(string) => {
-                    tv.set_string_val(string.clone());
-                }
-                common::value::Value::ListString(list_string) => {
-                    let mut string_list = super::ipc::StringList::new();
-                    string_list.set_list(protobuf::RepeatedField::from_ref(list_string));
-                    tv.set_string_list(string_list);
-                }
-                common::value::Value::NamedKey(name, key) => {
-                    let named_key = {
-                        let mut nk = super::ipc::NamedKey::new();
-                        nk.set_name(name.to_string());
-                        nk.set_key(key_to_ipc(key));
-                        nk
-                    };
-                    tv.set_named_key(named_key);
-                }
-                common::value::Value::Acct(account) => {
-                    let mut acc = super::ipc::Account::new();
-                    acc.set_pub_key(account.pub_key().to_vec());
-                    //TODO update proto; change nonce to u64
-                    acc.set_nonce(account.nonce() as i64);
-                    let urefs = urefs_map_to_ipc_vec(account.urefs_lookup());
-                    acc.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
-                    tv.set_account(acc);
-                }
-                common::value::Value::Contract { bytes, known_urefs } => {
-                    let mut contr = super::ipc::Contract::new();
-                    let urefs = urefs_map_to_ipc_vec(known_urefs);
-                    contr.set_body(bytes.clone());
-                    contr.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
-                    tv.set_contract(contr);
-                }
-            };
+            let tv = value_to_ipc(v);
             tw.set_value(tv);
             t.set_write(tw)
         }
@@ -236,7 +241,7 @@ fn key_to_ipc(key: &common::key::Key) -> super::ipc::Key {
 }
 
 /// Transforms gRPC Key into domain Key.
-fn ipc_to_key(ipc_key: &super::ipc::Key) -> common::key::Key {
+pub fn ipc_to_key(ipc_key: &super::ipc::Key) -> common::key::Key {
     if ipc_key.has_account() {
         let mut arr = [0u8; 20];
         arr.clone_from_slice(&ipc_key.get_account().account);

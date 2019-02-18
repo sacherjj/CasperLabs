@@ -67,7 +67,7 @@ object DeployRuntime {
     )
   }
 
-  private def gracefulExit[F[_]: Sync, A](program: F[Either[Throwable, String]]): F[Unit] =
+  private[client] def gracefulExit[F[_]: Sync, A](program: F[Either[Throwable, String]]): F[Unit] =
     for {
       result <- Sync[F].attempt(program)
       _ <- result.joinRight match {
@@ -76,7 +76,11 @@ object DeployRuntime {
                 System.err.println(processError(ex).getMessage)
                 System.exit(1)
               }
-            case Right(msg) => Sync[F].delay(println(msg))
+            case Right(msg) =>
+              Sync[F].delay {
+                println(msg)
+                System.exit(0)
+              }
           }
     } yield ()
 

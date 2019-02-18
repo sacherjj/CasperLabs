@@ -249,6 +249,20 @@ message PostEffectsResult {
     }
 }
  
+message QueryRequest {
+    bytes state_hash = 1;
+    Key base_key = 2;
+    repeated string path = 3;
+}
+
+message QueryResponse {
+    oneof result {
+        Value success = 1;
+        //TODO: ADT for errors
+        string failure = 2;
+    }
+}
+
 // Definition of the service.
 // ExecutionEngine implements server part while Consensus implements client part.
 service ExecutionEngineService {
@@ -256,7 +270,7 @@ service ExecutionEngineService {
     rpc SendDeploy (Deploy) returns (DeployResult) {}
     rpc ExecuteEffects (CommutativeEffects) returns (PostEffectsResult) {}
 
-
+    rpc query (QueryRequest) returns (QueryResponse) {}
     rpc exec (ExecRequest) returns (ExecResponse) {}
     rpc commit (CommitRequest) returns (CommitResponse) {}
 }

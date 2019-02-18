@@ -112,5 +112,47 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(visualizeBlocks)
 
+  val query = new Subcommand("query-state") {
+    descr(
+      "Query a value in the global state."
+    )
+
+    val socket = opt[String](
+      name = "socket",
+      descr = "Path to socket file used for Rust/Scala IPC",
+      required = true
+    )
+
+    val blockHash =
+      opt[String](
+        name = "block-hash",
+        descr = "Hash of the block to query the state of",
+        required = true
+      )
+
+    val keyType =
+      opt[String](
+        name = "type",
+        descr = "Type of base key. Must be one of 'hash', 'uref', 'address'",
+        validate = s => Set("hash", "uref", "address").contains(s.toLowerCase),
+        default = Option("address")
+      )
+
+    val key =
+      opt[String](
+        name = "key",
+        descr = "Base16 encoding of the base key.",
+        required = true
+      )
+
+    val path =
+      opt[String](
+        name = "path",
+        descr = "Path to the value to query. Must be of the form 'key1/key2/.../keyn'",
+        default = Option("")
+      )
+  }
+  addSubcommand(query)
+
   verify()
 }
