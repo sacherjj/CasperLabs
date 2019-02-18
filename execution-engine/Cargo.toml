@@ -1,0 +1,12 @@
+[workspace]
+
+members = [
+    "comm",
+    "common",
+    "engine",
+    "gens",
+    "storage",
+    "tests",
+    "vm",
+    "wasm-prep",
+]
