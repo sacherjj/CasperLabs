@@ -96,7 +96,7 @@ object Configuration {
     *
     * Otherwise a Path field will not respect server.dataDir changes.
     */
-  private def parseToActual(
+  private[configuration] def parseToActual(
       command: Command,
       default: ConfigurationSoft,
       confSoft: ConfigurationSoft
