@@ -4,7 +4,7 @@ The idea is to create many nodes with commands like `make node-0/up`, `make node
 
 Then we can slow down the network between `node-*` containers with https://alexei-led.github.io/post/pumba_docker_netem/ and see what happens.
 
-To deploy we'll have to `docker run --network casperlabs io.casperlabs/client` and pass it the WASM files; `client.sh` provides is a convenience wrapper for that.
+To deploy we'll have to `docker run --network casperlabs io.casperlabs/client` and pass it the WASM files. `client.sh` provides is a convenience wrapper for interacting with the network; run `./client.sh node-0 --help` to see what it can do.
 
 
 ## Build docker images
@@ -38,6 +38,49 @@ Response: Success! Block f876efed8d... created and added.
 $
 ```
 
+## Monitoring
+
+Running `make up` will install some common containers in the network, for example a [Prometheus](https://prometheus.io) server which will be available at http://localhost:9090. The list of [targets](http://localhost:9090/targets) will be updated every time we create or destroy nodes.
+
+To see some of the metrics in [Grafana](https://grafana.com/) go to http://localhost:3000 and log in with the credentials "admin/admin". The Block Gossiping dashboard displays charts that show how much overhead the communication has.
+
+Note that you'll need to run `docker login` with your DockerHub username and password to be able to pull 3rd party images.
+
+
+## Network Effects
+
+You can slow the network down a bit by running `make delay` in one terminal while issuing deploys in another one. You should see that now it takes longer for nodes to catch up after a block is created; even just sending the deploy is going to take a bit more time.
+
+Another way to introduce a network partition is to for example create two networks, put the bootstrap node in both of them, but the rest of the nodes in just one, half here, half there. Then either slow down just the bootstrap node by introducing packet loss using the [netem](https://alexei-led.github.io/post/pumba_docker_netem/) tool, or by running `docker exec -it --privileged node-0 sh` and using `iptables`:
+
+```sh
+# Drop traffic going to the intra-node gRPC port:
+iptables --append INPUT --protocol tcp --destination-port 40400 --jump DROP
+# Later delete the rule to restore traffic:
+iptables --delete INPUT --protocol tcp --destination-port 40400 --jump DROP
+```
+
+The effect should be that because the bootstrap node never sees any gossiping the two halves of the network can build the chain independently for a while. When the bootstrap node is restored and sees a new block, it will try to catch up with the missing parts of the DAG and forward it to its peers, reconnecting the two halves.
+
+You can also have a look at [using tc to slow down a specific port](https://stackoverflow.com/questions/10694730/in-linux-simulate-slow-traffic-incoming-traffic-to-port-e-g-54000). The benefit of using `iptables` and `tc` on individual port rather than the node level like `make delay` is that the deployment and metrics endpoints can stay unaffected.
+
+
+## Visualizing the DAG
+
+You'll need to `sudo apt-get install graphviz` to run the following code:
+
+```sh
+./client.sh node-0 vdag --showJustificationlines --depth 25 \
+    | dot -Tpng -o /tmp/cl-dag.png \
+    && xdg-open /tmp/cl-dag.png
+```
+
+Alternatively if you don't wish to install `graphviz` on your machine you can use just the browser:
+
+```sh
+google-chrome --new-window https://dreampuf.github.io/GraphvizOnline/#\
+    $(python -c "import urllib; print urllib.quote('''$(./client.sh node-0 vdag --showJustificationlines --depth 25)''')")
+```
 
 ## Shut down the network
 

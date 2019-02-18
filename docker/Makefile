@@ -1,7 +1,22 @@
 CL_CASPER_NUM_VALIDATORS ?= 10
+CL_SERVER_HTTP_PORT ?= 40403
+
+REFRESH_TARGETS := ./monitoring/prometheus/refresh-targets.sh
 
 # Don't remove directories created as dependencies.
 .SECONDARY:
+
+# Remove all node-N environments.
+clean: down $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
+	docker network rm casperlabs || exit 0
+	@# Removing genesis created by docker, due to permissions.
+	docker run --rm \
+		-v ${PWD}/.casperlabs:/root/.casperlabs \
+		--entrypoint sh \
+		io.casperlabs/node:latest \
+		-c "rm -rf /root/.casperlabs/genesis"
+	rm -rf .make
+
 
 # Create a new node environment by linking to the template docker-complse.yml file.
 node-%: .casperlabs/genesis
@@ -22,12 +37,16 @@ node-%: .casperlabs/genesis
 	echo CL_VALIDATOR_PRIVATE_KEY=$(shell cat "$(KEY_FILE)") >> $(ENV)
 
 	@# Link Dockerfile so we can change it and reapply.
-	ln -s ${PWD}/template/docker-compose.yml node-$(N)/docker-compose.yml
+	@#ln -s ${PWD}/template/docker-compose.yml node-$(N)/docker-compose.yml
+	@#Alternatively just make a copy so you can edit it independently.
+	cp ${PWD}/template/docker-compose.yml node-$(N)/docker-compose.yml
+
 
 # Start node.
 node-%/up: node-% .make/docker/network
 	@# Go into the directory to pick up values from .env
 	cd node-$* && docker-compose up -d
+	$(REFRESH_TARGETS)
 
 # Tear down node.
 node-%/down:
@@ -35,17 +54,34 @@ node-%/down:
 		cd node-$* && docker-compose down && cd - && \
 		rm -rf node-$* ; \
 	fi
+	$(REFRESH_TARGETS)
 
-# Remove all node-N environments.
-clean: $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
-	docker network rm casperlabs || exit 0
-	@# Removing genesis created by docker, due to permissions.
-	docker run --rm \
-		-v ${PWD}/.casperlabs:/root/.casperlabs \
-		--entrypoint sh \
-		io.casperlabs/node:latest \
-		-c "rm -rf /root/.casperlabs/genesis"
-	rm -rf .make
+# Just a quick way to check whether the server published any Prometheus metrics yet.
+node-%/metrics:
+	docker run --rm --network casperlabs appropriate/curl -s http://node-$*:$(CL_SERVER_HTTP_PORT)/metrics
+
+
+# Start common components.
+up: .make/docker/network
+	$(REFRESH_TARGETS)
+	docker-compose -p casperlabs up -d
+
+# Stop common components.
+down:
+	docker-compose -p casperlabs down
+
+
+# Slow down traffic between nodes to simulate network effects and large blocks.
+# If we slow it down too much then the client won't be able to connect though.
+# https://alexei-led.github.io/post/pumba_docker_netem/
+delay:
+	docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock gaiaadm/pumba \
+	    netem --duration 5m --interface eth0 \
+	      delay \
+	        --time 500 \
+	        --jitter 100 \
+	        --distribution normal \
+	      re2:^node
 
 
 .make/docker/network:

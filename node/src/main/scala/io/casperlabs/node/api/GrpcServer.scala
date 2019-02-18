@@ -13,6 +13,7 @@ import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.discovery.NodeDiscovery
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.effects
 import io.casperlabs.node.diagnostics.{JvmMetrics, NodeMetrics}
 import io.casperlabs.node.diagnostics
@@ -67,13 +68,13 @@ object GrpcServer {
       )
     }
 
-  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
       blockApiLock: Semaphore[F]
   )(implicit worker: Scheduler): F[GrpcServer] =
-    Sync[F].delay {
+    DeployGrpcService.instance(blockApiLock) map { inst =>
       GrpcServer(
         NettyServerBuilder
           .forPort(port)
@@ -81,7 +82,7 @@ object GrpcServer {
           .maxMessageSize(maxMessageSize)
           .addService(
             CasperMessageGrpcMonix
-              .bindService(DeployGrpcService.instance(blockApiLock), grpcExecutor)
+              .bindService(inst, grpcExecutor)
           )
           .build
       )

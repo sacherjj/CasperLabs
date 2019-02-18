@@ -21,7 +21,7 @@ docker-push-all: \
 	docker-push/client \
 	docker-push/execution-engine
 
-docker-build/node: .make/docker-build/universal/node
+docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
 docker-build/client: .make/docker-build/universal/client
 docker-build/execution-engine: .make/docker-build/execution-engine
 
@@ -65,6 +65,7 @@ clean:
 	mkdir -p $(dir $@) && touch $@
 
 
+# Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
 		execution-engine/comm/target/release/engine-grpc-server
@@ -84,6 +85,7 @@ clean:
 	mkdir -p $(dir $@) && touch $@
 
 
+# Compile gRPC interfaces for the Execution Engine.
 .make/rust-proto: .make \
 		.make/protoc-install \
 		$(shell find . -type f -iregex '.*\.proto')
@@ -92,6 +94,15 @@ clean:
 	touch $@
 
 
+# Make a node that has some extras installed for testing.
+.make/docker-build/test/node: \
+		.make/docker-build/universal/node \
+		docker/test-node.Dockerfile
+	docker build -f docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test docker
+	mkdir -p $(dir $@) && touch $@
+
+
+# Build the execution engine executable.
 execution-engine/comm/target/release/engine-grpc-server: \
 		.make/rust-proto \
 		$(shell find . -type f -iregex '.*/src/.*\.rs')

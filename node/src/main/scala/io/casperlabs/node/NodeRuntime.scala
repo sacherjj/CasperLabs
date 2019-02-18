@@ -205,6 +205,7 @@ class NodeRuntime private[node] (
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       multiParentCasperRef: MultiParentCasperRef[Effect],
+      metrics: Metrics[Task],
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task],

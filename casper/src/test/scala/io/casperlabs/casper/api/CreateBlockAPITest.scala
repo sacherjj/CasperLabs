@@ -14,6 +14,7 @@ import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.shared.Time
@@ -28,6 +29,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   import HashSetCasperTestNode.Effect
 
   private implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
+  implicit val metrics                      = new Metrics.MetricsNOP[Task]
 
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                       = createBonds(validators)
