@@ -150,11 +150,13 @@ Read more than you want to know about Docker networking starting about
 It is possible to set up a private CasperLabs network by running a standalone node and using it for bootstrapping other nodes. Here we run one on port 4000:
 
 ```console
-$ ./node/target/universal/stage/bin/casperlabs-node run -s -p 4000
-15:11:57.388 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node 0.0 (3ec3baf422f0b8055df8d6dc0414664736a392c0)
-(...)
-15:11:58.962 [main] INFO  io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabs://bc416197520ec34e19a03507f93bbeae15f80a02@78.144.212.177?protocol=4000&discovery=40404.
-
+$ ./node/target/universal/stage/bin/casperlabs-node run -s -p 4000 --server-host 127.0.0.1 --server-no-upnp
+...
+17:34:22.025 [main] INFO  io.casperlabs.node.NodeRuntime - Starting stand-alone node.
+...
+17:34:22.291 [main] INFO  io.casperlabs.node.NodeRuntime - gRPC external server started at 127.0.0.1:40401
+17:34:22.292 [main] INFO  io.casperlabs.node.NodeRuntime - gRPC internal server started at 127.0.0.1:40402
+17:34:22.542 [main] INFO  io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabs://bc416197520ec34e19a03507f93bbeae15f80a02@127.0.0.1?protocol=4000&discovery=40404.
 ```
 
 Now bootstrapping the other node just means giving the argument
@@ -175,26 +177,47 @@ $ ./node/target/universal/stage/bin/casperlabs-node \
      --server-http-port 40503 \
      --server-kademlia-port 40504 \
      --grpc-port-internal 40502 \
-     --server-bootstrap "casperlabs://bc416197520ec34e19a03507f93bbeae15f80a02@78.144.212.177?protocol=4000&discovery=40404"
+     --server-bootstrap "casperlabs://bc416197520ec34e19a03507f93bbeae15f80a02@127.0.0.1?protocol=4000&discovery=40404" \
+     --server-host 127.0.0.1 \
+     --server-no-upnp
+17:44:12.261 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node 0.0 (3ec3baf422f0b8055df8d6dc0414664736a392c0)
+17:44:12.268 [main] INFO  io.casperlabs.node.NodeEnvironment$ - Using data dir: /home/aakoshh/.casperlabs-2
+...
+17:44:12.843 [main] INFO  io.casperlabs.node.NodeRuntime - Starting node that will bootstrap from casperlabs://bc416197520ec34e19a03507f93bbeae15f80a02@127.0.0.1?protocol=4000&discovery=40404
+...
+17:44:13.141 [main] INFO  io.casperlabs.node.NodeRuntime - gRPC external server started at 127.0.0.1:40501
+17:44:13.142 [main] INFO  io.casperlabs.node.NodeRuntime - gRPC internal server started at 127.0.0.1:40502
+17:44:13.207 [main] INFO  io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabs://abd7498729d1a36f6d4921e3dd83ab1cf10552c8@127.0.0.1?protocol=40500&discovery=40504.
+17:44:13.704 [tl-dispatcher-49] INFO  i.c.c.util.comm.CasperPacketHandler$ - Valid ApprovedBlock received!
+17:44:13.734 [tl-dispatcher-49] WARN  i.c.b.InMemBlockDagStorage - Block a5ef46913d95a4ebdc8e0d5c81db33bdec8a6521c8baf498350f24a56aa56ef3 sender is empty
+17:44:13.750 [tl-dispatcher-49] INFO  i.c.c.util.comm.CasperPacketHandler$ - Making a transition to ApprovedBlockRecievedHandler state.
+17:44:13.761 [tl-dispatcher-50] INFO  i.c.casper.util.comm.CommUtil$ - Requested fork tip from peers
+17:44:22.649 [tl-dispatcher-58] INFO  io.casperlabs.comm.rp.Connect$ - Peers: 1.
+17:44:22.650 [tl-dispatcher-58] INFO  i.casperlabs.comm.rp.HandleMessages$ - Responded to protocol handshake request from casperlabs://bc416197520ec34e19a03507f93bbeae15f80a02@127.0.0.1?protocol=4000&discovery=40404
+
 ```
 
-where bootstrapped node should log, but having the same IP may prevent the nodes from connecting.
+where bootstrapped node should log that it has connected to the new one:
 
-```
-11:23:34.784 [scala-execution-context-global-26] INFO  main - Responded to encryption handshake request from #{PeerNode c17855314fc743c6ac8df001b70b2963}.
-11:24:11.163 [scala-execution-context-global-26] INFO  main - Responded to encryption handshake request from #{PeerNode 5fb06848ea89457e82a9e37565df2d57}.
-11:24:11.249 [scala-execution-context-global-26] INFO  main - Responded to protocol handshake request from #{PeerNode 5fb06848ea89457e82a9e37565df2d57}
-11:24:11.334 [main] INFO  main - Peers: 1.
+```console
+17:44:13.442 [tl-dispatcher-45] INFO  i.c.c.util.comm.CasperPacketHandler$ - Received ApprovedBlockRequest from casperlabs://abd7498729d1a36f6d4921e3dd83ab1cf10552c8@127.0.0.1?protocol=40500&discovery=40504
+17:44:13.444 [tl-dispatcher-45] INFO  i.c.comm.transport.TcpTransportLayer - stream to List(casperlabs://abd7498729d1a36f6d4921e3dd83ab1cf10552c8@127.0.0.1?protocol=40500&discovery=40504) blob
+17:44:13.444 [tl-dispatcher-45] INFO  i.c.c.util.comm.CasperPacketHandler$ - Sending ApprovedBlock to casperlabs://abd7498729d1a36f6d4921e3dd83ab1cf10552c8@127.0.0.1?protocol=40500&discovery=40504
+17:44:13.663 [tl-dispatcher-47] INFO  i.c.comm.transport.TcpTransportLayer - Streamed packet /home/aakoshh/.casperlabs/tmp/comm/20190219174413_a43463ed_packet.bts to casperlabs://abd7498729d1a36f6d4921e3dd83ab1cf10552c8@127.0.0.1?protocol=40500&discovery=40504
+17:44:22.667 [loop-36] INFO  io.casperlabs.comm.rp.Connect$ - Peers: 1.
+17:44:22.668 [loop-36] INFO  io.casperlabs.comm.rp.Connect$ - Connected to casperlabs://abd7498729d1a36f6d4921e3dd83ab1cf10552c8@127.0.0.1?protocol=40500&discovery=40504.
+5df2d57}
 ```
 
-A much easier option to set up a local network is to look at the [docker/README.md] directory:
+Another option to set up local network is to look at the [docker/README.md] directory:
 
 ```console
 $ make node-0/up
 ...
 $ make node-1/up
 ...
-$ $ docker logs --tail 10 node-0
+$ docker logs -f node-0
+...
 16:03:25.576 [main] INFO  io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabs://bc416197520ec34e19a03507f93bbeae15f80a02@node-0?protocol=40400&discovery=40404.
 16:03:29.770 [node-runner-17] WARN  i.c.b.InMemBlockDagStorage - Block 170f89c15dabf138ecc4f20e9d171416b8a59fcc1e6b30945df69394ff984524 sender is empty
 16:03:29.815 [node-runner-17] INFO  i.c.c.util.comm.CasperPacketHandler$ - Making a transition to ApprovedBlockRecievedHandler state.
