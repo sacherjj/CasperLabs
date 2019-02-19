@@ -62,7 +62,6 @@ pipeline:
     commands:
       - cd execution-engine/comm
       - ~/.cargo/bin/cargo update
-      - ~/.cargo/bin/cargo run --bin grpc-protoc
       - ~/.cargo/bin/cargo build
 
   run-rust-tests:

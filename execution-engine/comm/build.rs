@@ -1,14 +1,11 @@
 extern crate protoc_rust_grpc;
 
-use protoc_rust_grpc::{run, Args};
-
 fn main() {
-    run(Args {
+    protoc_rust_grpc::run(protoc_rust_grpc::Args {
         out_dir: "src/engine_server",
         input: &["../../models/src/main/protobuf/ipc.proto"],
         includes: &["../../models/src/main/protobuf"],
-        rust_protobuf: true, // also generate protobuf messages, not just services,
+        rust_protobuf: true,
         ..Default::default()
-    })
-    .expect("protoc");
+    }).expect("protoc-rust-grpc");
 }
