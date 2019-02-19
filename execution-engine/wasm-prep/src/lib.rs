@@ -8,7 +8,7 @@ use std::error::Error;
 use std::iter::Iterator;
 use vm::wasm_costs::WasmCosts;
 
-const ALLOWED_IMPORTS: &'static [&'static str] = &[
+const ALLOWED_IMPORTS: &[&str] = &[
     "read_value",
     "get_read",
     "write",

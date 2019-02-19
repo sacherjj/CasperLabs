@@ -52,7 +52,7 @@ fn ipc_transform_to_transform(tr: &super::ipc::Transform) -> storage::transform:
             let known_urefs = ipc_vec_to_urefs_map(ipc_contr.get_known_urefs());
             transform_write(common::value::Value::Contract {
                 bytes: contr_body,
-                known_urefs: known_urefs,
+                known_urefs,
             })
         } else if v.has_string_list() {
             let list = v.get_string_list().list.to_vec();
@@ -167,7 +167,7 @@ fn ipc_vec_to_urefs_map(vec: &[super::ipc::NamedKey]) -> BTreeMap<String, common
 // Helper method for turning BTreeMap of Keys into Vec of gRPC NamedKey.
 fn urefs_map_to_ipc_vec(urefs: &BTreeMap<String, common::key::Key>) -> Vec<super::ipc::NamedKey> {
     urefs
-        .into_iter()
+        .iter()
         .map(|(n, k)| {
             let mut nk = super::ipc::NamedKey::new();
             nk.set_name(n.to_string());

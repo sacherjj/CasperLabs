@@ -101,7 +101,7 @@ fn main() {
             timestamp,
             nonce,
             state_hash,
-            &gas_limit,
+            gas_limit,
         );
         match result {
             Err(storage::error::RootNotFound(hash)) => println!(

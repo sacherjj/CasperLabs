@@ -68,13 +68,13 @@ impl LmdbGs {
 
                 let result: Result<(), Error> = kvs.try_fold((), |_, (k, v)| {
                     let bytes = v.to_bytes();
-                    let _ = self.store.put(&mut w, k, &rkv::Value::Blob(&bytes))?;
+                    self.store.put(&mut w, k, &rkv::Value::Blob(&bytes))?;
                     Ok(())
                 });
 
                 match result {
                     Ok(_) => {
-                        let _ = w.commit()?;
+                        w.commit()?;
                         Ok(())
                     }
                     e @ Err(_) => {

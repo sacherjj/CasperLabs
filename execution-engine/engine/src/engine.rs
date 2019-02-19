@@ -94,7 +94,7 @@ where
         timestamp: u64,
         nonce: u64,
         prestate_hash: [u8; 32],
-        gas_limit: &u64,
+        gas_limit: u64,
     ) -> Result<ExecutionResult, RootNotFound> {
         match process(module_bytes, &self.wasm_costs) {
             Err(error) => Ok(ExecutionResult::Failure(error.into())),
