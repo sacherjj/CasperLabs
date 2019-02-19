@@ -209,7 +209,7 @@ where bootstrapped node should log that it has connected to the new one:
 5df2d57}
 ```
 
-Another option to set up local network is to look at the [docker/README.md] directory:
+Another option to set up local network is to look at the [docker](../docker/README.md) directory:
 
 ```console
 $ make node-0/up
@@ -234,7 +234,7 @@ $ docker logs -f node-0
 
 The current version of the node produces metrics on some communications-related activities in Prometheus format.
 
-To see metrics in action check out the [docker](docker/README.md) setup. Once you run `make up` you should be able to see Prometheus metrics at http://localhost:9090 and Grafana at http://localhost:3000
+To see metrics in action check out the [docker](../docker/README.md) setup. Once you run `make up` you should be able to see Prometheus metrics at http://localhost:9090 and Grafana at http://localhost:3000
 
 ### 3.4 Caveats
 
