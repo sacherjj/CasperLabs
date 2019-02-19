@@ -109,11 +109,10 @@ where
         &self,
         prestate_hash: [u8; 32],
         effects: HashMap<Key, Transform>,
-    ) -> Result<[u8; 32], Error> {
+    ) -> Result<[u8; 32], storage::error::Error> {
         self.state
             .lock()
             .commit(prestate_hash, effects)
-            .map_err(|err| err.into())
     }
 
     //TODO: inject gas counter, limit stack size etc
