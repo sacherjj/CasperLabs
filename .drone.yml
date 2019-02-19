@@ -63,6 +63,15 @@ pipeline:
       - cd execution-engine/
       - ~/.cargo/bin/cargo test
 
+  run-rust-lints:
+    <<: *buildenv
+    group: test
+    commands:
+      - cd execution-engine
+      - ~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)
+      - ~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy
+      - ~/.cargo/bin/cargo clippy -- -D warnings -A renamed_and_removed_lints
+
   run-unit-tests:
     <<: *sbtenv
     group: test
