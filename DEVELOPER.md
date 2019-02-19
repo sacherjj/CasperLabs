@@ -11,7 +11,7 @@ __Note__ Successfully building from source requires attending to all of the prer
 ### CasperLabs Development Environment on Ubuntu and Debian
 <details>
   <summary>Click to expand!</summary>
-  
+
   Java:
   ```console
   dev@dev:~$ sudo apt install openjdk-11-jdk -y
@@ -98,7 +98,7 @@ __Note__ Successfully building from source requires attending to all of the prer
   <summary>Click to expand!</summary>
 
   Brew:
-  On a Mac, Homebrew is helpful for installing software. Install it here: 
+  On a Mac, Homebrew is helpful for installing software. Install it here:
   ```console
   dev@dev:~$ /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
   ```
@@ -106,11 +106,11 @@ __Note__ Successfully building from source requires attending to all of the prer
   ```console
   dev@dev:~$ brew tap caskroom/cask
   ```
-  
+
   Java:
   ```console
   dev@dev:~$ brew cask install java10
-  
+
   dev@dev:~$ java -version
   ```
 
@@ -118,19 +118,19 @@ __Note__ Successfully building from source requires attending to all of the prer
   ```console
   dev@dev:~$ brew install sbt@1
   ```
-  
+
   Rust:
   ```console
   dev@dev:~$ brew install rustup
   ...
-  
+
   dev@dev:~$rustup-init
   Welcome to Rust!
 
-  This will download and install the official compiler for the Rust programming 
+  This will download and install the official compiler for the Rust programming
   language, and its package manager, Cargo.
 
-  It will add the cargo, rustc, rustup and other commands to Cargo's bin 
+  It will add the cargo, rustc, rustup and other commands to Cargo's bin
   directory, located at:
 
     /Users/dev/.cargo/bin
@@ -146,28 +146,28 @@ __Note__ Successfully building from source requires attending to all of the prer
 
   Rust is installed now. Great!
 
-  To get started you need Cargo's bin directory ($HOME/.cargo/bin) in your PATH 
+  To get started you need Cargo's bin directory ($HOME/.cargo/bin) in your PATH
   environment variable. Next time you log in this will be done automatically.
 
   To configure your current shell run source $HOME/.cargo/env
-  
+
   dev@dev:~$ source $HOME/.cargo/env
-  
+
   dev@dev:~$ rustup update
   ...
-  
+
   dev@dev:~$ rustup toolchain install nightly
   ...
-  
+
   dev@dev:~$ rustup target add wasm32-unknown-unknown --toolchain nightly
   ...
   ```
-  
+
   protoc:
   ```console
   dev@dev:~$ brew install protobuf
   ...
-  
+
   dev@dev:~$ protoc --version
   ```
 </details>
@@ -175,7 +175,7 @@ __Note__ Successfully building from source requires attending to all of the prer
 ### CasperLabs Development Environment on Fedora
 <details>
   <summary>Click to expand!</summary>
-  
+
   Java:
   ```console
   dev@dev:~$ dnf search openjdk
@@ -197,7 +197,7 @@ __Note__ Successfully building from source requires attending to all of the prer
   repo id                                      repo name                                                         status
   bintray--sbt-rpm                             bintray--sbt-rpm                                                      37
   ...
-  
+
   dev@dev:~/CasperLabs$ sudo dnf --enablerepo=bintray--sbt-rpm install sbt
 
   dev@dev:~$ sbt sbtVersion
@@ -277,10 +277,10 @@ This is required only when the `ipc.proto` file changes (but this is true when y
   1. Go to Execution Engine root directory. This is `execution-engine` directory in the node's root dir.
   2. Go to comm project directory (`cd comm`).
   3. Run: `cargo run --bin grpc-protoc`
-  
+
 #### Build Wasm contracts:
-  1. Go to contract that interests you in the `contracts-example` directory.
-  2. To compile Rust contract to Wasm, in the root dir of the contract (where Cargo.toml is defined) you need to run: `cargo build --release --target wasm32-unknown-unknown`. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory.      We will use this file when deploying a contract. For the purposes of "Hello World" demo we use `store-hello-world` and `call-hello-      name` contracts.
+  1. Go to contract that interests you in the [contracts-example](https://github.com/CasperLabs/contract-examples) repo.
+  2. To compile Rust contract to Wasm, in the root dir of the contract (where Cargo.toml is defined) you need to run: `cargo build --release --target wasm32-unknown-unknown`. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory. We will use this file when deploying a contract. For the purposes of "Hello World" demo we use `hello-name/define` and `hello-name/call` contracts.
   3. If `cargo build --release ...`  doesn't work try `cargo +nightly build ...`
 
 #### Building node:
@@ -295,7 +295,7 @@ This is required only when the `ipc.proto` file changes (but this is true when y
   1. Go to Execution Engine root directory. This is `execution-engine` directory in the node's root dir.
   2. Go to comm project directory (`cd comm`)
   3. Run `cargo build`
-  
+
 ### Running components
 For ease of use node assumes a default directory that is `~/.casperlabs/` First you have to create a hidden directory.
 
@@ -332,7 +332,7 @@ After deploying contract it's not yet executed (its effects are not applied to t
 ./client/target/universal/stage/bin/client --host 127.0.0.1 --port 40401 propose
 ```
 
-For the demo purposes we have to propose contracts separately because second contract (`call-hello-name`) won't see the changes (in practice it won't be able to call `store-hello-world` contract) from the previous deploy.
+For the demo purposes we have to propose contracts separately because second contract (`hello-name/call`) won't see the changes (in practice it won't be able to call `hello-name/define` contract) from the previous deploy.
 
 ## Information for developers
 Assure prerequisites shown above are met.
@@ -420,7 +420,7 @@ For tests of the Rholang module, make sure you've got the following JVM options 
 
 Otherwise the StackSafetySpec is going to be veeery slow and will most likely fail due to timeouts.
 
-You can make the above options default by editing the ScalaTest Template in `Run > Edit configurations > Templates`.  
+You can make the above options default by editing the ScalaTest Template in `Run > Edit configurations > Templates`.
 
 ### Cross-developing for Linux (e.g. Ubuntu) on a Mac
 You will need a virtual machine running the appropriate version of Linux.
