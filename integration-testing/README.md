@@ -31,11 +31,16 @@ Python 3.7.0
 
 ## Step 3: [Install pipenv](https://github.com/pypa/pipenv#installation)
 
+Pip comes bundled with latest python.
+```bash
+pip install pipenv
+```
 ## Step 4: Dependencies
 
 
 Once Python is installed you can run within `integration-testing` subdirectory
-the following command:
+the following command to install all dependencies. Please also see `Pipfile.lock` and 
+`Pipfile` files.
 
 ```bash
 $ pipenv sync
@@ -108,6 +113,12 @@ $ ./run_tests.sh --collect-only
 ```
 ```bash
 $ ./run_tests.sh --collect-only  test/test_star_connected.py
+```
+
+If you want to run a single test in a file
+
+```bash
+$ ./run_tests.sh test/test_network_topology.py -k "test_casper_propose_and_deploy"
 ```
 
 The test can runs the [mypy](https://pypi.org/project/pytest-mypy/) static type checker on your source files as part of 
