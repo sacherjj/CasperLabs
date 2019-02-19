@@ -60,7 +60,7 @@ impl MockEnv {
             self.memory.clone(),
             &mut self.tc,
             mock_module(),
-            &self.gas_limit,
+            self.gas_limit,
             address,
             nonce,
             timestamp,

@@ -70,6 +70,7 @@ where
     T4: FromRuntimeValue + Sized,
     T5: FromRuntimeValue + Sized,
 {
+    #[allow(clippy::many_single_char_names)]
     fn parse(args: RuntimeArgs) -> Result<Self, Trap> {
         let a: T1 = args.nth_checked(0)?;
         let b: T2 = args.nth_checked(1)?;
@@ -89,6 +90,7 @@ where
     T5: FromRuntimeValue + Sized,
     T6: FromRuntimeValue + Sized,
 {
+    #[allow(clippy::many_single_char_names)]
     fn parse(args: RuntimeArgs) -> Result<Self, Trap> {
         let a: T1 = args.nth_checked(0)?;
         let b: T2 = args.nth_checked(1)?;

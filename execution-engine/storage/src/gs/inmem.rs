@@ -79,7 +79,7 @@ impl History<InMemGS> for InMemHist {
             let arc = self
                 .history
                 .get(&prestate_hash)
-                .ok_or(RootNotFound(prestate_hash))?;
+                .ok_or_else(|| RootNotFound(prestate_hash))?;
 
             BTreeMap::clone(&arc)
         };
@@ -136,7 +136,7 @@ mod tests {
         map.insert(KEY2, VALUE2.clone());
         let mut history = HashMap::new();
         history.insert(EMPTY_ROOT, Arc::new(map));
-        InMemHist { history: history }
+        InMemHist { history }
     }
 
     fn checkout<R: DbReader, H: History<R>>(hist: &H, hash: [u8; 32]) -> TrackingCopy<R> {

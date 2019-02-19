@@ -44,7 +44,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                 timestamp,
                 nonce,
                 prestate_hash,
-                &gas_limit,
+                gas_limit,
             ) {
                 // We want to treat RootNotFound error differently b/c it should short-circuit
                 // the execution of ALL deploys within the block. This is because all of them share the same prestate
