@@ -196,7 +196,6 @@ message DeployError {
     oneof deploy_errors {
         OutOfGasError gasErr = 1;
         WasmError wasmErr = 2;
-        InvalidSignature signatureError = 3;
     }
 }
 message OutOfGasError {}

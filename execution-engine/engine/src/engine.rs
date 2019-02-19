@@ -26,7 +26,6 @@ where
 #[derive(Debug)]
 pub enum Error {
     PreprocessingError(String),
-    SignatureError(String),
     ExecError(ExecutionError),
     StorageError(StorageError),
 }
@@ -124,15 +123,5 @@ where
         wasm_costs: &WasmCosts,
     ) -> Result<Module, Error> {
         process(module_bytes, wasm_costs).map_err(|err| err.into())
-    }
-
-    //TODO return proper error
-    pub fn validate_signatures(
-        &self,
-        _deploy: &[u8],
-        _signature: &[u8],
-        _signature_alg: &str,
-    ) -> Result<String, Error> {
-        Ok(String::from("OK"))
     }
 }
