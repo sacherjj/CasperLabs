@@ -15,8 +15,8 @@ impl Args for u32 {
 
 impl Args for usize {
     fn parse(args: RuntimeArgs) -> Result<Self, Trap> {
-        let a: u32 = args.nth_checked(0)?;
-        Ok(a as usize)
+        let a0: u32 = args.nth_checked(0)?;
+        Ok(a0 as usize)
     }
 }
 
@@ -26,9 +26,9 @@ where
     T2: FromRuntimeValue + Sized,
 {
     fn parse(args: RuntimeArgs) -> Result<Self, Trap> {
-        let a: T1 = args.nth_checked(0)?;
-        let b: T2 = args.nth_checked(1)?;
-        Ok((a, b))
+        let a0: T1 = args.nth_checked(0)?;
+        let a1: T2 = args.nth_checked(1)?;
+        Ok((a0, a1))
     }
 }
 
@@ -39,10 +39,10 @@ where
     T3: FromRuntimeValue + Sized,
 {
     fn parse(args: RuntimeArgs) -> Result<Self, Trap> {
-        let a: T1 = args.nth_checked(0)?;
-        let b: T2 = args.nth_checked(1)?;
-        let c: T3 = args.nth_checked(2)?;
-        Ok((a, b, c))
+        let a0: T1 = args.nth_checked(0)?;
+        let a1: T2 = args.nth_checked(1)?;
+        let a2: T3 = args.nth_checked(2)?;
+        Ok((a0, a1, a2))
     }
 }
 
@@ -54,11 +54,11 @@ where
     T4: FromRuntimeValue + Sized,
 {
     fn parse(args: RuntimeArgs) -> Result<Self, Trap> {
-        let a: T1 = args.nth_checked(0)?;
-        let b: T2 = args.nth_checked(1)?;
-        let c: T3 = args.nth_checked(2)?;
-        let d: T4 = args.nth_checked(3)?;
-        Ok((a, b, c, d))
+        let a0: T1 = args.nth_checked(0)?;
+        let a1: T2 = args.nth_checked(1)?;
+        let a2: T3 = args.nth_checked(2)?;
+        let a3: T4 = args.nth_checked(3)?;
+        Ok((a0, a1, a2, a3))
     }
 }
 
@@ -70,14 +70,13 @@ where
     T4: FromRuntimeValue + Sized,
     T5: FromRuntimeValue + Sized,
 {
-    #[allow(clippy::many_single_char_names)]
     fn parse(args: RuntimeArgs) -> Result<Self, Trap> {
-        let a: T1 = args.nth_checked(0)?;
-        let b: T2 = args.nth_checked(1)?;
-        let c: T3 = args.nth_checked(2)?;
-        let d: T4 = args.nth_checked(3)?;
-        let e: T5 = args.nth_checked(4)?;
-        Ok((a, b, c, d, e))
+        let a0: T1 = args.nth_checked(0)?;
+        let a1: T2 = args.nth_checked(1)?;
+        let a2: T3 = args.nth_checked(2)?;
+        let a3: T4 = args.nth_checked(3)?;
+        let a4: T5 = args.nth_checked(4)?;
+        Ok((a0, a1, a2, a3, a4))
     }
 }
 
@@ -90,14 +89,13 @@ where
     T5: FromRuntimeValue + Sized,
     T6: FromRuntimeValue + Sized,
 {
-    #[allow(clippy::many_single_char_names)]
     fn parse(args: RuntimeArgs) -> Result<Self, Trap> {
-        let a: T1 = args.nth_checked(0)?;
-        let b: T2 = args.nth_checked(1)?;
-        let c: T3 = args.nth_checked(2)?;
-        let d: T4 = args.nth_checked(3)?;
-        let e: T5 = args.nth_checked(4)?;
-        let f: T6 = args.nth_checked(5)?;
-        Ok((a, b, c, d, e, f))
+        let a0: T1 = args.nth_checked(0)?;
+        let a1: T2 = args.nth_checked(1)?;
+        let a2: T3 = args.nth_checked(2)?;
+        let a3: T4 = args.nth_checked(3)?;
+        let a4: T5 = args.nth_checked(4)?;
+        let a5: T6 = args.nth_checked(5)?;
+        Ok((a0, a1, a2, a3, a4, a5))
     }
 }
