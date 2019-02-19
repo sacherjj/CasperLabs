@@ -257,3 +257,15 @@ is not using `@paremetrize.cartesian`.
 The second approach is more verbose but you have a finer control over the lifetime of the fixtures and you can control 
 the resource usage better.
 
+###  Ordering imports
+
+install `importanize` with `pip install importanize`, and run it on files and folders.
+
+```bash
+importanize  tests/test_network_topology.py
+
+importanize tests
+
+git diff dev..<your branch name>  --name-only | grep py | xargs importanize
+```
+
