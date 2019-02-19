@@ -85,8 +85,5 @@ execution-engine/engine/*.lock
 execution-engine/wasm-prep/*.lock
 execution-engine/tests/*.lock
 execution-engine/gens/*.lock
-contract-examples/*/*.lock
-contract-examples/counter/*/*.lock
-contract-examples/mailing-list/*/*.lock
 
 .make
