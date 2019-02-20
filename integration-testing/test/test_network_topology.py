@@ -87,6 +87,7 @@ def deploy_block(node, expected_string, contract_name):
     )
     node.deploy(container_contract_file_path)
     block_hash = node.propose()
+    logging.info(f"The block hash: {block_hash} generated for {node.container.name} for {contract_name}")
     return block_hash
 
 

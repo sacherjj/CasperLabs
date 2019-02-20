@@ -254,7 +254,8 @@ class Node:
                 command=command,
                 network=self.network,
                 volumes=volumes,
-                detach=True
+                detach=True,
+                tty=True
                 )
             logging.debug("OUTPUT {}".format(output.logs()))
             return output.logs()
