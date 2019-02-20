@@ -42,6 +42,7 @@ pub enum PreprocessingError {
 
 use PreprocessingError::*;
 
+//TODO: inject gas counter, limit stack size etc
 pub fn process(module_bytes: &[u8], wasm_costs: &WasmCosts) -> Result<Module, PreprocessingError> {
     // type annotation in closure needed
     let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());

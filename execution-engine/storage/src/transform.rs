@@ -1,4 +1,3 @@
-use super::error::Error;
 use common::key::Key;
 use common::value::Value;
 use std::collections::BTreeMap;
@@ -6,18 +5,28 @@ use std::fmt;
 use std::ops::Add;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
+pub struct TypeMismatch { pub expected: String, pub found: String }
+impl TypeMismatch {
+    pub fn new(expected: String, found: String) -> TypeMismatch {
+        TypeMismatch {
+            expected, found
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Transform {
     Identity,
     Write(Value),
     AddInt32(i32),
     AddKeys(BTreeMap<String, Key>),
-    Failure(Error),
+    Failure(TypeMismatch),
 }
 
 use self::Transform::*;
 
 impl Transform {
-    pub fn apply(self, v: Value) -> Result<Value, Error> {
+    pub fn apply(self, v: Value) -> Result<Value, TypeMismatch> {
         match self {
             Identity => Ok(v),
             Write(w) => Ok(w),
@@ -25,7 +34,7 @@ impl Transform {
                 Value::Int32(j) => Ok(Value::Int32(i + j)),
                 other => {
                     let expected = String::from("Int32");
-                    Err(Error::TypeMismatch {
+                    Err(TypeMismatch {
                         expected,
                         found: other.type_string(),
                     })
@@ -45,7 +54,7 @@ impl Transform {
                 }
                 other => {
                     let expected = String::from("Contract or Account");
-                    Err(Error::TypeMismatch {
+                    Err(TypeMismatch {
                         expected,
                         found: other.type_string(),
                     })
@@ -75,7 +84,7 @@ impl Add for Transform {
             }
             (AddInt32(i), b) => match b {
                 AddInt32(j) => AddInt32(i + j),
-                other => Failure(Error::TypeMismatch {
+                other => Failure(TypeMismatch {
                     expected: "AddInt32".to_owned(),
                     found: format!("{:?}", other),
                 }),
@@ -85,7 +94,7 @@ impl Add for Transform {
                     ks1.append(&mut ks2);
                     AddKeys(ks1)
                 }
-                other => Failure(Error::TypeMismatch {
+                other => Failure(TypeMismatch {
                     expected: "AddKeys".to_owned(),
                     found: format!("{:?}", other),
                 }),

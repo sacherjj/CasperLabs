@@ -140,7 +140,7 @@ message TransformWrite {
     Value value = 1;
 }
 message TransformFailure {
-    StorageError error = 1;
+    StorageTypeMismatch error = 1;
 }
  
 //Errors which may occur while interacting with global state

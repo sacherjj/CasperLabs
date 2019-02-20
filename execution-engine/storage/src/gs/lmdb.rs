@@ -1,7 +1,7 @@
 use common::bytesrepr::{deserialize, ToBytes};
 use common::key::Key;
 use common::value::Value;
-use error::Error;
+use error::{RootNotFound, Error};
 use gs::{DbReader, TrackingCopy};
 use history::*;
 use rkv::store::single::SingleStore;
@@ -42,7 +42,7 @@ impl LmdbGs {
                 let maybe_curr = self.store.get(&r, k)?;
 
                 match maybe_curr {
-                    None => Err(Error::KeyNotFound { key: *k }),
+                    None => Err(Error::KeyNotFound(*k)),
                     Some(rkv::Value::Blob(bytes)) => {
                         let value = deserialize(bytes)?;
                         Ok(value)
@@ -102,7 +102,7 @@ impl DbReader for LmdbGs {
 }
 
 impl History<Self> for LmdbGs {
-    fn checkout(&self, _prestate_hash: [u8; 32]) -> Result<TrackingCopy<LmdbGs>, Error> {
+    fn checkout(&self, _prestate_hash: [u8; 32]) -> Result<TrackingCopy<LmdbGs>, RootNotFound> {
         unimplemented!("LMDB History not implemented")
     }
 
@@ -110,7 +110,7 @@ impl History<Self> for LmdbGs {
         &mut self,
         _prestate_hash: [u8; 32],
         _effects: HashMap<Key, Transform>,
-    ) -> Result<[u8; 32], Error> {
+    ) -> Result<CommitResult, RootNotFound> {
         unimplemented!("LMDB History not implemented")
     }
 }
