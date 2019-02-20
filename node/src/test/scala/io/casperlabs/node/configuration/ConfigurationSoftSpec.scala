@@ -6,29 +6,31 @@ import java.util.concurrent.TimeUnit
 import cats.syntax.option._
 import io.casperlabs.comm.{Endpoint, NodeIdentifier, PeerNode}
 import io.casperlabs.shared.StoreType
+import io.casperlabs.node.configuration.ConfigurationSoft._
 import org.scalatest._
+import shapeless._
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
+import scala.reflect.{classTag, ClassTag}
 import scala.util.Try
 
 class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEach {
-  import ConfigurationSoft._
   val configFilename = "test-configuration.toml"
 
-  val expectedFromResources = {
+  val defaultConf: ConfigurationSoft = {
     val server = Server(
       host = "test".some,
       port = 1.some,
       httpPort = 1.some,
       kademliaPort = 1.some,
-      dynamicHostAddress = true.some,
-      noUpnp = true.some,
+      dynamicHostAddress = false.some,
+      noUpnp = false.some,
       defaultTimeout = 1.some,
       bootstrap = PeerNode(
         NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
         Endpoint("52.119.8.109", 1, 1)
       ).some,
-      standalone = true.some,
+      standalone = false.some,
       mapSize = 1L.some,
       storeType = StoreType.LMDB.some,
       dataDir = Paths.get("test").some,
@@ -53,10 +55,10 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       walletsFile = Paths.get("test").some,
       minimumBond = 1L.some,
       maximumBond = 1L.some,
-      hasFaucet = true.some,
+      hasFaucet = false.some,
       requiredSigs = 1.some,
       shardId = "test".some,
-      approveGenesis = true.some,
+      approveGenesis = false.some,
       approveGenesisInterval = FiniteDuration(1, TimeUnit.SECONDS).some,
       approveGenesisDuration = FiniteDuration(1, TimeUnit.SECONDS).some,
       deployTimestamp = 1L.some
@@ -64,13 +66,13 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     val tls = Tls(
       certificate = Paths.get("test").some,
       key = Paths.get("test").some,
-      secureRandomNonBlocking = true.some
+      secureRandomNonBlocking = false.some
     )
     val lmdb = LmdbBlockStore(
       blockStoreSize = 1L.some,
       maxDbs = 1.some,
       maxReaders = 1.some,
-      useTls = true.some
+      useTls = false.some
     )
     val blockStorage = BlockDagFileStorage(
       latestMessagesLogMaxSizeFactor = 1.some
@@ -82,7 +84,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     )
     val influx = Influx(
       "0.0.0.0".some,
-      14.some,
+      1.some,
       "test".some,
       "https".some
     )
@@ -103,423 +105,220 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     )
   }
 
-  val rawConfigFile =
-    """
-      |[server]
-      |host = "test2"
-      |port = 2
-      |http-port = 2
-      |kademlia-port = 2
-      |dynamic-host-address = false
-      |no-upnp = false
-      |default-timeout = 2
-      |bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.254?protocol=2&discovery=2"
-      |standalone = false
-      |map-size = 2
-      |store-type = "inmem"
-      |data-dir = "test2"
-      |max-num-of-connections = 2
-      |max-message-size = 2
-      |chunk-size = 2
-      |
-      |[lmdb]
-      |path = "test2"
-      |block-store-size = 2
-      |max-dbs = 2
-      |max-readers = 2
-      |use-tls = false
-      |
-      |[blockstorage]
-      |latest-messages-log-path = "test2"
-      |latest-messages-crc-path = "test2"
-      |block-metadata-log-path = "test2"
-      |block-metadata-crc-path = "test2"
-      |checkpoints-dir-path = "test2"
-      |latest-messages-log-max-size-factor = 2
-      |
-      |[grpc]
-      |host = "test2"
-      |socket = "test2"
-      |port-external = 2
-      |port-internal = 2
-      |
-      |[tls]
-      |certificate = "test2"
-      |key = "test2"
-      |secure-random-non-blocking = false
-      |
-      |[casper]
-      |public-key = "test2"
-      |private-key = "test2"
-      |private-key-path = "test2"
-      |sig-algorithm = "test2"
-      |bonds-file = "test2"
-      |known-validators-file = "test2"
-      |num-validators = 2
-      |genesis-path = "test2"
-      |wallets-file = "test2"
-      |minimum-bond = 2
-      |maximum-bond = 2
-      |has-faucet = false
-      |required-sigs = 2
-      |shard-id = "test2"
-      |approve-genesis = false
-      |approve-genesis-interval = "2seconds"
-      |approve-genesis-duration = "2seconds"
-      |deploy-timestamp = 2
-    """.stripMargin
-  val expectedFromConfigFile = {
-    val server = Server(
-      host = "test2".some,
-      port = 2.some,
-      httpPort = 2.some,
-      kademliaPort = 2.some,
-      dynamicHostAddress = false.some,
-      noUpnp = false.some,
-      defaultTimeout = 2.some,
-      bootstrap = PeerNode(
-        NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
-        Endpoint("52.119.8.254", 2, 2)
-      ).some,
-      standalone = false.some,
-      mapSize = 2L.some,
-      storeType = StoreType.InMem.some,
-      dataDir = Paths.get("test2").some,
-      maxNumOfConnections = 2.some,
-      maxMessageSize = 2.some,
-      chunkSize = 2.some
-    )
-    val grpcServer = GrpcServer(
-      host = "test2".some,
-      socket = Paths.get("test2").some,
-      portExternal = 2.some,
-      portInternal = 2.some
-    )
-    val casper = Casper(
-      validatorPublicKey = "test2".some,
-      validatorPrivateKey = "test2".some,
-      validatorPrivateKeyPath = Paths.get("test2").some,
-      validatorSigAlgorithm = "test2".some,
-      bondsFile = Paths.get("test2").some,
-      knownValidatorsFile = "test2".some,
-      numValidators = 2.some,
-      walletsFile = Paths.get("test2").some,
-      minimumBond = 2L.some,
-      maximumBond = 2L.some,
-      hasFaucet = false.some,
-      requiredSigs = 2.some,
-      shardId = "test2".some,
-      approveGenesis = false.some,
-      approveGenesisInterval = FiniteDuration(2, TimeUnit.SECONDS).some,
-      approveGenesisDuration = FiniteDuration(2, TimeUnit.SECONDS).some,
-      deployTimestamp = 2L.some
-    )
-    val tls = Tls(
-      certificate = Paths.get("test2").some,
-      key = Paths.get("test2").some,
-      secureRandomNonBlocking = false.some
-    )
-    val lmdb = LmdbBlockStore(
-      blockStoreSize = 2L.some,
-      maxDbs = 2.some,
-      maxReaders = 2.some,
-      useTls = false.some
-    )
-    val blockStorage = BlockDagFileStorage(
-      latestMessagesLogMaxSizeFactor = 2.some
-    )
-    val kamonSettings = Metrics(
-      false.some,
-      false.some,
-      false.some
-    )
-    val influx = Influx(
-      "0.0.0.0".some,
-      14.some,
-      "test".some,
-      "https".some
-    )
-    val influxAuth = InfluxAuth(
-      "user".some,
-      "password".some
-    )
-    ConfigurationSoft(
-      server.some,
-      grpcServer.some,
-      tls.some,
-      casper.some,
-      lmdb.some,
-      blockStorage.some,
-      kamonSettings.some,
-      influx.some,
-      influxAuth.some
-    )
+  test("""
+      |ConfigurationSoft.parse should properly parse
+      |CLI, ENV and TOML config file""".stripMargin) {
+    runTest()
   }
 
-  val cliArgs = List(
-    List("--grpc-host", "test3"),
-    List("--grpc-port", "3"),
-    List("--config-file", configFilename),
-    List("--server-max-message-size", "3"),
-    List("--server-chunk-size", "3"),
-    List("run"),
-    List("--casper-bonds-file", "test3"),
-    List("--casper-deploy-timestamp", "3"),
-    List("--casper-duration", "3seconds"),
-    List("--casper-genesis-validator"),
-    List("--casper-has-faucet"),
-    List("--casper-interval", "3seconds"),
-    List("--casper-known-validators", "test3"),
-    List("--casper-maximum-bond", "3"),
-    List("--casper-minimum-bond", "3"),
-    List("--casper-num-validators", "3"),
-    List("--casper-required-sigs", "3"),
-    List("--casper-shard-id", "test3"),
-    List("--casper-validator-private-key", "test3"),
-    List("--casper-validator-public-key", "test3"),
-    List("--casper-validator-private-key-path", "test3"),
-    List("--casper-validator-sig-algorithm", "test3"),
-    List("--casper-wallets-file", "test3"),
-    List("--grpc-port-internal", "3"),
-    List("--grpc-socket", "test3"),
-    List("--lmdb-block-store-size", "3"),
-    List(
-      "--server-bootstrap",
-      "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.253?protocol=3&discovery=3"
-    ),
-    List("--server-data-dir", "test3"),
-    List("--server-default-timeout", "3"),
-    List("--server-dynamic-host-address"),
-    List("--server-host", "test3"),
-    List("--server-http-port", "3"),
-    List("--server-kademlia-port", "3"),
-    List("--server-map-size", "3"),
-    List("--server-max-num-of-connections", "3"),
-    List("--server-no-upnp"),
-    List("--server-port", "3"),
-    List("--server-standalone"),
-    List("--server-store-type", "mixed"),
-    List("--tls-certificate", "test3"),
-    List("--tls-key", "test3"),
-    List("--tls-secure-random-non-blocking"),
-    List("--metrics-prometheus"),
-    List("--metrics-zipkin"),
-    List("--metrics-sigar"),
-    List("--metrics-influx-hostname", "localhost"),
-    List("--metrics-influx-database", "test"),
-    List("--metrics-influx-port", "1337"),
-    List("--metrics-influx-protocol", "ssh")
-  ).flatten.toArray
-  val expectedFromCliArgs = {
-    val server = Server(
-      host = "test3".some,
-      port = 3.some,
-      httpPort = 3.some,
-      kademliaPort = 3.some,
-      dynamicHostAddress = true.some,
-      noUpnp = true.some,
-      defaultTimeout = 3.some,
-      bootstrap = PeerNode(
-        NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
-        Endpoint("52.119.8.253", 3, 3)
-      ).some,
-      standalone = true.some,
-      mapSize = 3L.some,
-      storeType = StoreType.Mixed.some,
-      dataDir = Paths.get("test3").some,
-      maxNumOfConnections = 3.some,
-      maxMessageSize = 3.some,
-      chunkSize = 3.some
-    )
-    val grpcServer = GrpcServer(
-      host = "test3".some,
-      socket = Paths.get("test3").some,
-      portExternal = 3.some,
-      portInternal = 3.some
-    )
-    val casper = Casper(
-      validatorPublicKey = "test3".some,
-      validatorPrivateKey = "test3".some,
-      validatorPrivateKeyPath = Paths.get("test3").some,
-      validatorSigAlgorithm = "test3".some,
-      bondsFile = Paths.get("test3").some,
-      knownValidatorsFile = "test3".some,
-      numValidators = 3.some,
-      walletsFile = Paths.get("test3").some,
-      minimumBond = 3L.some,
-      maximumBond = 3L.some,
-      hasFaucet = true.some,
-      requiredSigs = 3.some,
-      shardId = "test3".some,
-      approveGenesis = true.some,
-      approveGenesisInterval = FiniteDuration(3, TimeUnit.SECONDS).some,
-      approveGenesisDuration = FiniteDuration(3, TimeUnit.SECONDS).some,
-      deployTimestamp = 3L.some
-    )
-    val tls = Tls(
-      certificate = Paths.get("test3").some,
-      key = Paths.get("test3").some,
-      secureRandomNonBlocking = true.some
-    )
-    val lmdb = LmdbBlockStore(
-      blockStoreSize = 3L.some,
-      maxDbs = 2.some,
-      maxReaders = 2.some,
-      useTls = false.some
-    )
-    val blockStorage = BlockDagFileStorage(
-      latestMessagesLogMaxSizeFactor = 2.some
-    )
-    val kamonSettings = Metrics(
-      true.some,
-      true.some,
-      true.some
-    )
-    val influx = Influx(
-      "localhost".some,
-      1337.some,
-      "test".some,
-      "ssh".some
-    )
-    val influxAuth = InfluxAuth(
-      "user".some,
-      "password".some
-    )
-    ConfigurationSoft(
-      server.some,
-      grpcServer.some,
-      tls.some,
-      casper.some,
-      lmdb.some,
-      blockStorage.some,
-      kamonSettings.some,
-      influx.some,
-      influxAuth.some
-    )
-  }
+  def runTest(): Unit =
+    for {
+      cli  <- List(true, false)
+      env  <- List(true, false)
+      file <- List(true, false)
+    } {
+      val fileConf            = if (file) Some(update(update(update(defaultConf)))) else None
+      val fileContent: String = fileConf.map(toToml).getOrElse("")
 
-  test("ConfigurationSoft.parse should properly parse default config resources") {
-    val Right(c) = ConfigurationSoft.parse(Array.empty[String], Map.empty)
-    c shouldEqual expectedFromResources
-  }
+      if (fileContent.nonEmpty) {
+        writeTestConfigFile(fileContent)
+      }
 
-  test("ConfigurationSoft.parse should properly parse TOML --config-file") {
-    writeTestConfigFile()
-    val Right(c) = ConfigurationSoft.parse(Array("--config-file", configFilename), Map.empty)
-    c shouldEqual expectedFromConfigFile
-  }
+      val cliConf = if (cli) Some(update(defaultConf)) else None
+      val cliArgs: Array[String] = {
+        (cliConf.map(toCli).getOrElse(Nil), fileContent) match {
+          case (c, f) if c.nonEmpty && f.nonEmpty =>
+            s"--config-file=$configFilename" :: "run" :: c
+          case (c, f) if c.nonEmpty && f.isEmpty => "run" :: c
+          case (c, f) if c.isEmpty && f.nonEmpty =>
+            s"--config-file=$configFilename" :: "diagnostics" :: Nil
+          case (c, f) if c.isEmpty && f.isEmpty =>
+            "diagnostics" :: Nil
+        }
+      }.toArray
 
-  test("ConfigurationSoft.parse should properly parse CLI args") {
-    writeTestConfigFile()
-    val Right(c) = ConfigurationSoft.parse(cliArgs, Map.empty)
-    c shouldEqual expectedFromCliArgs
-  }
+      val envConf                      = if (env) Some(update(update(defaultConf))) else None
+      val envVars: Map[String, String] = envConf.map(toEnvVars).getOrElse(Map.empty)
 
-  test("ConfigurationSoft.parse should fallback field by field cliConf->confFile->default") {
-    writeTestConfigFile("""
-        |[grpc]
-        |host = "localhost"
-        |[metrics]
-        |zipkin = true
-      """.stripMargin)
-    val Right(c) =
-      ConfigurationSoft.parse(
-        Array("--config-file", configFilename, "--grpc-port=100", "run"),
-        Map.empty
-      )
-    val expected =
-      expectedFromResources
-        .copy(
-          grpc = expectedFromResources.grpc
-            .map(_.copy(host = "localhost".some, portExternal = 100.some)),
-          metrics = expectedFromResources.metrics
-            .map(_.copy(zipkin = true.some))
+      val expected = {
+        val fileOrDefault = fileConf.map(_.fallbackTo(defaultConf)).getOrElse(defaultConf)
+        val envOrFile     = envConf.map(_.fallbackTo(fileOrDefault)).getOrElse(fileOrDefault)
+        val cliOrEnv      = cliConf.map(_.fallbackTo(envOrFile)).getOrElse(envOrFile)
+        cliOrEnv
+      }
+
+      val Right(result) = ConfigurationSoft.parse(cliArgs, envVars)
+
+      expected shouldEqual result
+    }
+
+  def toToml(conf: ConfigurationSoft): String = {
+    def dashify(s: String): String =
+      s.replaceAll("([A-Z]+)([A-Z][a-z])", "$1-$2")
+        .replaceAll("([a-z\\d])([A-Z])", "$1-$2")
+        .toLowerCase
+
+    def extractTomlTable[A <: Product: ClassTag](tableName: String, caseClass: A): String =
+      s"[$tableName]" + "\n" + classTag[A].runtimeClass.getDeclaredFields
+        .filterNot(_.isSynthetic)
+        .map(field => dashify(field.getName))
+        .zip(
+          caseClass.productIterator.toSeq
+            .map { case x: Option[_] => x.get }
+            .map {
+              case s: String               => s""""$s""""
+              case d: FiniteDuration       => s""""${d.toString.replace(" ", "")}""""
+              case _: StoreType.Mixed.type => s""""mixed""""
+              case _: StoreType.LMDB.type  => s""""lmdb""""
+              case _: StoreType.InMem.type => s""""inmem""""
+              case p: PeerNode             => s""""${p.toString}""""
+              case p: java.nio.file.Path   => s""""${p.toString}""""
+              case x                       => x.toString
+            }
         )
-    c shouldEqual expected
+        .map {
+          case (k, v) =>
+            s"$k = $v"
+        }
+        .mkString("\n")
+
+    s"""
+      |${extractTomlTable("server", conf.server.get)}
+      |
+      |${extractTomlTable("grpc", conf.grpc.get)}
+      |
+      |${extractTomlTable("tls", conf.tls.get)}
+      |
+      |${extractTomlTable("casper", conf.casper.get)}
+      |
+      |${extractTomlTable("lmdb", conf.lmdb.get)}
+      |
+      |${extractTomlTable("blockstorage", conf.blockstorage.get)}
+      |
+      |${extractTomlTable("metrics", conf.metrics.get)}
+      |
+      |${extractTomlTable("influx", conf.influx.get)}
+      |
+      |${extractTomlTable("influx-auth", conf.influxAuth.get)}
+    """.stripMargin
   }
 
-  test("Configuration.adjustPath should adjust path of data dir changed") {
-    val Some(updatedPath) = Configuration.adjustPath(
-      ConfigurationSoft(
-        Server(
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          Paths.get("another_test_dir").some,
-          None,
-          None,
-          None
-        ).some,
-        None,
-        Tls(
-          None,
-          None,
-          None
-        ).some,
-        None,
-        None,
-        None,
-        Metrics(
-          false.some,
-          false.some,
-          false.some
-        ).some,
-        None,
-        None
-      ),
-      Paths.get("default_test_dir/test").some,
-      ConfigurationSoft(
-        Server(
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-          Paths.get("default_test_dir").some,
-          None,
-          None,
-          None
-        ).some,
-        None,
-        Tls(
-          None,
-          None,
-          None
-        ).some,
-        None,
-        None,
-        None,
-        Metrics(
-          false.some,
-          false.some,
-          false.some
-        ).some,
-        None,
-        None
-      )
+  def toCli(conf: ConfigurationSoft): List[String] =
+    toEnvVars(conf)
+      .filterKeys(k => !k.contains("CL_INFLUX_AUTH"))
+      .flatMap {
+        case (k, v) =>
+          val key = "--" + k.toLowerCase.replace('_', '-').drop(3)
+          v match {
+            case "true"  => Some(s"$key")
+            case "false" => None
+            case _       => Some(s"$key=$v")
+          }
+      }
+      .toList
+
+  def toEnvVars(conf: ConfigurationSoft): Map[String, String] = {
+    val serverPrefix       = "CL_SERVER_"
+    val grpcPrefix         = "CL_GRPC_"
+    val tlsPrefix          = "CL_TLS_"
+    val casperPrefix       = "CL_CASPER_"
+    val lmdbPrefix         = "CL_LMDB_"
+    val blockstoragePrefix = "CL_BLOCKSTORAGE_"
+    val metricsPrefix      = "CL_METRICS_"
+    val influxPrefix       = "CL_INFLUX_"
+    val influxAuthPrefix   = "CL_INFLUX_AUTH_"
+
+    def snakify(s: String): String =
+      s.replaceAll("([A-Z]+)([A-Z][a-z])", "$1_$2")
+        .replaceAll("([a-z\\d])([A-Z])", "$1_$2")
+        .toUpperCase
+
+    def extractKeyValue[A <: Product: ClassTag](prefix: String, caseClass: A) =
+      classTag[A].runtimeClass.getDeclaredFields
+        .filterNot(_.isSynthetic)
+        .map(_.getName)
+        .zip(caseClass.productIterator.toSeq.map { case x: Option[_] => x.get })
+        .map {
+          case (k, v) =>
+            val key   = prefix + snakify(k)
+            val value = v.toString.toLowerCase.replace(" ", "")
+            key -> value
+        }
+    List(
+      extractKeyValue(serverPrefix, conf.server.get),
+      extractKeyValue(grpcPrefix, conf.grpc.get),
+      extractKeyValue(tlsPrefix, conf.tls.get),
+      extractKeyValue(casperPrefix, conf.casper.get),
+      extractKeyValue(lmdbPrefix, conf.lmdb.get),
+      extractKeyValue(blockstoragePrefix, conf.blockstorage.get),
+      extractKeyValue(metricsPrefix, conf.metrics.get),
+      extractKeyValue(influxPrefix, conf.influx.get),
+      extractKeyValue(influxAuthPrefix, conf.influxAuth.get)
+    ).flatten.toMap
+  }
+
+  def update(conf: ConfigurationSoft): ConfigurationSoft = {
+    val serverGen       = Generic[ConfigurationSoft.Server]
+    val casperGen       = Generic[ConfigurationSoft.Casper]
+    val grpcGen         = Generic[ConfigurationSoft.GrpcServer]
+    val tlsGen          = Generic[ConfigurationSoft.Tls]
+    val lmdbGen         = Generic[ConfigurationSoft.LmdbBlockStore]
+    val blockstorageGen = Generic[ConfigurationSoft.BlockDagFileStorage]
+    val metricsGen      = Generic[ConfigurationSoft.Metrics]
+    val influxGen       = Generic[ConfigurationSoft.Influx]
+
+    object mapper extends Poly1 {
+      implicit def caseInt: mapper.Case.Aux[Option[Int], Option[Int]] =
+        at[Option[Int]](_.map(_ + 1))
+      implicit def caseLong: mapper.Case.Aux[Option[Long], Option[Long]] =
+        at[Option[Long]](_.map(_ + 1))
+      implicit def caseString: mapper.Case.Aux[Option[String], Option[String]] =
+        at[Option[String]](_.map(_ + "-"))
+      implicit def caseFiniteDuration
+        : mapper.Case.Aux[Option[FiniteDuration], Option[FiniteDuration]] =
+        at[Option[FiniteDuration]](_.map(d => d.plus(1.second)))
+      implicit def caseBoolean: mapper.Case.Aux[Option[Boolean], Option[Boolean]] =
+        at[Option[Boolean]](_.map(b => !b))
+      implicit def casePath
+        : mapper.Case.Aux[Option[java.nio.file.Path], Option[java.nio.file.Path]] =
+        at[Option[java.nio.file.Path]](_.map(p => java.nio.file.Paths.get(p.toString + "-")))
+      implicit def casePeerNode: mapper.Case.Aux[Option[PeerNode], Option[PeerNode]] =
+        at[Option[PeerNode]](
+          _.map(
+            p =>
+              p.copy(
+                endpoint = p.endpoint
+                  .copy(tcpPort = p.endpoint.tcpPort + 1, udpPort = p.endpoint.udpPort + 1)
+              )
+          )
+        )
+      implicit def caseStoreType: mapper.Case.Aux[Option[StoreType], Option[StoreType]] =
+        at[Option[StoreType]](_.map {
+          case StoreType.Mixed => StoreType.LMDB
+          case StoreType.LMDB  => StoreType.InMem
+          case StoreType.InMem => StoreType.Mixed
+        })
+    }
+
+    ConfigurationSoft(
+      serverGen.from(serverGen.to(conf.server.get).map(mapper)).some,
+      grpcGen.from(grpcGen.to(conf.grpc.get).map(mapper)).some,
+      tlsGen.from(tlsGen.to(conf.tls.get).map(mapper)).some,
+      casperGen.from(casperGen.to(conf.casper.get).map(mapper)).some,
+      lmdbGen.from(lmdbGen.to(conf.lmdb.get).map(mapper)).some,
+      blockstorageGen.from(blockstorageGen.to(conf.blockstorage.get).map(mapper)).some,
+      metricsGen.from(metricsGen.to(conf.metrics.get).map(mapper)).some,
+      influxGen.from(influxGen.to(conf.influx.get).map(mapper)).some,
+      conf.influxAuth
     )
-    assert(updatedPath.endsWith("another_test_dir/test"))
   }
 
-  def writeTestConfigFile(conf: String = rawConfigFile): Unit = Files.write(
-    Paths.get(configFilename),
-    conf.getBytes("UTF-8"),
-    StandardOpenOption.CREATE_NEW
-  )
-
-  override protected def afterEach(): Unit = Try(Files.delete(Paths.get(configFilename)))
+  def writeTestConfigFile(conf: String): Unit = {
+    Files.deleteIfExists(Paths.get(configFilename))
+    Files.write(
+      Paths.get(configFilename),
+      conf.getBytes("UTF-8"),
+      StandardOpenOption.CREATE_NEW
+    )
+  }
 }

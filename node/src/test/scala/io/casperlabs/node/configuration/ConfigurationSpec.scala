@@ -23,9 +23,9 @@ class ConfigurationSpec extends FunSuite {
       val paths = extractPathsWithKeys(conf)
 
       val invalidPaths = paths
-        .filter {
+        .filterNot {
           case (_, path) =>
-            path != Paths.get("/tmp/casperlabs-data-dir")
+            path.startsWith(Paths.get("/tmp/casperlabs-data-dir"))
         }
         .map(_._1)
 
