@@ -111,5 +111,6 @@ delay:
 		-c "echo $$NODE_ID > /root/.casperlabs/bootstrap/node-id"
 	exit 1
 	docker stop make-genesis
-	@# Check that the file we wanted exists.
-	[ -f .casperlabs/genesis/bonds.txt ]
+	@# Check that the files we wanted exist and aren't empty.
+	[ -s .casperlabs/genesis/bonds.txt ]
+	[ -s .casperlabs/bootstrap/node-id ]
