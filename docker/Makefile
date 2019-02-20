@@ -14,7 +14,8 @@ clean: down $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down
 		-v ${PWD}/.casperlabs:/root/.casperlabs \
 		--entrypoint sh \
 		io.casperlabs/node:latest \
-		-c "rm -rf /root/.casperlabs"
+		-c "rm -rf /root/.casperlabs/*"
+	rm -rf .casperlabs
 	rm -rf .make
 
 
@@ -100,15 +101,15 @@ delay:
 		--casper-num-validators $(CL_CASPER_NUM_VALIDATORS) \
 		--tls-certificate /root/.casperlabs/bootstrap/node.certificate.pem \
 		--tls-key /root/.casperlabs/bootstrap/node.key.pem
-	@# Wait until the node is running, so we know it generated the files.
-	(docker logs -f make-genesis &) | grep -m 1 "Listening for traffic"
-	@# Capture the Node ID fromt the logs. Can't write to the bootstrap dir from here as it's owned by the docker user.
-	NODE_ID=$$(docker logs make-genesis | grep -Po 'casperlabs://\K[^@]+') && \
+	@# Wait until the node is running, so we know it generated the files. Capture the Node ID fromt the logs.
+	@# Can't write to the bootstrap dir from here as it's owned by the docker user.
+	NODE_ID=`(docker logs -f make-genesis &) | grep -m 1 -Po 'Listening for traffic on casperlabs://\K[^@]+'` && \
 	docker run --rm \
 		-v ${PWD}/.casperlabs/bootstrap:/root/.casperlabs/bootstrap \
 		--entrypoint sh \
 		io.casperlabs/node:latest \
 		-c "echo $$NODE_ID > /root/.casperlabs/bootstrap/node-id"
+	exit 1
 	docker stop make-genesis
 	@# Check that the file we wanted exists.
 	[ -f .casperlabs/genesis/bonds.txt ]
