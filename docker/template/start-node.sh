@@ -13,6 +13,8 @@ if [ "$HOSTNAME" = "$BOOTSTRAP_HOSTNAME" ]; then
         --grpc-socket $CL_GRPC_SOCKET \
         --metrics-prometheus
 else
+    # Connect to the bootstrap node.
+    BOOTSTRAP_ID=$(cat $HOME/.casperlabs/bootstrap/node-id)
     exec ./bin/casperlabs-node run \
         --server-host $HOSTNAME \
         --server-bootstrap "casperlabs://${BOOTSTRAP_ID}@${BOOTSTRAP_HOSTNAME}?protocol=40400&discovery=40404" \

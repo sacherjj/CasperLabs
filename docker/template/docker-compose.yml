@@ -41,7 +41,6 @@ services:
       # Got the ID from the logs by running the node once. They keys are going to be the same for node-0.
       # i.e. "Listening for traffic on casperlabs://..."
       BOOTSTRAP_HOSTNAME: node-0
-      BOOTSTRAP_ID: bc416197520ec34e19a03507f93bbeae15f80a02
       CL_VALIDATOR_PUBLIC_KEY: $CL_VALIDATOR_PUBLIC_KEY
       CL_VALIDATOR_PRIVATE_KEY: $CL_VALIDATOR_PRIVATE_KEY
       CL_GRPC_SOCKET: /root/.casperlabs/sockets/.casper-node.sock
