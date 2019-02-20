@@ -5,11 +5,11 @@ RUN curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v3.6.
 RUN unzip -o protoc-3.6.1-linux-x86_64.zip -d /usr/local bin/protoc
 WORKDIR /usr/src
 COPY . .
-RUN rustup default $(tail -n 1 /usr/src/execution-engine/rust-toolchain)
-RUN rustup update
+RUN rustup -v default $(tail -n 1 /usr/src/execution-engine/rust-toolchain)
+RUN rustup -v update
 WORKDIR /usr/src/execution-engine/comm
 RUN cargo update
-RUN cargo run --bin grpc-protoc
+RUN cargo run --bin engine-grpc-server
 RUN cargo build --release
 
 FROM io.casperlabs/node:latest
