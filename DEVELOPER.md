@@ -279,9 +279,18 @@ This is required only when the `ipc.proto` file changes (but this is true when y
   3. Run: `cargo run --bin grpc-protoc`
   
 #### Build Wasm contracts:
-  1. Go to contract that interests you in the `contracts-example` directory.
-  2. To compile Rust contract to Wasm, in the root dir of the contract (where Cargo.toml is defined) you need to run: `cargo build --release --target wasm32-unknown-unknown`. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory.      We will use this file when deploying a contract. For the purposes of "Hello World" demo we use `store-hello-world` and `call-hello-      name` contracts.
-  3. If `cargo build --release ...`  doesn't work try `cargo +nightly build ...`
+
+Contracts are in a separate github repo: https://github.com/CasperLabs/contract-examples.
+Clone this locally.   
+
+Make commands should build in the root of this repo.  `make all` or `make hello-name`.
+
+If make fails, contract can be manually built: 
+
+  1. Go to contract directory that interests you (where Cargo.toml is defined), such as `cd hello-name/call`.
+  2. To compile Rust contract to Wasm, run  `cargo build --release --target wasm32-unknown-unknown`. 
+  3. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory. We will use this file when deploying a contract. 
+  4. If `cargo build --release ...`  doesn't work try `cargo +nightly build ...`
 
 #### Building node:
   1. Go to node's root directory (it's where `build.sbt` file is located).
@@ -302,10 +311,10 @@ For ease of use node assumes a default directory that is `~/.casperlabs/` First 
 #### Run the node
 In the root of the node (where build.sbt lives).
 
-If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
+If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/casperlabs-node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
 
 ```
-./node/target/universal/stage/bin/node run --casper-validator-private-key <private key from bonds.txt file> --casper-validator-public-key <public key from bonds.txt file> -s
+./node/target/universal/stage/bin/casperlabs-node run --casper-validator-private-key <private key from <public_key>.sk file> --casper-validator-public-key <public key from bonds.txt file> -s
 ```
 
 #### Run the Execution Engine
@@ -321,7 +330,7 @@ cargo run --bin engine-grpc-server ~/.casperlabs/.casper-node.sock
 In the root of the node, run:
 
 ```
-./client/target/universal/stage/bin/client --host 127.0.0.1 --port 40401 deploy --from 00000000000000000000 --gas-limit 100000000 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
+./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 deploy --from 00000000000000000000 --gas-limit 100000000 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
 ```
 
 At the moment, payment wasm file is not used so use the same file as for the `--session`.
@@ -329,7 +338,7 @@ At the moment, payment wasm file is not used so use the same file as for the `--
 After deploying contract it's not yet executed (its effects are not applied to the global state), so you have to `propose` a block. Run:
 
 ```
-./client/target/universal/stage/bin/client --host 127.0.0.1 --port 40401 propose
+./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 propose
 ```
 
 For the demo purposes we have to propose contracts separately because second contract (`call-hello-name`) won't see the changes (in practice it won't be able to call `store-hello-world` contract) from the previous deploy.
