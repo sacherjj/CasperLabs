@@ -280,7 +280,7 @@ private[configuration] final case class Options(
     descr("Node diagnostics")
 
     val grpcPortExternal =
-      opt[Int](descr = s"Number. Port used for external gRPC API.${g(_.portExternal)}")
+      opt[Int](descr = s"Int. Port used for external gRPC API.${g(_.portExternal)}")
 
     val grpcHost =
       opt[String](
@@ -304,7 +304,7 @@ private[configuration] final case class Options(
   val run = new Subcommand("run") {
 
     val grpcPortExternal =
-      opt[Int](descr = s"Number. Port used for external gRPC API.${g(_.portExternal)}")
+      opt[Int](descr = s"Int. Port used for external gRPC API.${g(_.portExternal)}")
 
     val grpcHost =
       opt[String](
@@ -324,7 +324,7 @@ private[configuration] final case class Options(
       )
 
     val grpcPortInternal =
-      opt[Int](descr = s"Number. Port used for internal gRPC API.${g(_.portInternal)}")
+      opt[Int](descr = s"Int. Port used for internal gRPC API.${g(_.portInternal)}")
 
     val grpcSocket =
       opt[Path](descr = s"String. Socket path used for internal gRPC API.${g(_.socket)}")
@@ -336,7 +336,7 @@ private[configuration] final case class Options(
 
     val serverDefaultTimeout =
       opt[Int](
-        descr = s"Number. Default timeout for roundtrip connections.${s(_.defaultTimeout)}"
+        descr = s"Int. Default timeout for roundtrip connections.${s(_.defaultTimeout)}"
       )
 
     val tlsCertificate =
@@ -360,22 +360,22 @@ private[configuration] final case class Options(
       )
 
     val serverPort =
-      opt[Int](short = 'p', descr = s"Number. Network port to use.${s(_.port)}")
+      opt[Int](short = 'p', descr = s"Int. Network port to use.${s(_.port)}")
 
     val serverHttpPort =
       opt[Int](
         descr =
-          s"Number. HTTP port (deprecated - all API features will be ported to gRPC API).${s(_.httpPort)}"
+          s"Int. HTTP port (deprecated - all API features will be ported to gRPC API).${s(_.httpPort)}"
       )
 
     val serverKademliaPort =
       opt[Int](
         descr =
-          s"Number. Kademlia port used for node discovery based on Kademlia algorithm.${s(_.kademliaPort)}"
+          s"Int. Kademlia port used for node discovery based on Kademlia algorithm.${s(_.kademliaPort)}"
       )
 
     val casperNumValidators =
-      opt[Int](descr = s"Number of validators at genesis.${c(_.numValidators)}")
+      opt[Int](descr = s"Int of validators at genesis.${c(_.numValidators)}")
 
     val casperBondsFile = opt[Path](
       descr = "String. Path to plain text file consisting of lines of the form `<pk> <stake>`, " +
@@ -397,11 +397,11 @@ private[configuration] final case class Options(
     )
     val casperMinimumBond = opt[Long](
       descr =
-        s"Number. Minimum bond accepted by the PoS contract in the genesis block.${c(_.minimumBond)}"
+        s"Long. Minimum bond accepted by the PoS contract in the genesis block.${c(_.minimumBond)}"
     )
     val casperMaximumBond = opt[Long](
       descr =
-        s"Number. Maximum bond accepted by the PoS contract in the genesis block.${c(_.maximumBond)}"
+        s"Long. Maximum bond accepted by the PoS contract in the genesis block.${c(_.maximumBond)}"
     )
     val casperHasFaucet = opt[Flag](
       descr =
@@ -423,12 +423,12 @@ private[configuration] final case class Options(
     val casperRequiredSigs =
       opt[Int](
         descr =
-          s"Number of signatures from trusted validators required to creating an approved genesis block.${c(_.requiredSigs)}"
+          s"Int of signatures from trusted validators required to creating an approved genesis block.${c(_.requiredSigs)}"
       )
 
     val casperDeployTimestamp =
       opt[Long](
-        descr = s"Number. Timestamp for the deploys.${c(_.deployTimestamp)}"
+        descr = s"Long. Timestamp for the deploys.${c(_.deployTimestamp)}"
       )
 
     val casperApproveGenesisDuration =
@@ -454,7 +454,7 @@ private[configuration] final case class Options(
       opt[Path](required = false, descr = s"String. Path to data directory. ${s(_.dataDir)}")
 
     val serverMapSize =
-      opt[Long](required = false, descr = s"Number. Map size (in bytes).${s(_.mapSize)}")
+      opt[Long](required = false, descr = s"Long. Map size (in bytes).${s(_.mapSize)}")
 
     val serverStoreType =
       opt[StoreType](
@@ -465,25 +465,25 @@ private[configuration] final case class Options(
     val serverMaxNumOfConnections =
       opt[Int](
         descr =
-          s"Number. Maximum number of peers allowed to connect to the node.${s(_.maxNumOfConnections)}"
+          s"Int. Maximum number of peers allowed to connect to the node.${s(_.maxNumOfConnections)}"
       )
 
     val lmdbBlockStoreSize =
       opt[Long](
         required = false,
-        descr = s"Number. Casper BlockStore map size (in bytes).${l(_.blockStoreSize)}"
+        descr = s"Long. Casper BlockStore map size (in bytes).${l(_.blockStoreSize)}"
       )
 
     val lmdbMaxDbs =
       opt[Int](
         required = false,
-        descr = s"Number. LMDB max databases.${l(_.maxDbs)}"
+        descr = s"Int. LMDB max databases.${l(_.maxDbs)}"
       )
 
     val lmdbMaxReaders =
       opt[Int](
         required = false,
-        descr = s"Number. LMDB max readers.${l(_.maxReaders)}"
+        descr = s"Int. LMDB max readers.${l(_.maxReaders)}"
       )
 
     val lmdbUseTls =
@@ -493,7 +493,8 @@ private[configuration] final case class Options(
       )
 
     val blockstorageLatestMessagesLogMaxSizeFactor =
-      opt[Int](descr = s"TODO.${b(_.latestMessagesLogMaxSizeFactor)}")
+      opt[Int](descr =
+        s"Int. Size factor for squashing block storage latest messages.${b(_.latestMessagesLogMaxSizeFactor)}")
 
     val casperValidatorPublicKey = opt[String](
       descr = "String. Base16 encoding of the public key to use for signing a proposed blocks. " +
@@ -535,7 +536,7 @@ private[configuration] final case class Options(
       opt[String](descr = s"String. Name of the database in Influx.${i(_.database)}")
 
     val influxPort =
-      opt[Int](descr = s"Number. Port of the Influx instance.${i(_.port)}")
+      opt[Int](descr = s"Int. Port of the Influx instance.${i(_.port)}")
 
     val influxProtocol =
       opt[String](descr = s"String. Protocol used in Influx.${i(_.protocol)}")
