@@ -191,7 +191,8 @@ object Validate {
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      shardId: String
+      shardId: String,
+      lastFinalizedBlockHash: BlockHash
   ): F[Unit] =
     for {
       _ <- Validate.blockHash[F](block)
@@ -201,7 +202,7 @@ object Validate {
       _ <- Validate.repeatDeploy[F](block, dag)
       _ <- Validate.blockNumber[F](block)
       _ <- Validate.justificationFollows[F](block, genesis, dag)
-      _ <- Validate.parents[F](block, genesis, dag)
+      _ <- Validate.parents[F](block, genesis, lastFinalizedBlockHash, dag)
       - <- Validate.sequenceNumber[F](block, dag)
       - <- Validate.justificationRegressions[F](block, genesis, dag)
       _ <- Validate.shardIdentifier[F](block, shardId)
@@ -429,11 +430,12 @@ object Validate {
   def parents[F[_]: Monad: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
       genesis: BlockMessage,
+      lastFinalizedBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[Unit] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
-      case hashes if hashes.isEmpty => Seq(genesis.blockHash)
+      case hashes if hashes.isEmpty => Seq(lastFinalizedBlockHash)
       case hashes                   => hashes
     }
 
@@ -442,7 +444,7 @@ object Validate {
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
-      estimate             <- Estimator.tips[F](dag, genesis.blockHash, latestMessagesHashes)
+      estimate             <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(estimate.map(_.blockHash))}")
       computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
       computedParentHashes = computedParents.map(_.blockHash)
