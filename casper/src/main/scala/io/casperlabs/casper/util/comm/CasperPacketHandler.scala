@@ -57,7 +57,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       for {
         _              <- Log[F].info("Starting in approve genesis mode")
         timestamp      <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-        wallets        <- Genesis.getWallets[F](conf.genesisPath, conf.walletsFile)
+        wallets        <- Genesis.getWallets[F](conf.walletsFile)
         bonds          <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
         runtimeManager = RuntimeManager[F](executionEngineService, bonds)
         validatorId    <- ValidatorIdentity.fromConfig[F](conf)
@@ -86,7 +86,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         bonds          <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
         runtimeManager = RuntimeManager[F](executionEngineService, bonds)
         genesis <- Genesis[F](
-                    conf.genesisPath,
                     conf.walletsFile,
                     conf.minimumBond,
                     conf.maximumBond,

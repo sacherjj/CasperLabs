@@ -43,15 +43,14 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       portInternal = 1.some
     )
     val casper = Casper(
-      publicKey = "test".some,
-      privateKey = "test".some,
-      privateKeyPath = Paths.get("test").some,
-      sigAlgorithm = "test".some,
-      bondsFile = "test".some,
+      validatorPublicKey = "test".some,
+      validatorPrivateKey = "test".some,
+      validatorPrivateKeyPath = Paths.get("test").some,
+      validatorSigAlgorithm = "test".some,
+      bondsFile = Paths.get("test").some,
       knownValidatorsFile = "test".some,
       numValidators = 1.some,
-      genesisPath = Paths.get("test").some,
-      walletsFile = "test".some,
+      walletsFile = Paths.get("test").some,
       minimumBond = 1L.some,
       maximumBond = 1L.some,
       hasFaucet = true.some,
@@ -68,18 +67,12 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       secureRandomNonBlocking = true.some
     )
     val lmdb = LmdbBlockStore(
-      path = Paths.get("test").some,
       blockStoreSize = 1L.some,
       maxDbs = 1.some,
       maxReaders = 1.some,
       useTls = true.some
     )
     val blockStorage = BlockDagFileStorage(
-      latestMessagesLogPath = Paths.get("test").some,
-      latestMessagesCrcPath = Paths.get("test").some,
-      blockMetadataLogPath = Paths.get("test").some,
-      blockMetadataCrcPath = Paths.get("test").some,
-      checkpointsDirPath = Paths.get("test").some,
       latestMessagesLogMaxSizeFactor = 1.some
     )
     val kamonSettings = Metrics(
@@ -203,15 +196,14 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       portInternal = 2.some
     )
     val casper = Casper(
-      publicKey = "test2".some,
-      privateKey = "test2".some,
-      privateKeyPath = Paths.get("test2").some,
-      sigAlgorithm = "test2".some,
-      bondsFile = "test2".some,
+      validatorPublicKey = "test2".some,
+      validatorPrivateKey = "test2".some,
+      validatorPrivateKeyPath = Paths.get("test2").some,
+      validatorSigAlgorithm = "test2".some,
+      bondsFile = Paths.get("test2").some,
       knownValidatorsFile = "test2".some,
       numValidators = 2.some,
-      genesisPath = Paths.get("test2").some,
-      walletsFile = "test2".some,
+      walletsFile = Paths.get("test2").some,
       minimumBond = 2L.some,
       maximumBond = 2L.some,
       hasFaucet = false.some,
@@ -228,18 +220,12 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       secureRandomNonBlocking = false.some
     )
     val lmdb = LmdbBlockStore(
-      path = Paths.get("test2").some,
       blockStoreSize = 2L.some,
       maxDbs = 2.some,
       maxReaders = 2.some,
       useTls = false.some
     )
     val blockStorage = BlockDagFileStorage(
-      latestMessagesLogPath = Paths.get("test2").some,
-      latestMessagesCrcPath = Paths.get("test2").some,
-      blockMetadataLogPath = Paths.get("test2").some,
-      blockMetadataCrcPath = Paths.get("test2").some,
-      checkpointsDirPath = Paths.get("test2").some,
       latestMessagesLogMaxSizeFactor = 2.some
     )
     val kamonSettings = Metrics(
@@ -352,15 +338,14 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       portInternal = 3.some
     )
     val casper = Casper(
-      publicKey = "test3".some,
-      privateKey = "test3".some,
-      privateKeyPath = Paths.get("test3").some,
-      sigAlgorithm = "test3".some,
-      bondsFile = "test3".some,
+      validatorPublicKey = "test3".some,
+      validatorPrivateKey = "test3".some,
+      validatorPrivateKeyPath = Paths.get("test3").some,
+      validatorSigAlgorithm = "test3".some,
+      bondsFile = Paths.get("test3").some,
       knownValidatorsFile = "test3".some,
       numValidators = 3.some,
-      genesisPath = Paths.get("test2").some,
-      walletsFile = "test3".some,
+      walletsFile = Paths.get("test3").some,
       minimumBond = 3L.some,
       maximumBond = 3L.some,
       hasFaucet = true.some,
@@ -377,18 +362,12 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       secureRandomNonBlocking = true.some
     )
     val lmdb = LmdbBlockStore(
-      path = Paths.get("test2").some,
       blockStoreSize = 3L.some,
       maxDbs = 2.some,
       maxReaders = 2.some,
       useTls = false.some
     )
     val blockStorage = BlockDagFileStorage(
-      latestMessagesLogPath = Paths.get("test2").some,
-      latestMessagesCrcPath = Paths.get("test2").some,
-      blockMetadataLogPath = Paths.get("test2").some,
-      blockMetadataCrcPath = Paths.get("test2").some,
-      checkpointsDirPath = Paths.get("test2").some,
       latestMessagesLogMaxSizeFactor = 2.some
     )
     val kamonSettings = Metrics(

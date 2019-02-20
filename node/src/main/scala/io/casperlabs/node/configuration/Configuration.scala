@@ -237,22 +237,27 @@ object Configuration {
       confSoft: ConfigurationSoft
   ): ValidatedNel[String, CasperConf] =
     (
-      confSoft.casper.flatMap(_.publicKey).validNel[String],
+      confSoft.casper.flatMap(_.validatorPublicKey).validNel[String],
       confSoft.casper
-        .flatMap(_.privateKey)
+        .flatMap(_.validatorPrivateKey)
         .map(_.asLeft[Path])
-        .orElse(confSoft.casper.flatMap(_.privateKeyPath).map(_.asRight[String]))
+        .orElse(confSoft.casper.flatMap(_.validatorPrivateKeyPath).map(_.asRight[String]))
         .validNel[String],
-      optToValidated(confSoft.casper.flatMap(_.sigAlgorithm), "Casper.sigAlgorithm"),
-      adjustPathAsString(confSoft, confSoft.casper.flatMap(_.bondsFile), default).validNel[String],
+      optToValidated(confSoft.casper.flatMap(_.validatorSigAlgorithm), "Casper.sigAlgorithm"),
+      optToValidated(
+        adjustPath(confSoft, confSoft.casper.flatMap(_.bondsFile), default),
+        "Casper.bondsFile"
+      ),
       confSoft.casper.flatMap(_.knownValidatorsFile).validNel[String],
       optToValidated(confSoft.casper.flatMap(_.numValidators), "Casper.numValidators"),
       optToValidated(
-        adjustPath(confSoft, confSoft.casper.flatMap(_.genesisPath), default),
+        combineWithDataDir(confSoft, confSoft.casper.map(_.genesisPath)),
         "Casper.genesisPath"
       ),
-      adjustPathAsString(confSoft, confSoft.casper.flatMap(_.walletsFile), default)
-        .validNel[String],
+      optToValidated(
+        adjustPath(confSoft, confSoft.casper.flatMap(_.walletsFile), default),
+        "Casper.walletsFile"
+      ),
       optToValidated(confSoft.casper.flatMap(_.minimumBond), "Casper.minimumBond"),
       optToValidated(confSoft.casper.flatMap(_.maximumBond), "Casper.maximumBond"),
       optToValidated(confSoft.casper.flatMap(_.hasFaucet), "Casper.hasFaucet"),
@@ -276,7 +281,7 @@ object Configuration {
       confSoft: ConfigurationSoft
   ): ValidatedNel[String, LMDBBlockStore.Config] =
     (
-      optToValidated(adjustPath(confSoft, confSoft.lmdb.flatMap(_.path), default), "Lmdb.path"),
+      optToValidated(combineWithDataDir(confSoft, confSoft.lmdb.map(_.path)), "Lmdb.path"),
       optToValidated(confSoft.lmdb.flatMap(_.blockStoreSize), "Lmdb.blockStoreSize"),
       optToValidated(confSoft.lmdb.flatMap(_.maxDbs), "Lmdb.maxDbs"),
       optToValidated(confSoft.lmdb.flatMap(_.maxReaders), "Lmdb.maxReaders"),
@@ -289,23 +294,23 @@ object Configuration {
   ): ValidatedNel[String, BlockDagFileStorage.Config] =
     (
       optToValidated(
-        adjustPath(confSoft, confSoft.blockstorage.flatMap(_.latestMessagesLogPath), default),
+        combineWithDataDir(confSoft, confSoft.blockstorage.map(_.latestMessagesLogPath)),
         "BlockDagFileStorage.latestMessagesLogPath"
       ),
       optToValidated(
-        adjustPath(confSoft, confSoft.blockstorage.flatMap(_.latestMessagesCrcPath), default),
+        combineWithDataDir(confSoft, confSoft.blockstorage.map(_.latestMessagesCrcPath)),
         "BlockDagFileStorage.latestMessagesCrcPath"
       ),
       optToValidated(
-        adjustPath(confSoft, confSoft.blockstorage.flatMap(_.blockMetadataLogPath), default),
+        combineWithDataDir(confSoft, confSoft.blockstorage.map(_.blockMetadataLogPath)),
         "BlockDagFileStorage.blockMetadataLogPath"
       ),
       optToValidated(
-        adjustPath(confSoft, confSoft.blockstorage.flatMap(_.blockMetadataCrcPath), default),
+        combineWithDataDir(confSoft, confSoft.blockstorage.map(_.blockMetadataCrcPath)),
         "BlockDagFileStorage.blockMetadataCrcPath"
       ),
       optToValidated(
-        adjustPath(confSoft, confSoft.blockstorage.flatMap(_.checkpointsDirPath), default),
+        combineWithDataDir(confSoft, confSoft.blockstorage.map(_.checkpointsDirPath)),
         "BlockDagFileStorage.checkpointsDirPath"
       ),
       optToValidated(
@@ -323,6 +328,16 @@ object Configuration {
       default: ConfigurationSoft
   ): Option[Path] =
     adjustPathAsString(conf, pathToCheck.map(_.toAbsolutePath.toString), default).map(Paths.get(_))
+
+  private[configuration] def combineWithDataDir(
+      conf: ConfigurationSoft,
+      relativePath: Option[String]
+  ): Option[Path] =
+    for {
+      server  <- conf.server
+      dataDir <- server.dataDir
+      p       <- relativePath
+    } yield dataDir.resolve(p)
 
   private[configuration] def adjustPathAsString(
       conf: ConfigurationSoft,

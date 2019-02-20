@@ -2,6 +2,8 @@ package io.casperlabs.node.configuration
 
 import java.nio.file.Path
 
+import cats.data.ValidatedNel
+import cats.syntax.apply._
 import cats.syntax.either._
 import io.casperlabs.comm.PeerNode
 import io.casperlabs.shared.{Merge, StoreType}
@@ -49,21 +51,23 @@ private[configuration] object ConfigurationSoft {
   )
 
   private[configuration] case class LmdbBlockStore(
-      path: Option[Path],
       blockStoreSize: Option[Long],
       maxDbs: Option[Int],
       maxReaders: Option[Int],
       useTls: Option[Boolean]
-  )
+  ) {
+    val path: String = "casper-block-store"
+  }
 
   private[configuration] case class BlockDagFileStorage(
-      latestMessagesLogPath: Option[Path],
-      latestMessagesCrcPath: Option[Path],
-      blockMetadataLogPath: Option[Path],
-      blockMetadataCrcPath: Option[Path],
-      checkpointsDirPath: Option[Path],
       latestMessagesLogMaxSizeFactor: Option[Int]
-  )
+  ) {
+    val latestMessagesLogPath: String = "casper-block-dag-file-storage-latest-messages-log"
+    val latestMessagesCrcPath: String = "casper-block-dag-file-storage-latest-messages-crc"
+    val blockMetadataLogPath: String  = "casper-block-dag-file-storage-block-metadata-log"
+    val blockMetadataCrcPath: String  = "casper-block-dag-file-storage-block-metadata-crc"
+    val checkpointsDirPath: String    = "casper-block-dag-file-storage-checkpoints"
+  }
 
   private[configuration] case class GrpcServer(
       host: Option[String],
@@ -79,15 +83,14 @@ private[configuration] object ConfigurationSoft {
   )
 
   private[configuration] case class Casper(
-      publicKey: Option[String],
-      privateKey: Option[String],
-      privateKeyPath: Option[Path],
-      sigAlgorithm: Option[String],
-      bondsFile: Option[String],
+      validatorPublicKey: Option[String],
+      validatorPrivateKey: Option[String],
+      validatorPrivateKeyPath: Option[Path],
+      validatorSigAlgorithm: Option[String],
+      bondsFile: Option[Path],
       knownValidatorsFile: Option[String],
       numValidators: Option[Int],
-      genesisPath: Option[Path],
-      walletsFile: Option[String],
+      walletsFile: Option[Path],
       minimumBond: Option[Long],
       maximumBond: Option[Long],
       hasFaucet: Option[Boolean],
@@ -97,7 +100,9 @@ private[configuration] object ConfigurationSoft {
       approveGenesisInterval: Option[FiniteDuration],
       approveGenesisDuration: Option[FiniteDuration],
       deployTimestamp: Option[Long]
-  )
+  ) {
+    val genesisPath: String = "genesis"
+  }
 
   private[configuration] case class Metrics(
       prometheus: Option[Boolean],
