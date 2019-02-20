@@ -29,7 +29,6 @@ pub enum Error {
     Interpreter(InterpreterError),
     Storage(StorageError),
     BytesRepr(BytesReprError),
-    ValueTypeSizeMismatch { value_type: u32, value_size: usize },
     ForgedReference(Key),
     NoImportedMemory,
     ArgIndexOutOfBounds(usize),
