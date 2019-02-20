@@ -221,6 +221,7 @@ private[configuration] final case class Options(
     arguments: Seq[String],
     defaultsForHelpPrinting: ConfigurationSoft
 ) extends ScallopConf(arguments) {
+  helpWidth(120)
   import Converter._
   import Options.Flag
 
@@ -277,6 +278,7 @@ private[configuration] final case class Options(
   val configFile = opt[Path](descr = "String. Path to the TOML configuration file.")
 
   val diagnostics = new Subcommand("diagnostics") {
+    helpWidth(120)
     descr("Node diagnostics")
 
     val grpcPortExternal =
@@ -302,6 +304,7 @@ private[configuration] final case class Options(
   addSubcommand(diagnostics)
 
   val run = new Subcommand("run") {
+    helpWidth(120)
 
     val grpcPortExternal =
       opt[Int](descr = s"Int. Port used for external gRPC API.${g(_.portExternal)}")
@@ -493,8 +496,10 @@ private[configuration] final case class Options(
       )
 
     val blockstorageLatestMessagesLogMaxSizeFactor =
-      opt[Int](descr =
-        s"Int. Size factor for squashing block storage latest messages.${b(_.latestMessagesLogMaxSizeFactor)}")
+      opt[Int](
+        descr =
+          s"Int. Size factor for squashing block storage latest messages.${b(_.latestMessagesLogMaxSizeFactor)}"
+      )
 
     val casperValidatorPublicKey = opt[String](
       descr = "String. Base16 encoding of the public key to use for signing a proposed blocks. " +
