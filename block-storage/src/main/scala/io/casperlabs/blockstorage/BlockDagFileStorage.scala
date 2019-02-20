@@ -18,6 +18,7 @@ import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{Log, LogSource}
 
 import scala.collection.JavaConverters._
@@ -613,8 +614,9 @@ object BlockDagFileStorage {
   private def extractTopoSort(
       dataLookup: List[(BlockHash, BlockMetadata)]
   ): Vector[Vector[BlockHash]] = {
+    val blockMetadatas = dataLookup.map(_._2).toVector
     val indexedTopoSort =
-      dataLookup.map(_._2).toVector.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector
+      blockMetadatas.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector.sortBy(_._1)
     assert(indexedTopoSort.zipWithIndex.forall { case ((readI, _), i) => readI == i })
     indexedTopoSort.map(_._2)
   }

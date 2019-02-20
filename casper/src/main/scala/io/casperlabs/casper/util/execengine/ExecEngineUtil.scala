@@ -4,11 +4,12 @@ import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.protocol
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.ipc._
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 object ExecEngineUtil {

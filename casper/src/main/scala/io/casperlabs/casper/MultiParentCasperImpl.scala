@@ -6,12 +6,7 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{
-  BlockDagRepresentation,
-  BlockDagStorage,
-  BlockMetadata,
-  BlockStore
-}
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.Validate.ValidateErrorWrapper
 import io.casperlabs.casper.protocol._
@@ -27,6 +22,7 @@ import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 

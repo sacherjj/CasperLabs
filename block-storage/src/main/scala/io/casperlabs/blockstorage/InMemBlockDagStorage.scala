@@ -10,6 +10,7 @@ import io.casperlabs.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import io.casperlabs.blockstorage.util.TopologicalSortUtil
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.Log
 
 import scala.collection.immutable.HashSet

@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.models.BlockMetadata
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]

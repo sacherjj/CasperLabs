@@ -2,11 +2,13 @@ package io.casperlabs.casper
 
 import cats.Monad
 import cats.implicits._
-import io.casperlabs.catscontrib._, Catscontrib._
+import io.casperlabs.catscontrib._
+import Catscontrib._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata}
+import io.casperlabs.blockstorage.BlockDagRepresentation
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.{Clique, DagOperations, ProtoUtil}
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.Log
 
 /*

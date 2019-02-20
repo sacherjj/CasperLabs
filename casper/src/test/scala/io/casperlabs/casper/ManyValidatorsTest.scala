@@ -87,6 +87,6 @@ class ManyValidatorsTest
                  blockStore
                )
     } yield result
-    testProgram.runSyncUnsafe(1 minute)(scheduler, CanBlock.permit)
+    testProgram.runSyncUnsafe(2 minute)(scheduler, CanBlock.permit)
   }
 }
