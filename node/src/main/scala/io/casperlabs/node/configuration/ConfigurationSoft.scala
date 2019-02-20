@@ -127,6 +127,21 @@ private[configuration] object ConfigurationSoft {
       .leftMap(_.getMessage)
       .flatMap(raw => TomlReader.parse(raw))
 
+  private[configuration] def fromEnv(
+      envVars: Map[String, String]
+  ): ValidatedNel[String, ConfigurationSoft] =
+    (
+      EnvVarsParser[ConfigurationSoft.Server].parse(envVars, List("CL_SERVER")),
+      EnvVarsParser[ConfigurationSoft.GrpcServer].parse(envVars, List("CL_GRPC")),
+      EnvVarsParser[ConfigurationSoft.Tls].parse(envVars, List("CL_TLS")),
+      EnvVarsParser[ConfigurationSoft.Casper].parse(envVars, List("CL_CASPER")),
+      EnvVarsParser[ConfigurationSoft.LmdbBlockStore].parse(envVars, List("CL_LMDB")),
+      EnvVarsParser[ConfigurationSoft.BlockDagFileStorage].parse(envVars, List("CL_BLOCKSTORAGE")),
+      EnvVarsParser[ConfigurationSoft.Metrics].parse(envVars, List("CL_METRICS")),
+      EnvVarsParser[ConfigurationSoft.Influx].parse(envVars, List("CL_INFLUX")),
+      EnvVarsParser[ConfigurationSoft.InfluxAuth].parse(envVars, List("CL_INFLUX_AUTH"))
+    ).mapN(ConfigurationSoft.apply)
+
   private[configuration] def parse(
       args: Array[String],
       envVars: Map[String, String]
@@ -136,8 +151,10 @@ private[configuration] object ConfigurationSoft {
       cliConf                <- Options.parseConf(args, defaults)
       maybeRawTomlConfigFile = Options.tryReadConfigFile(args, defaults)
       maybeTomlConf          = maybeRawTomlConfigFile.map(_.flatMap(TomlReader.parse))
+      envConf                <- fromEnv(envVars).toEither.leftMap(_.toList.mkString("\n"))
+      cliWithEnv             = cliConf.fallbackTo(envConf)
       result <- maybeTomlConf
-                 .map(_.map(tomlConf => cliConf.fallbackTo(tomlConf).fallbackTo(defaults)))
-                 .getOrElse(Right(cliConf.fallbackTo(defaults)))
+                 .map(_.map(tomlConf => cliWithEnv.fallbackTo(tomlConf).fallbackTo(defaults)))
+                 .getOrElse(Right(cliWithEnv.fallbackTo(defaults)))
     } yield result
 }
