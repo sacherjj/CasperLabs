@@ -23,10 +23,10 @@ The setup process will establish validator keys and bonds in `.casperlabs/genesi
 
 ## Deploy some WASM code
 
-Assuming that you compiled the example WASM contracts as described [here](https://slack-files.com/TDVFB45LG-FFBGDQSBW-bad20239ec) you can deploy them by running the following:
+Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
 
 ```sh
-$ ./client.sh node-0 deploy $PWD/../contract-examples/store-hello-name/target/wasm32-unknown-unknown/release\
+$ ./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
 >     --from 00000000000000000000 \
 >     --gas-limit 100000000 --gas-price 1 \
 >     --session /data/helloname.wasm \

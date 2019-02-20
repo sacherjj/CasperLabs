@@ -91,9 +91,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		execution-engine/comm/target/release/engine-grpc-server
+		execution-engine/target/release/engine-grpc-server
 	# Just copy the executable to the container.
-	$(eval RELEASE = execution-engine/comm/target/release)
+	$(eval RELEASE = execution-engine/target/release)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
 	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:latest $(RELEASE)
 	rm -rf $(RELEASE)/Dockerfile
@@ -136,19 +136,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	mkdir -p $(dir $@) && touch $@
 
 
-# Compile gRPC interfaces for the Execution Engine.
-.make/rust-proto: .make \
-		.make/protoc-install \
-		$(shell find . -type f -iregex '.*\.proto')
-	cd execution-engine/comm && \
-	cargo update && \
-	cargo run --bin grpc-protoc
-	touch $@
-
-
 # Build the execution engine executable.
 execution-engine/comm/target/release/engine-grpc-server: \
-		.make/rust-proto \
+		.make/protoc-install \
 		$(shell find . -type f -iregex ".*/Cargo\.toml\|.*/src/.*\.rs" | grep -v target)
 	cd execution-engine/comm && \
 	cargo update && \
