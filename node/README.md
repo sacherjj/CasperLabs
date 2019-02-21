@@ -19,11 +19,11 @@ sbt -Dsbt.log.noformat=true clean node/docker:publishLocal
 
 Or you can run one of `make docker-build-all` or `make docker-build/node` as well.
 
-To test if the image is available to use, simply run `docker images`, `io.casperlabs/node` should be on the list of available images.
+To test if the image is available to use, simply run `docker images`, `casperlabs/node` should be on the list of available images.
 
 ```
 $ docker images | grep casperlabs
-io.casperlabs/node                               latest              b1af7024d9bf        6 minutes ago       131MB
+casperlabs/node                               latest              b1af7024d9bf        6 minutes ago       131MB
 ```
 
 
@@ -68,12 +68,12 @@ Node runs as a server, and requires a specific network configuration.
 
 An easy way to run CasperLabs Node is by using Docker. Use this pull command in Docker to get the current version of Node.
 
-```docker pull io.casperlabs/node```
+```docker pull casperlabs/node```
 
 You can also [build a docker image yourself](#building-via-docker) and then run it.
 
 ```console
-$ docker run -ti io.casperlabs/node run
+$ docker run -ti casperlabs/node run
 15:01:48.557 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node 0.0 (3ec3baf422f0b8055df8d6dc0414664736a392c0)
 15:01:48.564 [main] INFO  io.casperlabs.node.NodeEnvironment$ - Using data dir: /root/.casperlabs
 15:01:48.577 [main] INFO  i.c.c.t.GenerateCertificateIfAbsent - No certificate found at path /root/.casperlabs/node.certificate.pem
@@ -130,13 +130,13 @@ By default it uses TCP port 40400. This is also how more than one node may be ru
 ports. Remember that if using Docker, ports may have to be properly mapped and forwarded. For example, if we want to connect on the test net on TCP port 12345 and our machine's public IP address is 1.2.3.4, we could do it like so:
 
 ```console
-$ docker run -ti -p 12345:12345 io.casperlabs/node:latest run -p 12345 --server-host 1.2.3.4
+$ docker run -ti -p 12345:12345 casperlabs/node:latest run -p 12345 --server-host 1.2.3.4
 ```
 
 or perhaps by causing docker to use the host network and not its own bridge: Note: This does NOT work on MacOSX
 
 ```console
-$ docker run -ti --network=host io.casperlabs/node:latest run -p 12345
+$ docker run -ti --network=host casperlabs/node:latest run -p 12345
 ```
 
 This may take some experimentation to find combinations of arguments that work for any given setup.
