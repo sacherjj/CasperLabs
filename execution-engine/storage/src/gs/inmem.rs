@@ -120,6 +120,7 @@ impl History<InMemGS> for InMemHist {
 mod tests {
     use error::*;
     use gs::inmem::*;
+    use history::CommitResult;
     use std::sync::Arc;
     use transform::Transform;
 
@@ -151,7 +152,10 @@ mod tests {
     ) -> [u8; 32] {
         let res = hist.commit(hash, effects);
         assert!(res.is_ok());
-        res.unwrap()
+        match res.unwrap() {
+            CommitResult::Success(hash) => hash,
+            CommitResult::Failure(_) => panic!("Test commit failed but shouldn't.")
+        }
     }
 
     #[test]

@@ -248,7 +248,7 @@ mod tests {
 
         //adding the wrong type should fail
         let failed_add = tc.add(k, Value::Int32(3));
-        assert_matches!(failed_add, Err(Error::TypeMismatch { .. }));
+        assert_matches!(failed_add, Err(Error::TransformTypeMismatch { .. }));
         assert_eq!(tc.ops.is_empty(), true);
         assert_eq!(tc.fns.is_empty(), true);
 
