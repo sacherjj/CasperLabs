@@ -4,7 +4,7 @@ use blake2::VarBlake2b;
 use common::bytesrepr::*;
 use common::key::Key;
 use common::value::Value;
-use error::Error;
+use error::{RootNotFound, Error};
 use gs::*;
 use history::*;
 use std::collections::{BTreeMap, HashMap};
@@ -52,16 +52,16 @@ impl InMemHist {
 impl DbReader for InMemGS {
     fn get(&self, k: &Key) -> Result<Value, Error> {
         match self.0.get(k) {
-            None => Err(Error::KeyNotFound { key: *k }),
+            None => Err(Error::KeyNotFound(*k)),
             Some(v) => Ok(v.clone()),
         }
     }
 }
 
 impl History<InMemGS> for InMemHist {
-    fn checkout(&self, prestate_hash: [u8; 32]) -> Result<TrackingCopy<InMemGS>, Error> {
+    fn checkout(&self, prestate_hash: [u8; 32]) -> Result<TrackingCopy<InMemGS>, RootNotFound> {
         match self.history.get(&prestate_hash) {
-            None => Err(Error::RootNotFound(prestate_hash)),
+            None => Err(RootNotFound(prestate_hash)),
 
             Some(arc) => {
                 let gs = InMemGS(Arc::clone(arc));
@@ -74,19 +74,19 @@ impl History<InMemGS> for InMemHist {
         &mut self,
         prestate_hash: [u8; 32],
         effects: HashMap<Key, Transform>,
-    ) -> Result<[u8; 32], Error> {
+    ) -> Result<CommitResult, RootNotFound> {
         let mut base = {
             let arc = self
                 .history
                 .get(&prestate_hash)
-                .ok_or(Error::RootNotFound(prestate_hash))?;
+                .ok_or(RootNotFound(prestate_hash))?;
 
-            Ok::<BTreeMap<Key, Value>, Error>(BTreeMap::clone(&arc))
-        }?;
+            BTreeMap::clone(&arc)
+        };
 
-        effects
+        let result: Result<[u8;32], Error> = effects
             .into_iter()
-            .try_fold((), |_, (k, t)| {
+            .try_for_each(|(k, t)| {
                 let maybe_curr = base.remove(&k);
                 match maybe_curr {
                     None => match t {
@@ -94,7 +94,7 @@ impl History<InMemGS> for InMemHist {
                             let _ = base.insert(k, v);
                             Ok(())
                         }
-                        _ => Err(Error::KeyNotFound { key: k }),
+                        _ => Err(Error::KeyNotFound(k)),
                     },
                     Some(curr) => {
                         let new_value = t.apply(curr)?;
@@ -107,7 +107,12 @@ impl History<InMemGS> for InMemHist {
                 let hash = InMemHist::get_root_hash(&base);
                 self.history.insert(hash, Arc::new(base));
                 Ok(hash)
-            })
+            });
+
+        match result {
+            Ok(hash) => Ok(CommitResult::Success(hash)),
+            Err(err) => Ok(CommitResult::Failure(err)),
+        }
     }
 }
 
@@ -169,7 +174,7 @@ mod tests {
         let missing_root = [1u8; 32];
         let res = hist.checkout(missing_root);
         assert!(res.is_err());
-        assert_eq!(res.err(), Some(Error::RootNotFound(missing_root)));
+        assert_eq!(res.err(), Some(RootNotFound(missing_root)));
     }
 
     #[test]

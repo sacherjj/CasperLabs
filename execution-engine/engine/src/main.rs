@@ -9,7 +9,7 @@ use std::iter::Iterator;
 
 use clap::{App, Arg};
 
-use execution_engine::engine::EngineState;
+use execution_engine::engine::{EngineState, ExecutionResult};
 use storage::gs::inmem::InMemHist;
 
 #[derive(Debug)]
@@ -104,17 +104,31 @@ fn main() {
             &gas_limit,
         );
         match result {
-            Ok(effects) => {
-                let res = engine_state
-                    .apply_effect(state_hash, effects.1)
-                    .expect(&format!("Error when applying effects."));
-                println!(
-                    "Result for file {}: Success! New post state hash: {:?}",
-                    wasm_bytes.path, res
-                );
-                state_hash = res; // we need to keep updating the post state hash after each deploy
+            Err(storage::error::RootNotFound(hash)) => println!(
+                "Result for file {}: root {:?} not found.",
+                wasm_bytes.path, hash
+            ),
+            Ok(ExecutionResult::Success(effects)) => {
+                match engine_state.apply_effect(state_hash, effects.1) {
+                    Err(storage::error::RootNotFound(hash)) => println!(
+                        "Result for file {}: root {:?} not found.",
+                        wasm_bytes.path, hash
+                    ),
+                    Ok(storage::history::CommitResult::Success(new_root_hash)) => {
+                        println!(
+                            "Result for file {}: Success! New post state hash: {:?}",
+                            wasm_bytes.path, new_root_hash
+                        );
+                        state_hash = new_root_hash; // we need to keep updating the post state hash after each deploy
+                    }
+                    Ok(storage::history::CommitResult::Failure(storage_err)) => {
+                        eprintln!("Error when applying effects {:?}", storage_err)
+                    }
+                }
             }
-            Err(_) => println!("Result for file {}: {:?}", wasm_bytes.path, result),
+            Ok(ExecutionResult::Failure(error)) => {
+                println!("Result for file {}: {:?}", wasm_bytes.path, error)
+            }
         }
     }
 }

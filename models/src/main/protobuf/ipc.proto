@@ -140,7 +140,7 @@ message TransformWrite {
     Value value = 1;
 }
 message TransformFailure {
-    StorageError error = 1;
+    StorageTypeMismatch error = 1;
 }
  
 //Errors which may occur while interacting with global state
@@ -196,7 +196,6 @@ message DeployError {
     oneof deploy_errors {
         OutOfGasError gasErr = 1;
         WasmError wasmErr = 2;
-        InvalidSignature signatureError = 3;
     }
 }
 message OutOfGasError {}

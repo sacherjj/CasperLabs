@@ -4,7 +4,7 @@ use error::Error;
 use gs::{DbReader, ExecutionEffect};
 use op::Op;
 use std::collections::{BTreeMap, HashMap};
-use transform::Transform;
+use transform::{TypeMismatch, Transform};
 use utils::add;
 
 pub struct TrackingCopy<R: DbReader> {
@@ -53,10 +53,7 @@ impl<R: DbReader> TrackingCopy<R> {
                 map.insert(n, k);
                 Ok(Transform::AddKeys(map))
             }
-            other => Err(Error::TypeMismatch {
-                expected: "Int32 or NamedKey".to_string(),
-                found: other.type_string(),
-            }),
+            other => Err(TypeMismatch::new("Int32 or NamedKey".to_string(), other.type_string())),
         }?;
         let new_value = t.clone().apply(curr)?;
         let _ = self.cache.insert(k, new_value);

@@ -7,7 +7,6 @@ use common::key::Key;
 use common::value::{Account, Value};
 use storage::error::Error as StorageError;
 use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
-use storage::history::*;
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
@@ -29,7 +28,6 @@ pub enum Error {
     Interpreter(InterpreterError),
     Storage(StorageError),
     BytesRepr(BytesReprError),
-    ValueTypeSizeMismatch { value_type: u32, value_size: usize },
     ForgedReference(Key),
     NoImportedMemory,
     ArgIndexOutOfBounds(usize),
@@ -866,19 +864,17 @@ fn create_rng(account_addr: &[u8; 20], timestamp: i64, nonce: i64) -> ChaChaRng 
     ChaChaRng::from_seed(seed)
 }
 
-pub fn exec<R: DbReader, G: History<R>>(
+pub fn exec<R: DbReader>(
     parity_module: Module,
     account_addr: [u8; 20],
     timestamp: i64,
     nonce: i64,
-    prestate_hash: [u8; 32],
     gas_limit: &u64,
-    gs: &G,
+    tc: &mut TrackingCopy<R>,
 ) -> Result<ExecutionEffect, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let acct_key = Key::Account(account_addr);
-    let mut state = gs.checkout(prestate_hash)?;
-    let value = state.get(&acct_key)?;
+    let value = tc.get(&acct_key)?;
     let account = value.as_account();
     let mut known_urefs: HashSet<Key> = HashSet::new();
     for r in account.urefs_lookup().values() {
@@ -888,7 +884,7 @@ pub fn exec<R: DbReader, G: History<R>>(
     let mut runtime = Runtime {
         args: Vec::new(),
         memory,
-        state: &mut state,
+        state: tc,
         module: parity_module,
         result: Vec::new(),
         host_buf: Vec::new(),

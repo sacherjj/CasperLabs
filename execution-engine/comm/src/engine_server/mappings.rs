@@ -1,7 +1,5 @@
 use std::collections::BTreeMap;
 
-use common::bytesrepr;
-
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> storage::transform::Transform {
     storage::transform::Transform::Write(v)
@@ -142,48 +140,15 @@ fn transform_to_ipc(tr: &storage::transform::Transform) -> super::ipc::Transform
             add.set_value(protobuf::RepeatedField::from_vec(keys));
             t.set_add_keys(add);
         }
-        storage::transform::Transform::Failure(f) => {
+        storage::transform::Transform::Failure(storage::transform::TypeMismatch {
+            expected,
+            found,
+        }) => {
             let mut fail = super::ipc::TransformFailure::new();
-            let mut stor_err = super::ipc::StorageError::new();
-            match f {
-                storage::error::Error::KeyNotFound { key } => {
-                    stor_err.set_key_not_found(key_to_ipc(key));
-                }
-                storage::error::Error::TypeMismatch { expected, found } => {
-                    let mut type_miss = super::ipc::StorageTypeMismatch::new();
-                    type_miss.set_expected(expected.to_string());
-                    type_miss.set_found(found.to_string());
-                    stor_err.set_type_mismatch(type_miss);
-                }
-                storage::error::Error::RkvError(msg) => {
-                    let mut rkv_error = super::ipc::RkvError::new();
-                    rkv_error.set_error_msg(msg.to_owned());
-                    stor_err.set_rkv(rkv_error);
-                }
-                storage::error::Error::RootNotFound(root) => {
-                    let mut rkv_error = super::ipc::RkvError::new();
-                    rkv_error.set_error_msg(format!("{:?} root not found", root));
-                    stor_err.set_rkv(rkv_error);
-                }
-                storage::error::Error::BytesRepr(e) => match e {
-                    bytesrepr::Error::EarlyEndOfStream => {
-                        let mut bytes_repr = super::ipc::BytesReprError::new();
-                        bytes_repr.set_early_end(super::ipc::EarlyEndOfStream::new());
-                        stor_err.set_bytes_repr(bytes_repr);
-                    }
-                    bytesrepr::Error::FormattingError => {
-                        let mut bytes_repr = super::ipc::BytesReprError::new();
-                        bytes_repr.set_formatting(super::ipc::FormattingError::new());
-                        stor_err.set_bytes_repr(bytes_repr);
-                    }
-                    bytesrepr::Error::LeftOverBytes => {
-                        let mut bytes_repr = super::ipc::BytesReprError::new();
-                        bytes_repr.set_left_over(super::ipc::LeftOverBytes::new());
-                        stor_err.set_bytes_repr(bytes_repr);
-                    }
-                },
-            };
-            fail.set_error(stor_err);
+            let mut typemismatch_err = super::ipc::StorageTypeMismatch::new();
+            typemismatch_err.set_expected(expected.to_owned());
+            typemismatch_err.set_found(found.to_owned());
+            fail.set_error(typemismatch_err);
             t.set_failure(fail);
         }
     };

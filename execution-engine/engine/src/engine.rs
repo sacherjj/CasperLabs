@@ -1,10 +1,9 @@
 use common::key::Key;
 use execution::{exec, Error as ExecutionError};
-use parity_wasm::elements::Module;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use storage::error::Error as StorageError;
+use storage::error::{Error as StorageError, RootNotFound};
 use storage::gs::{DbReader, ExecutionEffect};
 use storage::history::*;
 use storage::transform::Transform;
@@ -23,10 +22,14 @@ where
     _phantom: PhantomData<R>,
 }
 
+pub enum ExecutionResult {
+    Success(ExecutionEffect),
+    Failure(Error),
+}
+
 #[derive(Debug)]
 pub enum Error {
     PreprocessingError(String),
-    SignatureError(String),
     ExecError(ExecutionError),
     StorageError(StorageError),
 }
@@ -92,47 +95,25 @@ where
         nonce: i64,
         prestate_hash: [u8; 32],
         gas_limit: &u64,
-    ) -> Result<ExecutionEffect, Error> {
-        let module = self.preprocess_module(module_bytes, &self.wasm_costs)?;
-        exec(
-            module,
-            address,
-            timestamp,
-            nonce,
-            prestate_hash,
-            gas_limit,
-            &*self.state.lock(),
-        )
-        .map_err(|e| e.into())
+    ) -> Result<ExecutionResult, RootNotFound> {
+        match process(module_bytes, &self.wasm_costs) {
+            Err(error) => Ok(ExecutionResult::Failure(error.into())),
+            Ok(module) => {
+                let mut tc: storage::gs::TrackingCopy<R> =
+                    self.state.lock().checkout(prestate_hash)?;
+                match exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
+                    Ok(ee) => Ok(ExecutionResult::Success(ee)),
+                    Err(error) => Ok(ExecutionResult::Failure(error.into())),
+                }
+            }
+        }
     }
 
     pub fn apply_effect(
         &self,
         prestate_hash: [u8; 32],
         effects: HashMap<Key, Transform>,
-    ) -> Result<[u8; 32], Error> {
-        self.state
-            .lock()
-            .commit(prestate_hash, effects)
-            .map_err(|err| err.into())
-    }
-
-    //TODO: inject gas counter, limit stack size etc
-    fn preprocess_module(
-        &self,
-        module_bytes: &[u8],
-        wasm_costs: &WasmCosts,
-    ) -> Result<Module, Error> {
-        process(module_bytes, wasm_costs).map_err(|err| err.into())
-    }
-
-    //TODO return proper error
-    pub fn validate_signatures(
-        &self,
-        _deploy: &[u8],
-        _signature: &[u8],
-        _signature_alg: &str,
-    ) -> Result<String, Error> {
-        Ok(String::from("OK"))
+    ) -> Result<CommitResult, RootNotFound> {
+        self.state.lock().commit(prestate_hash, effects)
     }
 }
