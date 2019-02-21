@@ -98,58 +98,50 @@ fn invalid_imports_error<T, E: AsRef<str>>(s: E) -> Result<T, PreprocessingError
 fn validate_imports(module: &Module) -> Result<(), PreprocessingError> {
     module
         .import_section()
-        .ok_or(NoImportSection)
-        .and_then(|import_section| {
-            import_section
-                .entries()
-                .iter()
-                .try_fold(false, |has_imported_memory_properly_named, ref entry| {
-                    if entry.module() != "env" {
-                        invalid_imports_error("All imports should be from env")
+        .ok_or(NoImportSection)?
+        .entries()
+        .iter()
+        .try_fold(false, |has_imported_memory_properly_named, ref entry| {
+            if entry.module() != "env" {
+                return invalid_imports_error("All imports should be from env");
+            }
+            match *entry.external() {
+                elements::External::Function(_) => {
+                    if !ALLOWED_IMPORTS.contains(&entry.field()) {
+                        invalid_imports_error::<bool, String>(format!(
+                            "'{}' is not supported by the runtime",
+                            entry.field()
+                        ))
                     } else {
-                        match *entry.external() {
-                            elements::External::Function(_) => {
-                                if !ALLOWED_IMPORTS.contains(&entry.field()) {
-                                    invalid_imports_error::<bool, String>(format!("'{}' is not supported by the runtime",  entry.field()))
-                                } else {
-                                    Ok(has_imported_memory_properly_named)
-                                }
-                            },
-                            elements::External::Memory(m) => {
-                                m
-                                    .limits()
-                                    .maximum()
-                                    .ok_or(invalid_imports("There is a limit to Wasm memory. This program does not limit memory"))
-                                    .and_then(|max| {
-                                        if max > MAX_MEM_PAGES {
-                                            invalid_imports_error::<bool, String>(format!("Wasm runtime has 10Mb limit (305 pages each 64KiB) on max contract memory. This program specific {}", max))
-                                        } else {
-                                            Ok(has_imported_memory_properly_named)
-                                        }
-                                    })
-                                    .and_then(|_| {
-                                        if entry.field() == "memory" {
-                                            Ok(true) // memory properly imported
-                                        } else {
-                                            Ok(false)
-                                        }
-                                    })
-                            },
-                            elements::External::Global(_) => {
-                                invalid_imports_error::<bool, &str>("No globals are provided with the runtime.")
-                            },
-                            elements::External::Table(_) => { Ok(has_imported_memory_properly_named) }
-                        }
+                        Ok(has_imported_memory_properly_named)
                     }
-                })
+                }
+                elements::External::Memory(m) => {
+                    let max = m.limits().maximum().ok_or(invalid_imports(
+                        "There is a limit to Wasm memory. This program does not limit memory",
+                    ))?;
+                    if max > MAX_MEM_PAGES {
+                        return invalid_imports_error::<bool, String>(format!(
+                            "Wasm runtime has 10Mb limit (305 pages each 64KiB) on \
+                             max contract memory. This program specific {}",
+                            max
+                        ));
+                    }
+                    Ok(entry.field() == "memory") // memory properly imported
+                }
+                elements::External::Global(_) => {
+                    invalid_imports_error::<bool, &str>("No globals are provided with the runtime.")
+                }
+                elements::External::Table(_) => Ok(has_imported_memory_properly_named),
+            }
         })
-    .and_then(|had_imported_memory_properly_named| {
-        if had_imported_memory_properly_named {
-            Ok(())
-        } else {
-            invalid_imports_error::<(), &str>("No imported memory from env::memory.")
-        }
-    })
+        .and_then(|had_imported_memory_properly_named| {
+            if had_imported_memory_properly_named {
+                Ok(())
+            } else {
+                invalid_imports_error::<(), &str>("No imported memory from env::memory.")
+            }
+        })
 }
 
 fn remove_memory_export(module: &mut Module) -> Result<(), PreprocessingError> {

@@ -25,20 +25,12 @@ impl<R: DbReader> TrackingCopy<R> {
     }
 
     pub fn get(&mut self, k: &Key) -> Result<Value, Error> {
-        //TODO: this remove+insert should not be necessary, but I can't get the borrow checker to agree
-        let maybe_value = self.cache.remove(k);
-        match maybe_value {
-            Some(value) => {
-                let _ = self.cache.insert(*k, value.clone());
-                Ok(value)
-            }
-
-            None => {
-                let value = self.reader.get(k)?;
-                let _ = self.cache.insert(*k, value.clone());
-                Ok(value)
-            }
+        if let Some(value) = self.cache.get(k) {
+            return Ok(value.clone());
         }
+        let value = self.reader.get(k)?;
+        let _ = self.cache.insert(*k, value.clone());
+        Ok(value)
     }
 
     pub fn read(&mut self, k: Key) -> Result<Value, Error> {

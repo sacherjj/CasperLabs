@@ -127,7 +127,7 @@ impl<'a> RuntimeContext<'a> {
 
     pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
         let keys: Vec<Key> = deserialize(bytes)?;
-        let _ = keys.iter().try_fold((), |_, k| self.validate_key(k))?;
+        keys.iter().try_for_each(|k| self.validate_key(k))?;
         Ok(keys)
     }
 }
