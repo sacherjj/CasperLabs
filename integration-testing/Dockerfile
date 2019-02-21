@@ -3,10 +3,11 @@ WORKDIR /tmp
 RUN apt-get update && apt-get -yq install unzip
 RUN curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v3.6.1/protoc-3.6.1-linux-x86_64.zip
 RUN unzip -o protoc-3.6.1-linux-x86_64.zip -d /usr/local bin/protoc
+RUN rustup -v default nightly-2018-12-04
+# $(tail -n 1 /usr/src/execution-engine/rust-toolchain)
+RUN rustup -v update
 WORKDIR /usr/src
 COPY . .
-RUN rustup -v default $(tail -n 1 /usr/src/execution-engine/rust-toolchain)
-RUN rustup -v update
 WORKDIR /usr/src/execution-engine/comm
 RUN cargo update
 RUN cargo build --release
