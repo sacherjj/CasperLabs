@@ -351,62 +351,6 @@ class ConfigurationSoftSpec
     ).flatten.toMap
   }
 
-  def update(conf: ConfigurationSoft): ConfigurationSoft = {
-    val serverGen       = Generic[ConfigurationSoft.Server]
-    val casperGen       = Generic[ConfigurationSoft.Casper]
-    val grpcGen         = Generic[ConfigurationSoft.GrpcServer]
-    val tlsGen          = Generic[ConfigurationSoft.Tls]
-    val lmdbGen         = Generic[ConfigurationSoft.LmdbBlockStore]
-    val blockstorageGen = Generic[ConfigurationSoft.BlockDagFileStorage]
-    val metricsGen      = Generic[ConfigurationSoft.Metrics]
-    val influxGen       = Generic[ConfigurationSoft.Influx]
-
-    object mapper extends Poly1 {
-      implicit def caseInt: mapper.Case.Aux[Option[Int], Option[Int]] =
-        at[Option[Int]](_.map(_ + 1))
-      implicit def caseLong: mapper.Case.Aux[Option[Long], Option[Long]] =
-        at[Option[Long]](_.map(_ + 1))
-      implicit def caseString: mapper.Case.Aux[Option[String], Option[String]] =
-        at[Option[String]](_.map(_ + "-"))
-      implicit def caseFiniteDuration
-        : mapper.Case.Aux[Option[FiniteDuration], Option[FiniteDuration]] =
-        at[Option[FiniteDuration]](_.map(d => d.plus(1.second)))
-      implicit def caseBoolean: mapper.Case.Aux[Option[Boolean], Option[Boolean]] =
-        at[Option[Boolean]](_.map(b => !b))
-      implicit def casePath
-        : mapper.Case.Aux[Option[java.nio.file.Path], Option[java.nio.file.Path]] =
-        at[Option[java.nio.file.Path]](_.map(p => java.nio.file.Paths.get(p.toString + "-")))
-      implicit def casePeerNode: mapper.Case.Aux[Option[PeerNode], Option[PeerNode]] =
-        at[Option[PeerNode]](
-          _.map(
-            p =>
-              p.copy(
-                endpoint = p.endpoint
-                  .copy(tcpPort = p.endpoint.tcpPort + 1, udpPort = p.endpoint.udpPort + 1)
-            )
-          )
-        )
-      implicit def caseStoreType: mapper.Case.Aux[Option[StoreType], Option[StoreType]] =
-        at[Option[StoreType]](_.map {
-          case StoreType.Mixed => StoreType.LMDB
-          case StoreType.LMDB  => StoreType.InMem
-          case StoreType.InMem => StoreType.Mixed
-        })
-    }
-
-    ConfigurationSoft(
-      serverGen.from(serverGen.to(conf.server).map(mapper)),
-      grpcGen.from(grpcGen.to(conf.grpc).map(mapper)),
-      tlsGen.from(tlsGen.to(conf.tls).map(mapper)),
-      casperGen.from(casperGen.to(conf.casper).map(mapper)),
-      lmdbGen.from(lmdbGen.to(conf.lmdb).map(mapper)),
-      blockstorageGen.from(blockstorageGen.to(conf.blockstorage).map(mapper)),
-      metricsGen.from(metricsGen.to(conf.metrics).map(mapper)),
-      influxGen.from(influxGen.to(conf.influx).map(mapper)),
-      conf.influxAuth
-    )
-  }
-
   override protected def afterEach(): Unit = Files.deleteIfExists(Paths.get(configFilename))
 
   def writeTestConfigFile(conf: String): Unit = {
