@@ -130,17 +130,7 @@ private[configuration] object ConfigurationSoft {
   private[configuration] def fromEnv(
       envVars: Map[String, String]
   ): ValidatedNel[String, ConfigurationSoft] =
-    (
-      EnvVarsParser[ConfigurationSoft.Server].parse(envVars, List("CL_SERVER")),
-      EnvVarsParser[ConfigurationSoft.GrpcServer].parse(envVars, List("CL_GRPC")),
-      EnvVarsParser[ConfigurationSoft.Tls].parse(envVars, List("CL_TLS")),
-      EnvVarsParser[ConfigurationSoft.Casper].parse(envVars, List("CL_CASPER")),
-      EnvVarsParser[ConfigurationSoft.LmdbBlockStore].parse(envVars, List("CL_LMDB")),
-      EnvVarsParser[ConfigurationSoft.BlockDagFileStorage].parse(envVars, List("CL_BLOCKSTORAGE")),
-      EnvVarsParser[ConfigurationSoft.Metrics].parse(envVars, List("CL_METRICS")),
-      EnvVarsParser[ConfigurationSoft.Influx].parse(envVars, List("CL_INFLUX")),
-      EnvVarsParser[ConfigurationSoft.InfluxAuth].parse(envVars, List("CL_INFLUX_AUTH"))
-    ).mapN(ConfigurationSoft.apply)
+    EnvVarsParser[ConfigurationSoft].parse(envVars, List("CL"))
 
   private[configuration] def parse(
       args: Array[String],

@@ -84,10 +84,10 @@ trait EnvVarsParserImplicits {
 
   implicit def labelledGenericParser[A, Repr <: HList](
       implicit gen: LabelledGeneric.Aux[A, Repr],
-      parser: EnvVarsParser[Repr]
+      parser: Lazy[EnvVarsParser[Repr]]
   ): EnvVarsParser[A] =
     (env: Map[String, String], path: List[String]) => {
-      parser.parse(env, path).map(gen.from)
+      parser.value.parse(env, path).map(gen.from)
     }
 }
 
