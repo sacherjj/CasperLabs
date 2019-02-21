@@ -245,7 +245,7 @@ class Node:
             logging.info("COMMAND {}".format(command))
             output = self.docker_client.containers.run(
                 image="io.casperlabs/client:{}".format(TAG),
-                auto_remove=True,
+                #auto_remove=True,
                 name="client-{}-{}".format(
                     ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(5)),
                     TAG
@@ -257,8 +257,8 @@ class Node:
                 detach=True,
                 tty=True
                 )
-            logging.debug("OUTPUT {}".format(output.logs()))
-            return output.logs()
+            logging.debug("OUTPUT {}".format(output.logs().decode('utf-8')))
+            return output.logs().decode('utf-8')
         except ContainerError as err:
             logging.warning("EXITED code={} command='{}' stderr='{}'".format(err.exit_status, err.command, err.stderr))
             raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
