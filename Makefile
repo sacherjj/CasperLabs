@@ -157,9 +157,23 @@ test:
 	#FIXME: The following says "error: No such file or directory (os error 2)""
 	#cd $* && ([ -d .rpm ] || cargo rpm init) && cargo rpm build -v
 
+	@# Map the local .cargo installation which already has all the plugins
+	@# but use the builder image to produce the packages becuase apparently
+	@# we can't make an RPM package on Ubuntu, but we can on CentOS.
+	@# Ideally the builder image will have these installed.
+	docker run -it --rm --entrypoint sh \
+		-v ${PWD}:/CasperLabs \
+		-v ~/.cargo:/root/.cargo \
+		casperlabs/buildenv:latest \
+		-c "export PATH=/root/.cargo/bin:$$PATH; \
+		cd /CasperLabs/$*; \
+		cargo install cargo-deb ; \
+		cargo install cargo-rpm ; \
+		cargo deb && ([ -d .rpm ] || cargo rpm init) && cargo rpm build -v"
+
 	@# Writes to for example CasperLabs/execution-engine/target/debian/engine_comm_0.1.0_amd64.deb
 	@# This command has a --no-build paramter which could speed it up. If RPM already built it, we can add it.
-	cd $* && cargo deb
+	#cd $* && cargo deb
 
 	#FIXME: Figure out what --input and --output should be
 	#cd $* && cargo-tarball --help
