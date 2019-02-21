@@ -1,23 +1,68 @@
 package io.casperlabs.node.configuration
 
+import java.io.File
+import java.nio.file
 import java.nio.file.{Files, Paths, StandardOpenOption}
 import java.util.concurrent.TimeUnit
 
 import cats.syntax.option._
 import io.casperlabs.comm.{Endpoint, NodeIdentifier, PeerNode}
-import io.casperlabs.shared.StoreType
 import io.casperlabs.node.configuration.ConfigurationSoft._
+import io.casperlabs.shared.StoreType
+import org.scalacheck.ScalacheckShapeless._
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
+import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import shapeless._
 
 import scala.concurrent.duration._
 import scala.reflect.{classTag, ClassTag}
-import scala.util.Try
 
-class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEach {
-  val configFilename = "test-configuration.toml"
+class ConfigurationSoftSpec
+    extends FunSuite
+    with Matchers
+    with BeforeAndAfterEach
+    with GeneratorDrivenPropertyChecks {
+  val configFilename: String = s"test-configuration.toml"
 
-  val defaultConf: ConfigurationSoft = {
+  implicit val pathGen: Arbitrary[file.Path] = Arbitrary {
+    for {
+      n     <- Gen.size
+      paths <- Gen.listOfN(n, Gen.alphaNumStr)
+    } yield Paths.get(paths.mkString(File.pathSeparator))
+  }
+
+  //Needed to pass through CLI options parsing
+  implicit val nonEmptyStringGen: Arbitrary[String] = Arbitrary {
+    for {
+      n   <- Gen.choose(1, 100)
+      seq <- Gen.listOfN(n, Gen.alphaNumChar)
+    } yield seq.mkString("")
+  }
+
+  //There is no way expressing explicit 'false' using CLI options.
+  implicit val optionBooleanGen: Arbitrary[Option[Boolean]] = Arbitrary {
+    Gen.oneOf(None, Some(true))
+  }
+
+  implicit val peerNodeGen: Arbitrary[PeerNode] = Arbitrary {
+    for {
+      n        <- Gen.choose(1, 100)
+      bytes    <- Gen.listOfN(n, Gen.choose(Byte.MinValue, Byte.MaxValue))
+      id       = NodeIdentifier(bytes)
+      host     <- Gen.listOfN(n, Gen.alphaNumChar)
+      tcpPort  <- Gen.posNum[Int]
+      udpPort  <- Gen.posNum[Int]
+      endpoint = Endpoint(host.mkString(""), tcpPort, udpPort)
+    } yield PeerNode(id, endpoint)
+  }
+
+  implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
+    PropertyCheckConfiguration(
+      minSuccessful = 500
+    )
+
+  implicit val defaultConf: ConfigurationSoft = {
     val server = Server(
       host = "test".some,
       port = 1.some,
@@ -107,50 +152,84 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
 
   test("""
       |ConfigurationSoft.parse should properly parse
-      |CLI, ENV and TOML config file""".stripMargin) {
-    runTest()
-  }
-
-  def runTest(): Unit =
-    for {
-      cli  <- List(true, false)
-      env  <- List(true, false)
-      file <- List(true, false)
-    } {
-      val fileConf            = if (file) Some(update(update(update(defaultConf)))) else None
-      val fileContent: String = fileConf.map(toToml).getOrElse("")
-
+      |TOML config file and environment variables regarding InfluxAuth
+    """.stripMargin) {
+    forAll { (file: Option[ConfigurationSoft], env: Option[ConfigurationSoft]) =>
+      val fileContent = file.map(toToml).getOrElse("")
       if (fileContent.nonEmpty) {
         writeTestConfigFile(fileContent)
       }
 
-      val cliConf = if (cli) Some(update(defaultConf)) else None
-      val cliArgs: Array[String] = {
-        (cliConf.map(toCli).getOrElse(Nil), fileContent) match {
-          case (c, f) if c.nonEmpty && f.nonEmpty =>
-            s"--config-file=$configFilename" :: "run" :: c
-          case (c, f) if c.nonEmpty && f.isEmpty => "run" :: c
-          case (c, f) if c.isEmpty && f.nonEmpty =>
-            s"--config-file=$configFilename" :: "diagnostics" :: Nil
-          case (c, f) if c.isEmpty && f.isEmpty =>
-            "diagnostics" :: Nil
+      val cliArgs =
+        if (fileContent.nonEmpty) {
+          Array(s"--config-file=$configFilename", "run")
+        } else {
+          Array("run")
         }
-      }.toArray
 
-      val envConf                      = if (env) Some(update(update(defaultConf))) else None
-      val envVars: Map[String, String] = envConf.map(toEnvVars).getOrElse(Map.empty)
+      val envVars = env.map(toEnvVars).getOrElse(Map.empty)
 
       val expected = {
-        val fileOrDefault = fileConf.map(_.fallbackTo(defaultConf)).getOrElse(defaultConf)
-        val envOrFile     = envConf.map(_.fallbackTo(fileOrDefault)).getOrElse(fileOrDefault)
-        val cliOrEnv      = cliConf.map(_.fallbackTo(envOrFile)).getOrElse(envOrFile)
-        cliOrEnv
+        val fileOrDefault = file.map(_.fallbackTo(defaultConf)).getOrElse(defaultConf)
+        val envOrFile     = env.map(_.fallbackTo(fileOrDefault)).getOrElse(fileOrDefault)
+        envOrFile
       }
 
       val Right(result) = ConfigurationSoft.parse(cliArgs, envVars)
 
-      expected shouldEqual result
+      expected.influxAuth shouldEqual result.influxAuth
     }
+  }
+
+  test("""
+      |ConfigurationSoft.parse should properly parse
+      |CLI options, environment variables and TOML config file
+      |ignoring InfluxAuth because there is no way providing it through CLI
+      |""".stripMargin) {
+    forAll {
+      (
+          cli: Option[ConfigurationSoft],
+          file: Option[ConfigurationSoft],
+          env: Option[ConfigurationSoft]
+      ) =>
+        val fileContent = file.map(toToml).getOrElse("")
+        if (fileContent.nonEmpty) {
+          writeTestConfigFile(fileContent)
+        }
+
+        val cliArgs = {
+          (cli.map(toCli).getOrElse(Nil), fileContent) match {
+            case (c, f) if c.nonEmpty && f.nonEmpty =>
+              s"--config-file=$configFilename" :: "run" :: c
+            case (c, f) if c.nonEmpty && f.isEmpty => "run" :: c
+            case (c, f) if c.isEmpty && f.nonEmpty =>
+              s"--config-file=$configFilename" :: "diagnostics" :: Nil
+            case (c, f) if c.isEmpty && f.isEmpty =>
+              "diagnostics" :: Nil
+          }
+        }.toArray
+
+        val envVars = env.map(toEnvVars).getOrElse(Map.empty)
+
+        val expected = {
+          val fileOrDefault = file.map(_.fallbackTo(defaultConf)).getOrElse(defaultConf)
+          val envOrFile     = env.map(_.fallbackTo(fileOrDefault)).getOrElse(fileOrDefault)
+          val cliOrEnv      = cli.map(_.fallbackTo(envOrFile)).getOrElse(envOrFile)
+          cliOrEnv
+        }
+
+        val Right(result) = ConfigurationSoft.parse(cliArgs, envVars)
+
+        expected.server shouldEqual result.server
+        expected.grpc shouldEqual result.grpc
+        expected.tls shouldEqual result.tls
+        expected.casper shouldEqual result.casper
+        expected.lmdb shouldEqual result.lmdb
+        expected.blockstorage shouldEqual result.blockstorage
+        expected.metrics shouldEqual result.metrics
+        expected.influx shouldEqual result.influx
+    }
+  }
 
   def toToml(conf: ConfigurationSoft): String = {
     def dashify(s: String): String =
@@ -164,7 +243,10 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
         .map(field => dashify(field.getName))
         .zip(
           caseClass.productIterator.toSeq
-            .map { case x: Option[_] => x.get }
+            .map {
+              case Some(x) => x
+              case None    => None
+            }
             .map {
               case s: String               => s""""$s""""
               case d: FiniteDuration       => s""""${d.toString.replace(" ", "")}""""
@@ -176,6 +258,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
               case x                       => x.toString
             }
         )
+        .filterNot(_._2 == "None")
         .map {
           case (k, v) =>
             s"$k = $v"
@@ -237,13 +320,24 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       classTag[A].runtimeClass.getDeclaredFields
         .filterNot(_.isSynthetic)
         .map(_.getName)
-        .zip(caseClass.productIterator.toSeq.map { case x: Option[_] => x.get })
+        .zip(
+          caseClass.productIterator.toSeq
+            .map {
+              case Some(x) => x
+              case None    => None
+            }
+        )
         .map {
           case (k, v) =>
-            val key   = prefix + snakify(k)
-            val value = v.toString.toLowerCase.replace(" ", "")
-            key -> value
+            val key = prefix + snakify(k)
+            key -> {
+              v.toString.replace(" ", "") match {
+                case x @ ("InMem" | "Mixed" | "LMDB") => x.toLowerCase
+                case x                                => x
+              }
+            }
         }
+        .filterNot(_._2 == "None")
     List(
       extractKeyValue(serverPrefix, conf.server),
       extractKeyValue(grpcPrefix, conf.grpc),
@@ -289,7 +383,7 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
               p.copy(
                 endpoint = p.endpoint
                   .copy(tcpPort = p.endpoint.tcpPort + 1, udpPort = p.endpoint.udpPort + 1)
-              )
+            )
           )
         )
       implicit def caseStoreType: mapper.Case.Aux[Option[StoreType], Option[StoreType]] =
@@ -312,6 +406,8 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       conf.influxAuth
     )
   }
+
+  override protected def afterEach(): Unit = Files.deleteIfExists(Paths.get(configFilename))
 
   def writeTestConfigFile(conf: String): Unit = {
     Files.deleteIfExists(Paths.get(configFilename))
