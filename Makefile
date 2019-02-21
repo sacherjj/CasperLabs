@@ -99,7 +99,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		execution-engine/comm/target/release/engine-grpc-server
+		execution-engine/target/release/casperlabs-engine-grpc-server
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/target/release)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
@@ -167,9 +167,8 @@ test:
 	mkdir -p $(dir $@) && touch $@
 
 
-
 # Build the execution engine executable.
-execution-engine/target/release/engine-grpc-server: \
+execution-engine/target/release/casperlabs-engine-grpc-server: \
 		$(RUST_SRC) \
 		.make/install/protoc
 	cd execution-engine/comm && \

@@ -2,7 +2,7 @@
 %define __os_install_post %{_dbpath}/brp-compress
 %define debug_package %{nil}
 
-Name: engine_comm
+Name: casperlabs-engine-grpc-server
 Summary: WASM execution engine for CasperLabs smart contracts
 Version: @@VERSION@@
 Release: 1
