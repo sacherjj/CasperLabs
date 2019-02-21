@@ -2,6 +2,8 @@
 name = "engine_comm"
 version = "0.1.0"
 authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
+description = "WASM execution engine for CasperLabs smart contracts"
+license = "Apache-2.0"
 
 [dependencies]
 protobuf = "2"
@@ -19,3 +21,10 @@ protoc-rust-grpc = "0.6.1"
 [[bin]]
 name = "engine-grpc-server"
 path = "src/main.rs"
+
+
+[package.metadata.rpm.cargo]
+buildflags = ["--release"]
+
+[package.metadata.rpm.targets]
+engine_comm = { path = "/usr/bin/engine_comm" }
