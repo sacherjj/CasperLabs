@@ -137,7 +137,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 
 
 # Build the execution engine executable.
-execution-engine/comm/target/release/engine-grpc-server: \
+execution-engine/target/release/engine-grpc-server: \
 		.make/protoc-install \
 		$(shell find . -type f -iregex ".*/Cargo\.toml\|.*/src/.*\.rs" | grep -v target)
 	cd execution-engine/comm && \
