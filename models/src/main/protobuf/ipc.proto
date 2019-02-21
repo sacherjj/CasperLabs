@@ -188,7 +188,7 @@ message TransformEntry {
 message ExecutionEffect {
     repeated OpEntry op_map = 1;
     repeated TransformEntry transform_map = 2;
-    int32 cost = 3;
+    uint64 cost = 3;
 }
  
 //TODO: be more specific about errors

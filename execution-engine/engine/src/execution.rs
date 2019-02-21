@@ -878,7 +878,7 @@ pub fn exec<R: DbReader>(
     nonce: u64,
     gas_limit: u64,
     tc: &mut TrackingCopy<R>,
-) -> Result<ExecutionEffect, Error> {
+) -> Result<(ExecutionEffect, u64), Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let acct_key = Key::Account(account_addr);
     let value = tc.get(&acct_key)?;
@@ -908,7 +908,5 @@ pub fn exec<R: DbReader>(
     };
     let _ = instance.invoke_export("call", &[], &mut runtime)?;
 
-    println!("Gas count: {:?}", runtime.gas_counter);
-    println!("Gas left: {:?}", gas_limit - runtime.gas_counter);
-    Ok(runtime.effect())
+    Ok((runtime.effect(), runtime.gas_counter))
 }

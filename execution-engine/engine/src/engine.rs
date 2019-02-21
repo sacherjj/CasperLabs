@@ -23,7 +23,7 @@ where
 }
 
 pub enum ExecutionResult {
-    Success(ExecutionEffect),
+    Success(ExecutionEffect, u64),
     Failure(Error),
 }
 
@@ -106,7 +106,7 @@ where
                 let mut tc: storage::gs::TrackingCopy<R> =
                     self.state.lock().checkout(prestate_hash)?;
                 match exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
-                    Ok(ee) => Ok(ExecutionResult::Success(ee)),
+                    Ok((ee, cost)) => Ok(ExecutionResult::Success(ee, cost)),
                     Err(error) => Ok(ExecutionResult::Failure(error.into())),
                 }
             }

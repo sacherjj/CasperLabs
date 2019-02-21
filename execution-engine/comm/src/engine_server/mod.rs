@@ -96,8 +96,9 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                     root_missing_err.set_hash(missing_root_hash.to_vec());
                     Err(root_missing_err)
                 }
-                Ok(ExecutionResult::Success(effects)) => {
-                    let ipc_ee = execution_effect_to_ipc(effects);
+                Ok(ExecutionResult::Success(effects, cost)) => {
+                    let mut ipc_ee = execution_effect_to_ipc(effects);
+                    ipc_ee.set_cost(cost);
                     let mut deploy_result = ipc::DeployResult::new();
                     deploy_result.set_effects(ipc_ee);
                     deploy_results.push(deploy_result);
