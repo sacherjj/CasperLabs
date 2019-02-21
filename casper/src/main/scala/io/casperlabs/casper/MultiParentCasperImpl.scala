@@ -47,7 +47,8 @@ final case class CasperState(
       Map.empty[BlockHash, Seq[ipc.TransformEntry]]
 )
 
-class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
+class MultiParentCasperImpl[
+    F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -422,7 +423,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         Sync[F].delay(
           s.transforms
             .getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry])
-        )
+      )
       processedHash <- ExecEngineUtil
                         .effectsForBlock(b, dag, f)
                         .recoverWith {
@@ -452,7 +453,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
 
     validationStatus.flatMap {
       case Right(effects) =>
-        addEffects(Valid, b, effects, dag).tupleLeft(Valid) // map ((Valid.asInstanceOf[BlockStatus], _))
+        addEffects(Valid, b, effects, dag).tupleLeft(Valid)
       case Left(ValidateErrorWrapper(invalid)) =>
         addEffects(invalid, b, Seq.empty, dag)
           .tupleLeft(invalid)
@@ -586,7 +587,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         s.copy(
           dependencyDag = DoublyLinkedDagOperations
             .add[BlockHash](s.dependencyDag, hash, childBlock.blockHash)
-        )
+      )
     )
 
   private def requestMissingDependency(hash: BlockHash) =
