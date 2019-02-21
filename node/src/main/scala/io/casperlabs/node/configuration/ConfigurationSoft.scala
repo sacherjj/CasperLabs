@@ -14,15 +14,15 @@ import scala.io.Source
 import scala.util.Try
 
 case class ConfigurationSoft(
-    server: Option[ConfigurationSoft.Server],
-    grpc: Option[ConfigurationSoft.GrpcServer],
-    tls: Option[ConfigurationSoft.Tls],
-    casper: Option[ConfigurationSoft.Casper],
-    lmdb: Option[ConfigurationSoft.LmdbBlockStore],
-    blockstorage: Option[ConfigurationSoft.BlockDagFileStorage],
-    metrics: Option[ConfigurationSoft.Metrics],
-    influx: Option[ConfigurationSoft.Influx],
-    influxAuth: Option[ConfigurationSoft.InfluxAuth]
+    server: ConfigurationSoft.Server,
+    grpc: ConfigurationSoft.GrpcServer,
+    tls: ConfigurationSoft.Tls,
+    casper: ConfigurationSoft.Casper,
+    lmdb: ConfigurationSoft.LmdbBlockStore,
+    blockstorage: ConfigurationSoft.BlockDagFileStorage,
+    metrics: ConfigurationSoft.Metrics,
+    influx: ConfigurationSoft.Influx,
+    influxAuth: ConfigurationSoft.InfluxAuth
 ) {
   implicit def fallback[A](implicit ev: LowPriority): Merge[Option[A]] =
     (l: Option[A], r: Option[A]) => l.orElse(r)

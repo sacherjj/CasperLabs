@@ -119,19 +119,19 @@ object Configuration {
   ): ValidatedNel[String, Kamon] = {
     val influx = parseInflux(conf).toOption
     (
-      optToValidated(conf.metrics.flatMap(_.prometheus), "Kamon.prometheus"),
-      optToValidated(conf.metrics.flatMap(_.zipkin), "Kamon.zipkin"),
-      optToValidated(conf.metrics.flatMap(_.sigar), "Kamon.sigar")
+      optToValidated(conf.metrics.prometheus, "Kamon.prometheus"),
+      optToValidated(conf.metrics.zipkin, "Kamon.zipkin"),
+      optToValidated(conf.metrics.sigar, "Kamon.sigar")
     ) mapN (Kamon(_, influx, _, _))
   }
 
   private def parseInflux(soft: ConfigurationSoft): ValidatedNel[String, Influx] = {
     val influxAuth = parseInfluxAuth(soft).toOption
     (
-      optToValidated(soft.influx.flatMap(_.hostname), "Influx.hostname"),
-      optToValidated(soft.influx.flatMap(_.port), "Influx.port"),
-      optToValidated(soft.influx.flatMap(_.database), "Influx.database"),
-      optToValidated(soft.influx.flatMap(_.protocol), "Influx.protocol")
+      optToValidated(soft.influx.hostname, "Influx.hostname"),
+      optToValidated(soft.influx.port, "Influx.port"),
+      optToValidated(soft.influx.database, "Influx.database"),
+      optToValidated(soft.influx.protocol, "Influx.protocol")
     ) mapN (Influx(_, _, _, _, influxAuth))
   }
 
@@ -139,30 +139,30 @@ object Configuration {
       soft: ConfigurationSoft
   ): ValidatedNel[String, InfluxDbAuthentication] =
     (
-      optToValidated(soft.influxAuth.flatMap(_.user), "[Influx.authentication.user]"),
-      optToValidated(soft.influxAuth.flatMap(_.password), "[Influx.authentication.password]")
+      optToValidated(soft.influxAuth.user, "[Influx.authentication.user]"),
+      optToValidated(soft.influxAuth.password, "[Influx.authentication.password]")
     ) mapN InfluxDbAuthentication
 
   private def parseServer(
       confSoft: ConfigurationSoft
   ): ValidatedNel[String, Configuration.Server] =
     (
-      confSoft.server.flatMap(_.host).validNel[String],
-      optToValidated(confSoft.server.flatMap(_.port), "Server.port"),
-      optToValidated(confSoft.server.flatMap(_.httpPort), "Server.httpPort"),
-      optToValidated(confSoft.server.flatMap(_.kademliaPort), "Server.kademliaPort"),
-      optToValidated(confSoft.server.flatMap(_.dynamicHostAddress), "Server.dynamicHostAddress"),
-      optToValidated(confSoft.server.flatMap(_.noUpnp), "Server.noUpnp"),
-      optToValidated(confSoft.server.flatMap(_.defaultTimeout), "Server.defaultTimeout"),
-      optToValidated(confSoft.server.flatMap(_.bootstrap), "Server.bootstrap"),
-      optToValidated(confSoft.server.flatMap(_.standalone), "Server.standalone"),
-      optToValidated(confSoft.casper.flatMap(_.approveGenesis), "Casper.approveGenesis"),
-      optToValidated(confSoft.server.flatMap(_.dataDir), "Server.dataDir"),
-      optToValidated(confSoft.server.flatMap(_.mapSize), "Server.mapSize"),
-      optToValidated(confSoft.server.flatMap(_.storeType), "Server.storeType"),
-      optToValidated(confSoft.server.flatMap(_.maxNumOfConnections), "Server.maxNumOfConnections"),
-      optToValidated(confSoft.server.flatMap(_.maxMessageSize), "Server.maxMessageSize"),
-      optToValidated(confSoft.server.flatMap(_.chunkSize), "Server.chunkSize")
+      confSoft.server.host.validNel[String],
+      optToValidated(confSoft.server.port, "Server.port"),
+      optToValidated(confSoft.server.httpPort, "Server.httpPort"),
+      optToValidated(confSoft.server.kademliaPort, "Server.kademliaPort"),
+      optToValidated(confSoft.server.dynamicHostAddress, "Server.dynamicHostAddress"),
+      optToValidated(confSoft.server.noUpnp, "Server.noUpnp"),
+      optToValidated(confSoft.server.defaultTimeout, "Server.defaultTimeout"),
+      optToValidated(confSoft.server.bootstrap, "Server.bootstrap"),
+      optToValidated(confSoft.server.standalone, "Server.standalone"),
+      optToValidated(confSoft.casper.approveGenesis, "Casper.approveGenesis"),
+      optToValidated(confSoft.server.dataDir, "Server.dataDir"),
+      optToValidated(confSoft.server.mapSize, "Server.mapSize"),
+      optToValidated(confSoft.server.storeType, "Server.storeType"),
+      optToValidated(confSoft.server.maxNumOfConnections, "Server.maxNumOfConnections"),
+      optToValidated(confSoft.server.maxMessageSize, "Server.maxMessageSize"),
+      optToValidated(confSoft.server.chunkSize, "Server.chunkSize")
     ).mapN(Configuration.Server.apply).map { server =>
       // Do not exceed HTTP2 RFC 7540
       val maxMessageSize = Math.min(server.maxMessageSize, 16 * 1024 * 1024)
@@ -178,13 +178,13 @@ object Configuration {
       confSoft: ConfigurationSoft
   ): ValidatedNel[String, Configuration.GrpcServer] =
     (
-      optToValidated(confSoft.grpc.flatMap(_.host), "GrpcServer.host"),
+      optToValidated(confSoft.grpc.host, "GrpcServer.host"),
       optToValidated(
-        adjustPath(confSoft, confSoft.grpc.flatMap(_.socket), default),
+        adjustPath(confSoft, confSoft.grpc.socket, default),
         "GrpcServer.socket"
       ),
-      optToValidated(confSoft.grpc.flatMap(_.portExternal), "GrpcServer.portExternal"),
-      optToValidated(confSoft.grpc.flatMap(_.portInternal), "GrpcServer.portInternal")
+      optToValidated(confSoft.grpc.portExternal, "GrpcServer.portExternal"),
+      optToValidated(confSoft.grpc.portInternal, "GrpcServer.portInternal")
     ).mapN(Configuration.GrpcServer.apply)
 
   private def parseTls(
@@ -192,16 +192,16 @@ object Configuration {
       confSoft: ConfigurationSoft
   ): ValidatedNel[String, Configuration.Tls] =
     (
-      optToValidated(default.server.flatMap(_.dataDir), "Default Server.dataDir"),
-      optToValidated(confSoft.server.flatMap(_.dataDir), "Server.dataDir"),
-      optToValidated(confSoft.tls.flatMap(_.certificate), "Default Tls.certificate"),
-      optToValidated(confSoft.tls.flatMap(_.key), "Default Tls.key"),
+      optToValidated(default.server.dataDir, "Default Server.dataDir"),
+      optToValidated(confSoft.server.dataDir, "Server.dataDir"),
+      optToValidated(confSoft.tls.certificate, "Default Tls.certificate"),
+      optToValidated(confSoft.tls.key, "Default Tls.key"),
       optToValidated(
-        adjustPath(confSoft, confSoft.tls.flatMap(_.certificate), default),
+        adjustPath(confSoft, confSoft.tls.certificate, default),
         "Tls.certificate"
       ),
-      optToValidated(adjustPath(confSoft, confSoft.tls.flatMap(_.key), default), "Tls.key"),
-      optToValidated(confSoft.tls.flatMap(_.secureRandomNonBlocking), "Tls.secureRandomNonBlocking")
+      optToValidated(adjustPath(confSoft, confSoft.tls.key, default), "Tls.key"),
+      optToValidated(confSoft.tls.secureRandomNonBlocking, "Tls.secureRandomNonBlocking")
     ).mapN(
       (
           defaultDataDir,
@@ -237,43 +237,42 @@ object Configuration {
       confSoft: ConfigurationSoft
   ): ValidatedNel[String, CasperConf] =
     (
-      confSoft.casper.flatMap(_.validatorPublicKey).validNel[String],
-      confSoft.casper
-        .flatMap(_.validatorPrivateKey)
+      confSoft.casper.validatorPublicKey.validNel[String],
+      confSoft.casper.validatorPrivateKey
         .map(_.asLeft[Path])
-        .orElse(confSoft.casper.flatMap(_.validatorPrivateKeyPath).map(_.asRight[String]))
+        .orElse(confSoft.casper.validatorPrivateKeyPath.map(_.asRight[String]))
         .validNel[String],
-      optToValidated(confSoft.casper.flatMap(_.validatorSigAlgorithm), "Casper.sigAlgorithm"),
+      optToValidated(confSoft.casper.validatorSigAlgorithm, "Casper.sigAlgorithm"),
       optToValidated(
-        adjustPath(confSoft, confSoft.casper.flatMap(_.bondsFile), default),
+        adjustPath(confSoft, confSoft.casper.bondsFile, default),
         "Casper.bondsFile"
       ),
-      confSoft.casper.flatMap(_.knownValidatorsFile).validNel[String],
-      optToValidated(confSoft.casper.flatMap(_.numValidators), "Casper.numValidators"),
+      confSoft.casper.knownValidatorsFile.validNel[String],
+      optToValidated(confSoft.casper.numValidators, "Casper.numValidators"),
       optToValidated(
-        combineWithDataDir(confSoft, confSoft.casper.map(_.genesisPath)),
+        combineWithDataDir(confSoft, confSoft.casper.genesisPath),
         "Casper.genesisPath"
       ),
       optToValidated(
-        adjustPath(confSoft, confSoft.casper.flatMap(_.walletsFile), default),
+        adjustPath(confSoft, confSoft.casper.walletsFile, default),
         "Casper.walletsFile"
       ),
-      optToValidated(confSoft.casper.flatMap(_.minimumBond), "Casper.minimumBond"),
-      optToValidated(confSoft.casper.flatMap(_.maximumBond), "Casper.maximumBond"),
-      optToValidated(confSoft.casper.flatMap(_.hasFaucet), "Casper.hasFaucet"),
-      optToValidated(confSoft.casper.flatMap(_.requiredSigs), "Casper.requiredSigs"),
-      optToValidated(confSoft.casper.flatMap(_.shardId), "Casper.shardId"),
-      optToValidated(confSoft.server.flatMap(_.standalone), "Server.standalone"),
-      optToValidated(confSoft.casper.flatMap(_.approveGenesis), "Casper.approveGenesis"),
+      optToValidated(confSoft.casper.minimumBond, "Casper.minimumBond"),
+      optToValidated(confSoft.casper.maximumBond, "Casper.maximumBond"),
+      optToValidated(confSoft.casper.hasFaucet, "Casper.hasFaucet"),
+      optToValidated(confSoft.casper.requiredSigs, "Casper.requiredSigs"),
+      optToValidated(confSoft.casper.shardId, "Casper.shardId"),
+      optToValidated(confSoft.server.standalone, "Server.standalone"),
+      optToValidated(confSoft.casper.approveGenesis, "Casper.approveGenesis"),
       optToValidated(
-        confSoft.casper.flatMap(_.approveGenesisInterval),
+        confSoft.casper.approveGenesisInterval,
         "Casper.approveGenesisInterval"
       ),
       optToValidated(
-        confSoft.casper.flatMap(_.approveGenesisDuration),
+        confSoft.casper.approveGenesisDuration,
         "Casper.approveGenesisDuration"
       ),
-      confSoft.casper.flatMap(_.deployTimestamp).validNel[String]
+      confSoft.casper.deployTimestamp.validNel[String]
     ).mapN(CasperConf.apply)
 
   private def parseBlockStorage(
@@ -281,11 +280,11 @@ object Configuration {
       confSoft: ConfigurationSoft
   ): ValidatedNel[String, LMDBBlockStore.Config] =
     (
-      optToValidated(combineWithDataDir(confSoft, confSoft.lmdb.map(_.path)), "Lmdb.path"),
-      optToValidated(confSoft.lmdb.flatMap(_.blockStoreSize), "Lmdb.blockStoreSize"),
-      optToValidated(confSoft.lmdb.flatMap(_.maxDbs), "Lmdb.maxDbs"),
-      optToValidated(confSoft.lmdb.flatMap(_.maxReaders), "Lmdb.maxReaders"),
-      optToValidated(confSoft.lmdb.flatMap(_.useTls), "Lmdb.useTls")
+      optToValidated(combineWithDataDir(confSoft, confSoft.lmdb.path), "Lmdb.path"),
+      optToValidated(confSoft.lmdb.blockStoreSize, "Lmdb.blockStoreSize"),
+      optToValidated(confSoft.lmdb.maxDbs, "Lmdb.maxDbs"),
+      optToValidated(confSoft.lmdb.maxReaders, "Lmdb.maxReaders"),
+      optToValidated(confSoft.lmdb.useTls, "Lmdb.useTls")
     ).mapN(LMDBBlockStore.Config.apply)
 
   private def parseBlockDagStorage(
@@ -294,27 +293,27 @@ object Configuration {
   ): ValidatedNel[String, BlockDagFileStorage.Config] =
     (
       optToValidated(
-        combineWithDataDir(confSoft, confSoft.blockstorage.map(_.latestMessagesLogPath)),
+        combineWithDataDir(confSoft, confSoft.blockstorage.latestMessagesLogPath),
         "BlockDagFileStorage.latestMessagesLogPath"
       ),
       optToValidated(
-        combineWithDataDir(confSoft, confSoft.blockstorage.map(_.latestMessagesCrcPath)),
+        combineWithDataDir(confSoft, confSoft.blockstorage.latestMessagesCrcPath),
         "BlockDagFileStorage.latestMessagesCrcPath"
       ),
       optToValidated(
-        combineWithDataDir(confSoft, confSoft.blockstorage.map(_.blockMetadataLogPath)),
+        combineWithDataDir(confSoft, confSoft.blockstorage.blockMetadataLogPath),
         "BlockDagFileStorage.blockMetadataLogPath"
       ),
       optToValidated(
-        combineWithDataDir(confSoft, confSoft.blockstorage.map(_.blockMetadataCrcPath)),
+        combineWithDataDir(confSoft, confSoft.blockstorage.blockMetadataCrcPath),
         "BlockDagFileStorage.blockMetadataCrcPath"
       ),
       optToValidated(
-        combineWithDataDir(confSoft, confSoft.blockstorage.map(_.checkpointsDirPath)),
+        combineWithDataDir(confSoft, confSoft.blockstorage.checkpointsDirPath),
         "BlockDagFileStorage.checkpointsDirPath"
       ),
       optToValidated(
-        confSoft.blockstorage.flatMap(_.latestMessagesLogMaxSizeFactor),
+        confSoft.blockstorage.latestMessagesLogMaxSizeFactor,
         "BlockDagFileStorage.latestMessagesLogMaxSizeFactor"
       )
     ).mapN(BlockDagFileStorage.Config.apply)
@@ -331,13 +330,9 @@ object Configuration {
 
   private[configuration] def combineWithDataDir(
       conf: ConfigurationSoft,
-      relativePath: Option[String]
+      relativePath: String
   ): Option[Path] =
-    for {
-      server  <- conf.server
-      dataDir <- server.dataDir
-      p       <- relativePath
-    } yield dataDir.resolve(p)
+    conf.server.dataDir.map(_.resolve(relativePath))
 
   private[configuration] def adjustPathAsString(
       conf: ConfigurationSoft,
@@ -345,8 +340,8 @@ object Configuration {
       default: ConfigurationSoft
   ): Option[String] =
     for {
-      defaultDataDir <- default.server.flatMap(_.dataDir)
-      dataDir        <- conf.server.flatMap(_.dataDir)
+      defaultDataDir <- default.server.dataDir
+      dataDir        <- conf.server.dataDir
       path           <- pathToCheck
     } yield path.replace(defaultDataDir.toAbsolutePath.toString, dataDir.toAbsolutePath.toString)
 }

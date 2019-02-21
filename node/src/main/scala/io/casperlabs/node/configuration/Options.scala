@@ -182,15 +182,18 @@ private[configuration] object Options {
         )
 
         ConfigurationSoft(
-          Some(server),
-          Some(grpcServer),
-          Some(tls),
-          Some(casper),
-          Some(lmdb),
-          Some(blockstorage),
-          Some(metrics),
-          Some(influx),
-          None
+          server,
+          grpcServer,
+          tls,
+          casper,
+          lmdb,
+          blockstorage,
+          metrics,
+          influx,
+          ConfigurationSoft.InfluxAuth(
+            None,
+            None
+          )
         )
       }.toEither.leftMap(_.getMessage)
     e.joinRight
@@ -230,28 +233,28 @@ private[configuration] final case class Options(
 
   //TODO: Use Monocle lenses?
   def s[A](select: ConfigurationSoft.Server => Option[A]): String =
-    defaultsForHelpPrinting.server.flatMap(select)
+    select(defaultsForHelpPrinting.server)
 
   def g[A](select: ConfigurationSoft.GrpcServer => Option[A]): String =
-    defaultsForHelpPrinting.grpc.flatMap(select)
+    select(defaultsForHelpPrinting.grpc)
 
   def t[A](select: ConfigurationSoft.Tls => Option[A]): String =
-    defaultsForHelpPrinting.tls.flatMap(select)
+    select(defaultsForHelpPrinting.tls)
 
   def c[A](select: ConfigurationSoft.Casper => Option[A]): String =
-    defaultsForHelpPrinting.casper.flatMap(select)
+    select(defaultsForHelpPrinting.casper)
 
   def l[A](select: ConfigurationSoft.LmdbBlockStore => Option[A]): String =
-    defaultsForHelpPrinting.lmdb.flatMap(select)
+    select(defaultsForHelpPrinting.lmdb)
 
   def b[A](select: ConfigurationSoft.BlockDagFileStorage => Option[A]): String =
-    defaultsForHelpPrinting.blockstorage.flatMap(select)
+    select(defaultsForHelpPrinting.blockstorage)
 
   def m[A](select: ConfigurationSoft.Metrics => Option[A]): String =
-    defaultsForHelpPrinting.metrics.flatMap(select)
+    select(defaultsForHelpPrinting.metrics)
 
   def i[A](select: ConfigurationSoft.Influx => Option[A]): String =
-    defaultsForHelpPrinting.influx.flatMap(select)
+    select(defaultsForHelpPrinting.influx)
 
   version(s"Casper Labs Node ${BuildInfo.version}")
   printedName = "casperlabs"

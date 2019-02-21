@@ -59,12 +59,12 @@ prometheus = false
 zipkin = false
 sigar = false
 
-#[influx]
+[influx]
 #hostname = "0.0.0.0"
 #port = 14
 #database = "test"
 #protocol = "https"
 #
-#[influx-auth]
+[influx-auth]
 #user = "user"
 #password = "password"

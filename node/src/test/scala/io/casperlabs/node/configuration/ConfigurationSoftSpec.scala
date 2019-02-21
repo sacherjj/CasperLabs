@@ -93,15 +93,15 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
       "password".some
     )
     ConfigurationSoft(
-      server.some,
-      grpcServer.some,
-      tls.some,
-      casper.some,
-      lmdb.some,
-      blockStorage.some,
-      kamonSettings.some,
-      influx.some,
-      influxAuth.some
+      server,
+      grpcServer,
+      tls,
+      casper,
+      lmdb,
+      blockStorage,
+      kamonSettings,
+      influx,
+      influxAuth
     )
   }
 
@@ -183,23 +183,23 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
         .mkString("\n")
 
     s"""
-      |${extractTomlTable("server", conf.server.get)}
+      |${extractTomlTable("server", conf.server)}
       |
-      |${extractTomlTable("grpc", conf.grpc.get)}
+      |${extractTomlTable("grpc", conf.grpc)}
       |
-      |${extractTomlTable("tls", conf.tls.get)}
+      |${extractTomlTable("tls", conf.tls)}
       |
-      |${extractTomlTable("casper", conf.casper.get)}
+      |${extractTomlTable("casper", conf.casper)}
       |
-      |${extractTomlTable("lmdb", conf.lmdb.get)}
+      |${extractTomlTable("lmdb", conf.lmdb)}
       |
-      |${extractTomlTable("blockstorage", conf.blockstorage.get)}
+      |${extractTomlTable("blockstorage", conf.blockstorage)}
       |
-      |${extractTomlTable("metrics", conf.metrics.get)}
+      |${extractTomlTable("metrics", conf.metrics)}
       |
-      |${extractTomlTable("influx", conf.influx.get)}
+      |${extractTomlTable("influx", conf.influx)}
       |
-      |${extractTomlTable("influx-auth", conf.influxAuth.get)}
+      |${extractTomlTable("influx-auth", conf.influxAuth)}
     """.stripMargin
   }
 
@@ -245,15 +245,15 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
             key -> value
         }
     List(
-      extractKeyValue(serverPrefix, conf.server.get),
-      extractKeyValue(grpcPrefix, conf.grpc.get),
-      extractKeyValue(tlsPrefix, conf.tls.get),
-      extractKeyValue(casperPrefix, conf.casper.get),
-      extractKeyValue(lmdbPrefix, conf.lmdb.get),
-      extractKeyValue(blockstoragePrefix, conf.blockstorage.get),
-      extractKeyValue(metricsPrefix, conf.metrics.get),
-      extractKeyValue(influxPrefix, conf.influx.get),
-      extractKeyValue(influxAuthPrefix, conf.influxAuth.get)
+      extractKeyValue(serverPrefix, conf.server),
+      extractKeyValue(grpcPrefix, conf.grpc),
+      extractKeyValue(tlsPrefix, conf.tls),
+      extractKeyValue(casperPrefix, conf.casper),
+      extractKeyValue(lmdbPrefix, conf.lmdb),
+      extractKeyValue(blockstoragePrefix, conf.blockstorage),
+      extractKeyValue(metricsPrefix, conf.metrics),
+      extractKeyValue(influxPrefix, conf.influx),
+      extractKeyValue(influxAuthPrefix, conf.influxAuth)
     ).flatten.toMap
   }
 
@@ -301,14 +301,14 @@ class ConfigurationSoftSpec extends FunSuite with Matchers with BeforeAndAfterEa
     }
 
     ConfigurationSoft(
-      serverGen.from(serverGen.to(conf.server.get).map(mapper)).some,
-      grpcGen.from(grpcGen.to(conf.grpc.get).map(mapper)).some,
-      tlsGen.from(tlsGen.to(conf.tls.get).map(mapper)).some,
-      casperGen.from(casperGen.to(conf.casper.get).map(mapper)).some,
-      lmdbGen.from(lmdbGen.to(conf.lmdb.get).map(mapper)).some,
-      blockstorageGen.from(blockstorageGen.to(conf.blockstorage.get).map(mapper)).some,
-      metricsGen.from(metricsGen.to(conf.metrics.get).map(mapper)).some,
-      influxGen.from(influxGen.to(conf.influx.get).map(mapper)).some,
+      serverGen.from(serverGen.to(conf.server).map(mapper)),
+      grpcGen.from(grpcGen.to(conf.grpc).map(mapper)),
+      tlsGen.from(tlsGen.to(conf.tls).map(mapper)),
+      casperGen.from(casperGen.to(conf.casper).map(mapper)),
+      lmdbGen.from(lmdbGen.to(conf.lmdb).map(mapper)),
+      blockstorageGen.from(blockstorageGen.to(conf.blockstorage).map(mapper)),
+      metricsGen.from(metricsGen.to(conf.metrics).map(mapper)),
+      influxGen.from(influxGen.to(conf.influx).map(mapper)),
       conf.influxAuth
     )
   }
