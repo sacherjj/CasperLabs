@@ -14,6 +14,8 @@ RUN cargo build --release
 
 FROM io.casperlabs/node:latest
 RUN apt-get update && apt-get -yq install curl sed nmap
+WORKDIR /tmp/resources
+COPY --from=0 /usr/src/integration-testing/resources  .
 WORKDIR /opt/docker/bin
 COPY --from=0 /usr/src/execution-engine/target/release/engine-grpc-server .
 COPY integration-testing/bootstrap .
