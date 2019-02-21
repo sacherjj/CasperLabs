@@ -157,7 +157,7 @@ test:
 	#FIXME: The following says "error: No such file or directory (os error 2)""
 	#cd $* && ([ -d .rpm ] || cargo rpm init) && cargo rpm build -v
 
-	@# Writes to for example CasperLabs/execution-engine/target/debian/engine_comm_0.1.0_amd64.deb
+	@# Writes to for example CasperLabs/execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
 	@# This command has a --no-build paramter which could speed it up. If RPM already built it, we can add it.
 	cd $* && cargo deb
 
