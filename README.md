@@ -14,10 +14,21 @@ Please refer to the [Developer guide](DEVELOPER.md) for information on running f
 
 ### Running from Docker
 
-TBD
+Please refer to the [docker guide](docker/README.md) for information on running from docker.
 
 ### Running from the tar-ball
-TBD
+
+Artifacts are published to http://repo.casperlabs.io/casperlabs/repo
+
+You can run from the packaged archive for example as follows:
+
+```console
+$ ARCHIVE=http://repo.casperlabs.io/casperlabs/repo/dev/casperlabs-node-0.0.tgz
+$ curl -s -o casperlabs-node.tgz $ARCHIVE
+$ tar -xzf casperlabs-node.tgz
+$ ./casperlabs-node-0.0/bin/casperlabs-node --version
+Casper Labs Node 0.0
+```
 
 ### Installing and running on Debian from DEB package
 #### CLI client tool

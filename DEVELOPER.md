@@ -280,15 +280,15 @@ This is required only when the `ipc.proto` file changes (but this is true when y
 
 #### Build Wasm contracts:
 Contracts are in a separate github repo: https://github.com/CasperLabs/contract-examples.
-Clone this locally.   
+Clone this locally.
 
 Make commands should build in the root of this repo.  `make all` or `make hello-name`.
 
-If make fails, contract can be manually built: 
+If make fails, contract can be manually built:
 
   1. Go to contract directory that interests you (where Cargo.toml is defined), such as `cd hello-name/call`.
-  2. To compile Rust contract to Wasm, run  `cargo build --release --target wasm32-unknown-unknown`. 
-  3. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory. We will use this file when deploying a contract. 
+  2. To compile Rust contract to Wasm, run  `cargo build --release --target wasm32-unknown-unknown`.
+  3. This puts `*.wasm` file in the `<root>/target/wasm32-unknown-unknown/release/` directory. We will use this file when deploying a contract.
   4. If `cargo build --release ...`  doesn't work try `cargo +nightly build ...`
 
 #### Building node:
@@ -313,7 +313,7 @@ In the root of the node (where build.sbt lives).
 If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/casperlabs-node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
 
 ```
-./node/target/universal/stage/bin/casperlabs-node run --casper-validator-private-key <private key from <public_key>.sk file> --casper-validator-public-key <public key from bonds.txt file> -s
+./node/target/universal/stage/bin/casperlabs-node run --casper-validator-private-key <private key from <public_key>.sk file> --casper-validator-public-key <public_key> -s
 ```
 
 #### Run the Execution Engine
@@ -420,15 +420,6 @@ The tarball can be found in directory `node/target/universal/`
 TBD
 ```
 Now after you've done some local changes and want to test them, simply run the last command `tbd` again. It will kill the running app and start a new instance containing latest changes in a completely new forked JVM.
-
-#### Running tests in IntelliJ
-
-For tests of the Rholang module, make sure you've got the following JVM options set in your Run Configuration:
-`-Xss240k -XX:MaxJavaStackTraceDepth=10000 -Xmx128m`
-
-Otherwise the StackSafetySpec is going to be veeery slow and will most likely fail due to timeouts.
-
-You can make the above options default by editing the ScalaTest Template in `Run > Edit configurations > Templates`.
 
 ### Cross-developing for Linux (e.g. Ubuntu) on a Mac
 You will need a virtual machine running the appropriate version of Linux.
