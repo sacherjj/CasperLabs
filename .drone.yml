@@ -48,19 +48,11 @@ pipeline:
     commands:
       - sbt compile test:compile doc
 
-  compile-rust-engine:
+  compile-rust:
     <<: *buildenv
     group: rust
     commands:
-      - cd execution-engine/engine
-      - ~/.cargo/bin/cargo update
-      - ~/.cargo/bin/cargo build
-
-  compile-rust-comm:
-    <<: *buildenv
-    group: rust
-    commands:
-      - cd execution-engine/comm
+      - cd execution-engine/
       - ~/.cargo/bin/cargo update
       - ~/.cargo/bin/cargo build
 
@@ -68,7 +60,7 @@ pipeline:
     <<: *buildenv
     group: test
     commands:
-      - cd execution-engine/tests
+      - cd execution-engine/
       - ~/.cargo/bin/cargo test
 
   run-unit-tests:
