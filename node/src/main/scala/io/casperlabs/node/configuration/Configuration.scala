@@ -10,6 +10,7 @@ import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.PeerNode
 import io.casperlabs.shared.StoreType
+import shapeless._
 
 final case class Configuration(
     command: Configuration.Command,
@@ -21,6 +22,8 @@ final case class Configuration(
     blockDagStorage: BlockDagFileStorage.Config,
     kamon: Configuration.Kamon
 )
+
+private case class DefaultConf(c: ConfigurationSoft) extends AnyVal
 
 object Configuration {
   case class Kamon(
@@ -94,75 +97,84 @@ object Configuration {
     either.fold(_.invalidNel[Configuration], identity)
   }
 
-  /**
-    * All [[java.nio.file.Path]] fields must be wrapped into [[io.casperlabs.node.configuration.Configuration.adjustPath]].
-    *
-    * Otherwise a Path field will not respect server.dataDir changes.
-    */
   private[configuration] def parseToActual(
       command: Command,
-      default: ConfigurationSoft,
+      defaultConf: ConfigurationSoft,
       confSoft: ConfigurationSoft
-  ): ValidatedNel[String, Configuration] =
+  ): ValidatedNel[String, Configuration] = {
+    implicit val default: DefaultConf = DefaultConf(defaultConf)
+    implicit val c: ConfigurationSoft = confSoft
     (
-      parseServer(confSoft),
-      parseGrpcServer(default, confSoft),
-      parseTls(default, confSoft),
-      parseCasper(default, confSoft),
-      parseBlockStorage(default, confSoft),
-      parseBlockDagStorage(default, confSoft),
-      parseKamon(confSoft)
+      parseServer,
+      parseGrpcServer,
+      parseTls,
+      parseCasper,
+      parseBlockStorage,
+      parseBlockDagStorage,
+      parseKamon
     ).mapN(Configuration(command, _, _, _, _, _, _, _))
+  }
 
   private def parseKamon(
+      implicit
+      default: DefaultConf,
       conf: ConfigurationSoft
   ): ValidatedNel[String, Kamon] = {
-    val influx = parseInflux(conf).toOption
+    val influx = parseInflux.toOption
+
     (
-      optToValidated(conf.metrics.prometheus, "Kamon.prometheus"),
-      optToValidated(conf.metrics.zipkin, "Kamon.zipkin"),
-      optToValidated(conf.metrics.sigar, "Kamon.sigar")
+      toValidated(_.metrics.prometheus, "Kamon.prometheus"),
+      toValidated(_.metrics.zipkin, "Kamon.zipkin"),
+      toValidated(_.metrics.sigar, "Kamon.sigar")
     ) mapN (Kamon(_, influx, _, _))
   }
 
-  private def parseInflux(soft: ConfigurationSoft): ValidatedNel[String, Influx] = {
-    val influxAuth = parseInfluxAuth(soft).toOption
+  private def parseInflux(
+      implicit
+      default: DefaultConf,
+      conf: ConfigurationSoft
+  ): ValidatedNel[String, Influx] = {
+    val influxAuth = parseInfluxAuth.toOption
     (
-      optToValidated(soft.influx.hostname, "Influx.hostname"),
-      optToValidated(soft.influx.port, "Influx.port"),
-      optToValidated(soft.influx.database, "Influx.database"),
-      optToValidated(soft.influx.protocol, "Influx.protocol")
+      toValidated(_.influx.hostname, "Influx.hostname"),
+      toValidated(_.influx.port, "Influx.port"),
+      toValidated(_.influx.database, "Influx.database"),
+      toValidated(_.influx.protocol, "Influx.protocol")
     ) mapN (Influx(_, _, _, _, influxAuth))
   }
 
   private def parseInfluxAuth(
-      soft: ConfigurationSoft
+      implicit
+      default: DefaultConf,
+      conf: ConfigurationSoft
   ): ValidatedNel[String, InfluxDbAuthentication] =
     (
-      optToValidated(soft.influxAuth.user, "[Influx.authentication.user]"),
-      optToValidated(soft.influxAuth.password, "[Influx.authentication.password]")
+      toValidated(_.influxAuth.user, "[Influx.authentication.user]"),
+      toValidated(_.influxAuth.password, "[Influx.authentication.password]")
     ) mapN InfluxDbAuthentication
 
   private def parseServer(
-      confSoft: ConfigurationSoft
+      implicit
+      default: DefaultConf,
+      conf: ConfigurationSoft
   ): ValidatedNel[String, Configuration.Server] =
     (
-      confSoft.server.host.validNel[String],
-      optToValidated(confSoft.server.port, "Server.port"),
-      optToValidated(confSoft.server.httpPort, "Server.httpPort"),
-      optToValidated(confSoft.server.kademliaPort, "Server.kademliaPort"),
-      optToValidated(confSoft.server.dynamicHostAddress, "Server.dynamicHostAddress"),
-      optToValidated(confSoft.server.noUpnp, "Server.noUpnp"),
-      optToValidated(confSoft.server.defaultTimeout, "Server.defaultTimeout"),
-      optToValidated(confSoft.server.bootstrap, "Server.bootstrap"),
-      optToValidated(confSoft.server.standalone, "Server.standalone"),
-      optToValidated(confSoft.casper.approveGenesis, "Casper.approveGenesis"),
-      optToValidated(confSoft.server.dataDir, "Server.dataDir"),
-      optToValidated(confSoft.server.mapSize, "Server.mapSize"),
-      optToValidated(confSoft.server.storeType, "Server.storeType"),
-      optToValidated(confSoft.server.maxNumOfConnections, "Server.maxNumOfConnections"),
-      optToValidated(confSoft.server.maxMessageSize, "Server.maxMessageSize"),
-      optToValidated(confSoft.server.chunkSize, "Server.chunkSize")
+      conf.server.host.validNel[String],
+      toValidated(_.server.port, "Server.port"),
+      toValidated(_.server.httpPort, "Server.httpPort"),
+      toValidated(_.server.kademliaPort, "Server.kademliaPort"),
+      toValidated(_.server.dynamicHostAddress, "Server.dynamicHostAddress"),
+      toValidated(_.server.noUpnp, "Server.noUpnp"),
+      toValidated(_.server.defaultTimeout, "Server.defaultTimeout"),
+      toValidated(_.server.bootstrap, "Server.bootstrap"),
+      toValidated(_.server.standalone, "Server.standalone"),
+      toValidated(_.casper.approveGenesis, "Casper.approveGenesis"),
+      toValidated(_.server.dataDir, "Server.dataDir"),
+      toValidated(_.server.mapSize, "Server.mapSize"),
+      toValidated(_.server.storeType, "Server.storeType"),
+      toValidated(_.server.maxNumOfConnections, "Server.maxNumOfConnections"),
+      toValidated(_.server.maxMessageSize, "Server.maxMessageSize"),
+      toValidated(_.server.chunkSize, "Server.chunkSize")
     ).mapN(Configuration.Server.apply).map { server =>
       // Do not exceed HTTP2 RFC 7540
       val maxMessageSize = Math.min(server.maxMessageSize, 16 * 1024 * 1024)
@@ -174,34 +186,31 @@ object Configuration {
     }
 
   private def parseGrpcServer(
-      default: ConfigurationSoft,
-      confSoft: ConfigurationSoft
+      implicit
+      default: DefaultConf,
+      conf: ConfigurationSoft
   ): ValidatedNel[String, Configuration.GrpcServer] =
     (
-      optToValidated(confSoft.grpc.host, "GrpcServer.host"),
-      optToValidated(
-        adjustPath(confSoft, confSoft.grpc.socket, default),
-        "GrpcServer.socket"
-      ),
-      optToValidated(confSoft.grpc.portExternal, "GrpcServer.portExternal"),
-      optToValidated(confSoft.grpc.portInternal, "GrpcServer.portInternal")
+      toValidated(_.grpc.host, "GrpcServer.host"),
+      toValidated(_.grpc.socket, "GrpcServer.socket"),
+      toValidated(_.grpc.portExternal, "GrpcServer.portExternal"),
+      toValidated(_.grpc.portInternal, "GrpcServer.portInternal")
     ).mapN(Configuration.GrpcServer.apply)
 
   private def parseTls(
-      default: ConfigurationSoft,
-      confSoft: ConfigurationSoft
+      implicit
+      default: DefaultConf,
+      conf: ConfigurationSoft
   ): ValidatedNel[String, Configuration.Tls] =
     (
-      optToValidated(default.server.dataDir, "Default Server.dataDir"),
-      optToValidated(confSoft.server.dataDir, "Server.dataDir"),
-      optToValidated(confSoft.tls.certificate, "Default Tls.certificate"),
-      optToValidated(confSoft.tls.key, "Default Tls.key"),
-      optToValidated(
-        adjustPath(confSoft, confSoft.tls.certificate, default),
-        "Tls.certificate"
-      ),
-      optToValidated(adjustPath(confSoft, confSoft.tls.key, default), "Tls.key"),
-      optToValidated(confSoft.tls.secureRandomNonBlocking, "Tls.secureRandomNonBlocking")
+      default.c.server.dataDir.fold("Default Server.dataDir".invalidNel[Path])(_.validNel[String]),
+      toValidated(_.server.dataDir, "Server.dataDir"),
+      default.c.tls.certificate
+        .fold("Default Tls.certificate".invalidNel[Path])(_.validNel[String]),
+      default.c.tls.key.fold("Default Tls.key".invalidNel[Path])(_.validNel[String]),
+      toValidated(_.tls.certificate, "Tls.certificate"),
+      toValidated(_.tls.key, "Tls.key"),
+      toValidated(_.tls.secureRandomNonBlocking, "Tls.secureRandomNonBlocking")
     ).mapN(
       (
           defaultDataDir,
@@ -233,115 +242,106 @@ object Configuration {
     )
 
   private def parseCasper(
-      default: ConfigurationSoft,
-      confSoft: ConfigurationSoft
+      implicit
+      default: DefaultConf,
+      conf: ConfigurationSoft
   ): ValidatedNel[String, CasperConf] =
     (
-      confSoft.casper.validatorPublicKey.validNel[String],
-      confSoft.casper.validatorPrivateKey
+      conf.casper.validatorPublicKey.validNel[String],
+      conf.casper.validatorPrivateKey
         .map(_.asLeft[Path])
-        .orElse(confSoft.casper.validatorPrivateKeyPath.map(_.asRight[String]))
+        .orElse(conf.casper.validatorPrivateKeyPath.map(_.asRight[String]))
         .validNel[String],
-      optToValidated(confSoft.casper.validatorSigAlgorithm, "Casper.sigAlgorithm"),
-      optToValidated(
-        adjustPath(confSoft, confSoft.casper.bondsFile, default),
-        "Casper.bondsFile"
-      ),
-      confSoft.casper.knownValidatorsFile.validNel[String],
-      optToValidated(confSoft.casper.numValidators, "Casper.numValidators"),
-      optToValidated(
-        combineWithDataDir(confSoft, confSoft.casper.genesisPath),
-        "Casper.genesisPath"
-      ),
-      optToValidated(
-        adjustPath(confSoft, confSoft.casper.walletsFile, default),
-        "Casper.walletsFile"
-      ),
-      optToValidated(confSoft.casper.minimumBond, "Casper.minimumBond"),
-      optToValidated(confSoft.casper.maximumBond, "Casper.maximumBond"),
-      optToValidated(confSoft.casper.hasFaucet, "Casper.hasFaucet"),
-      optToValidated(confSoft.casper.requiredSigs, "Casper.requiredSigs"),
-      optToValidated(confSoft.casper.shardId, "Casper.shardId"),
-      optToValidated(confSoft.server.standalone, "Server.standalone"),
-      optToValidated(confSoft.casper.approveGenesis, "Casper.approveGenesis"),
-      optToValidated(
-        confSoft.casper.approveGenesisInterval,
-        "Casper.approveGenesisInterval"
-      ),
-      optToValidated(
-        confSoft.casper.approveGenesisDuration,
-        "Casper.approveGenesisDuration"
-      ),
-      confSoft.casper.deployTimestamp.validNel[String]
+      toValidated(_.casper.validatorSigAlgorithm, "Casper.sigAlgorithm"),
+      toValidated(_.casper.bondsFile, "Casper.bondsFile"),
+      conf.casper.knownValidatorsFile.validNel[String],
+      toValidated(_.casper.numValidators, "Casper.numValidators"),
+      toValidated(_.casper.genesisPath.withDataDir, "Casper.genesisPath"),
+      toValidated(_.casper.walletsFile, "Casper.walletsFile"),
+      toValidated(_.casper.minimumBond, "Casper.minimumBond"),
+      toValidated(_.casper.maximumBond, "Casper.maximumBond"),
+      toValidated(_.casper.hasFaucet, "Casper.hasFaucet"),
+      toValidated(_.casper.requiredSigs, "Casper.requiredSigs"),
+      toValidated(_.casper.shardId, "Casper.shardId"),
+      toValidated(_.server.standalone, "Server.standalone"),
+      toValidated(_.casper.approveGenesis, "Casper.approveGenesis"),
+      toValidated(_.casper.approveGenesisInterval, "Casper.approveGenesisInterval"),
+      toValidated(_.casper.approveGenesisDuration, "Casper.approveGenesisDuration"),
+      conf.casper.deployTimestamp.validNel[String]
     ).mapN(CasperConf.apply)
 
   private def parseBlockStorage(
-      default: ConfigurationSoft,
-      confSoft: ConfigurationSoft
+      implicit
+      default: DefaultConf,
+      conf: ConfigurationSoft
   ): ValidatedNel[String, LMDBBlockStore.Config] =
     (
-      optToValidated(combineWithDataDir(confSoft, confSoft.lmdb.path), "Lmdb.path"),
-      optToValidated(confSoft.lmdb.blockStoreSize, "Lmdb.blockStoreSize"),
-      optToValidated(confSoft.lmdb.maxDbs, "Lmdb.maxDbs"),
-      optToValidated(confSoft.lmdb.maxReaders, "Lmdb.maxReaders"),
-      optToValidated(confSoft.lmdb.useTls, "Lmdb.useTls")
+      toValidated(_.lmdb.path.withDataDir, "Lmdb.path"),
+      toValidated(_.lmdb.blockStoreSize, "Lmdb.blockStoreSize"),
+      toValidated(_.lmdb.maxDbs, "Lmdb.maxDbs"),
+      toValidated(_.lmdb.maxReaders, "Lmdb.maxReaders"),
+      toValidated(_.lmdb.useTls, "Lmdb.useTls")
     ).mapN(LMDBBlockStore.Config.apply)
 
   private def parseBlockDagStorage(
-      default: ConfigurationSoft,
-      confSoft: ConfigurationSoft
+      implicit
+      default: DefaultConf,
+      conf: ConfigurationSoft
   ): ValidatedNel[String, BlockDagFileStorage.Config] =
     (
-      optToValidated(
-        combineWithDataDir(confSoft, confSoft.blockstorage.latestMessagesLogPath),
+      toValidated(
+        _.blockstorage.latestMessagesLogPath.withDataDir,
         "BlockDagFileStorage.latestMessagesLogPath"
       ),
-      optToValidated(
-        combineWithDataDir(confSoft, confSoft.blockstorage.latestMessagesCrcPath),
+      toValidated(
+        _.blockstorage.latestMessagesCrcPath.withDataDir,
         "BlockDagFileStorage.latestMessagesCrcPath"
       ),
-      optToValidated(
-        combineWithDataDir(confSoft, confSoft.blockstorage.blockMetadataLogPath),
+      toValidated(
+        _.blockstorage.blockMetadataLogPath.withDataDir,
         "BlockDagFileStorage.blockMetadataLogPath"
       ),
-      optToValidated(
-        combineWithDataDir(confSoft, confSoft.blockstorage.blockMetadataCrcPath),
+      toValidated(
+        _.blockstorage.blockMetadataCrcPath.withDataDir,
         "BlockDagFileStorage.blockMetadataCrcPath"
       ),
-      optToValidated(
-        combineWithDataDir(confSoft, confSoft.blockstorage.checkpointsDirPath),
+      toValidated(
+        _.blockstorage.checkpointsDirPath.withDataDir,
         "BlockDagFileStorage.checkpointsDirPath"
       ),
-      optToValidated(
-        confSoft.blockstorage.latestMessagesLogMaxSizeFactor,
+      toValidated(
+        _.blockstorage.latestMessagesLogMaxSizeFactor,
         "BlockDagFileStorage.latestMessagesLogMaxSizeFactor"
       )
     ).mapN(BlockDagFileStorage.Config.apply)
 
-  private def optToValidated[A](opt: Option[A], fieldName: String): ValidatedNel[String, A] =
-    opt.fold(s"$fieldName is not defined".invalidNel[A])(_.validNel[String])
+  private[configuration] def toValidated[A](
+      selectField: ConfigurationSoft => Option[A],
+      fieldName: String
+  )(
+      implicit
+      ev: A <:!< ConfigurationSoft.RelativePath,
+      c: ConfigurationSoft,
+      d: DefaultConf
+  ): ValidatedNel[String, A] = {
+    def adjustPath(path: Path): Option[Path] =
+      for {
+        defaultDataDir <- d.c.server.dataDir
+        dataDir        <- c.server.dataDir
+        newPath = path.toAbsolutePath.toString
+          .replace(defaultDataDir.toAbsolutePath.toString, dataDir.toAbsolutePath.toString)
+      } yield Paths.get(newPath)
 
-  private[configuration] def adjustPath(
-      conf: ConfigurationSoft,
-      pathToCheck: Option[Path],
-      default: ConfigurationSoft
-  ): Option[Path] =
-    adjustPathAsString(conf, pathToCheck.map(_.toAbsolutePath.toString), default).map(Paths.get(_))
+    selectField(c)
+      .flatMap {
+        case p: Path => adjustPath(p).asInstanceOf[Option[A]]
+        case v       => Some(v)
+      }
+      .fold(s"$fieldName is not defined".invalidNel[A])(_.validNel[String])
+  }
 
   private[configuration] def combineWithDataDir(
-      conf: ConfigurationSoft,
-      relativePath: String
-  ): Option[Path] =
-    conf.server.dataDir.map(_.resolve(relativePath))
-
-  private[configuration] def adjustPathAsString(
-      conf: ConfigurationSoft,
-      pathToCheck: Option[String],
-      default: ConfigurationSoft
-  ): Option[String] =
-    for {
-      defaultDataDir <- default.server.dataDir
-      dataDir        <- conf.server.dataDir
-      path           <- pathToCheck
-    } yield path.replace(defaultDataDir.toAbsolutePath.toString, dataDir.toAbsolutePath.toString)
+      relativePath: ConfigurationSoft => String
+  )(implicit c: ConfigurationSoft): ConfigurationSoft => Option[Path] =
+    _ => c.server.dataDir.map(_.resolve(relativePath(c)))
 }

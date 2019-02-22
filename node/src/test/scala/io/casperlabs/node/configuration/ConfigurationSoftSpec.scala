@@ -18,7 +18,6 @@ import shapeless.labelled.FieldType
 import shapeless.ops.hlist._
 
 import scala.concurrent.duration._
-import scala.reflect.{classTag, ClassTag}
 
 class ConfigurationSoftSpec
     extends FunSuite

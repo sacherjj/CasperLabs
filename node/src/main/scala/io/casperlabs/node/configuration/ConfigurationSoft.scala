@@ -3,7 +3,6 @@ package io.casperlabs.node.configuration
 import java.nio.file.Path
 
 import cats.data.ValidatedNel
-import cats.syntax.apply._
 import cats.syntax.either._
 import io.casperlabs.comm.PeerNode
 import io.casperlabs.shared.{Merge, StoreType}
@@ -32,6 +31,11 @@ case class ConfigurationSoft(
 }
 
 private[configuration] object ConfigurationSoft {
+  private[configuration] case class RelativePath(p: String) extends AnyVal {
+    def withDataDir(implicit c: ConfigurationSoft): Option[Path] =
+      c.server.dataDir.map(_.resolve(p))
+  }
+
   private[configuration] case class Server(
       host: Option[String],
       port: Option[Int],
@@ -56,17 +60,26 @@ private[configuration] object ConfigurationSoft {
       maxReaders: Option[Int],
       useTls: Option[Boolean]
   ) {
-    val path: String = "casper-block-store"
+    val path: RelativePath = RelativePath("casper-block-store")
   }
 
   private[configuration] case class BlockDagFileStorage(
       latestMessagesLogMaxSizeFactor: Option[Int]
   ) {
-    val latestMessagesLogPath: String = "casper-block-dag-file-storage-latest-messages-log"
-    val latestMessagesCrcPath: String = "casper-block-dag-file-storage-latest-messages-crc"
-    val blockMetadataLogPath: String  = "casper-block-dag-file-storage-block-metadata-log"
-    val blockMetadataCrcPath: String  = "casper-block-dag-file-storage-block-metadata-crc"
-    val checkpointsDirPath: String    = "casper-block-dag-file-storage-checkpoints"
+    val latestMessagesLogPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-latest-messages-log"
+    )
+    val latestMessagesCrcPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-latest-messages-crc"
+    )
+    val blockMetadataLogPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-block-metadata-log"
+    )
+    val blockMetadataCrcPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-block-metadata-crc"
+    )
+    val checkpointsDirPath: RelativePath =
+      RelativePath("casper-block-dag-file-storage-checkpoints")
   }
 
   private[configuration] case class GrpcServer(
@@ -101,7 +114,7 @@ private[configuration] object ConfigurationSoft {
       approveGenesisDuration: Option[FiniteDuration],
       deployTimestamp: Option[Long]
   ) {
-    val genesisPath: String = "genesis"
+    val genesisPath: RelativePath = RelativePath("genesis")
   }
 
   private[configuration] case class Metrics(
