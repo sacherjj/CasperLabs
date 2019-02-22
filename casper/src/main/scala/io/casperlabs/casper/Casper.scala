@@ -5,12 +5,7 @@ import cats.{Applicative, Monad}
 import cats.implicits._
 import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{
-  BlockDagRepresentation,
-  BlockDagStorage,
-  BlockMetadata,
-  BlockStore
-}
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util._

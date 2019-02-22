@@ -5,7 +5,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.blockstorage.{BlockDagStorage, BlockMetadata, BlockStore}
+import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper._
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
