@@ -160,8 +160,9 @@ test:
 	@# This command has a --no-build paramter which could speed it up. If RPM already built it, we can add it.
 	cd $* && cargo deb --no-build
 
-	#FIXME: Figure out what --input and --output should be
-	#cd $* && cargo-tarball --help
+	@#FIXME: Figure out what --input and --output should be
+	@# Alternatively we could use execution-engine/target/release/rpmbuild/SOURCES/casperlabs-engine-grpc-server-0.1.0.tar.gz
+	@#cd $* && cargo-tarball --help
 
 	mkdir -p $(dir $@) && touch $@
 
