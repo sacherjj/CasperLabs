@@ -91,8 +91,8 @@ where
         &self,
         module_bytes: &[u8],
         address: [u8; 20],
-        timestamp: i64,
-        nonce: i64,
+        timestamp: u64,
+        nonce: u64,
         prestate_hash: [u8; 32],
         gas_limit: &u64,
     ) -> Result<ExecutionResult, RootNotFound> {
