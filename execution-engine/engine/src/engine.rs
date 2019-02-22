@@ -72,12 +72,12 @@ impl From<ExecutionError> for Error {
     }
 }
 
-impl<G, R> EngineState<R, G>
+impl<H, R> EngineState<R, H>
 where
-    G: History<R>,
+    H: History<R>,
     R: DbReader,
 {
-    pub fn new(state: G) -> EngineState<R, G> {
+    pub fn new(state: H) -> EngineState<R, H> {
         EngineState {
             state: Mutex::new(state),
             wasm_costs: WasmCosts::new(),
