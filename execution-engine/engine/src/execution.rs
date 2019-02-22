@@ -151,8 +151,8 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         module: Module,
         gas_limit: &'a u64,
         account_addr: [u8; 20],
-        nonce: i64,
-        timestamp: i64,
+        nonce: u64,
+        timestamp: u64,
         context: RuntimeContext<'a>,
     ) -> Self {
         let rng = create_rng(&account_addr, timestamp, nonce);
@@ -853,13 +853,13 @@ fn sub_call<R: DbReader>(
     }
 }
 
-fn create_rng(account_addr: &[u8; 20], timestamp: i64, nonce: i64) -> ChaChaRng {
+fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let hasher = VarBlake2b::new(32).unwrap();
     data.extend(account_addr);
-    LittleEndian::write_i64(&mut data, timestamp);
-    LittleEndian::write_i64(&mut data, nonce);
+    LittleEndian::write_u64(&mut data, timestamp);
+    LittleEndian::write_u64(&mut data, nonce);
     hasher.variable_result(|hash| seed.clone_from_slice(hash));
     ChaChaRng::from_seed(seed)
 }
@@ -867,8 +867,8 @@ fn create_rng(account_addr: &[u8; 20], timestamp: i64, nonce: i64) -> ChaChaRng 
 pub fn exec<R: DbReader>(
     parity_module: Module,
     account_addr: [u8; 20],
-    timestamp: i64,
-    nonce: i64,
+    timestamp: u64,
+    nonce: u64,
     gas_limit: &u64,
     tc: &mut TrackingCopy<R>,
 ) -> Result<ExecutionEffect, Error> {

@@ -83,8 +83,8 @@ fn main() {
         .expect("Provided gas limit value is not u64.");
 
     // TODO: move to arg parser
-    let timestamp: i64 = 100000;
-    let nonce: i64 = 1;
+    let timestamp: u64 = 100000;
+    let nonce: u64 = 1;
 
     //let path = std::path::Path::new("./tmp/");
     //TODO: Better error handling?

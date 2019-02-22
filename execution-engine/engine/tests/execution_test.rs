@@ -52,8 +52,8 @@ impl MockEnv {
     pub fn runtime<'a>(
         &'a mut self,
         address: [u8; 20],
-        timestamp: i64,
-        nonce: i64,
+        timestamp: u64,
+        nonce: u64,
     ) -> Runtime<'a, InMemGS> {
         let context = mock_context(&mut self.uref_lookup, &self.account, self.key);
         Runtime::new(
@@ -163,8 +163,8 @@ fn gs_write<'a, R: DbReader>(
 #[test]
 fn valid_uref() {
     let addr = [0u8; 20];
-    let timestamp: i64 = 1000;
-    let nonce: i64 = 1;
+    let timestamp: u64 = 1000;
+    let nonce: u64 = 1;
     let (key, account) = mock_account(addr);
     let tc = mock_tc(key, &account);
     let mut env = MockEnv::new(key, account, 0, tc);
@@ -189,8 +189,8 @@ fn valid_uref() {
 #[test]
 fn forged_uref() {
     let addr = [0u8; 20];
-    let timestamp: i64 = 1000;
-    let nonce: i64 = 1;
+    let timestamp: u64 = 1000;
+    let nonce: u64 = 1;
     let (key, account) = mock_account(addr);
     let tc = mock_tc(key, &account);
     let mut env = MockEnv::new(key, account, 0, tc);
