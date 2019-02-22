@@ -84,15 +84,15 @@ pipeline:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  ## run-integration-tests:
-  ##   <<: *sbtenv
-  ##   commands:
-  ##     - python3 -m pip install pipenv dataclasses typing_extensions
-  ##     - cd integration-testing
-  ##     - ./run_tests.sh
-  ##   volumes:
-  ##     - /var/run/docker.sock:/var/run/docker.sock
-  ##     - /tmp:/tmp
+  run-integration-tests:
+    <<: *sbtenv
+    commands:
+      - python3 -m pip install pipenv dataclasses typing_extensions
+      - cd integration-testing
+      - ./run_tests.sh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp:/tmp
 
   # push
 
