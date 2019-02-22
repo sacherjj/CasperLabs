@@ -9,7 +9,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
 0.   Preamble
 
      This license, the CasperLabs Open Source License v1.0 (COSLv1.0), is an
-     open source license that modifies the Apache 2.0 License (“Apache 2.0”; see
+     open source license that modifies the Apache 2.0 License ("Apache 2.0"; see
      https://www.apache.org/licenses/LICENSE-2.0) to be free (libre) open source
      software (FLOSS) compliant and to extend to the decentralized application
      ecosystem.  FLOSS philosophy is incorporated in this COSLv1.0 not only by
@@ -22,23 +22,23 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
 1.   Definitions
 
      This COSLv1.0 incorporates by reference, the definitions within section 1,
-     “Definitions,” of the Apache 2.0 License.
+     "Definitions," of the Apache 2.0 License.
 
 2.   Bifurcation of Subject Matter
 
      This COSLv1.0 applies to a subject matter code base.  The subject matter
-     code base is composed of both object and source code embodiments (“Novel
-     Code”) and legacy code subject to the Apache 2.0 License (“Legacy Code”) as
+     code base is composed of both object and source code embodiments ("Novel
+     Code") and legacy code subject to the Apache 2.0 License ("Legacy Code") as
      defined in this section 2.
 
      Fork Demarcation: The subject matter code of this COSLv1.0 may be
      demarcated by a code share fork made on Midnight GMT, December 2, 2018
-     (“Fork Demarcation Time”).
+     ("Fork Demarcation Time").
 
      Subject Matter Code Base: The subject matter of this COSLv1.0 is composed
      of all files in the GitHub share initially committed to
      https://github.com/casperlabs or copies made on or after the Fork
-     Demarcation Time (“Subject Matter Code”).  (See initial commit at:
+     Demarcation Time ("Subject Matter Code").  (See initial commit at:
      https://github.com/CasperLabs/CasperLabs/commit/9c83ec3ecaa955dacfa3e42054d05098fc32bfc7).
 
      Novel Code Base: The scope of Novel Code is all additions or modifications
@@ -56,10 +56,10 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
      applies to the Novel Code, is not to be construed to relicense, modify, or
      otherwise disturb the Apache 2.0 License of the Legacy Code.  This license,
      the COSLv1.0, is an extension of the Apache 2.0 License under its section 4
-     which provides for “additional or different license terms and conditions
-     for use, reproduction, or distribution.”  Furthermore, per the Apache 2.0
+     which provides for "additional or different license terms and conditions
+     for use, reproduction, or distribution."  Furthermore, per the Apache 2.0
      License under its section 9, a distributor of the Subject Matter Code may
-     solely accept “warrantee or additional liability” of the distributed
+     solely accept "warrantee or additional liability" of the distributed
      Subject Matter Code.
 
 4.   Express Disclaimer of Contributions Under the Apache 2.0 License
@@ -75,8 +75,8 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
 5.   Contributions are Under COSLv1.0 and are Subject to Relicense
 
      All contributions to Novel Code will be under this COSLv1.0 and are subject
-     to the contributor executing a relicensing consent (“Relicensing Consent”)
-     which provides that contributor’s agreement to allow their contributions to
+     to the contributor executing a relicensing consent ("Relicensing Consent")
+     which provides that contributor's agreement to allow their contributions to
      be subject to updates to this COSLv1.0 or relicensing in the future,
      provided that the updated COSLv1.0 or new license is an open source license
      and is consistent with the present COSLv1.0 license including the copyleft
@@ -86,11 +86,11 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
 
      The COSLv1.0 is a license intended to benefit the open source community in
      the context of the distributed and decentralized platform and decentralized
-     applications (“Decentralized Applications” or “DApps”) based on a
+     applications ("Decentralized Applications" or "DApps") based on a
      distributed ledger built from the Subject Matter Code.  Licensees of the
      Subject Matter Code under this COSLv1.0 include the following parties:
 
-     Node Operators: A node operator (“Node Operator”) is a party that
+     Node Operators: A node operator ("Node Operator") is a party that
      contributes compute processing for a decentralized platform with a
      computing node where at least a portion of a distributed ledger resides on
      the node.  Node Operators include distributed ledger validators including
@@ -98,43 +98,43 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
      of Stake decentralized platforms.
 
      Decentralized Application Developers: A decentralized application developer
-     (“Decentralized Application Developer” or “DApp Developer”) is a party that
+     ("Decentralized Application Developer" or "DApp Developer") is a party that
      creates or modifies a DApp.  Where a DApp Developer is developing a DApp in
      the scope of work for a company or is otherwise contractually bound to
      develop a DApp for a company, that company is also a DApp Developer.
 
      Decentralized Application Distributor: A decentralized application
-     distributor (“Decentralized Application Distributor” or “DApp Distributor”)
+     distributor ("Decentralized Application Distributor" or "DApp Distributor")
      is a party that distributes a DApp either freely or for compensation.
 
      Decentralized Application Users: A decentralized application user
-     (“Decentralized Application User” or “DApp User”) is a party who is an end
+     ("Decentralized Application User" or "DApp User") is a party who is an end
      user of a DApp.  Where an end user uses a DApp in the scope of work for a
      company or is otherwise contractually bound to a company to use a DApp, the
      company is also a DApp User.
 
      Decentralized Platform Developers: A decentralized platform developer
-     (“Decentralized Platform Developer”) is a party that contributes code to
+     ("Decentralized Platform Developer") is a party that contributes code to
      software that enables the decentralized maintenance of a distributed
      ledger, development tools to develop DApps on that distributed ledger, or
      tools to administer a distributed ledger or applications built on the
      distributed ledger.
 
-     Token Issuers: A token issuer (“Token Issuer”) is a party, including a
+     Token Issuers: A token issuer ("Token Issuer") is a party, including a
      party other than the COSLv1.0 Licensor, that releases and manages quanta of
-     value as managed by the distributed ledger (“tokens”) to be used to
+     value as managed by the distributed ledger ("tokens") to be used to
      transfer value between parties.  Tokens may be used to measure work effort,
      such as amount of compute power estimated to be used to validate
      transactions on a distributed ledger. Where the tokens are hashed by the
      distributed ledger and are in a format suitable for use as a currency,
-     those tokens may be referred to as a “cryptocurrency.”
+     those tokens may be referred to as a "cryptocurrency."
 
-     Token Holders: A token holder (“Token Holder”) is a party the retains
+     Token Holders: A token holder ("Token Holder") is a party the retains
      tokens either for holding, or for use as currency or in distributed
      ledger-based transactions.
 
-     Decentralized Network Users: A decentralized network user (“Decentralized
-     Network User”) is a general term for any party that avails itself to a
+     Decentralized Network Users: A decentralized network user ("Decentralized
+     Network User") is a general term for any party that avails itself to a
      distributed ledger, or any application, tool, or token using the
      distributed ledger, or any application, tool, or token that administers,
      maintains, or develops any application, tool, or token using the
@@ -143,20 +143,20 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
      All the above parties defined in this section 6(a)-(h), in their context as
      users of the Subject Matter Code and Licensees under this COSLv1.0 and any
      other parties who access the Subject Matter Code are collectively known as
-     “Decentralized Ecosystem Parties”.
+     "Decentralized Ecosystem Parties".
 
 7.   User Classes
 
      The COSLv1.0 Licensor and the Decentralized Ecosystem Parties as set forth
      in section 6 of this COSLv1.0 solely comprise the members of a community
-     (“Community”) around the Subject Matter Code.  The COSLv1.0 Licensor is the
+     ("Community") around the Subject Matter Code.  The COSLv1.0 Licensor is the
      granting party of rights to the Subject Matter Code and the Decentralized
      Ecosystem Parties are the receiving party of rights to the Subject Matter
      Code.  The Decentralized Ecosystem Parties all belong to one and only one
-     of the following two user classes (“User Classes”):
+     of the following two user classes ("User Classes"):
 
-     Proprietary User Class: The Proprietary User Class (“Proprietary User
-     Class”) is a Decentralized Ecosystem Party that performs, or permits to
+     Proprietary User Class: The Proprietary User Class ("Proprietary User
+     Class") is a Decentralized Ecosystem Party that performs, or permits to
      occur, any of the following acts or uses:
 
      Co-opting the Development of the Decentralized Platform from the Community:
@@ -192,8 +192,8 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
      underlying cryptocurrency of a distributed ledger, resulting in
      interference of the economic operation of the distributed ledger.
 
-     Open Source User Class: The Open Source User Class (“Open Source User
-     Class”) is any Decentralized Ecosystem Party that is not in a Proprietary
+     Open Source User Class: The Open Source User Class ("Open Source User
+     Class") is any Decentralized Ecosystem Party that is not in a Proprietary
      User Class.
 
 8.   Governance and Conversion
@@ -202,9 +202,9 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
      cooperation with the Community as set forth in this COSLv1.0.  The
      Community includes any Decentralized Ecosystem Party as set forth in
      section 6 of this COSLv1.0.  Specifically, the COSLv1.0 Licensor will
-     designate a public, transparent online forum (“Community Forum”) associated
+     designate a public, transparent online forum ("Community Forum") associated
      with the Subject Matter Code and will designate one or more moderators
-     (“Community Forum Moderators”) to monitor and moderate the Community Forum.
+     ("Community Forum Moderators") to monitor and moderate the Community Forum.
      The Community Forum to receives requests and notifications from the
      Community, including proposed feature additions, proposed code changes,
      additions or deletions, and Community member status and user class.  The
@@ -218,7 +218,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
      under this COSLv1.0 are subject to membership of the Open Source User
      Class.  Where a party of the Open Source User Class performs an act or use
      as set forth in section 7(a) of this COSLv1.0, that party converts to the
-     Proprietary User Class (“Conversion”).  Where a party contemplates
+     Proprietary User Class ("Conversion").  Where a party contemplates
      performing an act that might be construed as proprietary, that party may
      demonstrate good faith by providing a sixty (60) calendar day advance
      notice to the COSLv1.0 Licensor and the Community, by sending a notice via
@@ -305,13 +305,13 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
      compensation terms, representations and warrantees, may be added beyond
      COSLv1.0 license terms provided they are consistent with COSLv1.0 and free
      (libre) and open source principles, and do not prejudice the COSLv1.0
-     Licensor’s use of Novel code.  Contributors to the Novel Code are to be
+     Licensor's use of Novel code.  Contributors to the Novel Code are to be
      fully indemnified by any party creating additional conditions.
 
 11.  Forks
 
      Community friendly copies of all or part of the Subject Matter Code for
-     separate development from the original Subject Matter Code tree (“Forks”)
+     separate development from the original Subject Matter Code tree ("Forks")
      are supported by this COSLv1.0, under the following conditions:
 
      Propagation of COSLv1.0 Licensing Principles: Code in a Fork is to be
@@ -338,7 +338,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
 12.  Attribution and Marking
 
      Reproduction and distribution of the Subject Matter Code, in full or in
-     part, original or modified, (“Subject Matter Code Distribution”) is subject
+     part, original or modified, ("Subject Matter Code Distribution") is subject
      to the following conditions:
 
      Licensee shall provide all recipients of the Subject Matter Code
@@ -393,7 +393,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION AND DISTRIBUTION
 
      Copyright [yyyy] [name of copyright owner (Legacy Code)]
 
-     Licensed under the Apache License, Version 2.0 (“License”); you may not use
+     Licensed under the Apache License, Version 2.0 ("License"); you may not use
      this file except in compliance with the License. You may obtain a copy of
      the License at
 
