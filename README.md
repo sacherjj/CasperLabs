@@ -85,6 +85,10 @@ TBD
 
 For building of CasperLabs, please refer to the [Developer guide](DEVELOPER.md)
 
+## Validator guide
+
+For running a CasperLabs node, please refer to the [Validator guide](VALIDATOR.md)
+
 ### Caveats
 
 ### Filing Issues
