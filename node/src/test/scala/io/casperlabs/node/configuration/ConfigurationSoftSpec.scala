@@ -14,6 +14,8 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import shapeless._
+import shapeless.labelled.FieldType
+import shapeless.ops.hlist._
 
 import scala.concurrent.duration._
 import scala.reflect.{classTag, ClassTag}
@@ -23,6 +25,9 @@ class ConfigurationSoftSpec
     with Matchers
     with BeforeAndAfterEach
     with GeneratorDrivenPropertyChecks {
+  type InnerFieldName = String
+  type UpperFieldName = String
+
   val configFilename: String = s"test-configuration.toml"
 
   implicit val pathGen: Arbitrary[file.Path] = Arbitrary {
@@ -237,53 +242,24 @@ class ConfigurationSoftSpec
         .replaceAll("([a-z\\d])([A-Z])", "$1-$2")
         .toLowerCase
 
-    def extractTomlTable[A <: Product: ClassTag](tableName: String, caseClass: A): String =
-      s"[$tableName]" + "\n" + classTag[A].runtimeClass.getDeclaredFields
-        .filterNot(_.isSynthetic)
-        .map(field => dashify(field.getName))
-        .zip(
-          caseClass.productIterator.toSeq
-            .map {
-              case Some(x) => x
-              case None    => None
-            }
-            .map {
-              case s: String               => s""""$s""""
-              case d: FiniteDuration       => s""""${d.toString.replace(" ", "")}""""
-              case _: StoreType.Mixed.type => s""""mixed""""
-              case _: StoreType.LMDB.type  => s""""lmdb""""
-              case _: StoreType.InMem.type => s""""inmem""""
-              case p: PeerNode             => s""""${p.toString}""""
-              case p: java.nio.file.Path   => s""""${p.toString}""""
-              case x                       => x.toString
-            }
-        )
-        .filterNot(_._2 == "None")
-        .map {
-          case (k, v) =>
-            s"$k = $v"
-        }
-        .mkString("\n")
-
-    s"""
-      |${extractTomlTable("server", conf.server)}
-      |
-      |${extractTomlTable("grpc", conf.grpc)}
-      |
-      |${extractTomlTable("tls", conf.tls)}
-      |
-      |${extractTomlTable("casper", conf.casper)}
-      |
-      |${extractTomlTable("lmdb", conf.lmdb)}
-      |
-      |${extractTomlTable("blockstorage", conf.blockstorage)}
-      |
-      |${extractTomlTable("metrics", conf.metrics)}
-      |
-      |${extractTomlTable("influx", conf.influx)}
-      |
-      |${extractTomlTable("influx-auth", conf.influxAuth)}
-    """.stripMargin
+    val stringBuilder = reduce(conf, new StringBuilder) {
+      case s: String               => s""""$s""""
+      case d: FiniteDuration       => s""""${d.toString.replace(" ", "")}""""
+      case _: StoreType.Mixed.type => s""""mixed""""
+      case _: StoreType.LMDB.type  => s""""lmdb""""
+      case _: StoreType.InMem.type => s""""inmem""""
+      case p: PeerNode             => s""""${p.toString}""""
+      case p: java.nio.file.Path   => s""""${p.toString}""""
+      case x                       => x.toString
+    } { (sb, upperFieldName, fields) =>
+      sb.append(s"[${dashify(upperFieldName)}]\n")
+      fields.foreach {
+        case (k, v) =>
+          sb.append(s"${dashify(k)} = $v\n")
+      }
+      sb.append("\n")
+    }
+    stringBuilder.toString()
   }
 
   def toCli(conf: ConfigurationSoft): List[String] =
@@ -301,54 +277,73 @@ class ConfigurationSoftSpec
       .toList
 
   def toEnvVars(conf: ConfigurationSoft): Map[String, String] = {
-    val serverPrefix       = "CL_SERVER_"
-    val grpcPrefix         = "CL_GRPC_"
-    val tlsPrefix          = "CL_TLS_"
-    val casperPrefix       = "CL_CASPER_"
-    val lmdbPrefix         = "CL_LMDB_"
-    val blockstoragePrefix = "CL_BLOCKSTORAGE_"
-    val metricsPrefix      = "CL_METRICS_"
-    val influxPrefix       = "CL_INFLUX_"
-    val influxAuthPrefix   = "CL_INFLUX_AUTH_"
-
     def snakify(s: String): String =
       s.replaceAll("([A-Z]+)([A-Z][a-z])", "$1_$2")
         .replaceAll("([a-z\\d])([A-Z])", "$1_$2")
         .toUpperCase
 
-    def extractKeyValue[A <: Product: ClassTag](prefix: String, caseClass: A) =
-      classTag[A].runtimeClass.getDeclaredFields
-        .filterNot(_.isSynthetic)
-        .map(_.getName)
-        .zip(
-          caseClass.productIterator.toSeq
-            .map {
-              case Some(x) => x
-              case None    => None
-            }
-        )
-        .map {
-          case (k, v) =>
-            val key = prefix + snakify(k)
-            key -> {
-              v.toString.replace(" ", "") match {
-                case x @ ("InMem" | "Mixed" | "LMDB") => x.toLowerCase
-                case x                                => x
-              }
-            }
+    reduce(conf, Map.empty[String, String])(_.toString.replace(" ", "") match {
+      case x @ ("InMem" | "Mixed" | "LMDB") => x.toLowerCase
+      case x                                => x
+    }) { (envVars, upperFieldName, innerFields) =>
+      envVars ++ innerFields.map {
+        case (k, v) =>
+          s"CL_${snakify(upperFieldName)}_${snakify(k)}" -> v
+      }
+    }
+  }
+
+  def reduce[Accumulator](conf: ConfigurationSoft, accumulator: Accumulator)(
+      innerFieldsMapper: Any => String
+  )(
+      reducer: (Accumulator, UpperFieldName, List[(InnerFieldName, String)]) => Accumulator
+  ): Accumulator = {
+
+    object toKeyValueMapper extends Poly1 {
+      implicit def caseAll[K <: Symbol, A](
+          implicit w: Witness.Aux[K]
+      ) =
+        at[FieldType[K, Option[A]]] { maybeField =>
+          val value: Option[String] = maybeField.map(v => innerFieldsMapper(v))
+          value.map { v =>
+            val k = w.value.name
+            (k, v)
+          }
         }
-        .filterNot(_._2 == "None")
-    List(
-      extractKeyValue(serverPrefix, conf.server),
-      extractKeyValue(grpcPrefix, conf.grpc),
-      extractKeyValue(tlsPrefix, conf.tls),
-      extractKeyValue(casperPrefix, conf.casper),
-      extractKeyValue(lmdbPrefix, conf.lmdb),
-      extractKeyValue(blockstoragePrefix, conf.blockstorage),
-      extractKeyValue(metricsPrefix, conf.metrics),
-      extractKeyValue(influxPrefix, conf.influx),
-      extractKeyValue(influxAuthPrefix, conf.influxAuth)
-    ).flatten.toMap
+    }
+
+    def mapToKeyValues[A <: Product, In <: HList, Out <: HList](
+        a: A,
+        gen: LabelledGeneric.Aux[A, In]
+    )(
+        implicit
+        m: Mapper.Aux[toKeyValueMapper.type, In, Out],
+        t: ToTraversable.Aux[Out, List, Option[(String, String)]]
+    ): List[(String, String)] =
+      gen.to(a).map(toKeyValueMapper).toList.flatten
+
+    object toEnvVarsReducer extends Poly2 {
+      implicit def caseGen[K <: Symbol, A <: Product, Repr1 <: HList, Repr2 <: HList](
+          implicit g: LabelledGeneric.Aux[A, Repr1],
+          w: Witness.Aux[K],
+          m: Mapper.Aux[toKeyValueMapper.type, Repr1, Repr2],
+          t: ToTraversable.Aux[Repr2, List, Option[(String, String)]]
+      ) =
+        at[Accumulator, FieldType[K, A]] { (accumulator, product) =>
+          val name: String                   = w.value.name
+          val fields: List[(String, String)] = mapToKeyValues(product, g)
+          reducer(accumulator, name, fields)
+        }
+    }
+
+    def reduce[A <: Product, Repr <: HList](a: A)(
+        implicit g: LabelledGeneric.Aux[A, Repr],
+        f: LeftFolder.Aux[Repr, Accumulator, toEnvVarsReducer.type, Accumulator]
+    ): Accumulator = g.to(a).foldLeft(accumulator)(toEnvVarsReducer)
+
+    /*_*/
+    reduce(conf)
+    /*_*/
   }
 
   override protected def afterEach(): Unit = Files.deleteIfExists(Paths.get(configFilename))
