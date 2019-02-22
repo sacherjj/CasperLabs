@@ -32,12 +32,19 @@ if TYPE_CHECKING:
     from logging import Logger
     from threading import Event
 
+TAG = os.environ.get(
+    "DRONE_BUILD_NUMBER",
+    None)
+if TAG is None:
+    TAG = "latest"
+else:
+    TAG = "DRONE-" + TAG
 DEFAULT_IMAGE = os.environ.get(
     "DEFAULT_IMAGE",
-    "casperlabs-integration-testing:latest")
+    "casperlabs-integration-testing:{}".format(TAG))
 
-casperlabsnode_binary = '/opt/docker/bin/node'
-casperlabsnode_directory = "/var/lib/casperlabsnode"
+casperlabsnode_binary = '/opt/docker/bin/bootstrap'
+casperlabsnode_directory = "/root/.casperlabs"
 casperlabsnode_deploy_dir = "{}/deploy".format(casperlabsnode_directory)
 casperlabsnode_bonds_file = '{}/genesis/bonds.txt'.format(casperlabsnode_directory)
 casperlabsnode_certificate = '{}/node.certificate.pem'.format(casperlabsnode_directory)
@@ -225,9 +232,9 @@ class Node:
         try:
             logging.info("COMMAND {}".format(command))
             output = self.docker_client.containers.run(
-                image="io.casperlabs/client",
+                image="casperlabs/client:{}".format(TAG),
                 auto_remove=True,
-                name="client",
+                name="client-{}".format(TAG),
                 command=command,
                 network=self.network,
                 volumes=volumes
@@ -236,16 +243,13 @@ class Node:
             return output
         except ContainerError as err:
             logging.warning("EXITED code={} command='{}' output='{}'".format(err.exit_status, err.command, err.stderr))
-            if err.stderr is not None:
-                return err.stderr.decode("utf-8")
-            else:
-                return ""
+            raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
 
     def deploy(self, session_code: str, payment_code:str="payment.wasm",
-               from_address:str="0x01", gas_limit:int=1000000,
+               from_address:str="00000000000000000000", gas_limit:int=1000000,
                gas_price:int=1, nonce:int=0) -> str:
-        session_code_full_path = os.path.join(os.getcwd(), "resources", session_code)
-        payment_code_full_path = os.path.join(os.getcwd(), "resources", payment_code)
+        session_code_full_path = "/tmp/resources/{}".format(session_code)
+        payment_code_full_path = "/tmp/resources/{}".format(payment_code)
 
         command = " ".join([
             "--host",
@@ -358,9 +362,13 @@ def make_node(
     hosts_allow_file = make_tempfile("hosts-allow-{}".format(name), hosts_allow_file_content)
     hosts_deny_file = make_tempfile("hosts-deny-{}".format(name), "ALL: ALL")
 
+    # container_command_options['--server-data-dir'] = casperlabsnode_directory
+    # container_command_options['--casper-bonds-file'] = casperlabsnode_bonds_file
     command = make_container_command(container_command, container_command_options)
 
-    env = {}
+    env = {
+        'RUST_BACKTRACE':'full'
+    }
     java_options = os.environ.get('_JAVA_OPTIONS')
     if java_options is not None:
         env['_JAVA_OPTIONS'] = java_options
@@ -430,8 +438,8 @@ def make_bootstrap_node(
     container_name: Optional[str] = None,
     mount_dir: Optional[str] = None,
 ) -> Node:
-    key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
-    cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
+    key_file = "/tmp/resources/bootstrap_certificate/node.key.pem"
+    cert_file = "/tmp/resources/bootstrap_certificate/node.certificate.pem"
 
     name = "{node_name}.{network_name}".format(
         node_name='bootstrap' if container_name is None else container_name,
@@ -444,6 +452,7 @@ def make_bootstrap_node(
         "--casper-validator-public-key":   key_pair.public_key,
         "--casper-has-faucet":             "",
         "--server-host":                   name,
+        "--metrics-prometheus":            "",
     }
 
     if cli_options is not None:
@@ -497,6 +506,7 @@ def make_peer(
         "--casper-validator-private-key":  key_pair.private_key,
         "--casper-validator-public-key":   key_pair.public_key,
         "--casper-host":                   name,
+        "--prometheus":                    "",
     }
 
     container = make_node(

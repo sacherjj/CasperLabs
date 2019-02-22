@@ -2,11 +2,11 @@ package io.casperlabs.client
 import java.io.File
 import java.nio.file.Files
 
-import cats.Apply
+import cats.{Apply, Monad}
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.{BlockQuery, BlocksQuery, DeployData}
+import io.casperlabs.casper.protocol.{BlockQuery, BlocksQuery, DeployData, VisualizeDagQuery}
 
 import scala.util.Try
 
@@ -24,6 +24,12 @@ object DeployRuntime {
 
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
+
+  def visualizeDag[F[_]: Monad: Sync: DeployService](
+      depth: Int,
+      showJustificationLines: Boolean
+  ): F[Unit] =
+    gracefulExit(DeployService[F].visualizeDag(VisualizeDagQuery(depth, showJustificationLines)))
 
   def deployFileProgram[F[_]: Sync: DeployService](
       from: String,
@@ -61,13 +67,13 @@ object DeployRuntime {
     )
   }
 
-  private def gracefulExit[F[_]: Sync, A](program: F[Either[Throwable, String]]): F[Unit] =
+  private def gracefulExit[F[_]: Sync](program: F[Either[Throwable, String]]): F[Unit] =
     for {
       result <- Sync[F].attempt(program)
       _ <- result.joinRight match {
             case Left(ex) =>
               Sync[F].delay {
-                println(processError(ex).getMessage)
+                System.err.println(processError(ex).getMessage)
                 System.exit(1)
               }
             case Right(msg) => Sync[F].delay(println(msg))

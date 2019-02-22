@@ -13,12 +13,6 @@ object MultiParentCasperRef {
 
   def apply[F[_]](implicit ev: MultiParentCasperRef[F]): MultiParentCasperRef[F] = ev
 
-  private class MultiParentCasperRefImpl[F[_]](state: Ref[F, Option[MultiParentCasper[F]]])
-      extends MultiParentCasperRef[F] {
-    override def get: F[Option[MultiParentCasper[F]]]       = state.get
-    override def set(casper: MultiParentCasper[F]): F[Unit] = state.set(Some(casper))
-  }
-
   def of[F[_]: Sync]: F[MultiParentCasperRef[F]] = MaybeCell.of[F, MultiParentCasper[F]]
 
   // For usage in tests only
@@ -27,11 +21,14 @@ object MultiParentCasperRef {
 
   def withCasper[F[_]: Monad: Log: MultiParentCasperRef, A](
       f: MultiParentCasper[F] => F[A],
-      default: A
+      msg: String,
+      default: F[A]
   ): F[A] =
     MultiParentCasperRef[F].get flatMap {
       case Some(casper) => f(casper)
       case None =>
-        Log[F].warn(s"Casper instance was not available.").map(_ => default)
+        Log[F]
+          .warn(s"$msg. Casper instance was not available yet.")
+          .flatMap(_ => default)
     }
 }

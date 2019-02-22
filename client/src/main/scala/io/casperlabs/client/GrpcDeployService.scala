@@ -7,6 +7,8 @@ import io.casperlabs.casper.protocol._
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
+import scala.util.Either
+
 class GrpcDeployService(host: String, port: Int) extends DeployService[Task] with Closeable {
   private val DefaultMaxMessageSize = 256 * 1024 * 1024
 
@@ -37,6 +39,9 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
       else Left(new RuntimeException(response.status))
     }
 
+  def visualizeDag(q: VisualizeDagQuery): Task[Either[Throwable, String]] =
+    stub.visualizeDag(q).attempt.map(_.map(_.content))
+
   def showBlocks(q: BlocksQuery): Task[Either[Throwable, String]] =
     stub
       .showBlocks(q)
@@ -56,12 +61,6 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
 
         Right(bs.mkString("\n") + "\n" + showLength)
       }
-
-  def addBlock(b: BlockMessage): Task[Either[Throwable, String]] =
-    stub.addBlock(b).map { response =>
-      if (response.success) Right(response.message)
-      else Left(new RuntimeException(response.message))
-    }
 
   override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)

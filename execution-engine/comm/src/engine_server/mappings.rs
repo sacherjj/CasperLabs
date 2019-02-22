@@ -140,21 +140,15 @@ fn transform_to_ipc(tr: &storage::transform::Transform) -> super::ipc::Transform
             add.set_value(protobuf::RepeatedField::from_vec(keys));
             t.set_add_keys(add);
         }
-        storage::transform::Transform::Failure(f) => {
+        storage::transform::Transform::Failure(storage::transform::TypeMismatch {
+            expected,
+            found,
+        }) => {
             let mut fail = super::ipc::TransformFailure::new();
-            let mut stor_err = super::ipc::StorageError::new();
-            match f {
-                storage::Error::KeyNotFound { key } => {
-                    stor_err.set_key_not_found(key_to_ipc(key));
-                }
-                storage::Error::TypeMismatch { expected, found } => {
-                    let mut type_miss = super::ipc::StorageTypeMismatch::new();
-                    type_miss.set_expected(expected.to_string());
-                    type_miss.set_found(found.to_string());
-                    stor_err.set_type_mismatch(type_miss);
-                }
-            };
-            fail.set_error(stor_err);
+            let mut typemismatch_err = super::ipc::StorageTypeMismatch::new();
+            typemismatch_err.set_expected(expected.to_owned());
+            typemismatch_err.set_found(found.to_owned());
+            fail.set_error(typemismatch_err);
             t.set_failure(fail);
         }
     };
@@ -259,7 +253,7 @@ pub fn transform_entry_to_key_transform(
 }
 
 /// Transforms domain ExecutionEffect into gRPC ExecutionEffect.
-pub fn execution_effect_to_ipc(ee: storage::ExecutionEffect) -> super::ipc::ExecutionEffect {
+pub fn execution_effect_to_ipc(ee: storage::gs::ExecutionEffect) -> super::ipc::ExecutionEffect {
     let mut eff = super::ipc::ExecutionEffect::new();
     let ipc_ops: Vec<super::ipc::OpEntry> =
         ee.0.iter()

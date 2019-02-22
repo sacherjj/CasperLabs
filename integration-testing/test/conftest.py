@@ -113,9 +113,8 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
 
     # Using pre-generated validator key pairs by casperlabsnode. We do this because warning below  with python generated keys
     # WARN  io.casperlabs.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
-    validator_keys = [kp for kp in peers_keypairs[0:command_line_options_fixture.peer_count+1]]
+    validator_keys = [kp for kp in [bootstrap_keypair] + peers_keypairs[0:command_line_options_fixture.peer_count+1]]
     with temporary_bonds_txt_file(validator_keys) as bonds_file:
-        bootstrap_keypair = validator_keys[0]
         peers_keypairs=validator_keys[1:]
 
         context = TestingContext(

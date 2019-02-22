@@ -1,8 +1,10 @@
 [package]
-name = "common"
+name = "casperlabs-contract-ffi"
 version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>"]
 edition = "2018"
+description = "Library for developing CasperLabs smart contracts."
+license = "Apache-2.0"
 
 [features]
 default = []

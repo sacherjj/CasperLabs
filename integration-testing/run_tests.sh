@@ -8,7 +8,11 @@ fi
 
 export DEFAULT_IMAGE=casperlabs-integration-testing:$tag
 
+cp Dockerfile ..
+cp .dockerignore ..
 sed "s/io.casperlabs\/node:latest/io.casperlabs\/node:$tag/" Dockerfile |\
-	docker build -t $DEFAULT_IMAGE -f - .
-
+    docker build -t $DEFAULT_IMAGE -f - ..
+rm ../Dockerfile
+rm ../.dockerignore
+cp -r resources /tmp
 pipenv run py.test -v "$@"

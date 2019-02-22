@@ -1,18 +1,20 @@
 package io.casperlabs.comm.rp
 
-import Connect._, Connections._
-import io.casperlabs.comm._, CommError._, protocol.routing._
-import io.casperlabs.p2p.EffectsTestInstances._
+import cats.Id
+import cats.data._
+import cats.implicits._
+import io.casperlabs.catscontrib._
+import io.casperlabs.catscontrib.effect.implicits._
+import io.casperlabs.comm.CommError._
+import io.casperlabs.comm._
+import io.casperlabs.comm.rp.Connect.Connections._
+import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.metrics.Metrics
-import scala.concurrent.duration._
-import org.scalatest._
-import org.scalatest.enablers.Containing
-import cats._, cats.data._, cats.implicits._
-import io.casperlabs.catscontrib._, Catscontrib._, ski._
+import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared._
-import io.casperlabs.comm.transport._
-import io.casperlabs.comm.rp.ProtocolHelper._
-import io.casperlabs.shared.TestOutlaws._
+import org.scalatest._
+
+import scala.concurrent.duration._
 
 class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 

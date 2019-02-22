@@ -3,11 +3,11 @@ host = "test"
 port = 1
 http-port = 1
 kademlia-port = 1
-dynamic-host-address = true
-no-upnp = true
+dynamic-host-address = false
+no-upnp = false
 default-timeout = 1
 bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=1&discovery=1"
-standalone = true
+standalone = false
 map-size = 1
 store-type = "lmdb"
 data-dir = "test"
@@ -20,14 +20,9 @@ path = "test"
 block-store-size = 1
 max-dbs = 1
 max-readers = 1
-use-tls = true
+use-tls = false
 
 [blockstorage]
-latest-messages-log-path = "test"
-latest-messages-crc-path = "test"
-block-metadata-log-path = "test"
-block-metadata-crc-path = "test"
-checkpoints-dir-path = "test"
 latest-messages-log-max-size-factor = 1
 
 [grpc]
@@ -39,24 +34,38 @@ port-internal = 1
 [tls]
 certificate = "test"
 key = "test"
-secure-random-non-blocking = true
+secure-random-non-blocking = false
 
 [casper]
-public-key = "test"
-private-key = "test"
-private-key-path = "test"
-sig-algorithm = "test"
+validator-public-key = "test"
+validator-private-key = "test"
+validator-private-key-path = "test"
+validator-sig-algorithm = "test"
 bonds-file = "test"
 known-validators-file = "test"
 num-validators = 1
-genesis-path = "test"
 wallets-file = "test"
 minimum-bond = 1
 maximum-bond = 1
-has-faucet = true
+has-faucet = false
 required-sigs = 1
 shard-id = "test"
-approve-genesis = true
+approve-genesis = false
 approve-genesis-interval = "1second"
 approve-genesis-duration = "1second"
 deploy-timestamp = 1
+
+[metrics]
+prometheus = false
+zipkin = false
+sigar = false
+
+[influx]
+hostname = "0.0.0.0"
+port = 1
+database = "test"
+protocol = "https"
+
+[influx-auth]
+user = "user"
+password = "password"

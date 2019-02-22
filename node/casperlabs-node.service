@@ -1,0 +1,10 @@
+[Unit]
+Description=CasperLabs Node
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/casperlabs-node run --server-data-dir=/var/lib/casperlabs-node
+User=casperlabs-node
+
+[Install]
+WantedBy=multi-user.target

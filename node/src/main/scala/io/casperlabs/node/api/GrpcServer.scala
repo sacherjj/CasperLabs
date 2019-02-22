@@ -2,7 +2,8 @@ package io.casperlabs.node.api
 
 import java.util.concurrent.TimeUnit
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -12,8 +13,10 @@ import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.discovery.NodeDiscovery
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
-import io.casperlabs.node.diagnostics
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.node.effects
 import io.casperlabs.node.diagnostics.{JvmMetrics, NodeMetrics}
+import io.casperlabs.node.diagnostics
 import io.casperlabs.node.model.diagnostics.DiagnosticsGrpcMonix
 import io.casperlabs.shared._
 import io.grpc.Server
@@ -60,24 +63,26 @@ object GrpcServer {
           .forPort(port)
           .executor(grpcExecutor)
           .maxMessageSize(maxMessageSize)
-          .addService(DiagnosticsGrpcMonix.bindService(diagnostics.grpc, grpcExecutor))
+          .addService(DiagnosticsGrpcMonix.bindService(diagnostics.effects.grpc, grpcExecutor))
           .build
       )
     }
 
-  def acquireExternalServer[F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable](
       port: Int,
       maxMessageSize: Int,
-      grpcExecutor: Scheduler
+      grpcExecutor: Scheduler,
+      blockApiLock: Semaphore[F]
   )(implicit worker: Scheduler): F[GrpcServer] =
-    Capture[F].capture {
+    DeployGrpcService.instance(blockApiLock) map { inst =>
       GrpcServer(
         NettyServerBuilder
           .forPort(port)
           .executor(grpcExecutor)
           .maxMessageSize(maxMessageSize)
           .addService(
-            CasperMessageGrpcMonix.bindService(DeployGrpcService.instance, grpcExecutor)
+            CasperMessageGrpcMonix
+              .bindService(inst, grpcExecutor)
           )
           .build
       )

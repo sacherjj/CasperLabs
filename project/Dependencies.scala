@@ -4,16 +4,21 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
-  val circeVersion  = "0.10.0"
-  val http4sVersion = "0.19.0"
-  val kamonVersion  = "1.1.0"
+  val circeVersion   = "0.10.0"
+  val http4sVersion  = "0.19.0"
+  val kamonVersion   = "1.1.3"
+  val catsVersion    = "1.5.0"
+  val catsMtlVersion = "0.4.0"
 
   // format: off
   val bitcoinjCore           = "org.bitcoinj"               % "bitcoinj-core"                   % "0.14.6"
   val bouncyCastle           = "org.bouncycastle"           % "bcprov-jdk15on"                  % "1.60"
-  val catsCore               = "org.typelevel"              %% "cats-core"                      % "1.4.0"
-  val catsEffect             = "org.typelevel"              %% "cats-effect"                    % "1.0.0"
-  val catsMtl                = "org.typelevel"              %% "cats-mtl-core"                  % "0.4.0"
+  val catsCore               = "org.typelevel"              %% "cats-core"                      % catsVersion
+  val catsLawsTest           = "org.typelevel"              %% "cats-laws"                      % catsVersion % "test"
+  val catsLawsTestkitTest    = "org.typelevel"              %% "cats-testkit"                   % catsVersion % "test"
+  val catsEffect             = "org.typelevel"              %% "cats-effect"                    % "1.1.0"
+  val catsMtl                = "org.typelevel"              %% "cats-mtl-core"                  % catsMtlVersion
+  val catsMtlLawsTest        = "org.typelevel"              %% "cats-mtl-laws"                  % catsMtlVersion % "test"
   val circeCore              = "io.circe"                   %% "circe-core"                     % circeVersion
   val circeGeneric           = "io.circe"                   %% "circe-generic"                  % circeVersion
   val circeGenericExtras     = "io.circe"                   %% "circe-generic-extras"           % circeVersion
@@ -26,17 +31,20 @@ object Dependencies {
   val http4sCirce            = "org.http4s"                 %% "http4s-circe"                   % http4sVersion
   val http4sDSL              = "org.http4s"                 %% "http4s-dsl"                     % http4sVersion
   val jaxb                   = "javax.xml.bind"             % "jaxb-api"                        % "2.3.1"
-  val jline               = ("org.scala-lang"             % "jline"                     % "2.10.7")
+  val jline                  = ("org.scala-lang"            % "jline"                           % "2.10.7")
     .exclude("org.fusesource.jansi", "jansi")
   // see https://jitpack.io/#rchain/kalium
   val kalium                 = "com.github.rchain"          % "kalium"                          % "0.8.1"
   val kamonCore              = "io.kamon"                   %% "kamon-core"                     % kamonVersion
-  val kamonPrometheus        = "io.kamon"                   %% "kamon-prometheus"               % kamonVersion
+  val kamonSystemMetrics     = "io.kamon"                   %% "kamon-system-metrics"           % "1.0.0"
+  val kamonPrometheus        = "io.kamon"                   %% "kamon-prometheus"               % "1.1.1"
+  val kamonInfluxDb          = "io.kamon"                   %% "kamon-influxdb"                 % "1.0.2"
   val kamonZipkin            = "io.kamon"                   %% "kamon-zipkin"                   % "1.0.0"
-  val lightningj          = ("org.lightningj"             % "lightningj"                % "0.5.0-Beta-rc2")
+  val lightningj             = ("org.lightningj"             % "lightningj"                     % "0.5.0-Beta-rc2")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
   val lmdbjava               = "org.lmdbjava"               % "lmdbjava"                        % "0.6.1"
   val logbackClassic         = "ch.qos.logback"             % "logback-classic"                 % "1.2.3"
+  val janino                 = "org.codehaus.janino"        % "janino"                          % "3.0.12"
   val lz4                    = "org.lz4"                    % "lz4-java"                        % "1.5.0"
   val monix                  = "io.monix"                   %% "monix"                          % "3.0.0-RC2"
   val scalaLogging           = "com.typesafe.scala-logging" %% "scala-logging"                  % "3.9.0"
@@ -63,6 +71,7 @@ object Dependencies {
   val scodecCats             = "org.scodec"                 %% "scodec-cats"                    % "0.8.0"
   val scodecBits             = "org.scodec"                 %% "scodec-bits"                    % "1.1.7"
   val shapeless              = "com.chuusai"                %% "shapeless"                      % "2.3.3"
+  val shapelessScalaCheck    = "com.github.alexarchambault" %% "scalacheck-shapeless_1.14"      % "1.2.0"
   val magnolia               = "com.propensive"             %% "magnolia"                       % "0.10.0"
   val weupnp                 = "org.bitlet"                 % "weupnp"                          % "0.1.4"
   // see https://jitpack.io/#rchain/secp256k1-java
@@ -73,6 +82,7 @@ object Dependencies {
   val overrides = Seq(
     catsCore,
     catsEffect,
+    catsLawsTest,
     shapeless,
     guava,
     scodecBits,
@@ -90,9 +100,9 @@ object Dependencies {
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
-  private val testing = Seq(scalactic, scalatest, scalacheck)
+  private val testing = Seq(scalactic, scalatest, scalacheck, shapelessScalaCheck)
 
-  private val logging = Seq(scalaLogging, logbackClassic)
+  private val logging = Seq(scalaLogging, logbackClassic, janino)
 
   private val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)
@@ -107,7 +117,7 @@ object Dependencies {
     Seq(scalapbRuntimeLib)
 
   val kamonDependencies: Seq[ModuleID] =
-    Seq(kamonCore, kamonPrometheus, kamonZipkin)
+    Seq(kamonCore, kamonSystemMetrics, kamonPrometheus, kamonZipkin, kamonInfluxDb)
 
   val apiServerDependencies: Seq[ModuleID] =
     http4sDependencies ++ circeDependencies

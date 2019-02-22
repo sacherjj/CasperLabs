@@ -3,12 +3,12 @@ package io.casperlabs.node
 import cats._
 import cats.data._
 import cats.effect._
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.{BlockStore, InMemBlockStore}
+import io.casperlabs.blockstorage.{BlockStore, InMemBlockDagStorage, InMemBlockStore}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.BlockMessage
@@ -33,7 +33,6 @@ import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import kamon._
-import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
@@ -68,6 +67,12 @@ class NodeRuntime private[node] (
       httpServer: Fiber[Task, Unit]
   )
 
+  /**
+    * Main node entry. It will:
+    * 1. set up configurations
+    * 2. create instances of typeclasses
+    * 3. run the node program.
+    */
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   val main: Effect[Unit] = for {
     local <- WhoAmI
@@ -87,10 +92,10 @@ class NodeRuntime private[node] (
     rpConfAsk            = effects.rpConfAsk(rpConfState)
     peerNodeAsk          = effects.peerNodeAsk(rpConfState)
     rpConnections        <- effects.rpConnections.toEffect
-    kademliaConnections  <- CachedConnections[Task, KademliaConnTag].toEffect
-    tcpConnections       <- CachedConnections[Task, TcpConnTag].toEffect
+    metrics              = diagnostics.effects.metrics[Task]
+    kademliaConnections  <- CachedConnections[Task, KademliaConnTag](Task.catsAsync, metrics).toEffect
+    tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
     time                 = effects.time
-    metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
@@ -103,7 +108,7 @@ class NodeRuntime private[node] (
       conf.server.maxMessageSize,
       conf.server.chunkSize,
       commTmpFolder
-    )(grpcScheduler, log, tcpConnections)
+    )(grpcScheduler, log, metrics, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,
       peerNodeAsk,
@@ -126,18 +131,28 @@ class NodeRuntime private[node] (
       blockMap,
       Metrics.eitherT(Monad[Task], metrics)
     )
+    blockDagStorage <- InMemBlockDagStorage.create[Effect](
+                        Concurrent[Effect],
+                        Log.eitherTLog(Monad[Task], log),
+                        blockStore
+                      )
     _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    executionEngineService = new GrpcExecutionEngineService(
-      conf.grpcServer.socket,
-      conf.server.maxMessageSize
-    )
-    runtimeManager = RuntimeManager.fromExecutionEngineService(executionEngineService)
+    oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
     abs = new ToAbstractContext[Effect] {
       def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
     }
+    // TODO Replace the RuntimeManager to SmartContractsApi
+    executionEngineService = new GrpcExecutionEngineService[Effect](
+      conf.grpcServer.socket,
+      conf.server.maxMessageSize
+    )(Monad[Effect], abs)
     casperPacketHandler <- CasperPacketHandler
-                            .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
+                            .of[Effect](
+                              conf.casper,
+                              defaultTimeout,
+                              executionEngineService,
+                              _.value
+                            )(
                               labEff,
                               Metrics.eitherT(Monad[Task], metrics),
                               blockStore,
@@ -148,11 +163,11 @@ class NodeRuntime private[node] (
                               eitherTrpConfAsk(rpConfAsk),
                               oracle,
                               Capture[Effect],
-                              Sync[Effect],
+                              Concurrent[Effect],
                               Time.eitherTTime(Monad[Task], time),
                               Log.eitherTLog(Monad[Task], log),
                               multiParentCasperRef,
-                              abs,
+                              blockDagStorage,
                               scheduler
                             )
     packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
@@ -160,11 +175,11 @@ class NodeRuntime private[node] (
       Log.eitherTLog(Monad[Task], log),
       ErrorHandler[Effect]
     )
-    nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
-    jvmMetrics      = diagnostics.jvmMetrics[Task]
+    nodeCoreMetrics = diagnostics.effects.nodeCoreMetrics[Task]
+    jvmMetrics      = diagnostics.effects.jvmMetrics[Task]
 
-    program = nodeProgram[Task](executionEngineService)(
-      Monad[Task],
+    program = nodeProgram[Effect](executionEngineService)(
+      Monad[Effect],
       time,
       rpConfState,
       rpConfAsk,
@@ -184,15 +199,17 @@ class NodeRuntime private[node] (
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
-  private def acquireServers()(
+  private def acquireServers(blockApiLock: Semaphore[Effect])(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       multiParentCasperRef: MultiParentCasperRef[Effect],
+      metrics: Metrics[Task],
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task],
-      connectionsCell: ConnectionsCell[Task]
+      connectionsCell: ConnectionsCell[Task],
+      concurrent: Concurrent[Effect]
   ): Effect[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
@@ -200,7 +217,8 @@ class NodeRuntime private[node] (
                              .acquireExternalServer[Effect](
                                conf.grpcServer.portExternal,
                                conf.server.maxMessageSize,
-                               grpcScheduler
+                               grpcScheduler,
+                               blockApiLock
                              )
 
       grpcServerInternal <- GrpcServer
@@ -212,22 +230,21 @@ class NodeRuntime private[node] (
                              .toEffect
 
       prometheusReporter = new NewPrometheusReporter()
-      prometheusService  = NewPrometheusReporter.service(prometheusReporter)
+      prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
 
       httpServerFiber <- BlazeBuilder[Task]
                           .bindHttp(conf.server.httpPort, "0.0.0.0")
                           .mountService(prometheusService, "/metrics")
                           .mountService(VersionInfo.service, "/version")
+                          .mountService(StatusInfo.service, "/status")
                           .resource
                           .use(_ => Task.never[Unit])
                           .start
                           .toEffect
 
-      _ <- Task.delay {
-            Kamon.addReporter(prometheusReporter)
-            Kamon.addReporter(new JmxReporter())
-            Kamon.addReporter(new ZipkinReporter())
-          }.toEffect
+      metrics = new MetricsRuntime[Effect](conf, id)
+      _       <- metrics.setupMetrics(prometheusReporter)
+
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
@@ -259,17 +276,6 @@ class NodeRuntime private[node] (
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
-
-  private def startReportJvmMetrics(
-      implicit metrics: Metrics[Task],
-      jvmMetrics: JvmMetrics[Task]
-  ): Task[Unit] =
-    Task.delay {
-      import scala.concurrent.duration._
-      loopScheduler.scheduleAtFixedRate(3.seconds, 3.second)(
-        JvmMetrics.report[Task].unsafeRunSync(scheduler)
-      )
-    }
 
   private def addShutdownHook[F[_]: Monad](
       servers: Servers,
@@ -339,12 +345,13 @@ class NodeRuntime private[node] (
       } yield ()
 
     for {
-      _       <- info
-      local   <- peerNodeAsk.ask.toEffect
-      host    = local.endpoint.host
-      servers <- acquireServers()
-      _       <- addShutdownHook(servers, executionEngineService).toEffect
-      _       <- servers.grpcServerExternal.start.toEffect
+      blockApiLock <- Semaphore[Effect](1)
+      _            <- info
+      local        <- peerNodeAsk.ask.toEffect
+      host         = local.endpoint.host
+      servers      <- acquireServers(blockApiLock)
+      _            <- addShutdownHook(servers, executionEngineService).toEffect
+      _            <- servers.grpcServerExternal.start.toEffect
       _ <- Log[Effect].info(
             s"gRPC external server started at $host:${servers.grpcServerExternal.port}"
           )
@@ -352,13 +359,12 @@ class NodeRuntime private[node] (
       _ <- Log[Effect].info(
             s"gRPC internal server started at $host:${servers.grpcServerInternal.port}"
           )
-      _ <- startReportJvmMetrics.toEffect
 
       _ <- TransportLayer[Effect].receive(
             pm => HandleMessages.handle[Effect](pm, defaultTimeout),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
-      _       <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
+      _       <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler).start.toEffect
       _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
       address = s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")

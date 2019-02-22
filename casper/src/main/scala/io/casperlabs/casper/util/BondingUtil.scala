@@ -1,6 +1,6 @@
 package io.casperlabs.casper.util
 
-import cats.effect.{Resource, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.casper.util.rholang.RuntimeManager
@@ -25,7 +25,7 @@ object BondingUtil {
   def bondingForwarderDeploy(bondKey: String, ethAddress: String): String = """"""
 
   def unlockDeploy[F[_]: Sync](ethAddress: String, pubKey: String, secKey: String)(
-      implicit runtimeManager: RuntimeManager[Task],
+      implicit runtimeManager: RuntimeManager[F],
       scheduler: Scheduler
   ): F[String] =
     preWalletUnlockDeploy(ethAddress, pubKey, Base16.decode(secKey), s"${ethAddress}_unlockOut")
@@ -36,7 +36,7 @@ object BondingUtil {
       pubKey: String,
       secKey: String
   )(
-      implicit runtimeManager: RuntimeManager[Task],
+      implicit runtimeManager: RuntimeManager[F],
       scheduler: Scheduler
   ): F[String] =
     issuanceWalletTransferDeploy(
@@ -53,13 +53,13 @@ object BondingUtil {
       pubKey: String,
       secKey: Array[Byte],
       statusOut: String
-  )(implicit runtimeManager: RuntimeManager[Task], scheduler: Scheduler): F[String] = ???
+  )(implicit runtimeManager: RuntimeManager[F], scheduler: Scheduler): F[String] = ???
 
   def walletTransferSigData[F[_]: Sync](
       nonce: Int,
       amount: Long,
       destination: String
-  )(implicit runtimeManager: RuntimeManager[Task], scheduler: Scheduler): F[Array[Byte]] = ???
+  )(implicit runtimeManager: RuntimeManager[F], scheduler: Scheduler): F[Array[Byte]] = ???
 
   def issuanceWalletTransferDeploy[F[_]: Sync](
       nonce: Int,
@@ -68,14 +68,14 @@ object BondingUtil {
       transferStatusOut: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager[Task], scheduler: Scheduler): F[String] = """""".pure[F]
+  )(implicit runtimeManager: RuntimeManager[F], scheduler: Scheduler): F[String] = """""".pure[F]
 
   def faucetBondDeploy[F[_]: Sync](
       amount: Long,
       sigAlgorithm: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager[Task], scheduler: Scheduler): F[String] = """""".pure[F]
+  )(implicit runtimeManager: RuntimeManager[F]): F[String] = """""".pure[F]
 
   def writeFile[F[_]: Sync](name: String, content: String): F[Unit] = {
     val file =
@@ -90,15 +90,13 @@ object BondingUtil {
       runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
     )
 
-  // is it smaller than the actual size?
-  // can you sen my screen?
   def makeExecutionEngineServiceResource[F[_]: Sync](
       runtimeDirResource: Resource[F, Path]
-  )(implicit scheduler: Scheduler): Resource[F, ExecutionEngineService[Task]] = ???
+  ): Resource[F, ExecutionEngineService[Task]] = ???
 
-  def makeRuntimeManagerResource[F[_]: Sync](
-      executionEngineServiceResource: Resource[F, ExecutionEngineService[Task]]
-  )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[Task]] =
+  def makeRuntimeManagerResource[F[_]: Concurrent](
+      executionEngineServiceResource: Resource[F, ExecutionEngineService[F]]
+  ): Resource[F, RuntimeManager[F]] =
     executionEngineServiceResource.flatMap(
       executionEngineService =>
         Resource
@@ -113,13 +111,13 @@ object BondingUtil {
       amount: Long,
       secKey: String,
       pubKey: String
-  )(implicit scheduler: Scheduler): F[Unit] = ???
+  ): F[Unit] = ???
 
   def writeFaucetBasedRhoFiles[F[_]: Sync](
       amount: Long,
       sigAlgorithm: String,
       secKey: String,
       pubKey: String
-  )(implicit scheduler: Scheduler): F[Unit] = ???
+  ): F[Unit] = ???
 
 }

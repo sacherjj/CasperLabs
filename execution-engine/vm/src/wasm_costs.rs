@@ -5,7 +5,7 @@ pub struct WasmCosts {
     pub regular: u32,
     /// Div operations multiplier.
     pub div: u32,
-    /// Div operations multiplier.
+    /// Mul operations multiplier.
     pub mul: u32,
     /// Memory (load/store) operations multiplier.
     pub mem: u32,

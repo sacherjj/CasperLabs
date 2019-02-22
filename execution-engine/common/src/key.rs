@@ -2,7 +2,7 @@ use super::alloc::vec::Vec;
 use super::bytesrepr::{Error, FromBytes, ToBytes};
 
 #[repr(C)]
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub enum Key {
     Account([u8; 20]),
     Hash([u8; 32]),
@@ -88,5 +88,16 @@ impl ToBytes for Vec<Key> {
         result.extend(size.to_bytes());
         result.extend(self.iter().flat_map(|k| k.to_bytes()));
         result
+    }
+}
+
+impl AsRef<[u8]> for Key {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            //TODO: need to distinguish between variants?
+            Account(a) => a,
+            Hash(h) => h,
+            URef(u) => u,
+        }
     }
 }

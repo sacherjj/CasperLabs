@@ -5,7 +5,8 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
-use storage::{Error as StorageError, ExecutionEffect, GlobalState, TrackingCopy};
+use storage::error::Error as StorageError;
+use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
@@ -14,7 +15,10 @@ use wasmi::{
 };
 
 use argsparser::Args;
+use byteorder::{ByteOrder, LittleEndian};
 use parity_wasm::elements::{Error as ParityWasmError, Module};
+use rand::{RngCore, SeedableRng};
+use rand_chacha::ChaChaRng;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
@@ -24,7 +28,6 @@ pub enum Error {
     Interpreter(InterpreterError),
     Storage(StorageError),
     BytesRepr(BytesReprError),
-    ValueTypeSizeMismatch { value_type: u32, value_size: usize },
     ForgedReference(Key),
     NoImportedMemory,
     ArgIndexOutOfBounds(usize),
@@ -122,15 +125,15 @@ impl<'a> RuntimeContext<'a> {
 
     pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
         let keys: Vec<Key> = deserialize(bytes)?;
-        let _ = keys.iter().try_fold((), |_, k| self.validate_key(k))?;
+        keys.iter().try_for_each(|k| self.validate_key(k))?;
         Ok(keys)
     }
 }
 
-pub struct Runtime<'a, T: TrackingCopy + 'a> {
+pub struct Runtime<'a, R: DbReader> {
     args: Vec<Vec<u8>>,
     memory: MemoryRef,
-    state: &'a mut T,
+    state: &'a mut TrackingCopy<R>,
     module: Module,
     result: Vec<u8>,
     host_buf: Vec<u8>,
@@ -138,16 +141,21 @@ pub struct Runtime<'a, T: TrackingCopy + 'a> {
     gas_counter: u64,
     gas_limit: &'a u64,
     context: RuntimeContext<'a>,
+    rng: ChaChaRng,
 }
 
-impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
+impl<'a, R: DbReader> Runtime<'a, R> {
     pub fn new(
         memory: MemoryRef,
-        state: &'a mut T,
+        state: &'a mut TrackingCopy<R>,
         module: Module,
         gas_limit: &'a u64,
+        account_addr: [u8; 20],
+        nonce: u64,
+        timestamp: u64,
         context: RuntimeContext<'a>,
     ) -> Self {
+        let rng = create_rng(&account_addr, timestamp, nonce);
         Runtime {
             args: Vec::new(),
             memory,
@@ -159,6 +167,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
             gas_counter: 0,
             gas_limit,
             context,
+            rng,
         }
     }
 
@@ -425,7 +434,7 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
         self.state.add(key, value).map_err(|e| e.into())
     }
 
-    fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<&Value, Trap> {
+    fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
         self.state.read(key).map_err(|e| e.into())
     }
@@ -440,7 +449,9 @@ impl<'a, T: TrackingCopy + 'a> Runtime<'a, T> {
     }
 
     pub fn new_uref(&mut self, key_ptr: u32) -> Result<(), Trap> {
-        let key = self.state.new_uref();
+        let mut key = [0u8; 32];
+        self.rng.fill_bytes(&mut key);
+        let key = Key::URef(key);
         self.context.insert_uref(key);
         self.memory
             .set(key_ptr, &key.to_bytes())
@@ -470,7 +481,7 @@ const GAS_FUNC_INDEX: usize = 14;
 const HAS_UREF_FUNC_INDEX: usize = 15;
 const ADD_UREF_FUNC_INDEX: usize = 16;
 
-impl<'a, T: TrackingCopy + 'a> Externals for Runtime<'a, T> {
+impl<'a, R: DbReader> Externals for Runtime<'a, R> {
     fn invoke_index(
         &mut self,
         index: usize,
@@ -780,12 +791,12 @@ fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), 
     Ok((instance, memory))
 }
 
-fn sub_call<T: TrackingCopy>(
+fn sub_call<R: DbReader>(
     parity_module: Module,
     args: Vec<Vec<u8>>,
     refs: &mut BTreeMap<String, Key>,
     key: Key,
-    current_runtime: &mut Runtime<T>,
+    current_runtime: &mut Runtime<R>,
     //Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
@@ -817,6 +828,7 @@ fn sub_call<T: TrackingCopy>(
             account: current_runtime.context.account,
             base_key: key,
         },
+        rng: current_runtime.rng.clone(),
     };
 
     let result = instance.invoke_export("call", &[], &mut runtime);
@@ -841,24 +853,38 @@ fn sub_call<T: TrackingCopy>(
     }
 }
 
-pub fn exec<T: TrackingCopy, G: GlobalState<T>>(
+fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng {
+    let mut seed: [u8; 32] = [0u8; 32];
+    let mut data: Vec<u8> = Vec::new();
+    let hasher = VarBlake2b::new(32).unwrap();
+    data.extend(account_addr);
+    LittleEndian::write_u64(&mut data, timestamp);
+    LittleEndian::write_u64(&mut data, nonce);
+    hasher.variable_result(|hash| seed.clone_from_slice(hash));
+    ChaChaRng::from_seed(seed)
+}
+
+pub fn exec<R: DbReader>(
     parity_module: Module,
     account_addr: [u8; 20],
+    timestamp: u64,
+    nonce: u64,
     gas_limit: &u64,
-    gs: &G,
+    tc: &mut TrackingCopy<R>,
 ) -> Result<ExecutionEffect, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let acct_key = Key::Account(account_addr);
-    let account = gs.get(&acct_key)?.as_account();
-    let mut state = gs.tracking_copy();
+    let value = tc.get(&acct_key)?;
+    let account = value.as_account();
     let mut known_urefs: HashSet<Key> = HashSet::new();
     for r in account.urefs_lookup().values() {
         known_urefs.insert(*r);
     }
+    let rng = create_rng(&account_addr, timestamp, nonce);
     let mut runtime = Runtime {
         args: Vec::new(),
         memory,
-        state: &mut state,
+        state: tc,
         module: parity_module,
         result: Vec::new(),
         host_buf: Vec::new(),
@@ -871,6 +897,7 @@ pub fn exec<T: TrackingCopy, G: GlobalState<T>>(
             account: &account,
             base_key: acct_key,
         },
+        rng: rng,
     };
     let _ = instance.invoke_export("call", &[], &mut runtime)?;
 

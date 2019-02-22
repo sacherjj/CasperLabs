@@ -1,16 +1,16 @@
 package io.casperlabs.casper.util.comm
 
-import java.nio.file.Paths
-
 import cats.effect.concurrent.Ref
+import cats.{Applicative, ApplicativeError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.InMemBlockStore
+import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.genesis.contracts.Faucet
-import io.casperlabs.casper.helper.{BlockStoreTestFixture, NoOpsCasperEffect}
+import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
+import io.casperlabs.casper.util.TestTime
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
   BootstrapCasperHandler,
@@ -26,35 +26,27 @@ import io.casperlabs.catscontrib.{ApplicativeError_, Capture}
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.{Connections, ConnectionsCell}
 import io.casperlabs.comm.rp.ProtocolHelper
-import ProtocolHelper._
+import io.casperlabs.comm.rp.ProtocolHelper._
 import io.casperlabs.comm.{transport, _}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.p2p.effects.PacketHandler
-import io.casperlabs.shared.{Cell, StoreType}
+import io.casperlabs.shared.Cell
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
-import monix.execution.Scheduler.Implicits.global
-import monix.execution.schedulers.TestScheduler
-import org.scalatest.{Ignore, WordSpec}
+import org.scalatest.{Ignore, Matchers, WordSpec}
 import io.casperlabs.casper.util.TestTime
+import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-
 import scala.concurrent.duration._
 
-//todo this is block by runTimeManager.replayComputeStates
-@Ignore
-class CasperPacketHandlerSpec extends WordSpec {
+class CasperPacketHandlerSpec extends WordSpec with Matchers {
   private def setup() = new {
-    val scheduler               = Scheduler.io("test")
-    val runtimeDir              = BlockStoreTestFixture.dbDir
-    val storageSize: Long       = 1024L * 1024
-    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-    val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
-
+    val scheduler                  = Scheduler.io("test")
+    val runtimeDir                 = BlockDagStorageTestFixture.blockStorageDir
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
@@ -63,17 +55,21 @@ class CasperPacketHandlerSpec extends WordSpec {
     val deployTimestamp            = 1L
     val genesis                    = buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
+    val storageSize: Long          = 1024L * 1024
+
+    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+    val runtimeManager          = RuntimeManager(casperSmartContractsApi, bonds)
+
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,
-      runtimeManager,
       bonds,
       Seq.empty,
       1L,
       Long.MaxValue,
       false,
       requiredSigs
-    )(scheduler)
+    )
     val local: PeerNode = peerNode("src", 40400)
     val shardId         = "test-shardId"
 
@@ -84,23 +80,29 @@ class CasperPacketHandlerSpec extends WordSpec {
     implicit val rpConf         = createRPConfAsk[Task](local)
     implicit val time           = TestTime.instance
     implicit val log            = new LogStub[Task]
-    implicit val errHandler = new ApplicativeError_[Task, CommError] {
-      override def raiseError[A](e: CommError): Task[A] =
-        Task.raiseError(new Exception(s"CommError: $e"))
-      override def handleErrorWith[A](fa: Task[A])(f: CommError => Task[A]): Task[A] =
-        fa.onErrorHandleWith(th => f(UnknownCommError(th.getMessage)))
-    }
+    implicit val errHandler =
+      ApplicativeError_.applicativeError(new ApplicativeError[Task, CommError] {
+        override def raiseError[A](e: CommError): Task[A] =
+          Task.raiseError(new Exception(s"CommError: $e"))
+        override def handleErrorWith[A](fa: Task[A])(f: CommError => Task[A]): Task[A] =
+          fa.onErrorHandleWith(th => f(UnknownCommError(th.getMessage)))
+        override def pure[A](x: A): Task[A]                           = Task.pure(x)
+        override def ap[A, B](ff: Task[A => B])(fa: Task[A]): Task[B] = Applicative[Task].ap(ff)(fa)
+      })
     implicit val metrics = new MetricsNOP[Task]
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
     implicit val blockStore = InMemBlockStore.create[Task]
-    implicit val casperRef  = MultiParentCasperRef.unsafe[Task](None)
+    implicit val blockDagStorage = InMemBlockDagStorage
+      .create[Task]
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+    implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(
-          blockDag: BlockDag,
+          blockDag: BlockDagRepresentation[Task],
           estimateBlockHash: BlockHash
-      ): Float = 1.0f
+      ): Task[Float] = Task.pure(1.0f)
     }
   }
 
@@ -108,7 +110,7 @@ class CasperPacketHandlerSpec extends WordSpec {
     "in GenesisValidator state" should {
 
       "respond on UnapprovedBlock messages with BlockApproval" in {
-        implicit val ctx = TestScheduler()
+        implicit val ctx = Scheduler.global
         val fixture      = setup()
         import fixture._
 
@@ -122,25 +124,25 @@ class CasperPacketHandlerSpec extends WordSpec {
         val unapprovedBlock  = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
         val unapprovedPacket = BlockApproverProtocolTest.unapprovedToPacket(unapprovedBlock)
         val test = for {
-          packetResponse <- packetHandler.handle(local).apply(unapprovedPacket)
-          _              = assert(packetResponse.isEmpty)
-          blockApproval  = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
+          _             <- packetHandler.handle(local).apply(unapprovedPacket)
+          blockApproval = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
           expectedPacket = ProtocolHelper.packet(
             local,
             transport.BlockApproval,
             blockApproval.toByteString
           )
           _ = {
+            log.warns shouldBe empty
+            transportLayer.requests should not be empty
             val lastMessage = transportLayer.requests.last
             assert(lastMessage.peer == local && lastMessage.msg == expectedPacket)
           }
         } yield ()
         test.unsafeRunSync
-        ctx.tick()
       }
 
       "should not respond to any other message" in {
-        implicit val ctx = TestScheduler()
+        implicit val ctx = Scheduler.global
         val fixture      = setup()
         import fixture._
 
@@ -151,27 +153,23 @@ class CasperPacketHandlerSpec extends WordSpec {
         val packetHandler = new CasperPacketHandlerImpl[Task](ref)
 
         val approvedBlockRequest = ApprovedBlockRequest("test")
-        val packet               = Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
+        val packet1              = Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
         val test = for {
-          packetResponse <- packetHandler.handle(local)(packet)
-          _ = assert(
-            packetResponse ==
-              Some(
-                Packet(
-                  transport.NoApprovedBlockAvailable.id,
-                  NoApprovedBlockAvailable("NoApprovedBlockAvailable", local.toString).toByteString
-                )
-              )
+          _    <- packetHandler.handle(local)(packet1)
+          head = transportLayer.requests.head
+          response = packet(
+            local,
+            transport.NoApprovedBlockAvailable,
+            NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toByteString
           )
-          _               = assert(transportLayer.requests.isEmpty)
-          blockRequest    = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
-          packet2         = Packet(transport.BlockRequest.id, blockRequest.toByteString)
-          packetResponse2 <- packetHandler.handle(local)(packet2)
-          _               = assert(packetResponse2.isEmpty)
-          _               = assert(transportLayer.requests.isEmpty)
+          _            = assert(head.peer == local && head.msg == response)
+          _            = transportLayer.reset()
+          blockRequest = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
+          packet2      = Packet(transport.BlockRequest.id, blockRequest.toByteString)
+          _            <- packetHandler.handle(local)(packet2)
+          _            = assert(transportLayer.requests.isEmpty)
         } yield ()
         test.unsafeRunSync
-        ctx.tick()
       }
     }
 
@@ -212,7 +210,13 @@ class CasperPacketHandlerSpec extends WordSpec {
           casperPacketHandler = new CasperPacketHandlerImpl[Task](refCasper)
           c1                  = abp.run().forkAndForget.runToFuture
           c2 = StandaloneCasperHandler
-            .approveBlockInterval(interval, shardId, runtimeManager, Some(validatorId), refCasper)
+            .approveBlockInterval(
+              interval,
+              shardId,
+              runtimeManager,
+              Some(validatorId),
+              refCasper
+            )
             .forkAndForget
             .runToFuture
           blockApproval = ApproveBlockProtocolTest.approval(
@@ -255,7 +259,12 @@ class CasperPacketHandlerSpec extends WordSpec {
 
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
-          new BootstrapCasperHandler[Task](runtimeManager, shardId, Some(validatorId), validators)
+          new BootstrapCasperHandler[Task](
+            runtimeManager,
+            shardId,
+            Some(validatorId),
+            validators
+          )
 
         val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
 
@@ -285,6 +294,14 @@ class CasperPacketHandlerSpec extends WordSpec {
           _                   = assert(blockO.contains(genesis))
           handlerInternal     <- refCasper.get
           _                   = assert(handlerInternal.isInstanceOf[ApprovedBlockReceivedHandler[Task]])
+          _ = assert(
+            transportLayer.requests.head.msg == packet(
+              local,
+              transport.ForkChoiceTipRequest,
+              ByteString.EMPTY
+            )
+          )
+          _ = transportLayer.reset()
           // assert that we really serve last approved block
           lastApprovedBlockO <- LastApprovedBlock[Task].get
           _                  = assert(lastApprovedBlockO.isDefined)
@@ -319,7 +336,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         )
       )
 
-      val casper = NoOpsCasperEffect[Task]().unsafeRunSync
+      implicit val casper = NoOpsCasperEffect[Task]().unsafeRunSync
 
       val refCasper = Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
         new ApprovedBlockReceivedHandler[Task](casper, approvedBlock)
@@ -368,6 +385,25 @@ class CasperPacketHandlerSpec extends WordSpec {
           _ = assert(
             ApprovedBlock
               .parseFrom(head.msg.message.packet.get.content.toByteArray) == approvedBlock
+          )
+        } yield ()
+
+        test.unsafeRunSync
+        transportLayer.reset()
+      }
+
+      "respond to ForkChoiceTipRequest messages" in {
+        val request = ForkChoiceTipRequest()
+        val requestPacket =
+          Packet(transport.ForkChoiceTipRequest.id, request.toByteString)
+
+        val test: Task[Unit] = for {
+          tip  <- MultiParentCasper.forkChoiceTip[Task]
+          _    <- casperPacketHandler.handle(local)(requestPacket)
+          head = transportLayer.requests.head
+          _    = assert(head.peer == local)
+          _ = assert(
+            head.msg.message.packet.get == Packet(transport.BlockMessage.id, tip.toByteString)
           )
         } yield ()
 

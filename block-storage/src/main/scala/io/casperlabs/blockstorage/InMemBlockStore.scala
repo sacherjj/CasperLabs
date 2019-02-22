@@ -4,56 +4,37 @@ import cats._
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
+import io.casperlabs.blockstorage.StorageError.StorageIOErr
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.Metrics.Source
 
 import scala.language.higherKinds
 
-class InMemBlockStore[F[_]] private ()(
+class InMemBlockStore[F[_]] private (
     implicit
     monadF: Monad[F],
-    refF: Ref[F, Map[BlockHash, BlockMessage]],
-    metricsF: Metrics[F]
+    refF: Ref[F, Map[BlockHash, BlockMessage]]
 ) extends BlockStore[F] {
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
-    for {
-      _     <- metricsF.incrementCounter("block-store-get")
-      state <- refF.get
-    } yield state.get(blockHash)
-
-  @deprecated(
-    message = "to be removed when casper code no longer needs the whole DB in memmory",
-    since = "0.5"
-  )
-  def asMap(): F[Map[BlockHash, BlockMessage]] =
-    for {
-      _     <- metricsF.incrementCounter("block-store-as-map")
-      state <- refF.get
-    } yield state
+    refF.get.map(_.get(blockHash))
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
-    for {
-      _     <- metricsF.incrementCounter("block-store-find")
-      state <- refF.get
-    } yield state.filterKeys(p(_)).toSeq
+    refF.get.map(_.filterKeys(p).toSeq)
 
-  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
-    for {
-      _ <- metricsF.incrementCounter("block-store-put")
-      _ <- refF.update { state =>
-            val (hash, message) = f
-            state.updated(hash, message)
-          }
-    } yield ()
+  def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]] =
+    refF.update(_ + f) map Right.apply
 
-  def clear(): F[Unit] =
-    for {
-      _ <- refF.update { _.empty }
-    } yield ()
+  def checkpoint(): F[StorageIOErr[Unit]] =
+    ().asRight[StorageIOError].pure[F]
 
-  override def close(): F[Unit] = monadF.pure(())
+  def clear(): F[StorageIOErr[Unit]] =
+    refF.update(_.empty) map Right.apply
+
+  override def close(): F[StorageIOErr[Unit]] =
+    monadF.pure(Right(()))
 }
 
 object InMemBlockStore {
@@ -63,7 +44,11 @@ object InMemBlockStore {
       refF: Ref[F, Map[BlockHash, BlockMessage]],
       metricsF: Metrics[F]
   ): BlockStore[F] =
-    new InMemBlockStore()
+    new InMemBlockStore[F] with MeteredBlockStore[F] {
+      override implicit val m: Metrics[F] = metricsF
+      override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "in-mem")
+      override implicit val a: Apply[F]   = monadF
+    }
 
   def createWithId: BlockStore[Id] = {
     import io.casperlabs.catscontrib.effect.implicits._

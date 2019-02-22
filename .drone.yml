@@ -48,38 +48,52 @@ pipeline:
     commands:
       - sbt compile test:compile doc
 
-  compile-rust-engine:
+  compile-rust:
     <<: *buildenv
+    group: rust
     commands:
-      - cd execution-engine/engine
-      - ~/.cargo/bin/cargo build
-
-  compile-rust-comm:
-    <<: *buildenv
-    commands:
-      - cd execution-engine/comm
-      - ~/.cargo/bin/cargo run --bin grpc-protoc
+      - cd execution-engine/
+      - ~/.cargo/bin/cargo update
       - ~/.cargo/bin/cargo build
 
   run-rust-tests:
     <<: *buildenv
+    group: test
     commands:
-      - cd execution-engine/tests
+      - cd execution-engine/
       - ~/.cargo/bin/cargo test
 
-#  run-unit-tests:
-#    <<: *sbtenv
-#    commands:
-#      - sbt test it:test
+  run-unit-tests:
+    <<: *sbtenv
+    group: test
+    commands:
+      - sbt test
+
+  docker-build-node-and-client:
+    <<: *sbtenv
+    commands:
+      - sbt node/docker:publishLocal client/docker:publishLocal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  ## run-integration-tests:
+  ##   <<: *sbtenv
+  ##   commands:
+  ##     - python3 -m pip install pipenv dataclasses typing_extensions
+  ##     - cd integration-testing
+  ##     - ./run_tests.sh
+  ##   volumes:
+  ##     - /var/run/docker.sock:/var/run/docker.sock
+  ##     - /tmp:/tmp
 
   # push
 
-  package:
+  package-client-deb-universal:
     <<: *sbtenv
     commands:
-      - sbt node/docker:publishLocal node/debian:packageBin node/universal:packageZipTarball
+      - sbt client/debian:packageBin client/universal:packageZipTarball
       - mkdir -p /artifacts/${DRONE_BRANCH}
-      - cp node/target/node_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
+      - cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
     volumes:
       - /var/cache/cl-build/.sbt:/root/.sbt
       - /var/cache/cl-build/.ivy2:/root/.ivy2
@@ -88,18 +102,56 @@ pipeline:
     when:
       event: [ push, tag ]
 
-  package-rpm:
+  package-client-rpm:
     <<: *sbtenv
     commands:
-      - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
+      - env JAVAC_VERSION=1.8 sbt clean compile doc client/rpm:packageBin
       - mkdir -p /artifacts/${DRONE_BRANCH}
-      - cp node/target/rpm/RPMS/noarch/node-*.noarch.rpm /artifacts/${DRONE_BRANCH}
+      - cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm /artifacts/${DRONE_BRANCH}
     volumes:
       - /var/cache/cl-build/.sbt:/root/.sbt
       - /var/cache/cl-build/.ivy2:/root/.ivy2
       - /artifacts/:/artifacts/
     when:
       event: [ push, tag ]
+
+  package-node-deb-universal:
+    <<: *sbtenv
+    commands:
+      - sbt node/debian:packageBin node/universal:packageZipTarball
+      - mkdir -p /artifacts/${DRONE_BRANCH}
+      - cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /artifacts/:/artifacts/
+    when:
+      event: [ push, tag ]
+
+  package-node-rpm:
+    <<: *sbtenv
+    commands:
+      - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
+      - mkdir -p /artifacts/${DRONE_BRANCH}
+      - cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm /artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+      - /artifacts/:/artifacts/
+    when:
+      event: [ push, tag ]
+
+
+  cleanup:
+    <<: *sbtenv
+    commands:
+      - docker images | grep none | awk '{print $3;}' | xargs docker rmi || true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      status: [ failure, success ]
+
 
   notify:
     image: plugins/slack

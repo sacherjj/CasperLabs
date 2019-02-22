@@ -1,5 +1,4 @@
 import Dependencies._
-import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
 
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
@@ -70,9 +69,22 @@ lazy val shared = (project in file("shared"))
       monix,
       scodecCore,
       scodecBits,
-      scalapbRuntimegGrpc
+      scalapbRuntimegGrpc,
+      catsLawsTest,
+      catsLawsTestkitTest
     )
   )
+
+lazy val graphz = (project in file("graphz"))
+  .settings(commonSettings: _*)
+  .settings(
+    version := "0.1",
+    libraryDependencies ++= commonDependencies ++ Seq(
+      catsCore,
+      catsEffect,
+      catsMtl
+    )
+  ).dependsOn(shared)
 
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
@@ -91,6 +103,8 @@ lazy val casper = (project in file("casper"))
     blockStorage % "compile->compile;test->test",
     comm         % "compile->compile;test->test",
     shared       % "compile->compile;test->test",
+    smartContracts % "compile->compile;test->test",
+		graphz,
     crypto,
     models
   )
@@ -154,7 +168,7 @@ lazy val models = (project in file("models"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(crypto)
+  .dependsOn(crypto, shared % "compile->compile;test->test")
 
 val nodeAndClientVersion = "0.0"
 
@@ -165,6 +179,9 @@ lazy val node = (project in file("node"))
     version := nodeAndClientVersion,
     name := "node",
     maintainer := "CasperLabs, LLC. <info@casperlabs.io>",
+    packageName := "casperlabs-node",
+    packageName in Docker := "node",
+    executableScriptName := "casperlabs-node",
     packageSummary := "CasperLabs Node",
     packageDescription := "CasperLabs Node - the Casperlabs blockchain node server software.",
     libraryDependencies ++=
@@ -199,7 +216,7 @@ lazy val node = (project in file("node"))
      *    initializes all useful variables (like $java_version).
      *
      * This won't work if someone passes -no-version-check command line
-     * argument to casperlabsnode. They most probably know what they're doing.
+     * argument to casperlabs-node. They most probably know what they're doing.
      *
      * https://unix.stackexchange.com/a/29742/124070
      * Thanks Gilles!
@@ -220,7 +237,7 @@ lazy val node = (project in file("node"))
       }
     """,
     /* Dockerization */
-    dockerUsername := Some(organization.value),
+    dockerUsername := Some("casperlabs"),
     version in Docker := version.value +
       git.gitHeadCommit.value.fold("")("-git" + _.take(8)),
     dockerAliases ++=
@@ -240,18 +257,19 @@ lazy val node = (project in file("node"))
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
         Cmd("USER", "root"),
-        ExecCmd("ENTRYPOINT", "bin/node"),
+        ExecCmd("ENTRYPOINT", "bin/casperlabs-node"),
         ExecCmd("CMD", "run")
       )
     },
     /* Packaging */
     linuxPackageMappings ++= {
-      val file = baseDirectory.value / "casperlabsnode.service"
+      val file = baseDirectory.value / "casperlabs-node.service"
       Seq(
-        packageMapping(file -> "/lib/systemd/system/casperlabsnode.service")
+        packageMapping(file -> "/lib/systemd/system/casperlabs-node.service")
       )
     },
     /* Debian */
+    name in Debian := "casperlabs-node",
     debianPackageDependencies in Debian ++= Seq(
       "openjdk-11-jre-headless",
       "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)", //ubuntu & debian
@@ -270,10 +288,11 @@ lazy val node = (project in file("node"))
        * https://access.redhat.com/articles/1299013
        * Red Hat will skip Java SE 9 and 10, and ship an OpenJDK distribution based on Java SE 11.
        */
-      "java-1.8.0-openjdk-headless >= 1.8.0.171",
+      "java-11-openjdk-headless >= 11.0.1.13",
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
-    )
+    ),
+    rpmAutoreq := "no"
   )
   .dependsOn(casper, comm, crypto, smartContracts)
 
@@ -289,7 +308,7 @@ lazy val blockStorage = (project in file("block-storage"))
       catsMtl
     )
   )
-  .dependsOn(shared, models)
+  .dependsOn(shared, models % "compile->compile;test->test")
 
 lazy val smartContracts = (project in file("smart-contracts"))
   .settings(commonSettings: _*)
@@ -306,16 +325,22 @@ lazy val smartContracts = (project in file("smart-contracts"))
   .dependsOn(shared, models)
 
 lazy val client = (project in file("client"))
-  .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+  .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(commonSettings: _*)
   .settings(
     name := "client",
     version := nodeAndClientVersion,
+    maintainer := "CasperLabs, LLC. <info@casperlabs.io>",
+    packageName := "casperlabs-client",
+    packageName in Docker := "client",
+    executableScriptName := "casperlabs-client",
+    packageSummary := "CasperLabs Client",
+    packageDescription := "CLI tool for interaction with the CasperLabs Node",
     libraryDependencies ++= commonDependencies ++ Seq(scallop, grpcNetty),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.client",
     /* Dockerization */
-    dockerUsername := Some(organization.value),
+    dockerUsername := Some("casperlabs"),
     version in Docker := version.value +
       git.gitHeadCommit.value.fold("")("-git" + _.take(8)),
     dockerAliases ++=
@@ -335,7 +360,7 @@ lazy val client = (project in file("client"))
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
         Cmd("USER", "root"),
-        ExecCmd("ENTRYPOINT", "bin/client"),
+        ExecCmd("ENTRYPOINT", "bin/casperlabs-client"),
         ExecCmd("CMD", "run")
       )
     },
@@ -347,7 +372,7 @@ lazy val client = (project in file("client"))
      *    initializes all useful variables (like $java_version).
      *
      * This won't work if someone passes -no-version-check command line
-     * argument to casperlabsnode. They most probably know what they're doing.
+     * argument to casperlabs-node. They most probably know what they're doing.
      *
      * https://unix.stackexchange.com/a/29742/124070
      * Thanks Gilles!
@@ -366,7 +391,29 @@ lazy val client = (project in file("client"))
           )
         fi
       }
-    """
+    """,
+    /* Debian */
+    name in Debian := "casperlabs-client",
+    debianPackageDependencies in Debian ++= Seq(
+      "openjdk-11-jre-headless",
+      "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)", //ubuntu & debian
+      "bash (>= 2.05a-11)"
+    ),
+    /* Redhat */
+    rpmVendor := "casperlabs.io",
+    rpmUrl := Some("https://casperlabs.io"),
+    rpmLicense := Some("Apache 2.0"),
+    packageArchitecture in Rpm := "noarch",
+    rpmPrerequisites := Seq(
+      /*
+       * https://access.redhat.com/articles/1299013
+       * Red Hat will skip Java SE 9 and 10, and ship an OpenJDK distribution based on Java SE 11.
+       */
+      "java-11-openjdk-headless >= 11.0.1.13",
+      //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
+      "openssl"
+    ),
+    rpmAutoreq := "no"
   )
   .dependsOn(shared, models)
 
@@ -377,6 +424,7 @@ lazy val casperlabs = (project in file("."))
     casper,
     comm,
     crypto,
+    graphz,
     models,
     node,
     shared,

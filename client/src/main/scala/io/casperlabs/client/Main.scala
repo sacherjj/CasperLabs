@@ -40,5 +40,7 @@ object Main {
         DeployRuntime.deployFileProgram(from, gasLimit, gasPrice, nonce, sessionCode, paymentCode)
       case _: Propose =>
         DeployRuntime.propose()
+      case VisualizeDag(_, _, depth, showJustificationLines) =>
+        DeployRuntime.visualizeDag(depth, showJustificationLines)
     }
 }

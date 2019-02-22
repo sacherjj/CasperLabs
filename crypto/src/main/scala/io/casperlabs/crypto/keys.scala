@@ -1,5 +1,5 @@
 package io.casperlabs.crypto
 
-case class PublicKey(bytes: Array[Byte])
+final case class PublicKey(bytes: Array[Byte])
 
-case class PrivateKey(bytes: Array[Byte])
+final case class PrivateKey(bytes: Array[Byte])

@@ -1,23 +1,28 @@
 package io.casperlabs.blockstorage
 
-import cats.Applicative
 import cats.implicits._
+import cats.{Applicative, Apply}
 import com.google.protobuf.ByteString
+import io.casperlabs.blockstorage.StorageError.StorageIOErr
 import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.metrics.Metrics
 
 import scala.language.higherKinds
 
 trait BlockStore[F[_]] {
   import BlockStore.BlockHash
 
-  def put(blockHash: BlockHash, blockMessage: BlockMessage): F[Unit] =
+  def put(blockMessage: BlockMessage): F[StorageIOErr[Unit]] =
+    put((blockMessage.blockHash, blockMessage))
+
+  def put(blockHash: BlockHash, blockMessage: BlockMessage): F[StorageIOErr[Unit]] =
     put((blockHash, blockMessage))
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]]
 
   def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]]
 
-  def put(f: => (BlockHash, BlockMessage)): F[Unit]
+  def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]]
 
   def apply(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[BlockMessage] =
     get(blockHash).map(_.get)
@@ -25,14 +30,28 @@ trait BlockStore[F[_]] {
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
     get(blockHash).map(_.isDefined)
 
-  def asMap(): F[Map[BlockHash, BlockMessage]]
+  def checkpoint(): F[StorageIOErr[Unit]]
 
-  def clear(): F[Unit]
+  def clear(): F[StorageIOErr[Unit]]
 
-  def close(): F[Unit]
+  def close(): F[StorageIOErr[Unit]]
 }
 
 object BlockStore {
+  trait MeteredBlockStore[F[_]] extends BlockStore[F] {
+    implicit val m: Metrics[F]
+    implicit val ms: Metrics.Source
+    implicit val a: Apply[F]
+
+    abstract override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
+      m.incrementCounter("get") *> super.get(blockHash)
+
+    abstract override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+      m.incrementCounter("find") *> super.find(p)
+
+    abstract override def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]] =
+      m.incrementCounter("put") *> super.put(f)
+  }
 
   def apply[F[_]](implicit ev: BlockStore[F]): BlockStore[F] = ev
 

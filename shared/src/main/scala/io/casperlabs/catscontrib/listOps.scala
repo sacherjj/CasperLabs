@@ -6,9 +6,9 @@ import cats.implicits._
 import scala.math.Ordering
 
 object ListContrib {
-  def sortBy[A, K: Monoid](list: IndexedSeq[A], map: collection.Map[A, K])(
+  def sortBy[A, K: Monoid](list: List[A], map: collection.Map[A, K])(
       implicit ord: Ordering[K]
-  ) =
+  ): List[A] =
     list.sortBy(map.getOrElse(_, Monoid[K].empty))(ord)
 
   // From https://hygt.github.io/2018/08/05/Cats-findM-collectFirstM.html
@@ -16,9 +16,20 @@ object ListContrib {
     list.tailRecM[G, Option[A]] {
       case head :: tail =>
         p(head).map {
-          case true  => Right(Some(head))
-          case false => Left(tail)
+          case true  => Some(head).asRight[List[A]]
+          case false => tail.asLeft[Option[A]]
         }
-      case Nil => G.pure(Right(None))
+      case Nil => G.pure(None.asRight[List[A]])
+    }
+
+  def filterM[G[_], A](list: List[A], p: A => G[Boolean])(implicit G: Monad[G]): G[List[A]] =
+    (list, List.empty[A]).tailRecM[G, List[A]] {
+      case (head :: tail, acc) =>
+        p(head).map {
+          case true  => (tail, head :: acc).asLeft[List[A]]
+          case false => (tail, acc).asLeft[List[A]]
+        }
+      case (Nil, acc) =>
+        G.pure(acc.reverse.asRight[(List[A], List[A])])
     }
 }

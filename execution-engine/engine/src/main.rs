@@ -3,12 +3,14 @@ extern crate common;
 extern crate execution_engine;
 extern crate storage;
 
-use clap::{App, Arg};
-use execution_engine::engine::EngineState;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter::Iterator;
-use storage::ExecutionEffect;
+
+use clap::{App, Arg};
+
+use execution_engine::engine::{EngineState, ExecutionResult};
+use storage::gs::inmem::InMemHist;
 
 #[derive(Debug)]
 struct Task {
@@ -73,30 +75,60 @@ fn main() {
         address
     };
 
+    let mut state_hash = [0u8; 32];
+
     let gas_limit: u64 = matches
         .value_of("gas-limit")
         .and_then(|v| v.parse::<u64>().ok())
         .expect("Provided gas limit value is not u64.");
 
-    let gs = storage::InMemGS::new();
-    let engine_state = {
-        let state = EngineState::new(gs);
-        state.with_mocked_account(account_addr);
-        state
-    };
+    // TODO: move to arg parser
+    let timestamp: u64 = 100000;
+    let nonce: u64 = 1;
+
+    //let path = std::path::Path::new("./tmp/");
+    //TODO: Better error handling?
+    //    let gs = LmdbGs::new(&path).unwrap();
+    let init_state = storage::gs::mocked_account(account_addr);
+    let gs = InMemHist::new_initialized(&state_hash, init_state);
+    let engine_state = EngineState::new(gs);
 
     for wasm_bytes in wasm_files.iter() {
-        let result = engine_state.run_deploy(&wasm_bytes.bytes, account_addr, &gas_limit);
+        println!("Pre state hash: {:?}", state_hash);
+        let result = engine_state.run_deploy(
+            &wasm_bytes.bytes,
+            account_addr,
+            timestamp,
+            nonce,
+            state_hash,
+            &gas_limit,
+        );
         match result {
-            Ok(ExecutionEffect(_, transform_map)) => {
-                for (key, transformation) in transform_map.iter() {
-                    engine_state
-                        .apply_effect(*key, transformation.clone())
-                        .expect(&format!("Error when applying effects on {:?}", *key));
+            Err(storage::error::RootNotFound(hash)) => println!(
+                "Result for file {}: root {:?} not found.",
+                wasm_bytes.path, hash
+            ),
+            Ok(ExecutionResult::Success(effects)) => {
+                match engine_state.apply_effect(state_hash, effects.1) {
+                    Err(storage::error::RootNotFound(hash)) => println!(
+                        "Result for file {}: root {:?} not found.",
+                        wasm_bytes.path, hash
+                    ),
+                    Ok(storage::history::CommitResult::Success(new_root_hash)) => {
+                        println!(
+                            "Result for file {}: Success! New post state hash: {:?}",
+                            wasm_bytes.path, new_root_hash
+                        );
+                        state_hash = new_root_hash; // we need to keep updating the post state hash after each deploy
+                    }
+                    Ok(storage::history::CommitResult::Failure(storage_err)) => {
+                        eprintln!("Error when applying effects {:?}", storage_err)
+                    }
                 }
-                println!("Result for file {}: Success!", wasm_bytes.path);
             }
-            Err(_) => println!("Result for file {}: {:?}", wasm_bytes.path, result),
+            Ok(ExecutionResult::Failure(error)) => {
+                println!("Result for file {}: {:?}", wasm_bytes.path, error)
+            }
         }
     }
 }

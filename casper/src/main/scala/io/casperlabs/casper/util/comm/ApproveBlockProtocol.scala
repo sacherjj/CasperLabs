@@ -8,7 +8,7 @@ import cats.{FlatMap, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.{LastApprovedBlock, PrettyPrinter, Validate}
+import io.casperlabs.casper.{CasperMetricsSource, LastApprovedBlock, PrettyPrinter, Validate}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.{Capture, MonadTrans}
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -20,6 +20,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 
 import scala.concurrent.duration._
+import scala.language.higherKinds
 
 /**
   * Bootstrap side of the protocol defined in
@@ -97,6 +98,8 @@ object ApproveBlockProtocol {
       private val sigsF: Ref[F, Set[Signature]]
   ) extends ApproveBlockProtocol[F] {
     private implicit val logSource: LogSource = LogSource(this.getClass)
+    private implicit val metricsSource: Metrics.Source =
+      Metrics.Source(CasperMetricsSource, "approve-block")
 
     private val candidate                 = ApprovedBlockCandidate(Some(block), requiredSigs)
     private val u                         = UnapprovedBlock(Some(candidate), start, duration.toMillis)
@@ -131,7 +134,7 @@ object ApproveBlockProtocol {
           _      <- sigsF.update(_ + validSig.get)
           after  <- sigsF.get
           _ <- if (after > before)
-                Metrics[F].incrementCounter(METRICS_APPROVAL_COUNTER_NAME)
+                Metrics[F].incrementCounter("genesis")
               else ().pure[F]
           _ <- Log[F].info(s"APPROVAL: received block approval from $sender")
         } yield (),
@@ -142,13 +145,7 @@ object ApproveBlockProtocol {
     private def signedByTrustedValidator(a: BlockApproval): Boolean =
       a.sig.fold(false)(s => trustedValidators.contains(s.publicKey))
 
-    private def completeIf(time: Long, signatures: Set[Signature]): F[Unit] =
-      if ((time >= start + duration.toMillis && signatures.size >= requiredSigs) || requiredSigs == 0) {
-        for {
-          _ <- LastApprovedBlock[F].set(ApprovedBlock(Some(candidate), signatures.toSeq))
-          _ <- sendApprovedBlock
-        } yield ()
-      } else Time[F].sleep(interval) >> internalRun()
+    def run(): F[Unit] = internalRun()
 
     private def internalRun(): F[Unit] =
       for {
@@ -158,8 +155,6 @@ object ApproveBlockProtocol {
         _    <- completeIf(t, sigs)
       } yield ()
 
-    def run(): F[Unit] = internalRun()
-
     //TODO: potential optimization, only send to peers we have not
     //      received a valid signature from yet
     private def sendUnapprovedBlock: F[Unit] =
@@ -168,6 +163,14 @@ object ApproveBlockProtocol {
         _ <- CommUtil.streamToPeers[F](transport.UnapprovedBlock, serializedUnapprovedBlock)
         _ <- Log[F].info(s"APPROVAL: Sent UnapprovedBlock $candidateHash to peers.")
       } yield ()
+
+    private def completeIf(time: Long, signatures: Set[Signature]): F[Unit] =
+      if ((time >= start + duration.toMillis && signatures.size >= requiredSigs) || requiredSigs == 0) {
+        for {
+          _ <- LastApprovedBlock[F].set(ApprovedBlock(Some(candidate), signatures.toSeq))
+          _ <- sendApprovedBlock
+        } yield ()
+      } else Time[F].sleep(interval) >> internalRun()
 
     private def sendApprovedBlock: F[Unit] =
       for {
@@ -187,7 +190,4 @@ object ApproveBlockProtocol {
             }
       } yield ()
   }
-
-  val METRICS_APPROVAL_COUNTER_NAME = "genesis-block-approvals"
-
 }

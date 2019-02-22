@@ -2,7 +2,7 @@ package io.casperlabs.comm.transport
 
 import java.nio.file.Path
 
-case class Tls(
+final case class Tls(
     certificate: Path,
     key: Path,
     customCertificateLocation: Boolean,

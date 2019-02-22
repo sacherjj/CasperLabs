@@ -3,7 +3,7 @@ package io.casperlabs.catscontrib
 trait Opses
     extends ToMonadOps
     with ToBooleanOps
-    with ToFlatMapBooleanOps
+    with ToBooleanF
     with ToOptionOps
     with ToApplicativeError_Ops
     with ToTaskableOps

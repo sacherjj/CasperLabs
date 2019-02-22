@@ -36,6 +36,7 @@ private[configuration] object TomlReader {
     case (value, _) =>
       Left((List.empty, s"Bool expected, $value provided"))
   }
+
   private implicit val finiteDurationCodec: Codec[FiniteDuration] = Codec {
     case (Value.Str(value), _) =>
       Duration(value) match {

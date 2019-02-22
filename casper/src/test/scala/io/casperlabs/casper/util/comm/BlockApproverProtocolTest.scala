@@ -1,59 +1,71 @@
 package io.casperlabs.casper.util.comm
 
-import java.nio.file.Paths
-
-import cats.Id
 import io.casperlabs.casper.HashSetCasperTest
 import io.casperlabs.casper.genesis.contracts._
-import io.casperlabs.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode}
+import io.casperlabs.casper.helper.HashSetCasperTestNode
+import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.rholang.RuntimeManager
-import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits._
+import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.transport
 import io.casperlabs.crypto.signatures.Ed25519
-import io.casperlabs.shared.StoreType
-import io.casperlabs.smartcontracts.ExecutionEngineService
-import monix.eval.Task
+import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
-import io.casperlabs.shared.TestOutlaws._
 
 class BlockApproverProtocolTest extends FlatSpec with Matchers {
   import BlockApproverProtocolTest._
 
-  "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" ignore {
+  private implicit val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
+
+  "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
     val n                          = 8
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = Map(validatorPk -> 10L)
-    val (approver, node)           = createProtocol(n, Seq.empty, validatorSk, bonds)
-    val unapproved                 = createUnapproved(n, node.genesis)
-    import node._
+    createProtocol(n, Seq.empty, validatorSk, bonds).flatMap {
+      case (approver, node) =>
+        val unapproved = createUnapproved(n, node.genesis)
+        import node._
 
-    approver.unapprovedBlockPacketHandler[Id](node.local, unapproved)
+        for {
+          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, unapproved, runtimeManager)
 
-    node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
-    node.logEff.warns.isEmpty should be(true)
+          _ = node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
+          _ = node.logEff.warns.isEmpty should be(true)
 
-    node.transportLayerEff.msgQueues(node.local).get.size should be(1)
+          queue  <- node.transportLayerEff.msgQueues(node.local).get
+          result = queue.size should be(1)
+        } yield result
+    }
   }
 
   // Todo this is block by runtimeManager.replayComputeState
-  it should "log a warning for invalid ApprovedBlockCandidates" ignore {
+  it should "log a warning for invalid ApprovedBlockCandidates" in effectTest {
     val n                          = 8
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = Map(validatorPk -> 10L)
-    val (approver, node)           = createProtocol(n, Seq.empty, validatorSk, bonds)
-    val differentUnapproved1       = createUnapproved(n / 2, node.genesis) //wrong number of signatures
-    val differentUnapproved2       = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
-    import node._
+    createProtocol(n, Seq.empty, validatorSk, bonds).flatMap {
+      case (approver, node) =>
+        val differentUnapproved1 = createUnapproved(n / 2, node.genesis)             //wrong number of signatures
+        val differentUnapproved2 = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
+        import node._
 
-    approver.unapprovedBlockPacketHandler[Id](node.local, differentUnapproved1)
-    approver.unapprovedBlockPacketHandler[Id](node.local, differentUnapproved2)
+        for {
+          _ <- approver.unapprovedBlockPacketHandler[Effect](
+                node.local,
+                differentUnapproved1,
+                runtimeManager
+              )
+          _ <- approver.unapprovedBlockPacketHandler[Effect](
+                node.local,
+                differentUnapproved2,
+                runtimeManager
+              )
 
-    node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
-
-    node.transportLayerEff.msgQueues(node.local).get.isEmpty should be(true)
+          _      = node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
+          queue  <- node.transportLayerEff.msgQueues(node.local).get
+          result = queue.isEmpty should be(true)
+        } yield result
+    }
   }
 }
 
@@ -69,11 +81,7 @@ object BlockApproverProtocolTest {
       wallets: Seq[PreWallet],
       sk: Array[Byte],
       bonds: Map[Array[Byte], Long]
-  ): (BlockApproverProtocol, HashSetCasperTestNode[Id]) = {
-    import monix.execution.Scheduler.Implicits.global
-
-    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-    val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
+  ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
 
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
@@ -86,19 +94,20 @@ object BlockApproverProtocolTest {
       Faucet.noopFaucet,
       deployTimestamp
     )
-    val node = HashSetCasperTestNode.network(Vector(sk), genesis).head
-
-    new BlockApproverProtocol(
-      node.validatorId,
-      deployTimestamp,
-      runtimeManager,
-      bonds,
-      wallets,
-      1L,
-      Long.MaxValue,
-      false,
-      requiredSigs
-    ) -> node
+    for {
+      nodes <- HashSetCasperTestNode.networkEff(Vector(sk), genesis)
+      node  = nodes.head
+    } yield
+      new BlockApproverProtocol(
+        node.validatorId,
+        deployTimestamp,
+        bonds,
+        wallets,
+        1L,
+        Long.MaxValue,
+        false,
+        requiredSigs
+      ) -> node
   }
 
 }

@@ -1,29 +1,37 @@
 use common::key::Key;
-use common::value;
-use core::marker::PhantomData;
 use execution::{exec, Error as ExecutionError};
-use parity_wasm::elements::Module;
 use parking_lot::Mutex;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::marker::PhantomData;
+use storage::error::{Error as StorageError, RootNotFound};
+use storage::gs::{DbReader, ExecutionEffect};
+use storage::history::*;
 use storage::transform::Transform;
-use storage::{ExecutionEffect, GlobalState, TrackingCopy};
 use vm::wasm_costs::WasmCosts;
 use wasm_prep::process;
 
-pub struct EngineState<T: TrackingCopy, G: GlobalState<T>> {
+pub struct EngineState<R, H>
+where
+    R: DbReader,
+    H: History<R>,
+{
     // Tracks the "state" of the blockchain (or is an interface to it).
     // I think it should be constrained with a lifetime parameter.
-    state: Mutex<G>,
-    phantom: PhantomData<T>, //necessary to make the compiler not complain that I don't use T, even though G uses it.
+    state: Mutex<H>,
     wasm_costs: WasmCosts,
+    _phantom: PhantomData<R>,
+}
+
+pub enum ExecutionResult {
+    Success(ExecutionEffect),
+    Failure(Error),
 }
 
 #[derive(Debug)]
 pub enum Error {
     PreprocessingError(String),
-    SignatureError(String),
     ExecError(ExecutionError),
-    StorageError(storage::Error),
+    StorageError(StorageError),
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -52,8 +60,8 @@ impl From<wasm_prep::PreprocessingError> for Error {
     }
 }
 
-impl From<storage::Error> for Error {
-    fn from(error: storage::Error) -> Self {
+impl From<StorageError> for Error {
+    fn from(error: StorageError) -> Self {
         Error::StorageError(error)
     }
 }
@@ -64,27 +72,16 @@ impl From<ExecutionError> for Error {
     }
 }
 
-impl<T, G> EngineState<T, G>
+impl<G, R> EngineState<R, G>
 where
-    T: TrackingCopy,
-    G: GlobalState<T>,
+    G: History<R>,
+    R: DbReader,
 {
-    // To run, contracts need an existing account.
-    // This function puts artifical entry in the GlobalState.
-    pub fn with_mocked_account(&self, account_addr: [u8; 20]) {
-        let account = value::Account::new([48u8; 32], 0, BTreeMap::new());
-        let transform = Transform::Write(value::Value::Acct(account));
-        self.state
-            .lock()
-            .apply(Key::Account(account_addr), transform)
-            .expect("Creation of mocked account should be a success.");
-    }
-
-    pub fn new(state: G) -> EngineState<T, G> {
+    pub fn new(state: G) -> EngineState<R, G> {
         EngineState {
             state: Mutex::new(state),
-            phantom: PhantomData,
             wasm_costs: WasmCosts::new(),
+            _phantom: PhantomData,
         }
     }
 
@@ -94,32 +91,29 @@ where
         &self,
         module_bytes: &[u8],
         address: [u8; 20],
+        timestamp: u64,
+        nonce: u64,
+        prestate_hash: [u8; 32],
         gas_limit: &u64,
-    ) -> Result<ExecutionEffect, Error> {
-        let module = self.preprocess_module(module_bytes, &self.wasm_costs)?;
-        exec(module, address, &gas_limit, &*self.state.lock()).map_err(|e| e.into())
+    ) -> Result<ExecutionResult, RootNotFound> {
+        match process(module_bytes, &self.wasm_costs) {
+            Err(error) => Ok(ExecutionResult::Failure(error.into())),
+            Ok(module) => {
+                let mut tc: storage::gs::TrackingCopy<R> =
+                    self.state.lock().checkout(prestate_hash)?;
+                match exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
+                    Ok(ee) => Ok(ExecutionResult::Success(ee)),
+                    Err(error) => Ok(ExecutionResult::Failure(error.into())),
+                }
+            }
+        }
     }
 
-    pub fn apply_effect(&self, key: Key, eff: Transform) -> Result<(), Error> {
-        self.state.lock().apply(key, eff).map_err(|err| err.into())
-    }
-
-    //TODO: inject gas counter, limit stack size etc
-    fn preprocess_module(
+    pub fn apply_effect(
         &self,
-        module_bytes: &[u8],
-        wasm_costs: &WasmCosts,
-    ) -> Result<Module, Error> {
-        process(module_bytes, wasm_costs).map_err(|err| err.into())
-    }
-
-    //TODO return proper error
-    pub fn validate_signatures(
-        &self,
-        _deploy: &[u8],
-        _signature: &[u8],
-        _signature_alg: &str,
-    ) -> Result<String, Error> {
-        Ok(String::from("OK"))
+        prestate_hash: [u8; 32],
+        effects: HashMap<Key, Transform>,
+    ) -> Result<CommitResult, RootNotFound> {
+        self.state.lock().commit(prestate_hash, effects)
     }
 }

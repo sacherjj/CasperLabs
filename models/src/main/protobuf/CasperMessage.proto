@@ -19,11 +19,12 @@ option (scalapb.options) = {
 service DeployService {
     rpc DoDeploy (DeployData) returns (DeployServiceResponse) {
     }
-    rpc addBlock (BlockMessage) returns (DeployServiceResponse) {
-    }
     rpc createBlock (google.protobuf.Empty) returns (DeployServiceResponse) {
     }
     rpc showBlock (BlockQuery) returns (BlockQueryResponse) {
+    }
+    // Get dag
+    rpc visualizeDag(VisualizeDagQuery) returns (VisualizeBlocksResponse) {
     }
     rpc showMainChain (BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {
     }
@@ -56,6 +57,10 @@ message BlockRequest {
     bytes hash = 2;
 }
 
+message ForkChoiceTipRequest {
+
+}
+
 message FindDeployInBlockQuery {
     bytes user = 1;
     int64 timestamp = 2;
@@ -81,6 +86,15 @@ message MaybeBlockMessage {
 message BlockQueryResponse {
     string status = 1;
     BlockInfo blockInfo = 2;
+}
+
+message VisualizeDagQuery {
+    int32 depth                 = 1;
+    bool showJustificationLines = 2;
+}
+
+message VisualizeBlocksResponse {
+    string content = 1;
 }
 
 message DataWithBlockInfo {
@@ -194,6 +208,20 @@ message BlockMessage {
     string sigAlgorithm = 8; // name of the algorithm used to sign
     string shardId = 9; // identifier of the shard where the block was created
     bytes extraBytes = 10;
+}
+
+message BlockMetadataInternal {
+    // This message in mapped to a different Scala class because of protobuf's inability to create map<bytes, int64> for
+    // bonds.
+    option (scalapb.message).type = "io.casperlabs.models.BlockMetadata";
+
+    bytes blockHash                       = 1;
+    repeated bytes parents                = 2 [(scalapb.field).collection_type="collection.immutable.List"];
+    bytes sender                          = 3;
+    repeated Justification justifications = 4 [(scalapb.field).collection_type="collection.immutable.List"];
+    repeated Bond bonds                   = 5 [(scalapb.field).collection_type="collection.immutable.List"];
+    int64 blockNum                        = 6;
+    int32 seqNum                          = 7;
 }
 
 message Header {

@@ -1,26 +1,35 @@
 package io.casperlabs.node.api
 
-import cats.effect.Sync
+import cats.Id
+import cats.data.StateT
+import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Semaphore
+import cats.implicits._
+import cats.mtl._
+import cats.mtl.implicits._
 import com.google.protobuf.empty.Empty
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
-import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import io.casperlabs.casper.protocol.{DeployData, DeployServiceResponse, _}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.Taskable
+import io.casperlabs.graphz.{GraphSerializer, Graphz, StringSerializer}
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
 private[api] object DeployGrpcService {
-  def instance[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable](
+      blockApiLock: Semaphore[F]
+  )(
       implicit worker: Scheduler
-  ): CasperMessageGrpcMonix.DeployService =
-    new CasperMessageGrpcMonix.DeployService {
-
+  ): F[CasperMessageGrpcMonix.DeployService] = {
+    def mkService = new CasperMessageGrpcMonix.DeployService {
       private def defer[A](task: F[A]): Task[A] =
         Task.defer(task.toTask).executeOn(worker).attemptAndLog
 
@@ -28,13 +37,30 @@ private[api] object DeployGrpcService {
         defer(BlockAPI.deploy[F](d))
 
       override def createBlock(e: Empty): Task[DeployServiceResponse] =
-        defer(BlockAPI.createBlock[F])
-
-      override def addBlock(b: BlockMessage): Task[DeployServiceResponse] =
-        defer(BlockAPI.addBlock[F](b))
+        defer(BlockAPI.createBlock[F](blockApiLock))
 
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
         defer(BlockAPI.showBlock[F](q))
+
+      // TODO handle potentiall errors (at least by returning proper response)
+      override def visualizeDag(q: VisualizeDagQuery): Task[VisualizeBlocksResponse] = {
+        type Effect[A] = StateT[Id, StringBuffer, A]
+        implicit val ser: GraphSerializer[Effect]       = new StringSerializer[Effect]
+        val stringify: Effect[Graphz[Effect]] => String = _.runS(new StringBuffer).toString
+
+        val depth  = if (q.depth <= 0) None else Some(q.depth)
+        val config = GraphConfig(q.showJustificationLines)
+
+        defer(
+          BlockAPI
+            .visualizeDag[F, Effect](
+              depth,
+              (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
+              stringify
+            )
+            .map(graph => VisualizeBlocksResponse(graph))
+        )
+      }
 
       override def showBlocks(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
         Observable
@@ -54,4 +80,7 @@ private[api] object DeployGrpcService {
       ): Task[PrivateNamePreviewResponse] =
         defer(BlockAPI.previewPrivateNames[F](request.user, request.timestamp, request.nameQty))
     }
+
+    BlockAPI.establishMetrics[F] *> Sync[F].delay(mkService)
+  }
 }

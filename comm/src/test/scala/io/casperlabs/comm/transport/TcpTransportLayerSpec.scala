@@ -6,6 +6,7 @@ import io.casperlabs.comm._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.shared.Log
+import io.casperlabs.metrics.Metrics
 import java.nio.file._
 import monix.catnap.MVar
 import monix.eval.Task
@@ -16,8 +17,9 @@ class TcpTransportLayerSpec
     extends TransportLayerSpec[Task, TcpTlsEnvironment]
     with BeforeAndAfterEach {
 
-  implicit val log: Log[Task]       = new Log.NOPLog[Task]
-  implicit val scheduler: Scheduler = Scheduler.Implicits.global
+  implicit val log: Log[Task]         = new Log.NOPLog[Task]
+  implicit val scheduler: Scheduler   = Scheduler.Implicits.global
+  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP
 
   var tempFolder: Path = null
 

@@ -1,129 +1,41 @@
 package io.casperlabs.node.configuration
+
 import java.nio.file.Path
 
+import cats.data.ValidatedNel
 import cats.syntax.either._
 import io.casperlabs.comm.PeerNode
-import io.casperlabs.shared.StoreType
-import shapeless.{Generic, Poly1}
+import io.casperlabs.shared.{Merge, StoreType}
+import shapeless.LowPriority
 
 import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
 import scala.util.Try
 
-private[configuration] case class ConfigurationSoft(
-    server: Option[ConfigurationSoft.Server],
-    grpc: Option[ConfigurationSoft.GrpcServer],
-    tls: Option[ConfigurationSoft.Tls],
-    casper: Option[ConfigurationSoft.Casper],
-    lmdb: Option[ConfigurationSoft.LmdbBlockStore],
-    blockstorage: Option[ConfigurationSoft.BlockDagFileStorage]
+case class ConfigurationSoft(
+    server: ConfigurationSoft.Server,
+    grpc: ConfigurationSoft.GrpcServer,
+    tls: ConfigurationSoft.Tls,
+    casper: ConfigurationSoft.Casper,
+    lmdb: ConfigurationSoft.LmdbBlockStore,
+    blockstorage: ConfigurationSoft.BlockDagFileStorage,
+    metrics: ConfigurationSoft.Metrics,
+    influx: ConfigurationSoft.Influx,
+    influxAuth: ConfigurationSoft.InfluxAuth
 ) {
-  def fallbackTo(other: ConfigurationSoft): ConfigurationSoft = {
-    val genConf = Generic[ConfigurationSoft]
+  implicit def fallback[A](implicit ev: LowPriority): Merge[Option[A]] =
+    (l: Option[A], r: Option[A]) => l.orElse(r)
 
-    object fallback extends Poly1 {
-      implicit def caseOption[A]
-        : fallback.Case[(Option[A], Option[A])] { type Result = Option[A] } =
-        at[(Option[A], Option[A])] { case (a, b) => a.orElse(b) }
-      implicit def caseString = at[String] { identity }
-    }
-
-    object mapper extends Poly1 {
-      implicit def caseServer =
-        at[(Option[ConfigurationSoft.Server], Option[ConfigurationSoft.Server])] {
-          case (a, b) =>
-            (a, b) match {
-              case (None, None)    => None
-              case (Some(_), None) => a
-              case (None, Some(_)) => b
-              case (Some(sa), Some(sb)) =>
-                val ha = Generic[ConfigurationSoft.Server].to(sa)
-                val hb = Generic[ConfigurationSoft.Server].to(sb)
-                Some(Generic[ConfigurationSoft.Server].from(ha.zip(hb).map(fallback)))
-            }
-        }
-
-      implicit def caseGrpcServer =
-        at[(Option[ConfigurationSoft.GrpcServer], Option[ConfigurationSoft.GrpcServer])] {
-          case (a, b) =>
-            (a, b) match {
-              case (None, None)    => None
-              case (Some(_), None) => a
-              case (None, Some(_)) => b
-              case (Some(sa), Some(sb)) =>
-                val ha = Generic[ConfigurationSoft.GrpcServer].to(sa)
-                val hb = Generic[ConfigurationSoft.GrpcServer].to(sb)
-                Some(Generic[ConfigurationSoft.GrpcServer].from(ha.zip(hb).map(fallback)))
-            }
-        }
-
-      implicit def caseTls =
-        at[(Option[ConfigurationSoft.Tls], Option[ConfigurationSoft.Tls])] {
-          case (a, b) =>
-            (a, b) match {
-              case (None, None)    => None
-              case (Some(_), None) => a
-              case (None, Some(_)) => b
-              case (Some(sa), Some(sb)) =>
-                val ha = Generic[ConfigurationSoft.Tls].to(sa)
-                val hb = Generic[ConfigurationSoft.Tls].to(sb)
-                Some(Generic[ConfigurationSoft.Tls].from(ha.zip(hb).map(fallback)))
-            }
-        }
-
-      implicit def caseCasper =
-        at[(Option[ConfigurationSoft.Casper], Option[ConfigurationSoft.Casper])] {
-          case (a, b) =>
-            (a, b) match {
-              case (None, None)    => None
-              case (Some(_), None) => a
-              case (None, Some(_)) => b
-              case (Some(sa), Some(sb)) =>
-                val ha = Generic[ConfigurationSoft.Casper].to(sa)
-                val hb = Generic[ConfigurationSoft.Casper].to(sb)
-                Some(Generic[ConfigurationSoft.Casper].from(ha.zip(hb).map(fallback)))
-            }
-        }
-
-      implicit def caseLmdb =
-        at[(Option[ConfigurationSoft.LmdbBlockStore], Option[ConfigurationSoft.LmdbBlockStore])] {
-          case (a, b) =>
-            (a, b) match {
-              case (None, None)    => None
-              case (Some(_), None) => a
-              case (None, Some(_)) => b
-              case (Some(sa), Some(sb)) =>
-                val ha = Generic[ConfigurationSoft.LmdbBlockStore].to(sa)
-                val hb = Generic[ConfigurationSoft.LmdbBlockStore].to(sb)
-                Some(Generic[ConfigurationSoft.LmdbBlockStore].from(ha.zip(hb).map(fallback)))
-            }
-        }
-
-      implicit def caseBlockDagFileStorage =
-        at[
-          (
-              Option[ConfigurationSoft.BlockDagFileStorage],
-              Option[ConfigurationSoft.BlockDagFileStorage]
-          )
-        ] {
-          case (a, b) =>
-            (a, b) match {
-              case (None, None)    => None
-              case (Some(_), None) => a
-              case (None, Some(_)) => b
-              case (Some(sa), Some(sb)) =>
-                val ha = Generic[ConfigurationSoft.BlockDagFileStorage].to(sa)
-                val hb = Generic[ConfigurationSoft.BlockDagFileStorage].to(sb)
-                Some(Generic[ConfigurationSoft.BlockDagFileStorage].from(ha.zip(hb).map(fallback)))
-            }
-        }
-    }
-
-    genConf.from(genConf.to(this).zip(genConf.to(other)).map(mapper))
-  }
+  def fallbackTo(other: ConfigurationSoft): ConfigurationSoft =
+    Merge[ConfigurationSoft].merge(this, other)
 }
 
 private[configuration] object ConfigurationSoft {
+  private[configuration] case class RelativePath(p: String) extends AnyVal {
+    def withDataDir(implicit c: ConfigurationSoft): Option[Path] =
+      c.server.dataDir.map(_.resolve(p))
+  }
+
   private[configuration] case class Server(
       host: Option[String],
       port: Option[Int],
@@ -143,21 +55,32 @@ private[configuration] object ConfigurationSoft {
   )
 
   private[configuration] case class LmdbBlockStore(
-      path: Option[Path],
       blockStoreSize: Option[Long],
       maxDbs: Option[Int],
       maxReaders: Option[Int],
       useTls: Option[Boolean]
-  )
+  ) {
+    val path: RelativePath = RelativePath("casper-block-store")
+  }
 
   private[configuration] case class BlockDagFileStorage(
-      latestMessagesLogPath: Option[Path],
-      latestMessagesCrcPath: Option[Path],
-      blockMetadataLogPath: Option[Path],
-      blockMetadataCrcPath: Option[Path],
-      checkpointsDirPath: Option[Path],
       latestMessagesLogMaxSizeFactor: Option[Int]
-  )
+  ) {
+    val latestMessagesLogPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-latest-messages-log"
+    )
+    val latestMessagesCrcPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-latest-messages-crc"
+    )
+    val blockMetadataLogPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-block-metadata-log"
+    )
+    val blockMetadataCrcPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-block-metadata-crc"
+    )
+    val checkpointsDirPath: RelativePath =
+      RelativePath("casper-block-dag-file-storage-checkpoints")
+  }
 
   private[configuration] case class GrpcServer(
       host: Option[String],
@@ -173,15 +96,14 @@ private[configuration] object ConfigurationSoft {
   )
 
   private[configuration] case class Casper(
-      publicKey: Option[String],
-      privateKey: Option[String],
-      privateKeyPath: Option[Path],
-      sigAlgorithm: Option[String],
-      bondsFile: Option[String],
+      validatorPublicKey: Option[String],
+      validatorPrivateKey: Option[String],
+      validatorPrivateKeyPath: Option[Path],
+      validatorSigAlgorithm: Option[String],
+      bondsFile: Option[Path],
       knownValidatorsFile: Option[String],
       numValidators: Option[Int],
-      genesisPath: Option[Path],
-      walletsFile: Option[String],
+      walletsFile: Option[Path],
       minimumBond: Option[Long],
       maximumBond: Option[Long],
       hasFaucet: Option[Boolean],
@@ -191,6 +113,26 @@ private[configuration] object ConfigurationSoft {
       approveGenesisInterval: Option[FiniteDuration],
       approveGenesisDuration: Option[FiniteDuration],
       deployTimestamp: Option[Long]
+  ) {
+    val genesisPath: RelativePath = RelativePath("genesis")
+  }
+
+  private[configuration] case class Metrics(
+      prometheus: Option[Boolean],
+      zipkin: Option[Boolean],
+      sigar: Option[Boolean]
+  )
+
+  private[configuration] case class Influx(
+      hostname: Option[String],
+      port: Option[Int],
+      database: Option[String],
+      protocol: Option[String]
+  )
+
+  private[configuration] case class InfluxAuth(
+      user: Option[String],
+      password: Option[String]
   )
 
   private[configuration] def tryDefault: Either[String, ConfigurationSoft] =
@@ -198,14 +140,24 @@ private[configuration] object ConfigurationSoft {
       .leftMap(_.getMessage)
       .flatMap(raw => TomlReader.parse(raw))
 
-  private[configuration] def parse(args: Array[String]): Either[String, ConfigurationSoft] =
+  private[configuration] def fromEnv(
+      envVars: Map[String, String]
+  ): ValidatedNel[String, ConfigurationSoft] =
+    EnvVarsParser[ConfigurationSoft].parse(envVars, List("CL"))
+
+  private[configuration] def parse(
+      args: Array[String],
+      envVars: Map[String, String]
+  ): Either[String, ConfigurationSoft] =
     for {
       defaults               <- tryDefault
       cliConf                <- Options.parseConf(args, defaults)
       maybeRawTomlConfigFile = Options.tryReadConfigFile(args, defaults)
       maybeTomlConf          = maybeRawTomlConfigFile.map(_.flatMap(TomlReader.parse))
+      envConf                <- fromEnv(envVars).toEither.leftMap(_.toList.mkString("\n"))
+      cliWithEnv             = cliConf.fallbackTo(envConf)
       result <- maybeTomlConf
-                 .map(_.map(tomlConf => cliConf.fallbackTo(tomlConf).fallbackTo(defaults)))
-                 .getOrElse(Right(cliConf.fallbackTo(defaults)))
+                 .map(_.map(tomlConf => cliWithEnv.fallbackTo(tomlConf).fallbackTo(defaults)))
+                 .getOrElse(Right(cliWithEnv.fallbackTo(defaults)))
     } yield result
 }

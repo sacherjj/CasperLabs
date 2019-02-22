@@ -50,7 +50,7 @@ object PacketOps {
       } yield resErr
   }
 
-  case class PacketFile(file: Path, fos: FileOutputStream)
+  final case class PacketFile(file: Path, fos: FileOutputStream)
 
   def createPacketFile[F[_]: Sync](folder: Path, postfix: String): F[PacketFile] =
     for {
