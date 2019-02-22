@@ -8,16 +8,7 @@ import string
 import threading
 from multiprocessing import Process, Queue
 from queue import Empty
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    Dict,
-    Generator,
-    List,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Dict, Generator, List, Optional, Tuple, Union
 
 import pytest
 from docker.client import DockerClient
@@ -35,7 +26,6 @@ from casperlabsnode_testing.wait import wait_for_node_started
 
 if TYPE_CHECKING:
     from conftest import KeyPair
-    from docker.client import DockerClient
     from docker.models.containers import Container
     from logging import Logger
     from threading import Event
