@@ -22,7 +22,7 @@ services:
   # and pick one particular node.
 
   node:
-    image: io.casperlabs/node:test
+    image: casperlabs/node:test
     container_name: node-${NODE_NUMBER}
     hostname: node-${NODE_NUMBER}
     volumes:
@@ -53,7 +53,7 @@ services:
       - execution-engine
 
   execution-engine:
-    image: io.casperlabs/execution-engine:latest
+    image: casperlabs/execution-engine:latest
     container_name: execution-engine-${NODE_NUMBER}
     hostname: execution-engine-${NODE_NUMBER}
     volumes:

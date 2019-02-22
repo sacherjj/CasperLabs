@@ -237,7 +237,7 @@ lazy val node = (project in file("node"))
       }
     """,
     /* Dockerization */
-    dockerUsername := Some(organization.value),
+    dockerUsername := Some("casperlabs"),
     version in Docker := version.value +
       git.gitHeadCommit.value.fold("")("-git" + _.take(8)),
     dockerAliases ++=
@@ -340,7 +340,7 @@ lazy val client = (project in file("client"))
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.client",
     /* Dockerization */
-    dockerUsername := Some(organization.value),
+    dockerUsername := Some("casperlabs"),
     version in Docker := version.value +
       git.gitHeadCommit.value.fold("")("-git" + _.take(8)),
     dockerAliases ++=

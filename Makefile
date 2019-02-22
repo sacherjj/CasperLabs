@@ -1,4 +1,4 @@
-DOCKER_USERNAME ?= io.casperlabs
+DOCKER_USERNAME ?= casperlabs
 DOCKER_PUSH_LATEST ?= false
 # Use the git tag / hash as version. Easy to pinpoint. `git tag` can return more than 1 though. `git rev-parse --short HEAD` would just be the commit.
 $(eval TAGS_OR_SHA = $(shell git tag -l --points-at HEAD | grep -e . || git describe --tags --always --long))
