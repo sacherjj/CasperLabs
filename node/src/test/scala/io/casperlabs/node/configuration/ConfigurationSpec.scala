@@ -10,7 +10,7 @@ class ConfigurationSpec extends FunSuite {
   test("""|Configuration.parseToActual should
           |respect server.dataDir changes for 'Path' options""".stripMargin) {
     def updateDataDir(c: ConfigurationSoft, dataDir: Path): ConfigurationSoft =
-      c.copy(server = c.server.map(server => server.copy(dataDir = Option(dataDir))))
+      c.copy(server = c.server.copy(dataDir = Option(dataDir)))
 
     for {
       defaultConfSoft <- ConfigurationSoft.tryDefault.toOption
@@ -23,9 +23,9 @@ class ConfigurationSpec extends FunSuite {
       val paths = extractPathsWithKeys(conf)
 
       val invalidPaths = paths
-        .filter {
+        .filterNot {
           case (_, path) =>
-            path != Paths.get("/tmp/casperlabs-data-dir")
+            path.startsWith(Paths.get("/tmp/casperlabs-data-dir"))
         }
         .map(_._1)
 

@@ -2,11 +2,10 @@ package io.casperlabs.node.configuration
 
 import java.nio.file.Path
 
+import cats.data.ValidatedNel
 import cats.syntax.either._
 import io.casperlabs.comm.PeerNode
-import io.casperlabs.node.configuration.ConfigurationSoft.LmdbBlockStore
-import io.casperlabs.shared.StoreType
-import io.casperlabs.shared.Merge
+import io.casperlabs.shared.{Merge, StoreType}
 import shapeless.LowPriority
 
 import scala.concurrent.duration.FiniteDuration
@@ -14,15 +13,15 @@ import scala.io.Source
 import scala.util.Try
 
 case class ConfigurationSoft(
-    server: Option[ConfigurationSoft.Server],
-    grpc: Option[ConfigurationSoft.GrpcServer],
-    tls: Option[ConfigurationSoft.Tls],
-    casper: Option[ConfigurationSoft.Casper],
-    lmdb: Option[ConfigurationSoft.LmdbBlockStore],
-    blockstorage: Option[ConfigurationSoft.BlockDagFileStorage],
-    metrics: Option[ConfigurationSoft.Metrics],
-    influx: Option[ConfigurationSoft.Influx],
-    influxAuth: Option[ConfigurationSoft.InfluxAuth]
+    server: ConfigurationSoft.Server,
+    grpc: ConfigurationSoft.GrpcServer,
+    tls: ConfigurationSoft.Tls,
+    casper: ConfigurationSoft.Casper,
+    lmdb: ConfigurationSoft.LmdbBlockStore,
+    blockstorage: ConfigurationSoft.BlockDagFileStorage,
+    metrics: ConfigurationSoft.Metrics,
+    influx: ConfigurationSoft.Influx,
+    influxAuth: ConfigurationSoft.InfluxAuth
 ) {
   implicit def fallback[A](implicit ev: LowPriority): Merge[Option[A]] =
     (l: Option[A], r: Option[A]) => l.orElse(r)
@@ -32,6 +31,11 @@ case class ConfigurationSoft(
 }
 
 private[configuration] object ConfigurationSoft {
+  private[configuration] case class RelativePath(p: String) extends AnyVal {
+    def withDataDir(implicit c: ConfigurationSoft): Option[Path] =
+      c.server.dataDir.map(_.resolve(p))
+  }
+
   private[configuration] case class Server(
       host: Option[String],
       port: Option[Int],
@@ -51,21 +55,32 @@ private[configuration] object ConfigurationSoft {
   )
 
   private[configuration] case class LmdbBlockStore(
-      path: Option[Path],
       blockStoreSize: Option[Long],
       maxDbs: Option[Int],
       maxReaders: Option[Int],
       useTls: Option[Boolean]
-  )
+  ) {
+    val path: RelativePath = RelativePath("casper-block-store")
+  }
 
   private[configuration] case class BlockDagFileStorage(
-      latestMessagesLogPath: Option[Path],
-      latestMessagesCrcPath: Option[Path],
-      blockMetadataLogPath: Option[Path],
-      blockMetadataCrcPath: Option[Path],
-      checkpointsDirPath: Option[Path],
       latestMessagesLogMaxSizeFactor: Option[Int]
-  )
+  ) {
+    val latestMessagesLogPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-latest-messages-log"
+    )
+    val latestMessagesCrcPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-latest-messages-crc"
+    )
+    val blockMetadataLogPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-block-metadata-log"
+    )
+    val blockMetadataCrcPath: RelativePath = RelativePath(
+      "casper-block-dag-file-storage-block-metadata-crc"
+    )
+    val checkpointsDirPath: RelativePath =
+      RelativePath("casper-block-dag-file-storage-checkpoints")
+  }
 
   private[configuration] case class GrpcServer(
       host: Option[String],
@@ -81,15 +96,14 @@ private[configuration] object ConfigurationSoft {
   )
 
   private[configuration] case class Casper(
-      publicKey: Option[String],
-      privateKey: Option[String],
-      privateKeyPath: Option[Path],
-      sigAlgorithm: Option[String],
-      bondsFile: Option[String],
+      validatorPublicKey: Option[String],
+      validatorPrivateKey: Option[String],
+      validatorPrivateKeyPath: Option[Path],
+      validatorSigAlgorithm: Option[String],
+      bondsFile: Option[Path],
       knownValidatorsFile: Option[String],
       numValidators: Option[Int],
-      genesisPath: Option[Path],
-      walletsFile: Option[String],
+      walletsFile: Option[Path],
       minimumBond: Option[Long],
       maximumBond: Option[Long],
       hasFaucet: Option[Boolean],
@@ -99,7 +113,9 @@ private[configuration] object ConfigurationSoft {
       approveGenesisInterval: Option[FiniteDuration],
       approveGenesisDuration: Option[FiniteDuration],
       deployTimestamp: Option[Long]
-  )
+  ) {
+    val genesisPath: RelativePath = RelativePath("genesis")
+  }
 
   private[configuration] case class Metrics(
       prometheus: Option[Boolean],
@@ -124,14 +140,24 @@ private[configuration] object ConfigurationSoft {
       .leftMap(_.getMessage)
       .flatMap(raw => TomlReader.parse(raw))
 
-  private[configuration] def parse(args: Array[String]): Either[String, ConfigurationSoft] =
+  private[configuration] def fromEnv(
+      envVars: Map[String, String]
+  ): ValidatedNel[String, ConfigurationSoft] =
+    EnvVarsParser[ConfigurationSoft].parse(envVars, List("CL"))
+
+  private[configuration] def parse(
+      args: Array[String],
+      envVars: Map[String, String]
+  ): Either[String, ConfigurationSoft] =
     for {
       defaults               <- tryDefault
       cliConf                <- Options.parseConf(args, defaults)
       maybeRawTomlConfigFile = Options.tryReadConfigFile(args, defaults)
       maybeTomlConf          = maybeRawTomlConfigFile.map(_.flatMap(TomlReader.parse))
+      envConf                <- fromEnv(envVars).toEither.leftMap(_.toList.mkString("\n"))
+      cliWithEnv             = cliConf.fallbackTo(envConf)
       result <- maybeTomlConf
-                 .map(_.map(tomlConf => cliConf.fallbackTo(tomlConf).fallbackTo(defaults)))
-                 .getOrElse(Right(cliConf.fallbackTo(defaults)))
+                 .map(_.map(tomlConf => cliWithEnv.fallbackTo(tomlConf).fallbackTo(defaults)))
+                 .getOrElse(Right(cliWithEnv.fallbackTo(defaults)))
     } yield result
 }

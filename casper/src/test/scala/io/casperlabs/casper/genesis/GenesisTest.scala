@@ -82,7 +82,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         time: LogicalTime[Task]
     ) =>
       for {
-        _ <- fromBondsFile(genesisPath, maybeBondsPath = Some("not/a/real/file"))(
+        _ <- fromBondsFile(genesisPath)(
               executionEngineService,
               log,
               time
@@ -103,14 +103,14 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         log: LogStub[Task],
         time: LogicalTime[Task]
     ) =>
-      val badBondsFile = genesisPath.resolve("misformatted.txt").toString
+      val badBondsFile = genesisPath.resolve("misformatted.txt")
 
-      val pw = new PrintWriter(badBondsFile)
+      val pw = new PrintWriter(badBondsFile.toString)
       pw.println("xzy 1\nabc 123 7")
       pw.close()
 
       for {
-        _ <- fromBondsFile(genesisPath, maybeBondsPath = Some(badBondsFile))(
+        _ <- fromBondsFile(genesisPath, badBondsFile)(
               executionEngineService,
               log,
               time
@@ -131,11 +131,11 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         log: LogStub[Task],
         time: LogicalTime[Task]
     ) =>
-      val bondsFile = genesisPath.resolve("givenBonds.txt").toString
-      printBonds(bondsFile)
+      val bondsFile = genesisPath.resolve("givenBonds.txt")
+      printBonds(bondsFile.toString)
 
       for {
-        genesis <- fromBondsFile(genesisPath, maybeBondsPath = Some(bondsFile))(
+        genesis <- fromBondsFile(genesisPath, bondsFile)(
                     executionEngineService,
                     log,
                     time
@@ -204,6 +204,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 }
 
 object GenesisTest {
+  val nonExistentPath   = Paths.get("/a/b/c/d/e/f/g")
   val storageSize       = 1024L * 1024
   def mkStoragePath     = Files.createTempDirectory(s"casper-genesis-test-runtime")
   def mkGenesisPath     = Files.createTempDirectory(s"casper-genesis-test")
@@ -212,18 +213,17 @@ object GenesisTest {
 
   def fromBondsFile(
       genesisPath: Path,
-      maybeBondsPath: Option[String] = None
+      bondsPath: Path = nonExistentPath
   )(
       implicit executionEngineService: ExecutionEngineService[Task],
       log: LogStub[Task],
       time: LogicalTime[Task]
   ): Task[BlockMessage] =
     for {
-      bonds          <- Genesis.getBonds[Task](genesisPath, maybeBondsPath, numValidators)
+      bonds          <- Genesis.getBonds[Task](genesisPath, bondsPath, numValidators)
       runtimeManager = RuntimeManager[Task](executionEngineService, bonds)
       genesis <- Genesis[Task](
-                  genesisPath,
-                  maybeWalletsPath = None,
+                  walletsPath = nonExistentPath,
                   minimumBond = 1L,
                   maximumBond = Long.MaxValue,
                   faucet = false,

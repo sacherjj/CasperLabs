@@ -98,8 +98,7 @@ object Genesis {
 
   //TODO: Decide on version number and shard identifier
   def apply[F[_]: Concurrent: Log: Time](
-      genesisPath: Path,
-      maybeWalletsPath: Option[String],
+      walletsPath: Path,
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean,
@@ -108,7 +107,7 @@ object Genesis {
       deployTimestamp: Option[Long]
   ): F[BlockMessage] =
     for {
-      wallets   <- getWallets[F](genesisPath, maybeWalletsPath)
+      wallets   <- getWallets[F](walletsPath)
       bonds     <- runtimeManager.computeBonds(runtimeManager.emptyStateHash)
       bondsMap  = bonds.map(b => b.validator.toByteArray -> b.stake).toMap
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
@@ -132,29 +131,15 @@ object Genesis {
     } yield withContr
 
   def toFile[F[_]: Applicative: Log](
-      maybePath: Option[String],
-      defaultPath: Path
-  ): F[Option[File]] =
-    maybePath match {
-      case Some(path) =>
-        val f = new File(path)
-        if (f.exists) f.some.pure[F]
-        else {
-          none[File].pure[F]
-        }
-
-      case None =>
-        val default = defaultPath.toFile
-        if (default.exists) {
-          Log[F].info(
-            s"Found default file ${default.getPath}."
-          ) *> default.some.pure[F]
-        } else none[File].pure[F]
-    }
+      path: Path
+  ): F[Option[File]] = {
+    val f = path.toFile
+    if (f.exists()) f.some.pure[F]
+    else none[File].pure[F]
+  }
 
   def getWallets[F[_]: Sync: Log](
-      genesisPath: Path,
-      maybeWalletsPath: Option[String]
+      wallets: Path
   ): F[Seq[PreWallet]] = {
     def walletFromFile(file: File): F[Seq[PreWallet]] =
       for {
@@ -173,26 +158,20 @@ object Genesis {
                     case Failure(ex) =>
                       Log[F]
                         .warn(
-                          s"Failed to read ${file.getAbsolutePath()} for reason: ${ex.getMessage}"
+                          s"Failed to read ${file.getAbsolutePath} for reason: ${ex.getMessage}"
                         )
                         .map(_ => Seq.empty[PreWallet])
                   }
       } yield wallets
 
     for {
-      walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
-      wallets <- (walletsFile, maybeWalletsPath) match {
-                  case (Some(file), _) => walletFromFile(file)
-                  case (None, Some(path)) =>
+      walletsFile <- toFile[F](wallets)
+      wallets <- walletsFile match {
+                  case Some(file) => walletFromFile(file)
+                  case _ =>
                     Log[F]
                       .warn(
-                        s"Specified wallets file $path does not exist. No wallets will exist at genesis."
-                      )
-                      .map(_ => Seq.empty[PreWallet])
-                  case (None, None) =>
-                    Log[F]
-                      .warn(
-                        s"No wallets file specified and no default file found. No wallets will exist at genesis."
+                        s"Specified wallets file $wallets does not exist. No wallets will exist at genesis."
                       )
                       .map(_ => Seq.empty[PreWallet])
                 }
@@ -227,11 +206,11 @@ object Genesis {
 
   def getBonds[F[_]: Sync: Log](
       genesisPath: Path,
-      maybeBondsPath: Option[String],
+      bonds: Path,
       numValidators: Int
   ): F[Map[Array[Byte], Long]] =
     for {
-      bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
+      bondsFile <- toFile[F](bonds)
       bonds <- bondsFile match {
                 case Some(file) =>
                   Sync[F]

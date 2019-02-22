@@ -29,7 +29,7 @@ object Main {
 
     val exec: Task[Unit] =
       for {
-        conf <- Task(Configuration.parse(args))
+        conf <- Task(Configuration.parse(args, sys.env))
         _ <- conf
               .fold(
                 errors => log.error(errors.mkString_("", "\n", "")),

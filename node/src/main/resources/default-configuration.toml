@@ -16,18 +16,12 @@ max-message-size = 4194304
 chunk-size = 1048576
 
 [lmdb]
-path = "$HOME/.casperlabs/casper-block-store"
 block-store-size = 1073741824
 max-dbs = 1
 max-readers = 126
 use-tls = false
 
 [blockstorage]
-latest-messages-log-path = "$HOME/.casperlabs/casper-block-dag-file-storage-latest-messages-log"
-latest-messages-crc-path = "$HOME/.casperlabs/casper-block-dag-file-storage-latest-messages-crc"
-block-metadata-log-path = "$HOME/.casperlabs/casper-block-dag-file-storage-block-metadata-log"
-block-metadata-crc-path = "$HOME/.casperlabs/casper-block-dag-file-storage-block-metadata-crc"
-checkpoints-dir-path = "$HOME/.casperlabs/casper-block-dag-file-storage-checkpoints"
 latest-messages-log-max-size-factor = 10
 
 [grpc]
@@ -42,15 +36,14 @@ key = "$HOME/.casperlabs/node.key.pem"
 secure-random-non-blocking = false
 
 [casper]
-#public-key =
-#private-key =
-#private-key-path = Option[Path]
-sig-algorithm = "ed25519"
-#bonds-file =
+#validator-public-key =
+#validator-private-key =
+#validator-private-key-path =
+validator-sig-algorithm = "ed25519"
+bonds-file = "$HOME/.casperlabs/genesis/bonds.txt"
 #known-validators-file =
 num-validators = 5
-genesis-path = "$HOME/.casperlabs/genesis"
-#wallets-file =
+wallets-file = "$HOME/.casperlabs/genesis/wallets.txt"
 minimum-bond = 1
 maximum-bond = 9223372036854775807
 has-faucet = false
@@ -66,12 +59,12 @@ prometheus = false
 zipkin = false
 sigar = false
 
-#[influx]
+[influx]
 #hostname = "0.0.0.0"
 #port = 14
 #database = "test"
 #protocol = "https"
 #
-#[influx-auth]
+[influx-auth]
 #user = "user"
 #password = "password"
