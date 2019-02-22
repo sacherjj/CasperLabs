@@ -320,7 +320,7 @@ If you're doing it for the first time you don't have private and public keys. Th
 In the root of th EE (`execution-engine/comm/`), run:
 
 ```
-cargo run --bin engine-grpc-server ~/.casperlabs/.casper-node.sock
+cargo run --bin casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
 
 .caspernode.sock is default socket file used for IPC communication.
