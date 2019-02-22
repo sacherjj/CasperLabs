@@ -244,8 +244,10 @@ object Configuration {
       adjustPathAsString(confSoft, confSoft.casper.flatMap(_.bondsFile), default).validNel[String],
       confSoft.casper.flatMap(_.knownValidatorsFile).validNel[String],
       optToValidated(confSoft.casper.flatMap(_.numValidators), "Casper.numValidators"),
-      optToValidated(adjustPath(confSoft, confSoft.casper.flatMap(_.genesisPath), default),
-                     "Casper.genesisPath"),
+      optToValidated(
+        adjustPath(confSoft, confSoft.casper.flatMap(_.genesisPath), default),
+        "Casper.genesisPath"
+      ),
       adjustPathAsString(confSoft, confSoft.casper.flatMap(_.walletsFile), default)
         .validNel[String],
       optToValidated(confSoft.casper.flatMap(_.minimumBond), "Casper.minimumBond"),

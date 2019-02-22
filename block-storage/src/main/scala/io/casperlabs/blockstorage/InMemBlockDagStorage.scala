@@ -67,7 +67,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
       _              <- lock.release
     } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
 
-  override def insert(block: BlockMessage): F[Unit] =
+  override def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
     for {
       _ <- lock.acquire
       _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block)))
@@ -101,8 +101,9 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
               case (acc, v) => acc.updated(v, block.blockHash)
             }
           }
-      _ <- lock.release
-    } yield ()
+      _   <- lock.release
+      dag <- getRepresentation
+    } yield dag
 
   override def checkpoint(): F[Unit] = ().pure[F]
 

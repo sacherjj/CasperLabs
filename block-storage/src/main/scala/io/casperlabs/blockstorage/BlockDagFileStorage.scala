@@ -304,7 +304,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore] private (
       _              <- lock.release
     } yield FileDagRepresentation(latestMessages, childMap, dataLookup, topoSort, sortOffset)
 
-  def insert(block: BlockMessage): F[Unit] =
+  def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
     for {
       _             <- lock.acquire
       alreadyStored <- dataLookupRef.get.map(_.contains(block.blockHash))
@@ -356,8 +356,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore] private (
               _ <- updateDataLookupFile(blockMetadata)
             } yield ()
           }
-      _ <- lock.release
-    } yield ()
+      _   <- lock.release
+      dag <- getRepresentation
+    } yield dag
 
   def checkpoint(): F[Unit] =
     ().pure[F]

@@ -22,12 +22,13 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       _      <- lock.release
     } yield result
 
-  def insert(block: BlockMessage): F[Unit] =
+  def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
     for {
-      _ <- lock.acquire
-      _ <- underlying.insert(block)
-      _ <- lock.release
-    } yield ()
+      _          <- lock.acquire
+      _          <- underlying.insert(block)
+      _          <- lock.release
+      updatedDag <- getRepresentation
+    } yield updatedDag
 
   def insertIndexed(block: BlockMessage): F[BlockMessage] =
     for {
