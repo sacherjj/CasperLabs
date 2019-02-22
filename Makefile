@@ -150,16 +150,15 @@ test:
 		$(RUST_SRC) \
 		.make/install/protoc \
 		.make/install/cargo-native-packager
-	@# target/release/rpmbuild/RPMs/<arch>
+	@# e.g. execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-0.1.0-1.x86_64.rpm
 	@# `rpm init` will create a .rpm/<MODULE>.spec file where we can define dependencies if we have to,
 	@# but the build won't refresh it if it already exists, and trying to init again results in an error,
 	@# and if we `--force` it, then it will add a second set of entries to the Cargo.toml file which will make it invalid.
-	#FIXME: The following says "error: No such file or directory (os error 2)""
-	#cd $* && ([ -d .rpm ] || cargo rpm init) && cargo rpm build -v
+	cd $* && ([ -d .rpm ] || cargo rpm init) && cargo rpm build
 
-	@# Writes to for example CasperLabs/execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
+	@# e.g. execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
 	@# This command has a --no-build paramter which could speed it up. If RPM already built it, we can add it.
-	cd $* && cargo deb
+	cd $* && cargo deb --no-build
 
 	#FIXME: Figure out what --input and --output should be
 	#cd $* && cargo-tarball --help
