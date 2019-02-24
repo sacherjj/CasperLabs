@@ -142,16 +142,16 @@ pipeline:
     when:
       event: [ push, tag ]
 
-#  package-ee:
-#    <<: *buildenv
-#    commands:
-#      - mkdir -p /artifacts/${DRONE_BRANCH}
-#      - make cargo-package-all
-#      - cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb /artifacts/${DRONE_BRANCH}
-#    volumes:
-#      - /artifacts/:/artifacts/
-#    when:
-#      event: [ push, tag ]
+  package-ee:
+    <<: *buildenv
+    commands:
+      - mkdir -p /artifacts/${DRONE_BRANCH}
+      - make cargo-package-all
+      - cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb /artifacts/${DRONE_BRANCH}
+    volumes:
+      - /artifacts/:/artifacts/
+    when:
+      event: [ push, tag ]
 
   cleanup:
     <<: *sbtenv
