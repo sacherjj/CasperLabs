@@ -1,6 +1,8 @@
 package io.casperlabs.client.configuration
 import java.io.File
 
+import guru.nidi.graphviz.engine.Format
+
 sealed trait Configuration extends Product with Serializable {
   def port: Int
   def host: String
@@ -21,8 +23,20 @@ final case class Propose(port: Int, host: String) extends Configuration
 
 final case class ShowBlock(port: Int, host: String, hash: String) extends Configuration
 final case class ShowBlocks(port: Int, host: String, depth: Int)  extends Configuration
-final case class VisualizeDag(port: Int, host: String, depth: Int, showJustificationLines: Boolean)
-    extends Configuration
+final case class VisualizeDag(
+    port: Int,
+    host: String,
+    depth: Int,
+    showJustificationLines: Boolean,
+    out: Option[String],
+    streaming: Option[Streaming]
+) extends Configuration
+
+sealed trait Streaming extends Product with Serializable
+object Streaming {
+  final case object Single   extends Streaming
+  final case object Multiple extends Streaming
+}
 
 final case class Query(
     port: Int,
@@ -62,7 +76,9 @@ object Configuration {
           options.port(),
           options.host(),
           options.visualizeBlocks.depth(),
-          options.visualizeBlocks.showJustificationLines()
+          options.visualizeBlocks.showJustificationLines(),
+          options.visualizeBlocks.out.toOption,
+          options.visualizeBlocks.stream.toOption
         )
       case options.query =>
         Query(

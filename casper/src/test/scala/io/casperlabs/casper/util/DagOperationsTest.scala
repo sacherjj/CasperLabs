@@ -2,10 +2,10 @@ package io.casperlabs.casper.util
 
 import org.scalatest.{FlatSpec, Matchers}
 import cats.{Id, Monad}
-import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.Time
 import monix.eval.Task
 

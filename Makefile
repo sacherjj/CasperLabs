@@ -1,10 +1,17 @@
-DOCKER_USERNAME ?= io.casperlabs
+DOCKER_USERNAME ?= casperlabs
 DOCKER_PUSH_LATEST ?= false
 # Use the git tag / hash as version. Easy to pinpoint. `git tag` can return more than 1 though. `git rev-parse --short HEAD` would just be the commit.
 $(eval TAGS_OR_SHA = $(shell git tag -l --points-at HEAD | grep -e . || git describe --tags --always --long))
 # Try to use the semantic version with any leading `v` stripped.
 $(eval SEMVER_REGEX = 'v?\K\d+\.\d+(\.\d+)?')
 $(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -Po $(SEMVER_REGEX) | tail -n 1 | grep -e . || echo $(TAGS_OR_SHA)))
+
+# All rust related source code. If every Rust module depends on everything then transitive dependencies are not a problem.
+# But with comm/build.rs compiling .proto to .rs every time we build the timestamps are updated as well, so filter those and depend on .proto instead.
+RUST_SRC := $(shell find . -type f -iregex ".*/Cargo\.toml\|.*/src/.*\.rs\|.*\.proto" \
+	| grep -v target \
+	| grep -v -e ipc.*\.rs)
+SCALA_SRC := $(shell find . -type f -iregex '.*/src/.*\.scala\|.*\.sbt')
 
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.
@@ -52,7 +59,8 @@ docker-push/%: docker-build/%
 
 
 cargo-package-all: \
-	.make/cargo-package/execution-engine/common
+	.make/cargo-package/execution-engine/common \
+	.make/cargo-native-packager/execution-engine/comm
 
 # We need to publish the libraries the contracts are supposed to use.
 cargo-publish-all: \
@@ -91,9 +99,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		execution-engine/comm/target/release/engine-grpc-server
+		execution-engine/target/release/casperlabs-engine-grpc-server
 	# Just copy the executable to the container.
-	$(eval RELEASE = execution-engine/comm/target/release)
+	$(eval RELEASE = execution-engine/target/release)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
 	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:latest $(RELEASE)
 	rm -rf $(RELEASE)/Dockerfile
@@ -108,16 +116,18 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 
 
 # Refresh Scala build artifacts if source was changed.
-.make/sbt-stage/%: .make \
-		$(shell find . -type f -iregex '.*/src/.*\.scala\|.*\.sbt')
+.make/sbt-stage/%: $(SCALA_SRC)
 	$(eval PROJECT = $*)
 	sbt -mem 5000 $(PROJECT)/universal:stage
 	mkdir -p $(dir $@) && touch $@
 
+test:
+	@echo $(RUST_SRC)
 
 # Re-package cargo if any Rust source code changes (to account for transitive dependencies).
 .make/cargo-package/%: \
-		$(shell find . -type f -iregex ".*/Cargo\.toml\|.*/src/.*\.rs" | grep -v target)
+		$(RUST_SRC) \
+		.make/install/protoc
 	cd $* && cargo update && cargo package
 	mkdir -p $(dir $@) && touch $@
 
@@ -135,31 +145,39 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	fi
 	mkdir -p $(dir $@) && touch $@
 
+# Create .deb, .rpm and .tgz
+.make/cargo-native-packager/%: \
+		$(RUST_SRC) \
+		.make/install/protoc \
+		.make/install/cargo-native-packager
+	@# e.g. execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-0.1.0-1.x86_64.rpm
+	@# `rpm init` will create a .rpm/<MODULE>.spec file where we can define dependencies if we have to,
+	@# but the build won't refresh it if it already exists, and trying to init again results in an error,
+	@# and if we `--force` it, then it will add a second set of entries to the Cargo.toml file which will make it invalid.
+	cd $* && ([ -d .rpm ] || cargo rpm init) && cargo rpm build
 
-# Compile gRPC interfaces for the Execution Engine.
-.make/rust-proto: .make \
-		.make/protoc-install \
-		$(shell find . -type f -iregex '.*\.proto')
-	cd execution-engine/comm && \
-	cargo update && \
-	cargo run --bin grpc-protoc
-	touch $@
+	@# e.g. execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
+	@# This command has a --no-build paramter which could speed it up. If RPM already built it, we can add it.
+	cd $* && cargo deb --no-build
+
+	@#FIXME: Figure out what --input and --output should be
+	@# Alternatively we could use execution-engine/target/release/rpmbuild/SOURCES/casperlabs-engine-grpc-server-0.1.0.tar.gz
+	@#cd $* && cargo-tarball --help
+
+	mkdir -p $(dir $@) && touch $@
 
 
 # Build the execution engine executable.
-execution-engine/comm/target/release/engine-grpc-server: \
-		.make/rust-proto \
-		$(shell find . -type f -iregex ".*/Cargo\.toml\|.*/src/.*\.rs" | grep -v target)
+execution-engine/target/release/casperlabs-engine-grpc-server: \
+		$(RUST_SRC) \
+		.make/install/protoc
 	cd execution-engine/comm && \
 	cargo update && \
 	cargo build --release
 
 # Miscellaneous tools to install once.
 
-.make:
-	mkdir .make
-
-.make/protoc-install: .make
+.make/install/protoc:
 	if [ -z "$$(which protoc)" ]; then \
 		curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v3.6.1/protoc-3.6.1-linux-x86_64.zip ; \
 		unzip protoc-3.6.1-linux-x86n_64.zip -d protoc ; \
@@ -168,4 +186,19 @@ execution-engine/comm/target/release/engine-grpc-server: \
 		chmod +x /usr/local/bin/protoc ; \
 		rm -rf protoc* ; \
 	fi
-	touch $@
+	mkdir -p $(dir $@) && touch $@
+
+.make/install/cargo-native-packager:
+	@# Installs fail if they already exist.
+	cargo install cargo-rpm || exit 0
+	cargo install cargo-deb || exit 0
+	cargo install cargo-tarball || exit 0
+	mkdir -p $(dir $@) && touch $@
+
+
+.make/install/rpm:
+	if [ -z "$$(which rpmbuild)" ]; then
+		# You'll need to isntall `rpmbuild` for `cargo rpm` to work. I'm putting this here for reference:
+		sudo apt-get install rpm
+	fi
+	mkdir -p $(dir $@) && touch $@

@@ -9,17 +9,18 @@ REFRESH_TARGETS := ./monitoring/prometheus/refresh-targets.sh
 # Remove all node-N environments.
 clean: down $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
 	docker network rm casperlabs || exit 0
-	@# Removing genesis created by docker, due to permissions.
+	@# Removing genesis created by docker, using docker, due to permissions.
 	docker run --rm \
 		-v ${PWD}/.casperlabs:/root/.casperlabs \
 		--entrypoint sh \
 		io.casperlabs/node:latest \
-		-c "rm -rf /root/.casperlabs/genesis"
+		-c "rm -rf /root/.casperlabs/*"
+	rm -rf .casperlabs
 	rm -rf .make
 
 
 # Create a new node environment by linking to the template docker-complse.yml file.
-node-%: .casperlabs/genesis
+node-%: .casperlabs
 	$(eval N = $*)
 
 	$(eval KEY_FILE_COUNT = $(shell find .casperlabs -type f -name *.sk | wc -l))
@@ -89,18 +90,26 @@ delay:
 	mkdir -p $(dir $@) && touch $@
 
 # Generate keys and bonds.
-.casperlabs/genesis:
+.casperlabs:
 	@# Start a node to generate keys.
 	docker run --rm -d \
 		--name make-genesis \
 		-v ${PWD}/.casperlabs/genesis:/root/.casperlabs/genesis \
+		-v ${PWD}/.casperlabs/bootstrap:/root/.casperlabs/bootstrap \
 		io.casperlabs/node:latest \
-		run -s --casper-num-validators $(CL_CASPER_NUM_VALIDATORS)
-	@# Wait until the node is running, so we know it generated the files.
-	(docker logs -f make-genesis &) | grep -m 1 "Listening for traffic"
-	@# If we captured the log line and parsed it we could get the ID of the node
-	@# from casperlabs://<id>@78.x.x.x?protocol=... and use it with the generated
-	@# SSL keys instead of the hardcoded ones.
+		run -s \
+		--casper-num-validators $(CL_CASPER_NUM_VALIDATORS) \
+		--tls-certificate /root/.casperlabs/bootstrap/node.certificate.pem \
+		--tls-key /root/.casperlabs/bootstrap/node.key.pem
+	@# Wait until the node is running, so we know it generated the files. Capture the Node ID fromt the logs.
+	@# Can't write to the bootstrap dir from here as it's owned by the docker user.
+	NODE_ID=`(docker logs -f make-genesis &) | grep -m 1 -Po 'Listening for traffic on casperlabs://\K[^@]+'` && \
+	docker run --rm \
+		-v ${PWD}/.casperlabs/bootstrap:/root/.casperlabs/bootstrap \
+		--entrypoint sh \
+		io.casperlabs/node:latest \
+		-c "echo $$NODE_ID > /root/.casperlabs/bootstrap/node-id"
 	docker stop make-genesis
-	@# Check that the file we wanted exists.
-	[ -f .casperlabs/genesis/bonds.txt ]
+	@# Check that the files we wanted exist and aren't empty.
+	[ -s .casperlabs/genesis/bonds.txt ]
+	[ -s .casperlabs/bootstrap/node-id ]

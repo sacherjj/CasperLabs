@@ -9,6 +9,7 @@ import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.models.blockImplicits._
 import io.casperlabs.shared
 import io.casperlabs.shared.Log

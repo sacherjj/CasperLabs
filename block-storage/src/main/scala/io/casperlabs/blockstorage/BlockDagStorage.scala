@@ -4,10 +4,11 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.models.BlockMetadata
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
-  def insert(block: BlockMessage): F[Unit]
+  def insert(block: BlockMessage): F[BlockDagRepresentation[F]]
   def checkpoint(): F[Unit]
   def clear(): F[Unit]
   def close(): F[Unit]

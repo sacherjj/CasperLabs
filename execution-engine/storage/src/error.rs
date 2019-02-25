@@ -4,16 +4,21 @@ use common::bytesrepr;
 use common::key::Key;
 use rkv::error::StoreError;
 use wasmi::HostError;
+use transform::TypeMismatch;
 
 use TreeRootHash;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RootNotFound(pub TreeRootHash);
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
-    KeyNotFound { key: Key },
-    TypeMismatch { expected: String, found: String },
+    KeyNotFound(Key),
+    TransformTypeMismatch(TypeMismatch),
+    //mateusz.gorski: I think that these errors should revert any changes made
+    //to Global State and most probably kill the node.
     RkvError(String), //TODO: capture error better
     BytesRepr(bytesrepr::Error),
-    RootNotFound(TreeRootHash),
 }
 
 impl fmt::Display for Error {
@@ -26,12 +31,18 @@ impl HostError for Error {}
 
 impl From<StoreError> for Error {
     fn from(e: StoreError) -> Self {
-        Error::RkvError(String::from(format!("StoreError\t{:?}", e)))
+        Error::RkvError(e.to_string())
     }
 }
 
 impl From<bytesrepr::Error> for Error {
     fn from(e: bytesrepr::Error) -> Self {
         Error::BytesRepr(e)
+    }
+}
+
+impl From<TypeMismatch> for Error {
+    fn from(tm: TypeMismatch) -> Self {
+        Error::TransformTypeMismatch(tm)
     }
 }

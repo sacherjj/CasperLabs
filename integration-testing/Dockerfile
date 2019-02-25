@@ -11,9 +11,9 @@ WORKDIR /usr/src/execution-engine/comm
 RUN cargo +nightly run --bin grpc-protoc
 RUN cargo +nightly build --release
 
-FROM io.casperlabs/node:latest
+FROM casperlabs/node:latest
 #RUN apt-get update && apt-get -yq install curl nmap
 WORKDIR /opt/docker/bin
-COPY --from=0 /usr/src/execution-engine/comm/target/release/engine-grpc-server .
+COPY --from=0 /usr/src/execution-engine/comm/target/release/casperlabs-engine-grpc-server .
 COPY integration-testing/bootstrap .
 ENTRYPOINT ["/opt/docker/bin/bootstrap"]

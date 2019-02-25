@@ -7,7 +7,6 @@ use common::key::Key;
 use common::value::{Account, Value};
 use storage::error::Error as StorageError;
 use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
-use storage::history::*;
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
@@ -29,7 +28,6 @@ pub enum Error {
     Interpreter(InterpreterError),
     Storage(StorageError),
     BytesRepr(BytesReprError),
-    ValueTypeSizeMismatch { value_type: u32, value_size: usize },
     ForgedReference(Key),
     NoImportedMemory,
     ArgIndexOutOfBounds(usize),
@@ -127,7 +125,7 @@ impl<'a> RuntimeContext<'a> {
 
     pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
         let keys: Vec<Key> = deserialize(bytes)?;
-        let _ = keys.iter().try_fold((), |_, k| self.validate_key(k))?;
+        keys.iter().try_for_each(|k| self.validate_key(k))?;
         Ok(keys)
     }
 }
@@ -153,8 +151,8 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         module: Module,
         gas_limit: &'a u64,
         account_addr: [u8; 20],
-        nonce: i64,
-        timestamp: i64,
+        nonce: u64,
+        timestamp: u64,
         context: RuntimeContext<'a>,
     ) -> Self {
         let rng = create_rng(&account_addr, timestamp, nonce);
@@ -855,30 +853,28 @@ fn sub_call<R: DbReader>(
     }
 }
 
-fn create_rng(account_addr: &[u8; 20], timestamp: i64, nonce: i64) -> ChaChaRng {
+fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let hasher = VarBlake2b::new(32).unwrap();
     data.extend(account_addr);
-    LittleEndian::write_i64(&mut data, timestamp);
-    LittleEndian::write_i64(&mut data, nonce);
+    LittleEndian::write_u64(&mut data, timestamp);
+    LittleEndian::write_u64(&mut data, nonce);
     hasher.variable_result(|hash| seed.clone_from_slice(hash));
     ChaChaRng::from_seed(seed)
 }
 
-pub fn exec<R: DbReader, G: History<R>>(
+pub fn exec<R: DbReader>(
     parity_module: Module,
     account_addr: [u8; 20],
-    timestamp: i64,
-    nonce: i64,
-    prestate_hash: [u8; 32],
+    timestamp: u64,
+    nonce: u64,
     gas_limit: &u64,
-    gs: &G,
+    tc: &mut TrackingCopy<R>,
 ) -> Result<ExecutionEffect, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let acct_key = Key::Account(account_addr);
-    let mut state = gs.checkout(prestate_hash)?;
-    let value = state.get(&acct_key)?;
+    let value = tc.get(&acct_key)?;
     let account = value.as_account();
     let mut known_urefs: HashSet<Key> = HashSet::new();
     for r in account.urefs_lookup().values() {
@@ -888,7 +884,7 @@ pub fn exec<R: DbReader, G: History<R>>(
     let mut runtime = Runtime {
         args: Vec::new(),
         memory,
-        state: &mut state,
+        state: tc,
         module: parity_module,
         result: Vec::new(),
         host_buf: Vec::new(),

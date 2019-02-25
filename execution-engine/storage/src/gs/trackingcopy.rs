@@ -4,7 +4,7 @@ use error::Error;
 use gs::{DbReader, ExecutionEffect};
 use op::Op;
 use std::collections::{BTreeMap, HashMap};
-use transform::Transform;
+use transform::{TypeMismatch, Transform};
 use utils::add;
 
 pub struct TrackingCopy<R: DbReader> {
@@ -25,20 +25,12 @@ impl<R: DbReader> TrackingCopy<R> {
     }
 
     pub fn get(&mut self, k: &Key) -> Result<Value, Error> {
-        //TODO: this remove+insert should not be necessary, but I can't get the borrow checker to agree
-        let maybe_value = self.cache.remove(k);
-        match maybe_value {
-            Some(value) => {
-                let _ = self.cache.insert(*k, value.clone());
-                Ok(value)
-            }
-
-            None => {
-                let value = self.reader.get(k)?;
-                let _ = self.cache.insert(*k, value.clone());
-                Ok(value)
-            }
+        if let Some(value) = self.cache.get(k) {
+            return Ok(value.clone());
         }
+        let value = self.reader.get(k)?;
+        let _ = self.cache.insert(*k, value.clone());
+        Ok(value)
     }
 
     pub fn read(&mut self, k: Key) -> Result<Value, Error> {
@@ -61,10 +53,7 @@ impl<R: DbReader> TrackingCopy<R> {
                 map.insert(n, k);
                 Ok(Transform::AddKeys(map))
             }
-            other => Err(Error::TypeMismatch {
-                expected: "Int32 or NamedKey".to_string(),
-                found: other.type_string(),
-            }),
+            other => Err(TypeMismatch::new("Int32 or NamedKey".to_string(), other.type_string())),
         }?;
         let new_value = t.clone().apply(curr)?;
         let _ = self.cache.insert(k, new_value);
@@ -259,7 +248,7 @@ mod tests {
 
         //adding the wrong type should fail
         let failed_add = tc.add(k, Value::Int32(3));
-        assert_matches!(failed_add, Err(Error::TypeMismatch { .. }));
+        assert_matches!(failed_add, Err(Error::TransformTypeMismatch { .. }));
         assert_eq!(tc.ops.is_empty(), true);
         assert_eq!(tc.fns.is_empty(), true);
 

@@ -1,5 +1,5 @@
 package io.casperlabs.client
-import cats.effect.Sync
+import cats.effect.{Sync, Timer}
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import com.google.protobuf.ByteString
@@ -32,11 +32,11 @@ object Main {
       for {
         maybeConf <- Task(Configuration.parse(args))
         _ <- maybeConf.fold(Log[Task].error("Couldn't parse CLI args into configuration")) { conf =>
-              implicit val deployService = new GrpcDeployService(
+              val deployService = new GrpcDeployService(
                 conf.host,
                 conf.port
               )
-              program(conf)(Sync[Task], deployService, tac)
+              program(conf)(Sync[Task], deployService, tac, Timer[Task])
                 .doOnFinish(_ => Task(deployService.close()))
             }
       } yield ()
@@ -44,7 +44,7 @@ object Main {
     exec.runSyncUnsafe()
   }
 
-  def program[F[_]: Sync: DeployService: ToAbstractContext](configuration: Configuration): F[Unit] =
+  def program[F[_]: Sync: DeployService: ToAbstractContext: Timer](configuration: Configuration): F[Unit] =
     configuration match {
       case ShowBlock(_, _, hash)   => DeployRuntime.showBlock(hash)
       case ShowBlocks(_, _, depth) => DeployRuntime.showBlocks(depth)
@@ -52,8 +52,8 @@ object Main {
         DeployRuntime.deployFileProgram(from, gasLimit, gasPrice, nonce, sessionCode, paymentCode)
       case _: Propose =>
         DeployRuntime.propose()
-      case VisualizeDag(_, _, depth, showJustificationLines) =>
-        DeployRuntime.visualizeDag(depth, showJustificationLines)
+      case VisualizeDag(_, _, depth, showJustificationLines, out, streaming) =>
+        DeployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
 
       case Query(_, _, hash, keyType, keyValue, path) =>
         val keyBytes = ByteString.copyFrom(Base16.decode(keyValue))

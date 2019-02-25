@@ -232,7 +232,7 @@ class Node:
         try:
             logging.info("COMMAND {}".format(command))
             output = self.docker_client.containers.run(
-                image="io.casperlabs/client:{}".format(TAG),
+                image="casperlabs/client:{}".format(TAG),
                 auto_remove=True,
                 name="client-{}".format(TAG),
                 command=command,

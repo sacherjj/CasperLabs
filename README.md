@@ -2,8 +2,6 @@
 
 The open-source CasperLabs project is building a decentralized, economic, censorship-resistant, public compute infrastructure and blockchain. It will host and execute programs popularly referred to as “smart contracts”. It will be trustworthy, scalable, concurrent, with proof-of-stake consensus and content delivery.
 
-(TBD) features project-related tutorials and documentation, project planning information, events calendar, and information for how to engage with this project.
-
 ## Download
 Check our public repository with prebuilt binaries: http://repo.casperlabs.io/casperlabs/repo/
 
@@ -14,10 +12,21 @@ Please refer to the [Developer guide](DEVELOPER.md) for information on running f
 
 ### Running from Docker
 
-TBD
+Please refer to the [docker guide](docker/README.md) for information on running from docker.
 
 ### Running from the tar-ball
-TBD
+
+Artifacts are published to http://repo.casperlabs.io/casperlabs/repo
+
+You can run from the packaged archive for example as follows:
+
+```console
+$ ARCHIVE=http://repo.casperlabs.io/casperlabs/repo/dev/casperlabs-node-0.0.tgz
+$ curl -s -o casperlabs-node.tgz $ARCHIVE
+$ tar -xzf casperlabs-node.tgz
+$ ./casperlabs-node-0.0/bin/casperlabs-node --version
+Casper Labs Node 0.0
+```
 
 ### Installing and running on Debian from DEB package
 #### CLI client tool
@@ -65,19 +74,10 @@ Install using `sudo rpm -U client/target/rpm/RPMS/noarch/casperlabs-client-0.0.1
 
 After installation run `casperlabs-client -- --help` for printing help message.
 
-### Installing and running on macOS via Homebrew
-
-#### Installing Homebrew - https://brew.sh
-TBD
-
 ## Developer guide
 
 For building of CasperLabs, please refer to the [Developer guide](DEVELOPER.md)
 
-### Caveats
+## Validator guide
 
-### Filing Issues
-
-TBD
-
-## Acknowledgements
+For running a CasperLabs node, please refer to the [Validator guide](VALIDATOR.md)

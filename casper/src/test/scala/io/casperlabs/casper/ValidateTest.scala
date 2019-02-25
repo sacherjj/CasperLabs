@@ -379,18 +379,18 @@ class ValidateTest
                        dag <- blockDagStorage.getRepresentation
 
                        // Valid
-                       _ <- Validate.parents[Task](b0, b0, dag)
-                       _ <- Validate.parents[Task](b1, b0, dag)
-                       _ <- Validate.parents[Task](b2, b0, dag)
-                       _ <- Validate.parents[Task](b3, b0, dag)
-                       _ <- Validate.parents[Task](b4, b0, dag)
-                       _ <- Validate.parents[Task](b5, b0, dag)
-                       _ <- Validate.parents[Task](b6, b0, dag)
+                       _ <- Validate.parents[Task](b0, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b1, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b2, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b3, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b4, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b5, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b6, b0, b0.blockHash, dag)
 
                        // Not valid
-                       _ <- Validate.parents[Task](b7, b0, dag).attempt
-                       _ <- Validate.parents[Task](b8, b0, dag).attempt
-                       _ <- Validate.parents[Task](b9, b0, dag).attempt
+                       _ <- Validate.parents[Task](b7, b0, b0.blockHash, dag).attempt
+                       _ <- Validate.parents[Task](b8, b0, b0.blockHash, dag).attempt
+                       _ <- Validate.parents[Task](b9, b0, b0.blockHash, dag).attempt
 
                        _ = log.warns should have size (3)
                        result = log.warns.forall(
@@ -422,9 +422,10 @@ class ValidateTest
         _ <- Validate
               .blockSummary[Task](
                 signedBlock,
-                BlockMessage(),
+                BlockMessage.defaultInstance,
                 dag,
-                "rchain"
+                "casperlabs",
+                BlockMessage.defaultInstance.blockHash
               )
               .attempt shouldBeF Left(InvalidBlockNumber)
         result = log.warns.size should be(1)
