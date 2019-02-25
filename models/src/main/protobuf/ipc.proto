@@ -204,10 +204,13 @@ message WasmError {
 }
  
 message DeployResult {
-    oneof result {
-        ExecutionEffect effects = 1;
-        DeployError error = 2;
+    message Result {
+        oneof result {
+            ExecutionEffect effects = 1;
+            DeployError error = 2;
+        }
     }
+    Result result = 1;
 }
 
 //TODO: be more specific about errors

@@ -332,7 +332,11 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       deployLookup                     = processedDeploys.zip(r).toMap
       commutingEffects                 = ExecEngineUtil.findCommutingEffects(processedDeploys)
       deploysForBlock = commutingEffects.map(eff => {
-        val deploy = deployLookup(ipc.DeployResult(ipc.DeployResult.Result.Effects(eff)))
+        val deploy = deployLookup(
+          ipc.DeployResult(
+            Some(ipc.DeployResult.Result(ipc.DeployResult.Result.Result.Effects(eff)))
+          )
+        )
         protocol.ProcessedDeploy(
           Some(deploy),
           eff.cost,

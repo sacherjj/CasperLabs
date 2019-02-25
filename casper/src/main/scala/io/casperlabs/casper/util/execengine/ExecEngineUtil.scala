@@ -61,9 +61,11 @@ object ExecEngineUtil {
   //TODO: How to handle errors?
   def findCommutingEffects(processedDeploys: Seq[DeployResult]): Seq[ExecutionEffect] =
     processedDeploys.flatMap {
-      case DeployResult(DeployResult.Result.Empty)        => None
-      case DeployResult(DeployResult.Result.Error(_))     => None
-      case DeployResult(DeployResult.Result.Effects(eff)) => Some(eff)
+      case DeployResult(None)                                                           => None //This should never happen
+      case DeployResult(Some(DeployResult.Result(DeployResult.Result.Result.Empty)))    => None
+      case DeployResult(Some(DeployResult.Result(DeployResult.Result.Result.Error(_)))) => None
+      case DeployResult(Some(DeployResult.Result(DeployResult.Result.Result.Effects(eff)))) =>
+        Some(eff)
     }
 
   def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
