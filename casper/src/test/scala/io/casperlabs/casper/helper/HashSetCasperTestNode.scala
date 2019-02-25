@@ -411,6 +411,15 @@ object HashSetCasperTestNode {
         ByteString.copyFrom(newArr).asRight[Throwable].pure[F]
       }
 
+      override def query(
+          state: ByteString,
+          baseKey: Key,
+          path: String
+      ): F[Either[Throwable, Value]] =
+        Applicative[F].pure[Either[Throwable, Value]](
+          Left(new Exception("Method `query` not implemented on this instance!"))
+        )
+
       override def close(): F[Unit] = ().pure[F]
     }
 
