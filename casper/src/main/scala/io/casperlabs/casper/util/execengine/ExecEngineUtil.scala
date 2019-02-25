@@ -59,13 +59,15 @@ object ExecEngineUtil {
 
   //TODO: actually find which ones commute
   //TODO: How to handle errors?
-  def findCommutingEffects(processedDeploys: Seq[DeployResult]): Seq[ExecutionEffect] =
+  def findCommutingEffects(processedDeploys: Seq[DeployResult]): Seq[(ExecutionEffect, Long)] =
     processedDeploys.flatMap {
-      case DeployResult(None)                                                           => None //This should never happen
-      case DeployResult(Some(DeployResult.Result(DeployResult.Result.Result.Empty)))    => None
-      case DeployResult(Some(DeployResult.Result(DeployResult.Result.Result.Error(_)))) => None
-      case DeployResult(Some(DeployResult.Result(DeployResult.Result.Result.Effects(eff)))) =>
-        Some(eff)
+      case DeployResult(None, _) => None //This should never happen
+      case DeployResult(Some(DeployResult.Result(DeployResult.Result.Result.Empty)), _) =>
+        None //This should never happen either
+      case DeployResult(Some(DeployResult.Result(DeployResult.Result.Result.Error(_))), errCost) =>
+        None //We are
+      case DeployResult(Some(DeployResult.Result(DeployResult.Result.Result.Effects(eff))), cost) =>
+        Some((eff, cost))
     }
 
   def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
@@ -83,7 +85,8 @@ object ExecEngineUtil {
                         transforms
                       )
       (prestate, processedDeploys) = processedHash
-    } yield (prestate, findCommutingEffects(processedDeploys).flatMap(_.transformMap))
+      transformMap                 = findCommutingEffects(processedDeploys).unzip._1.flatMap(_.transformMap)
+    } yield (prestate, transformMap)
 
   private def computePrestate[F[_]: Sync: ExecutionEngineService](
       parents: List[BlockMessage],

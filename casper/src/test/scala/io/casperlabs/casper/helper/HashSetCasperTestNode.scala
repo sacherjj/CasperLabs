@@ -384,7 +384,7 @@ object HashSetCasperTestNode {
       private val op            = Op(Op.OpInstance.Read(ReadOp()))
       private val transforEntry = TransformEntry(Some(key), Some(transform))
       private val opEntry       = OpEntry(Some(key), Some(op))
-      private val ee            = ExecutionEffect(Seq(opEntry), Seq(transforEntry), 0)
+      private val ee            = ExecutionEffect(Seq(opEntry), Seq(transforEntry))
 
       override def emptyStateHash: ByteString = ByteString.copyFrom(zero)
 

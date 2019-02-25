@@ -98,32 +98,28 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                 }
                 Ok(ExecutionResult::Success(effects, cost)) => {
                     let mut ipc_ee = execution_effect_to_ipc(effects);
-                    ipc_ee.set_cost(cost);
                     let deploy_result = {
                         let mut deploy_result_tmp = ipc::DeployResult::new();
                         let mut result = ipc::DeployResult_Result::new();
                         result.set_effects(ipc_ee);
                         deploy_result_tmp.set_result(result);
+                        deploy_result_tmp.set_cost(cost);
                         deploy_result_tmp
                     };
                     deploy_results.push(deploy_result);
                     Ok(())
                 }
-                Ok(ExecutionResult::Failure(err)) => {
+                Ok(ExecutionResult::Failure(err, cost)) => {
                     //TODO(mateusz.gorski) Tests!
                     match err {
                         EngineError::StorageError(storage_err) => {
                             use storage::error::Error::*;
-                            match storage_err {
+                            let mut err = match storage_err {
                                 KeyNotFound(key) => {
                                     let msg = format!("Key {:?} not found.", key);
-                                    deploy_results.push(wasm_error(msg.to_owned()));
-                                    Ok(())
+                                    wasm_error(msg.to_owned())
                                 }
-                                RkvError(error_msg) => {
-                                    deploy_results.push(wasm_error(error_msg));
-                                    Ok(())
-                                }
+                                RkvError(error_msg) => wasm_error(error_msg),
                                 TransformTypeMismatch(transform::TypeMismatch {
                                     expected,
                                     found,
@@ -132,18 +128,19 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                                         "Type mismatch. Expected {:?}, found {:?}",
                                         expected, found
                                     );
-                                    deploy_results.push(wasm_error(msg));
-                                    Ok(())
+                                    wasm_error(msg)
                                 }
                                 BytesRepr(bytesrepr_err) => {
                                     let msg = format!(
                                         "Error with byte representation: {:?}",
                                         bytesrepr_err
                                     );
-                                    deploy_results.push(wasm_error(msg));
-                                    Ok(())
+                                    wasm_error(msg)
                                 }
-                            }
+                            };
+                            err.set_cost(cost);
+                            deploy_results.push(err);
+                            Ok(())
                         }
                         EngineError::PreprocessingError(err_msg) => {
                             deploy_results.push(wasm_error(err_msg));
@@ -158,6 +155,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                                     deploy_error.set_gasErr(ipc::OutOfGasError::new());
                                     error_result.set_error(deploy_error);
                                     deploy_result_tmp.set_result(error_result);
+                                    deploy_result_tmp.set_cost(cost);
                                     deploy_result_tmp
                                 };
                                 deploy_results.push(deploy_result);
@@ -166,7 +164,9 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                             //TODO(mateusz.gorski): Be more specific about execution errors
                             other => {
                                 let msg = format!("{:?}", other);
-                                deploy_results.push(wasm_error(msg));
+                                let mut err = wasm_error(msg);
+                                err.set_cost(cost);
+                                deploy_results.push(err);
                                 Ok(())
                             }
                         },

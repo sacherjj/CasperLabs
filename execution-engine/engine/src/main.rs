@@ -127,7 +127,8 @@ fn main() {
                     }
                 }
             }
-            Ok(ExecutionResult::Failure(error)) => {
+            Ok(ExecutionResult::Failure(error, cost)) => {
+                println!("Gas used during execution: {:?}", cost);
                 println!("Result for file {}: {:?}", wasm_bytes.path, error)
             }
         }

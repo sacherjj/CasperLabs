@@ -331,24 +331,26 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       (preStateHash, processedDeploys) = processedHash
       deployLookup                     = processedDeploys.zip(r).toMap
       commutingEffects                 = ExecEngineUtil.findCommutingEffects(processedDeploys)
-      deploysForBlock = commutingEffects.map(eff => {
-        val deploy = deployLookup(
-          ipc.DeployResult(
-            Some(ipc.DeployResult.Result(ipc.DeployResult.Result.Result.Effects(eff)))
+      deploysForBlock = commutingEffects.map {
+        case (eff, cost) => {
+          val deploy = deployLookup(
+            ipc.DeployResult(
+              Some(ipc.DeployResult.Result(ipc.DeployResult.Result.Result.Effects(eff)))
+            )
           )
-        )
-        protocol.ProcessedDeploy(
-          Some(deploy),
-          eff.cost,
-          false
-        )
-      })
+          protocol.ProcessedDeploy(
+            Some(deploy),
+            cost,
+            false
+          )
+        }
+      }
       maxBlockNumber = p.foldLeft(-1L) {
         case (acc, b) => math.max(acc, blockNumber(b))
       }
       //TODO: compute bonds properly
       newBonds              = ProtoUtil.bonds(p.head)
-      transforms            = commutingEffects.flatMap(_.transformMap)
+      transforms            = commutingEffects.unzip._1.flatMap(_.transformMap)
       possiblePostStateHash <- ExecutionEngineService[F].commit(preStateHash, transforms)
       postStateHash <- possiblePostStateHash match {
                         case Left(ex)    => Sync[F].raiseError(ex)

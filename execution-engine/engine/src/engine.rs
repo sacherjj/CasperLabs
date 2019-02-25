@@ -24,7 +24,7 @@ where
 
 pub enum ExecutionResult {
     Success(ExecutionEffect, u64),
-    Failure(Error),
+    Failure(Error, u64),
 }
 
 #[derive(Debug)]
@@ -101,13 +101,13 @@ where
         gas_limit: u64,
     ) -> Result<ExecutionResult, RootNotFound> {
         match process(module_bytes, &self.wasm_costs) {
-            Err(error) => Ok(ExecutionResult::Failure(error.into())),
+            Err(error) => Ok(ExecutionResult::Failure(error.into(), 0)),
             Ok(module) => {
                 let mut tc: storage::gs::TrackingCopy<R> =
                     self.state.lock().checkout(prestate_hash)?;
                 match exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
-                    Ok((ee, cost)) => Ok(ExecutionResult::Success(ee, cost)),
-                    Err(error) => Ok(ExecutionResult::Failure(error.into())),
+                    (Ok(ee), cost) => Ok(ExecutionResult::Success(ee, cost)),
+                    (Err(error), cost) => Ok(ExecutionResult::Failure(error.into(), cost)),
                 }
             }
         }
