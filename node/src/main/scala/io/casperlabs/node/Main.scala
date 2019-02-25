@@ -1,5 +1,6 @@
 package io.casperlabs.node
 
+import cats.effect.ExitCode
 import cats.implicits._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
@@ -9,18 +10,18 @@ import io.casperlabs.node.configuration._
 import io.casperlabs.node.diagnostics.client.GrpcDiagnosticsService
 import io.casperlabs.node.effects._
 import io.casperlabs.shared._
-import io.casperlabs.smartcontracts.GrpcExecutionEngineService
-import monix.eval.Task
+import monix.eval.{Task, TaskApp}
 import monix.execution.Scheduler
+
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
 
-object Main {
+object Main extends TaskApp {
 
   private implicit lazy val logSource: LogSource = LogSource(this.getClass)
   private implicit lazy val log: Log[Task]       = effects.log
 
-  def main(args: Array[String]): Unit = {
+  override def run(args: List[String]): Task[ExitCode] = {
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
       "node-runner",
@@ -29,7 +30,7 @@ object Main {
 
     val exec: Task[Unit] =
       for {
-        conf <- Task(Configuration.parse(args, sys.env))
+        conf <- Task(Configuration.parse(args.toArray, sys.env))
         _ <- conf
               .fold(
                 errors => log.error(errors.mkString_("", "\n", "")),
@@ -37,7 +38,7 @@ object Main {
               )
       } yield ()
 
-    exec.unsafeRunSync
+    exec.as(ExitCode(0))
   }
 
   private def updateLoggingProps(conf: Configuration): Task[Unit] = Task {
