@@ -10,7 +10,7 @@ import cats.effect.laws.util.TestContext
 import cats.effect.laws.util.TestInstances._
 import cats.tests.CatsSuite
 import org.scalacheck.{Arbitrary, Cogen, Gen}
-import io.casperlabs.catscontrib.effect.implicits.bracketEffect
+import io.casperlabs.catscontrib.effect.implicits.bracketEitherTThrowable
 
 class TestBracket extends CatsSuite {
   sealed trait MyErr

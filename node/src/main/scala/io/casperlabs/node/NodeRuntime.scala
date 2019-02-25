@@ -16,7 +16,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib.effect.implicits.{bracketEffect, taskLiftEitherT}
+import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
@@ -182,7 +182,7 @@ class NodeRuntime private[node] (
       nodeCoreMetrics = diagnostics.effects.nodeCoreMetrics[Task]
       jvmMetrics      = diagnostics.effects.jvmMetrics[Task]
 
-      program = nodeProgram[Effect](executionEngineService)(
+      program = nodeProgram[Effect](
         Monad[Effect],
         time,
         rpConfState,
@@ -253,8 +253,7 @@ class NodeRuntime private[node] (
   }
 
   private def clearResources[F[_]: Monad](
-      servers: Servers,
-      executionEngineService: ExecutionEngineService[F]
+      servers: Servers
   )(
       implicit
       transport: TransportLayer[Task],
@@ -280,8 +279,7 @@ class NodeRuntime private[node] (
     } yield ()).unsafeRunSync(scheduler)
 
   private def addShutdownHook[F[_]: Monad](
-      servers: Servers,
-      casperSmartContractsApi: ExecutionEngineService[F]
+      servers: Servers
   )(
       implicit transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task],
@@ -289,14 +287,12 @@ class NodeRuntime private[node] (
       peerNodeAsk: PeerNodeAsk[Task]
   ): Task[Unit] =
     Task.delay(
-      sys.addShutdownHook(clearResources(servers, casperSmartContractsApi))
+      sys.addShutdownHook(clearResources(servers))
     )
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
   private def nodeProgram[F[_]: Monad](
-      executionEngineService: ExecutionEngineService[F]
-  )(
       implicit
       time: Time[Task],
       rpConfState: RPConfState[Task],
@@ -352,7 +348,7 @@ class NodeRuntime private[node] (
       local        <- peerNodeAsk.ask.toEffect
       host         = local.endpoint.host
       servers      <- acquireServers(blockApiLock)
-      _            <- addShutdownHook(servers, executionEngineService).toEffect
+      _            <- addShutdownHook(servers).toEffect
       _            <- servers.grpcServerExternal.start.toEffect
       _ <- Log[Effect].info(
             s"gRPC external server started at $host:${servers.grpcServerExternal.port}"

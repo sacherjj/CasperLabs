@@ -87,7 +87,7 @@ package object implicits {
       EitherT.liftF(TaskLift[F].taskLift(task))
   }
 
-  implicit def bracketEffect[F[_], E](
+  implicit def bracketEitherTThrowable[F[_], E](
       implicit
       br: Bracket[F, Throwable],
       mErr: MonadError[EitherT[F, E, ?], Throwable]
