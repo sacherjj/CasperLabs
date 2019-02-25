@@ -410,8 +410,6 @@ object HashSetCasperTestNode {
 
         ByteString.copyFrom(newArr).asRight[Throwable].pure[F]
       }
-
-      override def close(): F[Unit] = ().pure[F]
     }
 
   private def pad(x: Array[Byte], length: Int): Array[Byte] =

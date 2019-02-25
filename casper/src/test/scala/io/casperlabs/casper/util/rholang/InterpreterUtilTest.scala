@@ -48,11 +48,13 @@ class InterpreterUtilTest
   private val runtimeDir = Files.createTempDirectory(s"interpreter-util-test")
 
   private val socket = Paths.get(runtimeDir.toString, ".casper-node.sock")
-  implicit val executionEngineService: GrpcExecutionEngineService[Task] =
-    new GrpcExecutionEngineService[Task](
-      socket,
-      4 * 1024 * 1024
-    )
+
+  val (eeService, eeRelease) = GrpcExecutionEngineService[Task](
+    socket,
+    4 * 1024 * 1024
+  ).allocated.runSyncUnsafe()
+
+  implicit val executionEngineService: GrpcExecutionEngineService[Task] = eeService
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" ignore withStorage {
     implicit blockStore => implicit blockDagStorage =>
