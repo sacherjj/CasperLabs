@@ -139,17 +139,18 @@ pub struct Runtime<'a, R: DbReader> {
     host_buf: Vec<u8>,
     fn_store_id: u32,
     gas_counter: u64,
-    gas_limit: &'a u64,
+    gas_limit: u64,
     context: RuntimeContext<'a>,
     rng: ChaChaRng,
 }
 
 impl<'a, R: DbReader> Runtime<'a, R> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         memory: MemoryRef,
         state: &'a mut TrackingCopy<R>,
         module: Module,
-        gas_limit: &'a u64,
+        gas_limit: u64,
         account_addr: [u8; 20],
         nonce: u64,
         timestamp: u64,
@@ -180,7 +181,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         match prev.checked_add(amount) {
             // gas charge overflow protection
             None => false,
-            Some(val) if val > *self.gas_limit => false,
+            Some(val) if val > self.gas_limit => false,
             Some(val) => {
                 self.gas_counter = val;
                 true
@@ -214,7 +215,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         let bytes = self
             .memory
             .get(ptr, size as usize)
-            .map_err(|e| Error::Interpreter(e))?;
+            .map_err(Error::Interpreter)?;
         deserialize(&bytes).map_err(|e| Error::BytesRepr(e).into())
     }
 
@@ -223,7 +224,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
             .export_section_mut()
             .unwrap()
             .entries_mut()
-            .into_iter()
+            .iter_mut()
             .find(|e| e.field() == name)
             .unwrap()
             .field_mut();
@@ -245,7 +246,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
             //We only want the function exported under `name` to be callable;
             //`optimize` removes all code that is not reachable from the exports
             //listed in the second argument.
-            let _ = pwasm_utils::optimize(&mut module, vec![&name]).unwrap();
+            pwasm_utils::optimize(&mut module, vec![&name]).unwrap();
             Self::rename_export_to_call(&mut module, name);
 
             parity_wasm::serialize(module).map_err(|e| Error::ParityWasm(e).into())
@@ -285,7 +286,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
             .context
             .uref_lookup
             .get(&name)
-            .ok_or(Error::URefNotFound(name))?;
+            .ok_or_else(|| Error::URefNotFound(name))?;
         let uref_bytes = uref.to_bytes();
 
         self.memory
@@ -336,7 +337,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         let mem_get = self
             .memory
             .get(value_ptr, value_size)
-            .map_err(|e| Error::Interpreter(e))
+            .map_err(Error::Interpreter)
             .and_then(|x| {
                 let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
                 let urefs = self.context.deserialize_keys(&urefs_bytes)?;
@@ -510,7 +511,7 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
                 //args(2) = pointer to value
                 //args(3) = size of value
                 let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
-                let _ = self.write(key_ptr, key_size, value_ptr, value_size)?;
+                self.write(key_ptr, key_size, value_ptr, value_size)?;
                 Ok(None)
             }
 
@@ -520,28 +521,28 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
                 //args(2) = pointer to value
                 //args(3) = size of value
                 let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
-                let _ = self.add(key_ptr, key_size, value_ptr, value_size)?;
+                self.add(key_ptr, key_size, value_ptr, value_size)?;
                 Ok(None)
             }
 
             NEW_FUNC_INDEX => {
                 //args(0) = pointer to key destination in wasm memory
                 let key_ptr = Args::parse(args)?;
-                let _ = self.new_uref(key_ptr)?;
+                self.new_uref(key_ptr)?;
                 Ok(None)
             }
 
             GET_READ_FUNC_INDEX => {
                 //args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
-                let _ = self.set_mem_from_buf(dest_ptr)?;
+                self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             GET_FN_FUNC_INDEX => {
                 //args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
-                let _ = self.set_mem_from_buf(dest_ptr)?;
+                self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
@@ -555,7 +556,7 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
             GET_ARG_FUNC_INDEX => {
                 //args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
-                let _ = self.set_mem_from_buf(dest_ptr)?;
+                self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
@@ -598,7 +599,7 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
             GET_CALL_RESULT_FUNC_INDEX => {
                 //args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
-                let _ = self.set_mem_from_buf(dest_ptr)?;
+                self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
@@ -607,7 +608,7 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
                 //args(1) = size of uref name
                 //args(2) = pointer to destination in wasm memory
                 let (name_ptr, name_size, dest_ptr) = Args::parse(args)?;
-                let _ = self.get_uref(name_ptr, name_size, dest_ptr)?;
+                self.get_uref(name_ptr, name_size, dest_ptr)?;
                 Ok(None)
             }
 
@@ -624,19 +625,19 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
                 //args(1) = size of uref name
                 //args(2) = pointer to destination in wasm memory
                 let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
-                let _ = self.add_uref(name_ptr, name_size, key_ptr, key_size)?;
+                self.add_uref(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(None)
             }
 
             FUNCTION_ADDRESS_FUNC_INDEX => {
                 let dest_ptr = Args::parse(args)?;
-                let _ = self.function_address(dest_ptr)?;
+                self.function_address(dest_ptr)?;
                 Ok(None)
             }
 
             GAS_FUNC_INDEX => {
                 let gas: u32 = Args::parse(args)?;
-                let _ = self.gas(gas as u64)?;
+                self.gas(u64::from(gas))?;
                 Ok(None)
             }
 
@@ -650,12 +651,18 @@ pub struct RuntimeModuleImportResolver {
     max_memory: u32,
 }
 
-impl RuntimeModuleImportResolver {
-    pub fn new() -> RuntimeModuleImportResolver {
+impl Default for RuntimeModuleImportResolver {
+    fn default() -> Self {
         RuntimeModuleImportResolver {
             memory: RefCell::new(None),
             max_memory: 256,
         }
+    }
+}
+
+impl RuntimeModuleImportResolver {
+    pub fn new() -> RuntimeModuleImportResolver {
+        Default::default()
     }
 
     pub fn mem_ref(&self) -> Result<MemoryRef, Error> {
@@ -869,7 +876,7 @@ pub fn exec<R: DbReader>(
     account_addr: [u8; 20],
     timestamp: u64,
     nonce: u64,
-    gas_limit: &u64,
+    gas_limit: u64,
     tc: &mut TrackingCopy<R>,
 ) -> Result<ExecutionEffect, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
@@ -890,14 +897,14 @@ pub fn exec<R: DbReader>(
         host_buf: Vec::new(),
         fn_store_id: 0,
         gas_counter: 0,
-        gas_limit: gas_limit,
+        gas_limit,
         context: RuntimeContext {
             uref_lookup: &mut account.urefs_lookup().clone(),
             known_urefs,
             account: &account,
             base_key: acct_key,
         },
-        rng: rng,
+        rng,
     };
     let _ = instance.invoke_export("call", &[], &mut runtime)?;
 

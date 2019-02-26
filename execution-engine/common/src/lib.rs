@@ -57,6 +57,7 @@ pub mod ext {
     use crate::key::{Key, UREF_SIZE};
     use crate::value::Value;
 
+    #[allow(clippy::zero_ptr)]
     fn alloc_bytes(n: usize) -> *mut u8 {
         if n == 0 {
             //cannot allocate with size 0
@@ -199,11 +200,7 @@ pub mod ext {
     pub fn has_uref(name: &str) -> bool {
         let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
         let result = unsafe { ext_ffi::has_uref_name(name_ptr, name_size) };
-        if result == 0 {
-            true
-        } else {
-            false
-        }
+        result == 0
     }
 
     //Add the given key to the known_urefs map under the given name
@@ -217,6 +214,7 @@ pub mod ext {
     //Note this function is only relevent to contracts stored on chain which
     //return a value to their caller. The return value of a directly deployed
     //contract is never looked at.
+    #[allow(clippy::ptr_arg)]
     pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<Key>) -> ! {
         let (ptr, size, _bytes) = to_ptr(t);
         let (urefs_ptr, urefs_size, _bytes2) = to_ptr(extra_urefs);
@@ -229,6 +227,7 @@ pub mod ext {
     //the host in order to have them available to the called contract during its
     //execution. The value returned from the contract call (see `ret` above) is
     //returned from this function.
+    #[allow(clippy::ptr_arg)]
     pub fn call_contract<T: FromBytes>(
         contract_key: &Key,
         args: &Vec<Vec<u8>>,

@@ -26,9 +26,9 @@ pub fn uref_map_arb(depth: usize) -> impl Strategy<Value = BTreeMap<String, Key>
 
 pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
-        u8_slice_20().prop_map(|b| Key::Account(b)),
-        u8_slice_32().prop_map(|b| Key::Hash(b)),
-        u8_slice_32().prop_map(|b| Key::URef(b))
+        u8_slice_20().prop_map(Key::Account),
+        u8_slice_32().prop_map(Key::Hash),
+        u8_slice_32().prop_map(Key::URef)
     ]
 }
 
@@ -51,13 +51,13 @@ pub fn contract_arb() -> impl Strategy<Value = common::value::Value> {
 
 pub fn value_arb() -> impl Strategy<Value = common::value::Value> {
     prop_oneof![
-        (any::<i32>().prop_map(|i| Value::Int32(i))),
-        (vec(any::<u8>(), 1..1000).prop_map(|b| Value::ByteArray(b))),
-        (vec(any::<i32>(), 1..1000).prop_map(|b| Value::ListInt32(b))),
-        ("\\PC*".prop_map(|s| Value::String(s))),
-        (vec(any::<String>(), 1..500).prop_map(|s| Value::ListString(s))),
+        (any::<i32>().prop_map(Value::Int32)),
+        (vec(any::<u8>(), 1..1000).prop_map(Value::ByteArray)),
+        (vec(any::<i32>(), 1..1000).prop_map(Value::ListInt32)),
+        ("\\PC*".prop_map(Value::String)),
+        (vec(any::<String>(), 1..500).prop_map(Value::ListString)),
         ("\\PC*", key_arb()).prop_map(|(n, k)| Value::NamedKey(n, k)),
-        account_arb().prop_map(|acc| Value::Acct(acc)),
+        account_arb().prop_map(Value::Acct),
         contract_arb()
     ]
 }

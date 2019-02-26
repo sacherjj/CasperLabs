@@ -83,7 +83,7 @@ fn main() {
         .expect("Provided gas limit value is not u64.");
 
     // TODO: move to arg parser
-    let timestamp: u64 = 100000;
+    let timestamp: u64 = 100_000;
     let nonce: u64 = 1;
 
     //let path = std::path::Path::new("./tmp/");
@@ -101,7 +101,7 @@ fn main() {
             timestamp,
             nonce,
             state_hash,
-            &gas_limit,
+            gas_limit,
         );
         match result {
             Err(storage::error::RootNotFound(hash)) => println!(

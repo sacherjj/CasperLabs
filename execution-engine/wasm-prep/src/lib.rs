@@ -8,7 +8,7 @@ use std::error::Error;
 use std::iter::Iterator;
 use vm::wasm_costs::WasmCosts;
 
-const ALLOWED_IMPORTS: &'static [&'static str] = &[
+const ALLOWED_IMPORTS: &[&str] = &[
     "read_value",
     "get_read",
     "write",
@@ -118,7 +118,7 @@ fn validate_imports(module: &Module) -> Result<(), PreprocessingError> {
                     }
                 }
                 elements::External::Memory(m) => {
-                    let max = m.limits().maximum().ok_or(invalid_imports(
+                    let max = m.limits().maximum().ok_or_else(|| invalid_imports(
                         "There is a limit to Wasm memory. This program does not limit memory",
                     ))?;
                     if max > MAX_MEM_PAGES {
