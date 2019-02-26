@@ -221,6 +221,11 @@ mod tests {
         let new_v2 = Value::String("I am String now!".to_owned());
         let write_res = tc.write(KEY2, new_v2.clone());
         assert!(write_res.is_ok());
+        let key3 = Key::Account([3u8;20]);
+        let value3 = Value::Int32(3);
+        let write_res = tc.write(key3, value3.clone());
+        assert!(write_res.is_ok());
+        assert_eq!(tc.get(&key3).unwrap(), value3);
         let effects = tc.effect();
         // commit changes from the tracking copy
         let _ = commit(&mut gs, EMPTY_ROOT, effects.1);
@@ -228,5 +233,7 @@ mod tests {
         let mut tc_2 = checkout(&gs, EMPTY_ROOT);
         assert_eq!(tc_2.get(&KEY1).unwrap(), VALUE1);
         assert_eq!(tc_2.get(&KEY2).unwrap(), VALUE2);
+        // test that value inserted later are not visible in the past commits.
+        assert!(tc_2.get(&key3).is_err());
     }
 }
