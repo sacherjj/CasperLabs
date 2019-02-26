@@ -396,7 +396,7 @@ object HashSetCasperTestNode {
         //regardless of their wasm code. It pretends to have run all the deploys,
         //but it doesn't really; it just returns the same result no matter what.
         deploys
-          .map(_ => DeployResult(Some(DeployResult.Result(DeployResult.Result.Result.Effects(ee)))))
+          .map(_ => DeployResult(10, DeployResult.Result.Effects(ee)))
           .asRight[Throwable]
           .pure[F]
 

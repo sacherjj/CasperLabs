@@ -100,9 +100,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                     let mut ipc_ee = execution_effect_to_ipc(effects);
                     let deploy_result = {
                         let mut deploy_result_tmp = ipc::DeployResult::new();
-                        let mut result = ipc::DeployResult_Result::new();
-                        result.set_effects(ipc_ee);
-                        deploy_result_tmp.set_result(result);
+                        deploy_result_tmp.set_effects(ipc_ee);
                         deploy_result_tmp.set_cost(cost);
                         deploy_result_tmp
                     };
@@ -150,11 +148,9 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                             ExecutionError::GasLimit => {
                                 let mut deploy_result = {
                                     let mut deploy_result_tmp = ipc::DeployResult::new();
-                                    let mut error_result = ipc::DeployResult_Result::new();
                                     let mut deploy_error = ipc::DeployError::new();
                                     deploy_error.set_gasErr(ipc::OutOfGasError::new());
-                                    error_result.set_error(deploy_error);
-                                    deploy_result_tmp.set_result(error_result);
+                                    deploy_result_tmp.set_error(deploy_error);
                                     deploy_result_tmp.set_cost(cost);
                                     deploy_result_tmp
                                 };
@@ -236,13 +232,11 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
 // Helper method which returns single DeployResult that is set to be a WasmError.
 fn wasm_error(msg: String) -> DeployResult {
     let mut deploy_result = ipc::DeployResult::new();
-    let mut result = ipc::DeployResult_Result::new();
     let mut deploy_error = ipc::DeployError::new();
     let mut err = ipc::WasmError::new();
     err.set_message(msg.to_owned());
     deploy_error.set_wasmErr(err);
-    result.set_error(deploy_error);
-    deploy_result.set_result(result);
+    deploy_result.set_error(deploy_error);
     deploy_result
 }
 

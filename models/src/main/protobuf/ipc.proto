@@ -203,14 +203,11 @@ message WasmError {
 }
  
 message DeployResult {
-    message Result {
-        oneof result {
-            ExecutionEffect effects = 1;
-            DeployError error = 2;
-        }
+oneof result {
+        ExecutionEffect effects = 1;
+        DeployError error = 2;
     }
-    Result result = 1;
-    uint64 cost = 2;
+    uint64 cost = 3;
 }
 
 //TODO: be more specific about errors

@@ -335,7 +335,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         case (eff, cost) => {
           val deploy = deployLookup(
             ipc.DeployResult(
-              Some(ipc.DeployResult.Result(ipc.DeployResult.Result.Result.Effects(eff)))
+              cost,
+              ipc.DeployResult.Result.Effects(eff)
             )
           )
           protocol.ProcessedDeploy(
