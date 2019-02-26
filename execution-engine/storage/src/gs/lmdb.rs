@@ -1,7 +1,7 @@
 use common::bytesrepr::{deserialize, ToBytes};
 use common::key::Key;
 use common::value::Value;
-use error::{RootNotFound, Error};
+use error::{Error, RootNotFound};
 use gs::{DbReader, TrackingCopy};
 use history::*;
 use rkv::store::single::SingleStore;

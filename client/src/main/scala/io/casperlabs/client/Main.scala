@@ -44,7 +44,9 @@ object Main {
     exec.runSyncUnsafe()
   }
 
-  def program[F[_]: Sync: DeployService: ToAbstractContext: Timer](configuration: Configuration): F[Unit] =
+  def program[F[_]: Sync: DeployService: ToAbstractContext: Timer](
+      configuration: Configuration
+  ): F[Unit] =
     configuration match {
       case ShowBlock(_, _, hash)   => DeployRuntime.showBlock(hash)
       case ShowBlocks(_, _, depth) => DeployRuntime.showBlocks(depth)

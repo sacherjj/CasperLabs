@@ -4,7 +4,7 @@ use blake2::VarBlake2b;
 use common::bytesrepr::*;
 use common::key::Key;
 use common::value::Value;
-use error::{RootNotFound, Error};
+use error::{Error, RootNotFound};
 use gs::*;
 use history::*;
 use std::collections::{BTreeMap, HashMap};
@@ -84,7 +84,7 @@ impl History<InMemGS> for InMemHist {
             BTreeMap::clone(&arc)
         };
 
-        let result: Result<[u8;32], Error> = effects
+        let result: Result<[u8; 32], Error> = effects
             .into_iter()
             .try_for_each(|(k, t)| {
                 let maybe_curr = base.remove(&k);
@@ -154,7 +154,7 @@ mod tests {
         assert!(res.is_ok());
         match res.unwrap() {
             CommitResult::Success(hash) => hash,
-            CommitResult::Failure(_) => panic!("Test commit failed but shouldn't.")
+            CommitResult::Failure(_) => panic!("Test commit failed but shouldn't."),
         }
     }
 

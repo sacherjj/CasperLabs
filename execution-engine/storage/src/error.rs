@@ -3,8 +3,8 @@ use std::fmt;
 use common::bytesrepr;
 use common::key::Key;
 use rkv::error::StoreError;
-use wasmi::HostError;
 use transform::TypeMismatch;
+use wasmi::HostError;
 
 use TreeRootHash;
 
