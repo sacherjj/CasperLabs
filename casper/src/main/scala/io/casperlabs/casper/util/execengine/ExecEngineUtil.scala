@@ -64,7 +64,7 @@ object ExecEngineUtil {
       case DeployResult(_, DeployResult.Result.Empty) =>
         None //This should never happen either
       case DeployResult(errCost, DeployResult.Result.Error(_)) =>
-        None //We are
+        None //We should not be ignoring error cost
       case DeployResult(cost, DeployResult.Result.Effects(eff)) =>
         Some((eff, cost))
     }
