@@ -926,3 +926,41 @@ pub fn exec<R: DbReader>(
 
     (Ok(runtime.effect()), runtime.gas_counter)
 }
+
+#[cfg(test)]
+mod tests {
+    // Need intermediate method b/c when on_fail_charge macro is inlined
+    // for the error case it will call return which would exit the test.
+    fn indirect_fn(r: Result<u32, String>, f: u32) -> (Result<u32, String>, u32) {
+        let res = on_fail_charge!(r, f);
+        (Ok(res), 1111) // 1111 for easy discrimination
+    }
+
+    #[test]
+    fn on_fail_charge_ok() {
+        let counter = 0;
+        let ok: Result<u32, String> = Ok(10);
+        let res: (Result<u32, String>, u32) = indirect_fn(ok, counter);
+        assert!(res.0.is_ok());
+        assert_eq!(res.0.ok().unwrap(), 10);
+        assert_eq!(res.1, 1111);
+        assert_eq!(counter, 0); // test that lambda was not executed for the Ok-case
+    }
+
+    #[test]
+    fn on_fail_charge_laziness() {
+        // Need this indirection b/c otherwise compiler complains 
+        // about borrowing counter.counter after it was moved in the `fail` call.
+        struct Counter { pub counter: u32 };
+        impl Counter {
+            fn fail(&mut self) -> Result<u32, String> {
+                self.counter += 10;
+                Err("Err".to_owned())
+            }
+        }
+        let mut counter = Counter { counter: 1 };
+        let res: (Result<u32, String>, u32) = indirect_fn(counter.fail(), counter.counter);
+        assert!(res.0.is_err());
+        assert_eq!(res.1, 11); // test that counter value was fetched lazily
+    }
+}
