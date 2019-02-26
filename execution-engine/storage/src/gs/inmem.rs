@@ -221,7 +221,7 @@ mod tests {
         let new_v2 = Value::String("I am String now!".to_owned());
         let write_res = tc.write(KEY2, new_v2.clone());
         assert!(write_res.is_ok());
-        let key3 = Key::Account([3u8;20]);
+        let key3 = Key::Account([3u8; 20]);
         let value3 = Value::Int32(3);
         let write_res = tc.write(key3, value3.clone());
         assert!(write_res.is_ok());

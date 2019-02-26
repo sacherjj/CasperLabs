@@ -949,9 +949,11 @@ mod tests {
 
     #[test]
     fn on_fail_charge_laziness() {
-        // Need this indirection b/c otherwise compiler complains 
+        // Need this indirection b/c otherwise compiler complains
         // about borrowing counter.counter after it was moved in the `fail` call.
-        struct Counter { pub counter: u32 };
+        struct Counter {
+            pub counter: u32,
+        };
         impl Counter {
             fn fail(&mut self) -> Result<u32, String> {
                 self.counter += 10;
