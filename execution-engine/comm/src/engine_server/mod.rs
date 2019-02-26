@@ -1,12 +1,12 @@
 use std::marker::{Send, Sync};
 
-use execution_engine::engine::{Error as EngineError, EngineState, ExecutionResult};
-use execution_engine::execution::{Error as ExecutionError};
+use execution_engine::engine::{EngineState, Error as EngineError, ExecutionResult};
+use execution_engine::execution::Error as ExecutionError;
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
 use std::collections::HashMap;
-use storage::gs::DbReader;
+use storage::gs::{self, DbReader, QueryResult};
 use storage::history::{self, *};
 use storage::transform;
 
@@ -30,24 +30,40 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         let path = p.get_path();
 
         println!("Querying...");
-        let response = match self.query_state(state_hash, key, path) {
-            Err(err) => {
-                let mut result = ipc::QueryResponse::new();
-                let error = format!("{:?}", err);
-                println!("Error: {}", error);
-                result.set_failure(error);
-                result
-            }
+        if let Ok(tc) = self.tracking_copy(state_hash) {
+            let response = match gs::query_tc(tc, key, path) {
+                Err(err) => {
+                    let mut result = ipc::QueryResponse::new();
+                    let error = format!("{:?}", err);
+                    println!("Error: {}", error);
+                    result.set_failure(error);
+                    result
+                }
 
-            Ok(value) => {
-                println!("Success: {:?}", value);
-                let mut result = ipc::QueryResponse::new();
-                result.set_success(value_to_ipc(&value));
-                result
-            }
-        };
+                Ok(QueryResult::ValueNotFound(full_path)) => {
+                    let mut result = ipc::QueryResponse::new();
+                    let error = format!("Value not found: {:?}", full_path);
+                    println!("Error: {}", error);
+                    result.set_failure(error);
+                    result
+                }
 
-        grpc::SingleResponse::completed(response)
+                Ok(QueryResult::Success(value)) => {
+                    println!("Success: {:?}", value);
+                    let mut result = ipc::QueryResponse::new();
+                    result.set_success(value_to_ipc(&value));
+                    result
+                }
+            };
+
+            grpc::SingleResponse::completed(response)
+        } else {
+            let mut result = ipc::QueryResponse::new();
+            let error = format!("Root not found: {:?}", state_hash);
+            println!("Error: {}", error);
+            result.set_failure(error);
+            grpc::SingleResponse::completed(result)
+        }
     }
 
     fn exec(
@@ -140,7 +156,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                                 deploy_result.set_error(deploy_error);
                                 deploy_results.push(deploy_result);
                                 Ok(())
-                            },
+                            }
                             //TODO(mateusz.gorski): Be more specific about execution errors
                             other => {
                                 let msg = format!("{:?}", other);

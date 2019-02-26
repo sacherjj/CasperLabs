@@ -1,11 +1,10 @@
 use common::key::Key;
-use common::value::Value;
 use execution::{exec, Error as ExecutionError};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use storage::error::{Error as StorageError, RootNotFound};
-use storage::gs::{DbReader, ExecutionEffect};
+use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
 use storage::history::*;
 use storage::transform::Transform;
 use vm::wasm_costs::WasmCosts;
@@ -33,7 +32,6 @@ pub enum Error {
     PreprocessingError(String),
     ExecError(ExecutionError),
     StorageError(StorageError),
-    ValueNotFound(String),
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -87,49 +85,8 @@ where
         }
     }
 
-    pub fn query_state(
-        &self,
-        state_hash: [u8; 32],
-        base_key: Key,
-        path: &[String],
-    ) -> Result<Value, Error> {
-        let mut tc = self.state.lock().checkout(state_hash)?;
-        let base_value = tc.read(base_key)?;
-        let mut full_path = String::new();
-        for p in path {
-            full_path.push_str(p);
-        }
-        let not_found_error = Error::ValueNotFound(full_path);
-
-        let maybe_value =
-            path.iter()
-                .try_fold(base_value, |curr_value, name| -> Result<Value, Error> {
-                    match curr_value {
-                        Value::Acct(account) => {
-                            let key = account
-                                .urefs_lookup()
-                                .get(name)
-                                .ok_or(Error::ValueNotFound(String::new()))?;
-                            tc.read(*key).map_err(|e| e.into())
-                        }
-
-                        Value::Contract { known_urefs, .. } => {
-                            let key = known_urefs
-                                .get(name)
-                                .ok_or(Error::ValueNotFound(String::new()))?;
-                            tc.read(*key).map_err(|e| e.into())
-                        }
-
-                        _ => Err(Error::ValueNotFound(String::new())),
-                    }
-                });
-
-        //Can't return `not_found_error` directly in body above because
-        //of compiler error about moving out value in FnMut closure
-        match maybe_value {
-            Err(_) => Err(not_found_error),
-            ok @ Ok(_) => ok,
-        }
+    pub fn tracking_copy(&self, hash: [u8; 32]) -> Result<TrackingCopy<R>, RootNotFound> {
+        self.state.lock().checkout(hash)
     }
 
     //TODO run_deploy should perform preprocessing and validation of the deploy.
