@@ -76,7 +76,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         };
         let deploys = p.get_deploys();
         let mut deploy_results: Vec<DeployResult> = Vec::with_capacity(deploys.len());
-        let fold_result: Result<(), RootNotFound> = deploys.iter().try_fold((), |_, deploy| {
+        let fold_result: Result<(), RootNotFound> = deploys.iter().try_for_each(|deploy| {
             let module_bytes = &deploy.session_code;
             let address: [u8; 20] = {
                 let mut tmp = [0u8; 20];
