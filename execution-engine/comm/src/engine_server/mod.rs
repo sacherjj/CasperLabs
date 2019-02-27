@@ -86,7 +86,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
-            match self.run_deploy(
+            let deploy_result: Result<DeployResult, RootNotFound> = match self.run_deploy(
                 module_bytes,
                 address,
                 timestamp,
@@ -112,8 +112,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                         deploy_result_tmp.set_cost(cost);
                         deploy_result_tmp
                     };
-                    deploy_results.push(deploy_result);
-                    Ok(())
+                    Ok(deploy_result)
                 }
                 Ok(ExecutionResult::Failure(err, cost)) => {
                     //TODO(mateusz.gorski) Tests!
@@ -145,12 +144,12 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                                 }
                             };
                             err.set_cost(cost);
-                            deploy_results.push(err);
-                            Ok(())
+                            Ok(err)
                         }
                         EngineError::PreprocessingError(err_msg) => {
-                            deploy_results.push(wasm_error(err_msg));
-                            Ok(())
+                            let mut err = wasm_error(err_msg);
+                            err.set_cost(cost);
+                            Ok(err)
                         }
                         EngineError::ExecError(exec_error) => match exec_error {
                             ExecutionError::GasLimit => {
@@ -162,20 +161,25 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                                     deploy_result_tmp.set_cost(cost);
                                     deploy_result_tmp
                                 };
-                                deploy_results.push(deploy_result);
-                                Ok(())
+                                Ok(deploy_result)
                             }
                             //TODO(mateusz.gorski): Be more specific about execution errors
                             other => {
                                 let msg = format!("{:?}", other);
                                 let mut err = wasm_error(msg);
                                 err.set_cost(cost);
-                                deploy_results.push(err);
-                                Ok(())
+                                Ok(err)
                             }
                         },
                     }
                 }
+            };
+            match deploy_result {
+                Ok(result) => {
+                    deploy_results.push(result);
+                    Ok(())
+                }
+                Err(root_missing_err) => Err(root_missing_err),
             }
         });
         let mut exec_response = ipc::ExecResponse::new();
@@ -210,7 +214,9 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
     }
 }
 
-fn apply_effect_result_to_ipc(input: Result<storage::history::CommitResult, storage::error::RootNotFound>) -> ipc::CommitResponse {
+fn apply_effect_result_to_ipc(
+    input: Result<storage::history::CommitResult, storage::error::RootNotFound>,
+) -> ipc::CommitResponse {
     match input {
         Err(storage::error::RootNotFound(missing_root_hash)) => {
             let mut err = ipc::RootNotFound::new();
