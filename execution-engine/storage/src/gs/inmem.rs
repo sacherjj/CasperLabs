@@ -12,11 +12,17 @@ use std::sync::Arc;
 
 pub struct InMemGS(Arc<BTreeMap<Key, Value>>);
 
+impl Clone for InMemGS {
+    fn clone(&self) -> Self {
+        InMemGS(Arc::clone(&self.0))
+    }
+}
+
 /// In memory representation of the versioned global state
 /// store - stores a snapshot of the global state at the specific block
 /// history - stores all the snapshots of the global state
 pub struct InMemHist {
-    history: HashMap<[u8; 32], Arc<BTreeMap<Key, Value>>>,
+    history: HashMap<[u8; 32], InMemGS>,
 }
 
 impl InMemHist {
@@ -28,9 +34,9 @@ impl InMemHist {
         empty_root_hash: &[u8; 32],
         init_state: BTreeMap<Key, Value>,
     ) -> InMemHist {
-        let mut hist: HashMap<[u8; 32], Arc<BTreeMap<Key, Value>>> = HashMap::new();
-        hist.insert(empty_root_hash.clone(), Arc::new(init_state));
-        InMemHist { history: hist }
+        let mut history = HashMap::new();
+        history.insert(empty_root_hash.clone(), InMemGS(Arc::new(init_state)));
+        InMemHist { history }
     }
 
     //TODO(mateusz.gorski): I know this is not efficient and we should be caching these values
@@ -62,11 +68,7 @@ impl History<InMemGS> for InMemHist {
     fn checkout(&self, prestate_hash: [u8; 32]) -> Result<TrackingCopy<InMemGS>, RootNotFound> {
         match self.history.get(&prestate_hash) {
             None => Err(RootNotFound(prestate_hash)),
-
-            Some(arc) => {
-                let gs = InMemGS(Arc::clone(arc));
-                Ok(TrackingCopy::new(gs))
-            }
+            Some(gs) => Ok(TrackingCopy::new(gs.clone())),
         }
     }
 
@@ -76,12 +78,12 @@ impl History<InMemGS> for InMemHist {
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, RootNotFound> {
         let mut base = {
-            let arc = self
+            let gs = self
                 .history
                 .get(&prestate_hash)
                 .ok_or_else(|| RootNotFound(prestate_hash))?;
 
-            BTreeMap::clone(&arc)
+            BTreeMap::clone(&gs.0)
         };
 
         let result: Result<[u8;32], Error> = effects
@@ -105,7 +107,7 @@ impl History<InMemGS> for InMemHist {
             })
             .and_then(|_| {
                 let hash = InMemHist::get_root_hash(&base);
-                self.history.insert(hash, Arc::new(base));
+                self.history.insert(hash, InMemGS(Arc::new(base)));
                 Ok(hash)
             });
 
@@ -135,7 +137,7 @@ mod tests {
         map.insert(KEY1, VALUE1.clone());
         map.insert(KEY2, VALUE2.clone());
         let mut history = HashMap::new();
-        history.insert(EMPTY_ROOT, Arc::new(map));
+        history.insert(EMPTY_ROOT, InMemGS(Arc::new(map)));
         InMemHist { history }
     }
 
