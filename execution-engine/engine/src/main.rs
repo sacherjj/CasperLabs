@@ -9,7 +9,8 @@ use std::iter::Iterator;
 
 use clap::{App, Arg};
 
-use execution_engine::engine::{EngineState, ExecutionResult};
+use execution_engine::engine::{ExecutionResult, EngineState};
+use execution_engine::execution::WasmiExecutor;
 use storage::gs::inmem::InMemHist;
 
 #[derive(Debug)]
@@ -93,6 +94,8 @@ fn main() {
     let gs = InMemHist::new_initialized(&state_hash, init_state);
     let engine_state = EngineState::new(gs);
 
+    let wasmi_executor = WasmiExecutor {};
+
     for wasm_bytes in wasm_files.iter() {
         println!("Pre state hash: {:?}", state_hash);
         let result = engine_state.run_deploy(
@@ -102,6 +105,7 @@ fn main() {
             nonce,
             state_hash,
             gas_limit,
+            &wasmi_executor,
         );
         match result {
             Err(storage::error::RootNotFound(hash)) => println!(

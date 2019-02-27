@@ -1,7 +1,7 @@
 use std::marker::{Send, Sync};
 
 use execution_engine::engine::{EngineState, Error as EngineError, ExecutionResult};
-use execution_engine::execution::Error as ExecutionError;
+use execution_engine::execution::{Error as ExecutionError, WasmiExecutor};
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
@@ -66,6 +66,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         _o: ::grpc::RequestOptions,
         p: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
+        let executor = WasmiExecutor {};
         let mut prestate_hash = [0u8; 32];
         prestate_hash.copy_from_slice(&p.get_parent_state_hash());
         let deploys = p.get_deploys();
@@ -87,6 +88,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                 nonce,
                 prestate_hash,
                 gas_limit,
+                &executor,
             ) {
                 // We want to treat RootNotFound error differently b/c it should short-circuit
                 // the execution of ALL deploys within the block. This is because all of them share the same prestate

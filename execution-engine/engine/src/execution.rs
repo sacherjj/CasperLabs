@@ -884,47 +884,64 @@ macro_rules! on_fail_charge {
     };
 }
 
-pub fn exec<R: DbReader>(
-    parity_module: Module,
-    account_addr: [u8; 20],
-    timestamp: u64,
-    nonce: u64,
-    gas_limit: u64,
-    tc: &mut TrackingCopy<R>,
-) -> (Result<ExecutionEffect, Error>, u64) {
-    let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
-    let acct_key = Key::Account(account_addr);
-    let value = on_fail_charge!(tc.get(&acct_key), 0);
-    let account = value.as_account();
-    let mut known_urefs: HashSet<Key> = HashSet::new();
-    for r in account.urefs_lookup().values() {
-        known_urefs.insert(*r);
-    }
-    let rng = create_rng(&account_addr, timestamp, nonce);
-    let mut runtime = Runtime {
-        args: Vec::new(),
-        memory,
-        state: tc,
-        module: parity_module,
-        result: Vec::new(),
-        host_buf: Vec::new(),
-        fn_store_id: 0,
-        gas_counter: 0,
-        gas_limit,
-        context: RuntimeContext {
-            uref_lookup: &mut account.urefs_lookup().clone(),
-            known_urefs,
-            account: &account,
-            base_key: acct_key,
-        },
-        rng,
-    };
-    let _ = on_fail_charge!(
-        instance.invoke_export("call", &[], &mut runtime),
-        runtime.gas_counter
-    );
+pub trait Executor {
+    fn exec<R: DbReader>(
+        &self,
+        parity_module: Module,
+        account_addr: [u8; 20],
+        timestamp: u64,
+        nonce: u64,
+        gas_limit: u64,
+        tc: &mut TrackingCopy<R>,
+    ) -> (Result<ExecutionEffect, Error>, u64);
+}
 
-    (Ok(runtime.effect()), runtime.gas_counter)
+pub struct WasmiExecutor;
+
+impl Executor for WasmiExecutor {
+    fn exec<R: DbReader>(
+        &self,
+        parity_module: Module,
+        account_addr: [u8; 20],
+        timestamp: u64,
+        nonce: u64,
+        gas_limit: u64,
+        tc: &mut TrackingCopy<R>,
+    ) -> (Result<ExecutionEffect, Error>, u64) {
+        let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
+        let acct_key = Key::Account(account_addr);
+        let value = on_fail_charge!(tc.get(&acct_key), 0);
+        let account = value.as_account();
+        let mut known_urefs: HashSet<Key> = HashSet::new();
+        for r in account.urefs_lookup().values() {
+            known_urefs.insert(*r);
+        }
+        let rng = create_rng(&account_addr, timestamp, nonce);
+        let mut runtime = Runtime {
+            args: Vec::new(),
+            memory,
+            state: tc,
+            module: parity_module,
+            result: Vec::new(),
+            host_buf: Vec::new(),
+            fn_store_id: 0,
+            gas_counter: 0,
+            gas_limit,
+            context: RuntimeContext {
+                uref_lookup: &mut account.urefs_lookup().clone(),
+                known_urefs,
+                account: &account,
+                base_key: acct_key,
+            },
+            rng,
+        };
+        let _ = on_fail_charge!(
+            instance.invoke_export("call", &[], &mut runtime),
+            runtime.gas_counter
+        );
+
+        (Ok(runtime.effect()), runtime.gas_counter)
+    }
 }
 
 #[cfg(test)]

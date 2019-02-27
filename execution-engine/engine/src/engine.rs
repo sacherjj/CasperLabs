@@ -1,5 +1,5 @@
 use common::key::Key;
-use execution::{exec, Error as ExecutionError};
+use execution::{Error as ExecutionError, Executor};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -91,7 +91,7 @@ where
 
     //TODO run_deploy should perform preprocessing and validation of the deploy.
     //It should validate the signatures, ocaps etc.
-    pub fn run_deploy(
+    pub fn run_deploy<E: Executor>(
         &self,
         module_bytes: &[u8],
         address: [u8; 20],
@@ -99,13 +99,14 @@ where
         nonce: u64,
         prestate_hash: [u8; 32],
         gas_limit: u64,
+        executor: &E,
     ) -> Result<ExecutionResult, RootNotFound> {
         match process(module_bytes, &self.wasm_costs) {
             Err(error) => Ok(ExecutionResult::Failure(error.into(), 0)),
             Ok(module) => {
                 let mut tc: storage::gs::TrackingCopy<R> =
                     self.state.lock().checkout(prestate_hash)?;
-                match exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
+                match executor.exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
                     (Ok(ee), cost) => Ok(ExecutionResult::Success(ee, cost)),
                     (Err(error), cost) => Ok(ExecutionResult::Failure(error.into(), cost)),
                 }
