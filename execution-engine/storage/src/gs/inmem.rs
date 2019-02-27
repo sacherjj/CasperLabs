@@ -4,7 +4,7 @@ use blake2::VarBlake2b;
 use common::bytesrepr::*;
 use common::key::Key;
 use common::value::Value;
-use error::{RootNotFound, Error};
+use error::{Error, RootNotFound};
 use gs::*;
 use history::*;
 use std::collections::{BTreeMap, HashMap};
@@ -15,6 +15,15 @@ pub struct InMemGS(Arc<BTreeMap<Key, Value>>);
 impl Clone for InMemGS {
     fn clone(&self) -> Self {
         InMemGS(Arc::clone(&self.0))
+    }
+}
+
+impl DbReader for InMemGS {
+    fn get(&self, k: &Key) -> Result<Value, Error> {
+        match self.0.get(k) {
+            None => Err(Error::KeyNotFound(*k)),
+            Some(v) => Ok(v.clone()),
+        }
     }
 }
 
@@ -55,15 +64,6 @@ impl InMemHist {
     }
 }
 
-impl DbReader for InMemGS {
-    fn get(&self, k: &Key) -> Result<Value, Error> {
-        match self.0.get(k) {
-            None => Err(Error::KeyNotFound(*k)),
-            Some(v) => Ok(v.clone()),
-        }
-    }
-}
-
 impl History<InMemGS> for InMemHist {
     fn checkout(&self, prestate_hash: [u8; 32]) -> Result<TrackingCopy<InMemGS>, RootNotFound> {
         match self.history.get(&prestate_hash) {
@@ -86,7 +86,7 @@ impl History<InMemGS> for InMemHist {
             BTreeMap::clone(&gs.0)
         };
 
-        let result: Result<[u8;32], Error> = effects
+        let result: Result<[u8; 32], Error> = effects
             .into_iter()
             .try_for_each(|(k, t)| {
                 let maybe_curr = base.remove(&k);
@@ -156,7 +156,7 @@ mod tests {
         assert!(res.is_ok());
         match res.unwrap() {
             CommitResult::Success(hash) => hash,
-            CommitResult::Failure(_) => panic!("Test commit failed but shouldn't.")
+            CommitResult::Failure(_) => panic!("Test commit failed but shouldn't."),
         }
     }
 
