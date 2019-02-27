@@ -30,8 +30,8 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         let path = p.get_path();
 
         println!("Querying...");
-        if let Ok(tc) = self.tracking_copy(state_hash) {
-            let response = match gs::query_tc(tc, key, path) {
+        if let Ok(mut tc) = self.tracking_copy(state_hash) {
+            let response = match gs::query_tc(&mut tc, key, path) {
                 Err(err) => {
                     let mut result = ipc::QueryResponse::new();
                     let error = format!("{:?}", err);

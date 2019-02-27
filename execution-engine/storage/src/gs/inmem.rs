@@ -11,6 +11,11 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 pub struct InMemGS(Arc<BTreeMap<Key, Value>>);
+impl InMemGS {
+  pub fn new(map: BTreeMap<Key, Value>) -> Self {
+    InMemGS(Arc::new(map))
+  }
+}
 
 /// In memory representation of the versioned global state
 /// store - stores a snapshot of the global state at the specific block
