@@ -163,6 +163,8 @@ fn deploy_result_to_ipc(
         Ok(ExecutionResult::Failure(err, cost)) => {
             //TODO(mateusz.gorski) Tests!
             match err {
+                // We don't have separate IPC messages for storage errors
+                // so for the time being they are all reported as "wasm errors".
                 EngineError::StorageError(storage_err) => {
                     use storage::error::Error::*;
                     let mut err = match storage_err {
