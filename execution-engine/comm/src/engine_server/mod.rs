@@ -205,35 +205,37 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
             let (k, v) = transform_entry_to_key_transform(entry);
             effects.insert(k, v);
         }
-        let result = {
-            match self.apply_effect(prestate_hash, effects) {
-                Err(storage::error::RootNotFound(missing_root_hash)) => {
-                    let mut err = ipc::RootNotFound::new();
-                    let mut tmp_res = ipc::CommitResponse::new();
-                    err.set_hash(missing_root_hash.to_vec());
-                    tmp_res.set_missing_prestate(err);
-                    tmp_res
-                }
-                Ok(history::CommitResult::Success(post_state_hash)) => {
-                    println!("Effects applied. New state hash is: {:?}", post_state_hash);
-                    let mut commit_result = ipc::CommitResult::new();
-                    let mut tmp_res = ipc::CommitResponse::new();
-                    commit_result.set_poststate_hash(post_state_hash.to_vec());
-                    tmp_res.set_success(commit_result);
-                    tmp_res
-                }
-                //TODO(mateusz.gorski): We should be more specific about errors here.
-                Ok(history::CommitResult::Failure(storage_error)) => {
-                    println!("Error {:?} when applying effects", storage_error);
-                    let mut err = ipc::PostEffectsError::new();
-                    let mut tmp_res = ipc::CommitResponse::new();
-                    err.set_message(format!("{:?}", storage_error));
-                    tmp_res.set_failed_transform(err);
-                    tmp_res
-                }
-            }
-        };
+        let result = apply_effect_result_to_ipc(self.apply_effect(prestate_hash, effects));
         grpc::SingleResponse::completed(result)
+    }
+}
+
+fn apply_effect_result_to_ipc(input: Result<storage::history::CommitResult, storage::error::RootNotFound>) -> ipc::CommitResponse {
+    match input {
+        Err(storage::error::RootNotFound(missing_root_hash)) => {
+            let mut err = ipc::RootNotFound::new();
+            let mut tmp_res = ipc::CommitResponse::new();
+            err.set_hash(missing_root_hash.to_vec());
+            tmp_res.set_missing_prestate(err);
+            tmp_res
+        }
+        Ok(history::CommitResult::Success(post_state_hash)) => {
+            println!("Effects applied. New state hash is: {:?}", post_state_hash);
+            let mut commit_result = ipc::CommitResult::new();
+            let mut tmp_res = ipc::CommitResponse::new();
+            commit_result.set_poststate_hash(post_state_hash.to_vec());
+            tmp_res.set_success(commit_result);
+            tmp_res
+        }
+        //TODO(mateusz.gorski): We should be more specific about errors here.
+        Ok(history::CommitResult::Failure(storage_error)) => {
+            println!("Error {:?} when applying effects", storage_error);
+            let mut err = ipc::PostEffectsError::new();
+            let mut tmp_res = ipc::CommitResponse::new();
+            err.set_message(format!("{:?}", storage_error));
+            tmp_res.set_failed_transform(err);
+            tmp_res
+        }
     }
 }
 
