@@ -8,7 +8,7 @@ use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
 use storage::history::*;
 use storage::transform::Transform;
 use vm::wasm_costs::WasmCosts;
-use wasm_prep::process;
+use wasm_prep::Preprocessor;
 
 pub struct EngineState<R, H>
 where
@@ -91,7 +91,7 @@ where
 
     //TODO run_deploy should perform preprocessing and validation of the deploy.
     //It should validate the signatures, ocaps etc.
-    pub fn run_deploy<E: Executor>(
+    pub fn run_deploy<P: Preprocessor, E: Executor>(
         &self,
         module_bytes: &[u8],
         address: [u8; 20],
@@ -100,8 +100,9 @@ where
         prestate_hash: [u8; 32],
         gas_limit: u64,
         executor: &E,
+        preprocessor: &P,
     ) -> Result<ExecutionResult, RootNotFound> {
-        match process(module_bytes, &self.wasm_costs) {
+        match preprocessor.preprocess(module_bytes, &self.wasm_costs) {
             Err(error) => Ok(ExecutionResult::Failure(error.into(), 0)),
             Ok(module) => {
                 let mut tc: storage::gs::TrackingCopy<R> =

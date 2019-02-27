@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use storage::gs::{trackingcopy::QueryResult, DbReader};
 use storage::history::{self, *};
 use storage::transform;
+use wasm_prep::WasmiPreprocessor;
 
 pub mod ipc;
 pub mod ipc_grpc;
@@ -67,6 +68,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         p: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
         let executor = WasmiExecutor {};
+        let preprocessor = WasmiPreprocessor {};
         let mut prestate_hash = [0u8; 32];
         prestate_hash.copy_from_slice(&p.get_parent_state_hash());
         let deploys = p.get_deploys();
@@ -89,6 +91,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                 prestate_hash,
                 gas_limit,
                 &executor,
+                &preprocessor,
             ) {
                 // We want to treat RootNotFound error differently b/c it should short-circuit
                 // the execution of ALL deploys within the block. This is because all of them share the same prestate

@@ -4,6 +4,7 @@ extern crate execution_engine;
 extern crate grpc;
 extern crate protobuf;
 extern crate storage;
+extern crate wasm_prep;
 
 pub mod engine_server;
 

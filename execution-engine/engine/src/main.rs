@@ -2,6 +2,7 @@ extern crate clap;
 extern crate common;
 extern crate execution_engine;
 extern crate storage;
+extern crate wasm_prep;
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -9,9 +10,10 @@ use std::iter::Iterator;
 
 use clap::{App, Arg};
 
-use execution_engine::engine::{ExecutionResult, EngineState};
+use execution_engine::engine::{EngineState, ExecutionResult};
 use execution_engine::execution::WasmiExecutor;
 use storage::gs::inmem::InMemHist;
+use wasm_prep::WasmiPreprocessor;
 
 #[derive(Debug)]
 struct Task {
@@ -95,6 +97,7 @@ fn main() {
     let engine_state = EngineState::new(gs);
 
     let wasmi_executor = WasmiExecutor {};
+    let wasmi_preprocessor = WasmiPreprocessor {};
 
     for wasm_bytes in wasm_files.iter() {
         println!("Pre state hash: {:?}", state_hash);
@@ -106,6 +109,7 @@ fn main() {
             state_hash,
             gas_limit,
             &wasmi_executor,
+            &wasmi_preprocessor,
         );
         match result {
             Err(storage::error::RootNotFound(hash)) => println!(
