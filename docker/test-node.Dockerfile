@@ -1,4 +1,4 @@
-FROM io.casperlabs/node:latest
+FROM casperlabs/node:latest
 
 # Using iproute2 for network simulation with `tc`.
 # iptables can also be used to block individual ports.
