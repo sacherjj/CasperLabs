@@ -274,3 +274,20 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     server.add_service(ipc_grpc::ExecutionEngineServiceServer::new_service_def(e));
     server
 }
+
+#[cfg(test)]
+mod tests {
+    use super::wasm_error;
+    //Test that wasm_error function actually returns DeployResult with result set to WasmError
+    #[test]
+    fn wasm_error_result() {
+        let error_msg = "WasmError";
+        let mut result = wasm_error(error_msg.to_owned());
+        assert!(result.has_error());
+        let mut ipc_error = result.take_error();
+        assert!(ipc_error.has_wasmErr());
+        let ipc_wasm_error = ipc_error.take_wasmErr();
+        let ipc_error_msg = ipc_wasm_error.get_message();
+        assert_eq!(ipc_error_msg, error_msg);
+    }
+}
