@@ -278,6 +278,14 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
 #[cfg(test)]
 mod tests {
     use super::wasm_error;
+    use super::deploy_result_to_ipc;
+    use storage::gs::ExecutionEffect;
+    use execution_engine::engine::ExecutionResult;
+    use std::collections::HashMap;
+    use mappings::transform_entry_to_key_transform;
+    use common::key::Key;
+    use storage::transform::Transform;
+
     //Test that wasm_error function actually returns DeployResult with result set to WasmError
     #[test]
     fn wasm_error_result() {
@@ -289,5 +297,38 @@ mod tests {
         let ipc_wasm_error = ipc_error.take_wasmErr();
         let ipc_error_msg = ipc_wasm_error.get_message();
         assert_eq!(ipc_error_msg, error_msg);
+    }
+
+    #[test]
+    fn deploy_result_to_ipc_missing_root() {
+        let root_hash = [1u8;32];
+        let result = deploy_result_to_ipc(Err(storage::error::RootNotFound(root_hash)));
+        assert!(result.is_err());
+        let ipc_missing_hash = result.unwrap_err().take_hash();
+        assert_eq!(root_hash.to_vec(), ipc_missing_hash);
+    }
+
+    #[test]
+    fn deploy_result_to_ipc_success() {
+        let input_transforms: HashMap<Key, Transform> = {
+            let mut tmp_map = HashMap::new();
+            tmp_map.insert(Key::Account([1u8;20]), Transform::AddInt32(10));
+            tmp_map
+        };
+        let execution_effect: ExecutionEffect = ExecutionEffect(HashMap::new(), input_transforms.clone());
+        let cost: u64 = 123;
+        let execution_result: ExecutionResult = ExecutionResult::Success(execution_effect, cost);
+        let ipc_result = deploy_result_to_ipc(Ok(execution_result));
+        assert!(ipc_result.is_ok());
+        let mut ipc_deploy_result = ipc_result.unwrap();
+        assert_eq!(ipc_deploy_result.get_cost(), cost);
+
+        // Extract transform map from the IPC message and parse it back to the domain
+        let ipc_transforms: HashMap<Key, Transform> = {
+            let mut ipc_effects = ipc_deploy_result.take_effects(); 
+            let ipc_effects_tnfs = ipc_effects.take_transform_map().into_vec();
+            ipc_effects_tnfs.iter().map(transform_entry_to_key_transform).collect()
+        };
+        assert_eq!(&input_transforms, &ipc_transforms);
     }
 }
