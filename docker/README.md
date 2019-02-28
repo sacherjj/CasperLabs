@@ -4,7 +4,7 @@ The idea is to create many nodes with commands like `make node-0/up`, `make node
 
 Then we can slow down the network between `node-*` containers with https://alexei-led.github.io/post/pumba_docker_netem/ and see what happens.
 
-To deploy we'll have to `docker run --network casperlabs io.casperlabs/client` and pass it the WASM files. `client.sh` provides is a convenience wrapper for interacting with the network; run `./client.sh node-0 --help` to see what it can do.
+To deploy we'll have to `docker run --network casperlabs casperlabs/client` and pass it the WASM files. `client.sh` provides is a convenience wrapper for interacting with the network; run `./client.sh node-0 --help` to see what it can do.
 
 
 ## Build docker images

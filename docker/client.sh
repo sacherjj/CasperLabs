@@ -28,7 +28,7 @@ case "$CMD" in
         docker run --rm \
             --network casperlabs \
             --volume $VOL:/data \
-            io.casperlabs/client:latest \
+            casperlabs/client:latest \
             --host $NODE --port 40401 deploy $@
         ;;
 
@@ -36,14 +36,14 @@ case "$CMD" in
         # --help doesn't like --host and --port
         docker run --rm \
             --network casperlabs \
-            io.casperlabs/client:latest \
+            casperlabs/client:latest \
             $CMD
         ;;
 
     *)
         docker run --rm \
             --network casperlabs \
-            io.casperlabs/client:latest \
+            casperlabs/client:latest \
             --host $NODE --port 40401 $CMD $@
         ;;
 esac
