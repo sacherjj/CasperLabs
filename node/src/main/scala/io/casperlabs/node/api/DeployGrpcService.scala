@@ -35,11 +35,35 @@ private[api] object DeployGrpcService {
     val keyBytes = ByteString.copyFrom(Base16.decode(keyValue))
     keyType.toLowerCase match {
       case "hash" =>
-        ipc.Key(ipc.Key.KeyInstance.Hash(ipc.KeyHash(keyBytes))).pure[F]
+        keyBytes.size match {
+          case 32 => ipc.Key(ipc.Key.KeyInstance.Hash(ipc.KeyHash(keyBytes))).pure[F]
+          case n =>
+            appErr.raiseError(
+              new Exception(
+                s"Key of type hash must have exactly 32 bytes, $n =/= 32 provided."
+              )
+            )
+        }
       case "uref" =>
-        ipc.Key(ipc.Key.KeyInstance.Uref(ipc.KeyURef(keyBytes))).pure[F]
+        keyBytes.size match {
+          case 32 => ipc.Key(ipc.Key.KeyInstance.Uref(ipc.KeyURef(keyBytes))).pure[F]
+          case n =>
+            appErr.raiseError(
+              new Exception(
+                s"Key of type uref must have exactly 32 bytes, $n =/= 32 provided."
+              )
+            )
+        }
       case "address" =>
-        ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes))).pure[F]
+        keyBytes.size match {
+          case 20 => ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes))).pure[F]
+          case n =>
+            appErr.raiseError(
+              new Exception(
+                s"Key of type address must have exactly 20 bytes, $n =/= 20 provided."
+              )
+            )
+        }
       case _ =>
         appErr.raiseError(
           new Exception(

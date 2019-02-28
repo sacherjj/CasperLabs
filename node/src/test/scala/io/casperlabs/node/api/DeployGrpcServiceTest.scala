@@ -60,6 +60,31 @@ class DeployGrpcServiceTest extends FlatSpec with Matchers {
     maybeKey.isLeft shouldBe true
   }
 
+  it should "fail if the wrong number of bytes is given for the key type" in {
+    val a = util.Random.nextInt(50) + 33 //number > 32
+    val b = 32
+    val c = util.Random.nextInt(11) + 21 //number > 20 and < 32
+    val d = 20
+    val e = util.Random.nextInt(20) //number < 20
+
+    attemptToKey("hash", randomBytes(a)) should matchPattern { case Left(_)    => }
+    attemptToKey("uref", randomBytes(a)) should matchPattern { case Left(_)    => }
+    attemptToKey("address", randomBytes(a)) should matchPattern { case Left(_) => }
+
+    attemptToKey("address", randomBytes(b)) should matchPattern { case Left(_) => }
+
+    attemptToKey("hash", randomBytes(c)) should matchPattern { case Left(_)    => }
+    attemptToKey("uref", randomBytes(c)) should matchPattern { case Left(_)    => }
+    attemptToKey("address", randomBytes(c)) should matchPattern { case Left(_) => }
+
+    attemptToKey("hash", randomBytes(d)) should matchPattern { case Left(_) => }
+    attemptToKey("uref", randomBytes(d)) should matchPattern { case Left(_) => }
+
+    attemptToKey("hash", randomBytes(e)) should matchPattern { case Left(_)    => }
+    attemptToKey("uref", randomBytes(e)) should matchPattern { case Left(_)    => }
+    attemptToKey("address", randomBytes(e)) should matchPattern { case Left(_) => }
+  }
+
   "splitPath" should "split on '/' and exclude empty components" in {
     val pathA = "a/b/c"
     val pathB = ""
