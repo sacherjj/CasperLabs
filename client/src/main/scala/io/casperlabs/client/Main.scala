@@ -54,17 +54,8 @@ object Main {
         DeployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
 
       case Query(_, _, hash, keyType, keyValue, path) =>
-        val keyBytes = ByteString.copyFrom(Base16.decode(keyValue))
-        val key = keyType.toLowerCase match {
-          case "hash" =>
-            ipc.Key(ipc.Key.KeyInstance.Hash(ipc.KeyHash(keyBytes)))
-          case "uref" =>
-            ipc.Key(ipc.Key.KeyInstance.Uref(ipc.KeyURef(keyBytes)))
-          case "address" =>
-            ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes)))
-        }
         DeployRuntime.gracefulExit(
-          DeployService[F].queryState(protocol.QueryStateRequest(hash, key.toByteString, path))
+          DeployService[F].queryState(protocol.QueryStateRequest(hash, keyType, keyValue, path))
         )
     }
 }

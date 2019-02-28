@@ -1,6 +1,6 @@
 package io.casperlabs.node.api
 
-import cats.Id
+import cats.{ApplicativeError, Id}
 import cats.data.StateT
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
@@ -29,6 +29,29 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 private[api] object DeployGrpcService {
+  def toKey[F[_]](keyType: String, keyValue: String)(
+      implicit appErr: ApplicativeError[F, Throwable]
+  ): F[ipc.Key] = {
+    val keyBytes = ByteString.copyFrom(Base16.decode(keyValue))
+    keyType.toLowerCase match {
+      case "hash" =>
+        ipc.Key(ipc.Key.KeyInstance.Hash(ipc.KeyHash(keyBytes))).pure[F]
+      case "uref" =>
+        ipc.Key(ipc.Key.KeyInstance.Uref(ipc.KeyURef(keyBytes))).pure[F]
+      case "address" =>
+        ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes))).pure[F]
+      case _ =>
+        appErr.raiseError(
+          new Exception(
+            s"Key variant $keyType not valid. Must be one of hash, uref, address."
+          )
+        )
+    }
+  }
+
+  def splitPath(path: String): Seq[String] =
+    path.split("/").filter(_.nonEmpty)
+
   def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable: ExecutionEngineService](
       blockApiLock: Semaphore[F]
   )(
@@ -48,17 +71,17 @@ private[api] object DeployGrpcService {
         defer(BlockAPI.showBlock[F](q))
 
       override def queryState(q: QueryStateRequest): Task[QueryStateResponse] = q match {
-        case QueryStateRequest(blockHash, keyBytes, path) =>
+        case QueryStateRequest(blockHash, keyType, keyValue, path) =>
           val f = for {
-            bq <- BlockAPI.showBlock[F](BlockQuery(blockHash))
+            key <- toKey[F](keyType, keyValue)
+            bq  <- BlockAPI.showBlock[F](BlockQuery(blockHash))
             state <- bq.blockInfo.fold[F[String]](
                       Concurrent[F].raiseError(new Exception(s"Block $blockHash not found!"))
                     ) { info =>
                       info.tupleSpaceHash.pure[F]
                     }
             stateHash        = ByteString.copyFrom(Base16.decode(state))
-            key              <- Concurrent[F].delay(ipc.Key.parseFrom(keyBytes.toByteArray))
-            possibleResponse <- ExecutionEngineService[F].query(stateHash, key, path)
+            possibleResponse <- ExecutionEngineService[F].query(stateHash, key, splitPath(path))
             response <- possibleResponse match {
                          case Left(err)    => Concurrent[F].raiseError(err)
                          case Right(value) => value.toProtoString.pure[F]

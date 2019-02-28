@@ -414,7 +414,7 @@ object HashSetCasperTestNode {
       override def query(
           state: ByteString,
           baseKey: Key,
-          path: String
+          path: Seq[String]
       ): F[Either[Throwable, Value]] =
         Applicative[F].pure[Either[Throwable, Value]](
           Left(new Exception("Method `query` not implemented on this instance!"))

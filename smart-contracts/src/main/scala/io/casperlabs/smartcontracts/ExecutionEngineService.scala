@@ -30,7 +30,7 @@ import scala.util.Either
       deploys: Seq[Deploy]
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
-  def query(state: ByteString, baseKey: Key, path: String): F[Either[Throwable, Value]]
+  def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
   def close(): F[Unit]
 }
 
@@ -105,10 +105,14 @@ class GrpcExecutionEngineService[F[_]: Monad: ToAbstractContext](addr: Path, max
           }
       }
 
-  override def query(state: ByteString, baseKey: Key, path: String): F[Either[Throwable, Value]] =
+  override def query(
+      state: ByteString,
+      baseKey: Key,
+      path: Seq[String]
+  ): F[Either[Throwable, Value]] =
     ToAbstractContext[F]
       .fromTask(
-        stub.query(QueryRequest(state, Some(baseKey), path.split("/").filter(_.nonEmpty))).attempt
+        stub.query(QueryRequest(state, Some(baseKey), path)).attempt
       )
       .map {
         case Left(err) => Left(err)
@@ -138,7 +142,7 @@ object ExecutionEngineService {
       override def query(
           state: ByteString,
           baseKey: Key,
-          path: String
+          path: Seq[String]
       ): F[Either[Throwable, Value]] =
         Applicative[F]
           .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented")))

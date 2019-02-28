@@ -39,10 +39,10 @@ service DeployService {
 }
 
 message QueryStateRequest {
-    string block_hash = 1;
-    //TODO: should be Key ADT
-    bytes base_key = 2;
-    string path = 3;
+    string block_hash = 1; //base-16 encoding of block hash
+    string key_variant = 2; //one of "hash", "uref", "address"
+    string key_bytes = 3; //base-16 encoding of key
+    string path = 4; // '/'-separated path of human-readable names to value
 }
 
 message QueryStateResponse {
