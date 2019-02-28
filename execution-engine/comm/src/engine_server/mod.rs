@@ -29,13 +29,11 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         let key = ipc_to_key(p.get_base_key());
         let path = p.get_path();
 
-        println!("Querying...");
         if let Ok(mut tc) = self.tracking_copy(state_hash) {
             let response = match tc.query(key, path) {
                 Err(err) => {
                     let mut result = ipc::QueryResponse::new();
                     let error = format!("{:?}", err);
-                    println!("Error: {}", error);
                     result.set_failure(error);
                     result
                 }
@@ -43,13 +41,11 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                 Ok(QueryResult::ValueNotFound(full_path)) => {
                     let mut result = ipc::QueryResponse::new();
                     let error = format!("Value not found: {:?}", full_path);
-                    println!("Error: {}", error);
                     result.set_failure(error);
                     result
                 }
 
                 Ok(QueryResult::Success(value)) => {
-                    println!("Success: {:?}", value);
                     let mut result = ipc::QueryResponse::new();
                     result.set_success(value_to_ipc(&value));
                     result
@@ -60,7 +56,6 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         } else {
             let mut result = ipc::QueryResponse::new();
             let error = format!("Root not found: {:?}", state_hash);
-            println!("Error: {}", error);
             result.set_failure(error);
             grpc::SingleResponse::completed(result)
         }
