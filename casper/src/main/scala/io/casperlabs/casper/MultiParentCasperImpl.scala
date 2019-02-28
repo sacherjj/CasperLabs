@@ -325,42 +325,11 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       //temporary function for getting transforms for blocks
       f = (b: BlockMetadata) =>
         s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
-      processedHash <- ExecEngineUtil.processDeploys(
-                        p,
-                        dag,
-                        r,
-                        f
-                      )
-      (preStateHash, processedDeploys) = processedHash
-      deployLookup                     = processedDeploys.zip(r).toMap
-      commutingEffects                 = ExecEngineUtil.findCommutingEffects(processedDeploys)
-      deploysForBlock = commutingEffects.map {
-        case (eff, cost) => {
-          val deploy = deployLookup(
-            ipc.DeployResult(
-              cost,
-              ipc.DeployResult.Result.Effects(eff)
-            )
-          )
-          protocol.ProcessedDeploy(
-            Some(deploy),
-            cost,
-            false
-          )
-        }
-      }
-      maxBlockNumber = p.foldLeft(-1L) {
-        case (acc, b) => math.max(acc, blockNumber(b))
-      }
+      stateResult <- ExecEngineUtil
+                      .computeDeploysCheckpoint(p, r, dag, f)
+      (preStateHash, postStateHash, deploysForBlock, number) = stateResult
       //TODO: compute bonds properly
-      newBonds              = ProtoUtil.bonds(p.head)
-      transforms            = commutingEffects.unzip._1.flatMap(_.transformMap)
-      possiblePostStateHash <- ExecutionEngineService[F].commit(preStateHash, transforms)
-      postStateHash <- possiblePostStateHash match {
-                        case Left(ex)    => Sync[F].raiseError(ex)
-                        case Right(hash) => hash.pure[F]
-                      }
-      number = maxBlockNumber + 1
+      newBonds = ProtoUtil.bonds(p.head)
       postState = RChainState()
         .withPreStateHash(preStateHash)
         .withPostStateHash(postStateHash)
@@ -372,16 +341,6 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         .withDeploys(deploysForBlock)
       header = blockHeader(body, p.map(_.blockHash), version, now)
       block  = unsignedBlockProto(body, header, justifications, shardId)
-
-      msgBody = transforms
-        .map(t => {
-          val k    = PrettyPrinter.buildString(t.key.get)
-          val tStr = PrettyPrinter.buildString(t.transform.get)
-          s"$k :: $tStr"
-        })
-        .mkString("\n")
-      _ <- Log[F]
-            .info(s"Block #$number created with effects:\n$msgBody")
     } yield CreateBlockStatus.created(block)).handleErrorWith(
       ex =>
         Log[F]

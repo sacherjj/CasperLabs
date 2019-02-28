@@ -7,9 +7,14 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.protocol
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData}
+import io.casperlabs.casper.{protocol, PrettyPrinter}
+import io.casperlabs.casper.protocol.{BlockMessage, Bond, ProcessedDeploy}
+import io.casperlabs.casper.util.ProtoUtil.blockNumber
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.BlockMetadata
+import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 object ExecEngineUtil {
@@ -39,6 +44,59 @@ object ExecEngineUtil {
           nonce
         )
     }
+
+  def computeDeploysCheckpoint[F[_]: Sync: Log: ExecutionEngineService](
+      parents: Seq[BlockMessage],
+      deploys: Seq[protocol.Deploy],
+      dag: BlockDagRepresentation[F],
+      //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
+      transforms: BlockMetadata => F[Seq[TransformEntry]]
+  ): F[(StateHash, StateHash, Seq[ProcessedDeploy], Long)] =
+    for {
+      processedHash <- ExecEngineUtil.processDeploys(
+                        parents,
+                        dag,
+                        deploys,
+                        transforms
+                      )
+      (preStateHash, processedDeploys) = processedHash
+      deployLookup                     = processedDeploys.zip(deploys).toMap
+      commutingEffects                 = ExecEngineUtil.findCommutingEffects(processedDeploys)
+      deploysForBlock = commutingEffects.map {
+        case (eff, cost) => {
+          val deploy = deployLookup(
+            ipc.DeployResult(
+              cost,
+              ipc.DeployResult.Result.Effects(eff)
+            )
+          )
+          protocol.ProcessedDeploy(
+            Some(deploy),
+            cost,
+            false
+          )
+        }
+      }
+      transforms            = commutingEffects.unzip._1.flatMap(_.transformMap)
+      possiblePostStateHash <- ExecutionEngineService[F].commit(preStateHash, transforms)
+      postStateHash <- possiblePostStateHash match {
+                        case Left(ex)    => Sync[F].raiseError(ex)
+                        case Right(hash) => hash.pure[F]
+                      }
+      maxBlockNumber = parents.foldLeft(-1L) {
+        case (acc, b) => math.max(acc, blockNumber(b))
+      }
+      number = maxBlockNumber + 1
+      msgBody = transforms
+        .map(t => {
+          val k    = PrettyPrinter.buildString(t.key.get)
+          val tStr = PrettyPrinter.buildString(t.transform.get)
+          s"$k :: $tStr"
+        })
+        .mkString("\n")
+      _ <- Log[F]
+            .info(s"Block #$number created with effects:\n$msgBody")
+    } yield (preStateHash, postStateHash, deploysForBlock, number)
 
   def processDeploys[F[_]: Sync: ExecutionEngineService](
       parents: Seq[BlockMessage],
