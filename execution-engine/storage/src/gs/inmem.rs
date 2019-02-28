@@ -12,9 +12,9 @@ use std::sync::Arc;
 
 pub struct InMemGS(Arc<BTreeMap<Key, Value>>);
 impl InMemGS {
-  pub fn new(map: BTreeMap<Key, Value>) -> Self {
-    InMemGS(Arc::new(map))
-  }
+    pub fn new(map: BTreeMap<Key, Value>) -> Self {
+        InMemGS(Arc::new(map))
+    }
 }
 
 /// In memory representation of the versioned global state
