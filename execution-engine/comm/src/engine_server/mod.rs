@@ -279,13 +279,13 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use super::wasm_error;
     use super::deploy_result_to_ipc;
-    use storage::gs::ExecutionEffect;
-    use execution_engine::engine::{ExecutionResult, Error as EngineError};
-    use std::collections::HashMap;
-    use mappings::transform_entry_to_key_transform;
+    use super::wasm_error;
     use common::key::Key;
+    use execution_engine::engine::{Error as EngineError, ExecutionResult};
+    use mappings::transform_entry_to_key_transform;
+    use std::collections::HashMap;
+    use storage::gs::ExecutionEffect;
     use storage::transform::Transform;
 
     //Test that wasm_error function actually returns DeployResult with result set to WasmError
@@ -303,7 +303,7 @@ mod tests {
 
     #[test]
     fn deploy_result_to_ipc_missing_root() {
-        let root_hash = [1u8;32];
+        let root_hash = [1u8; 32];
         let result = deploy_result_to_ipc(Err(storage::error::RootNotFound(root_hash)));
         assert!(result.is_err());
         let ipc_missing_hash = result.unwrap_err().take_hash();
@@ -314,10 +314,11 @@ mod tests {
     fn deploy_result_to_ipc_success() {
         let input_transforms: HashMap<Key, Transform> = {
             let mut tmp_map = HashMap::new();
-            tmp_map.insert(Key::Account([1u8;20]), Transform::AddInt32(10));
+            tmp_map.insert(Key::Account([1u8; 20]), Transform::AddInt32(10));
             tmp_map
         };
-        let execution_effect: ExecutionEffect = ExecutionEffect(HashMap::new(), input_transforms.clone());
+        let execution_effect: ExecutionEffect =
+            ExecutionEffect(HashMap::new(), input_transforms.clone());
         let cost: u64 = 123;
         let execution_result: ExecutionResult = ExecutionResult::Success(execution_effect, cost);
         let ipc_result = deploy_result_to_ipc(Ok(execution_result));
@@ -327,9 +328,12 @@ mod tests {
 
         // Extract transform map from the IPC message and parse it back to the domain
         let ipc_transforms: HashMap<Key, Transform> = {
-            let mut ipc_effects = ipc_deploy_result.take_effects(); 
+            let mut ipc_effects = ipc_deploy_result.take_effects();
             let ipc_effects_tnfs = ipc_effects.take_transform_map().into_vec();
-            ipc_effects_tnfs.iter().map(transform_entry_to_key_transform).collect()
+            ipc_effects_tnfs
+                .iter()
+                .map(transform_entry_to_key_transform)
+                .collect()
         };
         assert_eq!(&input_transforms, &ipc_transforms);
     }
@@ -351,7 +355,10 @@ mod tests {
         let cost: u64 = 100;
         assert_eq!(test_cost(cost, KeyNotFound(Key::Account([1u8; 20]))), cost);
         assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
-        let type_mismatch = storage::transform::TypeMismatch { expected: "expected".to_owned(), found: "found".to_owned() };
+        let type_mismatch = storage::transform::TypeMismatch {
+            expected: "expected".to_owned(),
+            found: "found".to_owned(),
+        };
         assert_eq!(test_cost(cost, TransformTypeMismatch(type_mismatch)), cost);
         let bytesrepr_err = common::bytesrepr::Error::EarlyEndOfStream;
         assert_eq!(test_cost(cost, BytesRepr(bytesrepr_err)), cost);
@@ -369,9 +376,13 @@ mod tests {
     fn exec_err_has_cost() {
         let cost: u64 = 100;
         // GasLimit error is treated differently at the moment so test separately
-        assert_eq!(test_cost(cost, execution_engine::execution::Error::GasLimit), cost);
+        assert_eq!(
+            test_cost(cost, execution_engine::execution::Error::GasLimit),
+            cost
+        );
         // for the time being all other execution errors are treated in the same way
-        let forged_ref_error = execution_engine::execution::Error::ForgedReference(Key::Account([1u8; 20]));
+        let forged_ref_error =
+            execution_engine::execution::Error::ForgedReference(Key::Account([1u8; 20]));
         assert_eq!(test_cost(cost, forged_ref_error), cost);
     }
 }
