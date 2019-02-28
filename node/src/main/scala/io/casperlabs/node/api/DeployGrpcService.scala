@@ -75,17 +75,12 @@ private[api] object DeployGrpcService {
           val f = for {
             key <- toKey[F](keyType, keyValue)
             bq  <- BlockAPI.showBlock[F](BlockQuery(blockHash))
-            state <- bq.blockInfo.fold[F[String]](
-                      Concurrent[F].raiseError(new Exception(s"Block $blockHash not found!"))
-                    ) { info =>
-                      info.tupleSpaceHash.pure[F]
-                    }
+            state <- Concurrent[F]
+                      .fromOption(bq.blockInfo, new Exception(s"Block $blockHash not found!"))
+                      .map(_.tupleSpaceHash)
             stateHash        = ByteString.copyFrom(Base16.decode(state))
             possibleResponse <- ExecutionEngineService[F].query(stateHash, key, splitPath(path))
-            response <- possibleResponse match {
-                         case Left(err)    => Concurrent[F].raiseError(err)
-                         case Right(value) => value.toProtoString.pure[F]
-                       }
+            response         <- Concurrent[F].fromEither(possibleResponse).map(_.toProtoString)
           } yield QueryStateResponse(response)
           defer(f)
       }
