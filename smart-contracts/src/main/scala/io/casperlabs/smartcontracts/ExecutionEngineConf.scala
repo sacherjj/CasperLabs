@@ -39,7 +39,7 @@ class ExecutionEngineConf[F[_]: Sync: Log: TaskLift](addr: Path, maxMessageSize:
 
     val retry = for {
       _ <- Log[F].warn(
-            "Execution engine service did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
+            "Execution engine service is not responding, waiting 10 seconds before closing abruptly"
           )
       _ <- await(channel)
     } yield ()
