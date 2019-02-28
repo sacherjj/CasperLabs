@@ -104,8 +104,7 @@ pub fn value_to_ipc(v: &common::value::Value) -> super::ipc::Value {
         common::value::Value::Acct(account) => {
             let mut acc = super::ipc::Account::new();
             acc.set_pub_key(account.pub_key().to_vec());
-            //TODO update proto; change nonce to u64
-            acc.set_nonce(account.nonce() as i64);
+            acc.set_nonce(account.nonce());
             let urefs = urefs_map_to_ipc_vec(account.urefs_lookup());
             acc.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
             tv.set_account(acc);

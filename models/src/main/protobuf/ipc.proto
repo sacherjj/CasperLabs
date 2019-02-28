@@ -108,7 +108,7 @@ message Value {
  
 message Account {
     bytes pub_key = 1; // Should have 32 elements
-    int64 nonce = 2;
+    uint64 nonce = 2;
     repeated NamedKey known_urefs = 3;
 }
 message Contract {
