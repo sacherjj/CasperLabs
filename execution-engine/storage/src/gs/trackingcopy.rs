@@ -135,6 +135,7 @@ mod tests {
     use op::Op;
     use proptest::collection::vec;
     use proptest::prelude::*;
+    use std::iter;
     use std::cell::Cell;
     use std::collections::BTreeMap;
     use std::rc::Rc;
@@ -388,9 +389,7 @@ mod tests {
     proptest! {
         #[test]
         fn query_empty_path(k in key_arb(), missing_key in key_arb(), v in value_arb()) {
-            let mut map = BTreeMap::new();
-            map.insert(k, v.clone());
-            let gs = InMemGS::new(map);
+            let gs = InMemGS::new(iter::once((k, v.clone())).collect());
             let mut tc = TrackingCopy::new(gs);
             let empty_path = Vec::new();
             if let Ok(QueryResult::Success(result)) = tc.query(k, &empty_path) {
@@ -455,8 +454,7 @@ mod tests {
             let mut map = BTreeMap::new();
             map.insert(k, v.clone());
 
-            let mut known_urefs = BTreeMap::new();
-            known_urefs.insert(name.clone(), k);
+            let known_urefs = iter::once((name.clone(), k)).collect();
             let account = Account::new(
                 pk,
                 nonce,
