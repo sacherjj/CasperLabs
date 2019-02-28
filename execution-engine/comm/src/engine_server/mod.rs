@@ -161,8 +161,8 @@ fn deploy_result_to_ipc(
             Ok(deploy_result)
         }
         Ok(ExecutionResult::Failure(err, cost)) => {
-            //TODO(mateusz.gorski) Tests!
             match err {
+                // TODO(mateusz.gorski): Fix error model for the storage errors.
                 // We don't have separate IPC messages for storage errors
                 // so for the time being they are all reported as "wasm errors".
                 EngineError::StorageError(storage_err) => {
@@ -282,7 +282,7 @@ mod tests {
     use super::wasm_error;
     use super::deploy_result_to_ipc;
     use storage::gs::ExecutionEffect;
-    use execution_engine::engine::ExecutionResult;
+    use execution_engine::engine::{ExecutionResult, Error as EngineError};
     use std::collections::HashMap;
     use mappings::transform_entry_to_key_transform;
     use common::key::Key;
@@ -332,5 +332,46 @@ mod tests {
             ipc_effects_tnfs.iter().map(transform_entry_to_key_transform).collect()
         };
         assert_eq!(&input_transforms, &ipc_transforms);
+    }
+
+    fn into_execution_failure<E: Into<EngineError>>(error: E, cost: u64) -> ExecutionResult {
+        ExecutionResult::Failure(error.into(), cost)
+    }
+
+    fn test_cost<E: Into<EngineError>>(expected_cost: u64, err: E) -> u64 {
+        let execution_failure = into_execution_failure(err, expected_cost);
+        let ipc_deploy_result = deploy_result_to_ipc(Ok(execution_failure));
+        assert!(ipc_deploy_result.is_ok());
+        ipc_deploy_result.unwrap().get_cost()
+    }
+
+    #[test]
+    fn storage_error_has_cost() {
+        use storage::error::Error::*;
+        let cost: u64 = 100;
+        assert_eq!(test_cost(cost, KeyNotFound(Key::Account([1u8; 20]))), cost);
+        assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
+        let type_mismatch = storage::transform::TypeMismatch { expected: "expected".to_owned(), found: "found".to_owned() };
+        assert_eq!(test_cost(cost, TransformTypeMismatch(type_mismatch)), cost);
+        let bytesrepr_err = common::bytesrepr::Error::EarlyEndOfStream;
+        assert_eq!(test_cost(cost, BytesRepr(bytesrepr_err)), cost);
+    }
+
+    #[test]
+    fn preprocessing_err_has_cost() {
+        let cost: u64 = 100;
+        // it doesn't matter what error type it is
+        let preprocessing_error = wasm_prep::PreprocessingError::NoExportSection;
+        assert_eq!(test_cost(cost, preprocessing_error), cost);
+    }
+
+    #[test]
+    fn exec_err_has_cost() {
+        let cost: u64 = 100;
+        // GasLimit error is treated differently at the moment so test separately
+        assert_eq!(test_cost(cost, execution_engine::execution::Error::GasLimit), cost);
+        // for the time being all other execution errors are treated in the same way
+        let forged_ref_error = execution_engine::execution::Error::ForgedReference(Key::Account([1u8; 20]));
+        assert_eq!(test_cost(cost, forged_ref_error), cost);
     }
 }
