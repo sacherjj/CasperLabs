@@ -1,7 +1,7 @@
 use std::marker::{Send, Sync};
 
 use execution_engine::engine::{EngineState, Error as EngineError, ExecutionResult};
-use execution_engine::execution::{Error as ExecutionError, WasmiExecutor};
+use execution_engine::execution::{Error as ExecutionError, Executor, WasmiExecutor};
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use storage::gs::{trackingcopy::QueryResult, DbReader};
 use storage::history::{self, *};
 use storage::transform;
-use wasm_prep::WasmiPreprocessor;
+use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 pub mod ipc;
 pub mod ipc_grpc;
@@ -75,37 +75,17 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
             hash_tmp
         };
         let deploys = p.get_deploys();
-        let mut deploy_results: Vec<DeployResult> = Vec::with_capacity(deploys.len());
-        let fold_result: Result<(), RootNotFound> = deploys.iter().try_for_each(|deploy| {
-            let module_bytes = &deploy.session_code;
-            let address: [u8; 20] = {
-                let mut tmp = [0u8; 20];
-                tmp.copy_from_slice(&deploy.address);
-                tmp
-            };
-            let timestamp = deploy.timestamp;
-            let nonce = deploy.nonce;
-            let gas_limit = deploy.gas_limit as u64;
-            // We want to treat RootNotFound error differently b/c it should short-circuit
-            // the execution of ALL deploys within the block. This is because all of them share
-            // the same prestate and all of them would fail.
-            // try_for_each will continue only when Ok(_) is returned.
-            let result = deploy_result_to_ipc(self.run_deploy(
-                module_bytes,
-                address,
-                timestamp,
-                nonce,
-                prestate_hash,
-                gas_limit,
-                &executor,
-                &preprocessor,
-            ))?;
-            deploy_results.push(result);
-            Ok(())
-        });
+        let deploys_result: Result<Vec<DeployResult>, RootNotFound> = run_deploys(
+            &self,
+            &executor,
+            &preprocessor,
+            prestate_hash,
+            deploys.len(),
+            deploys,
+        );
         let mut exec_response = ipc::ExecResponse::new();
-        match fold_result {
-            Ok(_) => {
+        match deploys_result {
+            Ok(deploy_results) => {
                 let mut exec_result = ipc::ExecResult::new();
                 exec_result.set_deploy_results(protobuf::RepeatedField::from_vec(deploy_results));
                 exec_response.set_success(exec_result);
@@ -133,6 +113,47 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         let result = apply_effect_result_to_ipc(self.apply_effect(prestate_hash, effects));
         grpc::SingleResponse::completed(result)
     }
+}
+
+fn run_deploys<R: DbReader, H: History<R>, E: Executor, P: Preprocessor>(
+    engine_state: &EngineState<R, H>,
+    executor: &E,
+    preprocessor: &P,
+    prestate_hash: [u8; 32],
+    deploys_size: usize,
+    deploys: &[ipc::Deploy],
+) -> Result<Vec<DeployResult>, RootNotFound> {
+    let deploy_results: Vec<DeployResult> = Vec::with_capacity(deploys_size);
+    deploys
+        .iter()
+        .try_fold(deploy_results, |mut results, deploy| {
+            let module_bytes = &deploy.session_code;
+            let address: [u8; 20] = {
+                let mut tmp = [0u8; 20];
+                tmp.copy_from_slice(&deploy.address);
+                tmp
+            };
+            let timestamp = deploy.timestamp;
+            let nonce = deploy.nonce;
+            let gas_limit = deploy.gas_limit as u64;
+            let result =
+                deploy_result_to_ipc(engine_state.run_deploy(
+                    module_bytes,
+                    address,
+                    timestamp,
+                    nonce,
+                    prestate_hash,
+                    gas_limit,
+                    executor,
+                    preprocessor,
+                ))?;
+            // We want to treat RootNotFound error differently b/c it should short-circuit
+            // the execution of ALL deploys within the block. This is because all of them share
+            //the same prestate and all of them would fail.
+            // try_for_each will continue only when Ok(_) is returned.
+            results.push(result);
+            Ok(results)
+        })
 }
 
 fn deploy_result_to_ipc(
