@@ -78,31 +78,34 @@ impl<R: DbReader> TrackingCopy<R> {
     pub fn query(&mut self, base_key: Key, path: &[String]) -> Result<QueryResult, Error> {
         let base_value = self.read(base_key)?;
 
-        let result = path.iter().try_fold(
+        let result = path.iter().enumerate().try_fold(
             base_value,
             // We encode the two possible short-circuit conditions with
-            // Option<Error>, where the None case corresponds to
-            // QueryResult::ValueNotFound and Some(_) corresponds to
-            // a storage-related error.
-            |curr_value, name| -> Result<Value, Option<Error>> {
+            // Result<(usize, String), Error>, where the Ok(_) case corresponds to
+            // QueryResult::ValueNotFound and Err(_) corresponds to
+            // a storage-related error. The information in the Ok(_) case is used
+            // to build an informative error message about why the query was not successful.
+            |curr_value, (i, name)| -> Result<Value, Result<(usize, String), Error>> {
                 match curr_value {
                     Value::Acct(account) => {
                         if let Some(key) = account.urefs_lookup().get(name) {
-                            self.read(*key).map_err(|e| Some(e.into()))
+                            self.read(*key).map_err(|e| Err(e.into()))
                         } else {
-                            Err(None)
+                            Err(Ok((i, format!("Name {} not found in Account at path:", name))))
                         }
                     }
 
                     Value::Contract { known_urefs, .. } => {
                         if let Some(key) = known_urefs.get(name) {
-                            self.read(*key).map_err(|e| Some(e.into()))
+                            self.read(*key).map_err(|e| Err(e.into()))
                         } else {
-                            Err(None)
+                            Err(Ok((i, format!("Name {} not found in Contract at path:", name))))
                         }
                     }
 
-                    _ => Err(None),
+                    other => Err(
+                        Ok((i, format!("Name {} cannot be followed from value {:?} because it is neither an account nor contract. Value found at path:", name, other)))
+                    ),
                 }
             },
         );
@@ -110,16 +113,17 @@ impl<R: DbReader> TrackingCopy<R> {
         match result {
             Ok(value) => Ok(QueryResult::Success(value)),
 
-            Err(None) => {
-                let mut full_path = format!("{:?}", base_key);
-                for p in path {
-                    full_path.push_str("/");
-                    full_path.push_str(p);
+            Err(Ok((i, s))) => {
+                let mut error_msg = format!("{} {:?}", s, base_key);
+                //include the partial path to the account/contract/value which failed
+                for p in path.iter().take(i) {
+                    error_msg.push_str("/");
+                    error_msg.push_str(p);
                 }
-                Ok(QueryResult::ValueNotFound(full_path))
+                Ok(QueryResult::ValueNotFound(error_msg))
             }
 
-            Err(Some(err)) => Err(err),
+            Err(Err(err)) => Err(err),
         }
     }
 }
@@ -135,9 +139,9 @@ mod tests {
     use op::Op;
     use proptest::collection::vec;
     use proptest::prelude::*;
-    use std::iter;
     use std::cell::Cell;
     use std::collections::BTreeMap;
+    use std::iter;
     use std::rc::Rc;
     use transform::Transform;
 
