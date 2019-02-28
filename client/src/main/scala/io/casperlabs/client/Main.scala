@@ -3,8 +3,6 @@ package io.casperlabs.client
 import cats.effect.{Sync, Timer}
 import cats.syntax.functor._
 import cats.syntax.flatMap._
-import com.google.protobuf.ByteString
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.client.configuration._
 import io.casperlabs.ipc
 import io.casperlabs.casper.protocol
