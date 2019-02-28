@@ -188,4 +188,31 @@ object ExecEngineUtil {
         } yield result
       }
     } yield blockHashesToApply
+
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Log: ExecutionEngineService](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDagRepresentation[F],
+      //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
+      transforms: BlockMetadata => F[Seq[TransformEntry]]
+  ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
+    for {
+      parents <- ProtoUtil.unsafeGetParents[F](b)
+
+      deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
+
+      _ = assert(
+        parents.nonEmpty || (parents.isEmpty && b == genesis),
+        "Received a different genesis block."
+      )
+
+      result <- computeDeploysCheckpoint[F](
+                 parents,
+                 deploys,
+                 dag,
+                 transforms
+               )
+      (preStateHash, postStateHash, processedDeploys, _) = result
+    } yield (preStateHash, postStateHash, processedDeploys)
+
 }

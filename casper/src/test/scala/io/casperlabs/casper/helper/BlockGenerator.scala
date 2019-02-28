@@ -8,10 +8,12 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBl
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -26,8 +28,7 @@ object BlockGenerator {
 
   def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: Log](
       id: Int,
-      genesis: BlockMessage,
-      runtimeManager: RuntimeManager[F]
+      genesis: BlockMessage
   ): F[BlockMessage] =
     for {
       b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id)
@@ -35,8 +36,7 @@ object BlockGenerator {
       computeBlockCheckpointResult <- computeBlockCheckpoint[F](
                                        b,
                                        genesis,
-                                       dag,
-                                       runtimeManager
+                                       dag
                                      )
       (postStateHash, processedDeploys) = computeBlockCheckpointResult
       _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
@@ -45,14 +45,19 @@ object BlockGenerator {
   def computeBlockCheckpoint[F[_]: Sync: BlockStore: ExecutionEngineService: Log](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
+      dag: BlockDagRepresentation[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] =
     for {
-      result <- InterpreterUtil
-                 .computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
-      Right((preStateHash, postStateHash, processedDeploys)) = result
-    } yield (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
+      result <- ExecEngineUtil
+                 .computeBlockCheckpointFromDeploys[F](
+                   b,
+                   genesis,
+                   dag,
+                   //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
+                   (_: BlockMetadata) => Seq.empty[TransformEntry].pure[F]
+                 )
+      (_, postStateHash, processedDeploys) = result
+    } yield (postStateHash, processedDeploys)
 
   def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
       id: Int,

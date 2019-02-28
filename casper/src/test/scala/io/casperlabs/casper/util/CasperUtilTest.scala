@@ -142,8 +142,7 @@ class CasperUtilTest
                      computeBlockCheckpointResult <- computeBlockCheckpoint(
                                                       genesis,
                                                       genesis,
-                                                      dag,
-                                                      runtimeManager
+                                                      dag
                                                     )
                      (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
                      _ <- injectPostStateHash[Task](
@@ -152,15 +151,15 @@ class CasperUtilTest
                            postGenStateHash,
                            postGenProcessedDeploys
                          )
-                     _ <- updateChainWithBlockStateUpdate[Task](1, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](2, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](3, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](4, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](5, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](6, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](7, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](8, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](9, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](1, genesis)
+                     _ <- updateChainWithBlockStateUpdate[Task](2, genesis)
+                     _ <- updateChainWithBlockStateUpdate[Task](3, genesis)
+                     _ <- updateChainWithBlockStateUpdate[Task](4, genesis)
+                     _ <- updateChainWithBlockStateUpdate[Task](5, genesis)
+                     _ <- updateChainWithBlockStateUpdate[Task](6, genesis)
+                     _ <- updateChainWithBlockStateUpdate[Task](7, genesis)
+                     _ <- updateChainWithBlockStateUpdate[Task](8, genesis)
+                     _ <- updateChainWithBlockStateUpdate[Task](9, genesis)
 
                      _      <- conflicts[Task](b2, b3, genesis, dag) shouldBeF false
                      _      <- conflicts[Task](b4, b5, genesis, dag) shouldBeF true
