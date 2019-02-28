@@ -20,12 +20,14 @@ Artifacts are published to http://repo.casperlabs.io/casperlabs/repo
 
 You can run from the packaged archive for example as follows:
 
+*NOTE: Users will need to update \[VERSION\] with the version the want.
+
 ```console
-$ ARCHIVE=http://repo.casperlabs.io/casperlabs/repo/dev/casperlabs-node-0.0.tgz
+$ ARCHIVE=http://repo.casperlabs.io/casperlabs/repo/master/casperlabs-node-[VERSION].tgz
 $ curl -s -o casperlabs-node.tgz $ARCHIVE
 $ tar -xzf casperlabs-node.tgz
-$ ./casperlabs-node-0.0/bin/casperlabs-node --version
-Casper Labs Node 0.0
+$ ./casperlabs-node-[VERSION]/bin/casperlabs-node --version
+Casper Labs Node
 ```
 
 ### Installing and running on Debian from DEB package
@@ -49,7 +51,7 @@ Execute `sbt client/debian:packageBin`. Resulted `.deb` package will be placed i
 * openjdk-11-jre-headless
 * openssl
 
-Install using `sudo dpkg -i client/target/casperlabs-client-0.0.1.deb`.
+Install using `sudo dpkg -i client/target/casperlabs-client-[VERSION].deb`.
 
 After installation run `casperlabs-client -- --help` for printing help message.
 
@@ -70,7 +72,7 @@ Execute `sbt client/rpm:packageBin`. Resulted `.deb` package will be placed in t
 * java-11-openjdk-headless
 * openssl
 
-Install using `sudo rpm -U client/target/rpm/RPMS/noarch/casperlabs-client-0.0.1.noarch.rpm`.
+Install using `sudo rpm -U client/target/rpm/RPMS/noarch/casperlabs-client-[VERSION].noarch.rpm`.
 
 After installation run `casperlabs-client -- --help` for printing help message.
 
