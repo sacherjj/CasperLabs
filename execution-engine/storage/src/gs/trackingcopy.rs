@@ -7,6 +7,12 @@ use std::collections::{BTreeMap, HashMap};
 use transform::{Transform, TypeMismatch};
 use utils::add;
 
+#[derive(Debug)]
+pub enum QueryResult {
+    Success(Value),
+    ValueNotFound(String),
+}
+
 pub struct TrackingCopy<R: DbReader> {
     reader: R,
     cache: HashMap<Key, Value>,
@@ -68,15 +74,67 @@ impl<R: DbReader> TrackingCopy<R> {
     pub fn effect(&self) -> ExecutionEffect {
         ExecutionEffect(self.ops.clone(), self.fns.clone())
     }
+
+    pub fn query(&mut self, base_key: Key, path: &[String]) -> Result<QueryResult, Error> {
+        let base_value = self.read(base_key)?;
+
+        let result = path.iter().try_fold(
+            base_value,
+            // We encode the two possible short-circuit conditions with
+            // Option<Error>, where the None case corresponds to
+            // QueryResult::ValueNotFound and Some(_) corresponds to
+            // a storage-related error.
+            |curr_value, name| -> Result<Value, Option<Error>> {
+                match curr_value {
+                    Value::Acct(account) => {
+                        if let Some(key) = account.urefs_lookup().get(name) {
+                            self.read(*key).map_err(|e| Some(e.into()))
+                        } else {
+                            Err(None)
+                        }
+                    }
+
+                    Value::Contract { known_urefs, .. } => {
+                        if let Some(key) = known_urefs.get(name) {
+                            self.read(*key).map_err(|e| Some(e.into()))
+                        } else {
+                            Err(None)
+                        }
+                    }
+
+                    _ => Err(None),
+                }
+            },
+        );
+
+        match result {
+            Ok(value) => Ok(QueryResult::Success(value)),
+
+            Err(None) => {
+                let mut full_path = format!("{:?}", base_key);
+                for p in path {
+                    full_path.push_str("/");
+                    full_path.push_str(p);
+                }
+                Ok(QueryResult::ValueNotFound(full_path))
+            }
+
+            Err(Some(err)) => Err(err),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use common::key::Key;
-    use common::value::Value;
+    use common::value::{Account, Value};
     use error::Error;
-    use gs::{DbReader, TrackingCopy};
+    use gens::gens::*;
+    use gs::inmem::InMemGS;
+    use gs::{trackingcopy::QueryResult, DbReader, TrackingCopy};
     use op::Op;
+    use proptest::collection::vec;
+    use proptest::prelude::*;
     use std::cell::Cell;
     use std::collections::BTreeMap;
     use std::rc::Rc;
@@ -325,5 +383,147 @@ mod tests {
         assert_eq!(tc.fns.get(&k), Some(&Transform::Write(write_value)));
         assert_eq!(tc.ops.len(), 1);
         assert_eq!(tc.ops.get(&k), Some(&Op::Write));
+    }
+
+    proptest! {
+        #[test]
+        fn query_empty_path(k in key_arb(), missing_key in key_arb(), v in value_arb()) {
+            let mut map = BTreeMap::new();
+            map.insert(k, v.clone());
+            let gs = InMemGS::new(map);
+            let mut tc = TrackingCopy::new(gs);
+            let empty_path = Vec::new();
+            if let Ok(QueryResult::Success(result)) = tc.query(k, &empty_path) {
+                assert_eq!(v, result);
+            } else {
+                panic!("Query failed when it should not have!");
+            }
+
+            if missing_key != k {
+                let result = tc.query(missing_key, &empty_path);
+                assert_matches!(result, Err(Error::KeyNotFound(_)));
+            }
+        }
+
+        #[test]
+        fn query_contract_state(
+            k in key_arb(), // key state is stored at
+            v in value_arb(), // value in contract state
+            name in "\\PC*", // human-readable name for state
+            missing_name in "\\PC*",
+            body in vec(any::<u8>(), 1..1000), // contract body
+            hash in u8_slice_32(), // hash for contract key
+        ) {
+            let mut map = BTreeMap::new();
+            map.insert(k, v.clone());
+
+            let mut known_urefs = BTreeMap::new();
+            known_urefs.insert(name.clone(), k);
+            let contract = Value::Contract {
+                bytes: body,
+                known_urefs,
+            };
+            let contract_key = Key::Hash(hash);
+            map.insert(contract_key, contract);
+
+            let gs = InMemGS::new(map);
+            let mut tc = TrackingCopy::new(gs);
+            let path = vec!(name.clone());
+            if let Ok(QueryResult::Success(result)) = tc.query(contract_key, &path) {
+                assert_eq!(v, result);
+            } else {
+                panic!("Query failed when it should not have!");
+            }
+
+            if missing_name != name {
+                let result = tc.query(contract_key, &vec!(missing_name));
+                assert_matches!(result, Ok(QueryResult::ValueNotFound(_)));
+            }
+        }
+
+
+        #[test]
+        fn query_account_state(
+            k in key_arb(), // key state is stored at
+            v in value_arb(), // value in account state
+            name in "\\PC*", // human-readable name for state
+            missing_name in "\\PC*",
+            pk in u8_slice_32(), // account public key
+            nonce in any::<u64>(), // account nonce
+            address in u8_slice_20(), // address for account key
+        ) {
+            let mut map = BTreeMap::new();
+            map.insert(k, v.clone());
+
+            let mut known_urefs = BTreeMap::new();
+            known_urefs.insert(name.clone(), k);
+            let account = Account::new(
+                pk,
+                nonce,
+                known_urefs,
+            );
+            let account_key = Key::Account(address);
+            map.insert(account_key, Value::Acct(account));
+
+            let gs = InMemGS::new(map);
+            let mut tc = TrackingCopy::new(gs);
+            let path = vec!(name.clone());
+            if let Ok(QueryResult::Success(result)) = tc.query(account_key, &path) {
+                assert_eq!(v, result);
+            } else {
+                panic!("Query failed when it should not have!");
+            }
+
+            if missing_name != name {
+                let result = tc.query(account_key, &vec!(missing_name));
+                assert_matches!(result, Ok(QueryResult::ValueNotFound(_)));
+            }
+        }
+
+        #[test]
+        fn query_path(
+            k in key_arb(), // key state is stored at
+            v in value_arb(), // value in contract state
+            state_name in "\\PC*", // human-readable name for state
+            contract_name in "\\PC*", // human-readable name for contract
+            pk in u8_slice_32(), // account public key
+            nonce in any::<u64>(), // account nonce
+            address in u8_slice_20(), // address for account key
+            body in vec(any::<u8>(), 1..1000), //contract body
+            hash in u8_slice_32(), // hash for contract key
+        ) {
+            let mut map = BTreeMap::new();
+            map.insert(k, v.clone());
+
+            // create contract which knows about value
+            let mut contract_known_urefs = BTreeMap::new();
+            contract_known_urefs.insert(state_name.clone(), k);
+            let contract = Value::Contract {
+                bytes: body,
+                known_urefs: contract_known_urefs,
+            };
+            let contract_key = Key::Hash(hash);
+            map.insert(contract_key, contract);
+
+            // create account which knows about contract
+            let mut account_known_urefs = BTreeMap::new();
+            account_known_urefs.insert(contract_name.clone(), contract_key);
+            let account = Account::new(
+                pk,
+                nonce,
+                account_known_urefs,
+            );
+            let account_key = Key::Account(address);
+            map.insert(account_key, Value::Acct(account));
+
+            let gs = InMemGS::new(map);
+            let mut tc = TrackingCopy::new(gs);
+            let path = vec!(contract_name, state_name);
+            if let Ok(QueryResult::Success(result)) = tc.query(account_key, &path) {
+                assert_eq!(v, result);
+            } else {
+                panic!("Query failed when it should not have!");
+            }
+        }
     }
 }

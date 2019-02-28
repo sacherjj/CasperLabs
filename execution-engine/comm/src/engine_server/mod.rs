@@ -6,7 +6,7 @@ use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
 use std::collections::HashMap;
-use storage::gs::{self, DbReader, QueryResult};
+use storage::gs::{trackingcopy::QueryResult, DbReader};
 use storage::history::{self, *};
 use storage::transform;
 
@@ -31,7 +31,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
 
         println!("Querying...");
         if let Ok(mut tc) = self.tracking_copy(state_hash) {
-            let response = match gs::query_tc(&mut tc, key, path) {
+            let response = match tc.query(key, path) {
                 Err(err) => {
                     let mut result = ipc::QueryResponse::new();
                     let error = format!("{:?}", err);
