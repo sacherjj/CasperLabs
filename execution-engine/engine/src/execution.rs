@@ -884,10 +884,10 @@ macro_rules! on_fail_charge {
     };
 }
 
-pub trait Executor {
+pub trait Executor<A> {
     fn exec<R: DbReader>(
         &self,
-        parity_module: Module,
+        parity_module: A,
         account_addr: [u8; 20],
         timestamp: u64,
         nonce: u64,
@@ -898,7 +898,7 @@ pub trait Executor {
 
 pub struct WasmiExecutor;
 
-impl Executor for WasmiExecutor {
+impl Executor<Module> for WasmiExecutor {
     fn exec<R: DbReader>(
         &self,
         parity_module: Module,

@@ -115,7 +115,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
     }
 }
 
-fn run_deploys<R: DbReader, H: History<R>, E: Executor, P: Preprocessor>(
+fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>>(
     engine_state: &EngineState<R, H>,
     executor: &E,
     preprocessor: &P,

@@ -42,17 +42,17 @@ pub enum PreprocessingError {
 
 use PreprocessingError::*;
 
-pub trait Preprocessor {
+pub trait Preprocessor<A> {
     fn preprocess(
         &self,
         module_bytes: &[u8],
         wasm_costs: &WasmCosts,
-    ) -> Result<Module, PreprocessingError>;
+    ) -> Result<A, PreprocessingError>;
 }
 
 pub struct WasmiPreprocessor;
 
-impl Preprocessor for WasmiPreprocessor {
+impl Preprocessor<Module> for WasmiPreprocessor {
     // TODO: inject gas counter, limit stack size etc
     fn preprocess(
         &self,
