@@ -3,7 +3,7 @@ use execution::{Error as ExecutionError, Executor};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use storage::error::{Error as StorageError, RootNotFound};
+use storage::error::{GlobalStateError, RootNotFound};
 use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
 use storage::history::*;
 use storage::transform::Transform;
@@ -47,7 +47,7 @@ impl ExecutionResult {
 pub enum Error {
     PreprocessingError(String),
     ExecError(ExecutionError),
-    StorageError(StorageError),
+    StorageError(GlobalStateError),
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -76,8 +76,8 @@ impl From<wasm_prep::PreprocessingError> for Error {
     }
 }
 
-impl From<StorageError> for Error {
-    fn from(error: StorageError) -> Self {
+impl From<GlobalStateError> for Error {
+    fn from(error: GlobalStateError) -> Self {
         Error::StorageError(error)
     }
 }

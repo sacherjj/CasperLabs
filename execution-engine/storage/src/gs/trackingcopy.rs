@@ -1,6 +1,6 @@
 use common::key::Key;
 use common::value::Value;
-use error::Error;
+use error::GlobalStateError;
 use gs::{DbReader, ExecutionEffect};
 use op::Op;
 use std::collections::{BTreeMap, HashMap};
@@ -30,7 +30,7 @@ impl<R: DbReader> TrackingCopy<R> {
         }
     }
 
-    pub fn get(&mut self, k: &Key) -> Result<Value, Error> {
+    pub fn get(&mut self, k: &Key) -> Result<Value, GlobalStateError> {
         if let Some(value) = self.cache.get(k) {
             return Ok(value.clone());
         }
@@ -39,18 +39,18 @@ impl<R: DbReader> TrackingCopy<R> {
         Ok(value)
     }
 
-    pub fn read(&mut self, k: Key) -> Result<Value, Error> {
+    pub fn read(&mut self, k: Key) -> Result<Value, GlobalStateError> {
         let value = self.get(&k)?;
         add(&mut self.ops, k, Op::Read);
         Ok(value)
     }
-    pub fn write(&mut self, k: Key, v: Value) -> Result<(), Error> {
+    pub fn write(&mut self, k: Key, v: Value) -> Result<(), GlobalStateError> {
         let _ = self.cache.insert(k, v.clone());
         add(&mut self.ops, k, Op::Write);
         add(&mut self.fns, k, Transform::Write(v));
         Ok(())
     }
-    pub fn add(&mut self, k: Key, v: Value) -> Result<(), Error> {
+    pub fn add(&mut self, k: Key, v: Value) -> Result<(), GlobalStateError> {
         let curr = self.get(&k)?;
         let t = match v {
             Value::Int32(i) => Ok(Transform::AddInt32(i)),
@@ -75,7 +75,7 @@ impl<R: DbReader> TrackingCopy<R> {
         ExecutionEffect(self.ops.clone(), self.fns.clone())
     }
 
-    pub fn query(&mut self, base_key: Key, path: &[String]) -> Result<QueryResult, Error> {
+    pub fn query(&mut self, base_key: Key, path: &[String]) -> Result<QueryResult, GlobalStateError> {
         let base_value = self.read(base_key)?;
 
         let result = path.iter().enumerate().try_fold(
@@ -85,7 +85,7 @@ impl<R: DbReader> TrackingCopy<R> {
             // QueryResult::ValueNotFound and Err(_) corresponds to
             // a storage-related error. The information in the Ok(_) case is used
             // to build an informative error message about why the query was not successful.
-            |curr_value, (i, name)| -> Result<Value, Result<(usize, String), Error>> {
+            |curr_value, (i, name)| -> Result<Value, Result<(usize, String), GlobalStateError>> {
                 match curr_value {
                     Value::Acct(account) => {
                         if let Some(key) = account.urefs_lookup().get(name) {
@@ -132,7 +132,7 @@ impl<R: DbReader> TrackingCopy<R> {
 mod tests {
     use common::key::Key;
     use common::value::{Account, Value};
-    use error::Error;
+    use error::{GlobalStateError, Error};
     use gens::gens::*;
     use gs::inmem::InMemGS;
     use gs::{trackingcopy::QueryResult, DbReader, TrackingCopy};
@@ -167,7 +167,7 @@ mod tests {
     }
 
     impl DbReader for CountingDb {
-        fn get(&self, _k: &Key) -> Result<Value, Error> {
+        fn get(&self, _k: &Key) -> Result<Value, GlobalStateError> {
             let count = self.count.get();
             let value = match self.value {
                 Some(ref v) => v.clone(),
@@ -179,7 +179,7 @@ mod tests {
     }
 
     impl DbReader for Rc<CountingDb> {
-        fn get(&self, k: &Key) -> Result<Value, Error> {
+        fn get(&self, k: &Key) -> Result<Value, GlobalStateError> {
             CountingDb::get(self, k)
         }
     }

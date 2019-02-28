@@ -1,7 +1,7 @@
 use common::bytesrepr::{deserialize, ToBytes};
 use common::key::Key;
 use common::value::Value;
-use error::{Error, RootNotFound};
+use error::{Error, GlobalStateError, RootNotFound};
 use gs::{DbReader, TrackingCopy};
 use history::*;
 use rkv::store::single::SingleStore;
@@ -18,7 +18,7 @@ pub struct LmdbGs {
 }
 
 impl LmdbGs {
-    pub fn new(p: &Path) -> Result<LmdbGs, Error> {
+    pub fn new(p: &Path) -> Result<LmdbGs, GlobalStateError> {
         let env = Manager::singleton()
             .write()
             .map_err(|_| Error::RkvError(String::from("Error while creating LMDB env.")))
@@ -33,7 +33,7 @@ impl LmdbGs {
         Ok(LmdbGs { store, env })
     }
 
-    pub fn read(&self, k: &Key) -> Result<Value, Error> {
+    pub fn read(&self, k: &Key) -> Result<Value, GlobalStateError> {
         self.env
             .read()
             .map_err(|_| Error::RkvError(String::from("Couldn't get read lock to LMDB env.")))
@@ -56,7 +56,7 @@ impl LmdbGs {
             })
     }
 
-    pub fn write<'a, I>(&self, mut kvs: I) -> Result<(), Error>
+    pub fn write<'a, I>(&self, mut kvs: I) -> Result<(), GlobalStateError>
     where
         I: Iterator<Item = (Key, &'a Value)>,
     {
@@ -66,7 +66,7 @@ impl LmdbGs {
             .and_then(|rkv| {
                 let mut w = rkv.write()?;
 
-                let result: Result<(), Error> = kvs.try_fold((), |_, (k, v)| {
+                let result: Result<(), GlobalStateError> = kvs.try_fold((), |_, (k, v)| {
                     let bytes = v.to_bytes();
                     self.store.put(&mut w, k, &rkv::Value::Blob(&bytes))?;
                     Ok(())
@@ -85,14 +85,14 @@ impl LmdbGs {
             })
     }
 
-    pub fn write_single(&self, k: Key, v: &Value) -> Result<(), Error> {
+    pub fn write_single(&self, k: Key, v: &Value) -> Result<(), GlobalStateError> {
         let iterator = std::iter::once((k, v));
         self.write(iterator)
     }
 }
 
 impl DbReader for LmdbGs {
-    fn get(&self, k: &Key) -> Result<Value, Error> {
+    fn get(&self, k: &Key) -> Result<Value, GlobalStateError> {
         // TODO: The `Reader` should really be static for the DbReader instance,
         // i.e. just by creating a DbReader for LMDB it should create a `Reader`
         // to go with it. This would prevent the database from being modified while

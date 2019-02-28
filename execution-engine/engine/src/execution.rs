@@ -5,7 +5,7 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
-use storage::error::Error as StorageError;
+use storage::error::GlobalStateError;
 use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
 use wasmi::memory_units::Pages;
 use wasmi::{
@@ -26,7 +26,7 @@ use std::fmt;
 #[derive(Debug)]
 pub enum Error {
     Interpreter(InterpreterError),
-    Storage(StorageError),
+    Storage(GlobalStateError),
     BytesRepr(BytesReprError),
     ForgedReference(Key),
     NoImportedMemory,
@@ -56,8 +56,8 @@ impl From<InterpreterError> for Error {
     }
 }
 
-impl From<StorageError> for Error {
-    fn from(e: StorageError) -> Self {
+impl From<GlobalStateError> for Error {
+    fn from(e: GlobalStateError) -> Self {
         Error::Storage(e)
     }
 }

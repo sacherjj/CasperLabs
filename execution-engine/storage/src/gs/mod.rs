@@ -1,4 +1,4 @@
-use super::error::Error;
+use super::error::GlobalStateError;
 use super::op::Op;
 use super::transform::Transform;
 use crate::common::key::Key;
@@ -15,7 +15,7 @@ pub use self::trackingcopy::TrackingCopy;
 pub struct ExecutionEffect(pub HashMap<Key, Op>, pub HashMap<Key, Transform>);
 
 pub trait DbReader {
-    fn get(&self, k: &Key) -> Result<Value, Error>;
+    fn get(&self, k: &Key) -> Result<Value, GlobalStateError>;
 }
 
 pub fn mocked_account(account_addr: [u8; 20]) -> BTreeMap<Key, Value> {

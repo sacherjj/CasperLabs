@@ -4,7 +4,7 @@ use blake2::VarBlake2b;
 use common::bytesrepr::*;
 use common::key::Key;
 use common::value::Value;
-use error::{Error, RootNotFound};
+use error::{Error, GlobalStateError, RootNotFound};
 use gs::*;
 use history::*;
 use std::collections::{BTreeMap, HashMap};
@@ -24,7 +24,7 @@ impl <K, V>Clone for InMemGS<K,V> {
 }
 
 impl DbReader for InMemGS<Key, Value> {
-    fn get(&self, k: &Key) -> Result<Value, Error> {
+    fn get(&self, k: &Key) -> Result<Value, GlobalStateError> {
         match self.0.get(k) {
             None => Err(Error::KeyNotFound(*k)),
             Some(v) => Ok(v.clone()),
@@ -94,7 +94,7 @@ impl History<InMemGS<Key, Value>> for InMemHist<Key, Value> {
             BTreeMap::clone(&gs.0)
         };
 
-        let result: Result<[u8; 32], Error> = effects
+        let result: Result<[u8; 32], GlobalStateError> = effects
             .into_iter()
             .try_for_each(|(k, t)| {
                 let maybe_curr = base.remove(&k);
