@@ -11,7 +11,7 @@ import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.casper.helper.BlockDagStorageFixture
 import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
@@ -21,6 +21,9 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import io.casperlabs.shared.StoreType
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import cats.effect.Sync
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.models.BlockMetadata
 import monix.eval.Task
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
@@ -161,18 +164,19 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             log: LogStub[Task],
             time: LogicalTime[Task]
         ) =>
-          implicit val logEff = log
+          implicit val logEff                    = log
+          implicit val executionEngineServiceEff = executionEngineService
           for {
             genesis <- fromBondsFile(genesisPath)(executionEngineService, log, time)
             _       <- BlockStore[Task].put(genesis.blockHash, genesis)
             dag     <- blockDagStorage.getRepresentation
-            maybePostGenesisStateHash <- InterpreterUtil
+            // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
+            maybePostGenesisStateHash <- ExecEngineUtil
                                           .validateBlockCheckpoint[Task](
                                             genesis,
                                             dag,
-                                            RuntimeManager.fromExecutionEngineService(
-                                              executionEngineService
-                                            )
+                                            (_: BlockMetadata) =>
+                                              Seq.empty[TransformEntry].pure[Task]
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }

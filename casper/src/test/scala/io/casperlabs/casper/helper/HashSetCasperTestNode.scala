@@ -20,7 +20,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerInternal
 }
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.effect.implicits._
@@ -38,7 +38,10 @@ import io.casperlabs.shared.{Cell, Log}
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.ipc
+import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.models.BlockMetadata
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -118,11 +121,12 @@ class HashSetCasperTestNode[F[_]](
     // pre-population removed from internals of Casper
     blockStore.put(genesis.blockHash, genesis) *>
       blockDagStorage.getRepresentation.flatMap { dag =>
-        InterpreterUtil
+        ExecEngineUtil
           .validateBlockCheckpoint[F](
             genesis,
             dag,
-            runtimeManager
+            // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
+            (_: BlockMetadata) => Seq.empty[TransformEntry].pure[F]
           )
           .void
       }
@@ -302,7 +306,7 @@ object HashSetCasperTestNode {
                 _ =>
                   n.connectionsCell.flatModify(
                     _.addConn[F](m.local)(Monad[F], n.logEff, n.metricEff)
-                  )
+                )
               )
           }
     } yield nodes
