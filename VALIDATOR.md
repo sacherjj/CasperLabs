@@ -40,9 +40,9 @@ OpenJDK 64-Bit Server VM (build 11.0.1+13-Ubuntu-3ubuntu116.04ppa1, mixed mode, 
 The node consists of an API component running in Java and an execution engine running the WASM code of the deploys. They have to be started separately at the moment and configured to talk to each other.
 
 ```sh
-curl -sO http://repo.casperlabs.io/casperlabs/repo/dev/casperlabs-node_0.0_all.deb
+curl -sO http://repo.casperlabs.io/casperlabs/repo/dev/casperlabs-node_0.1_all.deb
 curl -sO http://repo.casperlabs.io/casperlabs/repo/dev/casperlabs-engine-grpc-server_0.1.0_amd64.deb
-sudo dpkg -i casperlabs-node_0.0_all.deb
+sudo dpkg -i casperlabs-node_0.1_all.deb
 sudo dpkg -i casperlabs-engine-grpc-server_0.1.0_amd64.deb
 ```
 
@@ -58,7 +58,7 @@ You'll need to create a directory to hold data. By default this is expected to b
 ```console
 $ mkdir casperlabs-node-data
 $ casperlabs-node run -s --server-data-dir casperlabs-node-data --casper-num-validators 1
-10:40:19.729 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node 0.0 (030bb96133ef9a9c31133ab3371937c2388bf5b9)
+10:40:19.729 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node 0.1 (030bb96133ef9a9c31133ab3371937c2388bf5b9)
 10:40:19.736 [main] INFO  io.casperlabs.node.NodeEnvironment$ - Using data dir: /home/aakoshh/projects/casperlabs-node-data
 10:40:19.748 [main] INFO  i.c.c.t.GenerateCertificateIfAbsent - No certificate found at path /home/aakoshh/projects/casperlabs-node-data/node.certificate.pem
 10:40:19.749 [main] INFO  i.c.c.t.GenerateCertificateIfAbsent - Generating a X.509 certificate for the node
