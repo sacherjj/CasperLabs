@@ -45,7 +45,7 @@ docker-push-all: \
 
 docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
 docker-build/client: .make/docker-build/universal/client
-docker-build/execution-engine: .make/docker-build/execution-engine
+docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -112,6 +112,12 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		.make/docker-build/universal/node \
 		docker/test-node.Dockerfile
 	docker build -f docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test docker
+	mkdir -p $(dir $@) && touch $@
+
+# Make a test version for the execution engine as well just so we can swith version easily.
+.make/docker-build/test/execution-engine: \
+		.make/docker-build/execution-engine
+	docker tag $(DOCKER_USERNAME)/execution-engine:latest $(DOCKER_USERNAME)/execution-engine:test
 	mkdir -p $(dir $@) && touch $@
 
 
