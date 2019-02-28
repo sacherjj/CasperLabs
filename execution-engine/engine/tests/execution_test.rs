@@ -7,7 +7,7 @@ extern crate wasmi;
 
 use common::bytesrepr::ToBytes;
 use common::key::{Key, UREF_SIZE};
-use common::value;
+use common::value::{self, Value};
 use execution_engine::execution::{Runtime, RuntimeContext};
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
@@ -23,7 +23,7 @@ struct MockEnv {
     key: Key,
     account: value::Account,
     uref_lookup: BTreeMap<String, Key>,
-    tc: TrackingCopy<InMemGS>,
+    tc: TrackingCopy<InMemGS<Key, Value>>,
     gas_limit: u64,
     memory: MemoryRef,
 }
@@ -33,7 +33,7 @@ impl MockEnv {
         key: Key,
         account: value::Account,
         gas_limit: u64,
-        tc: TrackingCopy<InMemGS>,
+        tc: TrackingCopy<InMemGS<Key, Value>>,
     ) -> Self {
         let uref_lookup = mock_uref_lookup();
         let memory = MemoryInstance::alloc(Pages(17), Some(Pages(MAX_MEM_PAGES as usize)))
@@ -54,7 +54,7 @@ impl MockEnv {
         address: [u8; 20],
         timestamp: u64,
         nonce: u64,
-    ) -> Runtime<'a, InMemGS> {
+    ) -> Runtime<'a, InMemGS<Key, Value>> {
         let context = mock_context(&mut self.uref_lookup, &self.account, self.key);
         Runtime::new(
             self.memory.clone(),
@@ -122,7 +122,7 @@ fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
     (key, account)
 }
 
-fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS> {
+fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS<Key, Value>> {
     let root_hash = storage::history::EMPTY_ROOT_HASH;
     let mut hist = InMemHist::new(&root_hash);
     let transform = Transform::Write(value::Value::Acct(init_account.clone()));
