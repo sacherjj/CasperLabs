@@ -4,11 +4,11 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{EitherValues, FlatSpec, Matchers}
 
 import DeployGrpcService.splitPath
 
-class DeployGrpcServiceTest extends FlatSpec with Matchers {
+class DeployGrpcServiceTest extends FlatSpec with EitherValues with Matchers {
 
   "toKey" should "convert a hash-type key successfully" in {
     val keyValue = randomBytes(32)
@@ -67,22 +67,22 @@ class DeployGrpcServiceTest extends FlatSpec with Matchers {
     val d = 20
     val e = util.Random.nextInt(20) //number < 20
 
-    attemptToKey("hash", randomBytes(a)) should matchPattern { case Left(_)    => }
-    attemptToKey("uref", randomBytes(a)) should matchPattern { case Left(_)    => }
-    attemptToKey("address", randomBytes(a)) should matchPattern { case Left(_) => }
+    attemptToKey("hash", randomBytes(a)) shouldBe ('left)
+    attemptToKey("uref", randomBytes(a)) shouldBe ('left)
+    attemptToKey("address", randomBytes(a)) shouldBe ('left)
 
-    attemptToKey("address", randomBytes(b)) should matchPattern { case Left(_) => }
+    attemptToKey("address", randomBytes(b)) shouldBe ('left)
 
-    attemptToKey("hash", randomBytes(c)) should matchPattern { case Left(_)    => }
-    attemptToKey("uref", randomBytes(c)) should matchPattern { case Left(_)    => }
-    attemptToKey("address", randomBytes(c)) should matchPattern { case Left(_) => }
+    attemptToKey("hash", randomBytes(c)) shouldBe ('left)
+    attemptToKey("uref", randomBytes(c)) shouldBe ('left)
+    attemptToKey("address", randomBytes(c)) shouldBe ('left)
 
-    attemptToKey("hash", randomBytes(d)) should matchPattern { case Left(_) => }
-    attemptToKey("uref", randomBytes(d)) should matchPattern { case Left(_) => }
+    attemptToKey("hash", randomBytes(d)) shouldBe ('left)
+    attemptToKey("uref", randomBytes(d)) shouldBe ('left)
 
-    attemptToKey("hash", randomBytes(e)) should matchPattern { case Left(_)    => }
-    attemptToKey("uref", randomBytes(e)) should matchPattern { case Left(_)    => }
-    attemptToKey("address", randomBytes(e)) should matchPattern { case Left(_) => }
+    attemptToKey("hash", randomBytes(e)) shouldBe ('left)
+    attemptToKey("uref", randomBytes(e)) shouldBe ('left)
+    attemptToKey("address", randomBytes(e)) shouldBe ('left)
   }
 
   "splitPath" should "split on '/' and exclude empty components" in {
