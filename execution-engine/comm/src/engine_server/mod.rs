@@ -4,7 +4,6 @@ use execution_engine::engine::{EngineState, Error as EngineError, ExecutionResul
 use execution_engine::execution::{Error as ExecutionError, Executor, WasmiExecutor};
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
-use mappings::*;
 use std::collections::HashMap;
 use storage::gs::{trackingcopy::QueryResult, DbReader};
 use storage::history::{self, *};
@@ -173,7 +172,7 @@ impl Into<DeployResult> for ExecutionResult {
                 result: Ok(effects),
                 cost,
             } => {
-                let mut ipc_ee = execution_effect_to_ipc(effects);
+                let mut ipc_ee = effects.into();
                 let deploy_result = {
                     let mut deploy_result_tmp = ipc::DeployResult::new();
                     deploy_result_tmp.set_effects(ipc_ee);

@@ -259,31 +259,33 @@ impl From<&super::ipc::TransformEntry> for (common::key::Key, storage::transform
     }
 }
 
-/// Transforms domain ExecutionEffect into gRPC ExecutionEffect.
-pub fn execution_effect_to_ipc(ee: storage::gs::ExecutionEffect) -> super::ipc::ExecutionEffect {
-    let mut eff = super::ipc::ExecutionEffect::new();
-    let ipc_ops: Vec<super::ipc::OpEntry> =
-        ee.0.iter()
-            .map(|(k, o)| {
-                let mut op_entry = super::ipc::OpEntry::new();
-                let ipc_key = k.into();
-                let ipc_op = o.clone().into();
-                op_entry.set_key(ipc_key);
-                op_entry.set_operation(ipc_op);
-                op_entry
-            })
-            .collect();
-    let ipc_tran: Vec<super::ipc::TransformEntry> =
-        ee.1.into_iter()
-            .map(|(k, t)| {
-                let mut tr_entry = super::ipc::TransformEntry::new();
-                let ipc_tr = t.into();
-                tr_entry.set_key((&k).into());
-                tr_entry.set_transform(ipc_tr);
-                tr_entry
-            })
-            .collect();
-    eff.set_op_map(protobuf::RepeatedField::from_vec(ipc_ops));
-    eff.set_transform_map(protobuf::RepeatedField::from_vec(ipc_tran));
-    eff
+impl From<storage::gs::ExecutionEffect> for super::ipc::ExecutionEffect {
+    fn from(ee: storage::gs::ExecutionEffect) -> super::ipc::ExecutionEffect {
+        let mut eff = super::ipc::ExecutionEffect::new();
+        let ipc_ops: Vec<super::ipc::OpEntry> =
+            ee.0.iter()
+                .map(|(k, o)| {
+                    let mut op_entry = super::ipc::OpEntry::new();
+                    let ipc_key = k.into();
+                    let ipc_op = o.clone().into();
+                    op_entry.set_key(ipc_key);
+                    op_entry.set_operation(ipc_op);
+                    op_entry
+                })
+                .collect();
+        let ipc_tran: Vec<super::ipc::TransformEntry> =
+            ee.1.into_iter()
+                .map(|(k, t)| {
+                    let mut tr_entry = super::ipc::TransformEntry::new();
+
+                    let ipc_tr = t.into();
+                    tr_entry.set_key((&k).into());
+                    tr_entry.set_transform(ipc_tr);
+                    tr_entry
+                })
+                .collect();
+        eff.set_op_map(protobuf::RepeatedField::from_vec(ipc_ops));
+        eff.set_transform_map(protobuf::RepeatedField::from_vec(ipc_tran));
+        eff
+    }
 }
