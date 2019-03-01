@@ -178,6 +178,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	@# .deb will be at execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
 	@# Need to use the same user ID as outside if we want to continue working with these files,
 	@# otherwise the user running in docker will own them.
+	@# Going to ignore errors with the rpm build here so that we can get the .deb package for docker.
 	$(eval USERID = $(shell id -u))
 	docker pull $(DOCKER_USERNAME)/buildenv:latest
 	docker run -it --rm --entrypoint sh \
@@ -192,8 +193,8 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 			export HOME=/home/builder ; \
 			export PATH=/home/builder/.cargo/bin:$$PATH ; \
 			cd /CasperLabs/$* ; \
-			([ -d .rpm ] || cargo rpm init) && cargo rpm build && \
-			cargo deb --no-build \
+			([ -d .rpm ] || cargo rpm init) && cargo rpm build ; \
+			cargo deb \
 		'"
 	mkdir -p $(dir $@) && touch $@
 
