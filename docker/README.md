@@ -1,8 +1,8 @@
 # Node network simulation
 
-The idea is to create many nodes with commands like `make node-0/up`, `make node-1/down` etc. Each will have the same configuration as `template/Dockerfile` by having a symlink. The containers would all be on the same network.
+The idea is to create many nodes with commands like `make node-0/up`, `make node-1/down` etc. Each will have the same configuration as `template/Dockerfile`. The containers would all be on the same network.
 
-Then we can slow down the network between `node-*` containers with https://alexei-led.github.io/post/pumba_docker_netem/ and see what happens.
+Then we can slow down the network between `node-*` containers with [pumba](https://alexei-led.github.io/post/pumba_docker_netem/) and see what happens.
 
 To deploy we'll have to `docker run --network casperlabs casperlabs/client` and pass it the WASM files. `client.sh` provides is a convenience wrapper for interacting with the network; run `./client.sh node-0 --help` to see what it can do.
 
@@ -18,7 +18,7 @@ We'll set up a bunch of nodes in docker with names such as `node-0`, `node-1` et
 
 The setup process will establish validator keys and bonds in `.casperlabs/genesis` by starting a node instance once up front. By default 10 files are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
 
-`node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first. You can run `make node-0` to establish its directory and see the values `docker-compose` will use, or just run `make node-0/up` to bring up the node in docker straight away. Check that everything is fine with `docker logs -f node-0`. When it's running, bring up more nodes.
+`node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first. You can run `make node-0` to establish its directory and see the values `docker-compose` will use, or just run `make node-0/up` to bring up the node in docker straight away. Check that everything is fine with `docker logs -f node-0`. When it's running, bring up more nodes, e.g `make node-1/up node-2/up`.
 
 
 ## Deploy some WASM code
@@ -32,9 +32,11 @@ Assuming that you cloned and compiled the [contract-examples](https://github.com
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm
 
-Success!
+> Success!
+
 ./client.sh node-0 propose
-Response: Success! Block f876efed8d... created and added.
+
+> Response: Success! Block f876efed8d... created and added.
 ```
 
 ## Monitoring
@@ -68,19 +70,38 @@ _NOTE_: For the techniques that use `iptables` and `tc` to work you'll need to r
 
 ## Visualizing the DAG
 
-You'll need to `sudo apt-get install graphviz` to run the following code:
+You can save snapshots of the DAG as it evolves, like a slide show, by starting the the client in a mode which saves a new image every time it changes. You have to give it a target directory (which will be available as `/data` in the container) and start it, then perform your deploy and propose actions in a different terminal. The `images` directory in the example below will accumulate files like `sample_1.png`, `sample_2.png`, etc.
 
 ```sh
-./client.sh node-0 vdag --showJustificationlines --depth 25 \
+./client.sh node-0 vdag $PWD/images --show-ustification-lines --depth 25 \
+    --out /data/sample.png --stream multiple-outputs
+
+> Wrote /data/sample_0.png
+> Wrote /data/sample_1.png
+^C
+
+ls images
+
+> sample_0.png  sample_1.png
+
+sudo rm -rf images
+```
+
+Unfortunately the docker container runs with a different user ID than the one on the host and the will set the ownership of these images so that they can only be removed with elevated privileges. Normally you'd install the client directly on your machine and not have this issue, connecting to the node through an open port rather than through a docker container. We're only using the client through the container so we don't have to map to different ports on the host for each node we want to deploy to.
+
+You can also `sudo apt-get install graphviz` and visualize the DAG like so:
+
+```sh
+./client.sh node-0 vdag --show-justification-lines --depth 25 \
     | dot -Tpng -o /tmp/cl-dag.png \
     && xdg-open /tmp/cl-dag.png
 ```
 
-Alternatively if you don't wish to install `graphviz` on your machine you can use just the browser:
+Alternatively you can even use the browser:
 
 ```sh
 google-chrome --new-window https://dreampuf.github.io/GraphvizOnline/#\
-    $(python -c "import urllib; print urllib.quote('''$(./client.sh node-0 vdag --showJustificationlines --depth 25)''')")
+    $(python -c "import urllib; print urllib.quote('''$(./client.sh node-0 vdag --show-justification-lines --depth 25)''')")
 ```
 
 ## Shut down the network

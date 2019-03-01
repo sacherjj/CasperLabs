@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
 set -e
 
@@ -21,17 +21,26 @@ fi
 NODE=$1; shift
 CMD=$1; shift
 
-case "$CMD" in
-    "deploy")
-        # Need to mount the files.
-        VOL=$1; shift
-        docker run --rm \
-            --network casperlabs \
-            --volume $VOL:/data \
-            casperlabs/client:latest \
-            --host $NODE --port 40401 deploy $@
-        ;;
+# cmd args
+function run_default() {
+    docker run --rm \
+        --network casperlabs \
+        casperlabs/client:latest \
+        --host $NODE --port 40401 $CMD $@
+}
 
+# cmd vol args
+function run_with_vol() {
+    VOL=$1; shift
+    docker run --rm \
+        --network casperlabs \
+        --volume $VOL:/data \
+        casperlabs/client:latest \
+        --host $NODE --port 40401 $CMD $@
+}
+
+
+case "$CMD" in
     --*)
         # --help doesn't like --host and --port
         docker run --rm \
@@ -40,10 +49,21 @@ case "$CMD" in
             $CMD
         ;;
 
+    "deploy")
+        # Need to mount the files.
+        run_with_vol $@
+        ;;
+
+    "vdag")
+        # For the slideshow we need to mount a directory to save to.
+        if [[ "$1" = --* ]]; then
+            run_default $@
+        else
+            run_with_vol $@
+        fi
+        ;;
+
     *)
-        docker run --rm \
-            --network casperlabs \
-            casperlabs/client:latest \
-            --host $NODE --port 40401 $CMD $@
+        run_default $@
         ;;
 esac
