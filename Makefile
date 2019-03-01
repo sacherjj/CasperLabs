@@ -2,16 +2,19 @@ DOCKER_USERNAME ?= casperlabs
 DOCKER_PUSH_LATEST ?= false
 # Use the git tag / hash as version. Easy to pinpoint. `git tag` can return more than 1 though. `git rev-parse --short HEAD` would just be the commit.
 $(eval TAGS_OR_SHA = $(shell git tag -l --points-at HEAD | grep -e . || git describe --tags --always --long))
-# Try to use the semantic version with any leading `v` stripped.
+# Try to use the semantic version with any leading `v` stripped. TODO: MacOS doesn't support -Po
 $(eval SEMVER_REGEX = 'v?\K\d+\.\d+(\.\d+)?')
 $(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -Po $(SEMVER_REGEX) | tail -n 1 | grep -e . || echo $(TAGS_OR_SHA)))
 
 # All rust related source code. If every Rust module depends on everything then transitive dependencies are not a problem.
 # But with comm/build.rs compiling .proto to .rs every time we build the timestamps are updated as well, so filter those and depend on .proto instead.
-RUST_SRC := $(shell find . -type f -iregex ".*/Cargo\.toml\|.*/src/.*\.rs\|.*\.proto" \
+RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" -o -name "*.proto" \) \
 	| grep -v target \
 	| grep -v -e ipc.*\.rs)
-SCALA_SRC := $(shell find . -type f -iregex '.*/src/.*\.scala\|.*\.sbt')
+SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
+
+test:
+	@echo $(RUST_SRC)
 
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.
@@ -82,12 +85,12 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	# Copy the 3rd party dependencies to a separate directory so if they don't change we can push faster.
 	mkdir -p $(STAGE)/.docker/layers/3rd
 	find $(STAGE)/lib \
-	    -type f -not -iregex ".*/io\.casperlabs\..*jar" \
+	    -type f -not -wholename "*/io.casperlabs.*.jar" \
 	    -exec cp {} $(STAGE)/.docker/layers/3rd \;
 	# Copy our own code.
 	mkdir -p $(STAGE)/.docker/layers/1st
 	find $(STAGE)/lib \
-	    -type f -iregex ".*/io\.casperlabs\..*jar" \
+	    -type f -wholename "*/io.casperlabs.*.jar" \
 	    -exec cp {} $(STAGE)/.docker/layers/1st \;
 	# Use the Dockerfile to build the project. Has to be within the context.
 	cp $(PROJECT)/Dockerfile $(STAGE)/Dockerfile
@@ -127,8 +130,6 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	sbt -mem 5000 $(PROJECT)/universal:stage
 	mkdir -p $(dir $@) && touch $@
 
-test:
-	@echo $(RUST_SRC)
 
 # Re-package cargo if any Rust source code changes (to account for transitive dependencies).
 .make/cargo-package/%: \
