@@ -240,19 +240,20 @@ fn op_to_ipc(op: storage::op::Op) -> super::ipc::Op {
 }
 
 /// Transforms gRPC TransformEntry into domain tuple of (Key, Transform).
-pub fn transform_entry_to_key_transform(
-    te: &super::ipc::TransformEntry,
-) -> (common::key::Key, storage::transform::Transform) {
-    if te.has_key() {
-        let key = ipc_to_key(te.get_key());
-        if te.has_transform() {
-            let t: storage::transform::Transform = ipc_transform_to_transform(te.get_transform());
-            (key, t)
+impl From<&super::ipc::TransformEntry> for (common::key::Key, storage::transform::Transform) {
+    fn from(from: &super::ipc::TransformEntry) -> Self {
+        if from.has_key() {
+            let key = ipc_to_key(from.get_key());
+            if from.has_transform() {
+                let t: storage::transform::Transform =
+                    ipc_transform_to_transform(from.get_transform());
+                (key, t)
+            } else {
+                panic!("No transform field in TransformEntry")
+            }
         } else {
-            panic!("No transform field in TransformEntry")
+            panic!("No key field in TransformEntry")
         }
-    } else {
-        panic!("No key field in TransformEntry")
     }
 }
 

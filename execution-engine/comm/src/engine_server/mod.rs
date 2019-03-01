@@ -107,7 +107,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         prestate_hash.copy_from_slice(&p.get_prestate_hash());
         let mut effects = HashMap::new();
         for entry in p.get_effects().iter() {
-            let (k, v) = transform_entry_to_key_transform(entry);
+            let (k, v) = entry.into();
             effects.insert(k, v);
         }
         let result = apply_effect_result_to_ipc(self.apply_effect(prestate_hash, effects));
@@ -308,7 +308,6 @@ mod tests {
     use super::wasm_error;
     use common::key::Key;
     use execution_engine::engine::{Error as EngineError, ExecutionResult};
-    use mappings::transform_entry_to_key_transform;
     use std::collections::HashMap;
     use storage::gs::ExecutionEffect;
     use storage::transform::Transform;
