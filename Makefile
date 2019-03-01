@@ -102,9 +102,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		execution-engine/target/release/casperlabs-engine-grpc-server
+		.make/cargo-native-packager/execution-engine/comm
 	# Just copy the executable to the container.
-	$(eval RELEASE = execution-engine/target/release)
+	$(eval RELEASE = execution-engine/target/debian)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
 	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:latest $(RELEASE)
 	rm -rf $(RELEASE)/Dockerfile
@@ -152,7 +152,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	fi
 	mkdir -p $(dir $@) && touch $@
 
-# Create .deb, .rpm and .tgz
+# Create .deb and .rpm packages.
 .make/cargo-native-packager/%: \
 		$(RUST_SRC) \
 		.make/install/protoc \
@@ -162,19 +162,13 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	@# but the build won't refresh it if it already exists, and trying to init again results in an error,
 	@# and if we `--force` it, then it will add a second set of entries to the Cargo.toml file which will make it invalid.
 	cd $* && ([ -d .rpm ] || cargo rpm init) && cargo rpm build
-
 	@# e.g. execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
-	@# This command has a --no-build paramter which could speed it up. If RPM already built it, we can add it.
+	@# This command has a --no-build paramter which could speed it up. If the RPM compilation is compatible we can speed it up a bit.
 	cd $* && cargo deb --no-build
-
-	@#FIXME: Figure out what --input and --output should be
-	@# Alternatively we could use execution-engine/target/release/rpmbuild/SOURCES/casperlabs-engine-grpc-server-0.1.0.tar.gz
-	@#cd $* && cargo-tarball --help
-
 	mkdir -p $(dir $@) && touch $@
 
 
-# Build the execution engine executable.
+# Build the execution engine executable. NOTE: This is not portable.
 execution-engine/target/release/casperlabs-engine-grpc-server: \
 		$(RUST_SRC) \
 		.make/install/protoc
