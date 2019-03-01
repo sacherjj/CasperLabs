@@ -39,20 +39,21 @@ fn ipc_transform_to_transform(tr: &super::ipc::Transform) -> storage::transform:
             transform_write(common::value::Value::String(v.get_string_val().to_string()))
         } else if v.has_account() {
             let mut pub_key = [0u8; 32];
+            let uref_map: URefMap = (v.get_account().get_known_urefs()).into();
             pub_key.clone_from_slice(&v.get_account().pub_key);
             let account = common::value::Account::new(
                 pub_key,
                 v.get_account().nonce as u64,
-                ipc_vec_to_urefs_map(&v.get_account().known_urefs.to_vec()),
+                uref_map.0,
             );
             transform_write(common::value::Value::Acct(account))
         } else if v.has_contract() {
             let ipc_contr = v.get_contract();
             let contr_body = ipc_contr.get_body().to_vec();
-            let known_urefs = ipc_vec_to_urefs_map(ipc_contr.get_known_urefs());
+            let known_urefs: URefMap = ipc_contr.get_known_urefs().into();
             transform_write(common::value::Value::Contract {
                 bytes: contr_body,
-                known_urefs,
+                known_urefs: known_urefs.0,
             })
         } else if v.has_string_list() {
             let list = v.get_string_list().list.to_vec();
@@ -159,13 +160,18 @@ fn transform_to_ipc(tr: &storage::transform::Transform) -> super::ipc::Transform
     t
 }
 
+// newtype because trait impl have to be defined in the crate of the type.
+pub struct URefMap(BTreeMap<String, common::key::Key>);
+
 // Helper method for turning gRPC Vec of NamedKey to domain BTreeMap.
-fn ipc_vec_to_urefs_map(vec: &[super::ipc::NamedKey]) -> BTreeMap<String, common::key::Key> {
-    let mut tree: BTreeMap<String, common::key::Key> = BTreeMap::new();
-    for nk in vec {
-        let _ = tree.insert(nk.get_name().to_string(), ipc_to_key(nk.get_key()));
+impl From<&[super::ipc::NamedKey]> for URefMap {
+    fn from(from: &[super::ipc::NamedKey]) -> Self {
+        let mut tree: BTreeMap<String, common::key::Key> = BTreeMap::new();
+        for nk in from {
+            let _ = tree.insert(nk.get_name().to_string(), ipc_to_key(nk.get_key()));
+        }
+        URefMap(tree)
     }
-    tree
 }
 
 // Helper method for turning BTreeMap of Keys into Vec of gRPC NamedKey.
