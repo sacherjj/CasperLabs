@@ -99,7 +99,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                 ));
             // We want to treat RootNotFound error differently b/c it should short-circuit
             // the execution of ALL deploys within the block. This is because all of them share
-            //the same prestate and all of them would fail.
+            // the same prestate and all of them would fail.
             // try_for_each will continue only when Ok(_) is returned.
             match deploy_result {
                 Ok(result) => {
@@ -206,7 +206,7 @@ fn deploy_result_to_ipc(
                         };
                         Ok(deploy_result)
                     }
-                    //TODO(mateusz.gorski): Be more specific about execution errors
+                    // TODO(mateusz.gorski): Be more specific about execution errors
                     other => {
                         let msg = format!("{:?}", other);
                         let mut err = wasm_error(msg);
@@ -238,7 +238,7 @@ fn apply_effect_result_to_ipc(
             tmp_res.set_success(commit_result);
             tmp_res
         }
-        //TODO(mateusz.gorski): We should be more specific about errors here.
+        // TODO(mateusz.gorski): We should be more specific about errors here.
         Ok(history::CommitResult::Failure(storage_error)) => {
             println!("Error {:?} when applying effects", storage_error);
             let mut err = ipc::PostEffectsError::new();
@@ -288,7 +288,7 @@ mod tests {
     use storage::gs::ExecutionEffect;
     use storage::transform::Transform;
 
-    //Test that wasm_error function actually returns DeployResult with result set to WasmError
+    // Test that wasm_error function actually returns DeployResult with result set to WasmError
     #[test]
     fn wasm_error_result() {
         let error_msg = "WasmError";

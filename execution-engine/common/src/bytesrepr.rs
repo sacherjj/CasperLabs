@@ -149,10 +149,10 @@ impl<T: ToBytes> ToBytes for Option<T> {
                 result.append(&mut value);
                 result
             }
-            //if the Option is empty then there
-            //is no value to serialize, but we still
-            //indicate the number of elements that need
-            //to be deserialized.
+            // if the Option is empty then there
+            // is no value to serialize, but we still
+            // indicate the number of elements that need
+            // to be deserialized.
             None => 0u32.to_bytes(),
         }
     }

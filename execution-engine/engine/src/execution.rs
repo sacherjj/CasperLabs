@@ -71,12 +71,12 @@ impl From<BytesReprError> for Error {
 impl HostError for Error {}
 
 pub struct RuntimeContext<'a> {
-    //Enables look up of specific uref based on human-readable name
+    // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
-    //Used to check uref is known before use (prevents forging urefs)
+    // Used to check uref is known before use (prevents forging urefs)
     known_urefs: HashSet<Key>,
     account: &'a Account,
-    //Key pointing to the entity we are currently running
+    // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
 }
@@ -243,9 +243,9 @@ impl<'a, R: DbReader> Runtime<'a, R> {
 
         if has_name {
             let mut module = self.module.clone();
-            //We only want the function exported under `name` to be callable;
+            // We only want the function exported under `name` to be callable;
             //`optimize` removes all code that is not reachable from the exports
-            //listed in the second argument.
+            // listed in the second argument.
             pwasm_utils::optimize(&mut module, vec![&name]).unwrap();
             Self::rename_export_to_call(&mut module, name);
 
@@ -267,9 +267,9 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         Ok((key, value))
     }
 
-    //Load the i-th argument invoked as part of a `sub_call` into
-    //the runtime buffer so that a subsequent `get_arg` can return it
-    //to the caller.
+    // Load the i-th argument invoked as part of a `sub_call` into
+    // the runtime buffer so that a subsequent `get_arg` can return it
+    // to the caller.
     pub fn load_arg(&mut self, i: usize) -> Result<usize, Trap> {
         if i < self.args.len() {
             self.host_buf = self.args[i].clone();
@@ -279,7 +279,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         }
     }
 
-    //Load the uref known by the given name into the wasm memory
+    // Load the uref known by the given name into the wasm memory
     pub fn get_uref(&mut self, name_ptr: u32, name_size: u32, dest_ptr: u32) -> Result<(), Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let uref = self
@@ -324,9 +324,9 @@ impl<'a, R: DbReader> Runtime<'a, R> {
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    //Return a some bytes from the memory and terminate the current `sub_call`.
-    //Note that the return type is `Trap`, indicating that this function will
-    //always kill the current wasm instance.
+    // Return a some bytes from the memory and terminate the current `sub_call`.
+    // Note that the return type is `Trap`, indicating that this function will
+    // always kill the current wasm instance.
     pub fn ret(
         &mut self,
         value_ptr: u32,
@@ -345,9 +345,9 @@ impl<'a, R: DbReader> Runtime<'a, R> {
             });
         match mem_get {
             Ok((buf, urefs)) => {
-                //Set the result field in the runtime and return
-                //the proper element of the `Error` enum indicating
-                //that the reason for exiting the module was a call to ret.
+                // Set the result field in the runtime and return
+                // the proper element of the `Error` enum indicating
+                // that the reason for exiting the module was a call to ret.
                 self.result = buf;
                 Error::Ret(urefs).into()
             }
@@ -490,81 +490,81 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
     ) -> Result<Option<RuntimeValue>, Trap> {
         match index {
             READ_FUNC_INDEX => {
-                //args(0) = pointer to key in wasm memory
-                //args(1) = size of key in wasm memory
+                // args(0) = pointer to key in wasm memory
+                // args(1) = size of key in wasm memory
                 let (key_ptr, key_size) = Args::parse(args)?;
                 let size = self.read_value(key_ptr, key_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             SER_FN_FUNC_INDEX => {
-                //args(0) = pointer to name in wasm memory
-                //args(1) = size of name in wasm memory
+                // args(0) = pointer to name in wasm memory
+                // args(1) = size of name in wasm memory
                 let (name_ptr, name_size) = Args::parse(args)?;
                 let size = self.serialize_function(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             WRITE_FUNC_INDEX => {
-                //args(0) = pointer to key in wasm memory
-                //args(1) = size of key
-                //args(2) = pointer to value
-                //args(3) = size of value
+                // args(0) = pointer to key in wasm memory
+                // args(1) = size of key
+                // args(2) = pointer to value
+                // args(3) = size of value
                 let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
                 self.write(key_ptr, key_size, value_ptr, value_size)?;
                 Ok(None)
             }
 
             ADD_FUNC_INDEX => {
-                //args(0) = pointer to key in wasm memory
-                //args(1) = size of key
-                //args(2) = pointer to value
-                //args(3) = size of value
+                // args(0) = pointer to key in wasm memory
+                // args(1) = size of key
+                // args(2) = pointer to value
+                // args(3) = size of value
                 let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
                 self.add(key_ptr, key_size, value_ptr, value_size)?;
                 Ok(None)
             }
 
             NEW_FUNC_INDEX => {
-                //args(0) = pointer to key destination in wasm memory
+                // args(0) = pointer to key destination in wasm memory
                 let key_ptr = Args::parse(args)?;
                 self.new_uref(key_ptr)?;
                 Ok(None)
             }
 
             GET_READ_FUNC_INDEX => {
-                //args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             GET_FN_FUNC_INDEX => {
-                //args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             LOAD_ARG_FUNC_INDEX => {
-                //args(0) = index of host runtime arg to load
+                // args(0) = index of host runtime arg to load
                 let i = Args::parse(args)?;
                 let size = self.load_arg(i)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             GET_ARG_FUNC_INDEX => {
-                //args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             RET_FUNC_INDEX => {
-                //args(0) = pointer to value
-                //args(1) = size of value
-                //args(2) = pointer to extra returned urefs
-                //args(3) = size of extra urefs
+                // args(0) = pointer to value
+                // args(1) = size of value
+                // args(2) = pointer to extra returned urefs
+                // args(3) = size of extra urefs
                 let (value_ptr, value_size, extra_urefs_ptr, extra_urefs_size) = Args::parse(args)?;
 
                 Err(self.ret(
@@ -576,12 +576,12 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
             }
 
             CALL_CONTRACT_FUNC_INDEX => {
-                //args(0) = pointer to key where contract is at in global state
-                //args(1) = size of key
-                //args(2) = pointer to function arguments in wasm memory
-                //args(3) = size of arguments
-                //args(4) = pointer to extra supplied urefs
-                //args(5) = size of extra urefs
+                // args(0) = pointer to key where contract is at in global state
+                // args(1) = size of key
+                // args(2) = pointer to function arguments in wasm memory
+                // args(3) = size of arguments
+                // args(4) = pointer to extra supplied urefs
+                // args(5) = size of extra urefs
                 let (key_ptr, key_size, args_ptr, args_size, extra_urefs_ptr, extra_urefs_size) =
                     Args::parse(args)?;
 
@@ -597,33 +597,33 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
             }
 
             GET_CALL_RESULT_FUNC_INDEX => {
-                //args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             GET_UREF_FUNC_INDEX => {
-                //args(0) = pointer to uref name in wasm memory
-                //args(1) = size of uref name
-                //args(2) = pointer to destination in wasm memory
+                // args(0) = pointer to uref name in wasm memory
+                // args(1) = size of uref name
+                // args(2) = pointer to destination in wasm memory
                 let (name_ptr, name_size, dest_ptr) = Args::parse(args)?;
                 self.get_uref(name_ptr, name_size, dest_ptr)?;
                 Ok(None)
             }
 
             HAS_UREF_FUNC_INDEX => {
-                //args(0) = pointer to uref name in wasm memory
-                //args(1) = size of uref name
+                // args(0) = pointer to uref name in wasm memory
+                // args(1) = size of uref name
                 let (name_ptr, name_size) = Args::parse(args)?;
                 let result = self.has_uref(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(result)))
             }
 
             ADD_UREF_FUNC_INDEX => {
-                //args(0) = pointer to uref name in wasm memory
-                //args(1) = size of uref name
-                //args(2) = pointer to destination in wasm memory
+                // args(0) = pointer to uref name in wasm memory
+                // args(1) = size of uref name
+                // args(2) = pointer to destination in wasm memory
                 let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
                 self.add_uref(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(None)
@@ -771,7 +771,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                     "Module requested too much memory".to_owned(),
                 ))
             } else {
-                //Note: each "page" is 64 KiB
+                // Note: each "page" is 64 KiB
                 let mem = MemoryInstance::alloc(
                     Pages(descriptor.initial() as usize),
                     descriptor.maximum().map(|x| Pages(x as usize)),
@@ -804,7 +804,7 @@ fn sub_call<R: DbReader>(
     refs: &mut BTreeMap<String, Key>,
     key: Key,
     current_runtime: &mut Runtime<R>,
-    //Unforgable references passed across the call boundary from caller to callee
+    // Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
 ) -> Result<Vec<u8>, Error> {
@@ -844,11 +844,11 @@ fn sub_call<R: DbReader>(
         Ok(_) => Ok(runtime.result),
         Err(e) => {
             if let Some(host_error) = e.as_host_error() {
-                //If the "error" was in fact a trap caused by calling `ret` then
-                //this is normal operation and we should return the value captured
-                //in the Runtime result field.
+                // If the "error" was in fact a trap caused by calling `ret` then
+                // this is normal operation and we should return the value captured
+                // in the Runtime result field.
                 if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
-                    //insert extra urefs returned from call
+                    // insert extra urefs returned from call
                     for r in ret_urefs.iter() {
                         current_runtime.context.known_urefs.insert(*r);
                     }

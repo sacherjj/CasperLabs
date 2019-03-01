@@ -53,7 +53,7 @@ pub trait Preprocessor {
 pub struct WasmiPreprocessor;
 
 impl Preprocessor for WasmiPreprocessor {
-    //TODO: inject gas counter, limit stack size etc
+    // TODO: inject gas counter, limit stack size etc
     fn preprocess(
         &self,
         module_bytes: &[u8],

@@ -53,8 +53,8 @@ impl InMemHist {
         InMemHist { history }
     }
 
-    //TODO(mateusz.gorski): I know this is not efficient and we should be caching these values
-    //but for the time being it should be enough.
+    // TODO(mateusz.gorski): I know this is not efficient and we should be caching these values
+    // but for the time being it should be enough.
     fn get_root_hash(state: &BTreeMap<Key, Value>) -> [u8; 32] {
         let mut data: Vec<u8> = Vec::new();
         for (k, v) in state.iter() {

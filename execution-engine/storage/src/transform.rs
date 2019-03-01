@@ -77,7 +77,7 @@ impl Add for Transform {
             (_, b @ Failure(_)) => b,
             (_, b @ Write(_)) => b,
             (Write(v), b) => {
-                //second transform changes value being written
+                // second transform changes value being written
                 match b.apply(v) {
                     Err(error) => Failure(error),
                     Ok(new_value) => Write(new_value),

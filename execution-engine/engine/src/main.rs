@@ -89,8 +89,8 @@ fn main() {
     let timestamp: u64 = 100_000;
     let nonce: u64 = 1;
 
-    //let path = std::path::Path::new("./tmp/");
-    //TODO: Better error handling?
+    // let path = std::path::Path::new("./tmp/");
+    // TODO: Better error handling?
     //    let gs = LmdbGs::new(&path).unwrap();
     let init_state = storage::gs::mocked_account(account_addr);
     let gs = InMemHist::new_initialized(&state_hash, init_state);
