@@ -179,9 +179,10 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	@# Need to use the same user ID as outside if we want to continue working with these files,
 	@# otherwise the user running in docker will own them.
 	$(eval USERID = $(shell id -u))
+	docker pull $(DOCKER_USERNAME)/buildenv:latest
 	docker run -it --rm --entrypoint sh \
 		-v ${PWD}:/CasperLabs \
-		casperlabs/buildenv:latest \
+		$(DOCKER_USERNAME)/buildenv:latest \
 		-c "\
 		apt-get install sudo ; \
 		useradd -u $(USERID) -m builder ; \
