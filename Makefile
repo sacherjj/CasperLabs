@@ -63,7 +63,8 @@ docker-push/%: docker-build/%
 
 cargo-package-all: \
 	.make/cargo-package/execution-engine/common \
-	.make/cargo-native-packager/execution-engine/comm
+	.make/cargo-native/rpm/execution-engine/comm \
+	.make/cargo-native/deb/execution-engine/comm
 
 # We need to publish the libraries the contracts are supposed to use.
 cargo-publish-all: \
@@ -102,7 +103,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		.make/cargo-native-packager/execution-engine/comm
+		.make/cargo-native/deb/execution-engine/comm
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/target/debian)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
@@ -152,19 +153,21 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	fi
 	mkdir -p $(dir $@) && touch $@
 
-# Create .deb and .rpm packages.
-.make/cargo-native-packager/%: \
-		$(RUST_SRC) \
-		.make/install/protoc \
-		.make/install/cargo-native-packager
+# Create .rpm package.
+.make/cargo-native/rpm/%: $(RUST_SRC) .make/install/protoc .make/install/cargo-native-packager
 	@# e.g. execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-0.1.0-1.x86_64.rpm
 	@# `rpm init` will create a .rpm/<MODULE>.spec file where we can define dependencies if we have to,
 	@# but the build won't refresh it if it already exists, and trying to init again results in an error,
 	@# and if we `--force` it, then it will add a second set of entries to the Cargo.toml file which will make it invalid.
 	cd $* && ([ -d .rpm ] || cargo rpm init) && cargo rpm build
+	mkdir -p $(dir $@) && touch $@
+
+# Create .deb package.
+.make/cargo-native/deb/%: $(RUST_SRC) .make/install/protoc .make/install/cargo-native-packager
 	@# e.g. execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
-	@# This command has a --no-build paramter which could speed it up. If the RPM compilation is compatible we can speed it up a bit.
-	cd $* && cargo deb --no-build
+	@# This command has a --no-build parameter which could speed it up becuase the RPM compilation
+	@# seems compatible, but some people have trouble building the RPM package.
+	cd $* && cargo deb
 	mkdir -p $(dir $@) && touch $@
 
 
