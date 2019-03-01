@@ -10,4 +10,5 @@ import scala.util.Either
   def showBlock(q: BlockQuery): F[Either[Throwable, String]]
   def showBlocks(q: BlocksQuery): F[Either[Throwable, String]]
   def visualizeDag(q: VisualizeDagQuery): F[Either[Throwable, String]]
+  def queryState(q: QueryStateRequest): F[Either[Throwable, String]]
 }

@@ -1,12 +1,12 @@
 use std::marker::{Send, Sync};
 
-use execution_engine::engine::{Error as EngineError, EngineState, ExecutionResult};
-use execution_engine::execution::{Error as ExecutionError};
+use execution_engine::engine::{EngineState, Error as EngineError, ExecutionResult};
+use execution_engine::execution::Error as ExecutionError;
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
 use std::collections::HashMap;
-use storage::gs::DbReader;
+use storage::gs::{trackingcopy::QueryResult, DbReader};
 use storage::history::{self, *};
 use storage::transform;
 
@@ -19,6 +19,48 @@ pub mod mappings;
 // Proto definitions should be translated into domain objects when Engine's API is invoked.
 // This way core won't depend on comm (outer layer) leading to cleaner design.
 impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineState<R, H> {
+    fn query(
+        &self,
+        _o: ::grpc::RequestOptions,
+        p: ipc::QueryRequest,
+    ) -> grpc::SingleResponse<ipc::QueryResponse> {
+        let mut state_hash = [0u8; 32];
+        state_hash.copy_from_slice(&p.get_state_hash());
+        let key = ipc_to_key(p.get_base_key());
+        let path = p.get_path();
+
+        if let Ok(mut tc) = self.tracking_copy(state_hash) {
+            let response = match tc.query(key, path) {
+                Err(err) => {
+                    let mut result = ipc::QueryResponse::new();
+                    let error = format!("{:?}", err);
+                    result.set_failure(error);
+                    result
+                }
+
+                Ok(QueryResult::ValueNotFound(full_path)) => {
+                    let mut result = ipc::QueryResponse::new();
+                    let error = format!("Value not found: {:?}", full_path);
+                    result.set_failure(error);
+                    result
+                }
+
+                Ok(QueryResult::Success(value)) => {
+                    let mut result = ipc::QueryResponse::new();
+                    result.set_success(value_to_ipc(&value));
+                    result
+                }
+            };
+
+            grpc::SingleResponse::completed(response)
+        } else {
+            let mut result = ipc::QueryResponse::new();
+            let error = format!("Root not found: {:?}", state_hash);
+            result.set_failure(error);
+            grpc::SingleResponse::completed(result)
+        }
+    }
+
     fn exec(
         &self,
         _o: ::grpc::RequestOptions,
@@ -109,7 +151,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                                 deploy_result.set_error(deploy_error);
                                 deploy_results.push(deploy_result);
                                 Ok(())
-                            },
+                            }
                             //TODO(mateusz.gorski): Be more specific about execution errors
                             other => {
                                 let msg = format!("{:?}", other);

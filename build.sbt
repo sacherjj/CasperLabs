@@ -416,7 +416,7 @@ lazy val client = (project in file("client"))
     ),
     rpmAutoreq := "no"
   )
-  .dependsOn(shared, models)
+  .dependsOn(crypto, shared, models, smartContracts)
 
 lazy val casperlabs = (project in file("."))
   .settings(commonSettings: _*)

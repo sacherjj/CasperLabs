@@ -108,7 +108,7 @@ message Value {
  
 message Account {
     bytes pub_key = 1; // Should have 32 elements
-    int64 nonce = 2;
+    uint64 nonce = 2;
     repeated NamedKey known_urefs = 3;
 }
 message Contract {
@@ -216,9 +216,24 @@ message PostEffectsError {
     string message = 1;
 }
 
+message QueryRequest {
+    bytes state_hash = 1;
+    Key base_key = 2;
+    repeated string path = 3;
+}
+
+message QueryResponse {
+    oneof result {
+        Value success = 1;
+        //TODO: ADT for errors
+        string failure = 2;
+    }
+}
+
 // Definition of the service.
 // ExecutionEngine implements server part while Consensus implements client part.
 service ExecutionEngineService {
     rpc exec (ExecRequest) returns (ExecResponse) {}
     rpc commit (CommitRequest) returns (CommitResponse) {}
+    rpc query (QueryRequest) returns (QueryResponse) {}
 }

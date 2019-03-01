@@ -7,5 +7,6 @@ fn main() {
         includes: &["../../models/src/main/protobuf"],
         rust_protobuf: true,
         ..Default::default()
-    }).expect("protoc-rust-grpc");
+    })
+    .expect("protoc-rust-grpc");
 }

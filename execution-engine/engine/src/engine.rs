@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use storage::error::{Error as StorageError, RootNotFound};
-use storage::gs::{DbReader, ExecutionEffect};
+use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
 use storage::history::*;
 use storage::transform::Transform;
 use vm::wasm_costs::WasmCosts;
@@ -83,6 +83,10 @@ where
             wasm_costs: WasmCosts::new(),
             _phantom: PhantomData,
         }
+    }
+
+    pub fn tracking_copy(&self, hash: [u8; 32]) -> Result<TrackingCopy<R>, RootNotFound> {
+        self.state.lock().checkout(hash)
     }
 
     //TODO run_deploy should perform preprocessing and validation of the deploy.
