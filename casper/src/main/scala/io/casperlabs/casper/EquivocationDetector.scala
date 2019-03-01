@@ -310,8 +310,7 @@ object EquivocationDetector {
       equivocationChildren: Set[BlockMessage],
       genesis: BlockMessage
   ): F[Set[BlockMessage]] =
-    // TODO: Is this a safe check? Or should I just check block hash?
-    if (justificationBlock == genesis) {
+    if (justificationBlock.blockHash == genesis.blockHash) {
       equivocationChildren.pure[F]
     } else if (justificationBlock.sender == equivocatingValidator) {
       // This is a special case as the justificationBlock might be the equivocation child
