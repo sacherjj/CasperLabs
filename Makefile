@@ -171,7 +171,8 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	mkdir -p $(dir $@) && touch $@
 
 # Create .rpm and .deb packages with Docker so people using Macs can build images locally too.
-# We may need to have .rpm and .deb specific builder images that work with what we want to host it in.
+# We may need to have .rpm and .deb specific builder images that work with what we want to host it in
+# as we seem to get some missing dependencies using the builderenv which didn't happend with Ubuntu.
 .make/cargo-docker-packager/%: $(RUST_SRC)
 	@# .rpm will be at execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-0.1.0-1.x86_64.rpm
 	@# .deb will be at execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
@@ -179,20 +180,20 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	@# otherwise the user running in docker will own them.
 	$(eval USERID = $(shell id -u))
 	docker run -it --rm --entrypoint sh \
-	    -v ${PWD}:/CasperLabs \
-        casperlabs/buildenv:latest \
-        -c "\
+		-v ${PWD}:/CasperLabs \
+		casperlabs/buildenv:latest \
+		-c "\
 		apt-get install sudo ; \
-        useradd -u $(USERID) -m builder ; \
+		useradd -u $(USERID) -m builder ; \
 		cp -r /root/. /home/builder/ ; \
 		chown -R builder /home/builder ; \
 		sudo -u builder sh -c '\
-		    export HOME=/home/builder ; \
-		    export PATH=/home/builder/.cargo/bin:$$PATH ; \
-            cd /CasperLabs/$* ; \
-            ([ -d .rpm ] || cargo rpm init) && cargo rpm build && \
-            cargo deb --no-build \
-        '"
+			export HOME=/home/builder ; \
+			export PATH=/home/builder/.cargo/bin:$$PATH ; \
+			cd /CasperLabs/$* ; \
+			([ -d .rpm ] || cargo rpm init) && cargo rpm build && \
+			cargo deb --no-build \
+		'"
 	mkdir -p $(dir $@) && touch $@
 
 # Build the execution engine executable. NOTE: This is not portable.
