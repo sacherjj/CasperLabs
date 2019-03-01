@@ -64,7 +64,7 @@ The effect should be that because the bootstrap node never sees any gossiping th
 
 You can also have a look at [using tc to slow down a specific port](https://stackoverflow.com/questions/10694730/in-linux-simulate-slow-traffic-incoming-traffic-to-port-e-g-54000). The benefit of using `iptables` and `tc` on individual port rather than the node level like `make delay` is that the deployment and metrics endpoints can stay unaffected.
 
-_NOTE_: For these tecniques to work you'll need to run the `test` version of the node image which you should have if you built the images yourself with `make docker-build-all` in the top directory, and subsequently set `export CL_VERSION=test` before creating the containers. You can set the the environment variable later as well, then run run `make node-0/up` again and see `docker-compose` recreating the containers with the new version.
+_NOTE_: For the techniques that use `iptables` and `tc` to work you'll need to run the `test` version of the node image which you should have if you built the images yourself with `make docker-build-all` in the top directory, and subsequently set `export CL_VERSION=test` before creating the containers. You can set the the environment variable later as well, then run run `make node-0/up` again and see `docker-compose` recreating the containers with the new version.
 
 
 ## Visualizing the DAG
