@@ -116,7 +116,10 @@ fn main() {
                 "Result for file {}: root {:?} not found.",
                 wasm_bytes.path, hash
             ),
-            Ok(ExecutionResult::Success(effects, cost)) => {
+            Ok(ExecutionResult {
+                result: Ok(effects),
+                cost,
+            }) => {
                 println!("Cost of executing the contract was: {}", cost);
                 match engine_state.apply_effect(state_hash, effects.1) {
                     Err(storage::error::RootNotFound(hash)) => println!(
@@ -135,7 +138,10 @@ fn main() {
                     }
                 }
             }
-            Ok(ExecutionResult::Failure(error, cost)) => {
+            Ok(ExecutionResult {
+                result: Err(error),
+                cost,
+            }) => {
                 println!("Gas used during execution: {:?}", cost);
                 println!("Result for file {}: {:?}", wasm_bytes.path, error)
             }

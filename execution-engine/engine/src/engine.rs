@@ -22,9 +22,25 @@ where
     _phantom: PhantomData<R>,
 }
 
-pub enum ExecutionResult {
-    Success(ExecutionEffect, u64),
-    Failure(Error, u64),
+pub struct ExecutionResult {
+    pub result: Result<ExecutionEffect, Error>,
+    pub cost: u64,
+}
+
+impl ExecutionResult {
+    pub fn failure(error: Error, cost: u64) -> ExecutionResult {
+        ExecutionResult {
+            result: Err(error),
+            cost,
+        }
+    }
+
+    pub fn success(effect: ExecutionEffect, cost: u64) -> ExecutionResult {
+        ExecutionResult {
+            result: Ok(effect),
+            cost,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -104,13 +120,13 @@ where
         preprocessor: &P,
     ) -> Result<ExecutionResult, RootNotFound> {
         match preprocessor.preprocess(module_bytes, &self.wasm_costs) {
-            Err(error) => Ok(ExecutionResult::Failure(error.into(), 0)),
+            Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
             Ok(module) => {
                 let mut tc: storage::gs::TrackingCopy<R> =
                     self.state.lock().checkout(prestate_hash)?;
                 match executor.exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
-                    (Ok(ee), cost) => Ok(ExecutionResult::Success(ee, cost)),
-                    (Err(error), cost) => Ok(ExecutionResult::Failure(error.into(), cost)),
+                    (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
+                    (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),
                 }
             }
         }
