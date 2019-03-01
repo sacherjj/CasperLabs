@@ -230,16 +230,17 @@ impl From<&super::ipc::Key> for common::key::Key {
     }
 }
 
-/// Transform domain Op into gRPC Op.
-fn op_to_ipc(op: storage::op::Op) -> super::ipc::Op {
-    let mut ipc_op = super::ipc::Op::new();
-    match op {
-        storage::op::Op::Read => ipc_op.set_read(super::ipc::ReadOp::new()),
-        storage::op::Op::Write => ipc_op.set_write(super::ipc::WriteOp::new()),
-        storage::op::Op::Add => ipc_op.set_add(super::ipc::AddOp::new()),
-        storage::op::Op::NoOp => ipc_op.set_noop(super::ipc::NoOp::new()),
-    };
-    ipc_op
+impl From<storage::op::Op> for super::ipc::Op {
+    fn from(op: storage::op::Op) -> super::ipc::Op {
+        let mut ipc_op = super::ipc::Op::new();
+        match op {
+            storage::op::Op::Read => ipc_op.set_read(super::ipc::ReadOp::new()),
+            storage::op::Op::Write => ipc_op.set_write(super::ipc::WriteOp::new()),
+            storage::op::Op::Add => ipc_op.set_add(super::ipc::AddOp::new()),
+            storage::op::Op::NoOp => ipc_op.set_noop(super::ipc::NoOp::new()),
+        };
+        ipc_op
+    }
 }
 
 /// Transforms gRPC TransformEntry into domain tuple of (Key, Transform).
@@ -247,8 +248,7 @@ impl From<&super::ipc::TransformEntry> for (common::key::Key, storage::transform
     fn from(from: &super::ipc::TransformEntry) -> Self {
         if from.has_key() {
             if from.has_transform() {
-                let t: storage::transform::Transform =
-                    from.get_transform().into();
+                let t: storage::transform::Transform = from.get_transform().into();
                 (from.get_key().into(), t)
             } else {
                 panic!("No transform field in TransformEntry")
@@ -267,7 +267,7 @@ pub fn execution_effect_to_ipc(ee: storage::gs::ExecutionEffect) -> super::ipc::
             .map(|(k, o)| {
                 let mut op_entry = super::ipc::OpEntry::new();
                 let ipc_key = k.into();
-                let ipc_op = op_to_ipc(o.clone());
+                let ipc_op = o.clone().into();
                 op_entry.set_key(ipc_key);
                 op_entry.set_operation(ipc_op);
                 op_entry
