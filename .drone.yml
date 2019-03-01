@@ -158,6 +158,16 @@ pipeline:
       - make cargo-package-all
       - cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb /artifacts/${DRONE_BRANCH}
       - cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm /artifacts/${DRONE_BRANCH}
+      - >-
+        cd execution-engine/target/release/rpmbuild/SOURCES ;
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]') ;
+        ARCH=$(uname -p) ;
+        SOURCE=$(ls casperlabs-engine-grpc-server-*.tar.gz | sed "s/.tar.gz//") ;
+        TARGET=$(ls $SOURCE*.tar.gz | sed "s/.tar.gz/_${OS}_${ARCH}.tar.gz/") ;
+        tar -xzf $SOURCE.tar.gz ;
+        tar -czf $TARGET -C $SOURCE/usr/bin/ . &&
+        cp $TARGET /artifacts/${DRONE_BRANCH}
+
     volumes:
       - /artifacts/:/artifacts/
     when:
