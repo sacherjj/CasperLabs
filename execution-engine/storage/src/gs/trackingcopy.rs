@@ -89,7 +89,7 @@ impl<R: DbReader> TrackingCopy<R> {
                 match curr_value {
                     Value::Acct(account) => {
                         if let Some(key) = account.urefs_lookup().get(name) {
-                            self.read(*key).map_err(|e| Err(e.into()))
+                            self.read(*key).map_err(Err)
                         } else {
                             Err(Ok((i, format!("Name {} not found in Account at path:", name))))
                         }
@@ -97,7 +97,7 @@ impl<R: DbReader> TrackingCopy<R> {
 
                     Value::Contract { known_urefs, .. } => {
                         if let Some(key) = known_urefs.get(name) {
-                            self.read(*key).map_err(|e| Err(e.into()))
+                            self.read(*key).map_err(Err)
                         } else {
                             Err(Ok((i, format!("Name {} not found in Contract at path:", name))))
                         }
