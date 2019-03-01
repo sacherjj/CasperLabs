@@ -203,7 +203,7 @@ message WasmError {
 }
  
 message DeployResult {
-oneof result {
+    oneof result {
         ExecutionEffect effects = 1;
         DeployError error = 2;
     }
