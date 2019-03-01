@@ -65,9 +65,9 @@ cargo-package-all: \
 # Drone is already running commands in the `builderenv`, no need to delegate.
 cargo-native-packager/%:
 	if [ -z "${DRONE_BRANCH}" ]; then \
-		make .make/cargo-docker-packager/$* ; \
+		$(MAKE) .make/cargo-docker-packager/$* ; \
 	else \
-		make .make/cargo-native-packager/$* ; \
+		$(MAKE) .make/cargo-native-packager/$* ; \
 	fi
 
 # We need to publish the libraries the contracts are supposed to use.
