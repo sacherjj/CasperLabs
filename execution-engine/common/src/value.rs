@@ -211,6 +211,10 @@ impl Account {
         &self.known_urefs
     }
 
+    pub fn get_urefs_lookup(self) -> BTreeMap<String, Key> {
+        self.known_urefs
+    }
+
     pub fn pub_key(&self) -> &[u8] {
         &self.public_key
     }
