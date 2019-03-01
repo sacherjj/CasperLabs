@@ -27,7 +27,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
     ) -> grpc::SingleResponse<ipc::QueryResponse> {
         let mut state_hash = [0u8; 32];
         state_hash.copy_from_slice(&p.get_state_hash());
-        let key = ipc_to_key(p.get_base_key());
+        let key = p.get_base_key().into();
         let path = p.get_path();
 
         if let Ok(mut tc) = self.tracking_copy(state_hash) {

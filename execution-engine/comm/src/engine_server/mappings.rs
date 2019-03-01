@@ -14,7 +14,7 @@ fn ipc_transform_to_transform(tr: &super::ipc::Transform) -> storage::transform:
             .get_add_keys()
             .get_value()
             .iter()
-            .map(|nk| (nk.name.to_string(), ipc_to_key(nk.get_key())));
+            .map(|nk| (nk.name.to_string(), nk.get_key().into()));
         let keys_map = {
             let mut map = BTreeMap::new();
             for (n, k) in add_keys {
@@ -41,11 +41,8 @@ fn ipc_transform_to_transform(tr: &super::ipc::Transform) -> storage::transform:
             let mut pub_key = [0u8; 32];
             let uref_map: URefMap = (v.get_account().get_known_urefs()).into();
             pub_key.clone_from_slice(&v.get_account().pub_key);
-            let account = common::value::Account::new(
-                pub_key,
-                v.get_account().nonce as u64,
-                uref_map.0,
-            );
+            let account =
+                common::value::Account::new(pub_key, v.get_account().nonce as u64, uref_map.0);
             transform_write(common::value::Value::Acct(account))
         } else if v.has_contract() {
             let ipc_contr = v.get_contract();
@@ -61,8 +58,7 @@ fn ipc_transform_to_transform(tr: &super::ipc::Transform) -> storage::transform:
         } else if v.has_named_key() {
             let nk = v.get_named_key();
             let name = nk.get_name().to_string();
-            let key = ipc_to_key(nk.get_key());
-            transform_write(common::value::Value::NamedKey(name, key))
+            transform_write(common::value::Value::NamedKey(name, nk.get_key().into()))
         } else {
             panic!("TransformEntry write contained unknown value: {:?}", v)
         }
@@ -168,7 +164,7 @@ impl From<&[super::ipc::NamedKey]> for URefMap {
     fn from(from: &[super::ipc::NamedKey]) -> Self {
         let mut tree: BTreeMap<String, common::key::Key> = BTreeMap::new();
         for nk in from {
-            let _ = tree.insert(nk.get_name().to_string(), ipc_to_key(nk.get_key()));
+            let _ = tree.insert(nk.get_name().to_string(), nk.get_key().into());
         }
         URefMap(tree)
     }
@@ -181,55 +177,57 @@ fn urefs_map_to_ipc_vec(urefs: &BTreeMap<String, common::key::Key>) -> Vec<super
         .map(|(n, k)| {
             let mut nk = super::ipc::NamedKey::new();
             nk.set_name(n.to_string());
-            nk.set_key(key_to_ipc(k));
+            nk.set_key(k.into());
             nk
         })
         .collect()
 }
 
-/// Transforms domain Key into gRPC Key.
-fn key_to_ipc(key: &common::key::Key) -> super::ipc::Key {
-    let mut k = super::ipc::Key::new();
-    match key {
-        common::key::Key::Account(acc) => {
-            let mut key_addr = super::ipc::KeyAddress::new();
-            key_addr.set_account(acc.to_vec());
-            k.set_account(key_addr);
+impl From<&common::key::Key> for super::ipc::Key {
+    fn from(key: &common::key::Key) -> super::ipc::Key {
+        let mut k = super::ipc::Key::new();
+        match key {
+            common::key::Key::Account(acc) => {
+                let mut key_addr = super::ipc::KeyAddress::new();
+                key_addr.set_account(acc.to_vec());
+                k.set_account(key_addr);
+            }
+            common::key::Key::Hash(hash) => {
+                let mut key_hash = super::ipc::KeyHash::new();
+                key_hash.set_key(hash.to_vec());
+                k.set_hash(key_hash);
+            }
+            common::key::Key::URef(uref) => {
+                let mut key_uref = super::ipc::KeyURef::new();
+                key_uref.set_uref(uref.to_vec());
+                k.set_uref(key_uref);
+            }
         }
-        common::key::Key::Hash(hash) => {
-            let mut key_hash = super::ipc::KeyHash::new();
-            key_hash.set_key(hash.to_vec());
-            k.set_hash(key_hash);
-        }
-        common::key::Key::URef(uref) => {
-            let mut key_uref = super::ipc::KeyURef::new();
-            key_uref.set_uref(uref.to_vec());
-            k.set_uref(key_uref);
-        }
+        k
     }
-    k
 }
 
-/// Transforms gRPC Key into domain Key.
-pub fn ipc_to_key(ipc_key: &super::ipc::Key) -> common::key::Key {
-    if ipc_key.has_account() {
-        let mut arr = [0u8; 20];
-        arr.clone_from_slice(&ipc_key.get_account().account);
-        common::key::Key::Account(arr)
-    } else if ipc_key.has_hash() {
-        let mut arr = [0u8; 32];
-        arr.clone_from_slice(&ipc_key.get_hash().key);
-        common::key::Key::Hash(arr)
-    } else if ipc_key.has_uref() {
-        let mut arr = [0u8; 32];
-        arr.clone_from_slice(&ipc_key.get_uref().uref);
-        common::key::Key::URef(arr)
-    } else {
-        // TODO make this Result::Err instead of panic
-        panic!(format!(
-            "ipc Key couldn't be parsed to any Key: {:?}",
-            ipc_key
-        ))
+impl From<&super::ipc::Key> for common::key::Key {
+    fn from(ipc_key: &super::ipc::Key) -> Self {
+        if ipc_key.has_account() {
+            let mut arr = [0u8; 20];
+            arr.clone_from_slice(&ipc_key.get_account().account);
+            common::key::Key::Account(arr)
+        } else if ipc_key.has_hash() {
+            let mut arr = [0u8; 32];
+            arr.clone_from_slice(&ipc_key.get_hash().key);
+            common::key::Key::Hash(arr)
+        } else if ipc_key.has_uref() {
+            let mut arr = [0u8; 32];
+            arr.clone_from_slice(&ipc_key.get_uref().uref);
+            common::key::Key::URef(arr)
+        } else {
+            // TODO make this Result::Err instead of panic
+            panic!(format!(
+                "ipc Key couldn't be parsed to any Key: {:?}",
+                ipc_key
+            ))
+        }
     }
 }
 
@@ -249,11 +247,10 @@ fn op_to_ipc(op: storage::op::Op) -> super::ipc::Op {
 impl From<&super::ipc::TransformEntry> for (common::key::Key, storage::transform::Transform) {
     fn from(from: &super::ipc::TransformEntry) -> Self {
         if from.has_key() {
-            let key = ipc_to_key(from.get_key());
             if from.has_transform() {
                 let t: storage::transform::Transform =
                     ipc_transform_to_transform(from.get_transform());
-                (key, t)
+                (from.get_key().into(), t)
             } else {
                 panic!("No transform field in TransformEntry")
             }
@@ -270,7 +267,7 @@ pub fn execution_effect_to_ipc(ee: storage::gs::ExecutionEffect) -> super::ipc::
         ee.0.iter()
             .map(|(k, o)| {
                 let mut op_entry = super::ipc::OpEntry::new();
-                let ipc_key = key_to_ipc(k);
+                let ipc_key = k.into();
                 let ipc_op = op_to_ipc(o.clone());
                 op_entry.set_key(ipc_key);
                 op_entry.set_operation(ipc_op);
@@ -281,9 +278,8 @@ pub fn execution_effect_to_ipc(ee: storage::gs::ExecutionEffect) -> super::ipc::
         ee.1.iter()
             .map(|(k, t)| {
                 let mut tr_entry = super::ipc::TransformEntry::new();
-                let ipc_key = key_to_ipc(k);
                 let ipc_tr = transform_to_ipc(t);
-                tr_entry.set_key(ipc_key);
+                tr_entry.set_key(k.into());
                 tr_entry.set_transform(ipc_tr);
                 tr_entry
             })
