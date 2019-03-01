@@ -13,9 +13,6 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v -e ipc.*\.rs)
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
 
-test:
-	@echo $(RUST_SRC)
-
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.
 # https://stackoverflow.com/questions/5426934/why-this-makefile-removes-my-goal
@@ -63,8 +60,7 @@ docker-push/%: docker-build/%
 
 cargo-package-all: \
 	.make/cargo-package/execution-engine/common \
-	.make/cargo-native/rpm/execution-engine/comm \
-	.make/cargo-native/deb/execution-engine/comm
+	.make/cargo-docker-packager/execution-engine/comm
 
 # We need to publish the libraries the contracts are supposed to use.
 cargo-publish-all: \
@@ -103,7 +99,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		.make/cargo-native/deb/execution-engine/comm
+		.make/cargo-docker-packager/execution-engine/comm
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/target/debian)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
@@ -153,23 +149,42 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	fi
 	mkdir -p $(dir $@) && touch $@
 
-# Create .rpm package.
-.make/cargo-native/rpm/%: $(RUST_SRC) .make/install/protoc .make/install/cargo-native-packager
-	@# e.g. execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-0.1.0-1.x86_64.rpm
+# Create .rpm and .deb packages natively. `cargo rpm build` doesn't work on MacOS.
+.make/cargo-native-packager/%: $(RUST_SRC) .make/install/protoc .make/install/cargo-native-packager
+	@# .rpm will be at execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-0.1.0-1.x86_64.rpm
 	@# `rpm init` will create a .rpm/<MODULE>.spec file where we can define dependencies if we have to,
 	@# but the build won't refresh it if it already exists, and trying to init again results in an error,
 	@# and if we `--force` it, then it will add a second set of entries to the Cargo.toml file which will make it invalid.
 	cd $* && ([ -d .rpm ] || cargo rpm init) && cargo rpm build
+	@# .deb will be at execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
+	@# This command has a --no-build parameter which can speed it up becuase the RPM compilation seems compatible.
+	cd $* && cargo deb --no-build
 	mkdir -p $(dir $@) && touch $@
 
-# Create .deb package.
-.make/cargo-native/deb/%: $(RUST_SRC) .make/install/protoc .make/install/cargo-native-packager
-	@# e.g. execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
-	@# This command has a --no-build parameter which could speed it up becuase the RPM compilation
-	@# seems compatible, but some people have trouble building the RPM package.
-	cd $* && cargo deb
+# Create .rpm and .deb packages with Docker so people using Macs can build images locally too.
+# We may need to have .rpm and .deb specific builder images that work with what we want to host it in.
+.make/cargo-docker-packager/%: $(RUST_SRC)
+	@# .rpm will be at execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-0.1.0-1.x86_64.rpm
+	@# .deb will be at execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
+	@# Need to use the same user ID as outside if we want to continue working with these files,
+	@# otherwise the user running in docker will own them.
+	$(eval USERID = $(shell id -u))
+	docker run -it --rm --entrypoint sh \
+	    -v ${PWD}:/CasperLabs \
+        casperlabs/buildenv:latest \
+        -c "\
+		apt-get install sudo ; \
+        useradd -u $(USERID) -m builder ; \
+		cp -r /root/. /home/builder/ ; \
+		chown -R builder /home/builder ; \
+		sudo -u builder sh -c '\
+		    export HOME=/home/builder ; \
+		    export PATH=/home/builder/.cargo/bin:$$PATH ; \
+            cd /CasperLabs/$* ; \
+            ([ -d .rpm ] || cargo rpm init) && cargo rpm build && \
+            cargo deb --no-build \
+        '"
 	mkdir -p $(dir $@) && touch $@
-
 
 # Build the execution engine executable. NOTE: This is not portable.
 execution-engine/target/release/casperlabs-engine-grpc-server: \
@@ -198,7 +213,6 @@ execution-engine/target/release/casperlabs-engine-grpc-server: \
 	cargo install cargo-deb || exit 0
 	cargo install cargo-tarball || exit 0
 	mkdir -p $(dir $@) && touch $@
-
 
 .make/install/rpm:
 	if [ -z "$$(which rpmbuild)" ]; then

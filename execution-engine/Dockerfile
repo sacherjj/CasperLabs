@@ -12,4 +12,12 @@ CMD [".casper-node.sock"]
 
 # Install from debian package.
 ADD ./casperlabs-engine-grpc-server*.deb /opt/docker/
-RUN dpkg -i /opt/docker/casperlabs-engine-grpc-server*.deb
+# TODO: If I build on Ubuntu 16.04 the package installs without a problem,
+# 		but if I use the casperlabs:buildenv image for packaging I get unmet dependencies.
+# RUN apt-get update && \
+#     apt install /opt/docker/casperlabs-engine-grpc-server*.deb && \
+#     apt-get clean
+RUN dpkg -i \
+    --ignore-depends libgcc1 \
+    --ignore-depends libc6 \
+    /opt/docker/casperlabs-engine-grpc-server*.deb
