@@ -118,9 +118,11 @@ fn validate_imports(module: &Module) -> Result<(), PreprocessingError> {
                     }
                 }
                 elements::External::Memory(m) => {
-                    let max = m.limits().maximum().ok_or_else(|| invalid_imports(
-                        "There is a limit to Wasm memory. This program does not limit memory",
-                    ))?;
+                    let max = m.limits().maximum().ok_or_else(|| {
+                        invalid_imports(
+                            "There is a limit to Wasm memory. This program does not limit memory",
+                        )
+                    })?;
                     if max > MAX_MEM_PAGES {
                         return invalid_imports_error::<bool, String>(format!(
                             "Wasm runtime has 10Mb limit (305 pages each 64KiB) on \
