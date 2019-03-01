@@ -189,7 +189,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		useradd -u $(USERID) -m builder ; \
 		cp -r /root/. /home/builder/ ; \
 		chown -R builder /home/builder ; \
-		sudo -u builder sh -c '\
+		sudo -u builder bash -c '\
 			export HOME=/home/builder ; \
 			export PATH=/home/builder/.cargo/bin:$$PATH ; \
 			cd /CasperLabs/$* ; \
