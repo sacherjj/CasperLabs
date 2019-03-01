@@ -5,65 +5,60 @@ fn transform_write(v: common::value::Value) -> storage::transform::Transform {
     storage::transform::Transform::Write(v)
 }
 
-/// Transforms ipc::Transform into domain transform::Transform.
-fn ipc_transform_to_transform(tr: &super::ipc::Transform) -> storage::transform::Transform {
-    if tr.has_identity() {
-        storage::transform::Transform::Identity
-    } else if tr.has_add_keys() {
-        let add_keys = tr
-            .get_add_keys()
-            .get_value()
-            .iter()
-            .map(|nk| (nk.name.to_string(), nk.get_key().into()));
-        let keys_map = {
-            let mut map = BTreeMap::new();
-            for (n, k) in add_keys {
-                map.insert(n, k);
+impl From<&super::ipc::Transform> for storage::transform::Transform {
+    fn from(tr: &super::ipc::Transform) -> storage::transform::Transform {
+        if tr.has_identity() {
+            storage::transform::Transform::Identity
+        } else if tr.has_add_keys() {
+            let keys_map = tr
+                .get_add_keys()
+                .get_value()
+                .iter()
+                .map(|nk| (nk.name.clone(), nk.get_key().into()))
+                .collect();
+            storage::transform::Transform::AddKeys(keys_map)
+        } else if tr.has_add_i32() {
+            storage::transform::Transform::AddInt32(tr.get_add_i32().value)
+        } else if tr.has_write() {
+            let v = tr.get_write().get_value();
+            if v.has_integer() {
+                transform_write(common::value::Value::Int32(v.get_integer()))
+            } else if v.has_byte_arr() {
+                let v: Vec<u8> = Vec::from(v.get_byte_arr());
+                transform_write(common::value::Value::ByteArray(v))
+            } else if v.has_int_list() {
+                let list = v.get_int_list().list.clone();
+                transform_write(common::value::Value::ListInt32(list))
+            } else if v.has_string_val() {
+                transform_write(common::value::Value::String(v.get_string_val().to_string()))
+            } else if v.has_account() {
+                let mut pub_key = [0u8; 32];
+                let uref_map: URefMap = (v.get_account().get_known_urefs()).into();
+                pub_key.clone_from_slice(&v.get_account().pub_key);
+                let account =
+                    common::value::Account::new(pub_key, v.get_account().nonce as u64, uref_map.0);
+                transform_write(common::value::Value::Acct(account))
+            } else if v.has_contract() {
+                let ipc_contr = v.get_contract();
+                let contr_body = ipc_contr.get_body().to_vec();
+                let known_urefs: URefMap = ipc_contr.get_known_urefs().into();
+                transform_write(common::value::Value::Contract {
+                    bytes: contr_body,
+                    known_urefs: known_urefs.0,
+                })
+            } else if v.has_string_list() {
+                let list = v.get_string_list().list.to_vec();
+                transform_write(common::value::Value::ListString(list))
+            } else if v.has_named_key() {
+                let nk = v.get_named_key();
+                let name = nk.get_name().to_string();
+                transform_write(common::value::Value::NamedKey(name, nk.get_key().into()))
+            } else {
+                panic!("TransformEntry write contained unknown value: {:?}", v)
             }
-            map
-        };
-        storage::transform::Transform::AddKeys(keys_map)
-    } else if tr.has_add_i32() {
-        storage::transform::Transform::AddInt32(tr.get_add_i32().value)
-    } else if tr.has_write() {
-        let v = tr.get_write().get_value();
-        if v.has_integer() {
-            transform_write(common::value::Value::Int32(v.get_integer()))
-        } else if v.has_byte_arr() {
-            let v: Vec<u8> = Vec::from(v.get_byte_arr());
-            transform_write(common::value::Value::ByteArray(v))
-        } else if v.has_int_list() {
-            let list = v.get_int_list().list.clone();
-            transform_write(common::value::Value::ListInt32(list))
-        } else if v.has_string_val() {
-            transform_write(common::value::Value::String(v.get_string_val().to_string()))
-        } else if v.has_account() {
-            let mut pub_key = [0u8; 32];
-            let uref_map: URefMap = (v.get_account().get_known_urefs()).into();
-            pub_key.clone_from_slice(&v.get_account().pub_key);
-            let account =
-                common::value::Account::new(pub_key, v.get_account().nonce as u64, uref_map.0);
-            transform_write(common::value::Value::Acct(account))
-        } else if v.has_contract() {
-            let ipc_contr = v.get_contract();
-            let contr_body = ipc_contr.get_body().to_vec();
-            let known_urefs: URefMap = ipc_contr.get_known_urefs().into();
-            transform_write(common::value::Value::Contract {
-                bytes: contr_body,
-                known_urefs: known_urefs.0,
-            })
-        } else if v.has_string_list() {
-            let list = v.get_string_list().list.to_vec();
-            transform_write(common::value::Value::ListString(list))
-        } else if v.has_named_key() {
-            let nk = v.get_named_key();
-            let name = nk.get_name().to_string();
-            transform_write(common::value::Value::NamedKey(name, nk.get_key().into()))
         } else {
-            panic!("TransformEntry write contained unknown value: {:?}", v)
+            panic!("TransformEntry couldn't be parsed to known Transform.")
         }
-    } else {
-        panic!("TransformEntry couldn't be parsed to known Transform.")
     }
 }
 
@@ -253,7 +248,7 @@ impl From<&super::ipc::TransformEntry> for (common::key::Key, storage::transform
         if from.has_key() {
             if from.has_transform() {
                 let t: storage::transform::Transform =
-                    ipc_transform_to_transform(from.get_transform());
+                    from.get_transform().into();
                 (from.get_key().into(), t)
             } else {
                 panic!("No transform field in TransformEntry")
