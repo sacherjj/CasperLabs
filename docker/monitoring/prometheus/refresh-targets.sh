@@ -9,7 +9,7 @@ PORT=${CL_SERVER_HTTP_PORT:-40403}
 HOSTS=$(docker ps --format '{{.Names}}' \
     | grep node- \
     | sort \
-    | awk -vORS=', ' '{print "\""$1":'$PORT'\""}' \
+    | awk -v ORS=', ' '{print "\""$1":'$PORT'\""}' \
     | sed 's/, $//')
 
 cat <<EOF > $(dirname $0)/targets.yml
