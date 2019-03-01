@@ -22,7 +22,7 @@ The setup process will establish validator keys and bonds in `.casperlabs/genesi
 
 `node-0` will be the bootstrap nodemake node-0/upthat all subsequent nodes connect to, so create that first. You can run `make node-0` to establish its directory and see the values `docker-compose` will use, or just run `make node-0/up` to bring up the node in docker straight away.
 
-```console
+```sh
 $ make node-0/up
 ...
 Creating execution-engine-0 ... done
@@ -31,7 +31,7 @@ Creating node-0 ... done
 
 We can check that everything is fine with:
 
-```bash
+```sh
 $ docker logs node-0
 ```
 
@@ -39,7 +39,7 @@ To follow the log in a terminal and watch messages while you bring up other node
 
 Now we will bring up a second node:
 
-```bash
+```sh
 $ make node-1/up
 ...
 Creating execution-engine-1 ... done
@@ -50,7 +50,7 @@ You will be able to see that in both node logs, we have `Peers: 1`, showing they
 
 New we bring up a third node:
 
-```bash
+```sh
 $ make node-2/up
 ...
 Creating execution-engine-2 ... done
@@ -71,9 +71,8 @@ $ ./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/targe
      --payment /data/helloname.wasm
 
 Success!
-$ ./client.sh node-0 propose
+./client.sh node-0 propose
 Response: Success! Block f876efed8d... created and added.
-$
 ```
 
 ## Monitoring
@@ -130,7 +129,7 @@ $ google-chrome --new-window \
 
 You can tear everything down by running `make clean`, or destroy individual nodes with `make node-1/down` for example.
 
-```basic
+```sh
 $ make node-1/down
 ...
 Stopping node-1             ... done
@@ -139,7 +138,7 @@ Removing node-1             ... done
 Removing execution-engine-1 ... done
 ```
 
-```bash
+```sh
 $ make clean
 docker-compose -p casperlabs down
 Stopping prometheus ... done
