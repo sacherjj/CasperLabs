@@ -400,11 +400,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
 
   implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
 
-  /*
-   * TODO: Pass in blockDag. We should only call _blockDag.get at one location.
-   * This would require returning the updated block DAG with the block status.
-   *
-   * We want to catch equivocations only after we confirm that the block completing
+  /* We want to catch equivocations only after we confirm that the block completing
    * the equivocation is otherwise valid.
    */
   private def attemptAdd(
