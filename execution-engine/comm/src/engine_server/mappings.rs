@@ -67,93 +67,95 @@ fn ipc_transform_to_transform(tr: &super::ipc::Transform) -> storage::transform:
     }
 }
 
-pub fn value_to_ipc(v: common::value::Value) -> super::ipc::Value {
-    let mut tv = super::ipc::Value::new();
-    match v {
-        common::value::Value::Int32(i) => {
-            tv.set_integer(i);
-        }
-        common::value::Value::ByteArray(arr) => {
-            tv.set_byte_arr(arr.clone());
-        }
-        common::value::Value::ListInt32(list) => {
-            let mut int_list = super::ipc::IntList::new();
-            int_list.set_list(list.clone());
-            tv.set_int_list(int_list);
-        }
-        common::value::Value::String(string) => {
-            tv.set_string_val(string.clone());
-        }
-        common::value::Value::ListString(list_string) => {
-            let mut string_list = super::ipc::StringList::new();
-            string_list.set_list(protobuf::RepeatedField::from_ref(list_string));
-            tv.set_string_list(string_list);
-        }
-        common::value::Value::NamedKey(name, key) => {
-            let named_key = {
-                let mut nk = super::ipc::NamedKey::new();
-                nk.set_name(name.to_string());
-                nk.set_key(&key.into());
-                nk
-            };
-            tv.set_named_key(named_key);
-        }
-        common::value::Value::Acct(account) => {
-            let mut acc = super::ipc::Account::new();
-            acc.set_pub_key(account.pub_key().to_vec());
-            acc.set_nonce(account.nonce());
-            let urefs = URefMap(account.get_urefs_lookup()).into();
-            acc.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
-            tv.set_account(acc);
-        }
-        common::value::Value::Contract { bytes, known_urefs } => {
-            let mut contr = super::ipc::Contract::new();
-            let urefs = URefMap(known_urefs).into();
-            contr.set_body(bytes.clone());
-            contr.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
-            tv.set_contract(contr);
-        }
-    };
-    tv
+impl From<common::value::Value> for super::ipc::Value {
+    fn from(v: common::value::Value) -> Self {
+        let mut tv = super::ipc::Value::new();
+        match v {
+            common::value::Value::Int32(i) => {
+                tv.set_integer(i);
+            }
+            common::value::Value::ByteArray(arr) => {
+                tv.set_byte_arr(arr);
+            }
+            common::value::Value::ListInt32(list) => {
+                let mut int_list = super::ipc::IntList::new();
+                int_list.set_list(list);
+                tv.set_int_list(int_list);
+            }
+            common::value::Value::String(string) => {
+                tv.set_string_val(string);
+            }
+            common::value::Value::ListString(list_string) => {
+                let mut string_list = super::ipc::StringList::new();
+                string_list.set_list(protobuf::RepeatedField::from_ref(list_string));
+                tv.set_string_list(string_list);
+            }
+            common::value::Value::NamedKey(name, key) => {
+                let named_key = {
+                    let mut nk = super::ipc::NamedKey::new();
+                    nk.set_name(name.to_string());
+                    nk.set_key((&key).into());
+                    nk
+                };
+                tv.set_named_key(named_key);
+            }
+            common::value::Value::Acct(account) => {
+                let mut acc = super::ipc::Account::new();
+                acc.set_pub_key(account.pub_key().to_vec());
+                acc.set_nonce(account.nonce());
+                let urefs = URefMap(account.get_urefs_lookup()).into();
+                acc.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
+                tv.set_account(acc);
+            }
+            common::value::Value::Contract { bytes, known_urefs } => {
+                let mut contr = super::ipc::Contract::new();
+                let urefs = URefMap(known_urefs).into();
+                contr.set_body(bytes);
+                contr.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
+                tv.set_contract(contr);
+            }
+        };
+        tv
+    }
 }
 
-/// Transforms domain storage::transform::Transform into gRPC Transform.
-fn transform_to_ipc(tr: storage::transform::Transform) -> super::ipc::Transform {
-    let mut t = super::ipc::Transform::new();
-    match tr {
-        storage::transform::Transform::Identity => {
-            t.set_identity(super::ipc::TransformIdentity::new());
-        }
-        storage::transform::Transform::Write(v) => {
-            let mut tw = super::ipc::TransformWrite::new();
-            let tv = value_to_ipc(v);
-            tw.set_value(tv);
-            t.set_write(tw)
-        }
-        storage::transform::Transform::AddInt32(i) => {
-            let mut add = super::ipc::TransformAddInt32::new();
-            add.set_value(i);
-            t.set_add_i32(add);
-        }
-        storage::transform::Transform::AddKeys(keys_map) => {
-            let mut add = super::ipc::TransformAddKeys::new();
-            let keys = URefMap(keys).into();
-            add.set_value(protobuf::RepeatedField::from_vec(keys));
-            t.set_add_keys(add);
-        }
-        storage::transform::Transform::Failure(storage::transform::TypeMismatch {
-            expected,
-            found,
-        }) => {
-            let mut fail = super::ipc::TransformFailure::new();
-            let mut typemismatch_err = super::ipc::StorageTypeMismatch::new();
-            typemismatch_err.set_expected(expected.to_owned());
-            typemismatch_err.set_found(found.to_owned());
-            fail.set_error(typemismatch_err);
-            t.set_failure(fail);
-        }
-    };
-    t
+impl From<storage::transform::Transform> for super::ipc::Transform {
+    fn from(tr: storage::transform::Transform) -> super::ipc::Transform {
+        let mut t = super::ipc::Transform::new();
+        match tr {
+            storage::transform::Transform::Identity => {
+                t.set_identity(super::ipc::TransformIdentity::new());
+            }
+            storage::transform::Transform::Write(v) => {
+                let mut tw = super::ipc::TransformWrite::new();
+                tw.set_value(v.into());
+                t.set_write(tw)
+            }
+            storage::transform::Transform::AddInt32(i) => {
+                let mut add = super::ipc::TransformAddInt32::new();
+                add.set_value(i);
+                t.set_add_i32(add);
+            }
+            storage::transform::Transform::AddKeys(keys_map) => {
+                let mut add = super::ipc::TransformAddKeys::new();
+                let keys = URefMap(keys_map).into();
+                add.set_value(protobuf::RepeatedField::from_vec(keys));
+                t.set_add_keys(add);
+            }
+            storage::transform::Transform::Failure(storage::transform::TypeMismatch {
+                expected,
+                found,
+            }) => {
+                let mut fail = super::ipc::TransformFailure::new();
+                let mut typemismatch_err = super::ipc::StorageTypeMismatch::new();
+                typemismatch_err.set_expected(expected.to_owned());
+                typemismatch_err.set_found(found.to_owned());
+                fail.set_error(typemismatch_err);
+                t.set_failure(fail);
+            }
+        };
+        t
+    }
 }
 
 // newtype because trait impl have to be defined in the crate of the type.
@@ -280,7 +282,7 @@ pub fn execution_effect_to_ipc(ee: storage::gs::ExecutionEffect) -> super::ipc::
         ee.1.into_iter()
             .map(|(k, t)| {
                 let mut tr_entry = super::ipc::TransformEntry::new();
-                let ipc_tr = transform_to_ipc(t);
+                let ipc_tr = t.into();
                 tr_entry.set_key((&k).into());
                 tr_entry.set_transform(ipc_tr);
                 tr_entry

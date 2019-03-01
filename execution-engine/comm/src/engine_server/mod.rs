@@ -48,7 +48,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
 
                 Ok(QueryResult::Success(value)) => {
                     let mut result = ipc::QueryResponse::new();
-                    result.set_success(value_to_ipc(&value));
+                    result.set_success(value.into());
                     result
                 }
             };
