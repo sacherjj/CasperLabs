@@ -26,16 +26,15 @@ The setup process will establish validator keys and bonds in `.casperlabs/genesi
 Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
 
 ```sh
-$ ./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
->     --from 00000000000000000000 \
->     --gas-limit 100000000 --gas-price 1 \
->     --session /data/helloname.wasm \
->     --payment /data/helloname.wasm
+./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
+     --from 00000000000000000000 \
+     --gas-limit 100000000 --gas-price 1 \
+     --session /data/helloname.wasm \
+     --payment /data/helloname.wasm
 
 Success!
-$ ./client.sh node-0 propose
+./client.sh node-0 propose
 Response: Success! Block f876efed8d... created and added.
-$
 ```
 
 ## Monitoring
