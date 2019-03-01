@@ -96,8 +96,8 @@ fn main() {
     let gs = InMemHist::new_initialized(&state_hash, init_state);
     let engine_state = EngineState::new(gs);
 
-    let wasmi_executor = WasmiExecutor {};
-    let wasmi_preprocessor = WasmiPreprocessor {};
+    let wasmi_executor = WasmiExecutor;
+    let wasmi_preprocessor = WasmiPreprocessor;
 
     for wasm_bytes in wasm_files.iter() {
         println!("Pre state hash: {:?}", state_hash);

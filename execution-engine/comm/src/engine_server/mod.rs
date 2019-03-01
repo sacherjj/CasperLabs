@@ -67,8 +67,8 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         _o: ::grpc::RequestOptions,
         p: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
-        let executor = WasmiExecutor {};
-        let preprocessor = WasmiPreprocessor {};
+        let executor = WasmiExecutor;
+        let preprocessor = WasmiPreprocessor;
         let prestate_hash = {
             let mut hash_tmp = [0u8; 32];
             hash_tmp.copy_from_slice(&p.get_parent_state_hash());
