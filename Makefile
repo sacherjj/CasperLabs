@@ -60,7 +60,15 @@ docker-push/%: docker-build/%
 
 cargo-package-all: \
 	.make/cargo-package/execution-engine/common \
-	.make/cargo-docker-packager/execution-engine/comm
+	cargo-native-packager/execution-engine/comm
+
+# Drone is already running commands in the `builderenv`, no need to delegate.
+cargo-native-packager/%:
+	if [ -z "${DRONE_BRANCH}" ]; then \
+		make .make/cargo-docker-packager/$* ; \
+	else \
+		make .make/cargo-native-packager/$* ; \
+	fi
 
 # We need to publish the libraries the contracts are supposed to use.
 cargo-publish-all: \
@@ -148,6 +156,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		echo $$RESULT && exit $$CODE ; \
 	fi
 	mkdir -p $(dir $@) && touch $@
+
 
 # Create .rpm and .deb packages natively. `cargo rpm build` doesn't work on MacOS.
 .make/cargo-native-packager/%: $(RUST_SRC) .make/install/protoc .make/install/cargo-native-packager
