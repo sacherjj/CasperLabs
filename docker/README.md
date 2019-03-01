@@ -4,7 +4,7 @@ The idea is to create many nodes with commands like `make node-0/up`, `make node
 
 Then we can slow down the network between `node-*` containers with https://alexei-led.github.io/post/pumba_docker_netem/ and see what happens.
 
-To deploy we'll have to `docker run --network casperlabs casperlabs/client` and pass it the WASM files. `client.sh` provides is a convenience wrapper for interacting with the network; run `./client.sh node-0 --help` to see what it can do.
+To deploy we need to use `docker run --network casperlabs casperlabs/client` and pass it the WASM files. `client.sh` provides is a convenient wrapper for interacting with the network. Run `./client.sh node-0 --help` to see what it can do.
 
 ## Build docker images
 
@@ -14,13 +14,17 @@ Run `make docker-build-all` in the main project directory to prepare the images.
 
 Contract examples exist in another repo.  Clone https://github.com/CasperLabs/contract-examples and follow the root [README.md](https://github.com/CasperLabs/contract-examples/blob/master/README.md) for build instructions.  You will need to have performed the Rust developer environment setup section in [DEVELOPER.md](https://github.com/CasperLabs/CasperLabs/blob/dev/DEVELOPER.md) in the root of this repo.
 
+## Required: docker-compose
+
+`docker-compose` is used to bring up the nodes on the network. Please verify that [docker-compose is installed](https://docs.docker.com/compose/install/) prior to continuing.
+
 ## Set up a network
 
-We'll set up a bunch of nodes in docker with names such as `node-0`, `node-1` etc. Each will have a corresponding container running the Execution Engine.
+We will create multiple nodes in docker with names such as `node-0`, `node-1` etc. Each will have a corresponding container running the Execution Engine.
 
 The setup process will establish validator keys and bonds in `.casperlabs/genesis` by starting a node instance once up front. By default 10 files are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
 
-`node-0` will be the bootstrap nodemake node-0/upthat all subsequent nodes connect to, so create that first. You can run `make node-0` to establish its directory and see the values `docker-compose` will use, or just run `make node-0/up` to bring up the node in docker straight away.
+`node-0` will be the bootstrap node that all subsequent nodes connect to, so we create that first. You can run `make node-0` to establish its directory and see the values `docker-compose` will use or just run `make node-0/up` to bring up the node in docker straight away.
 
 ```sh
 $ make node-0/up
