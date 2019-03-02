@@ -1,8 +1,6 @@
 # Node network simulation
 
-The idea is to create many nodes with commands like `make node-0/up`, `make node-1/down` etc. Each will have the same configuration as `template/Dockerfile`. The containers would all be on the same network.
-
-Then we can slow down the network between `node-*` containers with [pumba](https://alexei-led.github.io/post/pumba_docker_netem/) and see what happens.
+The idea is to create many nodes with commands like `make node-0/up`, bring them down with `make node-1/down` etc. Each will have the same configuration as `template/Dockerfile`. The containers would all be on the same network.
 
 To deploy we need to use `docker run --network casperlabs casperlabs/client` and pass it the WASM files. `client.sh` provides is a convenient wrapper for interacting with the network. Run `./client.sh node-0 --help` to see what it can do.
 
@@ -67,13 +65,25 @@ Assuming that you cloned and compiled the [contract-examples](https://github.com
      --gas-limit 100000000 --gas-price 1 \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm
-
-> Success!
-
-./client.sh node-0 propose
-
-> Response: Success! Block f876efed8d... created and added.
 ```
+
+After a successful deploy, you should see the following response:
+```
+Success!
+```
+
+At the moment you have to trigger block proposal by invoking the following command:
+```console
+./client.sh node-0 propose
+```
+
+After a successful deploy, the response will contain the block ID:
+```
+Response: Success! Block f876efed8d... created and added.
+```
+
+If you check the log output, each node should get the block and provide some feedback about the execution as well.
+
 
 ## Monitoring
 
@@ -83,9 +93,9 @@ Running `make up` will install some common containers in the network, for exampl
 
 ### Grafana
 
-To see some of the metrics in [Grafana](https://grafana.com/) go to http://localhost:3000 and log in with the credentials "admin/admin" and skip prompt to change password.  This is just a local instance of Grafana, so only accessible from localhost.  
+To see some of the metrics in [Grafana](https://grafana.com/) go to http://localhost:3000 and log in with the credentials "admin/admin" and skip prompt to change password.  This is just a local instance of Grafana, so only accessible from localhost.
 
-The Block Gossiping dashboard will display charts that show communication overhead.  Click on the dashboards (2x2 blocks) icon on the left if you don't see the Block Gossiping dashboard link.  
+The Block Gossiping dashboard will display charts that show communication overhead.  Click on the dashboards (2x2 blocks) icon on the left if you don't see the Block Gossiping dashboard link.
 
 Note that you'll need to run `docker login` with your DockerHub username and password to be able to pull 3rd party images.
 
@@ -96,21 +106,35 @@ You can save snapshots of the DAG as it evolves, like a slide show, by starting 
 ```console
 ./client.sh node-0 vdag $PWD/images --show-ustification-lines --depth 25 \
     --out /data/sample.png --stream multiple-outputs
+```
 
-> Wrote /data/sample_0.png
-> Wrote /data/sample_1.png
+As you make blocks, you should see feedback about a new image written to the output. You can stop the client using `Ctrl+C`:
+```
+Wrote /data/sample_0.png
+Wrote /data/sample_1.png
 ^C
+```
 
+If you check the contents of the `images` directory you'll see that they are still there:
+```console
 ls images
+```
 
-> sample_0.png  sample_1.png
-
-sudo rm -rf images
+You'll see the images right under the output directory we specified as the 2nd argument when we started the client:
+```
+sample_0.png  sample_1.png
 ```
 
 Unfortunately the docker container runs with a different user ID than the one on the host and the will set the ownership of these images so that they can only be removed with elevated privileges. Normally you'd install the client directly on your machine and not have this issue, connecting to the node through an open port rather than through a docker container. We're only using the client through the container so we don't have to map to different ports on the host for each node we want to deploy to.
 
-You can also `sudo apt-get install graphviz` and visualize the DAG like so:
+```console
+sudo rm -rf images
+```
+
+
+## Visualizing the DAG
+
+On Debian/Ubuntu you can also run `sudo apt-get install graphviz` and visualize the DAG like so:
 
 ```console
 ./client.sh node-0 vdag --show-justification-lines --depth 25 \
@@ -124,6 +148,7 @@ Alternatively you can even use the browser:
 google-chrome --new-window \
     $(python -c "import urllib; print 'https://dreampuf.github.io/GraphvizOnline/#' + urllib.quote('''$(./client.sh node-0 vdag --show-justification-lines --depth 25)''')")
 ```
+
 
 ## Network Effects
 
@@ -149,11 +174,11 @@ _NOTE_: For the techniques that use `iptables` and `tc` to work you'll need to r
 You can destory individual nodes:
 
 ```console
-$ make node-1/down
+make node-1/down
 ```
 
 You can tear everything down by running:
 
 ```console
-$ make clean
+make clean
 ```
