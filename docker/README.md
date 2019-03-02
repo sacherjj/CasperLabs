@@ -18,14 +18,43 @@ We'll set up a bunch of nodes in docker with names such as `node-0`, `node-1` et
 
 The setup process will establish validator keys and bonds in `.casperlabs/genesis` by starting a node instance once up front. By default 10 files are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
 
-`node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first. You can run `make node-0` to establish its directory and see the values `docker-compose` will use, or just run `make node-0/up` to bring up the node in docker straight away. Check that everything is fine with `docker logs -f node-0`. When it's running, bring up more nodes, e.g `make node-1/up node-2/up`.
+`node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first.
+
+Run the following command to establish its data directory and see the values docker-compose will use:
+
+```console
+make node-0
+```
+
+Or, just run the following command to bring up the node in a Docker container straight away:
+
+```console
+make node-0/up
+```
+
+You can check that the node is running with the following commands:
+
+```console
+docker ps
+```
+and follow ("tail") the nodes logs by running:
+
+```console
+docker logs -f node-0
+```
+
+Once the bootstrap node is up, run similar commands to bring up other nodes:
+
+```console
+make node-1/up node-2/up
+```
 
 
 ## Deploy some WASM code
 
 Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
 
-```sh
+```console
 ./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --from 00000000000000000000 \
      --gas-limit 100000000 --gas-price 1 \
@@ -39,6 +68,7 @@ Assuming that you cloned and compiled the [contract-examples](https://github.com
 > Response: Success! Block f876efed8d... created and added.
 ```
 
+
 ## Monitoring
 
 Running `make up` will install some common containers in the network, for example a [Prometheus](https://prometheus.io) server which will be available at http://localhost:9090. The list of [targets](http://localhost:9090/targets) will be updated every time we create or destroy nodes.
@@ -46,6 +76,43 @@ Running `make up` will install some common containers in the network, for exampl
 To see some of the metrics in [Grafana](https://grafana.com/) go to http://localhost:3000 and log in with the credentials "admin/admin". The Block Gossiping dashboard displays charts that show how much overhead the communication has.
 
 Note that you'll need to run `docker login` with your DockerHub username and password to be able to pull 3rd party images.
+
+
+## Visualizing the DAG
+
+You can save snapshots of the DAG as it evolves, like a slide show, by starting the the client in a mode which saves a new image every time it changes. You have to give it a target directory (which will be available as `/data` in the container) and start it, then perform your deploy and propose actions in a different terminal. The `images` directory in the example below will accumulate files like `sample_1.png`, `sample_2.png`, etc.
+
+```console
+./client.sh node-0 vdag $PWD/images --show-ustification-lines --depth 25 \
+    --out /data/sample.png --stream multiple-outputs
+
+> Wrote /data/sample_0.png
+> Wrote /data/sample_1.png
+^C
+
+ls images
+
+> sample_0.png  sample_1.png
+
+sudo rm -rf images
+```
+
+Unfortunately the docker container runs with a different user ID than the one on the host and the will set the ownership of these images so that they can only be removed with elevated privileges. Normally you'd install the client directly on your machine and not have this issue, connecting to the node through an open port rather than through a docker container. We're only using the client through the container so we don't have to map to different ports on the host for each node we want to deploy to.
+
+You can also `sudo apt-get install graphviz` and visualize the DAG like so:
+
+```console
+./client.sh node-0 vdag --show-justification-lines --depth 25 \
+    | dot -Tpng -o /tmp/cl-dag.png \
+    && xdg-open /tmp/cl-dag.png
+```
+
+Alternatively you can even use the browser:
+
+```console
+google-chrome --new-window https://dreampuf.github.io/GraphvizOnline/#\
+    $(python -c "import urllib; print urllib.quote('''$(./client.sh node-0 vdag --show-justification-lines --depth 25)''')")
+```
 
 
 ## Network Effects
@@ -67,42 +134,6 @@ You can also have a look at [using tc to slow down a specific port](https://stac
 
 _NOTE_: For the techniques that use `iptables` and `tc` to work you'll need to run the `test` version of the node image which you should have if you built the images yourself with `make docker-build-all` in the top directory, and subsequently set `export CL_VERSION=test` before creating the containers. You can set the the environment variable later as well, then run run `make node-0/up` again and see `docker-compose` recreating the containers with the new version.
 
-
-## Visualizing the DAG
-
-You can save snapshots of the DAG as it evolves, like a slide show, by starting the the client in a mode which saves a new image every time it changes. You have to give it a target directory (which will be available as `/data` in the container) and start it, then perform your deploy and propose actions in a different terminal. The `images` directory in the example below will accumulate files like `sample_1.png`, `sample_2.png`, etc.
-
-```sh
-./client.sh node-0 vdag $PWD/images --show-ustification-lines --depth 25 \
-    --out /data/sample.png --stream multiple-outputs
-
-> Wrote /data/sample_0.png
-> Wrote /data/sample_1.png
-^C
-
-ls images
-
-> sample_0.png  sample_1.png
-
-sudo rm -rf images
-```
-
-Unfortunately the docker container runs with a different user ID than the one on the host and the will set the ownership of these images so that they can only be removed with elevated privileges. Normally you'd install the client directly on your machine and not have this issue, connecting to the node through an open port rather than through a docker container. We're only using the client through the container so we don't have to map to different ports on the host for each node we want to deploy to.
-
-You can also `sudo apt-get install graphviz` and visualize the DAG like so:
-
-```sh
-./client.sh node-0 vdag --show-justification-lines --depth 25 \
-    | dot -Tpng -o /tmp/cl-dag.png \
-    && xdg-open /tmp/cl-dag.png
-```
-
-Alternatively you can even use the browser:
-
-```sh
-google-chrome --new-window https://dreampuf.github.io/GraphvizOnline/#\
-    $(python -c "import urllib; print urllib.quote('''$(./client.sh node-0 vdag --show-justification-lines --depth 25)''')")
-```
 
 ## Shut down the network
 
