@@ -1,8 +1,6 @@
 # Node network simulation
 
-The idea is to create many nodes with commands like `make node-0/up`, `make node-1/down` etc. Each will have the same configuration as `template/Dockerfile` by having a symlink. The containers would all be on the same network.
-
-Then we can slow down the network between `node-*` containers with https://alexei-led.github.io/post/pumba_docker_netem/ and see what happens.
+The idea is to create many nodes with commands like `make node-0/up`, bring them down with `make node-1/down` etc. Each will have the same configuration as `template/Dockerfile`. The containers would all be on the same network.
 
 To deploy we need to use `docker run --network casperlabs casperlabs/client` and pass it the WASM files. `client.sh` provides is a convenient wrapper for interacting with the network. Run `./client.sh node-0 --help` to see what it can do.
 
@@ -24,41 +22,35 @@ We will create multiple nodes in docker with names such as `node-0`, `node-1` et
 
 The setup process will establish validator keys and bonds in `.casperlabs/genesis` by starting a node instance once up front. By default 10 files are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
 
-`node-0` will be the bootstrap node that all subsequent nodes connect to, so we create that first. You can run `make node-0` to establish its directory and see the values `docker-compose` will use or just run `make node-0/up` to bring up the node in docker straight away.
+`node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first.
 
-```sh
-$ make node-0/up
-...
-Creating execution-engine-0 ... done
-Creating node-0 ... done
+Run the following command to establish its data directory and see the values docker-compose will use:
+
+```console
+make node-0
 ```
 
-We can check that everything is fine with:
+Or, just run the following command to bring up the node in a Docker container straight away:
 
-```sh
-$ docker logs node-0
+```console
+make node-0/up
 ```
 
-To follow the log in a terminal and watch messages while you bring up other nodes in a new terminal, use the `-f | --follow` flag as in `docker logs -f node-0`.
+You can check that the node is running with the following commands:
 
-Now we will bring up a second node:
+```console
+docker ps
+```
+and follow ("tail") the nodes logs by running:
 
-```sh
-$ make node-1/up
-...
-Creating execution-engine-1 ... done
-Creating node-1 ... done
+```console
+docker logs -f node-0
 ```
 
-You will be able to see that in both node logs, we have `Peers: 1`, showing they have connected.
+Once the bootstrap node is up, run similar commands to bring up other nodes:
 
-New we bring up a third node:
-
-```sh
-$ make node-2/up
-...
-Creating execution-engine-2 ... done
-Creating node-2 ... done
+```console
+make node-1/up node-2/up
 ```
 
 After connection is complete, all node logs will show `Peers: 2`.
@@ -67,17 +59,31 @@ After connection is complete, all node logs will show `Peers: 2`.
 
 Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
 
-```sh
-$ ./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
+```console
+./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --from 00000000000000000000 \
      --gas-limit 100000000 --gas-price 1 \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm
+```
 
+After a successful deploy, you should see the following response:
+```
 Success!
+```
+
+At the moment you have to trigger block proposal by invoking the following command:
+```console
 ./client.sh node-0 propose
+```
+
+After a successful deploy, the response will contain the block ID:
+```
 Response: Success! Block f876efed8d... created and added.
 ```
+
+If you check the log output, each node should get the block and provide some feedback about the execution as well.
+
 
 ## Monitoring
 
@@ -87,11 +93,62 @@ Running `make up` will install some common containers in the network, for exampl
 
 ### Grafana
 
-To see some of the metrics in [Grafana](https://grafana.com/) go to http://localhost:3000 and log in with the credentials "admin/admin" and skip prompt to change password.  This is just a local instance of Grafana, so only accessible from localhost.  
+To see some of the metrics in [Grafana](https://grafana.com/) go to http://localhost:3000 and log in with the credentials "admin/admin" and skip prompt to change password.  This is just a local instance of Grafana, so only accessible from localhost.
 
-The Block Gossiping dashboard will display charts that show communication overhead.  Click on the dashboards (2x2 blocks) icon on the left if you don't see the Block Gossiping dashboard link.  
+The Block Gossiping dashboard will display charts that show communication overhead.  Click on the dashboards (2x2 blocks) icon on the left if you don't see the Block Gossiping dashboard link.
 
 Note that you'll need to run `docker login` with your DockerHub username and password to be able to pull 3rd party images.
+
+## Visualizing the DAG
+
+You can save snapshots of the DAG as it evolves, like a slide show, by starting the the client in a mode which saves a new image every time it changes. You have to give it a target directory (which will be available as `/data` in the container) and start it, then perform your deploy and propose actions in a different terminal. The `images` directory in the example below will accumulate files like `sample_1.png`, `sample_2.png`, etc.
+
+```console
+./client.sh node-0 vdag $PWD/images --show-ustification-lines --depth 25 \
+    --out /data/sample.png --stream multiple-outputs
+```
+
+As you make blocks, you should see feedback about a new image written to the output. You can stop the client using `Ctrl+C`:
+```
+Wrote /data/sample_0.png
+Wrote /data/sample_1.png
+^C
+```
+
+If you check the contents of the `images` directory you'll see that they are still there:
+```console
+ls images
+```
+
+You'll see the images right under the output directory we specified as the 2nd argument when we started the client:
+```
+sample_0.png  sample_1.png
+```
+
+Unfortunately the docker container runs with a different user ID than the one on the host and the will set the ownership of these images so that they can only be removed with elevated privileges. Normally you'd install the client directly on your machine and not have this issue, connecting to the node through an open port rather than through a docker container. We're only using the client through the container so we don't have to map to different ports on the host for each node we want to deploy to.
+
+```console
+sudo rm -rf images
+```
+
+
+## Visualizing the DAG
+
+On Debian/Ubuntu you can also run `sudo apt-get install graphviz` and visualize the DAG like so:
+
+```console
+./client.sh node-0 vdag --show-justification-lines --depth 25 \
+    | dot -Tpng -o /tmp/cl-dag.png \
+    && xdg-open /tmp/cl-dag.png
+```
+
+Alternatively you can even use the browser:
+
+```console
+google-chrome --new-window \
+    $(python -c "import urllib; print 'https://dreampuf.github.io/GraphvizOnline/#' + urllib.quote('''$(./client.sh node-0 vdag --show-justification-lines --depth 25)''')")
+```
+
 
 ## Network Effects
 
@@ -99,7 +156,7 @@ You can slow the network down a bit by running `make delay` or `make slow` in on
 
 Another way to introduce a network partition is to for example create two networks, put the bootstrap node in both of them, but the rest of the nodes in just one, half here, half there. Then either slow down just the bootstrap node by introducing packet loss using the [netem](https://alexei-led.github.io/post/pumba_docker_netem/) tool, or by running `docker exec -it --privileged node-0 sh` and using `iptables`:
 
-```sh
+```console
 # Drop traffic going to the intra-node gRPC port:
 iptables --append INPUT --protocol tcp --destination-port 40400 --jump DROP
 # Later delete the rule to restore traffic:
@@ -112,57 +169,16 @@ You can also have a look at [using tc to slow down a specific port](https://stac
 
 _NOTE_: For the techniques that use `iptables` and `tc` to work you'll need to run the `test` version of the node image which you should have if you built the images yourself with `make docker-build-all` in the top directory, and subsequently set `export CL_VERSION=test` before creating the containers. You can set the the environment variable later as well, then run run `make node-0/up` again and see `docker-compose` recreating the containers with the new version.
 
-## Visualizing the DAG
-
-You'll need to `sudo apt-get install graphviz` to run the following code:
-
-```sh
-$ ./client.sh node-0 vdag --show-justification-lines --depth 25 \
-    | dot -Tpng -o /tmp/cl-dag.png \
-    && xdg-open /tmp/cl-dag.png
-```
-
-Alternatively if you don't wish to install `graphviz` on your machine you can use just the browser:
-
-```sh
-$ google-chrome --new-window \
-    $(python -c "import urllib; print 'https://dreampuf.github.io/GraphvizOnline/#' + urllib.quote('''$(./client.sh node-0 vdag --show-justification-lines --depth 25)''')")
-```
-
 ## Shut down the network
 
-You can tear everything down by running `make clean`, or destroy individual nodes with `make node-1/down` for example.
+You can destory individual nodes:
 
-```sh
-$ make node-1/down
-...
-Stopping node-1             ... done
-Stopping execution-engine-1 ... done
-Removing node-1             ... done
-Removing execution-engine-1 ... done
+```console
+make node-1/down
 ```
 
-```sh
-$ make clean
-docker-compose -p casperlabs down
-Stopping prometheus ... done
-Stopping grafana    ... done
-Removing prometheus ... done
-Removing grafana    ... done
-...
-Stopping node-0             ... done
-Stopping execution-engine-0 ... done
-Removing node-0             ... done
-Removing execution-engine-0 ... done
-Network casperlabs is external, skipping
-...
-Stopping node-2             ... done
-Stopping execution-engine-2 ... done
-Removing node-2             ... done
-Removing execution-engine-2 ... done
-...
-docker network rm casperlabs || exit 0
-casperlabs
-rm -rf .casperlabs
-rm -rf .make
+You can tear everything down by running:
+
+```console
+make clean
 ```
