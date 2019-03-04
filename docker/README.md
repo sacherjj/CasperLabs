@@ -41,6 +41,7 @@ You can check that the node is running with the following commands:
 ```console
 docker ps
 ```
+
 and follow ("tail") the nodes logs by running:
 
 ```console
@@ -68,22 +69,24 @@ Assuming that you cloned and compiled the [contract-examples](https://github.com
 ```
 
 After a successful deploy, you should see the following response:
+
 ```
 Success!
 ```
 
 At the moment you have to trigger block proposal by invoking the following command:
+
 ```console
 ./client.sh node-0 propose
 ```
 
 After a successful deploy, the response will contain the block ID:
+
 ```
 Response: Success! Block f876efed8d... created and added.
 ```
 
 If you check the log output, each node should get the block and provide some feedback about the execution as well.
-
 
 ## Monitoring
 
@@ -104,11 +107,12 @@ Note that you'll need to run `docker login` with your DockerHub username and pas
 You can save snapshots of the DAG as it evolves, like a slide show, by starting the the client in a mode which saves a new image every time it changes. You have to give it a target directory (which will be available as `/data` in the container) and start it, then perform your deploy and propose actions in a different terminal. The `images` directory in the example below will accumulate files like `sample_1.png`, `sample_2.png`, etc.
 
 ```console
-./client.sh node-0 vdag $PWD/images --show-ustification-lines --depth 25 \
+./client.sh node-0 vdag $PWD/images --show-justification-lines --depth 25 \
     --out /data/sample.png --stream multiple-outputs
 ```
 
 As you make blocks, you should see feedback about a new image written to the output. You can stop the client using `Ctrl+C`:
+
 ```
 Wrote /data/sample_0.png
 Wrote /data/sample_1.png
@@ -116,11 +120,13 @@ Wrote /data/sample_1.png
 ```
 
 If you check the contents of the `images` directory you'll see that they are still there:
+
 ```console
 ls images
 ```
 
 You'll see the images right under the output directory we specified as the 2nd argument when we started the client:
+
 ```
 sample_0.png  sample_1.png
 ```
@@ -130,7 +136,6 @@ Unfortunately the docker container runs with a different user ID than the one on
 ```console
 sudo rm -rf images
 ```
-
 
 ## Visualizing the DAG
 
@@ -148,7 +153,6 @@ Alternatively you can even use the browser:
 google-chrome --new-window \
     $(python -c "import urllib; print 'https://dreampuf.github.io/GraphvizOnline/#' + urllib.quote('''$(./client.sh node-0 vdag --show-justification-lines --depth 25)''')")
 ```
-
 
 ## Network Effects
 
