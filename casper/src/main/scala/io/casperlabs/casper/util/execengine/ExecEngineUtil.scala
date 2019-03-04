@@ -106,15 +106,7 @@ object ExecEngineUtil {
   ): F[Either[BlockException, Option[StateHash]]] = {
     val deployLookup     = processedDeploys.zip(deploys).toMap
     val commutingEffects = findCommutingEffects(processedDeploys)
-    val deploysForBlock = commutingEffects.map(eff => {
-      val deploy = deployLookup(ipc.DeployResult(ipc.DeployResult.Result.Effects(eff)))
-      protocol.ProcessedDeploy(
-        Some(deploy),
-        eff.cost,
-        false
-      )
-    })
-    val transforms = commutingEffects.flatMap(_.transformMap)
+    val transforms       = commutingEffects.unzip._1.flatMap(_.transformMap)
     ExecutionEngineService[F].commit(preStateHash, transforms).flatMap {
       case Left(ex) =>
         Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
@@ -281,8 +273,7 @@ object ExecEngineUtil {
       }
     } yield blockHashesToApply
 
-  private[casper] def computeBlockCheckpointFromDeploys[
-      F[_]: Sync: BlockStore: Log: ExecutionEngineService](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Log: ExecutionEngineService](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],

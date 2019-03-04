@@ -69,15 +69,22 @@ object Genesis {
                          }
       deployLookup     = processedDeploys.zip(blessedTerms).toMap
       commutingEffects = ExecEngineUtil.findCommutingEffects(processedDeploys)
-      deploysForBlock = commutingEffects.map(eff => {
-        val deploy = deployLookup(ipc.DeployResult(ipc.DeployResult.Result.Effects(eff)))
-        protocol.ProcessedDeploy(
-          Some(deploy),
-          eff.cost,
-          false
-        )
-      })
-      transforms            = commutingEffects.flatMap(_.transformMap)
+      deploysForBlock = commutingEffects.map {
+        case (eff, cost) => {
+          val deploy = deployLookup(
+            ipc.DeployResult(
+              cost,
+              ipc.DeployResult.Result.Effects(eff)
+            )
+          )
+          protocol.ProcessedDeploy(
+            Some(deploy),
+            cost,
+            false
+          )
+        }
+      }
+      transforms            = commutingEffects.unzip._1.flatMap(_.transformMap)
       possiblePostStateHash <- ExecutionEngineService[F].commit(startHash, transforms)
       postStateHash <- possiblePostStateHash match {
                         case Left(ex)    => Sync[F].raiseError(ex)

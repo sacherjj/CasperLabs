@@ -172,6 +172,7 @@ class NodeRuntime private[node] (
                                 Log.eitherTLog(Monad[Task], log),
                                 multiParentCasperRef,
                                 blockDagStorage,
+                                executionEngineService,
                                 scheduler
                               )
       packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
