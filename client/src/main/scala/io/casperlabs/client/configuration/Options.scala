@@ -2,12 +2,28 @@ package io.casperlabs.client.configuration
 
 import java.io.File
 
+import cats.syntax.option._
+import guru.nidi.graphviz.engine.Format
 import io.casperlabs.client.BuildInfo
 import org.rogach.scallop._
 
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
+  implicit val streamingConverter: ValueConverter[Streaming] = new ValueConverter[Streaming] {
+    override def parse(s: List[(String, List[String])]): Either[String, Option[Streaming]] =
+      s match {
+        case List((_, List(v))) =>
+          v match {
+            case "single-output"    => Right(Some(Streaming.Single))
+            case "multiple-outputs" => Right(Some(Streaming.Multiple))
+            case _                  => Left("Failed to parse 'v', must be 'single-output' or 'multiple-outputs'")
+          }
+        case Nil => Right(None)
+        case _   => Left("Provide 'single-output' or 'multiple-outputs'")
+      }
+    override val argType: ArgType.V = ArgType.SINGLE
+  }
 
-  version(s"Casper Labs Client ${BuildInfo.version}")
+  version(s"CasperLabs Client ${BuildInfo.version}")
   printedName = "casperlabs"
 
   val port =
@@ -101,16 +117,67 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
     val depth =
       opt[Int](
-        name = "depth",
-        descr = "depth in terms of block height"
+        descr = "depth in terms of block height",
+        required = true
       )
     val showJustificationLines =
       opt[Boolean](
-        name = "showJustificationlines",
-        descr = "if justification lines should be shown"
+        descr = "if justification lines should be shown",
+        default = false.some
+      )
+
+    val out = opt[String](
+      descr =
+        s"output image filename, outputs to stdout if not specified, must ends with one of the ${Format
+          .values()
+          .map(_.name().toLowerCase())
+          .mkString(", ")}",
+      validate = s => Format.values().map(_.name().toLowerCase).exists(s.endsWith)
+    )
+
+    val stream =
+      opt[Streaming](
+        descr =
+          "subscribe to changes, '--out' has to specified, valid values are 'single-output', 'multiple-outputs'"
       )
   }
   addSubcommand(visualizeBlocks)
+
+  val query = new Subcommand("query-state") {
+    descr(
+      "Query a value in the global state."
+    )
+
+    val blockHash =
+      opt[String](
+        name = "block-hash",
+        descr = "Hash of the block to query the state of",
+        required = true
+      )
+
+    val keyType =
+      opt[String](
+        name = "type",
+        descr = "Type of base key. Must be one of 'hash', 'uref', 'address'",
+        validate = s => Set("hash", "uref", "address").contains(s.toLowerCase),
+        default = Option("address")
+      )
+
+    val key =
+      opt[String](
+        name = "key",
+        descr = "Base16 encoding of the base key.",
+        required = true
+      )
+
+    val path =
+      opt[String](
+        name = "path",
+        descr = "Path to the value to query. Must be of the form 'key1/key2/.../keyn'",
+        default = Option("")
+      )
+  }
+  addSubcommand(query)
 
   verify()
 }

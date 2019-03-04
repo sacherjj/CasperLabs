@@ -32,8 +32,22 @@ service DeployService {
     }
     rpc findBlockWithDeploy (FindDeployInBlockQuery) returns (BlockQueryResponse) {
     }
+    rpc queryState (QueryStateRequest) returns (QueryStateResponse) {}
+    //TODO: delete this
     rpc previewPrivateNames (PrivateNamePreviewQuery) returns (PrivateNamePreviewResponse) {
     }
+}
+
+message QueryStateRequest {
+    string block_hash = 1; //base-16 encoding of block hash
+    string key_variant = 2; //one of "hash", "uref", "address"
+    string key_bytes = 3; //base-16 encoding of key
+    string path = 4; // '/'-separated path of human-readable names to value
+}
+
+message QueryStateResponse {
+    //TODO: should mimic ipc version
+    string result = 1;
 }
 
 message DeployData {

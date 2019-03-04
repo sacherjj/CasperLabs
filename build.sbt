@@ -170,7 +170,7 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(crypto, shared % "compile->compile;test->test")
 
-val nodeAndClientVersion = "0.0"
+val nodeAndClientVersion = "0.1"
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -334,9 +334,10 @@ lazy val client = (project in file("client"))
     packageName := "casperlabs-client",
     packageName in Docker := "client",
     executableScriptName := "casperlabs-client",
+    javacOptions  ++= Seq("-Dnashorn.args=\"--no-deprecation-warning\""),
     packageSummary := "CasperLabs Client",
     packageDescription := "CLI tool for interaction with the CasperLabs Node",
-    libraryDependencies ++= commonDependencies ++ Seq(scallop, grpcNetty),
+    libraryDependencies ++= commonDependencies ++ Seq(scallop, grpcNetty, graphvizJava),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.client",
     /* Dockerization */
@@ -415,7 +416,7 @@ lazy val client = (project in file("client"))
     ),
     rpmAutoreq := "no"
   )
-  .dependsOn(shared, models)
+  .dependsOn(crypto, shared, models, smartContracts)
 
 lazy val casperlabs = (project in file("."))
   .settings(commonSettings: _*)

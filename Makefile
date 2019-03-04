@@ -2,16 +2,16 @@ DOCKER_USERNAME ?= casperlabs
 DOCKER_PUSH_LATEST ?= false
 # Use the git tag / hash as version. Easy to pinpoint. `git tag` can return more than 1 though. `git rev-parse --short HEAD` would just be the commit.
 $(eval TAGS_OR_SHA = $(shell git tag -l --points-at HEAD | grep -e . || git describe --tags --always --long))
-# Try to use the semantic version with any leading `v` stripped.
+# Try to use the semantic version with any leading `v` stripped. TODO: MacOS doesn't support -Po
 $(eval SEMVER_REGEX = 'v?\K\d+\.\d+(\.\d+)?')
 $(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -Po $(SEMVER_REGEX) | tail -n 1 | grep -e . || echo $(TAGS_OR_SHA)))
 
 # All rust related source code. If every Rust module depends on everything then transitive dependencies are not a problem.
 # But with comm/build.rs compiling .proto to .rs every time we build the timestamps are updated as well, so filter those and depend on .proto instead.
-RUST_SRC := $(shell find . -type f -iregex ".*/Cargo\.toml\|.*/src/.*\.rs\|.*\.proto" \
+RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" -o -name "*.proto" \) \
 	| grep -v target \
 	| grep -v -e ipc.*\.rs)
-SCALA_SRC := $(shell find . -type f -iregex '.*/src/.*\.scala\|.*\.sbt')
+SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
 
 # Don't delete intermediary files we touch under .make,
 # which are markers for things we have done.
@@ -45,7 +45,7 @@ docker-push-all: \
 
 docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
 docker-build/client: .make/docker-build/universal/client
-docker-build/execution-engine: .make/docker-build/execution-engine
+docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -60,7 +60,15 @@ docker-push/%: docker-build/%
 
 cargo-package-all: \
 	.make/cargo-package/execution-engine/common \
-	.make/cargo-native-packager/execution-engine/comm
+	cargo-native-packager/execution-engine/comm
+
+# Drone is already running commands in the `builderenv`, no need to delegate.
+cargo-native-packager/%:
+	if [ -z "${DRONE_BRANCH}" ]; then \
+		$(MAKE) .make/cargo-docker-packager/$* ; \
+	else \
+		$(MAKE) .make/cargo-native-packager/$* ; \
+	fi
 
 # We need to publish the libraries the contracts are supposed to use.
 cargo-publish-all: \
@@ -82,12 +90,12 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	# Copy the 3rd party dependencies to a separate directory so if they don't change we can push faster.
 	mkdir -p $(STAGE)/.docker/layers/3rd
 	find $(STAGE)/lib \
-	    -type f -not -iregex ".*/io\.casperlabs\..*jar" \
+	    -type f -not -wholename "*/io.casperlabs.*.jar" \
 	    -exec cp {} $(STAGE)/.docker/layers/3rd \;
 	# Copy our own code.
 	mkdir -p $(STAGE)/.docker/layers/1st
 	find $(STAGE)/lib \
-	    -type f -iregex ".*/io\.casperlabs\..*jar" \
+	    -type f -wholename "*/io.casperlabs.*.jar" \
 	    -exec cp {} $(STAGE)/.docker/layers/1st \;
 	# Use the Dockerfile to build the project. Has to be within the context.
 	cp $(PROJECT)/Dockerfile $(STAGE)/Dockerfile
@@ -99,9 +107,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		execution-engine/target/release/casperlabs-engine-grpc-server
+		.make/cargo-docker-packager/execution-engine/comm
 	# Just copy the executable to the container.
-	$(eval RELEASE = execution-engine/target/release)
+	$(eval RELEASE = execution-engine/target/debian)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
 	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:latest $(RELEASE)
 	rm -rf $(RELEASE)/Dockerfile
@@ -114,6 +122,12 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker build -f docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:test docker
 	mkdir -p $(dir $@) && touch $@
 
+# Make a test version for the execution engine as well just so we can swith version easily.
+.make/docker-build/test/execution-engine: \
+		.make/docker-build/execution-engine
+	docker tag $(DOCKER_USERNAME)/execution-engine:latest $(DOCKER_USERNAME)/execution-engine:test
+	mkdir -p $(dir $@) && touch $@
+
 
 # Refresh Scala build artifacts if source was changed.
 .make/sbt-stage/%: $(SCALA_SRC)
@@ -121,8 +135,6 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	sbt -mem 5000 $(PROJECT)/universal:stage
 	mkdir -p $(dir $@) && touch $@
 
-test:
-	@echo $(RUST_SRC)
 
 # Re-package cargo if any Rust source code changes (to account for transitive dependencies).
 .make/cargo-package/%: \
@@ -145,29 +157,48 @@ test:
 	fi
 	mkdir -p $(dir $@) && touch $@
 
-# Create .deb, .rpm and .tgz
-.make/cargo-native-packager/%: \
-		$(RUST_SRC) \
-		.make/install/protoc \
-		.make/install/cargo-native-packager
-	@# target/release/rpmbuild/RPMs/<arch>
+
+# Create .rpm and .deb packages natively. `cargo rpm build` doesn't work on MacOS.
+.make/cargo-native-packager/%: $(RUST_SRC) .make/install/protoc .make/install/cargo-native-packager
+	@# .rpm will be at execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-0.1.0-1.x86_64.rpm
 	@# `rpm init` will create a .rpm/<MODULE>.spec file where we can define dependencies if we have to,
 	@# but the build won't refresh it if it already exists, and trying to init again results in an error,
 	@# and if we `--force` it, then it will add a second set of entries to the Cargo.toml file which will make it invalid.
-	#FIXME: The following says "error: No such file or directory (os error 2)""
-	#cd $* && ([ -d .rpm ] || cargo rpm init) && cargo rpm build -v
-
-	@# Writes to for example CasperLabs/execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
-	@# This command has a --no-build paramter which could speed it up. If RPM already built it, we can add it.
-	cd $* && cargo deb
-
-	#FIXME: Figure out what --input and --output should be
-	#cd $* && cargo-tarball --help
-
+	cd $* && ([ -d .rpm ] || cargo rpm init) && cargo rpm build
+	@# .deb will be at execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
+	@# This command has a --no-build parameter which can speed it up becuase the RPM compilation seems compatible.
+	cd $* && cargo deb --no-build
 	mkdir -p $(dir $@) && touch $@
 
+# Create .rpm and .deb packages with Docker so people using Macs can build images locally too.
+# We may need to have .rpm and .deb specific builder images that work with what we want to host it in
+# as we seem to get some missing dependencies using the builderenv which didn't happend with Ubuntu.
+.make/cargo-docker-packager/%: $(RUST_SRC)
+	@# .rpm will be at execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-0.1.0-1.x86_64.rpm
+	@# .deb will be at execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
+	@# Need to use the same user ID as outside if we want to continue working with these files,
+	@# otherwise the user running in docker will own them.
+	@# Going to ignore errors with the rpm build here so that we can get the .deb package for docker.
+	$(eval USERID = $(shell id -u))
+	docker pull $(DOCKER_USERNAME)/buildenv:latest
+	docker run -it --rm --entrypoint sh \
+		-v ${PWD}:/CasperLabs \
+		$(DOCKER_USERNAME)/buildenv:latest \
+		-c "\
+		apt-get install sudo ; \
+		useradd -u $(USERID) -m builder ; \
+		cp -r /root/. /home/builder/ ; \
+		chown -R builder /home/builder ; \
+		sudo -u builder bash -c '\
+			export HOME=/home/builder ; \
+			export PATH=/home/builder/.cargo/bin:$$PATH ; \
+			cd /CasperLabs/$* ; \
+			([ -d .rpm ] || cargo rpm init) && cargo rpm build ; \
+			cargo deb \
+		'"
+	mkdir -p $(dir $@) && touch $@
 
-# Build the execution engine executable.
+# Build the execution engine executable. NOTE: This is not portable.
 execution-engine/target/release/casperlabs-engine-grpc-server: \
 		$(RUST_SRC) \
 		.make/install/protoc
@@ -194,7 +225,6 @@ execution-engine/target/release/casperlabs-engine-grpc-server: \
 	cargo install cargo-deb || exit 0
 	cargo install cargo-tarball || exit 0
 	mkdir -p $(dir $@) && touch $@
-
 
 .make/install/rpm:
 	if [ -z "$$(which rpmbuild)" ]; then

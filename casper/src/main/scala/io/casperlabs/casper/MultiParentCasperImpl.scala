@@ -47,8 +47,7 @@ final case class CasperState(
       Map.empty[BlockHash, Seq[ipc.TransformEntry]]
 )
 
-class MultiParentCasperImpl[
-    F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
+class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -332,20 +331,27 @@ class MultiParentCasperImpl[
       (preStateHash, processedDeploys) = processedHash
       deployLookup                     = processedDeploys.zip(r).toMap
       commutingEffects                 = ExecEngineUtil.findCommutingEffects(processedDeploys)
-      deploysForBlock = commutingEffects.map(eff => {
-        val deploy = deployLookup(ipc.DeployResult(ipc.DeployResult.Result.Effects(eff)))
-        protocol.ProcessedDeploy(
-          Some(deploy),
-          eff.cost,
-          false
-        )
-      })
+      deploysForBlock = commutingEffects.map {
+        case (eff, cost) => {
+          val deploy = deployLookup(
+            ipc.DeployResult(
+              cost,
+              ipc.DeployResult.Result.Effects(eff)
+            )
+          )
+          protocol.ProcessedDeploy(
+            Some(deploy),
+            cost,
+            false
+          )
+        }
+      }
       maxBlockNumber = p.foldLeft(-1L) {
         case (acc, b) => math.max(acc, blockNumber(b))
       }
       //TODO: compute bonds properly
       newBonds              = ProtoUtil.bonds(p.head)
-      transforms            = commutingEffects.flatMap(_.transformMap)
+      transforms            = commutingEffects.unzip._1.flatMap(_.transformMap)
       possiblePostStateHash <- ExecutionEngineService[F].commit(preStateHash, transforms)
       postStateHash <- possiblePostStateHash match {
                         case Left(ex)    => Sync[F].raiseError(ex)
@@ -401,11 +407,7 @@ class MultiParentCasperImpl[
 
   implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
 
-  /*
-   * TODO: Pass in blockDag. We should only call _blockDag.get at one location.
-   * This would require returning the updated block DAG with the block status.
-   *
-   * We want to catch equivocations only after we confirm that the block completing
+  /* We want to catch equivocations only after we confirm that the block completing
    * the equivocation is otherwise valid.
    */
   private def attemptAdd(
@@ -423,7 +425,7 @@ class MultiParentCasperImpl[
         Sync[F].delay(
           s.transforms
             .getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry])
-      )
+        )
       processedHash <- ExecEngineUtil
                         .effectsForBlock(b, dag, f)
                         .recoverWith {
@@ -587,7 +589,7 @@ class MultiParentCasperImpl[
         s.copy(
           dependencyDag = DoublyLinkedDagOperations
             .add[BlockHash](s.dependencyDag, hash, childBlock.blockHash)
-      )
+        )
     )
 
   private def requestMissingDependency(hash: BlockHash) =

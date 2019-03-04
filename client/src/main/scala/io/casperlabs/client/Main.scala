@@ -1,6 +1,11 @@
 package io.casperlabs.client
-import cats.effect.Sync
+
+import cats.effect.{Sync, Timer}
+import cats.syntax.functor._
+import cats.syntax.flatMap._
 import io.casperlabs.client.configuration._
+import io.casperlabs.ipc
+import io.casperlabs.casper.protocol
 import io.casperlabs.shared.{Log, LogSource, UncaughtExceptionLogger}
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -21,18 +26,21 @@ object Main {
       for {
         maybeConf <- Task(Configuration.parse(args))
         _ <- maybeConf.fold(Log[Task].error("Couldn't parse CLI args into configuration")) { conf =>
-              implicit val deployService = new GrpcDeployService(
+              val deployService = new GrpcDeployService(
                 conf.host,
                 conf.port
               )
-              program(conf)(Sync[Task], deployService).doOnFinish(_ => Task(deployService.close()))
+              program(conf)(Sync[Task], deployService, Timer[Task])
+                .doOnFinish(_ => Task(deployService.close()))
             }
       } yield ()
 
     exec.runSyncUnsafe()
   }
 
-  def program[F[_]: Sync: DeployService](configuration: Configuration): F[Unit] =
+  def program[F[_]: Sync: DeployService: Timer](
+      configuration: Configuration
+  ): F[Unit] =
     configuration match {
       case ShowBlock(_, _, hash)   => DeployRuntime.showBlock(hash)
       case ShowBlocks(_, _, depth) => DeployRuntime.showBlocks(depth)
@@ -40,7 +48,12 @@ object Main {
         DeployRuntime.deployFileProgram(from, gasLimit, gasPrice, nonce, sessionCode, paymentCode)
       case _: Propose =>
         DeployRuntime.propose()
-      case VisualizeDag(_, _, depth, showJustificationLines) =>
-        DeployRuntime.visualizeDag(depth, showJustificationLines)
+      case VisualizeDag(_, _, depth, showJustificationLines, out, streaming) =>
+        DeployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
+
+      case Query(_, _, hash, keyType, keyValue, path) =>
+        DeployRuntime.gracefulExit(
+          DeployService[F].queryState(protocol.QueryStateRequest(hash, keyType, keyValue, path))
+        )
     }
 }

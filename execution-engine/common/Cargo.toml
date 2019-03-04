@@ -1,6 +1,6 @@
 [package]
 name = "casperlabs-contract-ffi"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Michael Birch <birchmd@casperlabs.io>"]
 edition = "2018"
 description = "Library for developing CasperLabs smart contracts."
@@ -12,4 +12,4 @@ std = []
 
 [dependencies]
 byteorder = { version = "1", default-features = false }
-wee_alloc = "0.4.2"
+wee_alloc = "0.4.3"

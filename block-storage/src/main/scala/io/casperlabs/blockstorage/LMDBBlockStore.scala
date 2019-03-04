@@ -8,7 +8,6 @@ import cats.effect.{ExitCase, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
-import io.casperlabs.blockstorage.StorageError.StorageIOErr
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
@@ -64,7 +63,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
     withTxn(env.txnRead())(f)
 
-  def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]] =
+  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     withWriteTxn { txn =>
       val (blockHash, blockMessage) = f
       blocks.put(
@@ -72,7 +71,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
         blockHash.toDirectByteBuffer,
         blockMessage.toByteString.toDirectByteBuffer
       )
-    } map Right.apply
+    }
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     withReadTxn { txn =>
@@ -95,13 +94,13 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
       }
     }
 
-  def checkpoint(): F[StorageIOErr[Unit]] =
-    ().asRight[StorageIOError].pure[F]
+  def checkpoint(): F[Unit] =
+    ().pure[F]
 
-  def clear(): F[StorageIOErr[Unit]] = withWriteTxn(blocks.drop) map Right.apply
+  def clear(): F[Unit] = withWriteTxn(blocks.drop)
 
-  override def close(): F[StorageIOErr[Unit]] =
-    syncF.delay { Right(env.close()) }
+  override def close(): F[Unit] =
+    syncF.delay { env.close() }
 }
 
 object LMDBBlockStore {

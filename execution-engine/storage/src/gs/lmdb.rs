@@ -1,7 +1,7 @@
 use common::bytesrepr::{deserialize, ToBytes};
 use common::key::Key;
 use common::value::Value;
-use error::{RootNotFound, Error};
+use error::{Error, RootNotFound};
 use gs::{DbReader, TrackingCopy};
 use history::*;
 use rkv::store::single::SingleStore;
@@ -47,8 +47,8 @@ impl LmdbGs {
                         let value = deserialize(bytes)?;
                         Ok(value)
                     }
-                    //If we always store values as Blobs this case will never come
-                    //up. TODO: Use other variants of rkb::Value (e.g. I64, Str)?
+                    // If we always store values as Blobs this case will never come
+                    // up. TODO: Use other variants of rkb::Value (e.g. I64, Str)?
                     Some(_) => Err(Error::RkvError(String::from(
                         "Value stored in LMDB was != Blob",
                     ))),
@@ -68,13 +68,13 @@ impl LmdbGs {
 
                 let result: Result<(), Error> = kvs.try_fold((), |_, (k, v)| {
                     let bytes = v.to_bytes();
-                    let _ = self.store.put(&mut w, k, &rkv::Value::Blob(&bytes))?;
+                    self.store.put(&mut w, k, &rkv::Value::Blob(&bytes))?;
                     Ok(())
                 });
 
                 match result {
                     Ok(_) => {
-                        let _ = w.commit()?;
+                        w.commit()?;
                         Ok(())
                     }
                     e @ Err(_) => {
@@ -93,10 +93,10 @@ impl LmdbGs {
 
 impl DbReader for LmdbGs {
     fn get(&self, k: &Key) -> Result<Value, Error> {
-        //TODO: The `Reader` should really be static for the DbReader instance,
-        //i.e. just by creating a DbReader for LMDB it should create a `Reader`
-        //to go with it. This would prevent the database from being modified while
-        //another process was expecing to be able to read it.
+        // TODO: The `Reader` should really be static for the DbReader instance,
+        // i.e. just by creating a DbReader for LMDB it should create a `Reader`
+        // to go with it. This would prevent the database from being modified while
+        // another process was expecting to be able to read it.
         self.read(k)
     }
 }
@@ -129,8 +129,8 @@ mod tests {
 
     #[test]
     fn lmdb_new() {
-        //Note: the directory created by `temp_dir`
-        //is automatically deleted when it goes out of scope.
+        // Note: the directory created by `temp_dir`
+        // is automatically deleted when it goes out of scope.
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path();
         let lmdb = LmdbGs::new(&path);

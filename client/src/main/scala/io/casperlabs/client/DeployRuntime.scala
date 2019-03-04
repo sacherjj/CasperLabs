@@ -2,13 +2,18 @@ package io.casperlabs.client
 import java.io.File
 import java.nio.file.Files
 
+import cats.data.EitherT
 import cats.{Apply, Monad}
-import cats.effect.Sync
+import cats.effect.{Sync, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.protocol.{BlockQuery, BlocksQuery, DeployData, VisualizeDagQuery}
+import io.casperlabs.client.configuration.Streaming
 
 import scala.util.Try
+import scala.concurrent.duration._
+import scala.language.higherKinds
 
 object DeployRuntime {
 
@@ -25,11 +30,76 @@ object DeployRuntime {
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
 
-  def visualizeDag[F[_]: Monad: Sync: DeployService](
+  def visualizeDag[F[_]: Sync: DeployService: Timer](
       depth: Int,
-      showJustificationLines: Boolean
+      showJustificationLines: Boolean,
+      maybeOut: Option[String],
+      maybeStreaming: Option[Streaming]
   ): F[Unit] =
-    gracefulExit(DeployService[F].visualizeDag(VisualizeDagQuery(depth, showJustificationLines)))
+    gracefulExit({
+      def askDag =
+        DeployService[F]
+          .visualizeDag(VisualizeDagQuery(depth, showJustificationLines))
+          .rethrow
+
+      val useJdkRenderer = Sync[F].delay(Graphviz.useEngine(new GraphvizJdkEngine))
+
+      def writeToFile(out: String, format: Format, dag: String) =
+        Sync[F].delay(
+          Graphviz
+            .fromString(dag)
+            .render(format)
+            .toFile(new File(s"$out"))
+        ) >> Sync[F].delay(println(s"Wrote $out"))
+
+      val sleep = Timer[F].sleep(5.seconds)
+
+      def subscribe(
+          out: String,
+          streaming: Streaming,
+          format: Format,
+          index: Int = 0,
+          prevDag: Option[String] = None
+      ): F[Unit] =
+        askDag >>= {
+          dag =>
+            if (prevDag.contains(dag)) {
+              sleep >>
+                subscribe(out, streaming, format, index, prevDag)
+            } else {
+              val f = format.name().toLowerCase
+              val filename = streaming match {
+                case Streaming.Single => out
+                case Streaming.Multiple =>
+                  val extension = "." + out.split('.').last
+                  out.stripSuffix(extension) + s"_$index" + extension
+              }
+              writeToFile(filename, format, dag) >>
+                sleep >>
+                subscribe(out, streaming, format, index + 1, dag.some)
+            }
+        }
+
+      def parseFormat(out: String) = Sync[F].delay(Format.valueOf(out.split('.').last.toUpperCase))
+
+      val eff = (maybeOut, maybeStreaming) match {
+        case (None, None) =>
+          askDag
+        case (Some(out), None) =>
+          useJdkRenderer >>
+            askDag >>= { dag =>
+            parseFormat(out) >>=
+              (format => writeToFile(out, format, dag).map(_ => "Success"))
+          }
+        case (Some(out), Some(streaming)) =>
+          useJdkRenderer >>
+            parseFormat(out) >>=
+            (subscribe(out, streaming, _).map(_ => "Success"))
+        case (None, Some(_)) =>
+          Sync[F].raiseError[String](new Throwable("--out must be specified if --stream"))
+      }
+      eff.attempt
+    })
 
   def deployFileProgram[F[_]: Sync: DeployService](
       from: String,
@@ -67,7 +137,7 @@ object DeployRuntime {
     )
   }
 
-  private def gracefulExit[F[_]: Sync](program: F[Either[Throwable, String]]): F[Unit] =
+  private[client] def gracefulExit[F[_]: Sync](program: F[Either[Throwable, String]]): F[Unit] =
     for {
       result <- Sync[F].attempt(program)
       _ <- result.joinRight match {
@@ -76,7 +146,11 @@ object DeployRuntime {
                 System.err.println(processError(ex).getMessage)
                 System.exit(1)
               }
-            case Right(msg) => Sync[F].delay(println(msg))
+            case Right(msg) =>
+              Sync[F].delay {
+                println(msg)
+                System.exit(0)
+              }
           }
     } yield ()
 

@@ -1,6 +1,6 @@
 package io.casperlabs.node.api
 
-import cats.Id
+import cats.{ApplicativeError, Id}
 import cats.data.StateT
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
@@ -17,14 +17,66 @@ import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.Taskable
 import io.casperlabs.graphz.{GraphSerializer, Graphz, StringSerializer}
+import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
+import com.google.protobuf.ByteString
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.smartcontracts.ExecutionEngineService
+
 private[api] object DeployGrpcService {
-  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable](
+  def toKey[F[_]](keyType: String, keyValue: String)(
+      implicit appErr: ApplicativeError[F, Throwable]
+  ): F[ipc.Key] = {
+    val keyBytes = ByteString.copyFrom(Base16.decode(keyValue))
+    keyType.toLowerCase match {
+      case "hash" =>
+        keyBytes.size match {
+          case 32 => ipc.Key(ipc.Key.KeyInstance.Hash(ipc.KeyHash(keyBytes))).pure[F]
+          case n =>
+            appErr.raiseError(
+              new Exception(
+                s"Key of type hash must have exactly 32 bytes, $n =/= 32 provided."
+              )
+            )
+        }
+      case "uref" =>
+        keyBytes.size match {
+          case 32 => ipc.Key(ipc.Key.KeyInstance.Uref(ipc.KeyURef(keyBytes))).pure[F]
+          case n =>
+            appErr.raiseError(
+              new Exception(
+                s"Key of type uref must have exactly 32 bytes, $n =/= 32 provided."
+              )
+            )
+        }
+      case "address" =>
+        keyBytes.size match {
+          case 20 => ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes))).pure[F]
+          case n =>
+            appErr.raiseError(
+              new Exception(
+                s"Key of type address must have exactly 20 bytes, $n =/= 20 provided."
+              )
+            )
+        }
+      case _ =>
+        appErr.raiseError(
+          new Exception(
+            s"Key variant $keyType not valid. Must be one of hash, uref, address."
+          )
+        )
+    }
+  }
+
+  def splitPath(path: String): Seq[String] =
+    path.split("/").filter(_.nonEmpty)
+
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable: ExecutionEngineService](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
@@ -41,6 +93,21 @@ private[api] object DeployGrpcService {
 
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
         defer(BlockAPI.showBlock[F](q))
+
+      override def queryState(q: QueryStateRequest): Task[QueryStateResponse] = q match {
+        case QueryStateRequest(blockHash, keyType, keyValue, path) =>
+          val f = for {
+            key <- toKey[F](keyType, keyValue)
+            bq  <- BlockAPI.showBlock[F](BlockQuery(blockHash))
+            state <- Concurrent[F]
+                      .fromOption(bq.blockInfo, new Exception(s"Block $blockHash not found!"))
+                      .map(_.tupleSpaceHash)
+            stateHash        = ByteString.copyFrom(Base16.decode(state))
+            possibleResponse <- ExecutionEngineService[F].query(stateHash, key, splitPath(path))
+            response         <- Concurrent[F].fromEither(possibleResponse).map(_.toProtoString)
+          } yield QueryStateResponse(response)
+          defer(f)
+      }
 
       // TODO handle potentiall errors (at least by returning proper response)
       override def visualizeDag(q: VisualizeDagQuery): Task[VisualizeBlocksResponse] = {

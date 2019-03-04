@@ -109,7 +109,7 @@ __Note__ Successfully building from source requires attending to all of the prer
 
   Java:
   ```console
-  dev@dev:~$ brew cask install java10
+  dev@dev:~$ brew cask install java
 
   dev@dev:~$ java -version
   ```
@@ -123,7 +123,7 @@ __Note__ Successfully building from source requires attending to all of the prer
   ```console
   dev@dev:~$ brew install rustup
   ...
-
+  
   dev@dev:~$rustup-init
   Welcome to Rust!
 
@@ -150,7 +150,9 @@ __Note__ Successfully building from source requires attending to all of the prer
   environment variable. Next time you log in this will be done automatically.
 
   To configure your current shell run source $HOME/.cargo/env
+  ```
 
+  ```console
   dev@dev:~$ source $HOME/.cargo/env
 
   dev@dev:~$ rustup update
@@ -341,6 +343,28 @@ After deploying contract it's not yet executed (its effects are not applied to t
 ```
 
 For the demo purposes we have to propose contracts separately because second contract (`hello-name/call`) won't see the changes (in practice it won't be able to call `hello-name/define` contract) from the previous deploy.
+
+### Visualising DAG state
+In the root of the node, run:
+
+```
+./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 vdag --depth 10 --out test.png
+```
+The output will be saved into the `test.png` file.
+
+It's also possible subscribing to DAG changes and view them in the realtime
+
+```
+./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 vdag --depth 10 --out test.png --stream=multiple-outputs
+```
+
+The outputs will be saved into the files `test_0.png`, `test_1.png`, etc.
+
+For more information and possible output image formats check the help message 
+```
+./client/target/universal/stage/bin/casperlabs-client vdag --help
+```
+
 
 ## Information for developers
 Assure prerequisites shown above are met.

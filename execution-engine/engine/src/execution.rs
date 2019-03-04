@@ -71,12 +71,12 @@ impl From<BytesReprError> for Error {
 impl HostError for Error {}
 
 pub struct RuntimeContext<'a> {
-    //Enables look up of specific uref based on human-readable name
+    // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
-    //Used to check uref is known before use (prevents forging urefs)
+    // Used to check uref is known before use (prevents forging urefs)
     known_urefs: HashSet<Key>,
     account: &'a Account,
-    //Key pointing to the entity we are currently running
+    // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
 }
@@ -139,17 +139,18 @@ pub struct Runtime<'a, R: DbReader> {
     host_buf: Vec<u8>,
     fn_store_id: u32,
     gas_counter: u64,
-    gas_limit: &'a u64,
+    gas_limit: u64,
     context: RuntimeContext<'a>,
     rng: ChaChaRng,
 }
 
 impl<'a, R: DbReader> Runtime<'a, R> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         memory: MemoryRef,
         state: &'a mut TrackingCopy<R>,
         module: Module,
-        gas_limit: &'a u64,
+        gas_limit: u64,
         account_addr: [u8; 20],
         nonce: u64,
         timestamp: u64,
@@ -180,7 +181,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         match prev.checked_add(amount) {
             // gas charge overflow protection
             None => false,
-            Some(val) if val > *self.gas_limit => false,
+            Some(val) if val > self.gas_limit => false,
             Some(val) => {
                 self.gas_counter = val;
                 true
@@ -214,7 +215,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         let bytes = self
             .memory
             .get(ptr, size as usize)
-            .map_err(|e| Error::Interpreter(e))?;
+            .map_err(Error::Interpreter)?;
         deserialize(&bytes).map_err(|e| Error::BytesRepr(e).into())
     }
 
@@ -223,7 +224,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
             .export_section_mut()
             .unwrap()
             .entries_mut()
-            .into_iter()
+            .iter_mut()
             .find(|e| e.field() == name)
             .unwrap()
             .field_mut();
@@ -242,10 +243,10 @@ impl<'a, R: DbReader> Runtime<'a, R> {
 
         if has_name {
             let mut module = self.module.clone();
-            //We only want the function exported under `name` to be callable;
+            // We only want the function exported under `name` to be callable;
             //`optimize` removes all code that is not reachable from the exports
-            //listed in the second argument.
-            let _ = pwasm_utils::optimize(&mut module, vec![&name]).unwrap();
+            // listed in the second argument.
+            pwasm_utils::optimize(&mut module, vec![&name]).unwrap();
             Self::rename_export_to_call(&mut module, name);
 
             parity_wasm::serialize(module).map_err(|e| Error::ParityWasm(e).into())
@@ -266,9 +267,9 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         Ok((key, value))
     }
 
-    //Load the i-th argument invoked as part of a `sub_call` into
-    //the runtime buffer so that a subsequent `get_arg` can return it
-    //to the caller.
+    // Load the i-th argument invoked as part of a `sub_call` into
+    // the runtime buffer so that a subsequent `get_arg` can return it
+    // to the caller.
     pub fn load_arg(&mut self, i: usize) -> Result<usize, Trap> {
         if i < self.args.len() {
             self.host_buf = self.args[i].clone();
@@ -278,14 +279,14 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         }
     }
 
-    //Load the uref known by the given name into the wasm memory
+    // Load the uref known by the given name into the wasm memory
     pub fn get_uref(&mut self, name_ptr: u32, name_size: u32, dest_ptr: u32) -> Result<(), Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let uref = self
             .context
             .uref_lookup
             .get(&name)
-            .ok_or(Error::URefNotFound(name))?;
+            .ok_or_else(|| Error::URefNotFound(name))?;
         let uref_bytes = uref.to_bytes();
 
         self.memory
@@ -323,9 +324,9 @@ impl<'a, R: DbReader> Runtime<'a, R> {
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    //Return a some bytes from the memory and terminate the current `sub_call`.
-    //Note that the return type is `Trap`, indicating that this function will
-    //always kill the current wasm instance.
+    // Return a some bytes from the memory and terminate the current `sub_call`.
+    // Note that the return type is `Trap`, indicating that this function will
+    // always kill the current wasm instance.
     pub fn ret(
         &mut self,
         value_ptr: u32,
@@ -336,7 +337,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         let mem_get = self
             .memory
             .get(value_ptr, value_size)
-            .map_err(|e| Error::Interpreter(e))
+            .map_err(Error::Interpreter)
             .and_then(|x| {
                 let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
                 let urefs = self.context.deserialize_keys(&urefs_bytes)?;
@@ -344,9 +345,9 @@ impl<'a, R: DbReader> Runtime<'a, R> {
             });
         match mem_get {
             Ok((buf, urefs)) => {
-                //Set the result field in the runtime and return
-                //the proper element of the `Error` enum indicating
-                //that the reason for exiting the module was a call to ret.
+                // Set the result field in the runtime and return
+                // the proper element of the `Error` enum indicating
+                // that the reason for exiting the module was a call to ret.
                 self.result = buf;
                 Error::Ret(urefs).into()
             }
@@ -489,81 +490,81 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
     ) -> Result<Option<RuntimeValue>, Trap> {
         match index {
             READ_FUNC_INDEX => {
-                //args(0) = pointer to key in wasm memory
-                //args(1) = size of key in wasm memory
+                // args(0) = pointer to key in wasm memory
+                // args(1) = size of key in wasm memory
                 let (key_ptr, key_size) = Args::parse(args)?;
                 let size = self.read_value(key_ptr, key_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             SER_FN_FUNC_INDEX => {
-                //args(0) = pointer to name in wasm memory
-                //args(1) = size of name in wasm memory
+                // args(0) = pointer to name in wasm memory
+                // args(1) = size of name in wasm memory
                 let (name_ptr, name_size) = Args::parse(args)?;
                 let size = self.serialize_function(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             WRITE_FUNC_INDEX => {
-                //args(0) = pointer to key in wasm memory
-                //args(1) = size of key
-                //args(2) = pointer to value
-                //args(3) = size of value
+                // args(0) = pointer to key in wasm memory
+                // args(1) = size of key
+                // args(2) = pointer to value
+                // args(3) = size of value
                 let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
-                let _ = self.write(key_ptr, key_size, value_ptr, value_size)?;
+                self.write(key_ptr, key_size, value_ptr, value_size)?;
                 Ok(None)
             }
 
             ADD_FUNC_INDEX => {
-                //args(0) = pointer to key in wasm memory
-                //args(1) = size of key
-                //args(2) = pointer to value
-                //args(3) = size of value
+                // args(0) = pointer to key in wasm memory
+                // args(1) = size of key
+                // args(2) = pointer to value
+                // args(3) = size of value
                 let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
-                let _ = self.add(key_ptr, key_size, value_ptr, value_size)?;
+                self.add(key_ptr, key_size, value_ptr, value_size)?;
                 Ok(None)
             }
 
             NEW_FUNC_INDEX => {
-                //args(0) = pointer to key destination in wasm memory
+                // args(0) = pointer to key destination in wasm memory
                 let key_ptr = Args::parse(args)?;
-                let _ = self.new_uref(key_ptr)?;
+                self.new_uref(key_ptr)?;
                 Ok(None)
             }
 
             GET_READ_FUNC_INDEX => {
-                //args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
-                let _ = self.set_mem_from_buf(dest_ptr)?;
+                self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             GET_FN_FUNC_INDEX => {
-                //args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
-                let _ = self.set_mem_from_buf(dest_ptr)?;
+                self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             LOAD_ARG_FUNC_INDEX => {
-                //args(0) = index of host runtime arg to load
+                // args(0) = index of host runtime arg to load
                 let i = Args::parse(args)?;
                 let size = self.load_arg(i)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             GET_ARG_FUNC_INDEX => {
-                //args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
-                let _ = self.set_mem_from_buf(dest_ptr)?;
+                self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             RET_FUNC_INDEX => {
-                //args(0) = pointer to value
-                //args(1) = size of value
-                //args(2) = pointer to extra returned urefs
-                //args(3) = size of extra urefs
+                // args(0) = pointer to value
+                // args(1) = size of value
+                // args(2) = pointer to extra returned urefs
+                // args(3) = size of extra urefs
                 let (value_ptr, value_size, extra_urefs_ptr, extra_urefs_size) = Args::parse(args)?;
 
                 Err(self.ret(
@@ -575,12 +576,12 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
             }
 
             CALL_CONTRACT_FUNC_INDEX => {
-                //args(0) = pointer to key where contract is at in global state
-                //args(1) = size of key
-                //args(2) = pointer to function arguments in wasm memory
-                //args(3) = size of arguments
-                //args(4) = pointer to extra supplied urefs
-                //args(5) = size of extra urefs
+                // args(0) = pointer to key where contract is at in global state
+                // args(1) = size of key
+                // args(2) = pointer to function arguments in wasm memory
+                // args(3) = size of arguments
+                // args(4) = pointer to extra supplied urefs
+                // args(5) = size of extra urefs
                 let (key_ptr, key_size, args_ptr, args_size, extra_urefs_ptr, extra_urefs_size) =
                     Args::parse(args)?;
 
@@ -596,47 +597,47 @@ impl<'a, R: DbReader> Externals for Runtime<'a, R> {
             }
 
             GET_CALL_RESULT_FUNC_INDEX => {
-                //args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in wasm memory
                 let dest_ptr = Args::parse(args)?;
-                let _ = self.set_mem_from_buf(dest_ptr)?;
+                self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             GET_UREF_FUNC_INDEX => {
-                //args(0) = pointer to uref name in wasm memory
-                //args(1) = size of uref name
-                //args(2) = pointer to destination in wasm memory
+                // args(0) = pointer to uref name in wasm memory
+                // args(1) = size of uref name
+                // args(2) = pointer to destination in wasm memory
                 let (name_ptr, name_size, dest_ptr) = Args::parse(args)?;
-                let _ = self.get_uref(name_ptr, name_size, dest_ptr)?;
+                self.get_uref(name_ptr, name_size, dest_ptr)?;
                 Ok(None)
             }
 
             HAS_UREF_FUNC_INDEX => {
-                //args(0) = pointer to uref name in wasm memory
-                //args(1) = size of uref name
+                // args(0) = pointer to uref name in wasm memory
+                // args(1) = size of uref name
                 let (name_ptr, name_size) = Args::parse(args)?;
                 let result = self.has_uref(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(result)))
             }
 
             ADD_UREF_FUNC_INDEX => {
-                //args(0) = pointer to uref name in wasm memory
-                //args(1) = size of uref name
-                //args(2) = pointer to destination in wasm memory
+                // args(0) = pointer to uref name in wasm memory
+                // args(1) = size of uref name
+                // args(2) = pointer to destination in wasm memory
                 let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
-                let _ = self.add_uref(name_ptr, name_size, key_ptr, key_size)?;
+                self.add_uref(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(None)
             }
 
             FUNCTION_ADDRESS_FUNC_INDEX => {
                 let dest_ptr = Args::parse(args)?;
-                let _ = self.function_address(dest_ptr)?;
+                self.function_address(dest_ptr)?;
                 Ok(None)
             }
 
             GAS_FUNC_INDEX => {
                 let gas: u32 = Args::parse(args)?;
-                let _ = self.gas(gas as u64)?;
+                self.gas(u64::from(gas))?;
                 Ok(None)
             }
 
@@ -650,12 +651,18 @@ pub struct RuntimeModuleImportResolver {
     max_memory: u32,
 }
 
-impl RuntimeModuleImportResolver {
-    pub fn new() -> RuntimeModuleImportResolver {
+impl Default for RuntimeModuleImportResolver {
+    fn default() -> Self {
         RuntimeModuleImportResolver {
             memory: RefCell::new(None),
             max_memory: 256,
         }
+    }
+}
+
+impl RuntimeModuleImportResolver {
+    pub fn new() -> RuntimeModuleImportResolver {
+        Default::default()
     }
 
     pub fn mem_ref(&self) -> Result<MemoryRef, Error> {
@@ -764,7 +771,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                     "Module requested too much memory".to_owned(),
                 ))
             } else {
-                //Note: each "page" is 64 KiB
+                // Note: each "page" is 64 KiB
                 let mem = MemoryInstance::alloc(
                     Pages(descriptor.initial() as usize),
                     descriptor.maximum().map(|x| Pages(x as usize)),
@@ -797,21 +804,12 @@ fn sub_call<R: DbReader>(
     refs: &mut BTreeMap<String, Key>,
     key: Key,
     current_runtime: &mut Runtime<R>,
-    //Unforgable references passed across the call boundary from caller to callee
+    // Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
 ) -> Result<Vec<u8>, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
-    let known_urefs = {
-        let mut tmp: HashSet<Key> = HashSet::new();
-        for r in refs.values() {
-            tmp.insert(*r);
-        }
-        for r in extra_urefs.into_iter() {
-            tmp.insert(r);
-        }
-        tmp
-    };
+    let known_urefs = refs.values().cloned().chain(extra_urefs).collect();
     let mut runtime = Runtime {
         args,
         memory,
@@ -837,14 +835,12 @@ fn sub_call<R: DbReader>(
         Ok(_) => Ok(runtime.result),
         Err(e) => {
             if let Some(host_error) = e.as_host_error() {
-                //If the "error" was in fact a trap caused by calling `ret` then
-                //this is normal operation and we should return the value captured
-                //in the Runtime result field.
+                // If the "error" was in fact a trap caused by calling `ret` then
+                // this is normal operation and we should return the value captured
+                // in the Runtime result field.
                 if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
                     //insert extra urefs returned from call
-                    for r in ret_urefs.iter() {
-                        current_runtime.context.known_urefs.insert(*r);
-                    }
+                    current_runtime.context.known_urefs.extend(ret_urefs);
                     return Ok(runtime.result);
                 }
             }
@@ -864,44 +860,113 @@ fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng 
     ChaChaRng::from_seed(seed)
 }
 
-pub fn exec<R: DbReader>(
-    parity_module: Module,
-    account_addr: [u8; 20],
-    timestamp: u64,
-    nonce: u64,
-    gas_limit: &u64,
-    tc: &mut TrackingCopy<R>,
-) -> Result<ExecutionEffect, Error> {
-    let (instance, memory) = instance_and_memory(parity_module.clone())?;
-    let acct_key = Key::Account(account_addr);
-    let value = tc.get(&acct_key)?;
-    let account = value.as_account();
-    let mut known_urefs: HashSet<Key> = HashSet::new();
-    for r in account.urefs_lookup().values() {
-        known_urefs.insert(*r);
-    }
-    let rng = create_rng(&account_addr, timestamp, nonce);
-    let mut runtime = Runtime {
-        args: Vec::new(),
-        memory,
-        state: tc,
-        module: parity_module,
-        result: Vec::new(),
-        host_buf: Vec::new(),
-        fn_store_id: 0,
-        gas_counter: 0,
-        gas_limit: gas_limit,
-        context: RuntimeContext {
-            uref_lookup: &mut account.urefs_lookup().clone(),
-            known_urefs,
-            account: &account,
-            base_key: acct_key,
-        },
-        rng: rng,
+#[macro_export]
+macro_rules! on_fail_charge {
+    ($fn:expr, $cost:expr) => {
+        match $fn {
+            Ok(res) => res,
+            Err(er) => {
+                let lambda = || $cost;
+                return (Err(er.into()), lambda());
+            }
+        }
     };
-    let _ = instance.invoke_export("call", &[], &mut runtime)?;
+}
 
-    println!("Gas count: {:?}", runtime.gas_counter);
-    println!("Gas left: {:?}", gas_limit - runtime.gas_counter);
-    Ok(runtime.effect())
+pub trait Executor {
+    fn exec<R: DbReader>(
+        &self,
+        parity_module: Module,
+        account_addr: [u8; 20],
+        timestamp: u64,
+        nonce: u64,
+        gas_limit: u64,
+        tc: &mut TrackingCopy<R>,
+    ) -> (Result<ExecutionEffect, Error>, u64);
+}
+
+pub struct WasmiExecutor;
+
+impl Executor for WasmiExecutor {
+    fn exec<R: DbReader>(
+        &self,
+        parity_module: Module,
+        account_addr: [u8; 20],
+        timestamp: u64,
+        nonce: u64,
+        gas_limit: u64,
+        tc: &mut TrackingCopy<R>,
+    ) -> (Result<ExecutionEffect, Error>, u64) {
+        let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
+        let acct_key = Key::Account(account_addr);
+        let value = on_fail_charge!(tc.get(&acct_key), 0);
+        let account = value.as_account();
+        let mut uref_lookup_local = account.urefs_lookup().clone();
+        let known_urefs: HashSet<Key> = uref_lookup_local.values().cloned().collect();
+        let rng = create_rng(&account_addr, timestamp, nonce);
+        let mut runtime = Runtime {
+            args: Vec::new(),
+            memory,
+            state: tc,
+            module: parity_module,
+            result: Vec::new(),
+            host_buf: Vec::new(),
+            fn_store_id: 0,
+            gas_counter: 0,
+            gas_limit,
+            context: RuntimeContext {
+                uref_lookup: &mut uref_lookup_local,
+                known_urefs,
+                account: &account,
+                base_key: acct_key,
+            },
+            rng,
+        };
+        let _ = on_fail_charge!(
+            instance.invoke_export("call", &[], &mut runtime),
+            runtime.gas_counter
+        );
+
+        (Ok(runtime.effect()), runtime.gas_counter)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // Need intermediate method b/c when on_fail_charge macro is inlined
+    // for the error case it will call return which would exit the test.
+    fn indirect_fn(r: Result<u32, String>, f: u32) -> (Result<u32, String>, u32) {
+        let res = on_fail_charge!(r, f);
+        (Ok(res), 1111) // 1111 for easy discrimination
+    }
+
+    #[test]
+    fn on_fail_charge_ok() {
+        let counter = 0;
+        let ok: Result<u32, String> = Ok(10);
+        let res: (Result<u32, String>, u32) = indirect_fn(ok, counter);
+        assert!(res.0.is_ok());
+        assert_eq!(res.0.ok().unwrap(), 10);
+        assert_eq!(res.1, 1111);
+        assert_eq!(counter, 0); // test that lambda was not executed for the Ok-case
+    }
+
+    #[test]
+    fn on_fail_charge_laziness() {
+        // Need this indirection b/c otherwise compiler complains
+        // about borrowing counter.counter after it was moved in the `fail` call.
+        struct Counter {
+            pub counter: u32,
+        };
+        impl Counter {
+            fn fail(&mut self) -> Result<u32, String> {
+                self.counter += 10;
+                Err("Err".to_owned())
+            }
+        }
+        let mut counter = Counter { counter: 1 };
+        let res: (Result<u32, String>, u32) = indirect_fn(counter.fail(), counter.counter);
+        assert!(res.0.is_err());
+        assert_eq!(res.1, 11); // test that counter value was fetched lazily
+    }
 }

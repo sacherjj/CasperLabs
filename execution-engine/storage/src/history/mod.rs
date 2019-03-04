@@ -1,10 +1,10 @@
 use TreeRootHash;
 
-use error::{RootNotFound, Error as StorageError};
-use gs::{DbReader, TrackingCopy};
-use transform::Transform;
 use common::key::Key;
+use error::{Error as StorageError, RootNotFound};
+use gs::{DbReader, TrackingCopy};
 use std::collections::HashMap;
+use transform::Transform;
 
 pub enum CommitResult {
     Success(TreeRootHash),

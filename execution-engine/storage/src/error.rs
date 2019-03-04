@@ -3,8 +3,8 @@ use std::fmt;
 use common::bytesrepr;
 use common::key::Key;
 use rkv::error::StoreError;
-use wasmi::HostError;
 use transform::TypeMismatch;
+use wasmi::HostError;
 
 use TreeRootHash;
 
@@ -15,8 +15,8 @@ pub struct RootNotFound(pub TreeRootHash);
 pub enum Error {
     KeyNotFound(Key),
     TransformTypeMismatch(TypeMismatch),
-    //mateusz.gorski: I think that these errors should revert any changes made
-    //to Global State and most probably kill the node.
+    // mateusz.gorski: I think that these errors should revert any changes made
+    // to Global State and most probably kill the node.
     RkvError(String), //TODO: capture error better
     BytesRepr(bytesrepr::Error),
 }
