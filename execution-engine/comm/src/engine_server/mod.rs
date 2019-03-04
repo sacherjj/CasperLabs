@@ -86,28 +86,22 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
-            let deploy_result: Result<DeployResult, RootNotFound> =
-                deploy_result_to_ipc(self.run_deploy(
-                    module_bytes,
-                    address,
-                    timestamp,
-                    nonce,
-                    prestate_hash,
-                    gas_limit,
-                    &executor,
-                    &preprocessor,
-                ));
             // We want to treat RootNotFound error differently b/c it should short-circuit
             // the execution of ALL deploys within the block. This is because all of them share
             // the same prestate and all of them would fail.
             // try_for_each will continue only when Ok(_) is returned.
-            match deploy_result {
-                Ok(result) => {
-                    deploy_results.push(result);
-                    Ok(())
-                }
-                Err(root_missing_err) => Err(root_missing_err),
-            }
+            let result = deploy_result_to_ipc(self.run_deploy(
+                module_bytes,
+                address,
+                timestamp,
+                nonce,
+                prestate_hash,
+                gas_limit,
+                &executor,
+                &preprocessor,
+            ))?;
+            deploy_results.push(result);
+            Ok(())
         });
         let mut exec_response = ipc::ExecResponse::new();
         match fold_result {
