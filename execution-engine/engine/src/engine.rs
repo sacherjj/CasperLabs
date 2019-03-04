@@ -1,5 +1,5 @@
 use common::key::Key;
-use execution::{exec, Error as ExecutionError};
+use execution::{Error as ExecutionError, Executor};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -8,7 +8,7 @@ use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
 use storage::history::*;
 use storage::transform::Transform;
 use vm::wasm_costs::WasmCosts;
-use wasm_prep::process;
+use wasm_prep::Preprocessor;
 
 pub struct EngineState<R, H>
 where
@@ -22,9 +22,25 @@ where
     _phantom: PhantomData<R>,
 }
 
-pub enum ExecutionResult {
-    Success(ExecutionEffect),
-    Failure(Error),
+pub struct ExecutionResult {
+    pub result: Result<ExecutionEffect, Error>,
+    pub cost: u64,
+}
+
+impl ExecutionResult {
+    pub fn failure(error: Error, cost: u64) -> ExecutionResult {
+        ExecutionResult {
+            result: Err(error),
+            cost,
+        }
+    }
+
+    pub fn success(effect: ExecutionEffect, cost: u64) -> ExecutionResult {
+        ExecutionResult {
+            result: Ok(effect),
+            cost,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -72,12 +88,12 @@ impl From<ExecutionError> for Error {
     }
 }
 
-impl<G, R> EngineState<R, G>
+impl<H, R> EngineState<R, H>
 where
-    G: History<R>,
+    H: History<R>,
     R: DbReader,
 {
-    pub fn new(state: G) -> EngineState<R, G> {
+    pub fn new(state: H) -> EngineState<R, H> {
         EngineState {
             state: Mutex::new(state),
             wasm_costs: WasmCosts::new(),
@@ -89,9 +105,10 @@ where
         self.state.lock().checkout(hash)
     }
 
-    //TODO run_deploy should perform preprocessing and validation of the deploy.
-    //It should validate the signatures, ocaps etc.
-    pub fn run_deploy(
+    // TODO run_deploy should perform preprocessing and validation of the deploy.
+    // It should validate the signatures, ocaps etc.
+    #[allow(clippy::too_many_arguments)]
+    pub fn run_deploy<P: Preprocessor, E: Executor>(
         &self,
         module_bytes: &[u8],
         address: [u8; 20],
@@ -99,15 +116,17 @@ where
         nonce: u64,
         prestate_hash: [u8; 32],
         gas_limit: u64,
+        executor: &E,
+        preprocessor: &P,
     ) -> Result<ExecutionResult, RootNotFound> {
-        match process(module_bytes, &self.wasm_costs) {
-            Err(error) => Ok(ExecutionResult::Failure(error.into())),
+        match preprocessor.preprocess(module_bytes, &self.wasm_costs) {
+            Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
             Ok(module) => {
                 let mut tc: storage::gs::TrackingCopy<R> =
                     self.state.lock().checkout(prestate_hash)?;
-                match exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
-                    Ok(ee) => Ok(ExecutionResult::Success(ee)),
-                    Err(error) => Ok(ExecutionResult::Failure(error.into())),
+                match executor.exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
+                    (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
+                    (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),
                 }
             }
         }

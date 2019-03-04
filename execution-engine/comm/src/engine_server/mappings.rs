@@ -219,7 +219,7 @@ pub fn ipc_to_key(ipc_key: &super::ipc::Key) -> common::key::Key {
         arr.clone_from_slice(&ipc_key.get_uref().uref);
         common::key::Key::URef(arr)
     } else {
-        //TODO make this Result::Err instead of panic
+        // TODO make this Result::Err instead of panic
         panic!(format!(
             "ipc Key couldn't be parsed to any Key: {:?}",
             ipc_key

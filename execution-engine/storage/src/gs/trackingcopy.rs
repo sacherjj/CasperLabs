@@ -202,12 +202,12 @@ mod tests {
         let k = Key::Hash([0u8; 32]);
 
         let zero = Ok(Value::Int32(0));
-        //first read
+        // first read
         let value = tc.read(k);
         assert_eq!(value, zero);
 
-        //second read; should use cache instead
-        //of going back to the DB
+        // second read; should use cache instead
+        // of going back to the DB
         let value = tc.read(k);
         let db_value = db_ref.count.get();
         assert_eq!(value, zero);
@@ -222,11 +222,11 @@ mod tests {
 
         let zero = Ok(Value::Int32(0));
         let value = tc.read(k);
-        //value read correctly
+        // value read correctly
         assert_eq!(value, zero);
-        //read does not cause any transform
+        // read does not cause any transform
         assert_eq!(tc.fns.is_empty(), true);
-        //read does produce an op
+        // read does produce an op
         assert_eq!(tc.ops.len(), 1);
         assert_eq!(tc.ops.get(&k), Some(&Op::Read));
     }
@@ -241,20 +241,20 @@ mod tests {
         let one = Value::Int32(1);
         let two = Value::Int32(2);
 
-        //writing should work
+        // writing should work
         let write = tc.write(k, one.clone());
         assert_matches!(write, Ok(_));
-        //write does not need to query the DB
+        // write does not need to query the DB
         let db_value = db_ref.count.get();
         assert_eq!(db_value, 0);
-        //write creates a Transfrom
+        // write creates a Transfrom
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::Write(one)));
-        //write creates an Op
+        // write creates an Op
         assert_eq!(tc.ops.len(), 1);
         assert_eq!(tc.ops.get(&k), Some(&Op::Write));
 
-        //writing again should update the values
+        // writing again should update the values
         let write = tc.write(k, two.clone());
         assert_matches!(write, Ok(_));
         let db_value = db_ref.count.get();
@@ -273,18 +273,18 @@ mod tests {
 
         let three = Value::Int32(3);
 
-        //adding should work
+        // adding should work
         let add = tc.add(k, three.clone());
         assert_matches!(add, Ok(_));
 
-        //add creates a Transfrom
+        // add creates a Transfrom
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::AddInt32(3)));
-        //add creates an Op
+        // add creates an Op
         assert_eq!(tc.ops.len(), 1);
         assert_eq!(tc.ops.get(&k), Some(&Op::Add));
 
-        //adding again should update the values
+        // adding again should update the values
         let add = tc.add(k, three);
         assert_matches!(add, Ok(_));
         assert_eq!(tc.fns.len(), 1);
@@ -295,7 +295,7 @@ mod tests {
 
     #[test]
     fn tracking_copy_add_named_key() {
-        //DB now holds an `Account` so that we can test adding a `NamedKey`
+        // DB now holds an `Account` so that we can test adding a `NamedKey`
         let account = common::value::Account::new([0u8; 32], 0u64, BTreeMap::new());
         let db = CountingDb::new_init(Value::Acct(account));
         let mut tc = TrackingCopy::new(db);
@@ -306,29 +306,29 @@ mod tests {
         let named_key = Value::NamedKey("test".to_string(), u1);
         let other_named_key = Value::NamedKey("test2".to_string(), u2);
         let mut map: BTreeMap<String, Key> = BTreeMap::new();
-        //This is written as an `if`, but it is clear from the line
-        //where `named_key` is defined that it will always match
+        // This is written as an `if`, but it is clear from the line
+        // where `named_key` is defined that it will always match
         if let Value::NamedKey(name, key) = named_key.clone() {
             map.insert(name, key);
         }
 
-        //adding the wrong type should fail
+        // adding the wrong type should fail
         let failed_add = tc.add(k, Value::Int32(3));
         assert_matches!(failed_add, Err(Error::TransformTypeMismatch { .. }));
         assert_eq!(tc.ops.is_empty(), true);
         assert_eq!(tc.fns.is_empty(), true);
 
-        //adding correct type works
+        // adding correct type works
         let add = tc.add(k, named_key);
         assert_matches!(add, Ok(_));
-        //add creates a Transfrom
+        // add creates a Transfrom
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::AddKeys(map.clone())));
-        //add creates an Op
+        // add creates an Op
         assert_eq!(tc.ops.len(), 1);
         assert_eq!(tc.ops.get(&k), Some(&Op::Add));
 
-        //adding again updates the values
+        // adding again updates the values
         if let Value::NamedKey(name, key) = other_named_key.clone() {
             map.insert(name, key);
         }
@@ -346,7 +346,7 @@ mod tests {
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
-        //reading then writing should update the op
+        // reading then writing should update the op
         let value = Value::Int32(3);
         let _ = tc.read(k);
         let _ = tc.write(k, value.clone());
@@ -362,14 +362,14 @@ mod tests {
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
-        //reading then adding should update the op
+        // reading then adding should update the op
         let value = Value::Int32(3);
         let _ = tc.read(k);
         let _ = tc.add(k, value);
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::AddInt32(3)));
         assert_eq!(tc.ops.len(), 1);
-        //this Op is correct because Read+Add = Write
+        // this Op is correct because Read+Add = Write
         assert_eq!(tc.ops.get(&k), Some(&Op::Write));
     }
 
@@ -379,7 +379,7 @@ mod tests {
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
-        //adding then writing should update the op
+        // adding then writing should update the op
         let value = Value::Int32(3);
         let write_value = Value::Int32(7);
         let _ = tc.add(k, value);

@@ -122,6 +122,7 @@ dependencies = [
  "protobuf 2.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "protoc-rust-grpc 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "storage 0.1.0",
+ "wasm-prep 0.1.0",
 ]
 
 [[package]]

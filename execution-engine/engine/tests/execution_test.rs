@@ -171,18 +171,18 @@ fn valid_uref() {
     let mut memory = env.memory_manager();
     let mut runtime = env.runtime(addr, timestamp, nonce);
 
-    //create a valid uref in wasm memory via new_uref
+    // create a valid uref in wasm memory via new_uref
     let uref = memory
         .new_uref(&mut runtime)
         .expect("call to new_uref should succeed");
 
-    //write arbitrary value to wasm memory to allow call to write
+    // write arbitrary value to wasm memory to allow call to write
     let value = memory
         .write(value::Value::Int32(42))
         .expect("writing value to wasm memory should succeed");
 
-    //Use uref as the key to perform an action on the global state.
-    //This should succeed because the uref is valid.
+    // Use uref as the key to perform an action on the global state.
+    // This should succeed because the uref is valid.
     let _ = gs_write(&mut runtime, uref, value).expect("writing using valid uref should succeed");
 }
 
@@ -197,18 +197,18 @@ fn forged_uref() {
     let mut memory = env.memory_manager();
     let mut runtime = env.runtime(addr, timestamp, nonce);
 
-    //create a forged uref
+    // create a forged uref
     let uref = memory
         .write(Key::URef([231u8; 32]))
         .expect("writing key to wasm memory should succeed");
 
-    //write arbitrary value to wasm memory to allow call to write
+    // write arbitrary value to wasm memory to allow call to write
     let value = memory
         .write(value::Value::Int32(42))
         .expect("writing value to wasm memory should succeed");
 
-    //Use uref as the key to perform an action on the global state.
-    //This should fail because the uref was forged
+    // Use uref as the key to perform an action on the global state.
+    // This should fail because the uref was forged
     let trap = gs_write(&mut runtime, uref, value).expect_err("use of forged key should fail");
 
     assert_eq!(format!("{:?}", trap).contains("ForgedReference"), true);

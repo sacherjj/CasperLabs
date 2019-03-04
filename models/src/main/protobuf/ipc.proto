@@ -188,7 +188,6 @@ message TransformEntry {
 message ExecutionEffect {
     repeated OpEntry op_map = 1;
     repeated TransformEntry transform_map = 2;
-    int32 cost = 3;
 }
  
 //TODO: be more specific about errors
@@ -199,7 +198,6 @@ message DeployError {
     }
 }
 message OutOfGasError {}
-message InvalidSignature {}
 message WasmError {
     string message = 1;
 }
@@ -209,6 +207,7 @@ message DeployResult {
         ExecutionEffect effects = 1;
         DeployError error = 2;
     }
+    uint64 cost = 3;
 }
 
 //TODO: be more specific about errors

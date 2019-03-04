@@ -2,6 +2,7 @@ extern crate clap;
 extern crate common;
 extern crate execution_engine;
 extern crate storage;
+extern crate wasm_prep;
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -10,7 +11,9 @@ use std::iter::Iterator;
 use clap::{App, Arg};
 
 use execution_engine::engine::{EngineState, ExecutionResult};
+use execution_engine::execution::WasmiExecutor;
 use storage::gs::inmem::InMemHist;
+use wasm_prep::WasmiPreprocessor;
 
 #[derive(Debug)]
 struct Task {
@@ -86,12 +89,15 @@ fn main() {
     let timestamp: u64 = 100_000;
     let nonce: u64 = 1;
 
-    //let path = std::path::Path::new("./tmp/");
-    //TODO: Better error handling?
+    // let path = std::path::Path::new("./tmp/");
+    // TODO: Better error handling?
     //    let gs = LmdbGs::new(&path).unwrap();
     let init_state = storage::gs::mocked_account(account_addr);
     let gs = InMemHist::new_initialized(&state_hash, init_state);
     let engine_state = EngineState::new(gs);
+
+    let wasmi_executor = WasmiExecutor;
+    let wasmi_preprocessor = WasmiPreprocessor;
 
     for wasm_bytes in wasm_files.iter() {
         println!("Pre state hash: {:?}", state_hash);
@@ -102,13 +108,19 @@ fn main() {
             nonce,
             state_hash,
             gas_limit,
+            &wasmi_executor,
+            &wasmi_preprocessor,
         );
         match result {
             Err(storage::error::RootNotFound(hash)) => println!(
                 "Result for file {}: root {:?} not found.",
                 wasm_bytes.path, hash
             ),
-            Ok(ExecutionResult::Success(effects)) => {
+            Ok(ExecutionResult {
+                result: Ok(effects),
+                cost,
+            }) => {
+                println!("Cost of executing the contract was: {}", cost);
                 match engine_state.apply_effect(state_hash, effects.1) {
                     Err(storage::error::RootNotFound(hash)) => println!(
                         "Result for file {}: root {:?} not found.",
@@ -126,7 +138,11 @@ fn main() {
                     }
                 }
             }
-            Ok(ExecutionResult::Failure(error)) => {
+            Ok(ExecutionResult {
+                result: Err(error),
+                cost,
+            }) => {
+                println!("Gas used during execution: {:?}", cost);
                 println!("Result for file {}: {:?}", wasm_bytes.path, error)
             }
         }
