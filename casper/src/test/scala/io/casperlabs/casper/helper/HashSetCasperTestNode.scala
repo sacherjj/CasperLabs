@@ -121,7 +121,7 @@ class HashSetCasperTestNode[F[_]](
     // pre-population removed from internals of Casper
     blockStore.put(genesis.blockHash, genesis) *>
       blockDagStorage.getRepresentation.flatMap { dag =>
-        ExecEngineUtil
+        BlockGenerator
           .validateBlockCheckpoint[F](
             genesis,
             dag,

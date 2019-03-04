@@ -8,7 +8,12 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, HashSetCasperTestNode}
+import io.casperlabs.casper.helper.{
+  BlockDagStorageFixture,
+  BlockGenerator,
+  BlockUtil,
+  HashSetCasperTestNode
+}
 import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.rholang.RuntimeManager
@@ -171,7 +176,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             _       <- BlockStore[Task].put(genesis.blockHash, genesis)
             dag     <- blockDagStorage.getRepresentation
             // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
-            maybePostGenesisStateHash <- ExecEngineUtil
+            maybePostGenesisStateHash <- BlockGenerator
                                           .validateBlockCheckpoint[Task](
                                             genesis,
                                             dag,

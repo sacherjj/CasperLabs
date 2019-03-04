@@ -7,7 +7,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, BlockUtil}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
@@ -595,7 +595,7 @@ class ValidateTest
       for {
         dag <- blockDagStorage.getRepresentation
         // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
-        _ <- ExecEngineUtil
+        _ <- BlockGenerator
               .validateBlockCheckpoint[Task](
                 genesis,
                 dag,
