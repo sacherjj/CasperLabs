@@ -140,7 +140,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  //Todo bring back this test once we implement the blocking function in RuntimeManager
   it should "be able to create a chain of blocks from different deploys" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node._
