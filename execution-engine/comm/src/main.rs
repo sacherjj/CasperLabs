@@ -33,7 +33,7 @@ fn main() {
 
     println!("Server is listening on socket: {}", socket);
 
-    // loop idefinitely
+    // loop indefinitely
     loop {
         std::thread::park();
     }
