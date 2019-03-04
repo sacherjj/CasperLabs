@@ -159,7 +159,6 @@ lazy val models = (project in file("models"))
       magnolia,
       scalapbCompiler,
       scalacheck,
-      scalacheckShapeless,
       scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(

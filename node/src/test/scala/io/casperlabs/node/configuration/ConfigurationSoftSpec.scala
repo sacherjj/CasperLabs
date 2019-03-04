@@ -9,10 +9,10 @@ import cats.syntax.option._
 import io.casperlabs.comm.{Endpoint, NodeIdentifier, PeerNode}
 import io.casperlabs.node.configuration.ConfigurationSoft._
 import io.casperlabs.shared.StoreType
-import org.scalacheck.ScalacheckShapeless._
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import io.casperlabs.node.configuration.MagnoliaArbitrary._
 import shapeless._
 import shapeless.labelled.FieldType
 import shapeless.ops.hlist._
