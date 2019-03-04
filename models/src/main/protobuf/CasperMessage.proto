@@ -251,7 +251,7 @@ message Header {
 message ProcessedDeploy {
     Deploy deploy = 1;
     //TODO PCost previously
-    double cost = 2;
+    uint64 cost = 2;
     bool errored = 3; //true if deploy encountered a user error
 }
 

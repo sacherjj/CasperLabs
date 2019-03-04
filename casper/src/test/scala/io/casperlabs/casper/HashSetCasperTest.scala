@@ -220,7 +220,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val List(data0, data1) =
       (0 to 1)
-        .flatMap(i => ProtoUtil.sourceDeploy(dummyContract, i, Int.MaxValue).raw)
+        .flatMap(i => ProtoUtil.sourceDeploy(dummyContract, i.toLong, Long.MaxValue).raw)
         .toList
 
     for {
