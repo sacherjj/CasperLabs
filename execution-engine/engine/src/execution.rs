@@ -809,16 +809,7 @@ fn sub_call<R: DbReader>(
     extra_urefs: Vec<Key>,
 ) -> Result<Vec<u8>, Error> {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
-    let known_urefs = {
-        let mut tmp: HashSet<Key> = HashSet::new();
-        for r in refs.values() {
-            tmp.insert(*r);
-        }
-        for r in extra_urefs.into_iter() {
-            tmp.insert(r);
-        }
-        tmp
-    };
+    let known_urefs = refs.values().cloned().chain(extra_urefs).collect();
     let mut runtime = Runtime {
         args,
         memory,
@@ -848,10 +839,8 @@ fn sub_call<R: DbReader>(
                 // this is normal operation and we should return the value captured
                 // in the Runtime result field.
                 if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
-                    // insert extra urefs returned from call
-                    for r in ret_urefs.iter() {
-                        current_runtime.context.known_urefs.insert(*r);
-                    }
+                    //insert extra urefs returned from call
+                    current_runtime.context.known_urefs.extend(ret_urefs);
                     return Ok(runtime.result);
                 }
             }
