@@ -135,8 +135,8 @@ fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
-            let result =
-                engine_state.run_deploy(
+            let result = engine_state
+                .run_deploy(
                     module_bytes,
                     address,
                     timestamp,
@@ -173,12 +173,9 @@ impl Into<DeployResult> for ExecutionResult {
                 cost,
             } => {
                 let mut ipc_ee = effects.into();
-                let deploy_result = {
-                    let mut deploy_result_tmp = ipc::DeployResult::new();
-                    deploy_result_tmp.set_effects(ipc_ee);
-                    deploy_result_tmp.set_cost(cost);
-                    deploy_result_tmp
-                };
+                let mut deploy_result = ipc::DeployResult::new();
+                deploy_result.set_effects(ipc_ee);
+                deploy_result.set_cost(cost);
                 deploy_result
             }
             ExecutionResult {
@@ -220,14 +217,11 @@ impl Into<DeployResult> for ExecutionResult {
                     }
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {
-                            let mut deploy_result = {
-                                let mut deploy_result_tmp = ipc::DeployResult::new();
-                                let mut deploy_error = ipc::DeployError::new();
-                                deploy_error.set_gasErr(ipc::OutOfGasError::new());
-                                deploy_result_tmp.set_error(deploy_error);
-                                deploy_result_tmp.set_cost(cost);
-                                deploy_result_tmp
-                            };
+                            let mut deploy_result = ipc::DeployResult::new();
+                            let mut deploy_error = ipc::DeployError::new();
+                            deploy_error.set_gasErr(ipc::OutOfGasError::new());
+                            deploy_result.set_error(deploy_error);
+                            deploy_result.set_cost(cost);
                             deploy_result
                         }
                         // TODO(mateusz.gorski): Be more specific about execution errors
@@ -350,10 +344,7 @@ mod tests {
         let ipc_transforms: HashMap<Key, Transform> = {
             let mut ipc_effects = ipc_deploy_result.take_effects();
             let ipc_effects_tnfs = ipc_effects.take_transform_map().into_vec();
-            ipc_effects_tnfs
-                .iter()
-                .map(|e| e.into())
-                .collect()
+            ipc_effects_tnfs.iter().map(|e| e.into()).collect()
         };
         assert_eq!(&input_transforms, &ipc_transforms);
     }

@@ -3,9 +3,9 @@ use std::fmt;
 use common::bytesrepr;
 use common::key::Key;
 use rkv::error::StoreError;
+use std::fmt::Debug;
 use transform::TypeMismatch;
 use wasmi::HostError;
-use std::fmt::Debug;
 
 use TreeRootHash;
 
@@ -24,7 +24,7 @@ pub enum Error<K: Debug> {
 
 pub type GlobalStateError = Error<Key>;
 
-impl <A: Debug>fmt::Display for Error<A> {
+impl<A: Debug> fmt::Display for Error<A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }

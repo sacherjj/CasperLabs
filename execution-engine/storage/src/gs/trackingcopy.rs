@@ -75,7 +75,11 @@ impl<R: DbReader> TrackingCopy<R> {
         ExecutionEffect(self.ops.clone(), self.fns.clone())
     }
 
-    pub fn query(&mut self, base_key: Key, path: &[String]) -> Result<QueryResult, GlobalStateError> {
+    pub fn query(
+        &mut self,
+        base_key: Key,
+        path: &[String],
+    ) -> Result<QueryResult, GlobalStateError> {
         let base_value = self.read(base_key)?;
 
         let result = path.iter().enumerate().try_fold(
@@ -132,7 +136,7 @@ impl<R: DbReader> TrackingCopy<R> {
 mod tests {
     use common::key::Key;
     use common::value::{Account, Value};
-    use error::{GlobalStateError, Error};
+    use error::{Error, GlobalStateError};
     use gens::gens::*;
     use gs::inmem::InMemGS;
     use gs::{trackingcopy::QueryResult, DbReader, TrackingCopy};

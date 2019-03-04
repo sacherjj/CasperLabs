@@ -11,13 +11,13 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 pub struct InMemGS<K, V>(Arc<BTreeMap<K, V>>);
-impl <K,V>InMemGS<K, V>{
+impl<K, V> InMemGS<K, V> {
     pub fn new(map: BTreeMap<K, V>) -> Self {
         InMemGS(Arc::new(map))
     }
 }
 
-impl <K, V>Clone for InMemGS<K,V> {
+impl<K, V> Clone for InMemGS<K, V> {
     fn clone(&self) -> Self {
         InMemGS(Arc::clone(&self.0))
     }
@@ -36,10 +36,10 @@ impl DbReader for InMemGS<Key, Value> {
 /// store - stores a snapshot of the global state at the specific block
 /// history - stores all the snapshots of the global state
 pub struct InMemHist<K, V> {
-    history: HashMap<[u8; 32], InMemGS<K,V>>,
+    history: HashMap<[u8; 32], InMemGS<K, V>>,
 }
 
-impl <K: Ord, V> InMemHist<K, V> {
+impl<K: Ord, V> InMemHist<K, V> {
     pub fn new(empty_root_hash: &[u8; 32]) -> InMemHist<K, V> {
         InMemHist::new_initialized(empty_root_hash, BTreeMap::new())
     }
@@ -56,9 +56,10 @@ impl <K: Ord, V> InMemHist<K, V> {
     // TODO(mateusz.gorski): I know this is not efficient and we should be caching these values
     // but for the time being it should be enough.
     fn get_root_hash(state: &BTreeMap<K, V>) -> [u8; 32]
-        where
-            K: ToBytes,
-            V: ToBytes {
+    where
+        K: ToBytes,
+        V: ToBytes,
+    {
         let mut data: Vec<u8> = Vec::new();
         for (k, v) in state.iter() {
             data.extend(k.to_bytes());
@@ -73,7 +74,10 @@ impl <K: Ord, V> InMemHist<K, V> {
 }
 
 impl History<InMemGS<Key, Value>> for InMemHist<Key, Value> {
-    fn checkout(&self, prestate_hash: [u8; 32]) -> Result<TrackingCopy<InMemGS<Key, Value>>, RootNotFound> {
+    fn checkout(
+        &self,
+        prestate_hash: [u8; 32],
+    ) -> Result<TrackingCopy<InMemGS<Key, Value>>, RootNotFound> {
         match self.history.get(&prestate_hash) {
             None => Err(RootNotFound(prestate_hash)),
             Some(gs) => Ok(TrackingCopy::new(gs.clone())),

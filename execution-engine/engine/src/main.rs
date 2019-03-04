@@ -10,7 +10,7 @@ use std::iter::Iterator;
 
 use clap::{App, Arg};
 
-use execution_engine::engine::{ExecutionResult, EngineState};
+use execution_engine::engine::{EngineState, ExecutionResult};
 use execution_engine::execution::WasmiExecutor;
 use storage::gs::inmem::InMemHist;
 use wasm_prep::WasmiPreprocessor;
