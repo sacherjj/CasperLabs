@@ -96,7 +96,7 @@ impl DbReader for LmdbGs {
         // TODO: The `Reader` should really be static for the DbReader instance,
         // i.e. just by creating a DbReader for LMDB it should create a `Reader`
         // to go with it. This would prevent the database from being modified while
-        // another process was expecing to be able to read it.
+        // another process was expecting to be able to read it.
         self.read(k)
     }
 }
