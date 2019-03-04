@@ -1113,12 +1113,12 @@ object HashSetCasperTest {
       faucetCode: String => String,
       deployTimestamp: Long
   ): BlockMessage = {
-    implicit val logEff         = new LogStub[Task]()
-    val initial                 = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "casperlabs")
-    val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task]()
-    val runtimeManager          = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
-    val emptyStateHash          = casperSmartContractsApi.emptyStateHash
-    val validators              = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+    implicit val logEff                  = new LogStub[Task]()
+    val initial                          = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "casperlabs")
+    implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task]()
+    val runtimeManager                   = RuntimeManager.fromExecutionEngineService(casperSmartContractsApi)
+    val emptyStateHash                   = casperSmartContractsApi.emptyStateHash
+    val validators                       = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val genesis = Genesis
       .withContracts(
         initial,

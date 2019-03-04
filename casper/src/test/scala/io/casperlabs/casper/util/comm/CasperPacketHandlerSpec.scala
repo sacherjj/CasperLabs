@@ -8,7 +8,11 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage,
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.genesis.contracts.Faucet
-import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
+import io.casperlabs.casper.helper.{
+  BlockDagStorageTestFixture,
+  HashSetCasperTestNode,
+  NoOpsCasperEffect
+}
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
 import io.casperlabs.casper.util.TestTime
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
@@ -41,6 +45,7 @@ import org.scalatest.{Ignore, Matchers, WordSpec}
 import io.casperlabs.casper.util.TestTime
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+
 import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec with Matchers {
@@ -57,8 +62,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
     val storageSize: Long          = 1024L * 1024
 
-    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-    val runtimeManager          = RuntimeManager(casperSmartContractsApi, bonds)
+    implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task]()
+    val runtimeManager                   = RuntimeManager(casperSmartContractsApi, bonds)
 
     val bap = new BlockApproverProtocol(
       validatorId,

@@ -9,6 +9,7 @@ import io.casperlabs.casper.ValidatorIdentity
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import io.casperlabs.catscontrib.Capture
 import io.casperlabs.catscontrib.Catscontrib._
@@ -20,8 +21,10 @@ import io.casperlabs.comm.{transport, PeerNode}
 import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.InternalProcessedDeploy
 import io.casperlabs.shared._
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -45,7 +48,7 @@ class BlockApproverProtocol(
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk: ExecutionEngineService](
       peer: PeerNode,
       u: UnapprovedBlock,
       runtimeManager: RuntimeManager[F]
@@ -104,7 +107,7 @@ object BlockApproverProtocol {
   ): BlockApproval =
     getBlockApproval(candidate, validatorId)
 
-  def validateCandidate[F[_]: Concurrent: Log](
+  def validateCandidate[F[_]: Concurrent: Log: ExecutionEngineService](
       runtimeManager: RuntimeManager[F],
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
@@ -149,12 +152,19 @@ object BlockApproverProtocol {
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
-      stateHash <- EitherT(
-                    runtimeManager
-                      .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
-                  ).leftMap { case (_, status) => s"Failed status during replay: $status." }
+      checkpointsResult <- EitherT(
+                            ExecEngineUtil
+                              .computeDeploysCheckpoint(
+                                Seq(),
+                                blockDeploys.map(_.deploy),
+                                null,
+                                blockMetada => Seq.empty[TransformEntry].pure[F]
+                              )
+                              .map(_.asRight[String])
+                          )
+      (_, postStateHash, _, _) = checkpointsResult
       _ <- EitherT(
-            (stateHash == postState.postStateHash)
+            (postStateHash == postState.postStateHash)
               .either(())
               .or("Tuplespace hash mismatch.")
               .pure[F]

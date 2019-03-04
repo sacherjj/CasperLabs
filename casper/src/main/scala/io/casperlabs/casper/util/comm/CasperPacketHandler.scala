@@ -47,7 +47,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       _ <- Metrics[F].incrementCounter("blocks-received-again", 0)
     } yield ()
 
-  def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage](
+  def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ExecutionEngineService](
       conf: CasperConf,
       delay: FiniteDuration,
       executionEngineService: ExecutionEngineService[F],
@@ -177,7 +177,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     *
     * When in this state node can't handle any other message type so it will return `F[None]`
     **/
-  private[comm] class GenesisValidatorHandler[F[_]: Sync: Concurrent: ConnectionsCell: NodeDiscovery: TransportLayer: Log: Time: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage](
+  private[comm] class GenesisValidatorHandler[F[_]: Sync: Concurrent: ConnectionsCell: NodeDiscovery: TransportLayer: Log: Time: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: ExecutionEngineService](
       runtimeManager: RuntimeManager[F],
       validatorId: ValidatorIdentity,
       shardId: String,

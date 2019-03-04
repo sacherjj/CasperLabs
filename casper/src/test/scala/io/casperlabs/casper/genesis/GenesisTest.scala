@@ -8,7 +8,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.casper.helper.BlockDagStorageFixture
+import io.casperlabs.casper.helper.{BlockDagStorageFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.rholang.RuntimeManager
@@ -242,7 +242,7 @@ object GenesisTest {
   ): Task[Unit] = {
     val storagePath             = mkStoragePath
     val genesisPath             = mkGenesisPath
-    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+    val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task]()
     val log                     = new LogStub[Task]
     val time                    = new LogicalTime[Task]
 

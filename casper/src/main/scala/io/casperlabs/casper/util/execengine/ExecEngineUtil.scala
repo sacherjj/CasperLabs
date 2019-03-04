@@ -9,6 +9,7 @@ import io.casperlabs.casper.{protocol, BlockException, PrettyPrinter}
 import io.casperlabs.casper.protocol.{BlockMessage, Bond, ProcessedDeploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.{DeployResult => _, _}
@@ -18,7 +19,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 object ExecEngineUtil {
   type StateHash = ByteString
 
-  private def deploy2deploy(d: protocol.Deploy): Deploy =
+  def deploy2deploy(d: protocol.Deploy): Deploy =
     d.raw.fold(Deploy()) {
       case protocol.DeployData(
           addr,
@@ -129,7 +130,8 @@ object ExecEngineUtil {
           // state hash in block does not match computed hash -- invalid!
           // return no state hash, do not update the state hash set
           Log[F].warn(
-            s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
+            s"Tuplespace hash ${PrettyPrinter.buildString(tsHash.getOrElse(ByteString.EMPTY))} does not match computed hash ${PrettyPrinter
+              .buildString(computedStateHash)}."
           ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
         }
     }
@@ -279,7 +281,8 @@ object ExecEngineUtil {
       }
     } yield blockHashesToApply
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Log: ExecutionEngineService](
+  private[casper] def computeBlockCheckpointFromDeploys[
+      F[_]: Sync: BlockStore: Log: ExecutionEngineService](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],

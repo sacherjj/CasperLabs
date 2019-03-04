@@ -8,14 +8,19 @@ import cats.implicits._
 import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.genesis.contracts._
+import io.casperlabs.casper.protocol
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import io.casperlabs.casper.util.Sorting
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.ipc
+import io.casperlabs.ipc.DeployResult
 import io.casperlabs.shared.{Log, LogSource, Time}
+import io.casperlabs.smartcontracts.ExecutionEngineService
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -30,10 +35,10 @@ object Genesis {
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String
-  ): List[DeployData] =
+  ): List[Deploy] =
     List()
 
-  def withContracts[F[_]: Concurrent: Log](
+  def withContracts[F[_]: Concurrent: Log: ExecutionEngineService](
       initial: BlockMessage,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
@@ -49,28 +54,45 @@ object Genesis {
       runtimeManager
     )
 
-  def withContracts[F[_]: Concurrent: Log](
-      blessedTerms: List[DeployData],
+  def withContracts[F[_]: Concurrent: Log: ExecutionEngineService](
+      blessedTerms: List[Deploy],
       initial: BlockMessage,
       startHash: StateHash,
       runtimeManager: RuntimeManager[F]
   ): F[BlockMessage] =
-    runtimeManager
-      .computeState(startHash, Seq.empty)
-      .map {
-        case (stateHash, processedDeploys) =>
-          val stateWithContracts = for {
-            bd <- initial.body
-            ps <- bd.state
-          } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(stateHash)
-          val version   = initial.header.get.version
-          val timestamp = initial.header.get.timestamp
-          val blockDeploys =
-            processedDeploys.filterNot(_.result.isFailed).map(ProcessedDeployUtil.fromInternal)
-          val body   = Body(state = stateWithContracts, deploys = blockDeploys)
-          val header = blockHeader(body, List.empty[ByteString], version, timestamp)
-          unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
-      }
+    for {
+      possibleResult <- ExecutionEngineService[F]
+                         .exec(startHash, blessedTerms.map(ExecEngineUtil.deploy2deploy))
+      processedDeploys <- possibleResult match {
+                           case Left(ex)             => Seq[DeployResult]().pure[F]
+                           case Right(deployResults) => deployResults.pure[F]
+                         }
+      deployLookup     = processedDeploys.zip(blessedTerms).toMap
+      commutingEffects = ExecEngineUtil.findCommutingEffects(processedDeploys)
+      deploysForBlock = commutingEffects.map(eff => {
+        val deploy = deployLookup(ipc.DeployResult(ipc.DeployResult.Result.Effects(eff)))
+        protocol.ProcessedDeploy(
+          Some(deploy),
+          eff.cost,
+          false
+        )
+      })
+      transforms            = commutingEffects.flatMap(_.transformMap)
+      possiblePostStateHash <- ExecutionEngineService[F].commit(startHash, transforms)
+      postStateHash <- possiblePostStateHash match {
+                        case Left(ex)    => Sync[F].raiseError(ex)
+                        case Right(hash) => hash.pure[F]
+                      }
+      stateWithContracts = for {
+        bd <- initial.body
+        ps <- bd.state
+      } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(postStateHash)
+      version       = initial.header.get.version
+      timestamp     = initial.header.get.timestamp
+      body          = Body(state = stateWithContracts, deploys = deploysForBlock)
+      header        = blockHeader(body, List.empty[ByteString], version, timestamp)
+      unsignedBlock = unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+    } yield unsignedBlock
 
   def withoutContracts(
       bonds: Map[Array[Byte], Long],
@@ -97,7 +119,7 @@ object Genesis {
   }
 
   //TODO: Decide on version number and shard identifier
-  def apply[F[_]: Concurrent: Log: Time](
+  def apply[F[_]: Concurrent: Log: Time: ExecutionEngineService](
       walletsPath: Path,
       minimumBond: Long,
       maximumBond: Long,
