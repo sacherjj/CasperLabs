@@ -912,10 +912,8 @@ impl Executor for WasmiExecutor {
         let acct_key = Key::Account(account_addr);
         let value = on_fail_charge!(tc.get(&acct_key), 0);
         let account = value.as_account();
-        let mut known_urefs: HashSet<Key> = HashSet::new();
-        for r in account.urefs_lookup().values() {
-            known_urefs.insert(*r);
-        }
+        let mut uref_lookup_local = account.urefs_lookup().clone();
+        let known_urefs: HashSet<Key> = uref_lookup_local.values().cloned().collect();
         let rng = create_rng(&account_addr, timestamp, nonce);
         let mut runtime = Runtime {
             args: Vec::new(),
@@ -928,7 +926,7 @@ impl Executor for WasmiExecutor {
             gas_counter: 0,
             gas_limit,
             context: RuntimeContext {
-                uref_lookup: &mut account.urefs_lookup().clone(),
+                uref_lookup: &mut uref_lookup_local,
                 known_urefs,
                 account: &account,
                 base_key: acct_key,
