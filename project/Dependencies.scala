@@ -51,7 +51,6 @@ object Dependencies {
   val scalaUri               = "io.lemonlabs"               %% "scala-uri"                      % "1.1.5"
   val scalacheck             = "org.scalacheck"             %% "scalacheck"                     % "1.14.0" % "test"
   val scalacheckNoTest       = "org.scalacheck"             %% "scalacheck"                     % "1.14.0"
-  val scalacheckShapeless    = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13"      % "1.1.8" % "test"
   val graphvizJava           = "guru.nidi"                  %  "graphviz-java"                  % "0.8.3"
   val scalactic              = "org.scalactic"              %% "scalactic"                      % "3.0.5" % "test"
   val scalapbCompiler        = "com.thesamet.scalapb"       %% "compilerplugin"                 % scalapb.compiler.Version.scalapbVersion
@@ -72,7 +71,6 @@ object Dependencies {
   val scodecCats             = "org.scodec"                 %% "scodec-cats"                    % "0.8.0"
   val scodecBits             = "org.scodec"                 %% "scodec-bits"                    % "1.1.7"
   val shapeless              = "com.chuusai"                %% "shapeless"                      % "2.3.3"
-  val shapelessScalaCheck    = "com.github.alexarchambault" %% "scalacheck-shapeless_1.14"      % "1.2.0"
   val magnolia               = "com.propensive"             %% "magnolia"                       % "0.10.0"
   val weupnp                 = "org.bitlet"                 % "weupnp"                          % "0.1.4"
   // see https://jitpack.io/#rchain/secp256k1-java
@@ -101,7 +99,7 @@ object Dependencies {
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
-  private val testing = Seq(scalactic, scalatest, scalacheck, shapelessScalaCheck)
+  private val testing = Seq(scalactic, scalatest, scalacheck)
 
   private val logging = Seq(scalaLogging, logbackClassic, janino)
 
