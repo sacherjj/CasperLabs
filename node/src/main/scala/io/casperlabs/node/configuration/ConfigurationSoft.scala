@@ -46,7 +46,6 @@ private[configuration] object ConfigurationSoft {
       defaultTimeout: Option[Int],
       bootstrap: Option[PeerNode],
       standalone: Option[Boolean],
-      mapSize: Option[Long],
       storeType: Option[StoreType],
       dataDir: Option[Path],
       maxNumOfConnections: Option[Int],

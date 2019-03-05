@@ -104,7 +104,6 @@ private[configuration] object Options {
           options.run.serverDefaultTimeout,
           options.run.serverBootstrap,
           options.run.serverStandalone,
-          options.run.serverMapSize,
           options.run.serverStoreType,
           options.run.serverDataDir,
           options.run.serverMaxNumOfConnections,
@@ -267,11 +266,11 @@ private[configuration] final case class Options(
 
     @scallop
     val grpcPortExternal =
-      gen[Int]("Port used for external gRPC API.")
+      gen[Int]("Port used for external gRPC API, e.g. deployments.")
 
     @scallop
     val grpcHost =
-      gen[String]("Hostname or IP of node on which gRPC service is running.")
+      gen[String]("Externally addressable hostname or IP of node on which gRPC service is running.")
 
     @scallop
     val serverMaxMessageSize =
@@ -288,11 +287,11 @@ private[configuration] final case class Options(
 
     @scallop
     val grpcPortExternal =
-      gen[Int]("Port used for external gRPC API.")
+      gen[Int]("Port used for external gRPC API, e.g. deployments.")
 
     @scallop
     val grpcHost =
-      gen[String]("Hostname or IP of node on which gRPC service is running.")
+      gen[String]("Externally addressable hostname or IP of node on which gRPC service is running.")
 
     @scallop
     val serverMaxMessageSize =
@@ -304,7 +303,7 @@ private[configuration] final case class Options(
 
     @scallop
     val grpcPortInternal =
-      gen[Int]("Port used for internal gRPC API.")
+      gen[Int]("Port used for internal gRPC API, e.g. diagnostics.")
 
     @scallop
     val grpcSocket =
@@ -346,11 +345,11 @@ private[configuration] final case class Options(
 
     @scallop
     val serverPort =
-      gen[Int]("Network port to use.", 'p')
+      gen[Int]("Network port to use for intra-node gRPC communication.", 'p')
 
     @scallop
     val serverHttpPort =
-      gen[Int]("HTTP port (deprecated - all API features will be ported to gRPC API).")
+      gen[Int]("HTTP port for utility services: /metrics, /version and /status.")
 
     @scallop
     val serverKademliaPort =
@@ -360,7 +359,9 @@ private[configuration] final case class Options(
 
     @scallop
     val casperNumValidators =
-      gen[Int]("Amount of validators at genesis.")
+      gen[Int](
+        "Amount of random validator keys to generate at genesis if no `bonds.txt` file is present."
+      )
 
     @scallop
     val casperBondsFile =
@@ -368,7 +369,7 @@ private[configuration] final case class Options(
         "Path to plain text file consisting of lines of the form `<pk> <stake>`, " +
           "which defines the bond amounts for each validator at genesis. " +
           "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
-          s"is the amount of Rev they have bonded (an integer). Note: this overrides the --num-validators option."
+          s"is the amount of CSPR they have bonded (an integer). Note: this overrides the --num-validators option."
       )
     @scallop
     val casperKnownValidatorsFile =
@@ -381,10 +382,10 @@ private[configuration] final case class Options(
     val casperWalletsFile =
       gen[Path](
         "Path to plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
-          "which defines the Rev wallets that exist at genesis. " +
+          "which defines the CSPR wallets that exist at genesis. " +
           "<algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1)," +
           "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
-          s"is the amount of Rev in the wallet."
+          s"is the amount of CSPR in the wallet."
       )
     @scallop
     val casperMinimumBond =
@@ -394,7 +395,7 @@ private[configuration] final case class Options(
       gen[Long]("Maximum bond accepted by the PoS contract in the genesis block.")
     @scallop
     val casperHasFaucet =
-      gen[Flag]("True if there should be a public access Rev faucet in the genesis block.")
+      gen[Flag]("True if there should be a public access CSPR faucet in the genesis block.")
 
     @scallop
     val serverBootstrap =
@@ -447,10 +448,6 @@ private[configuration] final case class Options(
       gen[Path]("Path to data directory. ")
 
     @scallop
-    val serverMapSize =
-      gen[Long]("Map size (in bytes).")
-
-    @scallop
     val serverStoreType =
       gen[StoreType](
         s"Type of Casperlabs space backing store. Valid values are: ${StoreType.values.mkString(",")}"
@@ -490,7 +487,8 @@ private[configuration] final case class Options(
     val casperValidatorPrivateKey =
       gen[String](
         "Base16 encoding of the private key to use for signing a proposed blocks. " +
-          s"It is not recommended to use in production since private key could be revealed through the process table."
+          s"It is not recommended to use in production since private key could be revealed through the process table." +
+          "Use the `validator-private-key-path` instead."
       )
 
     @scallop
