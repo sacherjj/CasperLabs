@@ -8,7 +8,7 @@ use std::error::Error;
 use std::iter::Iterator;
 use vm::wasm_costs::WasmCosts;
 
-const ALLOWED_IMPORTS: &'static [&'static str] = &[
+const ALLOWED_IMPORTS: &[&str] = &[
     "read_value",
     "get_read",
     "write",
@@ -42,18 +42,35 @@ pub enum PreprocessingError {
 
 use PreprocessingError::*;
 
-//TODO: inject gas counter, limit stack size etc
-pub fn process(module_bytes: &[u8], wasm_costs: &WasmCosts) -> Result<Module, PreprocessingError> {
-    // type annotation in closure needed
-    let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
-    let deserialized_module = deserialize_buffer(module_bytes).map_err(from_parity_err)?;
-    let mut ext_mod = externalize_mem(deserialized_module, None, MEM_PAGES);
-    remove_memory_export(&mut ext_mod)?;
-    validate_imports(&ext_mod)?;
-    let gas_mod = inject_gas_counters(ext_mod, wasm_costs)?;
-    let module = pwasm_utils::stack_height::inject_limiter(gas_mod, wasm_costs.max_stack_height)
-        .map_err(|_| StackLimiterError)?;
-    Ok(module)
+pub trait Preprocessor {
+    fn preprocess(
+        &self,
+        module_bytes: &[u8],
+        wasm_costs: &WasmCosts,
+    ) -> Result<Module, PreprocessingError>;
+}
+
+pub struct WasmiPreprocessor;
+
+impl Preprocessor for WasmiPreprocessor {
+    // TODO: inject gas counter, limit stack size etc
+    fn preprocess(
+        &self,
+        module_bytes: &[u8],
+        wasm_costs: &WasmCosts,
+    ) -> Result<Module, PreprocessingError> {
+        // type annotation in closure needed
+        let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
+        let deserialized_module = deserialize_buffer(module_bytes).map_err(from_parity_err)?;
+        let mut ext_mod = externalize_mem(deserialized_module, None, MEM_PAGES);
+        remove_memory_export(&mut ext_mod)?;
+        validate_imports(&ext_mod)?;
+        let gas_mod = inject_gas_counters(ext_mod, wasm_costs)?;
+        let module =
+            pwasm_utils::stack_height::inject_limiter(gas_mod, wasm_costs.max_stack_height)
+                .map_err(|_| StackLimiterError)?;
+        Ok(module)
+    }
 }
 
 fn gas_rules(wasm_costs: &WasmCosts) -> rules::Set {
@@ -118,9 +135,11 @@ fn validate_imports(module: &Module) -> Result<(), PreprocessingError> {
                     }
                 }
                 elements::External::Memory(m) => {
-                    let max = m.limits().maximum().ok_or(invalid_imports(
-                        "There is a limit to Wasm memory. This program does not limit memory",
-                    ))?;
+                    let max = m.limits().maximum().ok_or_else(|| {
+                        invalid_imports(
+                            "There is a limit to Wasm memory. This program does not limit memory",
+                        )
+                    })?;
                     if max > MAX_MEM_PAGES {
                         return invalid_imports_error::<bool, String>(format!(
                             "Wasm runtime has 10Mb limit (305 pages each 64KiB) on \

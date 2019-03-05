@@ -74,7 +74,7 @@ You can also [build a docker image yourself](#building-via-docker) and then run 
 
 ```console
 $ docker run -ti casperlabs/node run
-15:01:48.557 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node 0.0 (3ec3baf422f0b8055df8d6dc0414664736a392c0)
+15:01:48.557 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node (3ec3baf422f0b8055df8d6dc0414664736a392c0)
 15:01:48.564 [main] INFO  io.casperlabs.node.NodeEnvironment$ - Using data dir: /root/.casperlabs
 15:01:48.577 [main] INFO  i.c.c.t.GenerateCertificateIfAbsent - No certificate found at path /root/.casperlabs/node.certificate.pem
 15:01:48.578 [main] INFO  i.c.c.t.GenerateCertificateIfAbsent - Generating a X.509 certificate for the node
@@ -111,7 +111,7 @@ This will run Node from a package that was built in [Building from source](#buil
 
 ```console
 $ ./node/target/universal/stage/bin/casperlabs-node run -s
-15:03:55.420 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node 0.0 (3ec3baf422f0b8055df8d6dc0414664736a392c0)
+15:03:55.420 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node (3ec3baf422f0b8055df8d6dc0414664736a392c0)
 15:03:55.428 [main] INFO  io.casperlabs.node.NodeEnvironment$ - Using data dir: /home/aakoshh/.casperlabs
 15:03:55.565 [main] INFO  io.casperlabs.comm.UPnP$ - trying to open ports using UPnP....
 ```
@@ -180,7 +180,7 @@ $ ./node/target/universal/stage/bin/casperlabs-node \
      --server-bootstrap "casperlabs://bc416197520ec34e19a03507f93bbeae15f80a02@127.0.0.1?protocol=4000&discovery=40404" \
      --server-host 127.0.0.1 \
      --server-no-upnp
-17:44:12.261 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node 0.0 (3ec3baf422f0b8055df8d6dc0414664736a392c0)
+17:44:12.261 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node (3ec3baf422f0b8055df8d6dc0414664736a392c0)
 17:44:12.268 [main] INFO  io.casperlabs.node.NodeEnvironment$ - Using data dir: /home/aakoshh/.casperlabs-2
 ...
 17:44:12.843 [main] INFO  io.casperlabs.node.NodeRuntime - Starting node that will bootstrap from casperlabs://bc416197520ec34e19a03507f93bbeae15f80a02@127.0.0.1?protocol=4000&discovery=40404

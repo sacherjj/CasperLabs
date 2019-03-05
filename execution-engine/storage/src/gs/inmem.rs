@@ -4,19 +4,39 @@ use blake2::VarBlake2b;
 use common::bytesrepr::*;
 use common::key::Key;
 use common::value::Value;
-use error::{RootNotFound, Error};
+use error::{Error, RootNotFound};
 use gs::*;
 use history::*;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 pub struct InMemGS(Arc<BTreeMap<Key, Value>>);
+impl InMemGS {
+    pub fn new(map: BTreeMap<Key, Value>) -> Self {
+        InMemGS(Arc::new(map))
+    }
+}
+
+impl Clone for InMemGS {
+    fn clone(&self) -> Self {
+        InMemGS(Arc::clone(&self.0))
+    }
+}
+
+impl DbReader for InMemGS {
+    fn get(&self, k: &Key) -> Result<Value, Error> {
+        match self.0.get(k) {
+            None => Err(Error::KeyNotFound(*k)),
+            Some(v) => Ok(v.clone()),
+        }
+    }
+}
 
 /// In memory representation of the versioned global state
 /// store - stores a snapshot of the global state at the specific block
 /// history - stores all the snapshots of the global state
 pub struct InMemHist {
-    history: HashMap<[u8; 32], Arc<BTreeMap<Key, Value>>>,
+    history: HashMap<[u8; 32], InMemGS>,
 }
 
 impl InMemHist {
@@ -28,13 +48,13 @@ impl InMemHist {
         empty_root_hash: &[u8; 32],
         init_state: BTreeMap<Key, Value>,
     ) -> InMemHist {
-        let mut hist: HashMap<[u8; 32], Arc<BTreeMap<Key, Value>>> = HashMap::new();
-        hist.insert(empty_root_hash.clone(), Arc::new(init_state));
-        InMemHist { history: hist }
+        let mut history = HashMap::new();
+        history.insert(empty_root_hash.clone(), InMemGS(Arc::new(init_state)));
+        InMemHist { history }
     }
 
-    //TODO(mateusz.gorski): I know this is not efficient and we should be caching these values
-    //but for the time being it should be enough.
+    // TODO(mateusz.gorski): I know this is not efficient and we should be caching these values
+    // but for the time being it should be enough.
     fn get_root_hash(state: &BTreeMap<Key, Value>) -> [u8; 32] {
         let mut data: Vec<u8> = Vec::new();
         for (k, v) in state.iter() {
@@ -49,24 +69,11 @@ impl InMemHist {
     }
 }
 
-impl DbReader for InMemGS {
-    fn get(&self, k: &Key) -> Result<Value, Error> {
-        match self.0.get(k) {
-            None => Err(Error::KeyNotFound(*k)),
-            Some(v) => Ok(v.clone()),
-        }
-    }
-}
-
 impl History<InMemGS> for InMemHist {
     fn checkout(&self, prestate_hash: [u8; 32]) -> Result<TrackingCopy<InMemGS>, RootNotFound> {
         match self.history.get(&prestate_hash) {
             None => Err(RootNotFound(prestate_hash)),
-
-            Some(arc) => {
-                let gs = InMemGS(Arc::clone(arc));
-                Ok(TrackingCopy::new(gs))
-            }
+            Some(gs) => Ok(TrackingCopy::new(gs.clone())),
         }
     }
 
@@ -76,15 +83,15 @@ impl History<InMemGS> for InMemHist {
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, RootNotFound> {
         let mut base = {
-            let arc = self
+            let gs = self
                 .history
                 .get(&prestate_hash)
-                .ok_or(RootNotFound(prestate_hash))?;
+                .ok_or_else(|| RootNotFound(prestate_hash))?;
 
-            BTreeMap::clone(&arc)
+            BTreeMap::clone(&gs.0)
         };
 
-        let result: Result<[u8;32], Error> = effects
+        let result: Result<[u8; 32], Error> = effects
             .into_iter()
             .try_for_each(|(k, t)| {
                 let maybe_curr = base.remove(&k);
@@ -105,7 +112,7 @@ impl History<InMemGS> for InMemHist {
             })
             .and_then(|_| {
                 let hash = InMemHist::get_root_hash(&base);
-                self.history.insert(hash, Arc::new(base));
+                self.history.insert(hash, InMemGS(Arc::new(base)));
                 Ok(hash)
             });
 
@@ -135,8 +142,8 @@ mod tests {
         map.insert(KEY1, VALUE1.clone());
         map.insert(KEY2, VALUE2.clone());
         let mut history = HashMap::new();
-        history.insert(EMPTY_ROOT, Arc::new(map));
-        InMemHist { history: history }
+        history.insert(EMPTY_ROOT, InMemGS(Arc::new(map)));
+        InMemHist { history }
     }
 
     fn checkout<R: DbReader, H: History<R>>(hist: &H, hash: [u8; 32]) -> TrackingCopy<R> {
@@ -154,7 +161,7 @@ mod tests {
         assert!(res.is_ok());
         match res.unwrap() {
             CommitResult::Success(hash) => hash,
-            CommitResult::Failure(_) => panic!("Test commit failed but shouldn't.")
+            CommitResult::Failure(_) => panic!("Test commit failed but shouldn't."),
         }
     }
 
@@ -214,6 +221,11 @@ mod tests {
         let new_v2 = Value::String("I am String now!".to_owned());
         let write_res = tc.write(KEY2, new_v2.clone());
         assert!(write_res.is_ok());
+        let key3 = Key::Account([3u8; 20]);
+        let value3 = Value::Int32(3);
+        let write_res = tc.write(key3, value3.clone());
+        assert!(write_res.is_ok());
+        assert_eq!(tc.get(&key3).unwrap(), value3);
         let effects = tc.effect();
         // commit changes from the tracking copy
         let _ = commit(&mut gs, EMPTY_ROOT, effects.1);
@@ -221,5 +233,7 @@ mod tests {
         let mut tc_2 = checkout(&gs, EMPTY_ROOT);
         assert_eq!(tc_2.get(&KEY1).unwrap(), VALUE1);
         assert_eq!(tc_2.get(&KEY2).unwrap(), VALUE2);
+        // test that value inserted later are not visible in the past commits.
+        assert!(tc_2.get(&key3).is_err());
     }
 }

@@ -384,7 +384,7 @@ object HashSetCasperTestNode {
       private val op            = Op(Op.OpInstance.Read(ReadOp()))
       private val transforEntry = TransformEntry(Some(key), Some(transform))
       private val opEntry       = OpEntry(Some(key), Some(op))
-      private val ee            = ExecutionEffect(Seq(opEntry), Seq(transforEntry), 0)
+      private val ee            = ExecutionEffect(Seq(opEntry), Seq(transforEntry))
 
       override def emptyStateHash: ByteString = ByteString.copyFrom(zero)
 
@@ -395,7 +395,10 @@ object HashSetCasperTestNode {
         //This function returns the same `DeployResult` for all deploys,
         //regardless of their wasm code. It pretends to have run all the deploys,
         //but it doesn't really; it just returns the same result no matter what.
-        deploys.map(_ => DeployResult(DeployResult.Result.Effects(ee))).asRight[Throwable].pure[F]
+        deploys
+          .map(_ => DeployResult(10, DeployResult.Result.Effects(ee)))
+          .asRight[Throwable]
+          .pure[F]
 
       override def commit(
           prestate: ByteString,
@@ -410,6 +413,15 @@ object HashSetCasperTestNode {
 
         ByteString.copyFrom(newArr).asRight[Throwable].pure[F]
       }
+
+      override def query(
+          state: ByteString,
+          baseKey: Key,
+          path: Seq[String]
+      ): F[Either[Throwable, Value]] =
+        Applicative[F].pure[Either[Throwable, Value]](
+          Left(new Exception("Method `query` not implemented on this instance!"))
+        )
     }
 
   private def pad(x: Array[Byte], length: Int): Array[Byte] =

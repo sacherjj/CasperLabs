@@ -221,7 +221,7 @@ class InterpreterUtilTest
     """
   """.stripMargin
 
-  def prepareDeploys(v: Vector[ByteString], c: Double) = {
+  def prepareDeploys(v: Vector[ByteString], c: Long) = {
     val genesisDeploys =
       v.map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
     genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
@@ -516,10 +516,10 @@ class InterpreterUtilTest
 
   "findMultiParentsBlockHashesForReplay" should "filter out duplicate ancestors of main parent block" ignore withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1.0)
-      val b1DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1.0)
-      val b2DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1.0)
-      val b3DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1.0)
+      val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1L)
+      val b1DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
+      val b2DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
+      val b3DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
 
       /*
        * DAG Looks like this:

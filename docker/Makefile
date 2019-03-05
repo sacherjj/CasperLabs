@@ -1,5 +1,6 @@
 CL_CASPER_NUM_VALIDATORS ?= 10
 CL_SERVER_HTTP_PORT ?= 40403
+CL_VERSION ?= latest
 
 REFRESH_TARGETS := ./monitoring/prometheus/refresh-targets.sh
 
@@ -9,12 +10,6 @@ REFRESH_TARGETS := ./monitoring/prometheus/refresh-targets.sh
 # Remove all node-N environments.
 clean: down $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
 	docker network rm casperlabs || exit 0
-	@# Removing genesis created by docker, using docker, due to permissions.
-	docker run --rm \
-		-v ${PWD}/.casperlabs:/root/.casperlabs \
-		--entrypoint sh \
-		io.casperlabs/node:latest \
-		-c "rm -rf /root/.casperlabs/*"
 	rm -rf .casperlabs
 	rm -rf .make
 
@@ -32,6 +27,7 @@ node-%: .casperlabs
 
 	@# Create an .env file to hold template variables for docker-compose.
 	echo NODE_NUMBER=$(N) > $(ENV)
+	echo CL_VERSION=$(CL_VERSION) >> $(ENV)
 
 	@# The name of the file is the public key. Content is the private key.
 	echo CL_VALIDATOR_PUBLIC_KEY=$(shell echo "$(KEY_FILE)" | awk -F '[/.]' '{print $$4}') >> $(ENV)
@@ -77,11 +73,25 @@ down:
 # https://alexei-led.github.io/post/pumba_docker_netem/
 delay:
 	docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock gaiaadm/pumba \
-	    netem --duration 5m --interface eth0 \
+	    netem \
+	      --duration 5m \
+	      --interface eth0 \
+	      --tc-image gaiadocker/iproute2 \
 	      delay \
 	        --time 500 \
 	        --jitter 100 \
 	        --distribution normal \
+	      re2:^node
+
+# Use the `rate` function to limit bandwidth.
+slow:
+	docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock gaiaadm/pumba \
+	    netem \
+	      --duration 5m \
+	      --interface eth0 \
+	      --tc-image gaiadocker/iproute2 \
+	      rate \
+	        --rate 100kbit \
 	      re2:^node
 
 
@@ -92,24 +102,37 @@ delay:
 # Generate keys and bonds.
 .casperlabs:
 	@# Start a node to generate keys.
+	mkdir -p .bootstrap
 	docker run --rm -d \
 		--name make-genesis \
-		-v ${PWD}/.casperlabs/genesis:/root/.casperlabs/genesis \
-		-v ${PWD}/.casperlabs/bootstrap:/root/.casperlabs/bootstrap \
-		io.casperlabs/node:latest \
+		-v ${PWD}/.bootstrap:/root/.casperlabs \
+		casperlabs/node:$(CL_VERSION) \
 		run -s \
-		--casper-num-validators $(CL_CASPER_NUM_VALIDATORS) \
-		--tls-certificate /root/.casperlabs/bootstrap/node.certificate.pem \
-		--tls-key /root/.casperlabs/bootstrap/node.key.pem
+		--casper-num-validators $(CL_CASPER_NUM_VALIDATORS)
+
 	@# Wait until the node is running, so we know it generated the files. Capture the Node ID fromt the logs.
 	@# Can't write to the bootstrap dir from here as it's owned by the docker user.
-	NODE_ID=`(docker logs -f make-genesis &) | grep -m 1 -Po 'Listening for traffic on casperlabs://\K[^@]+'` && \
+	NODE_ID=`(docker logs -f make-genesis &) | grep -m 1 "Listening for traffic" | awk -F'[//|@]' '{print $$3}'` && \
 	docker run --rm \
-		-v ${PWD}/.casperlabs/bootstrap:/root/.casperlabs/bootstrap \
+		-v ${PWD}/.bootstrap:/root/.casperlabs \
 		--entrypoint sh \
-		io.casperlabs/node:latest \
-		-c "echo $$NODE_ID > /root/.casperlabs/bootstrap/node-id"
+		casperlabs/node:$(CL_VERSION) \
+		-c "echo $$NODE_ID > /root/.casperlabs/node-id"
 	docker stop make-genesis
+
+	@# Copy files to where we can mount them separately from.
+	mkdir -p .casperlabs/bootstrap
+	cp -r .bootstrap/genesis .casperlabs
+	cp .bootstrap/node* .casperlabs/bootstrap
+
+	@# Removing genesis created by docker, using docker, due to permissions.
+	docker run --rm \
+		-v ${PWD}/.bootstrap:/root/.casperlabs \
+		--entrypoint sh \
+		casperlabs/node:$(CL_VERSION) \
+		-c "rm -rf /root/.casperlabs/*"
+	rm -rf .bootstrap
+
 	@# Check that the files we wanted exist and aren't empty.
 	[ -s .casperlabs/genesis/bonds.txt ]
 	[ -s .casperlabs/bootstrap/node-id ]

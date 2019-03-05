@@ -94,7 +94,7 @@ impl ToBytes for Vec<Key> {
 impl AsRef<[u8]> for Key {
     fn as_ref(&self) -> &[u8] {
         match self {
-            //TODO: need to distinguish between variants?
+            // TODO: need to distinguish between variants?
             Account(a) => a,
             Hash(h) => h,
             URef(u) => u,

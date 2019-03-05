@@ -5,7 +5,6 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
-import io.casperlabs.blockstorage.StorageError.StorageIOErr
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
@@ -24,17 +23,17 @@ class InMemBlockStore[F[_]] private (
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
     refF.get.map(_.filterKeys(p).toSeq)
 
-  def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]] =
-    refF.update(_ + f) map Right.apply
+  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
+    refF.update(_ + f)
 
-  def checkpoint(): F[StorageIOErr[Unit]] =
-    ().asRight[StorageIOError].pure[F]
+  def checkpoint(): F[Unit] =
+    ().pure[F]
 
-  def clear(): F[StorageIOErr[Unit]] =
-    refF.update(_.empty) map Right.apply
+  def clear(): F[Unit] =
+    refF.update(_.empty)
 
-  override def close(): F[StorageIOErr[Unit]] =
-    monadF.pure(Right(()))
+  override def close(): F[Unit] =
+    monadF.pure(())
 }
 
 object InMemBlockStore {

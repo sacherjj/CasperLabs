@@ -4,6 +4,7 @@ extern crate execution_engine;
 extern crate grpc;
 extern crate protobuf;
 extern crate storage;
+extern crate wasm_prep;
 
 pub mod engine_server;
 
@@ -32,7 +33,7 @@ fn main() {
 
     println!("Server is listening on socket: {}", socket);
 
-    // loop idefinitely
+    // loop indefinitely
     loop {
         std::thread::park();
     }

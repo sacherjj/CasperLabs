@@ -34,6 +34,7 @@ import scala.util.Either
       deploys: Seq[Deploy]
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
+  def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
 }
 
 class GrpcExecutionEngineService[F[_]: Sync: Log: TaskLift] private[smartcontracts] (
@@ -83,6 +84,19 @@ class GrpcExecutionEngineService[F[_]: Sync: Log: TaskLift] private[smartcontrac
           Left(new SmartContractEngineError(s"Error executing transform: $message"))
       }
     }
+
+  override def query(
+      state: ByteString,
+      baseKey: Key,
+      path: Seq[String]
+  ): F[Either[Throwable, Value]] =
+    sendMessage(QueryRequest(state, Some(baseKey), path), _.query) {
+      _.result match {
+        case QueryResponse.Result.Success(value) => Right(value)
+        case QueryResponse.Result.Empty          => Left(new SmartContractEngineError("empty response"))
+        case QueryResponse.Result.Failure(err)   => Left(new SmartContractEngineError(err))
+      }
+    }
 }
 
 object ExecutionEngineService {
@@ -100,6 +114,13 @@ object ExecutionEngineService {
           prestate: ByteString,
           effects: Seq[TransformEntry]
       ): F[Either[Throwable, ByteString]] = ByteString.EMPTY.asRight[Throwable].pure
+      override def query(
+          state: ByteString,
+          baseKey: Key,
+          path: Seq[String]
+      ): F[Either[Throwable, Value]] =
+        Applicative[F]
+          .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented")))
     }
 }
 

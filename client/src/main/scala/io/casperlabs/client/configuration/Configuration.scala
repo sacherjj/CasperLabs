@@ -38,6 +38,15 @@ object Streaming {
   final case object Multiple extends Streaming
 }
 
+final case class Query(
+    port: Int,
+    host: String,
+    blockHash: String,
+    keyType: String,
+    key: String,
+    path: String
+) extends Configuration
+
 object Configuration {
   def parse(args: Array[String]): Option[Configuration] = {
     val options = Options(args)
@@ -70,6 +79,15 @@ object Configuration {
           options.visualizeBlocks.showJustificationLines(),
           options.visualizeBlocks.out.toOption,
           options.visualizeBlocks.stream.toOption
+        )
+      case options.query =>
+        Query(
+          options.port(),
+          options.host(),
+          options.query.blockHash(),
+          options.query.keyType(),
+          options.query.key(),
+          options.query.path()
         )
     }
   }

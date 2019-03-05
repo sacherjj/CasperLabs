@@ -1,6 +1,11 @@
 package io.casperlabs.client
+
 import cats.effect.{Sync, Timer}
+import cats.syntax.functor._
+import cats.syntax.flatMap._
 import io.casperlabs.client.configuration._
+import io.casperlabs.ipc
+import io.casperlabs.casper.protocol
 import io.casperlabs.shared.{Log, LogSource, UncaughtExceptionLogger}
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -33,7 +38,9 @@ object Main {
     exec.runSyncUnsafe()
   }
 
-  def program[F[_]: Sync: DeployService: Timer](configuration: Configuration): F[Unit] =
+  def program[F[_]: Sync: DeployService: Timer](
+      configuration: Configuration
+  ): F[Unit] =
     configuration match {
       case ShowBlock(_, _, hash)   => DeployRuntime.showBlock(hash)
       case ShowBlocks(_, _, depth) => DeployRuntime.showBlocks(depth)
@@ -43,5 +50,10 @@ object Main {
         DeployRuntime.propose()
       case VisualizeDag(_, _, depth, showJustificationLines, out, streaming) =>
         DeployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
+
+      case Query(_, _, hash, keyType, keyValue, path) =>
+        DeployRuntime.gracefulExit(
+          DeployService[F].queryState(protocol.QueryStateRequest(hash, keyType, keyValue, path))
+        )
     }
 }

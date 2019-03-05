@@ -5,12 +5,13 @@ use std::fmt;
 use std::ops::Add;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct TypeMismatch { pub expected: String, pub found: String }
+pub struct TypeMismatch {
+    pub expected: String,
+    pub found: String,
+}
 impl TypeMismatch {
     pub fn new(expected: String, found: String) -> TypeMismatch {
-        TypeMismatch {
-            expected, found
-        }
+        TypeMismatch { expected, found }
     }
 }
 
@@ -76,7 +77,7 @@ impl Add for Transform {
             (_, b @ Failure(_)) => b,
             (_, b @ Write(_)) => b,
             (Write(v), b) => {
-                //second transform changes value being written
+                // second transform changes value being written
                 match b.apply(v) {
                     Err(error) => Failure(error),
                     Ok(new_value) => Write(new_value),

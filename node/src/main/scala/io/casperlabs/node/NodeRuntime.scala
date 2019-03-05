@@ -182,8 +182,7 @@ class NodeRuntime private[node] (
       nodeCoreMetrics = diagnostics.effects.nodeCoreMetrics[Task]
       jvmMetrics      = diagnostics.effects.jvmMetrics[Task]
 
-      program = nodeProgram[Effect](
-        Monad[Effect],
+      program = nodeProgram(executionEngineService)(
         time,
         rpConfState,
         rpConfAsk,
@@ -203,7 +202,7 @@ class NodeRuntime private[node] (
       _ <- handleUnrecoverableErrors(program)
     } yield ()
 
-  private def acquireServers(blockApiLock: Semaphore[Effect])(
+  private def acquireServers(blockApiLock: Semaphore[Effect], ee: ExecutionEngineService[Effect])(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -216,6 +215,7 @@ class NodeRuntime private[node] (
       concurrent: Concurrent[Effect]
   ): Effect[Servers] = {
     implicit val s: Scheduler = scheduler
+    implicit val e            = ee
     for {
       grpcServerExternal <- GrpcServer
                              .acquireExternalServer[Effect](
@@ -292,7 +292,9 @@ class NodeRuntime private[node] (
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  private def nodeProgram[F[_]: Monad](
+  private def nodeProgram(
+      executionEngineService: ExecutionEngineService[Effect]
+  )(
       implicit
       time: Time[Task],
       rpConfState: RPConfState[Task],
@@ -347,7 +349,7 @@ class NodeRuntime private[node] (
       _            <- info
       local        <- peerNodeAsk.ask.toEffect
       host         = local.endpoint.host
-      servers      <- acquireServers(blockApiLock)
+      servers      <- acquireServers(blockApiLock, executionEngineService)
       _            <- addShutdownHook(servers).toEffect
       _            <- servers.grpcServerExternal.start.toEffect
       _ <- Log[Effect].info(

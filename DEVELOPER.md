@@ -109,7 +109,7 @@ __Note__ Successfully building from source requires attending to all of the prer
 
   Java:
   ```console
-  dev@dev:~$ brew cask install java10
+  dev@dev:~$ brew cask install java
 
   dev@dev:~$ java -version
   ```
@@ -123,7 +123,7 @@ __Note__ Successfully building from source requires attending to all of the prer
   ```console
   dev@dev:~$ brew install rustup
   ...
-
+  
   dev@dev:~$rustup-init
   Welcome to Rust!
 
@@ -150,7 +150,9 @@ __Note__ Successfully building from source requires attending to all of the prer
   environment variable. Next time you log in this will be done automatically.
 
   To configure your current shell run source $HOME/.cargo/env
+  ```
 
+  ```console
   dev@dev:~$ source $HOME/.cargo/env
 
   dev@dev:~$ rustup update
