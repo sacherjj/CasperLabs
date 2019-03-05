@@ -80,7 +80,6 @@ class ConfigurationSoftSpec
         Endpoint("52.119.8.109", 1, 1)
       ).some,
       standalone = false.some,
-      mapSize = 1L.some,
       storeType = StoreType.LMDB.some,
       dataDir = Paths.get("test").some,
       maxNumOfConnections = 1.some,
