@@ -111,13 +111,8 @@ slow:
 		--casper-num-validators $(CL_CASPER_NUM_VALIDATORS)
 
 	@# Wait until the node is running, so we know it generated the files. Capture the Node ID fromt the logs.
-	@# Can't write to the bootstrap dir from here as it's owned by the docker user.
 	NODE_ID=`(docker logs -f make-genesis &) | grep -m 1 "Listening for traffic" | awk -F'[//|@]' '{print $$3}'` && \
-	docker run --rm \
-		-v ${PWD}/.bootstrap:/root/.casperlabs \
-		--entrypoint sh \
-		casperlabs/node:$(CL_VERSION) \
-		-c "echo $$NODE_ID > /root/.casperlabs/node-id"
+	echo $$NODE_ID > .bootstrap/node-id
 	docker stop make-genesis
 
 	@# Copy files to where we can mount them separately from.
