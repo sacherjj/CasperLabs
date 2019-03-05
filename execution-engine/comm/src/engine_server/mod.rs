@@ -4,7 +4,6 @@ use execution_engine::engine::{EngineState, Error as EngineError, ExecutionResul
 use execution_engine::execution::{Error as ExecutionError, Executor, WasmiExecutor};
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
-use std::collections::HashMap;
 use storage::gs::{trackingcopy::QueryResult, DbReader};
 use storage::history::{self, *};
 use storage::transform;
@@ -104,11 +103,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
     ) -> grpc::SingleResponse<ipc::CommitResponse> {
         let mut prestate_hash = [0u8; 32];
         prestate_hash.copy_from_slice(&p.get_prestate_hash());
-        let mut effects = HashMap::new();
-        for entry in p.get_effects().iter() {
-            let (k, v) = entry.into();
-            effects.insert(k, v);
-        }
+        let effects = p.get_effects().iter().map(Into::into).collect();
         let result = apply_effect_result_to_ipc(self.apply_effect(prestate_hash, effects));
         grpc::SingleResponse::completed(result)
     }
