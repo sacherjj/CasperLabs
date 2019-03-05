@@ -186,7 +186,7 @@ impl Into<DeployResult> for ExecutionResult {
                         let mut err = match storage_err {
                             KeyNotFound(key) => {
                                 let msg = format!("Key {:?} not found.", key);
-                                wasm_error(msg.to_owned())
+                                wasm_error(msg)
                             }
                             RkvError(error_msg) => wasm_error(error_msg),
                             TransformTypeMismatch(transform::TypeMismatch { expected, found }) => {
