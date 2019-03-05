@@ -1,24 +1,39 @@
 use std::collections::BTreeMap;
+use std::convert::{TryFrom, TryInto};
 
 /// Helper method for turning instances of Value into Transform::Write.
-fn transform_write(v: common::value::Value) -> storage::transform::Transform {
-    storage::transform::Transform::Write(v)
+fn transform_write(v: common::value::Value) -> Result<storage::transform::Transform, ParsingError> {
+    Ok(storage::transform::Transform::Write(v))
 }
 
-impl From<&super::ipc::Transform> for storage::transform::Transform {
-    fn from(tr: &super::ipc::Transform) -> storage::transform::Transform {
+#[derive(Debug)]
+pub struct ParsingError(pub String);
+
+/// Smart constructor for parse errors
+fn parse_error<T>(message: String) -> Result<T, ParsingError> {
+    Err(ParsingError(message))
+}
+
+impl TryFrom<&super::ipc::Transform> for storage::transform::Transform {
+    type Error = ParsingError;
+    fn try_from(tr: &super::ipc::Transform) -> Result<storage::transform::Transform, ParsingError> {
         if tr.has_identity() {
-            storage::transform::Transform::Identity
+            Ok(storage::transform::Transform::Identity)
         } else if tr.has_add_keys() {
             let keys_map = tr
                 .get_add_keys()
                 .get_value()
-                .iter()
-                .map(|nk| (nk.name.clone(), nk.get_key().into()))
-                .collect();
-            storage::transform::Transform::AddKeys(keys_map)
+                .into_iter()
+                .map(|nk| {
+                    let local_nk = nk.clone();
+                    local_nk.get_key().try_into().map(|k| (local_nk.name, k))
+                })
+                .collect::<Result<BTreeMap<String, common::key::Key>, ParsingError>>()?;
+            Ok(storage::transform::Transform::AddKeys(keys_map))
         } else if tr.has_add_i32() {
-            storage::transform::Transform::AddInt32(tr.get_add_i32().value)
+            Ok(storage::transform::Transform::AddInt32(
+                tr.get_add_i32().value,
+            ))
         } else if tr.has_write() {
             let v = tr.get_write().get_value();
             if v.has_integer() {
@@ -33,7 +48,7 @@ impl From<&super::ipc::Transform> for storage::transform::Transform {
                 transform_write(common::value::Value::String(v.get_string_val().to_string()))
             } else if v.has_account() {
                 let mut pub_key = [0u8; 32];
-                let uref_map: URefMap = (v.get_account().get_known_urefs()).into();
+                let uref_map: URefMap = v.get_account().get_known_urefs().try_into()?;
                 pub_key.clone_from_slice(&v.get_account().pub_key);
                 let account =
                     common::value::Account::new(pub_key, v.get_account().nonce as u64, uref_map.0);
@@ -41,7 +56,7 @@ impl From<&super::ipc::Transform> for storage::transform::Transform {
             } else if v.has_contract() {
                 let ipc_contr = v.get_contract();
                 let contr_body = ipc_contr.get_body().to_vec();
-                let known_urefs: URefMap = ipc_contr.get_known_urefs().into();
+                let known_urefs: URefMap = ipc_contr.get_known_urefs().try_into()?;
                 transform_write(common::value::Value::Contract {
                     bytes: contr_body,
                     known_urefs: known_urefs.0,
@@ -52,12 +67,18 @@ impl From<&super::ipc::Transform> for storage::transform::Transform {
             } else if v.has_named_key() {
                 let nk = v.get_named_key();
                 let name = nk.get_name().to_string();
-                transform_write(common::value::Value::NamedKey(name, nk.get_key().into()))
+                let key = nk.get_key().try_into()?;
+                transform_write(common::value::Value::NamedKey(name, key))
             } else {
-                panic!("TransformEntry write contained unknown value: {:?}", v)
+                parse_error(format!(
+                    "TransformEntry write contained unknown value: {:?}",
+                    v
+                ))
             }
         } else {
-            panic!("TransformEntry couldn't be parsed to known Transform.")
+            parse_error(format!(
+                "TransformEntry couldn't be parsed to known Transform."
+            ))
         }
     }
 }
@@ -115,7 +136,7 @@ impl From<common::value::Value> for super::ipc::Value {
 }
 
 impl From<storage::transform::Transform> for super::ipc::Transform {
-    fn from(tr: storage::transform::Transform) -> super::ipc::Transform {
+    fn from(tr: storage::transform::Transform) -> Self {
         let mut t = super::ipc::Transform::new();
         match tr {
             storage::transform::Transform::Identity => {
@@ -157,13 +178,16 @@ impl From<storage::transform::Transform> for super::ipc::Transform {
 pub struct URefMap(BTreeMap<String, common::key::Key>);
 
 // Helper method for turning gRPC Vec of NamedKey to domain BTreeMap.
-impl From<&[super::ipc::NamedKey]> for URefMap {
-    fn from(from: &[super::ipc::NamedKey]) -> Self {
+impl TryFrom<&[super::ipc::NamedKey]> for URefMap {
+    type Error = ParsingError;
+    fn try_from(from: &[super::ipc::NamedKey]) -> Result<Self, ParsingError> {
         let mut tree: BTreeMap<String, common::key::Key> = BTreeMap::new();
         for nk in from {
-            let _ = tree.insert(nk.get_name().to_string(), nk.get_key().into());
+            let name = nk.get_name().to_string();
+            let key = nk.get_key().try_into()?;
+            let _ = tree.insert(name, key);
         }
-        URefMap(tree)
+        Ok(URefMap(tree))
     }
 }
 
@@ -206,23 +230,25 @@ impl From<&common::key::Key> for super::ipc::Key {
     }
 }
 
-impl From<&super::ipc::Key> for common::key::Key {
-    fn from(ipc_key: &super::ipc::Key) -> Self {
+impl TryFrom<&super::ipc::Key> for common::key::Key {
+    type Error = ParsingError;
+
+    fn try_from(ipc_key: &super::ipc::Key) -> Result<Self, ParsingError> {
         if ipc_key.has_account() {
             let mut arr = [0u8; 20];
             arr.clone_from_slice(&ipc_key.get_account().account);
-            common::key::Key::Account(arr)
+            Ok(common::key::Key::Account(arr))
         } else if ipc_key.has_hash() {
             let mut arr = [0u8; 32];
             arr.clone_from_slice(&ipc_key.get_hash().key);
-            common::key::Key::Hash(arr)
+            Ok(common::key::Key::Hash(arr))
         } else if ipc_key.has_uref() {
             let mut arr = [0u8; 32];
             arr.clone_from_slice(&ipc_key.get_uref().uref);
-            common::key::Key::URef(arr)
+            Ok(common::key::Key::URef(arr))
         } else {
             // TODO make this Result::Err instead of panic
-            panic!(format!(
+            parse_error(format!(
                 "ipc Key couldn't be parsed to any Key: {:?}",
                 ipc_key
             ))
@@ -244,17 +270,19 @@ impl From<storage::op::Op> for super::ipc::Op {
 }
 
 /// Transforms gRPC TransformEntry into domain tuple of (Key, Transform).
-impl From<&super::ipc::TransformEntry> for (common::key::Key, storage::transform::Transform) {
-    fn from(from: &super::ipc::TransformEntry) -> Self {
+impl TryFrom<&super::ipc::TransformEntry> for (common::key::Key, storage::transform::Transform) {
+    type Error = ParsingError;
+    fn try_from(from: &super::ipc::TransformEntry) -> Result<Self, ParsingError> {
         if from.has_key() {
             if from.has_transform() {
-                let t: storage::transform::Transform = from.get_transform().into();
-                (from.get_key().into(), t)
+                let t: storage::transform::Transform = from.get_transform().try_into()?;
+                let key = from.get_key().try_into()?;
+                Ok((key, t))
             } else {
-                panic!("No transform field in TransformEntry")
+                parse_error("No transform field in TransformEntry".to_owned())
             }
         } else {
-            panic!("No key field in TransformEntry")
+            parse_error("No key field in TransformEntry".to_owned())
         }
     }
 }

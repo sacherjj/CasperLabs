@@ -1,17 +1,22 @@
 use std::marker::{Send, Sync};
 
+use common::key::Key;
 use execution_engine::engine::{EngineState, Error as EngineError, ExecutionResult};
 use execution_engine::execution::{Error as ExecutionError, Executor, WasmiExecutor};
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
+use std::collections::HashMap;
+use std::convert::TryInto;
 use storage::gs::{trackingcopy::QueryResult, DbReader};
 use storage::history::{self, *};
-use storage::transform;
+use storage::transform::{self, Transform};
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 pub mod ipc;
 pub mod ipc_grpc;
 pub mod mappings;
+
+use mappings::*;
 
 // Idea is that Engine will represent the core of the execution engine project.
 // It will act as an entry point for execution of Wasm binaries.
@@ -25,38 +30,46 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
     ) -> grpc::SingleResponse<ipc::QueryResponse> {
         let mut state_hash = [0u8; 32];
         state_hash.copy_from_slice(&p.get_state_hash());
-        let key = p.get_base_key().into();
-        let path = p.get_path();
+        match p.get_base_key().try_into() {
+            Err(ParsingError(err_msg)) => {
+                let mut result = ipc::QueryResponse::new();
+                result.set_failure(err_msg);
+                grpc::SingleResponse::completed(result)
+            }
+            Ok(key) => {
+                let path = p.get_path();
 
-        if let Ok(mut tc) = self.tracking_copy(state_hash) {
-            let response = match tc.query(key, path) {
-                Err(err) => {
+                if let Ok(mut tc) = self.tracking_copy(state_hash) {
+                    let response = match tc.query(key, path) {
+                        Err(err) => {
+                            let mut result = ipc::QueryResponse::new();
+                            let error = format!("{:?}", err);
+                            result.set_failure(error);
+                            result
+                        }
+
+                        Ok(QueryResult::ValueNotFound(full_path)) => {
+                            let mut result = ipc::QueryResponse::new();
+                            let error = format!("Value not found: {:?}", full_path);
+                            result.set_failure(error);
+                            result
+                        }
+
+                        Ok(QueryResult::Success(value)) => {
+                            let mut result = ipc::QueryResponse::new();
+                            result.set_success(value.into());
+                            result
+                        }
+                    };
+
+                    grpc::SingleResponse::completed(response)
+                } else {
                     let mut result = ipc::QueryResponse::new();
-                    let error = format!("{:?}", err);
+                    let error = format!("Root not found: {:?}", state_hash);
                     result.set_failure(error);
-                    result
+                    grpc::SingleResponse::completed(result)
                 }
-
-                Ok(QueryResult::ValueNotFound(full_path)) => {
-                    let mut result = ipc::QueryResponse::new();
-                    let error = format!("Value not found: {:?}", full_path);
-                    result.set_failure(error);
-                    result
-                }
-
-                Ok(QueryResult::Success(value)) => {
-                    let mut result = ipc::QueryResponse::new();
-                    result.set_success(value.into());
-                    result
-                }
-            };
-
-            grpc::SingleResponse::completed(response)
-        } else {
-            let mut result = ipc::QueryResponse::new();
-            let error = format!("Root not found: {:?}", state_hash);
-            result.set_failure(error);
-            grpc::SingleResponse::completed(result)
+            }
         }
     }
 
@@ -97,9 +110,21 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
     ) -> grpc::SingleResponse<ipc::CommitResponse> {
         let mut prestate_hash = [0u8; 32];
         prestate_hash.copy_from_slice(&p.get_prestate_hash());
-        let effects = p.get_effects().iter().map(Into::into).collect();
-        let result = apply_effect_result_to_ipc(self.apply_effect(prestate_hash, effects));
-        grpc::SingleResponse::completed(result)
+        let effects_result: Result<HashMap<Key, Transform>, ParsingError> =
+            p.get_effects().iter().map(TryInto::try_into).collect();
+        match effects_result {
+            Err(ParsingError(error_message)) => {
+                let mut res = ipc::CommitResponse::new();
+                let mut err = ipc::PostEffectsError::new();
+                err.set_message(error_message);
+                res.set_failed_transform(err);
+                grpc::SingleResponse::completed(res)
+            }
+            Ok(effects) => {
+                let result = apply_effect_result_to_ipc(self.apply_effect(prestate_hash, effects));
+                grpc::SingleResponse::completed(result)
+            }
+        }
     }
 }
 
@@ -110,6 +135,11 @@ fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>
     prestate_hash: [u8; 32],
     deploys: &[ipc::Deploy],
 ) -> Result<Vec<DeployResult>, RootNotFound> {
+    // We want to treat RootNotFound error differently b/c it should short-circuit
+    // the execution of ALL deploys within the block. This is because all of them share
+    // the same prestate and all of them would fail.
+    // Iterator (Result<_, _> + collect()) will short circuit the execution
+    // when run_deploy returns Err.
     deploys
         .iter()
         .map(|deploy| {
@@ -135,10 +165,6 @@ fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>
                 )
                 .map(Into::into)
                 .map_err(Into::into)
-            // We want to treat RootNotFound error differently b/c it should short-circuit
-            // the execution of ALL deploys within the block. This is because all of them share
-            // the same prestate and all of them would fail.
-            // try_for_each will continue only when Ok(_) is returned.
         })
         .collect()
 }
@@ -289,6 +315,7 @@ mod tests {
     use common::key::Key;
     use execution_engine::engine::{Error as EngineError, ExecutionResult};
     use std::collections::HashMap;
+    use std::convert::TryInto;
     use storage::gs::ExecutionEffect;
     use storage::transform::Transform;
 
@@ -331,7 +358,11 @@ mod tests {
         let ipc_transforms: HashMap<Key, Transform> = {
             let mut ipc_effects = ipc_deploy_result.take_effects();
             let ipc_effects_tnfs = ipc_effects.take_transform_map().into_vec();
-            ipc_effects_tnfs.iter().map(|e| e.into()).collect()
+            ipc_effects_tnfs
+                .iter()
+                .map(|e| e.try_into())
+                .collect::<Result<HashMap<Key, Transform>, _>>()
+                .unwrap()
         };
         assert_eq!(&input_transforms, &ipc_transforms);
     }
