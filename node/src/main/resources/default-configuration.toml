@@ -6,7 +6,7 @@
 # Network port to use for intra-node gRPC communication.
 port = 40400
 
-# HTTP port for utility services: /metrics, /version and /status
+# HTTP port for utility services: /metrics, /version and /status.
 http-port = 40403
 
 # Kademlia port used for node discovery based on Kademlia algorithm.
@@ -26,9 +26,6 @@ bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?
 
 # Start a stand-alone node (no bootstrapping).
 standalone = false
-
-# TODO Not used and needs to be deleted
-map-size = 1073741824
 
 # Type of Casperlabs space backing store. Valid values are: lmdb, inmem, mixed.
 store-type = "lmdb"

@@ -46,7 +46,6 @@ private[configuration] object ConfigurationSoft {
       defaultTimeout: Option[Int],
       bootstrap: Option[PeerNode],
       standalone: Option[Boolean],
-      mapSize: Option[Long],
       storeType: Option[StoreType],
       dataDir: Option[Path],
       maxNumOfConnections: Option[Int],
@@ -150,14 +149,15 @@ private[configuration] object ConfigurationSoft {
       envVars: Map[String, String]
   ): Either[String, ConfigurationSoft] =
     for {
-      defaults               <- tryDefault
-      cliConf                <- Options.parseConf(args, defaults)
-      maybeRawTomlConfigFile = Options.tryReadConfigFile(args, defaults)
+      defaultConf            <- tryDefault
+      defaultValues          <- Configuration.readDefaultConfig
+      cliConf                <- Options.parseConf(args, defaultValues)
+      maybeRawTomlConfigFile = Options.tryReadConfigFile(args, defaultValues)
       maybeTomlConf          = maybeRawTomlConfigFile.map(_.flatMap(TomlReader.parse))
       envConf                <- fromEnv(envVars).toEither.leftMap(_.toList.mkString("\n"))
       cliWithEnv             = cliConf.fallbackTo(envConf)
       result <- maybeTomlConf
-                 .map(_.map(tomlConf => cliWithEnv.fallbackTo(tomlConf).fallbackTo(defaults)))
-                 .getOrElse(Right(cliWithEnv.fallbackTo(defaults)))
+                 .map(_.map(tomlConf => cliWithEnv.fallbackTo(tomlConf).fallbackTo(defaultConf)))
+                 .getOrElse(Right(cliWithEnv.fallbackTo(defaultConf)))
     } yield result
 }
