@@ -11,6 +11,10 @@ import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.PeerNode
 import io.casperlabs.shared.StoreType
 import shapeless._
+import toml.Toml
+
+import scala.io.Source
+import scala.util.Try
 
 final case class Configuration(
     command: Configuration.Command,
@@ -89,9 +93,10 @@ object Configuration {
       envVars: Map[String, String]
   ): ValidatedNel[String, Configuration] = {
     val either = for {
-      defaults <- ConfigurationSoft.tryDefault
-      confSoft <- ConfigurationSoft.parse(args, envVars)
-      command  <- Options.parseCommand(args, defaults)
+      defaults      <- ConfigurationSoft.tryDefault
+      defaultValues <- Configuration.readDefaultConfig
+      confSoft      <- ConfigurationSoft.parse(args, envVars)
+      command       <- Options.parseCommand(args, defaultValues)
     } yield parseToActual(command, defaults, confSoft)
 
     either.fold(_.invalidNel[Configuration], identity)
@@ -344,4 +349,36 @@ object Configuration {
       relativePath: ConfigurationSoft => String
   )(implicit c: ConfigurationSoft): ConfigurationSoft => Option[Path] =
     _ => c.server.dataDir.map(_.resolve(relativePath(c)))
+
+  private[configuration] def readDefaultConfig: Either[String, Map[String, String]] = {
+    def readRawDefaultConfig: Either[String, String] =
+      Try(Source.fromResource("default-configuration.toml").mkString).toEither.leftMap(_.getMessage)
+
+    def dashToCamel(s: String): String =
+      s.foldLeft(("", false)) {
+          case ((acc, _), '-')   => (acc, true)
+          case ((acc, true), c)  => (acc + c.toUpper, false)
+          case ((acc, false), c) => (acc + c, false)
+        }
+        ._1
+
+    def flatten(t: Map[String, toml.Value]): Map[String, String] =
+      t.toList.flatMap {
+        case (key, toml.Value.Str(value))  => List((key, value))
+        case (key, toml.Value.Bool(value)) => List((key, value.toString))
+        case (key, toml.Value.Real(value)) => List((key, value.toString))
+        case (key, toml.Value.Num(value))  => List((key, value.toString))
+        case (key, toml.Value.Tbl(values)) => flatten(values).map { case (k, v) => s"$key-$k" -> v }
+        case _                             => Nil
+      }.toMap
+
+    for {
+      content      <- readRawDefaultConfig
+      tbl          <- Toml.parse(content)
+      dashifiedMap = flatten(tbl.values)
+    } yield
+      dashifiedMap.map {
+        case (k, v) => (dashToCamel(k), v)
+      }
+  }
 }
