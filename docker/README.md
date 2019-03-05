@@ -137,8 +137,6 @@ Unfortunately the docker container runs with a different user ID than the one on
 sudo rm -rf images
 ```
 
-## Visualizing the DAG
-
 On Debian/Ubuntu you can also run `sudo apt-get install graphviz` and visualize the DAG like so:
 
 ```console
