@@ -73,14 +73,8 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
             hash_tmp
         };
         let deploys = p.get_deploys();
-        let deploys_result: Result<Vec<DeployResult>, RootNotFound> = run_deploys(
-            &self,
-            &executor,
-            &preprocessor,
-            prestate_hash,
-            deploys.len(),
-            deploys,
-        );
+        let deploys_result: Result<Vec<DeployResult>, RootNotFound> =
+            run_deploys(&self, &executor, &preprocessor, prestate_hash, deploys);
         let mut exec_response = ipc::ExecResponse::new();
         match deploys_result {
             Ok(deploy_results) => {
@@ -114,13 +108,11 @@ fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>
     executor: &E,
     preprocessor: &P,
     prestate_hash: [u8; 32],
-    deploys_size: usize,
     deploys: &[ipc::Deploy],
 ) -> Result<Vec<DeployResult>, RootNotFound> {
-    let deploy_results: Vec<DeployResult> = Vec::with_capacity(deploys_size);
     deploys
         .iter()
-        .try_fold(deploy_results, |mut results, deploy| {
+        .map(|deploy| {
             let module_bytes = &deploy.session_code;
             let address: [u8; 20] = {
                 let mut tmp = [0u8; 20];
@@ -130,7 +122,7 @@ fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
-            let result = engine_state
+            engine_state
                 .run_deploy(
                     module_bytes,
                     address,
@@ -140,15 +132,15 @@ fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>
                     gas_limit,
                     executor,
                     preprocessor,
-                )?
-                .into();
+                )
+                .map(Into::into)
+                .map_err(Into::into)
             // We want to treat RootNotFound error differently b/c it should short-circuit
             // the execution of ALL deploys within the block. This is because all of them share
             // the same prestate and all of them would fail.
             // try_for_each will continue only when Ok(_) is returned.
-            results.push(result);
-            Ok(results)
         })
+        .collect()
 }
 
 impl From<storage::error::RootNotFound> for ipc::RootNotFound {
@@ -160,9 +152,9 @@ impl From<storage::error::RootNotFound> for ipc::RootNotFound {
     }
 }
 
-impl Into<DeployResult> for ExecutionResult {
-    fn into(self: ExecutionResult) -> DeployResult {
-        match self {
+impl From<ExecutionResult> for DeployResult {
+    fn from(er: ExecutionResult) -> DeployResult {
+        match er {
             ExecutionResult {
                 result: Ok(effects),
                 cost,
