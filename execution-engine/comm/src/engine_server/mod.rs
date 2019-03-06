@@ -1,15 +1,13 @@
 use std::marker::{Send, Sync};
 
 use execution_engine::engine::{EngineState, Error as EngineError, ExecutionResult};
-use execution_engine::execution::{Error as ExecutionError, WasmiExecutor};
+use execution_engine::execution::{Error as ExecutionError, Executor, WasmiExecutor};
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
-use mappings::*;
-use std::collections::HashMap;
 use storage::gs::{trackingcopy::QueryResult, DbReader};
 use storage::history::{self, *};
 use storage::transform;
-use wasm_prep::WasmiPreprocessor;
+use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 pub mod ipc;
 pub mod ipc_grpc;
@@ -27,7 +25,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
     ) -> grpc::SingleResponse<ipc::QueryResponse> {
         let mut state_hash = [0u8; 32];
         state_hash.copy_from_slice(&p.get_state_hash());
-        let key = ipc_to_key(p.get_base_key());
+        let key = p.get_base_key().into();
         let path = p.get_path();
 
         if let Ok(mut tc) = self.tracking_copy(state_hash) {
@@ -48,7 +46,7 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
 
                 Ok(QueryResult::Success(value)) => {
                     let mut result = ipc::QueryResponse::new();
-                    result.set_success(value_to_ipc(&value));
+                    result.set_success(value.into());
                     result
                 }
             };
@@ -75,37 +73,11 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
             hash_tmp
         };
         let deploys = p.get_deploys();
-        let mut deploy_results: Vec<DeployResult> = Vec::with_capacity(deploys.len());
-        let fold_result: Result<(), RootNotFound> = deploys.iter().try_for_each(|deploy| {
-            let module_bytes = &deploy.session_code;
-            let address: [u8; 20] = {
-                let mut tmp = [0u8; 20];
-                tmp.copy_from_slice(&deploy.address);
-                tmp
-            };
-            let timestamp = deploy.timestamp;
-            let nonce = deploy.nonce;
-            let gas_limit = deploy.gas_limit as u64;
-            // We want to treat RootNotFound error differently b/c it should short-circuit
-            // the execution of ALL deploys within the block. This is because all of them share
-            // the same prestate and all of them would fail.
-            // try_for_each will continue only when Ok(_) is returned.
-            let result = deploy_result_to_ipc(self.run_deploy(
-                module_bytes,
-                address,
-                timestamp,
-                nonce,
-                prestate_hash,
-                gas_limit,
-                &executor,
-                &preprocessor,
-            ))?;
-            deploy_results.push(result);
-            Ok(())
-        });
+        let deploys_result: Result<Vec<DeployResult>, RootNotFound> =
+            run_deploys(&self, &executor, &preprocessor, prestate_hash, deploys);
         let mut exec_response = ipc::ExecResponse::new();
-        match fold_result {
-            Ok(_) => {
+        match deploys_result {
+            Ok(deploy_results) => {
                 let mut exec_result = ipc::ExecResult::new();
                 exec_result.set_deploy_results(protobuf::RepeatedField::from_vec(deploy_results));
                 exec_response.set_success(exec_result);
@@ -125,95 +97,129 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
     ) -> grpc::SingleResponse<ipc::CommitResponse> {
         let mut prestate_hash = [0u8; 32];
         prestate_hash.copy_from_slice(&p.get_prestate_hash());
-        let mut effects = HashMap::new();
-        for entry in p.get_effects().iter() {
-            let (k, v) = transform_entry_to_key_transform(entry);
-            effects.insert(k, v);
-        }
+        let effects = p.get_effects().iter().map(Into::into).collect();
         let result = apply_effect_result_to_ipc(self.apply_effect(prestate_hash, effects));
         grpc::SingleResponse::completed(result)
     }
 }
 
-fn deploy_result_to_ipc(
-    input: Result<ExecutionResult, storage::error::RootNotFound>,
-) -> Result<DeployResult, ipc::RootNotFound> {
-    match input {
-        Err(storage::error::RootNotFound(missing_root_hash)) => {
-            let mut root_missing_err = ipc::RootNotFound::new();
-            root_missing_err.set_hash(missing_root_hash.to_vec());
-            Err(root_missing_err)
-        }
-        Ok(ExecutionResult {
-            result: Ok(effects),
-            cost,
-        }) => {
-            let mut ipc_ee = execution_effect_to_ipc(effects);
-            let deploy_result = {
-                let mut deploy_result_tmp = ipc::DeployResult::new();
-                deploy_result_tmp.set_effects(ipc_ee);
-                deploy_result_tmp.set_cost(cost);
-                deploy_result_tmp
+fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>>(
+    engine_state: &EngineState<R, H>,
+    executor: &E,
+    preprocessor: &P,
+    prestate_hash: [u8; 32],
+    deploys: &[ipc::Deploy],
+) -> Result<Vec<DeployResult>, RootNotFound> {
+    deploys
+        .iter()
+        .map(|deploy| {
+            let module_bytes = &deploy.session_code;
+            let address: [u8; 20] = {
+                let mut tmp = [0u8; 20];
+                tmp.copy_from_slice(&deploy.address);
+                tmp
             };
-            Ok(deploy_result)
-        }
-        Ok(ExecutionResult {
-            result: Err(err),
-            cost,
-        }) => {
-            match err {
-                // TODO(mateusz.gorski): Fix error model for the storage errors.
-                // We don't have separate IPC messages for storage errors
-                // so for the time being they are all reported as "wasm errors".
-                EngineError::StorageError(storage_err) => {
-                    use storage::error::Error::*;
-                    let mut err = match storage_err {
-                        KeyNotFound(key) => {
-                            let msg = format!("Key {:?} not found.", key);
-                            wasm_error(msg.to_owned())
-                        }
-                        RkvError(error_msg) => wasm_error(error_msg),
-                        TransformTypeMismatch(transform::TypeMismatch { expected, found }) => {
-                            let msg = format!(
-                                "Type mismatch. Expected {:?}, found {:?}",
-                                expected, found
-                            );
-                            wasm_error(msg)
-                        }
-                        BytesRepr(bytesrepr_err) => {
-                            let msg =
-                                format!("Error with byte representation: {:?}", bytesrepr_err);
-                            wasm_error(msg)
-                        }
-                    };
-                    err.set_cost(cost);
-                    Ok(err)
-                }
-                EngineError::PreprocessingError(err_msg) => {
-                    let mut err = wasm_error(err_msg);
-                    err.set_cost(cost);
-                    Ok(err)
-                }
-                EngineError::ExecError(exec_error) => match exec_error {
-                    ExecutionError::GasLimit => {
-                        let mut deploy_result = {
-                            let mut deploy_result_tmp = ipc::DeployResult::new();
+            let timestamp = deploy.timestamp;
+            let nonce = deploy.nonce;
+            let gas_limit = deploy.gas_limit as u64;
+            engine_state
+                .run_deploy(
+                    module_bytes,
+                    address,
+                    timestamp,
+                    nonce,
+                    prestate_hash,
+                    gas_limit,
+                    executor,
+                    preprocessor,
+                )
+                .map(Into::into)
+                .map_err(Into::into)
+            // We want to treat RootNotFound error differently b/c it should short-circuit
+            // the execution of ALL deploys within the block. This is because all of them share
+            // the same prestate and all of them would fail.
+            // try_for_each will continue only when Ok(_) is returned.
+        })
+        .collect()
+}
+
+impl From<storage::error::RootNotFound> for ipc::RootNotFound {
+    fn from(err: storage::error::RootNotFound) -> ipc::RootNotFound {
+        let storage::error::RootNotFound(missing_root_hash) = err;
+        let mut root_missing_err = ipc::RootNotFound::new();
+        root_missing_err.set_hash(missing_root_hash.to_vec());
+        root_missing_err
+    }
+}
+
+impl From<ExecutionResult> for DeployResult {
+    fn from(er: ExecutionResult) -> DeployResult {
+        match er {
+            ExecutionResult {
+                result: Ok(effects),
+                cost,
+            } => {
+                let mut ipc_ee = effects.into();
+                let mut deploy_result = ipc::DeployResult::new();
+                deploy_result.set_effects(ipc_ee);
+                deploy_result.set_cost(cost);
+                deploy_result
+            }
+            ExecutionResult {
+                result: Err(err),
+                cost,
+            } => {
+                match err {
+                    // TODO(mateusz.gorski): Fix error model for the storage errors.
+                    // We don't have separate IPC messages for storage errors
+                    // so for the time being they are all reported as "wasm errors".
+                    EngineError::StorageError(storage_err) => {
+                        use storage::error::Error::*;
+                        let mut err = match storage_err {
+                            KeyNotFound(key) => {
+                                let msg = format!("Key {:?} not found.", key);
+                                wasm_error(msg)
+                            }
+                            RkvError(error_msg) => wasm_error(error_msg),
+                            TransformTypeMismatch(transform::TypeMismatch { expected, found }) => {
+                                let msg = format!(
+                                    "Type mismatch. Expected {:?}, found {:?}",
+                                    expected, found
+                                );
+                                wasm_error(msg)
+                            }
+                            BytesRepr(bytesrepr_err) => {
+                                let msg =
+                                    format!("Error with byte representation: {:?}", bytesrepr_err);
+                                wasm_error(msg)
+                            }
+                        };
+                        err.set_cost(cost);
+                        err
+                    }
+                    EngineError::PreprocessingError(err_msg) => {
+                        let mut err = wasm_error(err_msg);
+                        err.set_cost(cost);
+                        err
+                    }
+                    EngineError::ExecError(exec_error) => match exec_error {
+                        ExecutionError::GasLimit => {
+                            let mut deploy_result = ipc::DeployResult::new();
                             let mut deploy_error = ipc::DeployError::new();
                             deploy_error.set_gasErr(ipc::OutOfGasError::new());
-                            deploy_result_tmp.set_error(deploy_error);
-                            deploy_result_tmp.set_cost(cost);
-                            deploy_result_tmp
-                        };
-                        Ok(deploy_result)
-                    }
-                    // TODO(mateusz.gorski): Be more specific about execution errors
-                    other => {
-                        let msg = format!("{:?}", other);
-                        let mut err = wasm_error(msg);
-                        err.set_cost(cost);
-                        Ok(err)
-                    }
-                },
+                            deploy_result.set_error(deploy_error);
+                            deploy_result.set_cost(cost);
+                            deploy_result
+                        }
+                        // TODO(mateusz.gorski): Be more specific about execution errors
+                        other => {
+                            let msg = format!("{:?}", other);
+                            let mut err = wasm_error(msg);
+                            err.set_cost(cost);
+                            err
+                        }
+                    },
+                }
             }
         }
     }
@@ -279,11 +285,9 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use super::deploy_result_to_ipc;
     use super::wasm_error;
     use common::key::Key;
     use execution_engine::engine::{Error as EngineError, ExecutionResult};
-    use mappings::transform_entry_to_key_transform;
     use std::collections::HashMap;
     use storage::gs::ExecutionEffect;
     use storage::transform::Transform;
@@ -304,9 +308,8 @@ mod tests {
     #[test]
     fn deploy_result_to_ipc_missing_root() {
         let root_hash = [1u8; 32];
-        let result = deploy_result_to_ipc(Err(storage::error::RootNotFound(root_hash)));
-        assert!(result.is_err());
-        let ipc_missing_hash = result.unwrap_err().take_hash();
+        let mut result: super::ipc::RootNotFound = storage::error::RootNotFound(root_hash).into();
+        let ipc_missing_hash = result.take_hash();
         assert_eq!(root_hash.to_vec(), ipc_missing_hash);
     }
 
@@ -321,19 +324,14 @@ mod tests {
             ExecutionEffect(HashMap::new(), input_transforms.clone());
         let cost: u64 = 123;
         let execution_result: ExecutionResult = ExecutionResult::success(execution_effect, cost);
-        let ipc_result = deploy_result_to_ipc(Ok(execution_result));
-        assert!(ipc_result.is_ok());
-        let mut ipc_deploy_result = ipc_result.unwrap();
+        let mut ipc_deploy_result: super::ipc::DeployResult = execution_result.into();
         assert_eq!(ipc_deploy_result.get_cost(), cost);
 
         // Extract transform map from the IPC message and parse it back to the domain
         let ipc_transforms: HashMap<Key, Transform> = {
             let mut ipc_effects = ipc_deploy_result.take_effects();
             let ipc_effects_tnfs = ipc_effects.take_transform_map().into_vec();
-            ipc_effects_tnfs
-                .iter()
-                .map(transform_entry_to_key_transform)
-                .collect()
+            ipc_effects_tnfs.iter().map(|e| e.into()).collect()
         };
         assert_eq!(&input_transforms, &ipc_transforms);
     }
@@ -344,9 +342,8 @@ mod tests {
 
     fn test_cost<E: Into<EngineError>>(expected_cost: u64, err: E) -> u64 {
         let execution_failure = into_execution_failure(err, expected_cost);
-        let ipc_deploy_result = deploy_result_to_ipc(Ok(execution_failure));
-        assert!(ipc_deploy_result.is_ok());
-        ipc_deploy_result.unwrap().get_cost()
+        let ipc_deploy_result: super::ipc::DeployResult = execution_failure.into();
+        ipc_deploy_result.get_cost()
     }
 
     #[test]

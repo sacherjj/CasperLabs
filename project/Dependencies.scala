@@ -73,7 +73,6 @@ object Dependencies {
   val scodecCats             = "org.scodec"                 %% "scodec-cats"                    % "0.8.0"
   val scodecBits             = "org.scodec"                 %% "scodec-bits"                    % "1.1.7"
   val shapeless              = "com.chuusai"                %% "shapeless"                      % "2.3.3"
-  val shapelessScalaCheck    = "com.github.alexarchambault" %% "scalacheck-shapeless_1.14"      % "1.2.0"
   val magnolia               = "com.propensive"             %% "magnolia"                       % "0.10.0"
   val weupnp                 = "org.bitlet"                 % "weupnp"                          % "0.1.4"
   // see https://jitpack.io/#rchain/secp256k1-java
@@ -102,7 +101,7 @@ object Dependencies {
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
-  private val testing = Seq(scalactic, scalatest, scalacheck, shapelessScalaCheck)
+  private val testing = Seq(scalactic, scalatest, scalacheck, scalacheckShapeless)
 
   private val logging = Seq(scalaLogging, logbackClassic, janino)
 
