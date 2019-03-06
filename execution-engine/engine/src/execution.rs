@@ -208,7 +208,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
 
     fn value_from_mem(&mut self, value_ptr: u32, value_size: u32) -> Result<Value, Error> {
         let bytes = self.memory.get(value_ptr, value_size as usize)?;
-        deserialize(&bytes).map_err(|e| e.into())
+        deserialize(&bytes).map_err(Into::into)
     }
 
     fn string_from_mem(&mut self, ptr: u32, size: u32) -> Result<String, Trap> {
@@ -315,7 +315,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         self.context.insert_named_uref(name.clone(), key);
         self.state
             .add(self.context.base_key, Value::NamedKey(name, key))
-            .map_err(|e| e.into())
+            .map_err(Into::into)
     }
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
@@ -421,7 +421,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         value_size: u32,
     ) -> Result<(), Trap> {
         let (key, value) = self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)?;
-        self.state.write(key, value).map_err(|e| e.into())
+        self.state.write(key, value).map_err(Into::into)
     }
 
     pub fn add(
@@ -432,12 +432,12 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         value_size: u32,
     ) -> Result<(), Trap> {
         let (key, value) = self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)?;
-        self.state.add(key, value).map_err(|e| e.into())
+        self.state.add(key, value).map_err(Into::into)
     }
 
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        self.state.read(key).map_err(|e| e.into())
+        self.state.read(key).map_err(Into::into)
     }
 
     pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {

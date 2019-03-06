@@ -23,7 +23,7 @@ impl TryFrom<&super::ipc::Transform> for storage::transform::Transform {
             let keys_map = tr
                 .get_add_keys()
                 .get_value()
-                .into_iter()
+                .iter()
                 .map(|nk| {
                     let local_nk = nk.clone();
                     local_nk.get_key().try_into().map(|k| (local_nk.name, k))
@@ -76,9 +76,7 @@ impl TryFrom<&super::ipc::Transform> for storage::transform::Transform {
                 ))
             }
         } else {
-            parse_error(format!(
-                "TransformEntry couldn't be parsed to known Transform."
-            ))
+            parse_error("TransformEntry couldn't be parsed to known Transform.".to_owned())
         }
     }
 }

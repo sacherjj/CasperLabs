@@ -22,13 +22,13 @@ impl LmdbGs {
         let env = Manager::singleton()
             .write()
             .map_err(|_| Error::RkvError(String::from("Error while creating LMDB env.")))
-            .and_then(|mut r| r.get_or_create(p, Rkv::new).map_err(|e| e.into()))?;
+            .and_then(|mut r| r.get_or_create(p, Rkv::new).map_err(Into::into))?;
         let store = env
             .read()
             .map_err(|_| Error::RkvError(String::from("Error when creating LMDB store.")))
             .and_then(|r| {
                 r.open_single(Some("global_state"), StoreOptions::create())
-                    .map_err(|e| e.into())
+                    .map_err(Into::into)
             })?;
         Ok(LmdbGs { store, env })
     }

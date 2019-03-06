@@ -176,7 +176,7 @@ impl ToBytes for Vec<i32> {
         let size = self.len() as u32;
         let mut result: Vec<u8> = Vec::with_capacity(4 + 4 * size as usize);
         result.extend(size.to_bytes());
-        result.extend(self.iter().flat_map(|e| e.to_bytes()));
+        result.extend(self.iter().flat_map(ToBytes::to_bytes));
         result
     }
 }
@@ -226,7 +226,7 @@ impl ToBytes for Vec<String> {
         let size = self.len() as u32;
         let mut result = Vec::with_capacity(4);
         result.extend(size.to_bytes());
-        let bytes = self.iter().flat_map(|s| s.to_bytes());
+        let bytes = self.iter().flat_map(ToBytes::to_bytes);
         result.extend(bytes);
         result
     }
