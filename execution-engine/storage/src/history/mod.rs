@@ -1,14 +1,14 @@
 use TreeRootHash;
 
 use common::key::Key;
-use error::{Error as StorageError, RootNotFound};
+use error::{GlobalStateError, RootNotFound};
 use gs::{DbReader, TrackingCopy};
 use std::collections::HashMap;
 use transform::Transform;
 
 pub enum CommitResult {
     Success(TreeRootHash),
-    Failure(StorageError),
+    Failure(GlobalStateError),
 }
 
 pub trait History<R: DbReader> {
