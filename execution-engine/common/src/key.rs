@@ -86,7 +86,7 @@ impl ToBytes for Vec<Key> {
         let size = self.len() as u32;
         let mut result: Vec<u8> = Vec::with_capacity(4 + (size as usize) * UREF_SIZE);
         result.extend(size.to_bytes());
-        result.extend(self.iter().flat_map(|k| k.to_bytes()));
+        result.extend(self.iter().flat_map(ToBytes::to_bytes));
         result
     }
 }

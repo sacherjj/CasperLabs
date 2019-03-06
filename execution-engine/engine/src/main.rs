@@ -72,7 +72,7 @@ fn main() {
         let mut address = [48u8; 20];
         matches
             .value_of("address")
-            .map(|addr| addr.as_bytes())
+            .map(str::as_bytes)
             .map(|bytes| address.copy_from_slice(bytes))
             .expect("Error when parsing address");
         address
