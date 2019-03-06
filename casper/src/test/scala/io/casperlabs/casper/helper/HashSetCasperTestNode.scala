@@ -422,8 +422,6 @@ object HashSetCasperTestNode {
         Applicative[F].pure[Either[Throwable, Value]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
-
-      override def close(): F[Unit] = ().pure[F]
     }
 
   private def pad(x: Array[Byte], length: Int): Array[Byte] =

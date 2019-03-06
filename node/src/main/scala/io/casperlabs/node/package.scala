@@ -2,11 +2,9 @@ package io.casperlabs
 
 import cats.data.EitherT
 import cats.syntax.applicative._
-
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.eitherT._
 import io.casperlabs.comm.CommError
-
 import monix.eval.Task
 
 package object node {

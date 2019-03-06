@@ -42,6 +42,6 @@ object Resources {
       .flatMap { tmpDir =>
         Resource.make[Task, ExecutionEngineService[Task]](Task.delay {
           ExecutionEngineService.noOpApi()
-        })(rt => rt.close())
+        })(_ => Task.unit)
       }
 }

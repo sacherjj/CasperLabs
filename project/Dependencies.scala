@@ -17,6 +17,7 @@ object Dependencies {
   val catsLawsTest           = "org.typelevel"              %% "cats-laws"                      % catsVersion % "test"
   val catsLawsTestkitTest    = "org.typelevel"              %% "cats-testkit"                   % catsVersion % "test"
   val catsEffect             = "org.typelevel"              %% "cats-effect"                    % "1.1.0"
+  val catsEffectLaws         = "org.typelevel"              %% "cats-effect-laws"               % "1.1.0" % "test"
   val catsMtl                = "org.typelevel"              %% "cats-mtl-core"                  % catsMtlVersion
   val catsMtlLawsTest        = "org.typelevel"              %% "cats-mtl-laws"                  % catsMtlVersion % "test"
   val circeCore              = "io.circe"                   %% "circe-core"                     % circeVersion
@@ -49,8 +50,9 @@ object Dependencies {
   val monix                  = "io.monix"                   %% "monix"                          % "3.0.0-RC2"
   val scalaLogging           = "com.typesafe.scala-logging" %% "scala-logging"                  % "3.9.0"
   val scalaUri               = "io.lemonlabs"               %% "scala-uri"                      % "1.1.5"
-  val scalacheck             = "org.scalacheck"             %% "scalacheck"                     % "1.14.0" % "test"
-  val scalacheckNoTest       = "org.scalacheck"             %% "scalacheck"                     % "1.14.0"
+  val scalacheck             = "org.scalacheck"             %% "scalacheck"                     % "1.13.5" % "test"
+  val scalacheckNoTest       = "org.scalacheck"             %% "scalacheck"                     % "1.13.5"
+  val scalacheckShapeless    = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13"      % "1.1.8" % "test"
   val graphvizJava           = "guru.nidi"                  %  "graphviz-java"                  % "0.8.3"
   val scalactic              = "org.scalactic"              %% "scalactic"                      % "3.0.5" % "test"
   val scalapbCompiler        = "com.thesamet.scalapb"       %% "compilerplugin"                 % scalapb.compiler.Version.scalapbVersion
@@ -99,7 +101,7 @@ object Dependencies {
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
-  private val testing = Seq(scalactic, scalatest, scalacheck)
+  private val testing = Seq(scalactic, scalatest, scalacheck, scalacheckShapeless)
 
   private val logging = Seq(scalaLogging, logbackClassic, janino)
 

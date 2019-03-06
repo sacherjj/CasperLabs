@@ -64,6 +64,7 @@ lazy val shared = (project in file("shared"))
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
       catsEffect,
+      catsEffectLaws,
       catsMtl,
       lz4,
       monix,

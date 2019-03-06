@@ -29,6 +29,11 @@ class ConfigurationSoftSpec
 
   val configFilename: String = s"test-configuration.toml"
 
+  //Needed because Scalacheck-shapeless derivation is broken
+  implicit val finiteDurationGen: Arbitrary[FiniteDuration] = Arbitrary {
+    Gen.posNum[Long].map(FiniteDuration(_, TimeUnit.MILLISECONDS))
+  }
+
   implicit val pathGen: Arbitrary[file.Path] = Arbitrary {
     for {
       n     <- Gen.size
