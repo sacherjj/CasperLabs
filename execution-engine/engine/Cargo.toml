@@ -16,7 +16,6 @@ clap = "2.32.0"
 parking_lot = "0.7.1"
 rand = "0.6.1"
 rand_chacha = "0.1.1"
-byteorder = { version = "1", default-features = false }
 
 
 [[bin]]

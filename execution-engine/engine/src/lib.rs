@@ -1,4 +1,3 @@
-extern crate byteorder;
 extern crate common;
 extern crate core;
 extern crate parity_wasm;
