@@ -166,7 +166,7 @@ pipeline:
     when:
       event: [ push, tag ]
 
-  rsync-testing:
+  rsync-artifacts:
     image: drillster/drone-rsync
     hosts: [ $REPO_HOST ]
     target: $REPO_PATH/
