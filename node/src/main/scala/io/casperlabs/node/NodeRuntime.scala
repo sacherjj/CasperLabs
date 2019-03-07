@@ -13,7 +13,6 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.comm.CasperPacketHandler
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}

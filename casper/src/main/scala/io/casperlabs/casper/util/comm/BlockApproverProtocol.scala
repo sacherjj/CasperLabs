@@ -11,7 +11,7 @@ import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.deploy2deploy
-import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil}
 import io.casperlabs.catscontrib.Capture
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
@@ -50,10 +50,10 @@ class BlockApproverProtocol(
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk: ExecutionEngineService](
+  def unapprovedBlockPacketHandler[
+      F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk: ExecutionEngineService](
       peer: PeerNode,
-      u: UnapprovedBlock,
-      runtimeManager: RuntimeManager[F]
+      u: UnapprovedBlock
   ): F[Unit] =
     if (u.candidate.isEmpty) {
       Log[F]
@@ -63,7 +63,6 @@ class BlockApproverProtocol(
       val candidate = u.candidate.get
       BlockApproverProtocol
         .validateCandidate(
-          runtimeManager,
           candidate,
           requiredSigs,
           deployTimestamp,
@@ -110,7 +109,6 @@ object BlockApproverProtocol {
     getBlockApproval(candidate, validatorId)
 
   def validateCandidate[F[_]: Concurrent: Log: ExecutionEngineService](
-      runtimeManager: RuntimeManager[F],
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
       timestamp: Long,
@@ -175,7 +173,9 @@ object BlockApproverProtocol {
           )
       tuplespaceBonds <- EitherT(
                           Concurrent[F]
-                            .attempt(runtimeManager.computeBonds(postState.postStateHash))
+                            .attempt(
+                              ExecutionEngineService[F].computeBonds(postState.postStateHash)
+                            )
                         ).leftMap(_.getMessage)
       tuplespaceBondsMap = tuplespaceBonds.map {
         case Bond(validator, stake) => validator -> stake

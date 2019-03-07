@@ -652,10 +652,6 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       })
     }
 
-  //TODO: Delete this method
-  def getRuntimeManager: F[Option[RuntimeManager[F]]] =
-    Applicative[F].pure(None)
-
   def fetchDependencies: F[Unit] =
     for {
       s <- Cell[F, CasperState].read

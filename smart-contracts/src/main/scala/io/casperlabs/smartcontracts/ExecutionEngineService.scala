@@ -1,6 +1,5 @@
 package io.casperlabs.smartcontracts
 
-import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
@@ -12,7 +11,7 @@ import cats.syntax.flatMap._
 import cats.syntax.apply._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.DeployData
+import io.casperlabs.casper.protocol.Bond
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
@@ -36,6 +35,8 @@ import scala.util.Either
       deploys: Seq[Deploy]
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
+  def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
+  def setBonds(bonds: Map[Array[Byte], Long])
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
@@ -45,6 +46,8 @@ class GrpcExecutionEngineService[F[_]: Sync: Log: TaskLift] private[smartcontrac
     maxMessageSize: Int,
     stub: Stub
 ) extends ExecutionEngineService[F] {
+
+  var initialBonds = Seq.empty[Bond]
 
   override def emptyStateHash: ByteString = ByteString.copyFrom(Array.fill(32)(0.toByte))
 
@@ -100,6 +103,16 @@ class GrpcExecutionEngineService[F[_]: Sync: Log: TaskLift] private[smartcontrac
         case QueryResponse.Result.Failure(err)   => Left(new SmartContractEngineError(err))
       }
     }
+  // Todo
+  override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
+    // FIXME: Implement bonds!
+    initialBonds.pure[F]
+
+  // Todo Pass in the genesis bonds until we have a solution based on the BlockStore.
+  override def setBonds(bonds: Map[Array[Byte], Long]): Unit =
+    initialBonds = bonds.map {
+      case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
+    }.toSeq
   override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
     stub.validate(contracts).to[F] >>= (
       _.result match {
@@ -137,6 +150,9 @@ object ExecutionEngineService {
       ): F[Either[Throwable, Value]] =
         Applicative[F]
           .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented")))
+      override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
+        Seq.empty[Bond].pure
+      override def setBonds(bonds: Map[Array[Byte], Long]): Unit = ()
       override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
         ().asRight[String].pure[F]
     }

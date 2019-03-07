@@ -18,9 +18,6 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.scalatestcontrib._
 import monix.eval.Task
-import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
-import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
-import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -137,39 +134,37 @@ class CasperUtilTest
         b10     <- createBlock[Task](Seq(b8.blockHash), deploys = Seq(deploys(4)))
 
         dag <- blockDagStorage.getRepresentation
-        result <- mkRuntimeManager("casper-util-test").use { runtimeManager =>
-                   for {
-                     computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                                      genesis,
-                                                      genesis,
-                                                      dag
-                                                    )
-                     (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
-                     _ <- injectPostStateHash[Task](
-                           0,
-                           genesis,
-                           postGenStateHash,
-                           postGenProcessedDeploys
-                         )
-                     _ <- updateChainWithBlockStateUpdate[Task](1, genesis)
-                     _ <- updateChainWithBlockStateUpdate[Task](2, genesis)
-                     _ <- updateChainWithBlockStateUpdate[Task](3, genesis)
-                     _ <- updateChainWithBlockStateUpdate[Task](4, genesis)
-                     _ <- updateChainWithBlockStateUpdate[Task](5, genesis)
-                     _ <- updateChainWithBlockStateUpdate[Task](6, genesis)
-                     _ <- updateChainWithBlockStateUpdate[Task](7, genesis)
-                     _ <- updateChainWithBlockStateUpdate[Task](8, genesis)
-                     _ <- updateChainWithBlockStateUpdate[Task](9, genesis)
+        result <- for {
+                   computeBlockCheckpointResult <- computeBlockCheckpoint(
+                                                    genesis,
+                                                    genesis,
+                                                    dag
+                                                  )
+                   (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
+                   _ <- injectPostStateHash[Task](
+                         0,
+                         genesis,
+                         postGenStateHash,
+                         postGenProcessedDeploys
+                       )
+                   _ <- updateChainWithBlockStateUpdate[Task](1, genesis)
+                   _ <- updateChainWithBlockStateUpdate[Task](2, genesis)
+                   _ <- updateChainWithBlockStateUpdate[Task](3, genesis)
+                   _ <- updateChainWithBlockStateUpdate[Task](4, genesis)
+                   _ <- updateChainWithBlockStateUpdate[Task](5, genesis)
+                   _ <- updateChainWithBlockStateUpdate[Task](6, genesis)
+                   _ <- updateChainWithBlockStateUpdate[Task](7, genesis)
+                   _ <- updateChainWithBlockStateUpdate[Task](8, genesis)
+                   _ <- updateChainWithBlockStateUpdate[Task](9, genesis)
 
-                     _      <- conflicts[Task](b2, b3, genesis, dag) shouldBeF false
-                     _      <- conflicts[Task](b4, b5, genesis, dag) shouldBeF true
-                     _      <- conflicts[Task](b6, b6, genesis, dag) shouldBeF false
-                     _      <- conflicts[Task](b6, b9, genesis, dag) shouldBeF false
-                     _      <- conflicts[Task](b7, b8, genesis, dag) shouldBeF false
-                     _      <- conflicts[Task](b7, b10, genesis, dag) shouldBeF false
-                     result <- conflicts[Task](b9, b10, genesis, dag) shouldBeF true
-                   } yield result
-                 }
+                   _      <- conflicts[Task](b2, b3, genesis, dag) shouldBeF false
+                   _      <- conflicts[Task](b4, b5, genesis, dag) shouldBeF true
+                   _      <- conflicts[Task](b6, b6, genesis, dag) shouldBeF false
+                   _      <- conflicts[Task](b6, b9, genesis, dag) shouldBeF false
+                   _      <- conflicts[Task](b7, b8, genesis, dag) shouldBeF false
+                   _      <- conflicts[Task](b7, b10, genesis, dag) shouldBeF false
+                   result <- conflicts[Task](b9, b10, genesis, dag) shouldBeF true
+                 } yield result
       } yield result
   }
 }

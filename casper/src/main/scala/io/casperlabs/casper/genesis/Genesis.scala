@@ -13,8 +13,8 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import io.casperlabs.casper.util.Sorting
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
-import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.ipc
@@ -35,7 +35,7 @@ object Genesis {
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String
-  ): List[Deploy] =
+  ): List[DeployData] =
     List()
 
   def withContracts[F[_]: Concurrent: Log: ExecutionEngineService](
@@ -44,21 +44,18 @@ object Genesis {
       wallets: Seq[PreWallet],
       faucetCode: String => String,
       startHash: StateHash,
-      runtimeManager: RuntimeManager[F],
       timestamp: Long
   ): F[BlockMessage] =
     withContracts(
       defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
       initial,
-      startHash,
-      runtimeManager
+      startHash
     )
 
   def withContracts[F[_]: Concurrent: Log: ExecutionEngineService](
-      blessedTerms: List[Deploy],
+      blessedTerms: List[DeployData],
       initial: BlockMessage,
-      startHash: StateHash,
-      runtimeManager: RuntimeManager[F]
+      startHash: StateHash
   ): F[BlockMessage] =
     for {
       possibleResult <- ExecutionEngineService[F]
@@ -92,7 +89,9 @@ object Genesis {
       stateWithContracts = for {
         bd <- initial.body
         ps <- bd.state
-      } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(postStateHash)
+      } yield
+        ps.withPreStateHash(ExecutionEngineService[F].emptyStateHash)
+          .withPostStateHash(postStateHash)
       version       = initial.header.get.version
       timestamp     = initial.header.get.timestamp
       body          = Body(state = stateWithContracts, deploys = deploysForBlock)
@@ -130,13 +129,12 @@ object Genesis {
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean,
-      runtimeManager: RuntimeManager[F],
       shardId: String,
       deployTimestamp: Option[Long]
   ): F[BlockMessage] =
     for {
       wallets   <- getWallets[F](walletsPath)
-      bonds     <- runtimeManager.computeBonds(runtimeManager.emptyStateHash)
+      bonds     <- ExecutionEngineService[F].computeBonds(ExecutionEngineService[F].emptyStateHash)
       bondsMap  = bonds.map(b => b.validator.toByteArray -> b.stake).toMap
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       initial = withoutContracts(
@@ -152,8 +150,7 @@ object Genesis {
                     ProofOfStakeParams(minimumBond, maximumBond, validators),
                     wallets,
                     faucetCode,
-                    runtimeManager.emptyStateHash,
-                    runtimeManager,
+                    ExecutionEngineService[F].emptyStateHash,
                     timestamp
                   )
     } yield withContr

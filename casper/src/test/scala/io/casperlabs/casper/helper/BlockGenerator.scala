@@ -16,7 +16,6 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.{
   processDeploys,
   StateHash
 }
-import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.ipc.{DeployResult, TransformEntry}

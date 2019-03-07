@@ -3,7 +3,6 @@ package io.casperlabs.casper.util
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.{Blake2b256, Keccak256}
 import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
@@ -24,8 +23,7 @@ object BondingUtil {
   def bondingForwarderDeploy(bondKey: String, ethAddress: String): String = """"""
 
   def unlockDeploy[F[_]: Sync](ethAddress: String, pubKey: String, secKey: String)(
-      implicit runtimeManager: RuntimeManager[F],
-      scheduler: Scheduler
+      implicit scheduler: Scheduler
   ): F[String] =
     preWalletUnlockDeploy(ethAddress, pubKey, Base16.decode(secKey), s"${ethAddress}_unlockOut")
 
@@ -35,8 +33,7 @@ object BondingUtil {
       pubKey: String,
       secKey: String
   )(
-      implicit runtimeManager: RuntimeManager[F],
-      scheduler: Scheduler
+      implicit scheduler: Scheduler
   ): F[String] =
     issuanceWalletTransferDeploy(
       0, //nonce
@@ -52,13 +49,13 @@ object BondingUtil {
       pubKey: String,
       secKey: Array[Byte],
       statusOut: String
-  )(implicit runtimeManager: RuntimeManager[F], scheduler: Scheduler): F[String] = ???
+  )(implicit scheduler: Scheduler): F[String] = ???
 
   def walletTransferSigData[F[_]: Sync](
       nonce: Int,
       amount: Long,
       destination: String
-  )(implicit runtimeManager: RuntimeManager[F], scheduler: Scheduler): F[Array[Byte]] = ???
+  )(implicit scheduler: Scheduler): F[Array[Byte]] = ???
 
   def issuanceWalletTransferDeploy[F[_]: Sync](
       nonce: Int,
@@ -67,14 +64,14 @@ object BondingUtil {
       transferStatusOut: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager[F], scheduler: Scheduler): F[String] = """""".pure[F]
+  )(implicit scheduler: Scheduler): F[String] = """""".pure[F]
 
   def faucetBondDeploy[F[_]: Sync](
       amount: Long,
       sigAlgorithm: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager[F]): F[String] = """""".pure[F]
+  ): F[String] = """""".pure[F]
 
   def writeFile[F[_]: Sync](name: String, content: String): F[Unit] = {
     val file =
@@ -92,17 +89,6 @@ object BondingUtil {
   def makeExecutionEngineServiceResource[F[_]: Sync](
       runtimeDirResource: Resource[F, Path]
   ): Resource[F, ExecutionEngineService[Task]] = ???
-
-  def makeRuntimeManagerResource[F[_]: Concurrent](
-      executionEngineServiceResource: Resource[F, ExecutionEngineService[F]]
-  ): Resource[F, RuntimeManager[F]] =
-    executionEngineServiceResource.flatMap(
-      executionEngineService =>
-        Resource
-          .make(RuntimeManager.fromExecutionEngineService(executionEngineService).pure[F])(
-            _ => Sync[F].unit
-          )
-    )
 
   def bondingDeploy[F[_]: Sync](
       bondKey: String,

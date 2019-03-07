@@ -11,7 +11,6 @@ import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, Bloc
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
@@ -20,7 +19,6 @@ import io.casperlabs.shared.Time
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -376,33 +374,30 @@ class ValidateTest
         b7 <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
         b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
         b9 <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0) //empty justification
-        result <- mkRuntimeManager("casper-util-test")
-                   .use { runtimeManager =>
-                     for {
-                       dag <- blockDagStorage.getRepresentation
+        result <- for {
+                   dag <- blockDagStorage.getRepresentation
 
-                       // Valid
-                       _ <- Validate.parents[Task](b0, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b1, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b2, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b3, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b4, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b5, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b6, b0, b0.blockHash, dag)
+                   // Valid
+                   _ <- Validate.parents[Task](b0, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b1, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b2, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b3, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b4, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b5, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b6, b0, b0.blockHash, dag)
 
-                       // Not valid
-                       _ <- Validate.parents[Task](b7, b0, b0.blockHash, dag).attempt
-                       _ <- Validate.parents[Task](b8, b0, b0.blockHash, dag).attempt
-                       _ <- Validate.parents[Task](b9, b0, b0.blockHash, dag).attempt
+                   // Not valid
+                   _ <- Validate.parents[Task](b7, b0, b0.blockHash, dag).attempt
+                   _ <- Validate.parents[Task](b8, b0, b0.blockHash, dag).attempt
+                   _ <- Validate.parents[Task](b9, b0, b0.blockHash, dag).attempt
 
-                       _ = log.warns should have size (3)
-                       result = log.warns.forall(
-                         _.contains("block parents did not match estimate based on justification")
-                       ) should be(
-                         true
-                       )
-                     } yield result
-                   }
+                   _ = log.warns should have size (3)
+                   result = log.warns.forall(
+                     _.contains("block parents did not match estimate based on justification")
+                   ) should be(
+                     true
+                   )
+                 } yield result
       } yield result
   }
 
@@ -590,8 +585,8 @@ class ValidateTest
       val storageDirectory                 = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long                = 1024L * 1024
       implicit val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-      val runtimeManager                   = RuntimeManager[Task](casperSmartContractsApi, bonds)
-      implicit val log                     = new LogStub[Task]
+      casperSmartContractsApi.setBonds(bonds)
+      implicit val log = new LogStub[Task]
       for {
         dag <- blockDagStorage.getRepresentation
         // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct

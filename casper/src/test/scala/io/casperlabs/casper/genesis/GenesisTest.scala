@@ -16,7 +16,6 @@ import io.casperlabs.casper.helper.{
 }
 import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
@@ -229,14 +228,13 @@ object GenesisTest {
       time: LogicalTime[Task]
   ): Task[BlockMessage] =
     for {
-      bonds          <- Genesis.getBonds[Task](genesisPath, bondsPath, numValidators)
-      runtimeManager = RuntimeManager[Task](executionEngineService, bonds)
+      bonds <- Genesis.getBonds[Task](genesisPath, bondsPath, numValidators)
+      _     = ExecutionEngineService[Task].setBonds(bonds)
       genesis <- Genesis[Task](
                   walletsPath = nonExistentPath,
                   minimumBond = 1L,
                   maximumBond = Long.MaxValue,
                   faucet = false,
-                  runtimeManager,
                   shardId = casperlabsShardId,
                   deployTimestamp = Some(System.currentTimeMillis)
                 )

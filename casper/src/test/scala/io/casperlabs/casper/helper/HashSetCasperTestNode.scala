@@ -20,7 +20,6 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerInternal
 }
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.effect.implicits._
@@ -73,8 +72,6 @@ class HashSetCasperTestNode[F[_]](
     val casperState: Cell[F, CasperState]
 ) {
 
-  private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
-
   implicit val logEff             = new LogStub[F]
   implicit val timeEff            = logicalTime
   implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
@@ -82,13 +79,13 @@ class HashSetCasperTestNode[F[_]](
   implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
   implicit val rpConfAsk          = createRPConfAsk[F](local)
 
-  val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F]()
+  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F]()
 
   val bonds = genesis.body
     .flatMap(_.state.map(_.bonds.map(b => b.validator.toByteArray -> b.stake).toMap))
     .getOrElse(Map.empty)
+  casperSmartContractsApi.setBonds(bonds)
 
-  val runtimeManager = RuntimeManager(casperSmartContractsApi, bonds)
   val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
@@ -98,7 +95,6 @@ class HashSetCasperTestNode[F[_]](
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
-  implicit val ee = runtimeManager.executionEngineService
   implicit val casperEff = new MultiParentCasperImpl[F](
     Some(validatorId),
     genesis,
@@ -306,7 +302,7 @@ object HashSetCasperTestNode {
                 _ =>
                   n.connectionsCell.flatModify(
                     _.addConn[F](m.local)(Monad[F], n.logEff, n.metricEff)
-                  )
+                )
               )
           }
     } yield nodes
@@ -368,9 +364,10 @@ object HashSetCasperTestNode {
 
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
   def simpleEEApi[F[_]: Applicative](): ExecutionEngineService[F] =
-    new ExecutionEngineService[F] {
+    new ExecutionEngineService[F]() {
       import ipc._
-      private val zero = Array.fill(32)(0.toByte)
+      private val zero         = Array.fill(32)(0.toByte)
+      private var initialBonds = Seq.empty[Bond]
 
       private def getExecutionEffect(deploy: Deploy) = {
         val key           = Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
@@ -417,7 +414,12 @@ object HashSetCasperTestNode {
         Applicative[F].pure[Either[Throwable, Value]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
-
+      override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
+        initialBonds.pure[F]
+      override def setBonds(bonds: Map[Array[Byte], Long]): Unit =
+        initialBonds = bonds.map {
+          case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
+        }.toSeq
       override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
         ().asRight[String].pure[F]
     }
