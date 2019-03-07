@@ -64,10 +64,13 @@ object Genesis {
       possibleResult <- ExecutionEngineService[F]
                          .exec(startHash, blessedTerms.map(ExecEngineUtil.deploy2deploy))
       processedDeploys <- possibleResult match {
-                           case Left(ex)             => Seq[DeployResult]().pure[F]
+                           case Left(ex)             => Concurrent[F].raiseError(ex)
                            case Right(deployResults) => deployResults.pure[F]
                          }
-      deployLookup     = processedDeploys.zip(blessedTerms).toMap
+      deployLookup = processedDeploys.zip(blessedTerms).toMap
+      // Todo We shouldn't need to do any commutivity checking for the genesis block.
+      // Either we make it a "SEQ" block (which is not a feature that exists yet)
+      // or there should be a single deploy containing all the blessed contracts.
       commutingEffects = ExecEngineUtil.findCommutingEffects(processedDeploys)
       deploysForBlock = commutingEffects.map {
         case (eff, cost) => {
