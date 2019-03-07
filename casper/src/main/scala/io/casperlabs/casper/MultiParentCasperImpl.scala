@@ -38,7 +38,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 final case class CasperState(
     seenBlockHashes: Set[BlockHash] = Set.empty[BlockHash],
     blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
-    deployHistory: Set[Deploy] = Set.empty[Deploy],
+    deployHistory: Set[DeployData] = Set.empty[DeployData],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord],
@@ -214,21 +214,17 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       bufferContains     = state.blockBuffer.exists(_.blockHash == b.blockHash)
     } yield (blockStoreContains || bufferContains)
 
-  //TODO: `Deploy` is now redundant with `DeployData`, so we should remove it.
-  //The reason we needed both in RChain was because rholang was submitted as source
-  //code and parsed by the node. Now we just accept wasm code directly. We still need
-  //to verify the wasm code for correctness though.
   //TODO: verify wasm code correctness (done in rust but should be immediate so that we fail fast)
   //TODO: verify sig immediately (again, so we fail fast)
-  def deploy(d: DeployData): F[Either[Throwable, Unit]] =
-    addDeploy(Deploy(d.sessionCode, Some(d))).map(_ => Right(()))
+  def deploy(d: DeployData): F[Either[Throwable, Unit]] = addDeploy(d) map Right.apply
+  //addDeploy(Deploy(d.sessionCode, Some(d))).map(_ => Right(()))
 
-  def addDeploy(deploy: Deploy): F[Unit] =
+  def addDeploy(deployData: DeployData): F[Unit] =
     for {
       _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployHistory = s.deployHistory + deploy)
+            s.copy(deployHistory = s.deployHistory + deployData)
           }
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
+      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deployData)}")
     } yield ()
 
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
@@ -292,7 +288,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   private def remainingDeploys(
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage]
-  ): F[Seq[Deploy]] =
+  ): F[Seq[DeployData]] =
     for {
       state <- Cell[F, CasperState].read
       hist  = state.deployHistory
@@ -313,7 +309,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   private def createProposal(
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage],
-      r: Seq[Deploy],
+      r: Seq[DeployData],
       justifications: Seq[Justification]
   ): F[CreateBlockStatus] =
     (for {

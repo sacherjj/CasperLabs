@@ -25,12 +25,12 @@ class RuntimeManager[F[_]: Concurrent] private (
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
-  ): F[Either[(Option[Deploy], Failed), StateHash]] =
-    hash.asRight[(Option[Deploy], Failed)].pure
+  ): F[Either[(Option[DeployData], Failed), StateHash]] =
+    hash.asRight[(Option[DeployData], Failed)].pure
 
   def computeState(
       hash: StateHash,
-      terms: Seq[(Deploy, ExecutionEffect)],
+      terms: Seq[(DeployData, ExecutionEffect)],
       time: Option[Long] = None
   )(implicit log: Log[F]): F[(StateHash, Seq[InternalProcessedDeploy])] =
     //replaced by ExecEngineUtil

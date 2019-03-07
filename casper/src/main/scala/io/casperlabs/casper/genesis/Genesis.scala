@@ -30,7 +30,7 @@ object Genesis {
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String
-  ): List[Deploy] =
+  ): List[DeployData] =
     List()
 
   def withContracts[F[_]: Concurrent: Log](
@@ -50,7 +50,7 @@ object Genesis {
     )
 
   def withContracts[F[_]: Concurrent: Log](
-      blessedTerms: List[Deploy],
+      blessedTerms: List[DeployData],
       initial: BlockMessage,
       startHash: StateHash,
       runtimeManager: RuntimeManager[F]

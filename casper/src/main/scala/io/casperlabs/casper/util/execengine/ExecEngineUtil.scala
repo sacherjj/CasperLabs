@@ -6,7 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.protocol
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.protocol.{BlockMessage, DeployData}
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.ipc._
 import io.casperlabs.models.BlockMetadata
@@ -15,9 +15,9 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 object ExecEngineUtil {
   type StateHash = ByteString
 
-  private def deploy2deploy(d: protocol.Deploy): Deploy =
-    d.raw.fold(Deploy()) {
-      case protocol.DeployData(
+  private def deploy2deploy(d: DeployData): Deploy =
+    d match {
+      case DeployData(
           addr,
           time,
           sCode,
@@ -43,7 +43,7 @@ object ExecEngineUtil {
   def processDeploys[F[_]: Sync: ExecutionEngineService](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
-      deploys: Seq[protocol.Deploy],
+      deploys: Seq[DeployData],
       //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
       transforms: BlockMetadata => F[Seq[TransformEntry]]
   ): F[(StateHash, Seq[DeployResult])] =

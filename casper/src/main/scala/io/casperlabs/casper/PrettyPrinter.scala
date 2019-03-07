@@ -2,7 +2,6 @@ package io.casperlabs.casper
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
 import io.casperlabs.ipc
 import scalapb.GeneratedMessage
 import io.casperlabs.crypto.codec._
@@ -14,7 +13,7 @@ object PrettyPrinter {
   def buildString(t: GeneratedMessage): String =
     t match {
       case b: BlockMessage  => buildString(b)
-      case d: Deploy        => buildString(d)
+      case d: DeployData    => buildString(d)
       case k: ipc.Key       => buildString(k)
       case t: ipc.Transform => buildString(t)
       case v: ipc.Value     => buildString(v)
@@ -89,8 +88,8 @@ object PrettyPrinter {
   def buildString(b: ByteString): String =
     limit(Base16.encode(b.toByteArray), 10)
 
-  private def buildString(d: Deploy): String =
-    s"Deploy #${d.raw.fold(0L)(_.timestamp)}"
+  private def buildString(d: DeployData): String =
+    s"Deploy #${d.timestamp}"
 
   private def buildString(r: RChainState): String =
     buildString(r.postStateHash)

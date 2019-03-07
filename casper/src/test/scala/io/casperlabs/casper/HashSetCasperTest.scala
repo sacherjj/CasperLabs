@@ -114,7 +114,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ = parents should have size 1
       _ = parents.head shouldBe genesis.blockHash
       _ = deploys should have size 1
-      _ = deploys.head.raw should contain(deploy)
+      _ = deploys.head shouldEqual deploy
       _ = pendingUntilFixed {
         storage.contains("@{0}!(0)") shouldBe true
       }
@@ -219,9 +219,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       ByteString.readFrom(getClass.getResourceAsStream("/helloname.wasm"))
 
     val List(data0, data1) =
-      (0 to 1)
-        .flatMap(i => ProtoUtil.sourceDeploy(dummyContract, i.toLong, Long.MaxValue).raw)
-        .toList
+      (for (i <- 0 to 1)
+        yield ProtoUtil.sourceDeploy(dummyContract, i.toLong, Long.MaxValue)).toList
 
     for {
       nodes              <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
@@ -846,7 +845,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d))).toIndexedSeq
 
       createBlockResult <- nodes(0).casperEff
-                            .deploy(deploys(0).raw.get) *> nodes(0).casperEff.createBlock
+                            .deploy(deploys(0)) *> nodes(0).casperEff.createBlock
       Created(signedBlock) = createBlockResult
       signedInvalidBlock = BlockUtil.resignBlock(
         signedBlock.withSeqNum(-2),
