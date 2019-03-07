@@ -368,12 +368,12 @@ class InterpreterUtilTest
   def computeSingleProcessedDeploy(
       runtimeManager: RuntimeManager[Task],
       dag: BlockDagRepresentation[Task],
-      deploy: Deploy*
+      deploy: DeployData*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[InternalProcessedDeploy]] =
     for {
       executionResults <- Task.traverse(deploy) { d =>
                            runtimeManager
-                             .sendDeploy(ProtoUtil.deployDataToEEDeploy(d.getRaw))
+                             .sendDeploy(ProtoUtil.deployDataToEEDeploy(d))
                              .flatMap {
                                case Right(effect) => Task.now(d -> effect)
                                // FIXME: The `computeDeploysCheckpoint` should allow passing in

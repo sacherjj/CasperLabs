@@ -134,11 +134,10 @@ object BlockApproverProtocol {
         genesisBlessedContracts = Genesis
           .defaultBlessedTerms(timestamp, posParams, wallets, faucetCode)
           .toSet
-        blockDeploys          = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
-        genesisBlessedDeploys = genesisBlessedContracts.flatMap(_.raw)
+        blockDeploys = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
         _ <- blockDeploys
               .forall(
-                d => genesisBlessedDeploys.exists(dd => deployDataEq.eqv(dd, d.deploy.raw.get))
+                d => genesisBlessedContracts.exists(dd => deployDataEq.eqv(dd, d.deploy))
               )
               .either(())
               .or("Candidate deploys do not match expected deploys.")

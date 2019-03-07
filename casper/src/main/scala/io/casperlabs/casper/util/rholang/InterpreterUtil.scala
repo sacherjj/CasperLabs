@@ -129,7 +129,7 @@ object InterpreterUtil {
 
   def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Log](
       parents: Seq[BlockMessage],
-      deploysWithEffect: Seq[(Deploy, ExecutionEffect)],
+      deploysWithEffect: Seq[(DeployData, ExecutionEffect)],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       time: Option[Long] = None
@@ -250,35 +250,28 @@ object InterpreterUtil {
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
 
-      deploys: Seq[Deploy] = ProtoUtil.deploys(b).flatMap(_.deploy)
+      deploys: Seq[DeployData] = ProtoUtil.deploys(b).flatMap(_.deploy)
       deploysEffect <- deploys.toList
-                        .foldM[F, Either[Throwable, Seq[(Deploy, ExecutionEffect)]]](
+                        .foldM[F, Either[Throwable, Seq[(DeployData, ExecutionEffect)]]](
                           Seq()
                             .asRight[Throwable]
                         ) {
                           case (Left(e), _) =>
-                            e.asLeft[Seq[(Deploy, ExecutionEffect)]]
+                            e.asLeft[Seq[(DeployData, ExecutionEffect)]]
                               .pure[F]
                           case (Right(acc), d) =>
-                            d.raw match {
-                              case Some(r) =>
-                                runtimeManager
-                                  .sendDeploy(
-                                    ProtoUtil
-                                      .deployDataToEEDeploy(r)
-                                  )
-                                  .map {
-                                    case Left(e) =>
-                                      e.asLeft[Seq[(Deploy, ExecutionEffect)]]
-                                    case Right(effect) =>
-                                      (acc :+ (d, effect))
-                                        .asRight[Throwable]
-                                  }
-                              case None =>
-                                (acc :+ (d, ExecutionEffect()))
-                                  .asRight[Throwable]
-                                  .pure[F]
-                            }
+                            runtimeManager
+                              .sendDeploy(
+                                ProtoUtil
+                                  .deployDataToEEDeploy(d)
+                              )
+                              .map {
+                                case Left(e) =>
+                                  e.asLeft[Seq[(DeployData, ExecutionEffect)]]
+                                case Right(effect) =>
+                                  (acc :+ (d, effect))
+                                    .asRight[Throwable]
+                              }
                         }
       _ = assert(
         parents.nonEmpty || (parents.isEmpty && b == genesis),

@@ -241,14 +241,8 @@ object ProtoUtil {
 
   def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
     deploys(b).toStream
-      .flatMap(getDeployData)
+      .flatMap(_.deploy)
       .exists(deployData => deployData.user == user && deployData.timestamp == timestamp)
-
-  private def getDeployData(d: ProcessedDeploy): Option[DeployData] =
-    for {
-      deploy     <- d.deploy
-      deployData <- deploy.raw
-    } yield deployData
 
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
     b.body.fold(Seq.empty[ProcessedDeploy])(_.deploys)
@@ -297,7 +291,7 @@ object ProtoUtil {
                  false.pure[F]
                } else {
                  // Gather for each deploy which blocks it appears in.
-                 def getDeploys(b: BlockMessage): F[Map[Deploy, Set[ByteString]]] =
+                 def getDeploys(b: BlockMessage): F[Map[DeployData, Set[ByteString]]] =
                    for {
                      bAncestors <- DagOperations
                                     .bfTraverseF[F, BlockMessage](List(b))(
@@ -308,7 +302,7 @@ object ProtoUtil {
                      deploys = bAncestors
                        .flatMap { b =>
                          val deploys =
-                           b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
+                           b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[DeployData])
                          deploys.map(_ -> b.blockHash)
                        }
                        .groupBy { case (d, b) => d }
@@ -321,8 +315,8 @@ object ProtoUtil {
                    b2Deploys <- getDeploys(b2)
                    // Find deploys that appear in multiple blocks.
                    conflicts = (b1Deploys.keySet ++ b2Deploys.keySet).filter { d =>
-                     val fromB1 = b1Deploys.get(d).getOrElse(Set.empty)
-                     val fromB2 = b2Deploys.get(d).getOrElse(Set.empty)
+                     val fromB1 = b1Deploys.getOrElse(d, Set.empty)
+                     val fromB2 = b2Deploys.getOrElse(d, Set.empty)
                      (fromB1 union fromB2).size > 1
                    }
                    _ <- if (conflicts.nonEmpty) {
@@ -491,10 +485,10 @@ object ProtoUtil {
           .withGasLimit(Integer.MAX_VALUE)
     )
 
-  def basicDeploy[F[_]: Monad: Time](id: Int): F[Deploy] =
+  def basicDeploy[F[_]: Monad: Time](id: Int): F[DeployData] =
     for {
       d <- basicDeployData[F](id)
-    } yield Deploy(raw = Some(d))
+    } yield d
 
   //Todo: it is for testing
   def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
@@ -511,26 +505,18 @@ object ProtoUtil {
   def compiledSourceDeploy(
       timestamp: Long,
       gasLimit: Long
-  ): Deploy = ???
+  ): DeployData = ???
 
-  def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): Deploy =
-    Deploy(
-      raw = Some(
-        DeployData(
-          user = ByteString.EMPTY,
-          timestamp = timestamp,
-          sessionCode = sessionCode,
-          gasLimit = gasLimit
-        )
-      )
+  def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): DeployData =
+    DeployData(
+      user = ByteString.EMPTY,
+      timestamp = timestamp,
+      sessionCode = sessionCode,
+      gasLimit = gasLimit
     )
 
-  def termDeployNow(sessionCode: ByteString): Deploy =
+  def termDeployNow(sessionCode: ByteString): DeployData =
     sourceDeploy(sessionCode, System.currentTimeMillis(), Integer.MAX_VALUE)
-
-  def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
-    raw = Some(dd)
-  )
 
   def deployDataToEEDeploy(dd: DeployData): EEDeploy = EEDeploy(
     address = dd.address,

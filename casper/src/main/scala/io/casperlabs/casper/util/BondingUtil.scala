@@ -4,7 +4,6 @@ import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.casper.util.rholang.RuntimeManager
-import io.casperlabs.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.{Blake2b256, Keccak256}
 import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}

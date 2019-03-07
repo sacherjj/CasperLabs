@@ -249,7 +249,7 @@ message Header {
 }
 
 message ProcessedDeploy {
-    Deploy deploy = 1;
+    DeployData deploy = 1;
     //TODO PCost previously
     uint64 cost = 2;
     bool errored = 3; //true if deploy encountered a user error
@@ -274,12 +274,6 @@ message RChainState {
     //(which will be part of the tuplespace in the real implementation).
     repeated Bond bonds = 3;
     int64 blockNumber = 4;
-}
-
-message Deploy {
-    //TODO
-    bytes sessionCode = 1; //wasm
-    DeployData raw = 2;
 }
 
 message Event {
