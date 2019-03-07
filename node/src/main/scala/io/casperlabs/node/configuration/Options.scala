@@ -9,10 +9,10 @@ import io.casperlabs.node.BuildInfo
 import io.casperlabs.shared.{scallop, StoreType}
 import org.rogach.scallop._
 
+import scala.collection.mutable
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.io.Source
 import scala.language.implicitConversions
-import scala.util.Try
 
 private[configuration] object Converter {
   import Options._
@@ -84,12 +84,7 @@ private[configuration] object Options {
     so.map(identity)
 
   def safeCreate(args: Seq[String], defaults: Map[String, String]): Either[String, Options] =
-    try {
-      Options(args, defaults).asRight[String]
-    } catch {
-      case e: Throwable =>
-        e.getMessage.asLeft[Options]
-    }
+    Either.catchNonFatal(Options(args, defaults)).leftMap(_.getMessage)
 }
 
 //noinspection TypeAnnotation
@@ -109,8 +104,8 @@ private[configuration] final case class Options private (
     * Converts between string representation of field name and its actual value
     * Filled by [[io.casperlabs.shared.scallop]] macro
     */
-  private var fields =
-    Map.empty[(ScallopConfBase, String), () => ScallopOption[String]]
+  private val fields =
+    mutable.Map.empty[(ScallopConfBase, String), () => ScallopOption[String]]
 
   implicit def scallopOptionToOption[A](so: ScallopOption[A]): Option[A] = so.toOption
 
@@ -234,12 +229,10 @@ private[configuration] final case class Options private (
       case _                => "Failed to parse command".asLeft[Configuration.Command]
     }
 
-  def tryReadConfigFile: Either[String, Option[String]] =
+  def readConfigFile: Either[String, Option[String]] =
     configFile.toOption
       .map(
-        p =>
-          try Source.fromFile(p.toFile).mkString.some.asRight[String]
-          catch { case e: Throwable => e.getMessage.asLeft[Option[String]] }
+        p => Either.catchNonFatal(Source.fromFile(p.toFile).mkString.some).leftMap(_.getMessage)
       )
       .fold(none[String].asRight[String])(identity)
 

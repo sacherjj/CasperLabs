@@ -24,12 +24,12 @@ import scala.reflect.macros.blackbox
   * {{{
   * val run = new Subcommand {
   *   val someOption = {
-  *     fields = fields.updated((this, "someOption"), () => someOption.map(_.toString))
+  *     fields += ((this, "someOption"), () => someOption.map(_.toString))
   *     opt[Int](descr = "Int. Some description. Default is 10.", short = 'c')
   *   }
   *
   *   val anotherOption = {
-  *     fields = fields.updated((this, "anotherOption"), () => anotherOption.map(_.toString))
+  *     fields += ((this, "anotherOption"), () => anotherOption.map(_.toString))
   *     opt[Int](descr = "Int. Some description. Default is 10.", short = 'c')
   *   }
   * }
@@ -142,6 +142,6 @@ object scallopImpl {
   /*Value is lambda because of macroses limitation generating all code wrapped into {...}*/
   private def putIntoMap(c: blackbox.Context)(term: c.universe.TermName, termName: String) = {
     import c.universe._
-    q"fields = fields.updated((this, $termName), () => $term.map(_.toString));"
+    q"fields += ((this, $termName), () => $term.map(_.toString));"
   }
 }
