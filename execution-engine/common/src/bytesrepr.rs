@@ -1,9 +1,6 @@
-extern crate byteorder;
-
 use super::alloc::collections::BTreeMap;
 use super::alloc::string::String;
 use super::alloc::vec::Vec;
-use byteorder::{ByteOrder, LittleEndian};
 
 pub trait ToBytes {
     fn to_bytes(&self) -> Vec<u8>;
@@ -55,49 +52,43 @@ impl FromBytes for u8 {
 
 impl ToBytes for i32 {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = [0u8; 4];
-        LittleEndian::write_i32(&mut buf, *self);
-        let mut result: Vec<u8> = Vec::with_capacity(4);
-        result.extend_from_slice(&buf);
-        result
+        self.to_le_bytes().to_vec()
     }
 }
 impl FromBytes for i32 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let mut container: [u8; 4] = [0u8; 4];
         let (num_bytes, rem) = safe_split_at(bytes, 4)?;
-        Ok((LittleEndian::read_i32(num_bytes), rem))
+        container.copy_from_slice(num_bytes);
+        Ok((i32::from_le_bytes(container), rem))
     }
 }
 
 impl ToBytes for u32 {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = [0u8; 4];
-        LittleEndian::write_u32(&mut buf, *self);
-        let mut result: Vec<u8> = Vec::with_capacity(4);
-        result.extend_from_slice(&buf);
-        result
+        self.to_le_bytes().to_vec()
     }
 }
 impl FromBytes for u32 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let mut container: [u8; 4] = [0u8; 4];
         let (num_bytes, rem) = safe_split_at(bytes, 4)?;
-        Ok((LittleEndian::read_u32(num_bytes), rem))
+        container.copy_from_slice(num_bytes);
+        Ok((u32::from_le_bytes(container), rem))
     }
 }
 
 impl ToBytes for u64 {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = [0u8; 8];
-        LittleEndian::write_u64(&mut buf, *self);
-        let mut result: Vec<u8> = Vec::with_capacity(8);
-        result.extend_from_slice(&buf);
-        result
+        self.to_le_bytes().to_vec()
     }
 }
 impl FromBytes for u64 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let mut container: [u8; 8] = [0u8; 8];
         let (num_bytes, rem) = safe_split_at(bytes, 8)?;
-        Ok((LittleEndian::read_u64(num_bytes), rem))
+        container.copy_from_slice(num_bytes);
+        Ok((u64::from_le_bytes(container), rem))
     }
 }
 

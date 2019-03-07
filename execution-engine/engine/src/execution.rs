@@ -15,7 +15,6 @@ use wasmi::{
 };
 
 use argsparser::Args;
-use byteorder::{ByteOrder, LittleEndian};
 use parity_wasm::elements::{Error as ParityWasmError, Module};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
@@ -854,8 +853,8 @@ fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng 
     let mut data: Vec<u8> = Vec::new();
     let hasher = VarBlake2b::new(32).unwrap();
     data.extend(account_addr);
-    LittleEndian::write_u64(&mut data, timestamp);
-    LittleEndian::write_u64(&mut data, nonce);
+    data.extend_from_slice(&timestamp.to_le_bytes());
+    data.extend_from_slice(&nonce.to_le_bytes());
     hasher.variable_result(|hash| seed.clone_from_slice(hash));
     ChaChaRng::from_seed(seed)
 }

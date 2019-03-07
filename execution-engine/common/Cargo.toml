@@ -11,5 +11,4 @@ default = []
 std = []
 
 [dependencies]
-byteorder = { version = "1", default-features = false }
 wee_alloc = "0.4.3"
