@@ -29,11 +29,6 @@ class ConfigurationSoftSpec
 
   val configFilename: String = s"test-configuration.toml"
 
-  //Needed because Scalacheck-shapeless derivation is broken
-  implicit val finiteDurationGen: Arbitrary[FiniteDuration] = Arbitrary {
-    Gen.posNum[Long].map(FiniteDuration(_, TimeUnit.MILLISECONDS))
-  }
-
   implicit val pathGen: Arbitrary[file.Path] = Arbitrary {
     for {
       n     <- Gen.size
@@ -64,6 +59,11 @@ class ConfigurationSoftSpec
       udpPort  <- Gen.posNum[Int]
       endpoint = Endpoint(host.mkString(""), tcpPort, udpPort)
     } yield PeerNode(id, endpoint)
+  }
+
+  // There are some comparison problems with default generator
+  implicit val finiteDurationGen: Arbitrary[FiniteDuration] = Arbitrary {
+    Gen.posNum[Long].map(FiniteDuration(_, TimeUnit.MILLISECONDS))
   }
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =

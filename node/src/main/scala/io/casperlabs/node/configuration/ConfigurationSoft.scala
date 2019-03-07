@@ -151,9 +151,10 @@ private[configuration] object ConfigurationSoft {
     for {
       defaultConf            <- tryDefault
       defaultValues          <- Configuration.readDefaultConfig
-      cliConf                <- Options.parseConf(args, defaultValues)
-      maybeRawTomlConfigFile = Options.tryReadConfigFile(args, defaultValues)
-      maybeTomlConf          = maybeRawTomlConfigFile.map(_.flatMap(TomlReader.parse))
+      options                <- Options.safeCreate(args, defaultValues)
+      cliConf                <- options.parseConf
+      maybeRawTomlConfigFile <- options.readConfigFile
+      maybeTomlConf          = maybeRawTomlConfigFile.map(TomlReader.parse)
       envConf                <- fromEnv(envVars).toEither.leftMap(_.toList.mkString("\n"))
       cliWithEnv             = cliConf.fallbackTo(envConf)
       result <- maybeTomlConf

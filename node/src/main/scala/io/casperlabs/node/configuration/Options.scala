@@ -9,10 +9,10 @@ import io.casperlabs.node.BuildInfo
 import io.casperlabs.shared.{scallop, StoreType}
 import org.rogach.scallop._
 
+import scala.collection.mutable
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.io.Source
 import scala.language.implicitConversions
-import scala.util.Try
 
 private[configuration] object Converter {
   import Options._
@@ -79,150 +79,16 @@ private[configuration] object Options {
 
   def flag(b: Boolean): Flag = b.asInstanceOf[Flag]
 
-  implicit def scallopOptionToOption[A](so: ScallopOption[A]): Option[A] = so.toOption
-
   // We need this conversion because ScallopOption[A] is invariant in A
   implicit def scallopOptionFlagToBoolean(so: ScallopOption[Flag]): ScallopOption[Boolean] =
     so.map(identity)
 
-  def parseConf(
-      arguments: Seq[String],
-      defaults: Map[String, String]
-  ): Either[String, ConfigurationSoft] = {
-    val e = for {
-      c <- parseCommand(arguments, defaults)
-    } yield
-      Try {
-        val options = Options(arguments, defaults)
-        val server = ConfigurationSoft.Server(
-          options.run.serverHost,
-          options.run.serverPort,
-          options.run.serverHttpPort,
-          options.run.serverKademliaPort,
-          options.run.serverDynamicHostAddress,
-          options.run.serverNoUpnp,
-          options.run.serverDefaultTimeout,
-          options.run.serverBootstrap,
-          options.run.serverStandalone,
-          options.run.serverStoreType,
-          options.run.serverDataDir,
-          options.run.serverMaxNumOfConnections,
-          c match {
-            case _: Configuration.Command.Diagnostics.type =>
-              options.diagnostics.serverMaxMessageSize
-            case _: Configuration.Command.Run.type => options.run.serverMaxMessageSize
-          },
-          c match {
-            case _: Configuration.Command.Diagnostics.type =>
-              options.diagnostics.serverChunkSize
-            case _: Configuration.Command.Run.type => options.run.serverChunkSize
-          }
-        )
-        val grpcServer = ConfigurationSoft.GrpcServer(
-          c match {
-            case _: Configuration.Command.Diagnostics.type =>
-              options.diagnostics.grpcHost
-            case _: Configuration.Command.Run.type =>
-              options.run.grpcHost
-          },
-          options.run.grpcSocket,
-          c match {
-            case _: Configuration.Command.Diagnostics.type =>
-              options.diagnostics.grpcPortExternal
-            case _: Configuration.Command.Run.type => options.run.grpcPortExternal
-          },
-          options.run.grpcPortInternal
-        )
-        val tls = ConfigurationSoft.Tls(
-          options.run.tlsCertificate,
-          options.run.tlsKey,
-          options.run.tlsSecureRandomNonBlocking
-        )
-        val casper = ConfigurationSoft.Casper(
-          options.run.casperValidatorPublicKey,
-          options.run.casperValidatorPrivateKey,
-          options.run.casperValidatorPrivateKeyPath,
-          options.run.casperValidatorSigAlgorithm,
-          options.run.casperBondsFile,
-          options.run.casperKnownValidatorsFile,
-          options.run.casperNumValidators,
-          options.run.casperWalletsFile,
-          options.run.casperMinimumBond,
-          options.run.casperMaximumBond,
-          options.run.casperHasFaucet,
-          options.run.casperRequiredSigs,
-          options.run.casperShardId,
-          options.run.casperApproveGenesis,
-          options.run.casperApproveGenesisInterval,
-          options.run.casperApproveGenesisDuration,
-          options.run.casperDeployTimestamp
-        )
-
-        val lmdb = ConfigurationSoft.LmdbBlockStore(
-          options.run.lmdbBlockStoreSize,
-          options.run.lmdbMaxDbs,
-          options.run.lmdbMaxReaders,
-          options.run.lmdbUseTls
-        )
-
-        val blockstorage = ConfigurationSoft.BlockDagFileStorage(
-          options.run.blockstorageLatestMessagesLogMaxSizeFactor
-        )
-
-        val metrics = ConfigurationSoft.Metrics(
-          options.run.metricsPrometheus,
-          options.run.metricsZipkin,
-          options.run.metricsSigar
-        )
-
-        val influx = ConfigurationSoft.Influx(
-          options.run.influxHostname,
-          options.run.influxPort,
-          options.run.influxDatabase,
-          options.run.influxProtocol
-        )
-
-        ConfigurationSoft(
-          server,
-          grpcServer,
-          tls,
-          casper,
-          lmdb,
-          blockstorage,
-          metrics,
-          influx,
-          ConfigurationSoft.InfluxAuth(
-            None,
-            None
-          )
-        )
-      }.toEither.leftMap(_.getMessage)
-    e.joinRight
-  }
-
-  def parseCommand(
-      args: Seq[String],
-      defaults: Map[String, String]
-  ): Either[String, Configuration.Command] =
-    Try {
-      val options = Options(args, defaults)
-      options.subcommand.fold(s"Command was not provided".asLeft[Configuration.Command]) {
-        case options.run         => Configuration.Command.Run.asRight[String]
-        case options.diagnostics => Configuration.Command.Run.asRight[String]
-      }
-    }.toEither.leftMap(_.getMessage).joinRight
-
-  def tryReadConfigFile(
-      args: Seq[String],
-      defaults: Map[String, String]
-  ): Option[Either[String, String]] =
-    Options(args, defaults).configFile
-      .map(p => Try(Source.fromFile(p.toFile).mkString).toEither.leftMap(_.getMessage))
-      .toOption
+  def safeCreate(args: Seq[String], defaults: Map[String, String]): Either[String, Options] =
+    Either.catchNonFatal(Options(args, defaults)).leftMap(_.getMessage)
 }
 
 //noinspection TypeAnnotation
-private[configuration] final case class Options(
+private[configuration] final case class Options private (
     arguments: Seq[String],
     defaults: Map[String, String]
 ) extends ScallopConf(arguments) {
@@ -233,6 +99,144 @@ private[configuration] final case class Options(
   //Needed only for eliminating red code from IntelliJ IDEA, see @scallop definition
   private def gen[A](descr: String, short: Char = '\u0000'): ScallopOption[A] =
     sys.error("Add @scallop macro annotation")
+
+  /**
+    * Converts between string representation of field name and its actual value
+    * Filled by [[io.casperlabs.shared.scallop]] macro
+    */
+  private val fields =
+    mutable.Map.empty[(ScallopConfBase, String), () => ScallopOption[String]]
+
+  implicit def scallopOptionToOption[A](so: ScallopOption[A]): Option[A] = so.toOption
+
+  def parseConf: Either[String, ConfigurationSoft] = {
+    for {
+      c <- parseCommand
+    } yield {
+      val server = ConfigurationSoft.Server(
+        run.serverHost,
+        run.serverPort,
+        run.serverHttpPort,
+        run.serverKademliaPort,
+        run.serverDynamicHostAddress,
+        run.serverNoUpnp,
+        run.serverDefaultTimeout,
+        run.serverBootstrap,
+        run.serverStandalone,
+        run.serverStoreType,
+        run.serverDataDir,
+        run.serverMaxNumOfConnections,
+        c match {
+          case _: Configuration.Command.Diagnostics.type =>
+            diagnostics.serverMaxMessageSize
+          case _: Configuration.Command.Run.type => run.serverMaxMessageSize
+        },
+        c match {
+          case _: Configuration.Command.Diagnostics.type =>
+            diagnostics.serverChunkSize
+          case _: Configuration.Command.Run.type => run.serverChunkSize
+        }
+      )
+      val grpcServer = ConfigurationSoft.GrpcServer(
+        c match {
+          case _: Configuration.Command.Diagnostics.type =>
+            diagnostics.grpcHost
+          case _: Configuration.Command.Run.type =>
+            run.grpcHost
+        },
+        run.grpcSocket,
+        c match {
+          case _: Configuration.Command.Diagnostics.type =>
+            diagnostics.grpcPortExternal
+          case _: Configuration.Command.Run.type => run.grpcPortExternal
+        },
+        run.grpcPortInternal
+      )
+      val tls = ConfigurationSoft.Tls(
+        run.tlsCertificate,
+        run.tlsKey,
+        run.tlsSecureRandomNonBlocking
+      )
+      val casper = ConfigurationSoft.Casper(
+        run.casperValidatorPublicKey,
+        run.casperValidatorPrivateKey,
+        run.casperValidatorPrivateKeyPath,
+        run.casperValidatorSigAlgorithm,
+        run.casperBondsFile,
+        run.casperKnownValidatorsFile,
+        run.casperNumValidators,
+        run.casperWalletsFile,
+        run.casperMinimumBond,
+        run.casperMaximumBond,
+        run.casperHasFaucet,
+        run.casperRequiredSigs,
+        run.casperShardId,
+        run.casperApproveGenesis,
+        run.casperApproveGenesisInterval,
+        run.casperApproveGenesisDuration,
+        run.casperDeployTimestamp
+      )
+
+      val lmdb = ConfigurationSoft.LmdbBlockStore(
+        run.lmdbBlockStoreSize,
+        run.lmdbMaxDbs,
+        run.lmdbMaxReaders,
+        run.lmdbUseTls
+      )
+
+      val blockstorage = ConfigurationSoft.BlockDagFileStorage(
+        run.blockstorageLatestMessagesLogMaxSizeFactor
+      )
+
+      val metrics = ConfigurationSoft.Metrics(
+        run.metricsPrometheus,
+        run.metricsZipkin,
+        run.metricsSigar
+      )
+
+      val influx = ConfigurationSoft.Influx(
+        run.influxHostname,
+        run.influxPort,
+        run.influxDatabase,
+        run.influxProtocol
+      )
+
+      ConfigurationSoft(
+        server,
+        grpcServer,
+        tls,
+        casper,
+        lmdb,
+        blockstorage,
+        metrics,
+        influx,
+        ConfigurationSoft.InfluxAuth(
+          None,
+          None
+        )
+      )
+    }
+  }
+
+  def fieldByName(fieldName: String): Option[String] =
+    subcommand
+      .flatMap(command => fields.get((command, fieldName)).flatMap(_.apply().toOption))
+
+  def parseCommand: Either[String, Configuration.Command] =
+    subcommand.fold(s"Command was not provided".asLeft[Configuration.Command]) {
+      case this.run         => Configuration.Command.Run.asRight[String]
+      case this.diagnostics => Configuration.Command.Run.asRight[String]
+      case _                => "Failed to parse command".asLeft[Configuration.Command]
+    }
+
+  def readConfigFile: Either[String, Option[String]] =
+    configFile.toOption
+      .map(
+        p => Either.catchNonFatal(Source.fromFile(p.toFile).mkString.some).leftMap(_.getMessage)
+      )
+      .fold(none[String].asRight[String])(identity)
+
+  val configFile = opt[Path](descr = "Path to the TOML configuration file.")
 
   version(s"Casper Labs Node ${BuildInfo.version}")
   printedName = "casperlabs"
@@ -256,11 +260,7 @@ private[configuration] final case class Options(
     """.stripMargin
   )
 
-  @scallop
-  val configFile =
-    gen[Path]("Path to the TOML configuration file.")
-
-  val diagnostics = new Subcommand("diagnostics") { self =>
+  val diagnostics = new Subcommand("diagnostics") {
     helpWidth(120)
     descr("Node diagnostics")
 

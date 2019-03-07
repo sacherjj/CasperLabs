@@ -94,8 +94,9 @@ object Configuration {
     val either = for {
       defaults      <- ConfigurationSoft.tryDefault
       defaultValues <- Configuration.readDefaultConfig
+      options       <- Options.safeCreate(args, defaultValues)
+      command       <- options.parseCommand
       confSoft      <- ConfigurationSoft.parse(args, envVars)
-      command       <- Options.parseCommand(args, defaultValues)
     } yield parseToActual(command, defaults, confSoft)
 
     either.fold(_.invalidNel[Configuration], identity)
