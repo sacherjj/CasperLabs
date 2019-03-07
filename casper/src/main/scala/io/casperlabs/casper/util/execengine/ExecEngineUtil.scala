@@ -165,7 +165,7 @@ object ExecEngineUtil {
       } yield result
   }
 
-  private def blocksToApply[F[_]: Monad](
+  private[execengine] def blocksToApply[F[_]: Monad](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F]
   ): F[Vector[BlockMetadata]] =
