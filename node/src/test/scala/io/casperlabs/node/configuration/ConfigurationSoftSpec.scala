@@ -66,6 +66,13 @@ class ConfigurationSoftSpec
     } yield PeerNode(id, endpoint)
   }
 
+  // There are some comparison problems with default generator
+  implicit val finiteDurationGen: Arbitrary[FiniteDuration] = Arbitrary {
+    for {
+      n <- Gen.choose(0, Int.MaxValue)
+    } yield FiniteDuration(n.toLong, MILLISECONDS)
+  }
+
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(
       minSuccessful = 500

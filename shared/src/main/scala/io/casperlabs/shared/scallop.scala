@@ -9,20 +9,31 @@ import scala.reflect.macros.blackbox
   * ==Example==
   * {{{
   * val defaults: Map[String, String] = Map("someOption" -> "10")
+  * var fields: Map[(ScallopConfBase, String), () => ScallopOption[String]]
   * def gen[A](descr: String, short: Char = '\u0000'): ScallopOption[A] =
   *   sys.error("Add @scallop macro annotation")
   *
-  * @scallop
-  * val someOption = gen[Int]("Some description.", 'c')
-  * @scallop
-  * val anotherOption = gen[String]("Another description.")
+  * val run = new Subcommand {
+  *   @scallop
+  *   val someOption = gen[Int]("Some description.", 'c')
+  *   @scallop
+  *   val anotherOption = gen[String]("Another description.")
+  * }
   * }}}
   * Will produce:
   * {{{
-  * val someOption = opt[Int](descr = "Int. Some description. Default is 10.", short = 'c')
-  * val anotherOption = opt[String](descr = "String. Another description.")
-  * }}}
+  * val run = new Subcommand {
+  *   val someOption = {
+  *     fields = fields.updated((this, "someOption"), () => someOption.map(_.toString))
+  *     opt[Int](descr = "Int. Some description. Default is 10.", short = 'c')
+  *   }
   *
+  *   val anotherOption = {
+  *     fields = fields.updated((this, "anotherOption"), () => anotherOption.map(_.toString))
+  *     opt[Int](descr = "Int. Some description. Default is 10.", short = 'c')
+  *   }
+  * }
+  * }}}
   */
 @compileTimeOnly("enable macro paradise")
 class scallop extends StaticAnnotation {
@@ -33,16 +44,27 @@ object scallopImpl {
   def impl(c: blackbox.Context)(annottees: c.Tree*): c.Tree = {
     import c.universe._
     annottees.head match {
-      case q"val $variableName = gen[$tpe]($descr, $short)" =>
-        val termName = termNameAsString(c)(variableName)
-        val tomlType = tomlTypeDefinition(c)(tpe)
-        val default  = defaultDefinition(c)(termName)
-        optionWithShort(c)(variableName, tpe, tomlType, default, descr, short)
-      case q"val $variableName = gen[$tpe]($descr)" =>
-        val termName = termNameAsString(c)(variableName)
-        val tomlType = tomlTypeDefinition(c)(tpe)
-        val default  = defaultDefinition(c)(termName)
-        option(c)(variableName, tpe, tomlType, default, descr)
+      case q"val $term = gen[$tpe]($descr, $short)" =>
+        val termName       = termNameAsString(c)(term)
+        val tomlType       = tomlTypeDefinition(c)(tpe)
+        val default        = defaultDefinition(c)(termName)
+        val puttingIntoMap = putIntoMap(c)(term, termName)
+        optionDefinitionWithShort(c)(
+          term,
+          termName,
+          tpe,
+          tomlType,
+          default,
+          puttingIntoMap,
+          descr,
+          short
+        )
+      case q"val $term = gen[$tpe]($descr)" =>
+        val termName       = termNameAsString(c)(term)
+        val tomlType       = tomlTypeDefinition(c)(tpe)
+        val default        = defaultDefinition(c)(termName)
+        val puttingIntoMap = putIntoMap(c)(term, termName)
+        optionDefinition(c)(term, termName, tpe, tomlType, puttingIntoMap, default, descr)
     }
   }
   private def tomlTypeDefinition(c: blackbox.Context)(tpe: c.Tree) = {
@@ -66,24 +88,35 @@ object scallopImpl {
     q"""val default: String = defaults.get($termName).fold("")(s => " Default: " + s)"""
   }
 
-  private def option(
+  private def optionDefinition(
       c: blackbox.Context
-  )(term: c.universe.TermName, tpe: c.Tree, tomlType: c.Tree, default: c.Tree, descr: c.Tree) = {
+  )(
+      term: c.universe.TermName,
+      termName: String,
+      tpe: c.Tree,
+      tomlType: c.Tree,
+      puttingIntoMap: c.Tree,
+      default: c.Tree,
+      descr: c.Tree
+  ) = {
     import c.universe._
     q"""
       val $term: ScallopOption[$tpe] = {
         $tomlType;
         $default;
+        $puttingIntoMap;
         opt[$tpe](descr = s"$$tomlType. " + $descr + s"$$default")
       };
       """
   }
 
-  private def optionWithShort(c: blackbox.Context)(
+  private def optionDefinitionWithShort(c: blackbox.Context)(
       term: c.universe.TermName,
+      termName: String,
       tpe: c.Tree,
       tomlType: c.Tree,
       default: c.Tree,
+      puttingIntoMap: c.Tree,
       descr: c.Tree,
       short: c.Tree
   ) = {
@@ -92,6 +125,7 @@ object scallopImpl {
       val $term: ScallopOption[$tpe] = {
         $tomlType;
         $default;
+        $puttingIntoMap;
         opt[$tpe](descr = s"$$tomlType. " + $descr + s"$$default", short = $short)
       };
       """
@@ -103,5 +137,11 @@ object scallopImpl {
       case TermName(name) =>
         name
     }
+  }
+
+  /*Value is lambda because of macroses limitation generating all code wrapped into {...}*/
+  private def putIntoMap(c: blackbox.Context)(term: c.universe.TermName, termName: String) = {
+    import c.universe._
+    q"fields = fields.updated((this, $termName), () => $term.map(_.toString));"
   }
 }
