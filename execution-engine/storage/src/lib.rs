@@ -1,7 +1,7 @@
-extern crate blake2;
 extern crate common;
 extern crate parking_lot;
 extern crate rkv;
+extern crate shared;
 extern crate wasmi;
 
 pub mod error;
@@ -21,5 +21,3 @@ extern crate tempfile;
 extern crate proptest;
 #[cfg(test)]
 extern crate gens;
-
-type TreeRootHash = [u8; 32];

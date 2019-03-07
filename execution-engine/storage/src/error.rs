@@ -3,14 +3,13 @@ use std::fmt;
 use common::bytesrepr;
 use common::key::Key;
 use rkv::error::StoreError;
+use shared::newtypes::Blake2bHash;
 use std::fmt::Debug;
 use transform::TypeMismatch;
 use wasmi::HostError;
 
-use TreeRootHash;
-
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct RootNotFound(pub TreeRootHash);
+pub struct RootNotFound(pub Blake2bHash);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error<K: Debug> {

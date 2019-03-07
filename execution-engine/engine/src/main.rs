@@ -1,6 +1,7 @@
 extern crate clap;
 extern crate common;
 extern crate execution_engine;
+extern crate shared;
 extern crate storage;
 extern crate wasm_prep;
 
@@ -12,6 +13,7 @@ use clap::{App, Arg};
 
 use execution_engine::engine::{EngineState, ExecutionResult};
 use execution_engine::execution::WasmiExecutor;
+use shared::newtypes::Blake2bHash;
 use storage::gs::inmem::InMemHist;
 use wasm_prep::WasmiPreprocessor;
 
@@ -78,7 +80,7 @@ fn main() {
         address
     };
 
-    let mut state_hash = [0u8; 32];
+    let mut state_hash: Blake2bHash = [0u8; 32].into();
 
     let gas_limit: u64 = matches
         .value_of("gas-limit")

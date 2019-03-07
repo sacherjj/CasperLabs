@@ -1,6 +1,7 @@
 extern crate common;
 extern crate execution_engine;
 extern crate parity_wasm;
+extern crate shared;
 extern crate storage;
 extern crate wasm_prep;
 extern crate wasmi;
@@ -11,6 +12,7 @@ use common::value::{self, Value};
 use execution_engine::execution::{Runtime, RuntimeContext};
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
+use shared::newtypes::Blake2bHash;
 use std::collections::{BTreeMap, HashMap};
 use storage::gs::{inmem::*, DbReader, TrackingCopy};
 use storage::history::*;
@@ -123,13 +125,13 @@ fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
 }
 
 fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS<Key, Value>> {
-    let root_hash = storage::history::EMPTY_ROOT_HASH;
+    let root_hash: Blake2bHash = [0u8; 32].into();
     let mut hist = InMemHist::new(&root_hash);
     let transform = Transform::Write(value::Value::Acct(init_account.clone()));
 
     let mut m = HashMap::new();
     m.insert(init_key, transform);
-    hist.commit([0u8; 32], m)
+    hist.commit(root_hash, m)
         .expect("Creation of mocked account should be a success.");
 
     hist.checkout(root_hash)

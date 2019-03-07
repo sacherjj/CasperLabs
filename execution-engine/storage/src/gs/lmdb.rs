@@ -6,6 +6,7 @@ use gs::{DbReader, TrackingCopy};
 use history::*;
 use rkv::store::single::SingleStore;
 use rkv::{Manager, Rkv, StoreOptions};
+use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
@@ -102,13 +103,13 @@ impl DbReader for LmdbGs {
 }
 
 impl History<Self> for LmdbGs {
-    fn checkout(&self, _prestate_hash: [u8; 32]) -> Result<TrackingCopy<LmdbGs>, RootNotFound> {
+    fn checkout(&self, _prestate_hash: Blake2bHash) -> Result<TrackingCopy<LmdbGs>, RootNotFound> {
         unimplemented!("LMDB History not implemented")
     }
 
     fn commit(
         &mut self,
-        _prestate_hash: [u8; 32],
+        _prestate_hash: Blake2bHash,
         _effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, RootNotFound> {
         unimplemented!("LMDB History not implemented")
