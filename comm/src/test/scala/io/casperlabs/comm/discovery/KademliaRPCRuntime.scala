@@ -10,23 +10,22 @@ import cats._
 import cats.effect.Timer
 import cats.effect.concurrent.MVar
 import cats.implicits._
-
 import io.casperlabs.comm._
+import scala.concurrent.duration._
 
-abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
+abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] extends TestRuntime {
 
   def createEnvironment(port: Int): F[E]
 
-  def createKademliaRPC(env: E): F[KademliaRPC[F]]
+  def createKademliaRPC(env: E, timeout: FiniteDuration): F[KademliaRPC[F]]
 
   def extract[A](fa: F[A]): A
 
-  private val nextPort = new AtomicInteger((Random.nextInt(100) + 500 + 1) * 100)
-
   def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
     for {
-      e1 <- createEnvironment(nextPort.incrementAndGet())
-      e2 <- createEnvironment(nextPort.incrementAndGet())
+      e1 <- createEnvironment(getFreePort)
+      e2 <- createEnvironment(getFreePort)
+      _ = require(e1 != e2, "Oop, we picked the same port twice!")
       r  <- block(e1, e2)
     } yield r
 
@@ -42,7 +41,9 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
 
   abstract class TwoNodesRuntime[A](
       val pingHandler: PingHandler[F] = Handler.pingHandler,
-      val lookupHandler: LookupHandler[F] = Handler.lookupHandlerNil
+      val lookupHandler: LookupHandler[F] = Handler.lookupHandlerNil,
+      // Give it ample time on Drone.
+      timeout: FiniteDuration = 5.seconds
   ) extends Runtime[A] {
     def execute(kademliaRPC: KademliaRPC[F], local: PeerNode, remote: PeerNode): F[A]
 
@@ -50,8 +51,8 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
       extract(
         twoNodesEnvironment { (e1, e2) =>
           for {
-            localRpc  <- createKademliaRPC(e1)
-            remoteRpc <- createKademliaRPC(e2)
+            localRpc  <- createKademliaRPC(e1, timeout)
+            remoteRpc <- createKademliaRPC(e2, timeout)
             local     = e1.peer
             remote    = e2.peer
             _ <- localRpc.receive(
@@ -89,7 +90,7 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
       extract(
         twoNodesEnvironment { (e1, e2) =>
           for {
-            localRpc <- createKademliaRPC(e1)
+            localRpc <- createKademliaRPC(e1, timeout = 500.millis)
             local    = e1.peer
             remote   = e2.peer
             _ <- localRpc.receive(
