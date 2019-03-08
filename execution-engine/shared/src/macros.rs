@@ -1,6 +1,6 @@
-//! Some helpful macros.
+//! Some macros.
 
-/// A helful macro for implementing common traits for newtypes based on arrays.
+/// A macro for implementing common traits for newtypes based on arrays.
 ///
 /// Borrowed from [rust-secp256k1](https://github.com/rust-bitcoin/rust-secp256k1/blob/b192157ab418214f779c5a3a94f4c1b9df4c232a/src/macros.rs).
 #[macro_export]
@@ -32,7 +32,7 @@ macro_rules! impl_array_newtype {
             #[inline]
             /// Returns whether the object as an array is empty
             pub fn is_empty(&self) -> bool {
-                false
+                $len == 0
             }
         }
 
@@ -131,7 +131,7 @@ macro_rules! impl_array_newtype {
     };
 }
 
-/// A helful macro for implementing a prettier `Debug` for newtypes based on arrays.
+/// A macro for implementing a prettier `Debug` for newtypes based on arrays.
 ///
 /// Borrowed from [rust-secp256k1](https://github.com/rust-bitcoin/rust-secp256k1/blob/b192157ab418214f779c5a3a94f4c1b9df4c232a/src/macros.rs).
 #[macro_export]
@@ -149,7 +149,7 @@ macro_rules! impl_pretty_debug {
     };
 }
 
-/// A helful macro for implementing `Debug` for newtypes based on arrays.
+/// A macro for implementing `Debug` for newtypes based on arrays.
 ///
 /// Borrowed from [rust-secp256k1](https://github.com/rust-bitcoin/rust-secp256k1/blob/b192157ab418214f779c5a3a94f4c1b9df4c232a/src/macros.rs).
 #[macro_export]

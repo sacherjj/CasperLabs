@@ -1,4 +1,4 @@
-//! Some helpful newtypes.
+//! Some newtypes.
 
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
