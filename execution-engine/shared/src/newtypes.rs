@@ -8,11 +8,8 @@ use std::convert::TryFrom;
 const BLAKE2B_DIGEST_LENGTH: usize = 32;
 
 /// Represents a 32-byte BLAKE2b hash digest
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Blake2bHash([u8; BLAKE2B_DIGEST_LENGTH]);
-
-impl_array_newtype!(Blake2bHash, u8, BLAKE2B_DIGEST_LENGTH);
-
-impl_pretty_debug!(Blake2bHash);
 
 impl Blake2bHash {
     /// Creates a 32-byte BLAKE2b hash digest from a given a piece of data
