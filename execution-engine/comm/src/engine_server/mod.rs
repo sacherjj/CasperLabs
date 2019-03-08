@@ -5,6 +5,7 @@ use execution_engine::engine::{EngineState, Error as EngineError, ExecutionResul
 use execution_engine::execution::{Error as ExecutionError, Executor, WasmiExecutor};
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
+use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use storage::gs::{trackingcopy::QueryResult, DbReader};
@@ -28,8 +29,8 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         _o: ::grpc::RequestOptions,
         p: ipc::QueryRequest,
     ) -> grpc::SingleResponse<ipc::QueryResponse> {
-        let mut state_hash = [0u8; 32];
-        state_hash.copy_from_slice(&p.get_state_hash());
+        // TODO: don't unwrap
+        let state_hash: Blake2bHash = p.get_state_hash().try_into().unwrap();
         match p.get_base_key().try_into() {
             Err(ParsingError(err_msg)) => {
                 let mut result = ipc::QueryResponse::new();
@@ -80,11 +81,8 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
         let executor = WasmiExecutor;
         let preprocessor = WasmiPreprocessor;
-        let prestate_hash = {
-            let mut hash_tmp = [0u8; 32];
-            hash_tmp.copy_from_slice(&p.get_parent_state_hash());
-            hash_tmp
-        };
+        // TODO: don't unwrap
+        let prestate_hash: Blake2bHash = p.get_parent_state_hash().try_into().unwrap();
         let deploys = p.get_deploys();
         let deploys_result: Result<Vec<DeployResult>, RootNotFound> =
             run_deploys(&self, &executor, &preprocessor, prestate_hash, deploys);
@@ -108,8 +106,8 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         _o: ::grpc::RequestOptions,
         p: ipc::CommitRequest,
     ) -> grpc::SingleResponse<ipc::CommitResponse> {
-        let mut prestate_hash = [0u8; 32];
-        prestate_hash.copy_from_slice(&p.get_prestate_hash());
+        // TODO: don't unwrap
+        let prestate_hash: Blake2bHash = p.get_prestate_hash().try_into().unwrap();
         let effects_result: Result<HashMap<Key, Transform>, ParsingError> =
             p.get_effects().iter().map(TryInto::try_into).collect();
         match effects_result {
@@ -132,7 +130,7 @@ fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>
     engine_state: &EngineState<R, H>,
     executor: &E,
     preprocessor: &P,
-    prestate_hash: [u8; 32],
+    prestate_hash: Blake2bHash,
     deploys: &[ipc::Deploy],
 ) -> Result<Vec<DeployResult>, RootNotFound> {
     // We want to treat RootNotFound error differently b/c it should short-circuit
@@ -314,6 +312,7 @@ mod tests {
     use super::wasm_error;
     use common::key::Key;
     use execution_engine::engine::{Error as EngineError, ExecutionResult};
+    use shared::newtypes::Blake2bHash;
     use std::collections::HashMap;
     use std::convert::TryInto;
     use storage::gs::ExecutionEffect;
@@ -334,7 +333,7 @@ mod tests {
 
     #[test]
     fn deploy_result_to_ipc_missing_root() {
-        let root_hash = [1u8; 32];
+        let root_hash: Blake2bHash = [1u8; 32].into();
         let mut result: super::ipc::RootNotFound = storage::error::RootNotFound(root_hash).into();
         let ipc_missing_hash = result.take_hash();
         assert_eq!(root_hash.to_vec(), ipc_missing_hash);

@@ -1,12 +1,11 @@
 use crate::transform::Transform;
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
 use common::bytesrepr::*;
 use common::key::Key;
 use common::value::Value;
 use error::{Error, GlobalStateError, RootNotFound};
 use gs::*;
 use history::*;
+use shared::newtypes::Blake2bHash;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
@@ -36,16 +35,16 @@ impl DbReader for InMemGS<Key, Value> {
 /// store - stores a snapshot of the global state at the specific block
 /// history - stores all the snapshots of the global state
 pub struct InMemHist<K, V> {
-    history: HashMap<[u8; 32], InMemGS<K, V>>,
+    history: HashMap<Blake2bHash, InMemGS<K, V>>,
 }
 
 impl<K: Ord, V> InMemHist<K, V> {
-    pub fn new(empty_root_hash: &[u8; 32]) -> InMemHist<K, V> {
+    pub fn new(empty_root_hash: &Blake2bHash) -> InMemHist<K, V> {
         InMemHist::new_initialized(empty_root_hash, BTreeMap::new())
     }
 
     pub fn new_initialized(
-        empty_root_hash: &[u8; 32],
+        empty_root_hash: &Blake2bHash,
         init_state: BTreeMap<K, V>,
     ) -> InMemHist<K, V> {
         let mut history = HashMap::new();
@@ -55,7 +54,7 @@ impl<K: Ord, V> InMemHist<K, V> {
 
     // TODO(mateusz.gorski): I know this is not efficient and we should be caching these values
     // but for the time being it should be enough.
-    fn get_root_hash(state: &BTreeMap<K, V>) -> [u8; 32]
+    fn get_root_hash(state: &BTreeMap<K, V>) -> Blake2bHash
     where
         K: ToBytes,
         V: ToBytes,
@@ -65,18 +64,14 @@ impl<K: Ord, V> InMemHist<K, V> {
             data.extend(k.to_bytes());
             data.extend(v.to_bytes());
         }
-        let mut hasher = VarBlake2b::new(32).unwrap();
-        hasher.input(data);
-        let mut hash_bytes = [0; 32];
-        hasher.variable_result(|hash| hash_bytes.clone_from_slice(hash));
-        hash_bytes
+        Blake2bHash::new(&data)
     }
 }
 
 impl History<InMemGS<Key, Value>> for InMemHist<Key, Value> {
     fn checkout(
         &self,
-        prestate_hash: [u8; 32],
+        prestate_hash: Blake2bHash,
     ) -> Result<TrackingCopy<InMemGS<Key, Value>>, RootNotFound> {
         match self.history.get(&prestate_hash) {
             None => Err(RootNotFound(prestate_hash)),
@@ -86,7 +81,7 @@ impl History<InMemGS<Key, Value>> for InMemHist<Key, Value> {
 
     fn commit(
         &mut self,
-        prestate_hash: [u8; 32],
+        prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, RootNotFound> {
         let mut base = {
@@ -98,7 +93,7 @@ impl History<InMemGS<Key, Value>> for InMemHist<Key, Value> {
             BTreeMap::clone(&gs.0)
         };
 
-        let result: Result<[u8; 32], GlobalStateError> = effects
+        let result: Result<Blake2bHash, GlobalStateError> = effects
             .into_iter()
             .try_for_each(|(k, t)| {
                 let maybe_curr = base.remove(&k);
@@ -142,18 +137,18 @@ mod tests {
     const KEY2: Key = Key::Account([2u8; 20]);
     const VALUE1: Value = Value::Int32(1);
     const VALUE2: Value = Value::Int32(2);
-    const EMPTY_ROOT: [u8; 32] = [0u8; 32];
 
     fn prepopulated_hist() -> InMemHist<Key, Value> {
+        let empty_root_hash = [0u8; 32].into();
         let mut map = BTreeMap::new();
         map.insert(KEY1, VALUE1.clone());
         map.insert(KEY2, VALUE2.clone());
         let mut history = HashMap::new();
-        history.insert(EMPTY_ROOT, InMemGS(Arc::new(map)));
+        history.insert(empty_root_hash, InMemGS(Arc::new(map)));
         InMemHist { history }
     }
 
-    fn checkout<R: DbReader, H: History<R>>(hist: &H, hash: [u8; 32]) -> TrackingCopy<R> {
+    fn checkout<R: DbReader, H: History<R>>(hist: &H, hash: Blake2bHash) -> TrackingCopy<R> {
         let res = hist.checkout(hash);
         assert!(res.is_ok());
         res.unwrap()
@@ -161,9 +156,9 @@ mod tests {
 
     fn commit<R: DbReader, H: History<R>>(
         hist: &mut H,
-        hash: [u8; 32],
+        hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> [u8; 32] {
+    ) -> Blake2bHash {
         let res = hist.commit(hash, effects);
         assert!(res.is_ok());
         match res.unwrap() {
@@ -176,8 +171,9 @@ mod tests {
     fn test_inmem_checkout() {
         // Tests out to empty root hash and validates that
         // its content is as expeced.
+        let empty_root_hash = [0u8; 32].into();
         let hist = prepopulated_hist();
-        let res = hist.checkout(EMPTY_ROOT);
+        let res = hist.checkout(empty_root_hash);
         assert!(res.is_ok());
         let mut tc = res.unwrap();
         assert_eq!(tc.get(&KEY1).unwrap(), VALUE1);
@@ -189,7 +185,7 @@ mod tests {
         // Tests that an error is returned when trying to checkout
         // to missing hash.
         let hist = prepopulated_hist();
-        let missing_root = [1u8; 32];
+        let missing_root: Blake2bHash = [1u8; 32].into();
         let res = hist.checkout(missing_root);
         assert!(res.is_err());
         assert_eq!(res.err(), Some(RootNotFound(missing_root)));
@@ -199,8 +195,9 @@ mod tests {
     fn test_checkout_commit() {
         // Tests that when changes are commited then new hash is returned
         // and values that are living under new hash are as expected.
+        let empty_root_hash = [0u8; 32].into();
         let mut hist = prepopulated_hist();
-        let mut tc = checkout(&hist, EMPTY_ROOT);
+        let mut tc = checkout(&hist, empty_root_hash);
         let add_res = tc.add(KEY1, Value::Int32(1));
         assert!(add_res.is_ok());
         let new_v2 = Value::String("I am String now!".to_owned());
@@ -208,7 +205,7 @@ mod tests {
         assert!(write_res.is_ok());
         let effects = tc.effect();
         // commit changes from the tracking copy
-        let hash_res = commit(&mut hist, EMPTY_ROOT, effects.1);
+        let hash_res = commit(&mut hist, empty_root_hash, effects.1);
         // checkout to the new hash
         let mut tc_2 = checkout(&hist, hash_res);
         assert_eq!(tc_2.get(&KEY1).unwrap(), Value::Int32(2));
@@ -221,8 +218,9 @@ mod tests {
         // then it commits new transformations yielding new hash,
         // and then checks out back to the empty root hash
         // and validates that it doesn't contain commited changes
+        let empty_root_hash = [0u8; 32].into();
         let mut gs = prepopulated_hist();
-        let mut tc = checkout(&gs, EMPTY_ROOT);
+        let mut tc = checkout(&gs, empty_root_hash);
         let add_res = tc.add(KEY1, Value::Int32(1));
         assert!(add_res.is_ok());
         let new_v2 = Value::String("I am String now!".to_owned());
@@ -235,9 +233,9 @@ mod tests {
         assert_eq!(tc.get(&key3).unwrap(), value3);
         let effects = tc.effect();
         // commit changes from the tracking copy
-        let _ = commit(&mut gs, EMPTY_ROOT, effects.1);
+        let _ = commit(&mut gs, empty_root_hash, effects.1);
         // checkout to the empty root hash
-        let mut tc_2 = checkout(&gs, EMPTY_ROOT);
+        let mut tc_2 = checkout(&gs, empty_root_hash);
         assert_eq!(tc_2.get(&KEY1).unwrap(), VALUE1);
         assert_eq!(tc_2.get(&KEY2).unwrap(), VALUE2);
         // test that value inserted later are not visible in the past commits.
