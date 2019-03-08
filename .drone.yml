@@ -155,7 +155,7 @@ pipeline:
       - cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}
       - cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm artifacts/${DRONE_BRANCH}
       - >-
-        WORKING_DIR=$(pwd)
+        WORKING_DIR=$(pwd) ;
         cd execution-engine/target/release/rpmbuild/SOURCES ;
         OS=$(uname -s | tr '[:upper:]' '[:lower:]') ;
         ARCH=$(uname -p) ;
