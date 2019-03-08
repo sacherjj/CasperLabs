@@ -101,13 +101,12 @@ pipeline:
     <<: *sbtenv
     commands:
       - sbt client/debian:packageBin client/universal:packageZipTarball
-      - mkdir -p /artifacts/${DRONE_BRANCH}
-      - cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
+      - mkdir -p artifacts/${DRONE_BRANCH}
+      - cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}
     volumes:
       - /var/cache/cl-build/.sbt:/root/.sbt
       - /var/cache/cl-build/.ivy2:/root/.ivy2
       - /var/run/docker.sock:/var/run/docker.sock
-      - /artifacts/:/artifacts/
     when:
       event: [ push, tag ]
 
@@ -115,12 +114,11 @@ pipeline:
     <<: *sbtenv
     commands:
       - env JAVAC_VERSION=1.8 sbt clean compile doc client/rpm:packageBin
-      - mkdir -p /artifacts/${DRONE_BRANCH}
-      - cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm /artifacts/${DRONE_BRANCH}
+      - mkdir -p artifacts/${DRONE_BRANCH}
+      - cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}
     volumes:
       - /var/cache/cl-build/.sbt:/root/.sbt
       - /var/cache/cl-build/.ivy2:/root/.ivy2
-      - /artifacts/:/artifacts/
     when:
       event: [ push, tag ]
 
@@ -128,13 +126,12 @@ pipeline:
     <<: *sbtenv
     commands:
       - sbt node/debian:packageBin node/universal:packageZipTarball
-      - mkdir -p /artifacts/${DRONE_BRANCH}
-      - cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz /artifacts/${DRONE_BRANCH}
+      - mkdir -p artifacts/${DRONE_BRANCH}
+      - cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz artifacts/${DRONE_BRANCH}
     volumes:
       - /var/cache/cl-build/.sbt:/root/.sbt
       - /var/cache/cl-build/.ivy2:/root/.ivy2
       - /var/run/docker.sock:/var/run/docker.sock
-      - /artifacts/:/artifacts/
     when:
       event: [ push, tag ]
 
@@ -142,22 +139,21 @@ pipeline:
     <<: *sbtenv
     commands:
       - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
-      - mkdir -p /artifacts/${DRONE_BRANCH}
-      - cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm /artifacts/${DRONE_BRANCH}
+      - mkdir -p artifacts/${DRONE_BRANCH}
+      - cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm artifacts/${DRONE_BRANCH}
     volumes:
       - /var/cache/cl-build/.sbt:/root/.sbt
       - /var/cache/cl-build/.ivy2:/root/.ivy2
-      - /artifacts/:/artifacts/
     when:
       event: [ push, tag ]
 
   package-ee:
     <<: *buildenv
     commands:
-      - mkdir -p /artifacts/${DRONE_BRANCH}
+      - mkdir -p artifacts/${DRONE_BRANCH}
       - make cargo-package-all
-      - cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb /artifacts/${DRONE_BRANCH}
-      - cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm /artifacts/${DRONE_BRANCH}
+      - cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}
+      - cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm artifacts/${DRONE_BRANCH}
       - >-
         cd execution-engine/target/release/rpmbuild/SOURCES ;
         OS=$(uname -s | tr '[:upper:]' '[:lower:]') ;
@@ -166,10 +162,18 @@ pipeline:
         TARGET=$(ls $SOURCE*.tar.gz | sed "s/.tar.gz/_${OS}_${ARCH}.tar.gz/") ;
         tar -xzf $SOURCE.tar.gz ;
         tar -czf $TARGET -C $SOURCE/usr/bin/ . &&
-        cp $TARGET /artifacts/${DRONE_BRANCH}
+        cp $TARGET artifacts/${DRONE_BRANCH}
+    when:
+      event: [ push, tag ]
 
-    volumes:
-      - /artifacts/:/artifacts/
+  rsync-artifacts:
+    image: drillster/drone-rsync
+    hosts: [ $REPO_HOST ]
+    target: $REPO_PATH/
+    source: artifacts/${DRONE_BRANCH}
+    secrets: [ repo_host, rsync_user, rsync_key, repo_path ]
+    delete: true
+    recursive: true
     when:
       event: [ push, tag ]
 
@@ -181,7 +185,6 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
     when:
       status: [ failure, success ]
-
 
   notify:
     image: plugins/slack
