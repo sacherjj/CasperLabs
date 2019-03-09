@@ -178,6 +178,19 @@ pipeline:
     when:
       event: [ push, tag ]
 
+  github_publish_release_artifacts:
+    image: plugins/github-release
+    prerelease: true
+    files:
+      - artifacts/${DRONE_BRANCH}/*
+    checksum:
+     - sha256
+     - md5
+    secrets: [github_token]
+    when:
+      branch: master
+      event: tag
+
   cleanup:
     <<: *sbtenv
     commands:
