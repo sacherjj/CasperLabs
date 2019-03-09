@@ -65,7 +65,8 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
       "response takes to long" should {
         "get a negative result" in
           new TwoNodesRuntime[Boolean](
-            pingHandler = Handler.pingHandlerWithDelay(1.second)
+            pingHandler = Handler.pingHandlerWithDelay(1.second),
+            timeout = 500.millis
           ) {
             def execute(
                 kademliaRPC: KademliaRPC[F],

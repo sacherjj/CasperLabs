@@ -28,14 +28,14 @@ class GrpcKademliaRPCSpec extends KademliaRPCSpec[Task, GrpcEnvironment] {
       GrpcEnvironment(host, port, peer)
     }
 
-  def createKademliaRPC(env: GrpcEnvironment): Task[KademliaRPC[Task]] = {
+  def createKademliaRPC(env: GrpcEnvironment, timeout: FiniteDuration): Task[KademliaRPC[Task]] = {
     implicit val ask: PeerNodeAsk[Task] =
       new DefaultApplicativeAsk[Task, PeerNode] {
         val applicative: Applicative[Task] = Applicative[Task]
         def ask: Task[PeerNode]            = Task.pure(env.peer)
       }
     CachedConnections[Task, KademliaConnTag].map { implicit cache =>
-      new GrpcKademliaRPC(env.port, 500.millis)
+      new GrpcKademliaRPC(env.port, timeout)
     }
   }
 
