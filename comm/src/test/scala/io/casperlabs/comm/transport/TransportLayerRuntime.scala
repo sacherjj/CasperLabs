@@ -1,7 +1,5 @@
 package io.casperlabs.comm.transport
 
-import java.net.ServerSocket
-
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.Random
@@ -14,9 +12,9 @@ import io.casperlabs.comm._
 import io.casperlabs.comm.protocol.routing.Protocol
 import io.casperlabs.comm.CommError.CommErr
 import io.casperlabs.comm.rp.ProtocolHelper
-import io.casperlabs.shared.Resources
+import io.casperlabs.comm.TestRuntime
 
-abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
+abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] extends TestRuntime {
 
   def createEnvironment(port: Int): F[E]
 
@@ -25,12 +23,6 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
   def createDispatcherCallback: F[DispatcherCallback[F]]
 
   def extract[A](fa: F[A]): A
-
-  private def getFreePort: Int =
-    Resources.withResource(new ServerSocket(0)) { s =>
-      s.setReuseAddress(true)
-      s.getLocalPort
-    }
 
   def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
     for {
