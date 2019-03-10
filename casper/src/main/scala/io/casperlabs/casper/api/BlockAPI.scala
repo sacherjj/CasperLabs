@@ -409,16 +409,4 @@ object BlockAPI {
           "No action taken since other thread is already processing the block."
         )
     }
-
-  def previewPrivateNames[F[_]: Monad: Log](
-      user: ByteString,
-      timestamp: Long,
-      nameQty: Int
-  ): F[PrivateNamePreviewResponse] = {
-    val seed    = DeployData().withUser(user).withTimestamp(timestamp)
-    val rand    = Blake2b512Random(DeployData.toByteArray(seed))
-    val safeQty = nameQty min 1024
-    val ids     = (0 until safeQty).map(_ => ByteString.copyFrom(rand.next()))
-    PrivateNamePreviewResponse(ids).pure[F]
-  }
 }
