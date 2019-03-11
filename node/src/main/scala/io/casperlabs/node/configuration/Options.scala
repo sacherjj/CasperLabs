@@ -71,10 +71,6 @@ private[configuration] object Options {
 
   def flag(b: Boolean): Flag = b.asInstanceOf[Flag]
 
-  // We need this conversion because ScallopOption[A] is invariant in A
-  implicit def scallopOptionFlagToBoolean(so: ScallopOption[Flag]): ScallopOption[Boolean] =
-    so.map(identity)
-
   def safeCreate(args: Seq[String], defaults: Map[String, String]): Either[String, Options] =
     Either.catchNonFatal(Options(args, defaults)).leftMap(_.getMessage)
 }
@@ -98,116 +94,6 @@ private[configuration] final case class Options private (
     */
   private val fields =
     mutable.Map.empty[(ScallopConfBase, String), () => ScallopOption[String]]
-
-  implicit def scallopOptionToOption[A](so: ScallopOption[A]): Option[A] = so.toOption
-
-  def parseConf: Either[String, ConfigurationSoft] = {
-    for {
-      c <- parseCommand
-    } yield {
-      val server = ConfigurationSoft.Server(
-        run.serverHost,
-        run.serverPort,
-        run.serverHttpPort,
-        run.serverKademliaPort,
-        run.serverDynamicHostAddress,
-        run.serverNoUpnp,
-        run.serverDefaultTimeout,
-        run.serverBootstrap,
-        run.serverStoreType,
-        run.serverDataDir,
-        run.serverMaxNumOfConnections,
-        c match {
-          case _: Configuration.Command.Diagnostics.type =>
-            diagnostics.serverMaxMessageSize
-          case _: Configuration.Command.Run.type => run.serverMaxMessageSize
-        },
-        c match {
-          case _: Configuration.Command.Diagnostics.type =>
-            diagnostics.serverChunkSize
-          case _: Configuration.Command.Run.type => run.serverChunkSize
-        }
-      )
-      val grpcServer = ConfigurationSoft.GrpcServer(
-        c match {
-          case _: Configuration.Command.Diagnostics.type =>
-            diagnostics.grpcHost
-          case _: Configuration.Command.Run.type =>
-            run.grpcHost
-        },
-        run.grpcSocket,
-        c match {
-          case _: Configuration.Command.Diagnostics.type =>
-            diagnostics.grpcPortExternal
-          case _: Configuration.Command.Run.type => run.grpcPortExternal
-        },
-        run.grpcPortInternal
-      )
-      val tls = ConfigurationSoft.Tls(
-        run.tlsCertificate,
-        run.tlsKey,
-        run.tlsSecureRandomNonBlocking
-      )
-      val casper = ConfigurationSoft.Casper(
-        run.casperValidatorPublicKey,
-        run.casperValidatorPrivateKey,
-        run.casperValidatorPrivateKeyPath,
-        run.casperValidatorSigAlgorithm,
-        run.casperBondsFile,
-        run.casperKnownValidatorsFile,
-        run.casperNumValidators,
-        run.casperWalletsFile,
-        run.casperMinimumBond,
-        run.casperMaximumBond,
-        run.casperHasFaucet,
-        run.casperRequiredSigs,
-        run.casperShardId,
-        run.casperStandalone,
-        run.casperApproveGenesis,
-        run.casperApproveGenesisInterval,
-        run.casperApproveGenesisDuration,
-        run.casperDeployTimestamp
-      )
-
-      val lmdb = ConfigurationSoft.LmdbBlockStore(
-        run.lmdbBlockStoreSize,
-        run.lmdbMaxDbs,
-        run.lmdbMaxReaders,
-        run.lmdbUseTls
-      )
-
-      val blockstorage = ConfigurationSoft.BlockDagFileStorage(
-        run.blockstorageLatestMessagesLogMaxSizeFactor
-      )
-
-      val metrics = ConfigurationSoft.Metrics(
-        run.metricsPrometheus,
-        run.metricsZipkin,
-        run.metricsSigar,
-        run.metricsInflux
-      )
-
-      val influx = ConfigurationSoft.Influx(
-        run.influxHostname,
-        run.influxPort,
-        run.influxDatabase,
-        run.influxProtocol,
-        None,
-        None
-      )
-
-      ConfigurationSoft(
-        server,
-        grpcServer,
-        tls,
-        casper,
-        lmdb,
-        blockstorage,
-        metrics,
-        influx
-      )
-    }
-  }
 
   def fieldByName(fieldName: String): Option[String] =
     subcommand
@@ -274,6 +160,7 @@ private[configuration] final case class Options private (
   addSubcommand(diagnostics)
 
   val run = new Subcommand("run") {
+
     helpWidth(120)
 
     @scallop
@@ -447,6 +334,7 @@ private[configuration] final case class Options private (
     @scallop
     val serverMaxNumOfConnections =
       gen[Int]("Maximum number of peers allowed to connect to the node.")
+
     @scallop
     val lmdbBlockStoreSize =
       gen[Long]("Casper BlockStore map size (in bytes).")

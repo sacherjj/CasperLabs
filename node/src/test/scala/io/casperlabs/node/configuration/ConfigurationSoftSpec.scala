@@ -1,112 +1,119 @@
 package io.casperlabs.node.configuration
 
-import java.nio.file.{Files, Paths, StandardOpenOption}
+import java.nio.file.{Files, Path, Paths, StandardOpenOption}
 import java.util.concurrent.TimeUnit
 
+import cats.data.Validated.Valid
 import cats.syntax.option._
+import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
+import io.casperlabs.casper.CasperConf
+import io.casperlabs.comm.transport.Tls
 import io.casperlabs.comm.{Endpoint, NodeIdentifier, PeerNode}
-import io.casperlabs.node.configuration.ConfigurationSoft._
+import io.casperlabs.configuration.{ignore, relativeToDataDir}
+import io.casperlabs.node.configuration.Configuration.Influx
 import io.casperlabs.node.configuration.MagnoliaArbitrary._
+import io.casperlabs.node.configuration.Utils._
 import io.casperlabs.shared.StoreType
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import shapeless._
-import shapeless.labelled.FieldType
-import shapeless.ops.hlist._
+import shapeless.<:!<
 
 import scala.concurrent.duration._
+import scala.io.Source
 
 class ConfigurationSoftSpec
     extends FunSuite
     with Matchers
     with BeforeAndAfterEach
     with GeneratorDrivenPropertyChecks
-    with ArbitraryImplicits {
-  type InnerFieldName = String
-  type UpperFieldName = String
-
+    with ArbitraryImplicits
+    with ParserImplicits {
   val configFilename: String = s"test-configuration.toml"
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(
-      minSuccessful = 500
+      minSuccessful = 2000,
+      workers = 1
     )
 
-  implicit val defaultConf: ConfigurationSoft = {
-    val server = Server(
+  val defaultConf: Configuration = {
+    val server = Configuration.Server(
       host = "test".some,
-      port = 1.some,
-      httpPort = 1.some,
-      kademliaPort = 1.some,
-      dynamicHostAddress = false.some,
-      noUpnp = false.some,
-      defaultTimeout = 1.some,
+      port = 1,
+      httpPort = 1,
+      kademliaPort = 1,
+      dynamicHostAddress = false,
+      noUpnp = false,
+      defaultTimeout = 1,
       bootstrap = PeerNode(
         NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
         Endpoint("52.119.8.109", 1, 1)
-      ).some,
-      storeType = StoreType.LMDB.some,
-      dataDir = Paths.get("/tmp").some,
-      maxNumOfConnections = 1.some,
-      maxMessageSize = 1.some,
-      chunkSize = 1.some
+      ),
+      storeType = StoreType.LMDB,
+      dataDir = Paths.get("/tmp"),
+      maxNumOfConnections = 1,
+      maxMessageSize = 1,
+      chunkSize = 1
     )
-    val grpcServer = GrpcServer(
-      host = "test".some,
-      socket = Paths.get("/tmp/test").some,
-      portExternal = 1.some,
-      portInternal = 1.some
+    val grpcServer = Configuration.GrpcServer(
+      host = "test",
+      socket = Paths.get("/tmp/test"),
+      portExternal = 1,
+      portInternal = 1
     )
-    val casper = Casper(
+    val casper = CasperConf(
       validatorPublicKey = "test".some,
       validatorPrivateKey = "test".some,
       validatorPrivateKeyPath = Paths.get("/tmp/test").some,
-      validatorSigAlgorithm = "test".some,
-      bondsFile = Paths.get("/tmp/test").some,
+      validatorSigAlgorithm = "test",
+      bondsFile = Paths.get("/tmp/test"),
       knownValidatorsFile = Paths.get("/tmp/test").some,
-      numValidators = 1.some,
-      walletsFile = Paths.get("/tmp/test").some,
-      minimumBond = 1L.some,
-      maximumBond = 1L.some,
-      hasFaucet = false.some,
-      requiredSigs = 1.some,
-      shardId = "test".some,
-      standalone = false.some,
-      approveGenesis = false.some,
-      approveGenesisInterval = FiniteDuration(1, TimeUnit.SECONDS).some,
-      approveGenesisDuration = FiniteDuration(1, TimeUnit.SECONDS).some,
-      deployTimestamp = 1L.some
+      numValidators = 1,
+      walletsFile = Paths.get("/tmp/test"),
+      minimumBond = 1L,
+      maximumBond = 1L,
+      hasFaucet = false,
+      requiredSigs = 1,
+      shardId = "test",
+      standalone = false,
+      approveGenesis = false,
+      approveGenesisInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      approveGenesisDuration = FiniteDuration(1, TimeUnit.SECONDS),
+      deployTimestamp = 1L.some,
+      genesisPath = Paths.get("/tmp/genesis")
     )
     val tls = Tls(
-      certificate = Paths.get("/tmp/test").some,
-      key = Paths.get("/tmp/test").some,
-      secureRandomNonBlocking = false.some
+      certificate = Paths.get("/tmp/test"),
+      key = Paths.get("/tmp/test"),
+      secureRandomNonBlocking = false
     )
-    val lmdb = LmdbBlockStore(
-      blockStoreSize = 1L.some,
-      maxDbs = 1.some,
-      maxReaders = 1.some,
-      useTls = false.some
+    val lmdb = LMDBBlockStore.Config(
+      dir = Paths.get("/tmp/lmdb-block-store"),
+      blockStoreSize = 1L,
+      maxDbs = 1,
+      maxReaders = 1,
+      useTls = false
     )
-    val blockStorage = BlockDagFileStorage(
-      latestMessagesLogMaxSizeFactor = 1.some
+    val blockStorage = BlockDagFileStorage.Config(
+      latestMessagesLogMaxSizeFactor = 1,
+      dir = Paths.get("/tmp/block-dag-file-storage")
     )
-    val kamonSettings = Metrics(
-      false.some,
-      false.some,
-      false.some,
-      false.some
+    val kamonSettings = Configuration.Kamon(
+      prometheus = false,
+      zipkin = false,
+      sigar = false,
+      influx = false
     )
-    val influx = Influx(
-      "0.0.0.0".some,
-      1.some,
-      "test".some,
-      "https".some,
+    val influx = Configuration.Influx(
+      "0.0.0.0",
+      1,
+      "test",
+      "https",
       "user".some,
       "password".some
     )
 
-    ConfigurationSoft(
+    Configuration(
       server,
       grpcServer,
       tls,
@@ -114,15 +121,85 @@ class ConfigurationSoftSpec
       lmdb,
       blockStorage,
       kamonSettings,
-      influx
+      influx.some
     )
   }
 
   test("""
-      |ConfigurationSoft.parse should properly parse
-      |TOML config file and environment variables regarding InfluxAuth
+        |Configuration.updateTls should update
+        |'customCertificateLocation' and 'customKeyLocation'
+        |if certificate and key are custom""".stripMargin) {
+    forAll { (maybeDataDir: Option[Path], maybeCert: Option[Path], maybeKey: Option[Path]) =>
+      import shapeless._
+      import cats.syntax.flatMap._
+      import cats.instances.either._
+
+      /*_*/
+      val confUpdatedDataDir =
+        maybeDataDir.fold(defaultConf)(lens[Configuration].server.dataDir.set(defaultConf))
+      val confUpdatedCert =
+        maybeCert.fold(confUpdatedDataDir)(
+          lens[Configuration].tls.certificate.set(confUpdatedDataDir)
+        )
+      val confUpdatedKey =
+        maybeKey.fold(confUpdatedCert)(lens[Configuration].tls.key.set(confUpdatedCert))
+      /*_*/
+
+      val Right(defaults) = readFile(Source.fromResource("default-configuration.toml")) >>= Configuration.parseToml
+      val Right(res) = Configuration
+        .updateTls(Configuration.updatePaths(confUpdatedKey, defaultConf.server.dataDir), defaults)
+      val Right(defaultCert) =
+        Parser[java.nio.file.Path].parse(defaults("tlsCertificate"))
+      val Right(defaultKey) = Parser[java.nio.file.Path].parse(defaults("tlsKey"))
+
+      maybeCert match {
+        case Some(c) =>
+          val certStrippedPath        = stripPrefix(c, res.server.dataDir)
+          val defaultCertStrippedPath = stripPrefix(defaultCert, defaultConf.server.dataDir)
+          assert(res.tls.customCertificateLocation && certStrippedPath != defaultCertStrippedPath)
+        case None =>
+          assert(!res.tls.customCertificateLocation)
+      }
+      maybeKey match {
+        case Some(k) =>
+          val keyStrippedPath        = stripPrefix(k, res.server.dataDir)
+          val defaultKeyStrippedPath = stripPrefix(defaultKey, defaultConf.server.dataDir)
+          assert(res.tls.customKeyLocation && keyStrippedPath != defaultKeyStrippedPath)
+        case None => assert(!res.tls.customKeyLocation)
+      }
+    }
+  }
+
+  test("""
+        |Configuration.updatePath should
+        |respect server.dataDir changes for 'Path' options""".stripMargin) {
+    forAll { newDataDir: Path =>
+      def updateDataDir(c: Configuration, dataDir: Path): Configuration =
+        c.copy(server = c.server.copy(dataDir = dataDir))
+
+      for {
+        (_, defaultConf)       <- Configuration.parse(Array.empty, Map.empty).toOption
+        confWithChangedDataDir = updateDataDir(defaultConf, newDataDir)
+        conf = Configuration
+          .updatePaths(confWithChangedDataDir, defaultConf.server.dataDir)
+      } {
+        val paths = gatherPaths(conf)
+        val invalidPaths = paths
+          .filterNot {
+            case (_, path) =>
+              path.startsWith(newDataDir)
+          }
+          .map(_._1)
+        assert(invalidPaths.isEmpty, "Invalid paths, wrap them into 'Configuration#adjustPath'")
+      }
+    }
+  }
+
+  test("""
+        |Configuration.parse should properly parse
+        |TOML config file and environment variables regarding InfluxAuth
     """.stripMargin) {
-    forAll { (file: Option[ConfigurationSoft], env: Option[ConfigurationSoft]) =>
+    forAll { (file: Option[Configuration], env: Option[Configuration]) =>
       val fileContent = file.map(toToml).getOrElse("")
       if (fileContent.nonEmpty) {
         writeTestConfigFile(fileContent)
@@ -138,27 +215,26 @@ class ConfigurationSoftSpec
       val envVars = env.map(toEnvVars).getOrElse(Map.empty)
 
       val expected = {
-        val fileOrDefault = file.map(_.fallbackTo(defaultConf)).getOrElse(defaultConf)
-        val envOrFile     = env.map(_.fallbackTo(fileOrDefault)).getOrElse(fileOrDefault)
+        val fileOrDefault = file.map(fallback(_, defaultConf)).getOrElse(defaultConf)
+        val envOrFile     = env.map(fallback(_, fileOrDefault)).getOrElse(fileOrDefault)
         envOrFile
       }
 
-      val Right(result) = ConfigurationSoft.parse(cliArgs, envVars)
-
+      val Valid((_, result)) = Configuration.parse(cliArgs, envVars)
       expected.influx shouldEqual result.influx
     }
   }
 
   test("""
-      |ConfigurationSoft.parse should properly parse
+      |Configuration.parse should properly parse
       |CLI options, environment variables and TOML config file
-      |ignoring InfluxAuth because there is no way providing it through CLI
+      |ignoring Influx because there is no way providing its auth through CLI
       |""".stripMargin) {
     forAll {
       (
-          cli: Option[ConfigurationSoft],
-          file: Option[ConfigurationSoft],
-          env: Option[ConfigurationSoft]
+          cli: Option[Configuration],
+          file: Option[Configuration],
+          env: Option[Configuration]
       ) =>
         val fileContent = file.map(toToml).getOrElse("")
         if (fileContent.nonEmpty) {
@@ -180,13 +256,13 @@ class ConfigurationSoftSpec
         val envVars = env.map(toEnvVars).getOrElse(Map.empty)
 
         val expected = {
-          val fileOrDefault = file.map(_.fallbackTo(defaultConf)).getOrElse(defaultConf)
-          val envOrFile     = env.map(_.fallbackTo(fileOrDefault)).getOrElse(fileOrDefault)
-          val cliOrEnv      = cli.map(_.fallbackTo(envOrFile)).getOrElse(envOrFile)
-          cliOrEnv
+          val fileOrDefault = file.map(fallback(_, defaultConf)).getOrElse(defaultConf)
+          val envOrFile     = env.map(fallback(_, fileOrDefault)).getOrElse(fileOrDefault)
+          val cliOrEnv      = cli.map(fallback(_, envOrFile)).getOrElse(envOrFile)
+          Configuration.updatePaths(cliOrEnv, defaultConf.server.dataDir)
         }
 
-        val Right(result) = ConfigurationSoft.parse(cliArgs, envVars)
+        val Valid((_, result)) = Configuration.parse(cliArgs, envVars)
 
         expected.server shouldEqual result.server
         expected.grpc shouldEqual result.grpc
@@ -198,13 +274,101 @@ class ConfigurationSoftSpec
     }
   }
 
-  def toToml(conf: ConfigurationSoft): String = {
+  def replacePaths(c: Configuration, path: Path): Configuration = {
+    import magnolia._
+
+    import scala.language.experimental.macros
+
+    trait Replace[A] {
+      def replace(p: Path, a: A): A
+    }
+
+    implicit def default[A](implicit ev1: A <:!< Path, ev2: A <:!< Product): Replace[A] =
+      (_, a) => a
+    implicit def option[A](implicit F: Replace[A]): Replace[Option[A]] =
+      (p, o) => o.map(F.replace(p, _))
+    implicit val pathReplace: Replace[Path] =
+      (p, _) => p
+
+    object GenericReplace {
+      type Typeclass[T] = Replace[T]
+      def combine[T](caseClass: CaseClass[Typeclass, T]): Typeclass[T] =
+        (p, v) => caseClass.construct(param => param.typeclass.replace(p, param.dereference(v)))
+      def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] =
+        (p, v) => sealedTrait.dispatch(v)(s => s.typeclass.replace(p, s.cast(v)))
+      implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
+    }
+
+    GenericReplace.gen[Configuration].replace(path, c)
+  }
+
+  def gatherPaths(c: Configuration): List[(String, Path)] = {
+    import magnolia._
+
+    import scala.language.experimental.macros
+
+    trait Filter[A] {
+      def filter(fieldNames: List[String], a: A): List[(String, Path)]
+    }
+
+    implicit def default[A](implicit ev1: A <:!< Path, ev2: A <:!< Product): Filter[A] =
+      (_, _) => Nil
+    implicit def option[A](implicit F: Filter[A]): Filter[Option[A]] =
+      (fieldNames, opt) => opt.toList.flatMap(v => F.filter(fieldNames, v))
+    implicit val pathFilter: Filter[Path] =
+      (fieldNames, p) => List((fieldNames.reverse.mkString("."), p))
+
+    object GenericFilter {
+      type Typeclass[T] = Filter[T]
+      def combine[T](caseClass: CaseClass[Typeclass, T]): Typeclass[T] =
+        (fieldNames, v) =>
+          caseClass.parameters.toList
+            .flatMap(p => p.typeclass.filter(p.label :: fieldNames, p.dereference(v)))
+      def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] =
+        (fieldNames, v) => sealedTrait.dispatch(v)(s => s.typeclass.filter(fieldNames, s.cast(v)))
+      implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
+    }
+
+    GenericFilter.gen[Configuration].filter(Nil, c)
+  }
+
+  def fallback(a: Configuration, b: Configuration): Configuration = {
+    import magnolia._
+
+    import scala.language.experimental.macros
+
+    trait Merge[A] {
+      def merge(a: A, b: A): A
+    }
+
+    implicit def instance[A](implicit ev: A <:!< Product): Merge[A] = (a, _) => a
+    implicit def optionInflux: Merge[Option[Influx]] =
+      (maybeA, maybeB) =>
+        (maybeA, maybeB) match {
+          case (Some(a), Some(b)) => GenericMerge.gen[Influx].merge(a, b).some
+          case (Some(a), None)    => a.some
+          case (None, Some(b))    => b.some
+          case (None, None)       => None
+      }
+    implicit def optionPlain[A](implicit ev: A <:!< Product): Merge[Option[A]] = _ orElse _
+
+    object GenericMerge {
+      type Typeclass[T] = Merge[T]
+      def combine[T](caseClass: CaseClass[Typeclass, T]): Typeclass[T] =
+        (a, b) => caseClass.construct(p => p.typeclass.merge(p.dereference(a), p.dereference(b)))
+      def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
+      implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
+    }
+    GenericMerge.gen[Configuration].merge(a, b)
+  }
+
+  def toToml(conf: Configuration): String = {
     def dashify(s: String): String =
       s.replaceAll("([A-Z]+)([A-Z][a-z])", "$1-$2")
         .replaceAll("([a-z\\d])([A-Z])", "$1-$2")
         .toLowerCase
 
-    val stringBuilder = reduce(conf, new StringBuilder) {
+    val tables = reduce(conf, Map.empty[String, Map[String, String]]) {
       case s: String               => s""""$s""""
       case d: FiniteDuration       => s""""${d.toString.replace(" ", "")}""""
       case _: StoreType.Mixed.type => s""""mixed""""
@@ -213,18 +377,28 @@ class ConfigurationSoftSpec
       case p: PeerNode             => s""""${p.toString}""""
       case p: java.nio.file.Path   => s""""${p.toString}""""
       case x                       => x.toString
-    } { (sb, upperFieldName, fields) =>
-      sb.append(s"[${dashify(upperFieldName)}]\n")
-      fields.foreach {
-        case (k, v) =>
-          sb.append(s"${dashify(k)} = $v\n")
-      }
-      sb.append("\n")
+    } { (acc, fullFieldName, field) =>
+      val tableName :: fieldName = fullFieldName
+      val table                  = dashify(tableName)
+      val key                    = dashify(fieldName.mkString("-"))
+      val previousTable          = acc.getOrElse(table, Map.empty[String, String])
+      val updatedKeys            = previousTable + (key -> field)
+      acc.updated(table, updatedKeys)
     }
-    stringBuilder.toString()
+
+    val sb = new StringBuilder
+    tables.foreach {
+      case (table, subtable) =>
+        sb.append(s"[$table]\n")
+        subtable.foreach {
+          case (k, v) =>
+            sb.append(s"$k = $v\n")
+        }
+    }
+    sb.toString()
   }
 
-  def toCli(conf: ConfigurationSoft): List[String] =
+  def toCli(conf: Configuration): List[String] =
     toEnvVars(conf)
       .filterKeys(k => k != "CL_INFLUX_USER" && k != "CL_INFLUX_PASSWORD")
       .flatMap {
@@ -238,74 +412,60 @@ class ConfigurationSoftSpec
       }
       .toList
 
-  def toEnvVars(conf: ConfigurationSoft): Map[String, String] = {
-    def snakify(s: String): String =
-      s.replaceAll("([A-Z]+)([A-Z][a-z])", "$1_$2")
-        .replaceAll("([a-z\\d])([A-Z])", "$1_$2")
-        .toUpperCase
-
+  def toEnvVars(conf: Configuration): Map[String, String] =
     reduce(conf, Map.empty[String, String])(_.toString.replace(" ", "") match {
       case x @ ("InMem" | "Mixed" | "LMDB") => x.toLowerCase
       case x                                => x
-    }) { (envVars, upperFieldName, innerFields) =>
-      envVars ++ innerFields.map {
-        case (k, v) =>
-          s"CL_${snakify(upperFieldName)}_${snakify(k)}" -> v
+    }) { (envVars, fieldName, field) =>
+      envVars + (s"CL_${snakify(fieldName.mkString("_"))}" -> field)
+    }
+
+  def reduce[Accumulator](conf: Configuration, accumulator: Accumulator)(
+      innerFieldsMapper: Any => String)(
+      reducer: (Accumulator, List[String], String) => Accumulator): Accumulator = {
+    import magnolia._
+
+    import scala.language.experimental.macros
+
+    trait Flattener[A] {
+      def flatten(path: List[String], a: A): List[(List[String], String)]
+    }
+
+    implicit val peerNode: Flattener[PeerNode] =
+      (path, a) => List((path, innerFieldsMapper(a)))
+    implicit def instance[A](implicit ev: A <:!< Product): Flattener[A] =
+      (path, a) => List((path, innerFieldsMapper(a)))
+    implicit def optionNestedInflux: Flattener[Option[Influx]] =
+      (path, opt) =>
+        opt.toList.flatMap(influx => GenericFlattener.gen[Influx].flatten(path, influx))
+    implicit def option[A](implicit ev: A <:!< Influx): Flattener[Option[A]] =
+      (path, opt) => opt.toList.map(a => (path, innerFieldsMapper(a)))
+
+    object GenericFlattener {
+      type Typeclass[T] = Flattener[T]
+      def combine[T](
+          caseClass: CaseClass[Typeclass, T]
+      )(implicit ev: T <:!< PeerNode): Typeclass[T] =
+        (path, v) =>
+          caseClass.parameters.toList
+            .flatMap(
+              p =>
+                if (p.annotations.exists(_.isInstanceOf[ignore])) {
+                  List.empty
+                } else {
+                  p.typeclass.flatten(path :+ p.label, p.dereference(v))
+              }
+          )
+      def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
+      implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
+    }
+    GenericFlattener
+      .gen[Configuration]
+      .flatten(Nil, conf)
+      .foldLeft(accumulator) {
+        case (acc, (fieldName, field)) =>
+          reducer(acc, fieldName, field)
       }
-    }
-  }
-
-  def reduce[Accumulator](conf: ConfigurationSoft, accumulator: Accumulator)(
-      innerFieldsMapper: Any => String
-  )(
-      reducer: (Accumulator, UpperFieldName, List[(InnerFieldName, String)]) => Accumulator
-  ): Accumulator = {
-
-    object toKeyValueMapper extends Poly1 {
-      implicit def caseAll[K <: Symbol, A](
-          implicit w: Witness.Aux[K]
-      ) =
-        at[FieldType[K, Option[A]]] { maybeField =>
-          val value: Option[String] = maybeField.map(v => innerFieldsMapper(v))
-          value.map { v =>
-            val k = w.value.name
-            (k, v)
-          }
-        }
-    }
-
-    def mapToKeyValues[A <: Product, In <: HList, Out <: HList](
-        a: A,
-        gen: LabelledGeneric.Aux[A, In]
-    )(
-        implicit
-        m: Mapper.Aux[toKeyValueMapper.type, In, Out],
-        t: ToTraversable.Aux[Out, List, Option[(String, String)]]
-    ): List[(String, String)] =
-      gen.to(a).map(toKeyValueMapper).toList.flatten
-
-    object toEnvVarsReducer extends Poly2 {
-      implicit def caseGen[K <: Symbol, A <: Product, Repr1 <: HList, Repr2 <: HList](
-          implicit g: LabelledGeneric.Aux[A, Repr1],
-          w: Witness.Aux[K],
-          m: Mapper.Aux[toKeyValueMapper.type, Repr1, Repr2],
-          t: ToTraversable.Aux[Repr2, List, Option[(String, String)]]
-      ) =
-        at[Accumulator, FieldType[K, A]] { (accumulator, product) =>
-          val name: String                   = w.value.name
-          val fields: List[(String, String)] = mapToKeyValues(product, g)
-          reducer(accumulator, name, fields)
-        }
-    }
-
-    def reduce[A <: Product, Repr <: HList](a: A)(
-        implicit g: LabelledGeneric.Aux[A, Repr],
-        f: LeftFolder.Aux[Repr, Accumulator, toEnvVarsReducer.type, Accumulator]
-    ): Accumulator = g.to(a).foldLeft(accumulator)(toEnvVarsReducer)
-
-    /*_*/
-    reduce(conf)
-    /*_*/
   }
 
   override protected def afterEach(): Unit = Files.deleteIfExists(Paths.get(configFilename))
