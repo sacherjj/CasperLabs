@@ -141,12 +141,12 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
   private def node(n: PeerNode): Node =
     Node()
       .withId(ByteString.copyFrom(n.key.toArray))
-      .withHost(ByteString.copyFromUtf8(n.endpoint.host))
-      .withUdpPort(n.endpoint.udpPort)
-      .withTcpPort(n.endpoint.tcpPort)
+      .withHost(n.endpoint.host)
+      .withDiscoveryPort(n.endpoint.udpPort)
+      .withProtocolPort(n.endpoint.tcpPort)
 
   private def toPeerNode(n: Node): PeerNode =
-    PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
+    PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host, n.protocolPort, n.discoveryPort))
 
   class SimpleKademliaRPCService(
       pingHandler: PeerNode => Task[Unit],

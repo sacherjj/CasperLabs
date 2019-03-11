@@ -2,18 +2,13 @@ syntax = "proto3";
 package io.casperlabs.comm.discovery;
 
 import "scalapb/scalapb.proto";
+import "io/casperlabs/comm/discovery/node.proto";
 
 option (scalapb.options) = {
   package_name: "io.casperlabs.comm.discovery"
   flat_package: true
 };
 
-message Node {
-  bytes  id       = 1;
-  bytes  host     = 2;
-  uint32 tcp_port = 3;
-  uint32 udp_port = 4;
-}
 
 message Ping {
   Node   sender         = 1;
@@ -26,7 +21,7 @@ message Lookup {
   bytes  id     = 1;
   Node   sender = 2;
 }
-        
+
 message LookupResponse {
     repeated Node nodes = 1;
 }
