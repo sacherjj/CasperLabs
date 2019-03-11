@@ -11,7 +11,6 @@ import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, Bloc
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
@@ -35,7 +34,6 @@ class ValidateTest
     with BlockGenerator
     with BlockDagStorageFixture {
   implicit val log              = new LogStub[Task]
-  implicit val absId            = ToAbstractContext.idToAbstractContext
   implicit val raiseValidateErr = Validate.raiseValidateErrorThroughSync[Task]
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.

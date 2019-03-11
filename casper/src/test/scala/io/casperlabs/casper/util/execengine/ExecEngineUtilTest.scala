@@ -7,7 +7,6 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
@@ -23,7 +22,6 @@ class ExecEngineUtilTest
     with BlockDagStorageFixture {
 
   implicit val logEff = new LogStub[Task]
-  implicit val absId  = ToAbstractContext.idToAbstractContext
 
   implicit val executionEngineService = HashSetCasperTestNode.simpleEEApi[Task]()
 

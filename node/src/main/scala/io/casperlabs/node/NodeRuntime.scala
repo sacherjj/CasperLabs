@@ -145,10 +145,6 @@ class NodeRuntime private[node] (
                         )
       _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
       oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
-      abs = new ToAbstractContext[Effect] {
-        def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
-      }
-
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](
                                 conf.casper,
