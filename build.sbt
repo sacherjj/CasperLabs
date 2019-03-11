@@ -9,6 +9,9 @@ Global / conflictManager := ConflictManager.strict
 //resolve all version conflicts explicitly
 Global / dependencyOverrides := Dependencies.overrides
 
+// Keeping all the .proto definitions in a common catalogue so we can use `include` to factor out common messages.
+val protobufDirectory = file(".") / "protobuf" / "io" / "casperlabs"
+
 lazy val projectSettings = Seq(
   organization := "io.casperlabs",
   scalaVersion := "2.12.7",
@@ -127,6 +130,8 @@ lazy val comm = (project in file("comm"))
       monix,
       guava
     ),
+    PB.protoSources in Compile := Seq(
+      protobufDirectory / "comm" / "discovery"),
     PB.targets in Compile := Seq(
       PB.gens.java                              -> (sourceManaged in Compile).value,
       scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value,
@@ -162,6 +167,13 @@ lazy val models = (project in file("models"))
       scalacheck,
       scalapbRuntimegGrpc
     ),
+    // TODO: As we refactor the interfaces this project should only depend on consensus
+    // related models, ones that get stored, passed to client. The client for example
+    // shouldn't transitively depend on node-to-node and node-to-EE interfaces.
+    PB.protoSources in Compile := Seq(
+      protobufDirectory / "casper" / "protocol",
+      protobufDirectory / "comm" / "protocol" / "routing",
+      protobufDirectory / "ipc"),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
       grpcmonix.generators
@@ -194,6 +206,8 @@ lazy val node = (project in file("node"))
         scalapbRuntimegGrpc,
         tomlScala
       ),
+    PB.protoSources in Compile := Seq(
+      protobufDirectory / "node" / "model"),
     PB.targets in Compile := Seq(
       PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf",
       scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value / "protobuf",
