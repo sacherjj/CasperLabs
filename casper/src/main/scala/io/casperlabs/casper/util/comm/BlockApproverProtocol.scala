@@ -1,15 +1,16 @@
 package io.casperlabs.casper.util.comm
 
 import cats.data.EitherT
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.ValidatorIdentity
+import io.casperlabs.casper.{protocol, ValidatorIdentity}
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.deploy2deploy
 import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import io.casperlabs.catscontrib.Capture
 import io.casperlabs.catscontrib.Catscontrib._
@@ -21,7 +22,8 @@ import io.casperlabs.comm.{transport, PeerNode}
 import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.ipc
+import io.casperlabs.ipc.{DeployResult, TransformEntry}
 import io.casperlabs.models.InternalProcessedDeploy
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -152,17 +154,19 @@ object BlockApproverProtocol {
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
-      checkpointsResult <- EitherT(
-                            ExecEngineUtil
-                              .computeDeploysCheckpoint(
-                                Seq(),
-                                blockDeploys.map(_.deploy),
-                                null,
-                                blockMetada => Seq.empty[TransformEntry].pure[F]
-                              )
-                              .map(_.asRight[String])
-                          )
-      (_, postStateHash, _, _) = checkpointsResult
+      deploys                   = blockDeploys.map(_.deploy)
+      processedDeploys <- EitherT(
+                           ExecutionEngineService[F].exec(
+                             ExecutionEngineService[F].emptyStateHash,
+                             deploys.map(deploy2deploy)
+                           )
+                         ).leftMap(_.getMessage)
+      commutingEffects = ExecEngineUtil.findCommutingEffects(processedDeploys)
+      transforms       = commutingEffects.unzip._1.flatMap(_.transformMap)
+      postStateHash <- EitherT(
+                        ExecutionEngineService[F]
+                          .commit(ExecutionEngineService[F].emptyStateHash, transforms)
+                      ).leftMap(_.getMessage)
       _ <- EitherT(
             (postStateHash == postState.postStateHash)
               .either(())
