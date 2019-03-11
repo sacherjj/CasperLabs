@@ -1,5 +1,5 @@
 use common::key::Key;
-use error::{GlobalStateError, RootNotFound};
+use error::GlobalStateError;
 use gs::{DbReader, TrackingCopy};
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
@@ -14,8 +14,10 @@ pub enum CommitResult {
 }
 
 pub trait History<R: DbReader> {
+    type Error;
+
     /// Checkouts to the post state of a specific block.
-    fn checkout(&self, prestate_hash: Blake2bHash) -> Result<TrackingCopy<R>, RootNotFound>;
+    fn checkout(&self, prestate_hash: Blake2bHash) -> Result<TrackingCopy<R>, Self::Error>;
 
     /// Applies changes and returns a new post state hash.
     /// block_hash is used for computing a deterministic and unique keys.
@@ -23,5 +25,5 @@ pub trait History<R: DbReader> {
         &mut self,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<CommitResult, RootNotFound>;
+    ) -> Result<CommitResult, Self::Error>;
 }

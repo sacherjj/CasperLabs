@@ -69,6 +69,8 @@ impl<K: Ord, V> InMemHist<K, V> {
 }
 
 impl History<InMemGS<Key, Value>> for InMemHist<Key, Value> {
+    type Error = RootNotFound;
+
     fn checkout(
         &self,
         prestate_hash: Blake2bHash,
@@ -148,17 +150,27 @@ mod tests {
         InMemHist { history }
     }
 
-    fn checkout<R: DbReader, H: History<R>>(hist: &H, hash: Blake2bHash) -> TrackingCopy<R> {
+    fn checkout<R, H>(hist: &H, hash: Blake2bHash) -> TrackingCopy<R>
+    where
+        R: DbReader,
+        H: History<R>,
+        H::Error: std::fmt::Debug,
+    {
         let res = hist.checkout(hash);
         assert!(res.is_ok());
         res.unwrap()
     }
 
-    fn commit<R: DbReader, H: History<R>>(
+    fn commit<R, H>(
         hist: &mut H,
         hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Blake2bHash {
+    ) -> Blake2bHash
+    where
+        R: DbReader,
+        H: History<R>,
+        H::Error: std::fmt::Debug,
+    {
         let res = hist.commit(hash, effects);
         assert!(res.is_ok());
         match res.unwrap() {

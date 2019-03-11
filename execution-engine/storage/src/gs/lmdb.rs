@@ -103,6 +103,8 @@ impl DbReader for LmdbGs {
 }
 
 impl History<Self> for LmdbGs {
+    type Error = RootNotFound;
+
     fn checkout(&self, _prestate_hash: Blake2bHash) -> Result<TrackingCopy<LmdbGs>, RootNotFound> {
         unimplemented!("LMDB History not implemented")
     }
