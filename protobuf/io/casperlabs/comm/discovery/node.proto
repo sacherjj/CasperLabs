@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package io.casperlabs.comm.discovery;
+
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  package_name: "io.casperlabs.comm.discovery"
+  flat_package: true
+};
+
+message Node {
+    bytes id = 1;
+    string host = 2;
+    uint32 protocol_port = 3;
+    uint32 discovery_port = 4;
+}

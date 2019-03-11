@@ -2,7 +2,7 @@ syntax = "proto3";
 package io.casperlabs.comm.protocol.routing;
 
 import "scalapb/scalapb.proto";
-import "CasperMessage.proto";
+import "io/casperlabs/casper/protocol/CasperMessage.proto";
 
 option (scalapb.options) = {
   package_name: "io.casperlabs.comm.protocol.routing"
