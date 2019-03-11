@@ -25,7 +25,7 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] extends 
     for {
       e1 <- createEnvironment(getFreePort)
       e2 <- createEnvironment(getFreePort)
-      _ = require(e1 != e2, "Oop, we picked the same port twice!")
+      _  = require(e1 != e2, "Oop, we picked the same port twice!")
       r  <- block(e1, e2)
     } yield r
 
