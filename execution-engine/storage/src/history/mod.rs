@@ -5,6 +5,10 @@ use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use transform::Transform;
 
+// TODO: remove annotation
+#[allow(dead_code)]
+mod trie;
+
 pub enum CommitResult {
     Success(Blake2bHash),
     Failure(GlobalStateError),
