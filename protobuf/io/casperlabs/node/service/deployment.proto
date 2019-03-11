@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package io.casperlabs.node.service;
+
+import "scalapb/scalapb.proto";
+import "io/casperlabs/casper/model/consensus.proto";
+
+option (scalapb.options) = {
+  package_name: "io.casperlabs.node.service"
+  flat_package: true
+};
+
+service DeployService {
+    rpc Deploy(DeployRequest) returns (DeployResponse) {}
+}
+
+message DeployRequest {
+    io.casperlabs.casper.model.Deploy deploy = 1;
+}
+
+message DeployResponse {}

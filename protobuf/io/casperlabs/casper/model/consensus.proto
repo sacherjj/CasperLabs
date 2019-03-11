@@ -1,0 +1,98 @@
+syntax = "proto3";
+package io.casperlabs.casper.model;
+
+import "google/protobuf/empty.proto";
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  package_name: "io.casperlabs.casper.model"
+  flat_package: true
+};
+
+// Signature over for example a deploy or a block. The location of the public key depends
+// on the subject; for example if it's a block then the key is actually part of the data
+// that needs to be signed over.
+message Signature {
+    // One of the supported algorithms: ed25519, secp256k1
+    string sig_algorithm = 1;
+    bytes sig = 2;
+}
+
+// A smart contract invocation, singed by the account that sent it.
+message Deploy {
+    int64 timestamp = 1;
+    // Wasm code of the smart contract to be executed.
+    bytes session_code = 2;
+    // Wasm code that transfers some tokens to the validators as payment in exchange to run the Deploy.
+    bytes payment_code = 3;
+    // Conversion rate between the cost of Wasm opcodes and the tokens send by the `payment_code`.
+    uint64 gas_price = 4;
+    // Monotonic nonce of the Account. Only the Deploy with the expected nonce can be executed straight away;
+    // anything higher has to wait until the Account gets into the correct state, i.e. the pending Deploys get
+    // executed on whichever Node they are waiting.
+    uint64 nonce = 5;
+    // Signature over hash(timestamp, hash(session_code), hash(payment_code), nonce, gas_price) where hash is blake2b256.
+    Signature signature = 6;
+    // Identifying the Account is the key used to sign the Deploy.
+    bytes account_public_key = 7;
+}
+
+message BlockSummary {
+    // Hash of the `header`.
+    bytes block_hash = 1;
+    Block.Header header = 2;
+    // Signature over `block_hash`.
+    Signature signature = 3;
+}
+
+message Block {
+    // Hash of the `header`.
+    bytes block_hash = 1;
+    Header header = 2;
+    Body body = 3;
+    // Signature over `block_hash`.
+    Signature signature = 4;
+
+    message Header {
+        repeated bytes parent_hashes = 1;
+        repeated Justification justifications = 2;
+        GlobalState state = 3;
+        bytes deploys_hash = 4;
+        int64 timestamp = 5;
+        uint64 version = 6;
+        uint32 deploy_count = 7;
+        string chain_id = 8;
+        uint32 validator_block_seq_num = 9;
+        bytes validator_public_key = 10;
+    }
+
+    message Body {
+        GlobalState state = 1;
+        repeated ProcessedDeploy deploys = 2;
+    }
+
+    message Justification {
+        bytes validator_public_key = 1;
+        bytes latest_block_hash = 2;
+    }
+
+    message ProcessedDeploy {
+        Deploy deploy = 1;
+        double cost = 2;
+        bool is_error = 3;
+        string error_message = 4;
+    }
+
+    message GlobalState {
+        // May not correspond to a particular block if there are multiple parents.
+        bytes pre_state_hash = 1;
+        bytes post_state_hash = 2;
+        // Included in header so lightweight nodes can follow the consensus.
+        repeated Bond bonds = 3;
+    }
+}
+
+message Bond {
+    bytes validator_public_key = 1;
+    int64 stake = 2;
+}

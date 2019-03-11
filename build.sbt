@@ -11,6 +11,8 @@ Global / dependencyOverrides := Dependencies.overrides
 
 // Keeping all the .proto definitions in a common place so we can use `include` to factor out common messages.
 val protobufDirectory = file("protobuf")
+// Protos can import any other using the full path within `protobuf`. This filter reduces the list
+// for which we actually generate .scala source, so we don't get duplicates between projects.
 def protobufSubDirectoryFilter(subdirs: String*) = {
   import java.nio.file.Paths // Handle backslash on Windows.
   (f: File) =>
@@ -141,8 +143,8 @@ lazy val comm = (project in file("comm"))
       protobufSubDirectoryFilter(
         "io/casperlabs/comm/discovery")),
     PB.targets in Compile := Seq(
-      PB.gens.java                              -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value,
+      //PB.gens.java                              -> (sourceManaged in Compile).value,
+      scalapb.gen(javaConversions = false)      -> (sourceManaged in Compile).value,
       grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
     )
   )
@@ -181,8 +183,9 @@ lazy val models = (project in file("models"))
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
-        "io/casperlabs/casper/protocol",
-        "io/casperlabs/comm/protocol/routing",
+        "io/casperlabs/casper/model",
+        "io/casperlabs/casper/protocol", // TODO: Eventually will be superceded by casper/model
+        "io/casperlabs/comm/protocol/routing", // TODO: Eventually will be superceded by node/service
         "io/casperlabs/ipc")),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
@@ -219,10 +222,12 @@ lazy val node = (project in file("node"))
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
-        "io/casperlabs/node/model")),
+        "io/casperlabs/node/model",
+        "io/casperlabs/node/service")),
+    // Generating into /protobuf because of https://github.com/thesamet/sbt-protoc/issues/8
     PB.targets in Compile := Seq(
-      PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf",
-      scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value / "protobuf",
+      //PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf",
+      scalapb.gen(javaConversions = false)      -> (sourceManaged in Compile).value / "protobuf",
       grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),

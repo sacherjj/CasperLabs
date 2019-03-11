@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+import "scalapb/scalapb.proto";
+import "io/casperlabs/casper/model/consensus.proto";
+import "io/casperlabs/comm/discovery/node.proto";
+
+option (scalapb.options) = {
+  package_name: "io.casperlabs.node.service"
+  flat_package: true
+};
+
+service GossipService {
+    rpc NewBlocks(NewBlocksRequest) returns (NewBlocksResponse);
+    rpc StreamAncestorBlockSummaries(StreamAncestorBlockSummariesRequest) returns (stream io.casperlabs.casper.model.BlockSummary);
+    rpc StreamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest) returns (stream io.casperlabs.casper.model.BlockSummary);
+    rpc BatchGetBlockSummaries(BatchGetBlockSummariesRequest) returns (BatchGetBlockSummariesResponse);
+    rpc GetBlockChunked(GetBlockChunkedRequest) returns (stream Chunk);
+}
+
+message NewBlocksRequest {
+    io.casperlabs.comm.discovery.Node sender = 1;
+    repeated bytes block_hashes = 2;
+}
+
+message NewBlocksResponse {
+    bool is_new = 1;
+}
+
+message BatchGetBlockSummariesRequest {
+    repeated bytes block_hashes = 1;
+}
+
+message BatchGetBlockSummariesResponse {
+    repeated io.casperlabs.casper.model.BlockSummary block_summaries = 1;
+}
+
+message StreamAncestorBlockSummariesRequest {
+    repeated bytes target_block_hashes = 1;
+    repeated bytes known_block_hashes = 2;
+    uint32 max_depth = 3;
+}
+
+message StreamDagTipBlockSummariesRequest {
+}
+
+message GetBlockChunkedRequest {
+    bytes block_hashe = 1;
+    uint32 chunk_size = 2;
+    repeated string accepted_compression_algorithms = 3;
+}
+
+// Generic message for transferring a stream of data that wouldn't fit into single gRPC messages.
+message Chunk {
+    // Alternating between a header and subsequent chunks of data.
+    oneof content {
+        Header header = 1;
+        bytes data = 2;
+    }
+
+    message Header {
+        // Use the content_length to sanity check the size of the data in the chunks that follow.
+        uint32 content_length = 1;
+        // Indicate if compression was used on the data. e.g. lz4
+        string compression_algorithm = 2;
+    }
+}
