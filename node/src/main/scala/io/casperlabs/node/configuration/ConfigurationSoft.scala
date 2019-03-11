@@ -20,8 +20,7 @@ case class ConfigurationSoft(
     lmdb: ConfigurationSoft.LmdbBlockStore,
     blockstorage: ConfigurationSoft.BlockDagFileStorage,
     metrics: ConfigurationSoft.Metrics,
-    influx: ConfigurationSoft.Influx,
-    influxAuth: ConfigurationSoft.InfluxAuth
+    influx: ConfigurationSoft.Influx
 ) {
   implicit def fallback[A](implicit ev: LowPriority): Merge[Option[A]] =
     (l: Option[A], r: Option[A]) => l.orElse(r)
@@ -45,7 +44,6 @@ private[configuration] object ConfigurationSoft {
       noUpnp: Option[Boolean],
       defaultTimeout: Option[Int],
       bootstrap: Option[PeerNode],
-      standalone: Option[Boolean],
       storeType: Option[StoreType],
       dataDir: Option[Path],
       maxNumOfConnections: Option[Int],
@@ -65,20 +63,7 @@ private[configuration] object ConfigurationSoft {
   private[configuration] case class BlockDagFileStorage(
       latestMessagesLogMaxSizeFactor: Option[Int]
   ) {
-    val latestMessagesLogPath: RelativePath = RelativePath(
-      "casper-block-dag-file-storage-latest-messages-log"
-    )
-    val latestMessagesCrcPath: RelativePath = RelativePath(
-      "casper-block-dag-file-storage-latest-messages-crc"
-    )
-    val blockMetadataLogPath: RelativePath = RelativePath(
-      "casper-block-dag-file-storage-block-metadata-log"
-    )
-    val blockMetadataCrcPath: RelativePath = RelativePath(
-      "casper-block-dag-file-storage-block-metadata-crc"
-    )
-    val checkpointsDirPath: RelativePath =
-      RelativePath("casper-block-dag-file-storage-checkpoints")
+    val dir: RelativePath = RelativePath("block-dag-file-storage")
   }
 
   private[configuration] case class GrpcServer(
@@ -100,7 +85,7 @@ private[configuration] object ConfigurationSoft {
       validatorPrivateKeyPath: Option[Path],
       validatorSigAlgorithm: Option[String],
       bondsFile: Option[Path],
-      knownValidatorsFile: Option[String],
+      knownValidatorsFile: Option[Path],
       numValidators: Option[Int],
       walletsFile: Option[Path],
       minimumBond: Option[Long],
@@ -108,6 +93,7 @@ private[configuration] object ConfigurationSoft {
       hasFaucet: Option[Boolean],
       requiredSigs: Option[Int],
       shardId: Option[String],
+      standalone: Option[Boolean],
       approveGenesis: Option[Boolean],
       approveGenesisInterval: Option[FiniteDuration],
       approveGenesisDuration: Option[FiniteDuration],
@@ -119,14 +105,17 @@ private[configuration] object ConfigurationSoft {
   private[configuration] case class Metrics(
       prometheus: Option[Boolean],
       zipkin: Option[Boolean],
-      sigar: Option[Boolean]
+      sigar: Option[Boolean],
+      influx: Option[Boolean]
   )
 
   private[configuration] case class Influx(
       hostname: Option[String],
       port: Option[Int],
       database: Option[String],
-      protocol: Option[String]
+      protocol: Option[String],
+      user: Option[String],
+      password: Option[String]
   )
 
   private[configuration] case class InfluxAuth(

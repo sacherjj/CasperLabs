@@ -5,26 +5,24 @@ import java.nio.file.Path
 import cats.syntax.either._
 import cats.syntax.option._
 import io.casperlabs.comm.PeerNode
+import io.casperlabs.configuration.cli.scallop
 import io.casperlabs.node.BuildInfo
-import io.casperlabs.shared.{scallop, StoreType}
+import io.casperlabs.shared.StoreType
 import org.rogach.scallop._
 
 import scala.collection.mutable
-import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
 import scala.language.implicitConversions
 
-private[configuration] object Converter {
+private[configuration] object Converter extends ParserImplicits {
   import Options._
 
   implicit val bootstrapAddressConverter: ValueConverter[PeerNode] = new ValueConverter[PeerNode] {
     def parse(s: List[(String, List[String])]): Either[String, Option[PeerNode]] =
       s match {
         case (_, uri :: Nil) :: Nil =>
-          PeerNode
-            .fromAddress(uri)
-            .map(u => Right(Some(u)))
-            .getOrElse(Left("can't parse the casperlabs node bootstrap address"))
+          Parser[PeerNode].parse(uri).map(_.some)
         case Nil => Right(None)
         case _   => Left("provide the casperlabs node bootstrap address")
       }
@@ -45,10 +43,7 @@ private[configuration] object Converter {
       override def parse(s: List[(String, List[String])]): Either[String, Option[FiniteDuration]] =
         s match {
           case (_, duration :: Nil) :: Nil =>
-            val finiteDuration = Some(Duration(duration)).collect { case f: FiniteDuration => f }
-            finiteDuration.fold[Either[String, Option[FiniteDuration]]](
-              Left("Expected finite duration.")
-            )(fd => Right(Some(fd)))
+            Parser[FiniteDuration].parse(duration).map(_.some)
           case Nil => Right(None)
           case _   => Left("Provide a duration.")
         }
@@ -60,10 +55,7 @@ private[configuration] object Converter {
     def parse(s: List[(String, List[String])]): Either[String, Option[StoreType]] =
       s match {
         case (_, storeType :: Nil) :: Nil =>
-          StoreType
-            .from(storeType)
-            .map(u => Right(Some(u)))
-            .getOrElse(Left("can't parse the store type"))
+          Parser[StoreType].parse(storeType).map(_.some)
         case Nil => Right(None)
         case _   => Left("provide the store type")
       }
@@ -102,7 +94,7 @@ private[configuration] final case class Options private (
 
   /**
     * Converts between string representation of field name and its actual value
-    * Filled by [[io.casperlabs.shared.scallop]] macro
+    * Filled by [[io.casperlabs.configuration.cli.scallop]] macro
     */
   private val fields =
     mutable.Map.empty[(ScallopConfBase, String), () => ScallopOption[String]]
@@ -122,7 +114,6 @@ private[configuration] final case class Options private (
         run.serverNoUpnp,
         run.serverDefaultTimeout,
         run.serverBootstrap,
-        run.serverStandalone,
         run.serverStoreType,
         run.serverDataDir,
         run.serverMaxNumOfConnections,
@@ -171,6 +162,7 @@ private[configuration] final case class Options private (
         run.casperHasFaucet,
         run.casperRequiredSigs,
         run.casperShardId,
+        run.casperStandalone,
         run.casperApproveGenesis,
         run.casperApproveGenesisInterval,
         run.casperApproveGenesisDuration,
@@ -191,14 +183,17 @@ private[configuration] final case class Options private (
       val metrics = ConfigurationSoft.Metrics(
         run.metricsPrometheus,
         run.metricsZipkin,
-        run.metricsSigar
+        run.metricsSigar,
+        run.metricsInflux
       )
 
       val influx = ConfigurationSoft.Influx(
         run.influxHostname,
         run.influxPort,
         run.influxDatabase,
-        run.influxProtocol
+        run.influxProtocol,
+        None,
+        None
       )
 
       ConfigurationSoft(
@@ -209,11 +204,7 @@ private[configuration] final case class Options private (
         lmdb,
         blockstorage,
         metrics,
-        influx,
-        ConfigurationSoft.InfluxAuth(
-          None,
-          None
-        )
+        influx
       )
     }
   }
@@ -373,7 +364,7 @@ private[configuration] final case class Options private (
       )
     @scallop
     val casperKnownValidatorsFile =
-      gen[String](
+      gen[Path](
         "Path to plain text file listing the public keys of validators known to the user (one per line). " +
           "Signatures from these validators are required in order to accept a block which starts the local" +
           s"node's view of the blockDAG."
@@ -405,7 +396,7 @@ private[configuration] final case class Options private (
       )
 
     @scallop
-    val serverStandalone =
+    val casperStandalone =
       gen[Flag](
         "Start a stand-alone node (no bootstrapping).",
         's'
@@ -517,6 +508,10 @@ private[configuration] final case class Options private (
     @scallop
     val metricsSigar =
       gen[Flag]("Enable Sigar host system metrics.")
+
+    @scallop
+    val metricsInflux =
+      gen[Flag]("Enable Influx system metrics.")
 
     @scallop
     val influxHostname =

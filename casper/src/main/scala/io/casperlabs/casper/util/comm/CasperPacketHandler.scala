@@ -80,7 +80,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                )
              )
       } yield new CasperPacketHandlerImpl[F](gv)
-    } else if (conf.createGenesis) {
+    } else if (conf.standalone) {
       for {
         _              <- Log[F].info("Starting in create genesis mode")
         bonds          <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)

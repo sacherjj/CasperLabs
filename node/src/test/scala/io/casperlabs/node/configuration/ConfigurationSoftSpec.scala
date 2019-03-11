@@ -1,18 +1,15 @@
 package io.casperlabs.node.configuration
 
-import java.io.File
-import java.nio.file
 import java.nio.file.{Files, Paths, StandardOpenOption}
 import java.util.concurrent.TimeUnit
 
 import cats.syntax.option._
 import io.casperlabs.comm.{Endpoint, NodeIdentifier, PeerNode}
 import io.casperlabs.node.configuration.ConfigurationSoft._
+import io.casperlabs.node.configuration.MagnoliaArbitrary._
 import io.casperlabs.shared.StoreType
-import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import io.casperlabs.node.configuration.MagnoliaArbitrary._
 import shapeless._
 import shapeless.labelled.FieldType
 import shapeless.ops.hlist._
@@ -23,48 +20,12 @@ class ConfigurationSoftSpec
     extends FunSuite
     with Matchers
     with BeforeAndAfterEach
-    with GeneratorDrivenPropertyChecks {
+    with GeneratorDrivenPropertyChecks
+    with ArbitraryImplicits {
   type InnerFieldName = String
   type UpperFieldName = String
 
   val configFilename: String = s"test-configuration.toml"
-
-  implicit val pathGen: Arbitrary[file.Path] = Arbitrary {
-    for {
-      n     <- Gen.size
-      paths <- Gen.listOfN(n, Gen.alphaNumStr)
-    } yield Paths.get(paths.mkString(File.pathSeparator))
-  }
-
-  //Needed to pass through CLI options parsing
-  implicit val nonEmptyStringGen: Arbitrary[String] = Arbitrary {
-    for {
-      n   <- Gen.choose(1, 100)
-      seq <- Gen.listOfN(n, Gen.alphaNumChar)
-    } yield seq.mkString("")
-  }
-
-  //There is no way expressing explicit 'false' using CLI options.
-  implicit val optionBooleanGen: Arbitrary[Option[Boolean]] = Arbitrary {
-    Gen.oneOf(None, Some(true))
-  }
-
-  implicit val peerNodeGen: Arbitrary[PeerNode] = Arbitrary {
-    for {
-      n        <- Gen.choose(1, 100)
-      bytes    <- Gen.listOfN(n, Gen.choose(Byte.MinValue, Byte.MaxValue))
-      id       = NodeIdentifier(bytes)
-      host     <- Gen.listOfN(n, Gen.alphaNumChar)
-      tcpPort  <- Gen.posNum[Int]
-      udpPort  <- Gen.posNum[Int]
-      endpoint = Endpoint(host.mkString(""), tcpPort, udpPort)
-    } yield PeerNode(id, endpoint)
-  }
-
-  // There are some comparison problems with default generator
-  implicit val finiteDurationGen: Arbitrary[FiniteDuration] = Arbitrary {
-    Gen.posNum[Long].map(FiniteDuration(_, TimeUnit.MILLISECONDS))
-  }
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(
@@ -84,41 +45,41 @@ class ConfigurationSoftSpec
         NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
         Endpoint("52.119.8.109", 1, 1)
       ).some,
-      standalone = false.some,
       storeType = StoreType.LMDB.some,
-      dataDir = Paths.get("test").some,
+      dataDir = Paths.get("/tmp").some,
       maxNumOfConnections = 1.some,
       maxMessageSize = 1.some,
       chunkSize = 1.some
     )
     val grpcServer = GrpcServer(
       host = "test".some,
-      socket = Paths.get("test").some,
+      socket = Paths.get("/tmp/test").some,
       portExternal = 1.some,
       portInternal = 1.some
     )
     val casper = Casper(
       validatorPublicKey = "test".some,
       validatorPrivateKey = "test".some,
-      validatorPrivateKeyPath = Paths.get("test").some,
+      validatorPrivateKeyPath = Paths.get("/tmp/test").some,
       validatorSigAlgorithm = "test".some,
-      bondsFile = Paths.get("test").some,
-      knownValidatorsFile = "test".some,
+      bondsFile = Paths.get("/tmp/test").some,
+      knownValidatorsFile = Paths.get("/tmp/test").some,
       numValidators = 1.some,
-      walletsFile = Paths.get("test").some,
+      walletsFile = Paths.get("/tmp/test").some,
       minimumBond = 1L.some,
       maximumBond = 1L.some,
       hasFaucet = false.some,
       requiredSigs = 1.some,
       shardId = "test".some,
+      standalone = false.some,
       approveGenesis = false.some,
       approveGenesisInterval = FiniteDuration(1, TimeUnit.SECONDS).some,
       approveGenesisDuration = FiniteDuration(1, TimeUnit.SECONDS).some,
       deployTimestamp = 1L.some
     )
     val tls = Tls(
-      certificate = Paths.get("test").some,
-      key = Paths.get("test").some,
+      certificate = Paths.get("/tmp/test").some,
+      key = Paths.get("/tmp/test").some,
       secureRandomNonBlocking = false.some
     )
     val lmdb = LmdbBlockStore(
@@ -133,18 +94,18 @@ class ConfigurationSoftSpec
     val kamonSettings = Metrics(
       false.some,
       false.some,
+      false.some,
       false.some
     )
     val influx = Influx(
       "0.0.0.0".some,
       1.some,
       "test".some,
-      "https".some
-    )
-    val influxAuth = InfluxAuth(
+      "https".some,
       "user".some,
       "password".some
     )
+
     ConfigurationSoft(
       server,
       grpcServer,
@@ -153,8 +114,7 @@ class ConfigurationSoftSpec
       lmdb,
       blockStorage,
       kamonSettings,
-      influx,
-      influxAuth
+      influx
     )
   }
 
@@ -185,7 +145,7 @@ class ConfigurationSoftSpec
 
       val Right(result) = ConfigurationSoft.parse(cliArgs, envVars)
 
-      expected.influxAuth shouldEqual result.influxAuth
+      expected.influx shouldEqual result.influx
     }
   }
 
@@ -235,7 +195,6 @@ class ConfigurationSoftSpec
         expected.lmdb shouldEqual result.lmdb
         expected.blockstorage shouldEqual result.blockstorage
         expected.metrics shouldEqual result.metrics
-        expected.influx shouldEqual result.influx
     }
   }
 
@@ -267,7 +226,7 @@ class ConfigurationSoftSpec
 
   def toCli(conf: ConfigurationSoft): List[String] =
     toEnvVars(conf)
-      .filterKeys(k => !k.contains("CL_INFLUX_AUTH"))
+      .filterKeys(k => k != "CL_INFLUX_USER" && k != "CL_INFLUX_PASSWORD")
       .flatMap {
         case (k, v) =>
           val key = "--" + k.toLowerCase.replace('_', '-').drop(3)

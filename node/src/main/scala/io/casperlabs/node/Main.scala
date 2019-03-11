@@ -2,7 +2,6 @@ package io.casperlabs.node
 
 import cats.effect.ExitCode
 import cats.implicits._
-import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm._
 import io.casperlabs.node.configuration.Configuration.Command.{Diagnostics, Run}
@@ -48,8 +47,8 @@ object Main extends TaskApp {
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
-        conf.grpcServer.host,
-        conf.grpcServer.portInternal,
+        conf.grpc.host,
+        conf.grpc.portInternal,
         conf.server.maxMessageSize
       )
 

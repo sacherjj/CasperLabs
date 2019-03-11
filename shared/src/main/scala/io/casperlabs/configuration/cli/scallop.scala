@@ -1,4 +1,4 @@
-package io.casperlabs.shared
+package io.casperlabs.configuration.cli
 
 import scala.annotation.{compileTimeOnly, StaticAnnotation}
 import scala.language.experimental.macros
