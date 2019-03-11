@@ -21,7 +21,7 @@ import shapeless.<:!<
 import scala.concurrent.duration._
 import scala.io.Source
 
-class ConfigurationSoftSpec
+class ConfigurationSpec
     extends FunSuite
     with Matchers
     with BeforeAndAfterEach
