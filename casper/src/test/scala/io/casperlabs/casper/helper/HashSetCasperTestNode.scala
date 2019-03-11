@@ -174,13 +174,7 @@ object HashSetCasperTestNode {
     for {
       blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
       blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
-                          BlockDagFileStorage.Config(
-                            blockDagDir.resolve("latest-messages-data"),
-                            blockDagDir.resolve("latest-messages-crc"),
-                            blockDagDir.resolve("block-metadata-data"),
-                            blockDagDir.resolve("block-metadata-crc"),
-                            blockDagDir.resolve("checkpoints")
-                          ),
+                          BlockDagFileStorage.Config(blockDagDir),
                           genesis
                         )(Concurrent[F], Log[F], blockStore)
       blockProcessingLock <- Semaphore[F](1)
@@ -260,13 +254,7 @@ object HashSetCasperTestNode {
             for {
               blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
               blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
-                                  BlockDagFileStorage.Config(
-                                    blockDagDir.resolve("latest-messages-data"),
-                                    blockDagDir.resolve("latest-messages-crc"),
-                                    blockDagDir.resolve("block-metadata-data"),
-                                    blockDagDir.resolve("block-metadata-crc"),
-                                    blockDagDir.resolve("checkpoints")
-                                  ),
+                                  BlockDagFileStorage.Config(blockDagDir),
                                   genesis
                                 )(Concurrent[F], Log[F], blockStore)
               semaphore <- Semaphore[F](1)

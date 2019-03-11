@@ -99,16 +99,13 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     }
 
   private def defaultLatestMessagesLog(dagDataDir: Path): Path =
-    dagDataDir.resolve("latest-messsages-data")
-
-  private def defaultLatestMessagesCrc(dagDataDir: Path): Path =
-    dagDataDir.resolve("latest-messsages-checksum")
+    dagDataDir.resolve("latest-messages-log")
 
   private def defaultBlockMetadataLog(dagDataDir: Path): Path =
-    dagDataDir.resolve("block-metadata-data")
+    dagDataDir.resolve("block-metadata-log")
 
   private def defaultBlockMetadataCrc(dagDataDir: Path): Path =
-    dagDataDir.resolve("block-metadata-checksum")
+    dagDataDir.resolve("block-metadata-crc")
 
   private def defaultCheckpointsDir(dagDataDir: Path): Path =
     dagDataDir.resolve("checkpoints")
@@ -126,11 +123,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     implicit val log = new shared.Log.NOPLog[Task]()
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
-        defaultLatestMessagesLog(dagDataDir),
-        defaultLatestMessagesCrc(dagDataDir),
-        defaultBlockMetadataLog(dagDataDir),
-        defaultBlockMetadataCrc(dagDataDir),
-        defaultCheckpointsDir(dagDataDir),
+        dagDataDir,
         maxSizeFactor
       )
     )

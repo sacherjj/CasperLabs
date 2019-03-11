@@ -1,7 +1,6 @@
 package io.casperlabs.node.configuration
 import java.nio.file.{Path, Paths}
 
-import cats.data.Validated._
 import cats.data.ValidatedNel
 import cats.syntax.apply._
 import cats.syntax.either._
@@ -9,8 +8,9 @@ import cats.syntax.validated._
 import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.PeerNode
+import io.casperlabs.comm.transport.Tls
 import io.casperlabs.shared.StoreType
-import shapeless._
+import shapeless.<:!<
 import toml.Toml
 
 import scala.io.Source
@@ -19,12 +19,13 @@ import scala.util.Try
 final case class Configuration(
     command: Configuration.Command,
     server: Configuration.Server,
-    grpcServer: Configuration.GrpcServer,
-    tls: Configuration.Tls,
+    grpc: Configuration.GrpcServer,
+    tls: Tls,
     casper: CasperConf,
-    blockStorage: LMDBBlockStore.Config,
-    blockDagStorage: BlockDagFileStorage.Config,
-    kamon: Configuration.Kamon
+    lmdb: LMDBBlockStore.Config,
+    blockstorage: BlockDagFileStorage.Config,
+    metrics: Configuration.Kamon,
+    influx: Option[Configuration.Influx]
 )
 
 private case class DefaultConf(c: ConfigurationSoft) extends AnyVal
@@ -32,9 +33,9 @@ private case class DefaultConf(c: ConfigurationSoft) extends AnyVal
 object Configuration {
   case class Kamon(
       prometheus: Boolean,
-      influx: Option[Influx],
       zipkin: Boolean,
-      sigar: Boolean
+      sigar: Boolean,
+      influx: Boolean
   )
 
   case class Influx(
@@ -42,12 +43,8 @@ object Configuration {
       port: Int,
       database: String,
       protocol: String,
-      authentication: Option[InfluxDbAuthentication]
-  )
-
-  case class InfluxDbAuthentication(
-      user: String,
-      password: String
+      user: Option[String],
+      password: Option[String]
   )
 
   case class Server(
@@ -59,8 +56,6 @@ object Configuration {
       noUpnp: Boolean,
       defaultTimeout: Int,
       bootstrap: PeerNode,
-      standalone: Boolean,
-      genesisValidator: Boolean,
       dataDir: Path,
       storeType: StoreType,
       maxNumOfConnections: Int,
@@ -72,13 +67,6 @@ object Configuration {
       socket: Path,
       portExternal: Int,
       portInternal: Int
-  )
-  case class Tls(
-      certificate: Path,
-      key: Path,
-      customCertificateLocation: Boolean,
-      customKeyLocation: Boolean,
-      secureRandomNonBlocking: Boolean
   )
 
   sealed trait Command extends Product with Serializable
@@ -117,46 +105,34 @@ object Configuration {
       parseBlockStorage,
       parseBlockDagStorage,
       parseKamon
-    ).mapN(Configuration(command, _, _, _, _, _, _, _))
+    ).mapN(Configuration(command, _, _, _, _, _, _, _, parseInflux))
   }
 
   private def parseKamon(
       implicit
       default: DefaultConf,
       conf: ConfigurationSoft
-  ): ValidatedNel[String, Kamon] = {
-    val influx = parseInflux.toOption
-
+  ): ValidatedNel[String, Kamon] =
     (
       toValidated(_.metrics.prometheus, "Kamon.prometheus"),
       toValidated(_.metrics.zipkin, "Kamon.zipkin"),
-      toValidated(_.metrics.sigar, "Kamon.sigar")
-    ) mapN (Kamon(_, influx, _, _))
-  }
+      toValidated(_.metrics.sigar, "Kamon.sigar"),
+      toValidated(_.metrics.influx, "Kamon.influx")
+    ) mapN Kamon
 
   private def parseInflux(
       implicit
       default: DefaultConf,
       conf: ConfigurationSoft
-  ): ValidatedNel[String, Influx] = {
-    val influxAuth = parseInfluxAuth.toOption
-    (
+  ): Option[Influx] =
+    ((
       toValidated(_.influx.hostname, "Influx.hostname"),
       toValidated(_.influx.port, "Influx.port"),
       toValidated(_.influx.database, "Influx.database"),
-      toValidated(_.influx.protocol, "Influx.protocol")
-    ) mapN (Influx(_, _, _, _, influxAuth))
-  }
-
-  private def parseInfluxAuth(
-      implicit
-      default: DefaultConf,
-      conf: ConfigurationSoft
-  ): ValidatedNel[String, InfluxDbAuthentication] =
-    (
-      toValidated(_.influxAuth.user, "[Influx.authentication.user]"),
-      toValidated(_.influxAuth.password, "[Influx.authentication.password]")
-    ) mapN InfluxDbAuthentication
+      toValidated(_.influx.protocol, "Influx.protocol"),
+      conf.influx.user.validNel[String],
+      conf.influx.password.validNel[String]
+    ) mapN Influx).toOption
 
   private def parseServer(
       implicit
@@ -172,8 +148,6 @@ object Configuration {
       toValidated(_.server.noUpnp, "Server.noUpnp"),
       toValidated(_.server.defaultTimeout, "Server.defaultTimeout"),
       toValidated(_.server.bootstrap, "Server.bootstrap"),
-      toValidated(_.server.standalone, "Server.standalone"),
-      toValidated(_.casper.approveGenesis, "Casper.approveGenesis"),
       toValidated(_.server.dataDir, "Server.dataDir"),
       toValidated(_.server.storeType, "Server.storeType"),
       toValidated(_.server.maxNumOfConnections, "Server.maxNumOfConnections"),
@@ -205,7 +179,7 @@ object Configuration {
       implicit
       default: DefaultConf,
       conf: ConfigurationSoft
-  ): ValidatedNel[String, Configuration.Tls] =
+  ): ValidatedNel[String, Tls] =
     (
       default.c.server.dataDir.fold("Default Server.dataDir".invalidNel[Path])(_.validNel[String]),
       toValidated(_.server.dataDir, "Server.dataDir"),
@@ -235,7 +209,7 @@ object Configuration {
           defaultKey.toAbsolutePath.toString
             .stripPrefix(defaultDataDir.toAbsolutePath.toString)
 
-        Configuration.Tls(
+        Tls(
           certificate,
           key,
           isCertificateCustomLocation,
@@ -252,10 +226,8 @@ object Configuration {
   ): ValidatedNel[String, CasperConf] =
     (
       conf.casper.validatorPublicKey.validNel[String],
-      conf.casper.validatorPrivateKey
-        .map(_.asLeft[Path])
-        .orElse(conf.casper.validatorPrivateKeyPath.map(_.asRight[String]))
-        .validNel[String],
+      conf.casper.validatorPrivateKey.validNel[String],
+      conf.casper.validatorPrivateKeyPath.validNel[String],
       toValidated(_.casper.validatorSigAlgorithm, "Casper.sigAlgorithm"),
       toValidated(_.casper.bondsFile, "Casper.bondsFile"),
       conf.casper.knownValidatorsFile.validNel[String],
@@ -267,7 +239,7 @@ object Configuration {
       toValidated(_.casper.hasFaucet, "Casper.hasFaucet"),
       toValidated(_.casper.requiredSigs, "Casper.requiredSigs"),
       toValidated(_.casper.shardId, "Casper.shardId"),
-      toValidated(_.server.standalone, "Server.standalone"),
+      toValidated(_.casper.standalone, "Casper.standalone"),
       toValidated(_.casper.approveGenesis, "Casper.approveGenesis"),
       toValidated(_.casper.approveGenesisInterval, "Casper.approveGenesisInterval"),
       toValidated(_.casper.approveGenesisDuration, "Casper.approveGenesisDuration"),
@@ -294,24 +266,8 @@ object Configuration {
   ): ValidatedNel[String, BlockDagFileStorage.Config] =
     (
       toValidated(
-        _.blockstorage.latestMessagesLogPath.withDataDir,
-        "BlockDagFileStorage.latestMessagesLogPath"
-      ),
-      toValidated(
-        _.blockstorage.latestMessagesCrcPath.withDataDir,
-        "BlockDagFileStorage.latestMessagesCrcPath"
-      ),
-      toValidated(
-        _.blockstorage.blockMetadataLogPath.withDataDir,
-        "BlockDagFileStorage.blockMetadataLogPath"
-      ),
-      toValidated(
-        _.blockstorage.blockMetadataCrcPath.withDataDir,
-        "BlockDagFileStorage.blockMetadataCrcPath"
-      ),
-      toValidated(
-        _.blockstorage.checkpointsDirPath.withDataDir,
-        "BlockDagFileStorage.checkpointsDirPath"
+        _.blockstorage.dir.withDataDir,
+        "BlockDagFileStorage.dir"
       ),
       toValidated(
         _.blockstorage.latestMessagesLogMaxSizeFactor,

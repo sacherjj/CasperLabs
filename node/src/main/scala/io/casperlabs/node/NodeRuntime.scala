@@ -77,7 +77,7 @@ class NodeRuntime private[node] (
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
 
   val main = GrpcExecutionEngineService[Effect](
-    conf.grpcServer.socket,
+    conf.grpc.socket,
     conf.server.maxMessageSize
   ).use(runMain)
 
@@ -95,7 +95,7 @@ class NodeRuntime private[node] (
 
       defaultTimeout = conf.server.defaultTimeout.millis
 
-      initPeer             = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+      initPeer             = if (conf.casper.standalone) None else Some(conf.server.bootstrap)
       rpConfState          = effects.rpConfState(rpConf(local, initPeer))
       rpConfAsk            = effects.rpConfAsk(rpConfState)
       peerNodeAsk          = effects.peerNodeAsk(rpConfState)
@@ -219,7 +219,7 @@ class NodeRuntime private[node] (
     for {
       grpcServerExternal <- GrpcServer
                              .acquireExternalServer[Effect](
-                               conf.grpcServer.portExternal,
+                               conf.grpc.portExternal,
                                conf.server.maxMessageSize,
                                grpcScheduler,
                                blockApiLock
@@ -227,7 +227,7 @@ class NodeRuntime private[node] (
 
       grpcServerInternal <- GrpcServer
                              .acquireInternalServer(
-                               conf.grpcServer.portInternal,
+                               conf.grpc.portInternal,
                                conf.server.maxMessageSize,
                                grpcScheduler
                              )
@@ -314,7 +314,7 @@ class NodeRuntime private[node] (
   ): Effect[Unit] = {
 
     val info: Effect[Unit] =
-      if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
+      if (conf.casper.standalone) Log[Effect].info(s"Starting stand-alone node.")
       else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
 
     val dynamicIpCheck: Task[Unit] =
