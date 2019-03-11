@@ -16,6 +16,7 @@ shared = { path = "../shared" }
 storage = { path = "../storage" }
 wasm-prep = { path = "../wasm-prep" }
 common = { path = "../common", package = "casperlabs-contract-ffi" }
+wabt = "0.7.4"
 
 [build-dependencies]
 protoc-rust-grpc = "0.6.1"

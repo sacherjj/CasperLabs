@@ -6,6 +6,7 @@ extern crate protobuf;
 extern crate shared;
 extern crate storage;
 extern crate wasm_prep;
+extern crate wabt;
 
 pub mod engine_server;
 

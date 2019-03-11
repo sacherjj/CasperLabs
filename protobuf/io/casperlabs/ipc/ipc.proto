@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package io.casperlabs.ipc;
 
+import "google/protobuf/empty.proto";
+
 message Deploy {
     bytes address = 1; // length 20 bytes
     uint64 timestamp = 2;
@@ -229,10 +231,24 @@ message QueryResponse {
     }
 }
 
+
+message ValidateResponse {
+    oneof result {
+        google.protobuf.Empty success = 1;
+        string failure = 2;
+    }
+}
+
+message ValidateRequest {
+    bytes session_code = 1;
+    bytes payment_code = 2;
+}
+
 // Definition of the service.
 // ExecutionEngine implements server part while Consensus implements client part.
 service ExecutionEngineService {
     rpc exec (ExecRequest) returns (ExecResponse) {}
     rpc commit (CommitRequest) returns (CommitResponse) {}
     rpc query (QueryRequest) returns (QueryResponse) {}
+    rpc validate (ValidateRequest) returns (ValidateResponse) {}
 }

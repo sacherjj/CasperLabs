@@ -124,6 +124,23 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
             }
         }
     }
+
+    fn validate(&self, _o: ::grpc::RequestOptions, p: ValidateRequest) -> grpc::SingleResponse<ValidateResponse> {
+        match wabt::wat2wasm(p.payment_code).and(wabt::wat2wasm(p.session_code)) {
+            Ok(_) => {
+                let mut result = ValidateResponse::new();
+                result.set_success(::protobuf::well_known_types::Empty::new());
+                grpc::SingleResponse::completed(result)
+            },
+            Err(cause) => {
+                let mut result = ValidateResponse::new();
+                result.set_failure(cause.to_string());
+                grpc::SingleResponse::completed(result)
+            },
+        }
+    }
+
+
 }
 
 fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>>(

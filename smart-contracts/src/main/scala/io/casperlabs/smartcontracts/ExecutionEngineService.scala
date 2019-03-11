@@ -1,5 +1,6 @@
 package io.casperlabs.smartcontracts
 
+import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
@@ -11,6 +12,7 @@ import cats.syntax.flatMap._
 import cats.syntax.apply._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.protocol.DeployData
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
@@ -35,6 +37,7 @@ import scala.util.Either
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
+  def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
 
 class GrpcExecutionEngineService[F[_]: Sync: Log: TaskLift] private[smartcontracts] (
@@ -97,6 +100,19 @@ class GrpcExecutionEngineService[F[_]: Sync: Log: TaskLift] private[smartcontrac
         case QueryResponse.Result.Failure(err)   => Left(new SmartContractEngineError(err))
       }
     }
+  override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
+    stub.validate(contracts).to[F] >>= (
+      _.result match {
+        case ValidateResponse.Result.Empty =>
+          Sync[F].raiseError(
+            new IllegalStateException("Execution Engine service has sent a corrupted reply")
+          )
+        case ValidateResponse.Result.Success(_) =>
+          ().asRight[String].pure[F]
+        case ValidateResponse.Result.Failure(cause: String) =>
+          cause.asLeft[Unit].pure[F]
+      }
+    )
 }
 
 object ExecutionEngineService {
@@ -121,6 +137,8 @@ object ExecutionEngineService {
       ): F[Either[Throwable, Value]] =
         Applicative[F]
           .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented")))
+      override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
+        ().asRight[String].pure[F]
     }
 }
 
