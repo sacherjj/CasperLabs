@@ -15,7 +15,7 @@ import io.casperlabs.comm.discovery.NodeDiscovery
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.diagnostics.{JvmMetrics, NodeMXBean, NodeMetrics}
-import io.casperlabs.node.model.diagnostics._
+import io.casperlabs.node.api.diagnostics._
 import javax.management.ObjectName
 import monix.eval.Task
 

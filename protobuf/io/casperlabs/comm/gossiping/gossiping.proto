@@ -1,18 +1,14 @@
 syntax = "proto3";
 
-import "scalapb/scalapb.proto";
-import "io/casperlabs/casper/model/consensus.proto";
-import "io/casperlabs/comm/discovery/node.proto";
+package io.casperlabs.comm.gossiping;
 
-option (scalapb.options) = {
-  package_name: "io.casperlabs.node.service"
-  flat_package: true
-};
+import "io/casperlabs/casper/consensus/consensus.proto";
+import "io/casperlabs/comm/discovery/node.proto";
 
 service GossipService {
     rpc NewBlocks(NewBlocksRequest) returns (NewBlocksResponse);
-    rpc StreamAncestorBlockSummaries(StreamAncestorBlockSummariesRequest) returns (stream io.casperlabs.casper.model.BlockSummary);
-    rpc StreamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest) returns (stream io.casperlabs.casper.model.BlockSummary);
+    rpc StreamAncestorBlockSummaries(StreamAncestorBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
+    rpc StreamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
     rpc BatchGetBlockSummaries(BatchGetBlockSummariesRequest) returns (BatchGetBlockSummariesResponse);
     rpc GetBlockChunked(GetBlockChunkedRequest) returns (stream Chunk);
 }
@@ -31,7 +27,7 @@ message BatchGetBlockSummariesRequest {
 }
 
 message BatchGetBlockSummariesResponse {
-    repeated io.casperlabs.casper.model.BlockSummary block_summaries = 1;
+    repeated io.casperlabs.casper.consensus.BlockSummary block_summaries = 1;
 }
 
 message StreamAncestorBlockSummariesRequest {
@@ -44,7 +40,7 @@ message StreamDagTipBlockSummariesRequest {
 }
 
 message GetBlockChunkedRequest {
-    bytes block_hashe = 1;
+    bytes block_hashes = 1;
     uint32 chunk_size = 2;
     repeated string accepted_compression_algorithms = 3;
 }

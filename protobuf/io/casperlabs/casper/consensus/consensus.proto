@@ -1,13 +1,5 @@
 syntax = "proto3";
-package io.casperlabs.casper.model;
-
-import "google/protobuf/empty.proto";
-import "scalapb/scalapb.proto";
-
-option (scalapb.options) = {
-  package_name: "io.casperlabs.casper.model"
-  flat_package: true
-};
+package io.casperlabs.casper.consensus;
 
 // Signature over for example a deploy or a block. The location of the public key depends
 // on the subject; for example if it's a block then the key is actually part of the data
@@ -37,6 +29,7 @@ message Deploy {
     bytes account_public_key = 7;
 }
 
+// Limited block information for gossiping.
 message BlockSummary {
     // Hash of the `header`.
     bytes block_hash = 1;
@@ -45,6 +38,7 @@ message BlockSummary {
     Signature signature = 3;
 }
 
+// Full block information.
 message Block {
     // Hash of the `header`.
     bytes block_hash = 1;
@@ -94,5 +88,5 @@ message Block {
 
 message Bond {
     bytes validator_public_key = 1;
-    int64 stake = 2;
+    uint64 stake = 2;
 }

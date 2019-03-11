@@ -141,11 +141,12 @@ lazy val comm = (project in file("comm"))
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
-        "io/casperlabs/comm/discovery")),
+        "io/casperlabs/comm/discovery",
+        "io/casperlabs/comm/gossiping",
+      )),
     PB.targets in Compile := Seq(
-      //PB.gens.java                              -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = false)      -> (sourceManaged in Compile).value,
-      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", crypto, smartContracts)
@@ -183,14 +184,14 @@ lazy val models = (project in file("models"))
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
-        "io/casperlabs/casper/model",
-        "io/casperlabs/casper/protocol", // TODO: Eventually will be superceded by casper/model
-        "io/casperlabs/comm/protocol/routing", // TODO: Eventually will be superceded by node/service
-        "io/casperlabs/ipc")),
+        "io/casperlabs/casper/consensus",
+        "io/casperlabs/casper/protocol", // TODO: Eventually remove.
+        "io/casperlabs/comm/protocol/routing", // TODO: Eventually remove.
+        "io/casperlabs/ipc" // TODO: Limit scope to EE related code.
+      )),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
-      grpcmonix.generators
-        .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(crypto, shared % "compile->compile;test->test")
@@ -222,13 +223,12 @@ lazy val node = (project in file("node"))
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
-        "io/casperlabs/node/model",
-        "io/casperlabs/node/service")),
+        "io/casperlabs/node/api",
+      )),
     // Generating into /protobuf because of https://github.com/thesamet/sbt-protoc/issues/8
     PB.targets in Compile := Seq(
-      //PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf",
-      scalapb.gen(javaConversions = false)      -> (sourceManaged in Compile).value / "protobuf",
-      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value / "protobuf"
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.node",

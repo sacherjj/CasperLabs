@@ -3,7 +3,7 @@ package io.casperlabs.node.diagnostics.client
 import cats._
 import cats.implicits._
 import io.casperlabs.node.effects.ConsoleIO
-import io.casperlabs.node.model.diagnostics._
+import io.casperlabs.node.api.diagnostics._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.Catscontrib._
 
