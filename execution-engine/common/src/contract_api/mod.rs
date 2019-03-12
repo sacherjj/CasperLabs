@@ -1,30 +1,43 @@
 mod alloc_util;
+pub mod pointers;
 
 use self::alloc_util::*;
+use self::pointers::*;
+use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
+use crate::ext_ffi;
+use crate::key::{Key, UREF_SIZE};
+use crate::value::{Contract, Value};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-use crate::ext_ffi;
-use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
-use crate::key::{Key, UREF_SIZE};
-use crate::value::{Contract, Value};
 
 // Read value under the key in the global state
-pub fn read(key: &Key) -> Value {
+pub fn read<T>(u_ptr: UPointer<T>) -> T
+where
+    T: From<Value>,
+{
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is
     //      dropped then key_ptr becomes invalid.
-    let (key_ptr, key_size, _bytes) = to_ptr(key);
+    let key: Key = u_ptr.into();
+    let (key_ptr, key_size, _bytes) = to_ptr(&key);
     let value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
     let value_ptr = alloc_bytes(value_size);
     let value_bytes = unsafe {
         ext_ffi::get_read(value_ptr);
         Vec::from_raw_parts(value_ptr, value_size, value_size)
     };
-    deserialize(&value_bytes).unwrap()
+    let value: Value = deserialize(&value_bytes).unwrap();
+    value.into()
 }
 
 // Write the value under the key in the global state
-pub fn write(key: &Key, value: &Value) {
+pub fn write<T>(u_ptr: UPointer<T>, t: T) where Value: From<T> {
+    let key = u_ptr.into();
+    let value = t.into();
+    write_untyped(&key, &value)
+}
+
+fn write_untyped(key: &Key, value: &Value) {
     let (key_ptr, key_size, _bytes) = to_ptr(key);
     let (value_ptr, value_size, _bytes2) = to_ptr(value);
     unsafe {
@@ -33,7 +46,13 @@ pub fn write(key: &Key, value: &Value) {
 }
 
 // Add the given value to the one  currently under the key in the global state
-pub fn add(key: &Key, value: &Value) {
+pub fn add<T>(u_ptr: UPointer<T>, t: T) where Value: From<T> {
+    let key = u_ptr.into();
+    let value = t.into();
+    add_untyped(&key, &value)
+}
+
+fn add_untyped(key: &Key, value: &Value) {
     let (key_ptr, key_size, _bytes) = to_ptr(key);
     let (value_ptr, value_size, _bytes2) = to_ptr(value);
     unsafe {
@@ -44,13 +63,20 @@ pub fn add(key: &Key, value: &Value) {
 }
 
 // Returns a new unforgable reference Key
-pub fn new_uref() -> Key {
+pub fn new_uref<T>(init: T) -> UPointer<T> where Value: From<T> {
     let key_ptr = alloc_bytes(UREF_SIZE);
     let bytes = unsafe {
         ext_ffi::new_uref(key_ptr);
         Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
     };
-    deserialize(&bytes).unwrap()
+    let key: Key = deserialize(&bytes).unwrap();
+    if let Key::URef(id) = key {
+        let value: Value = init.into();
+        write_untyped(&key, &value);
+        UPointer::new(id)
+    } else {
+        panic!("URef FFI did not return a URef!");
+    }
 }
 
 fn fn_bytes_by_name(name: &str) -> Vec<u8> {
@@ -67,15 +93,15 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
 // Note that the function is wrapped up in a new module and re-exported under the name
 //"call". `fn_bytes_by_name` is meant to be used when storing a contract on-chain at
 // an unforgable reference.
-pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Value {
+pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
     let bytes = fn_bytes_by_name(name);
-    Value::Contract(Contract::new(bytes, known_urefs))
+    Contract::new(bytes, known_urefs)
 }
 
 // Gets the serialized bytes of an exported function (see `fn_by_name`), then
 // computes gets the address from the host to produce a key where the contract is then
 // stored in the global state. This key is returned.
-pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Key {
+pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> ContractPointer {
     let bytes = fn_bytes_by_name(name);
     let fn_hash = {
         let mut tmp = [0u8; 32];
@@ -89,8 +115,8 @@ pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Key {
     };
     let key = Key::Hash(fn_hash);
     let value = Value::Contract(Contract::new(bytes, known_urefs));
-    write(&key, &value);
-    key
+    write_untyped(&key, &value);
+    ContractPointer::Hash(fn_hash)
 }
 
 // Return the i-th argument passed to the host for the current module
@@ -154,11 +180,12 @@ pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<Key>) -> ! {
 // returned from this function.
 #[allow(clippy::ptr_arg)]
 pub fn call_contract<T: FromBytes>(
-    contract_key: &Key,
+    c_ptr: ContractPointer,
     args: &Vec<Vec<u8>>,
     extra_urefs: &Vec<Key>,
 ) -> T {
-    let (key_ptr, key_size, _bytes1) = to_ptr(contract_key);
+    let contract_key: Key = c_ptr.into();
+    let (key_ptr, key_size, _bytes1) = to_ptr(&contract_key);
     let (args_ptr, args_size, _bytes2) = to_ptr(args);
     let (urefs_ptr, urefs_size, _bytes3) = to_ptr(extra_urefs);
     let res_size = unsafe {
