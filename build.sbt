@@ -143,6 +143,7 @@ lazy val comm = (project in file("comm"))
       protobufSubDirectoryFilter(
         "io/casperlabs/comm/discovery",
         "io/casperlabs/comm/gossiping",
+        "io/casperlabs/comm/protocol/routing" // TODO: Eventually remove.
       )),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
@@ -185,8 +186,7 @@ lazy val models = (project in file("models"))
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
         "io/casperlabs/casper/consensus",
-        "io/casperlabs/casper/protocol", // TODO: Eventually remove.
-        "io/casperlabs/comm/protocol/routing", // TODO: Eventually remove.
+        "io/casperlabs/casper/protocol" // TODO: Eventually remove.
       )),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
