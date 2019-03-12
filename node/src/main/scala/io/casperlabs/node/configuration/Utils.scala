@@ -5,7 +5,7 @@ import scala.io.Source
 import cats.syntax.either._
 import io.casperlabs.configuration.SubConfig
 import shapeless.<:!<
-
+import shapeless.tag.@@
 import scala.util.matching.Regex
 
 private[configuration] object Utils {
@@ -14,6 +14,15 @@ private[configuration] object Utils {
   type NotSubConfig[A] = A <:!< SubConfig
   type NotOption[A]    = A <:!< Option[_]
 
+  sealed trait CamelCaseTag
+  type CamelCase = String @@ CamelCaseTag
+  def CamelCase(s: String): CamelCase = s.asInstanceOf[CamelCase]
+
+  sealed trait SnakeCaseTag
+  type SnakeCase = String @@ SnakeCaseTag
+  def isSnakeCase(s: String): Boolean = s.matches("[A-Z_]+")
+  def SnakeCase(s: String): SnakeCase = s.asInstanceOf[SnakeCase]
+
   def readFile(source: => Source): Either[String, String] =
     try {
       source.mkString.asRight[String]
@@ -21,18 +30,27 @@ private[configuration] object Utils {
       case e: Throwable => e.getMessage.asLeft[String]
     }
 
-  def dashToCamel(s: String): String =
-    s.foldLeft(("", false)) {
-        case ((acc, _), '-')   => (acc, true)
-        case ((acc, true), c)  => (acc + c.toUpper, false)
-        case ((acc, false), c) => (acc + c, false)
-      }
-      ._1
+  def dashToCamel(s: String): CamelCase =
+    CamelCase(
+      s.foldLeft(("", false)) {
+          case ((acc, _), '-')   => (acc, true)
+          case ((acc, true), c)  => (acc + c.toUpper, false)
+          case ((acc, false), c) => (acc + c, false)
+        }
+        ._1
+    )
 
-  def snakify(s: String): String =
-    s.replaceAll("([A-Z]+)([A-Z][a-z])", "$1_$2")
-      .replaceAll("([a-z\\d])([A-Z])", "$1_$2")
-      .toUpperCase
+  def constructCamelCase(pathToField: List[String]): CamelCase = {
+    val reversed = pathToField.reverse
+    CamelCase((reversed.head :: reversed.tail.map(_.capitalize)).mkString(""))
+  }
+
+  def snakify(s: String): SnakeCase =
+    SnakeCase(
+      s.replaceAll("([A-Z]+)([A-Z][a-z])", "$1_$2")
+        .replaceAll("([a-z\\d])([A-Z])", "$1_$2")
+        .toUpperCase
+    )
 
   def replacePrefix(path: Path, toRemove: Path, newPrefix: Path): String =
     path.toAbsolutePath.toString.replaceFirst(

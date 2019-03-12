@@ -149,8 +149,8 @@ class ConfigurationSpec
       val Right(res) = Configuration
         .updateTls(Configuration.updatePaths(confUpdatedKey, defaultConf.server.dataDir), defaults)
       val Right(defaultCert) =
-        Parser[java.nio.file.Path].parse(defaults("tlsCertificate"))
-      val Right(defaultKey) = Parser[java.nio.file.Path].parse(defaults("tlsKey"))
+        Parser[java.nio.file.Path].parse(defaults(CamelCase("tlsCertificate")))
+      val Right(defaultKey) = Parser[java.nio.file.Path].parse(defaults(CamelCase("tlsKey")))
 
       maybeCert match {
         case Some(c) =>
@@ -176,8 +176,10 @@ class ConfigurationSpec
     forAll { newDataDir: Path =>
       def updateDataDir(c: Configuration, dataDir: Path): Configuration =
         c.copy(server = c.server.copy(dataDir = dataDir))
-      val conf = Configuration.updatePaths(updateDataDir(defaultConf, newDataDir),
-                                           defaultConf.server.dataDir)
+      val conf = Configuration.updatePaths(
+        updateDataDir(defaultConf, newDataDir),
+        defaultConf.server.dataDir
+      )
       val paths = gatherPaths(conf)
       val invalidPaths = paths
         .filterNot {
@@ -323,7 +325,7 @@ class ConfigurationSpec
             case (Some(a), None)    => a.some
             case (None, Some(b))    => b.some
             case (None, None)       => None
-        }
+          }
       implicit def optionPlain[A: NotSubConfig: NotOption]: Merge[Option[A]] = _ orElse _
     }
 
@@ -385,7 +387,7 @@ class ConfigurationSpec
       case x @ ("InMem" | "Mixed" | "LMDB") => x.toLowerCase
       case x                                => x
     }) { (envVars, fieldName, field) =>
-      envVars + (s"CL_${snakify(fieldName.mkString("_"))}" -> field)
+      envVars + (snakify(("CL" :: fieldName).mkString("_")) -> field)
     }
 
   def reduce[Accumulator](conf: Configuration, accumulator: Accumulator)(
@@ -412,8 +414,8 @@ class ConfigurationSpec
                   List.empty
                 } else {
                   p.typeclass.flatten(path :+ p.label, p.dereference(v))
-              }
-          )
+                }
+            )
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
       implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
 

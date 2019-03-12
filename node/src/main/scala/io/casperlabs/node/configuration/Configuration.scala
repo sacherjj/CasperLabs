@@ -89,21 +89,25 @@ object Configuration extends ParserImplicits {
       command            <- options.parseCommand
       defaultDataDir     <- readDefaultDataDir
       maybeRawConfigFile <- options.readConfigFile
-      maybeConfigFile <- maybeRawConfigFile.fold(none[Map[String, String]].asRight[String])(
+      maybeConfigFile <- maybeRawConfigFile.fold(none[Map[CamelCase, String]].asRight[String])(
                           parseToml(_).map(_.some)
                         )
+      envSnakeCase = envVars.flatMap {
+        case (k, v) if k.startsWith("CL_") && isSnakeCase(k) => List(SnakeCase(k) -> v)
+        case _                                               => Nil
+      }
     } yield
-      parse(options.fieldByName, envVars, maybeConfigFile, defaultDataDir, defaults)
+      parse(options.fieldByName, envSnakeCase, maybeConfigFile, defaultDataDir, defaults)
         .map(conf => (command, conf))
     res.fold(_.invalidNel[(Command, Configuration)], identity)
   }
 
   private def parse(
-      cliByName: String => Option[String],
-      envVars: Map[String, String],
-      configFile: Option[Map[String, String]],
+      cliByName: CamelCase => Option[String],
+      envVars: Map[SnakeCase, String],
+      configFile: Option[Map[CamelCase, String]],
       defaultDataDir: Path,
-      defaultConfigFile: Map[String, String]
+      defaultConfigFile: Map[CamelCase, String]
   ): ValidatedNel[String, Configuration] =
     ConfParser
       .gen[Configuration]
@@ -149,7 +153,7 @@ object Configuration extends ParserImplicits {
             relativePath.fold(p.typeclass.update(p.dereference(t)))(
               ann => dataDir.resolve(ann.relativePath).asInstanceOf[p.PType]
             )
-        }
+          }
 
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] =
         t => sealedTrait.dispatch(t)(s => s.typeclass.update(s.cast(t)))
@@ -161,18 +165,18 @@ object Configuration extends ParserImplicits {
 
   private[configuration] def updateTls(
       c: Configuration,
-      defaultConfigFile: Map[String, String]
+      defaultConfigFile: Map[CamelCase, String]
   ): Either[String, Configuration] = {
     val dataDir = c.server.dataDir
     for {
       defaultDataDir <- readDefaultDataDir
       defaultCertificate <- defaultConfigFile
-                             .get("tlsCertificate")
+                             .get(CamelCase("tlsCertificate"))
                              .fold("tls.certificate must have default value".asLeft[Path])(
                                s => Parser[Path].parse(s)
                              )
       defaultKey <- defaultConfigFile
-                     .get("tlsKey")
+                     .get(CamelCase("tlsKey"))
                      .fold("tls.key must have default value".asLeft[Path])(
                        s => Parser[Path].parse(s)
                      )
@@ -198,13 +202,13 @@ object Configuration extends ParserImplicits {
       defaultRaw <- readFile(Source.fromResource("default-configuration.toml"))
       defaults   <- parseToml(defaultRaw)
       dataDir <- defaults
-                  .get("serverDataDir")
+                  .get(CamelCase("serverDataDir"))
                   .fold("server default data dir must be defined".asLeft[Path])(
                     s => Parser[Path].parse(s)
                   )
     } yield dataDir
 
-  private[configuration] def parseToml(content: String): Either[String, Map[String, String]] = {
+  private[configuration] def parseToml(content: String): Either[String, Map[CamelCase, String]] = {
 
     def flatten(t: Map[String, toml.Value]): Map[String, String] =
       t.toList.flatMap {

@@ -7,6 +7,7 @@ import cats.syntax.option._
 import io.casperlabs.comm.PeerNode
 import io.casperlabs.configuration.cli.scallop
 import io.casperlabs.node.BuildInfo
+import io.casperlabs.node.configuration.Utils._
 import io.casperlabs.shared.StoreType
 import org.rogach.scallop._
 
@@ -71,14 +72,14 @@ private[configuration] object Options {
 
   def flag(b: Boolean): Flag = b.asInstanceOf[Flag]
 
-  def safeCreate(args: Seq[String], defaults: Map[String, String]): Either[String, Options] =
+  def safeCreate(args: Seq[String], defaults: Map[CamelCase, String]): Either[String, Options] =
     Either.catchNonFatal(Options(args, defaults)).leftMap(_.getMessage)
 }
 
 //noinspection TypeAnnotation
 private[configuration] final case class Options private (
     arguments: Seq[String],
-    defaults: Map[String, String]
+    defaults: Map[CamelCase, String]
 ) extends ScallopConf(arguments) {
   helpWidth(120)
   import Converter._
@@ -95,7 +96,7 @@ private[configuration] final case class Options private (
   private val fields =
     mutable.Map.empty[(ScallopConfBase, String), () => ScallopOption[String]]
 
-  def fieldByName(fieldName: String): Option[String] =
+  def fieldByName(fieldName: CamelCase): Option[String] =
     subcommand
       .flatMap(command => fields.get((command, fieldName)).flatMap(_.apply().toOption))
 
