@@ -5,7 +5,7 @@ import cats.data.EitherT
 
 import io.casperlabs.catscontrib.MonadTrans
 import io.casperlabs.catscontrib.Catscontrib._
-import io.casperlabs.node.model.diagnostics.NodeCoreMetrics
+import io.casperlabs.node.api.diagnostics.NodeCoreMetrics
 
 trait NodeMetrics[F[_]] {
   def metrics: F[NodeCoreMetrics]

@@ -4,7 +4,7 @@ import java.io.Closeable
 import java.util.concurrent.TimeUnit
 
 import io.casperlabs.comm._
-import io.casperlabs.node.model.diagnostics._
+import io.casperlabs.node.api.diagnostics._
 
 import com.google.protobuf.empty.Empty
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}

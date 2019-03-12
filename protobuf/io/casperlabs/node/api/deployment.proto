@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package io.casperlabs.node.api.deployment;
+
+import "io/casperlabs/casper/consensus/consensus.proto";
+
+service DeployService {
+    rpc Deploy(DeployRequest) returns (DeployResponse) {}
+}
+
+message DeployRequest {
+    io.casperlabs.casper.consensus.Deploy deploy = 1;
+}
+
+message DeployResponse {}
