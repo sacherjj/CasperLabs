@@ -149,7 +149,7 @@ lazy val comm = (project in file("comm"))
       grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared % "compile->compile;test->test", crypto, smartContracts)
+  .dependsOn(shared % "compile->compile;test->test", crypto, models)
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
@@ -187,7 +187,6 @@ lazy val models = (project in file("models"))
         "io/casperlabs/casper/consensus",
         "io/casperlabs/casper/protocol", // TODO: Eventually remove.
         "io/casperlabs/comm/protocol/routing", // TODO: Eventually remove.
-        "io/casperlabs/ipc" // TODO: Limit scope to EE related code.
       )),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
@@ -325,7 +324,7 @@ lazy val node = (project in file("node"))
     ),
     rpmAutoreq := "no"
   )
-  .dependsOn(casper, comm, crypto, smartContracts)
+  .dependsOn(casper, comm, crypto)
 
 lazy val blockStorage = (project in file("block-storage"))
   .settings(commonSettings: _*)
@@ -341,6 +340,7 @@ lazy val blockStorage = (project in file("block-storage"))
   )
   .dependsOn(shared, models % "compile->compile;test->test")
 
+// Smart contract execution.
 lazy val smartContracts = (project in file("smart-contracts"))
   .settings(commonSettings: _*)
   .settings(
@@ -351,6 +351,15 @@ lazy val smartContracts = (project in file("smart-contracts"))
       grpcNetty,
       nettyTransNativeEpoll,
       nettyTransNativeKqueue
+    ),
+    PB.protoSources in Compile := Seq(protobufDirectory),
+    includeFilter in PB.generate := new SimpleFileFilter(
+      protobufSubDirectoryFilter(
+        "io/casperlabs/ipc"
+      )),
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(shared, models)
@@ -447,7 +456,7 @@ lazy val client = (project in file("client"))
     ),
     rpmAutoreq := "no"
   )
-  .dependsOn(crypto, shared, models, smartContracts)
+  .dependsOn(crypto, shared, models)
 
 lazy val casperlabs = (project in file("."))
   .settings(commonSettings: _*)
