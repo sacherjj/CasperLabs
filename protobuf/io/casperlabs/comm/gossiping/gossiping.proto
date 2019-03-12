@@ -40,7 +40,7 @@ message StreamDagTipBlockSummariesRequest {
 }
 
 message GetBlockChunkedRequest {
-    bytes block_hashes = 1;
+    bytes block_hash = 1;
     uint32 chunk_size = 2;
     repeated string accepted_compression_algorithms = 3;
 }
