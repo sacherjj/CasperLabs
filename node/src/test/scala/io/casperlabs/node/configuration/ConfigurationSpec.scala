@@ -176,22 +176,16 @@ class ConfigurationSpec
     forAll { newDataDir: Path =>
       def updateDataDir(c: Configuration, dataDir: Path): Configuration =
         c.copy(server = c.server.copy(dataDir = dataDir))
-
-      for {
-        (_, defaultConf)       <- Configuration.parse(Array.empty, Map.empty).toOption
-        confWithChangedDataDir = updateDataDir(defaultConf, newDataDir)
-        conf = Configuration
-          .updatePaths(confWithChangedDataDir, defaultConf.server.dataDir)
-      } {
-        val paths = gatherPaths(conf)
-        val invalidPaths = paths
-          .filterNot {
-            case (_, path) =>
-              path.startsWith(newDataDir)
-          }
-          .map(_._1)
-        assert(invalidPaths.isEmpty, "Invalid paths, wrap them into 'Configuration#adjustPath'")
-      }
+      val conf = Configuration.updatePaths(updateDataDir(defaultConf, newDataDir),
+                                           defaultConf.server.dataDir)
+      val paths = gatherPaths(conf)
+      val invalidPaths = paths
+        .filterNot {
+          case (_, path) =>
+            path.startsWith(newDataDir)
+        }
+        .map(_._1)
+      assert(invalidPaths.isEmpty, "Invalid paths, wrap them into 'Configuration#adjustPath'")
     }
   }
 
@@ -329,7 +323,7 @@ class ConfigurationSpec
             case (Some(a), None)    => a.some
             case (None, Some(b))    => b.some
             case (None, None)       => None
-          }
+        }
       implicit def optionPlain[A: NotSubConfig: NotOption]: Merge[Option[A]] = _ orElse _
     }
 
@@ -418,8 +412,8 @@ class ConfigurationSpec
                   List.empty
                 } else {
                   p.typeclass.flatten(path :+ p.label, p.dereference(v))
-                }
-            )
+              }
+          )
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
       implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
 
