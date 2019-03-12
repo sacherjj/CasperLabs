@@ -126,7 +126,12 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
     }
 
     fn validate(&self, _o: ::grpc::RequestOptions, p: ValidateRequest) -> grpc::SingleResponse<ValidateResponse> {
-        match wabt::wat2wasm(p.payment_code).and(wabt::wat2wasm(p.session_code)) {
+        let pay_mod = wabt::Module::read_binary(p.payment_code, &wabt::ReadBinaryOptions::default())
+            .and_then(|x| x.validate());
+        let ses_mod = wabt::Module::read_binary(p.session_code, &wabt::ReadBinaryOptions::default())
+            .and_then(|x| x.validate());
+
+        match pay_mod.and(ses_mod) {
             Ok(_) => {
                 let mut result = ValidateResponse::new();
                 result.set_success(::protobuf::well_known_types::Empty::new());
@@ -139,8 +144,6 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
             },
         }
     }
-
-
 }
 
 fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>>(
