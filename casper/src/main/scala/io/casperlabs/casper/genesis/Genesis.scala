@@ -87,12 +87,8 @@ object Genesis {
           )
         }
       }
-      transforms            = commutingEffects.unzip._1.flatMap(_.transformMap)
-      possiblePostStateHash <- ExecutionEngineService[F].commit(startHash, transforms)
-      postStateHash <- possiblePostStateHash match {
-                        case Left(ex)    => Sync[F].raiseError(ex)
-                        case Right(hash) => hash.pure[F]
-                      }
+      transforms    = commutingEffects.unzip._1.flatMap(_.transformMap)
+      postStateHash <- Sync[F].rethrow(ExecutionEngineService[F].commit(startHash, transforms))
       stateWithContracts = for {
         bd <- initial.body
         ps <- bd.state

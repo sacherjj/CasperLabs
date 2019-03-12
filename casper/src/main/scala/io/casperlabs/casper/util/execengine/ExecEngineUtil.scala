@@ -86,12 +86,8 @@ object ExecEngineUtil {
           )
         }
       }
-      transforms            = commutingEffects.unzip._1.flatMap(_.transformMap)
-      possiblePostStateHash <- ExecutionEngineService[F].commit(preStateHash, transforms)
-      postStateHash <- possiblePostStateHash match {
-                        case Left(ex)    => Sync[F].raiseError(ex)
-                        case Right(hash) => hash.pure[F]
-                      }
+      transforms    = commutingEffects.unzip._1.flatMap(_.transformMap)
+      postStateHash <- Sync[F].rethrow(ExecutionEngineService[F].commit(preStateHash, transforms))
       maxBlockNumber = parents.foldLeft(-1L) {
         case (acc, b) => math.max(acc, blockNumber(b))
       }
@@ -115,13 +111,9 @@ object ExecEngineUtil {
       transforms: BlockMetadata => F[Seq[TransformEntry]]
   ): F[(StateHash, Seq[DeployResult])] =
     for {
-      prestate       <- computePrestate[F](parents.toList, dag, transforms)
-      ds             = deploys.map(deploy2deploy)
-      possibleResult <- ExecutionEngineService[F].exec(prestate, ds)
-      result <- possibleResult match {
-                 case Left(ex)             => Sync[F].raiseError(ex)
-                 case Right(deployResults) => deployResults.pure[F]
-               }
+      prestate <- computePrestate[F](parents.toList, dag, transforms)
+      ds       = deploys.map(deploy2deploy)
+      result   <- Sync[F].rethrow(ExecutionEngineService[F].exec(prestate, ds))
     } yield (prestate, result)
 
   //TODO: actually find which ones commute
@@ -164,14 +156,10 @@ object ExecEngineUtil {
       ProtoUtil.postStateHash(soleParent).pure[F] //single parent
     case initParent :: _ => //multiple parents
       for {
-        bs             <- blocksToApply[F](parents, dag)
-        diffs          <- bs.traverse(transforms).map(_.flatten)
-        prestate       = ProtoUtil.postStateHash(initParent)
-        possibleResult <- ExecutionEngineService[F].commit(prestate, diffs)
-        result <- possibleResult match {
-                   case Left(ex)    => Sync[F].raiseError(ex)
-                   case Right(hash) => hash.pure[F]
-                 }
+        bs       <- blocksToApply[F](parents, dag)
+        diffs    <- bs.traverse(transforms).map(_.flatten)
+        prestate = ProtoUtil.postStateHash(initParent)
+        result   <- Sync[F].rethrow(ExecutionEngineService[F].commit(prestate, diffs))
       } yield result
   }
 
