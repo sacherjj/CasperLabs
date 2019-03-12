@@ -75,7 +75,7 @@ message Block {
 
     message ProcessedDeploy {
         Deploy deploy = 1;
-        double cost = 2;
+        uint64 cost = 2;
         bool is_error = 3;
         string error_message = 4;
     }
