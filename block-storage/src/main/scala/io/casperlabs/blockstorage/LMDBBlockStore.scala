@@ -9,7 +9,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
 import io.casperlabs.casper.protocol.BlockMessage
-import io.casperlabs.configuration.{ignore, relativeToDataDir}
+import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Resources.withResource
@@ -114,7 +114,7 @@ object LMDBBlockStore {
       maxDbs: Int,
       maxReaders: Int,
       useTls: Boolean
-  )
+  ) extends SubConfig
 
   def create[F[_]](config: Config)(
       implicit

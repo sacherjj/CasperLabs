@@ -6,7 +6,7 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib.Capture
-import io.casperlabs.configuration.{ignore, relativeToDataDir}
+import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
 import io.casperlabs.shared.{Log, LogSource}
@@ -37,7 +37,7 @@ final case class CasperConf(
     approveGenesisInterval: FiniteDuration,
     approveGenesisDuration: FiniteDuration,
     deployTimestamp: Option[Long]
-)
+) extends SubConfig
 
 object CasperConf {
   private implicit val logSource: LogSource = LogSource(this.getClass)
