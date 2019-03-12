@@ -65,8 +65,7 @@ message Block {
     }
 
     message Body {
-        GlobalState state = 1;
-        repeated ProcessedDeploy deploys = 2;
+        repeated ProcessedDeploy deploys = 1;
     }
 
     message Justification {
