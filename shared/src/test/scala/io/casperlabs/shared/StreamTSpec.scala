@@ -20,6 +20,15 @@ class StreamTSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChec
       }
     }
 
+    it("should be able to be constructed from iterators") {
+      forAll { (list: List[Int]) =>
+        val it                       = list.iterator
+        val stream: StreamT[Id, Int] = StreamT.fromIterator[Id, Int](it)
+
+        stream.toList[Int] shouldBe list
+      }
+    }
+
     it("should correctly compute heads") {
       forAll { (list: List[Int]) =>
         whenever(list.nonEmpty) {
