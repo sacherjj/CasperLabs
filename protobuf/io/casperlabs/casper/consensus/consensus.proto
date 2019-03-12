@@ -12,21 +12,25 @@ message Signature {
 
 // A smart contract invocation, singed by the account that sent it.
 message Deploy {
-    int64 timestamp = 1;
-    // Wasm code of the smart contract to be executed.
-    bytes session_code = 2;
-    // Wasm code that transfers some tokens to the validators as payment in exchange to run the Deploy.
-    bytes payment_code = 3;
-    // Conversion rate between the cost of Wasm opcodes and the tokens send by the `payment_code`.
-    uint64 gas_price = 4;
+    // `hash(account_public_key, timestamp, nonce, hash(session_code), hash(payment_code), gas_price)`,
+    // where `hash` is blake2b256.
+    bytes deploy_hash = 1;
+    // Identifying the Account is the key used to sign the Deploy.
+    bytes account_public_key = 2;
     // Monotonic nonce of the Account. Only the Deploy with the expected nonce can be executed straight away;
     // anything higher has to wait until the Account gets into the correct state, i.e. the pending Deploys get
-    // executed on whichever Node they are waiting.
-    uint64 nonce = 5;
-    // Signature over hash(timestamp, hash(session_code), hash(payment_code), nonce, gas_price) where hash is blake2b256.
-    Signature signature = 6;
-    // Identifying the Account is the key used to sign the Deploy.
-    bytes account_public_key = 7;
+    // executed on whichever Node they are currently waiting.
+    uint64 nonce = 3;
+    // Current time milliseconds.
+    uint64 timestamp = 4;
+    // Wasm code of the smart contract to be executed.
+    bytes session_code = 5;
+    // Wasm code that transfers some tokens to the validators as payment in exchange to run the Deploy.
+    bytes payment_code = 6;
+    // Conversion rate between the cost of Wasm opcodes and the tokens send by the `payment_code`.
+    uint64 gas_price = 7;
+    // Signature over `deploy_hash`.
+    Signature signature = 8;
 }
 
 // Limited block information for gossiping.
