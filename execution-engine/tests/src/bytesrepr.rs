@@ -64,6 +64,11 @@ proptest! {
     }
 
     #[test]
+    fn test_array_u8_32(arr in any::<[u8; 32]>()) {
+        assert!(test_serialization_roundtrip(&arr));
+    }
+
+    #[test]
     fn test_string(s in "\\PC*") {
         assert!(test_serialization_roundtrip(&s));
     }
@@ -91,5 +96,25 @@ proptest! {
     #[test]
     fn test_value_serialization(v in value_arb()) {
         assert!(test_serialization_roundtrip(&v));
+    }
+
+    #[test]
+    fn test_blake2b_hash(hash in blake2b_hash_arb()) {
+        assert!(test_serialization_roundtrip(&hash));
+    }
+
+    #[test]
+    fn test_trie_pointer(pointer in trie_pointer_arb()) {
+        assert!(test_serialization_roundtrip(&pointer));
+    }
+
+    #[test]
+    fn test_trie_pointer_block(pointer_block in trie_pointer_block_arb()) {
+        assert!(test_serialization_roundtrip(&pointer_block));
+    }
+
+    #[test]
+    fn test_trie(trie in trie_arb()) {
+        assert!(test_serialization_roundtrip(&trie));
     }
 }

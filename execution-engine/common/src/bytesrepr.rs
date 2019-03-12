@@ -243,6 +243,33 @@ impl FromBytes for [u8; 32] {
     }
 }
 
+impl<T: ToBytes> ToBytes for [T; 256] {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut result = Vec::with_capacity(self.len() + 4);
+        result.extend((256u32).to_bytes());
+        let bytes = self.iter().flat_map(ToBytes::to_bytes);
+        result.extend(bytes);
+        result
+    }
+}
+
+impl<T: Copy + Default + FromBytes> FromBytes for [T; 256] {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (size, mut stream): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        if size != 256 {
+            return Err(Error::FormattingError);
+        }
+        // can't use std::mem::uninitialized unfortunately
+        let mut ret: [T; 256] = [Default::default(); 256];
+        for item in ret.iter_mut() {
+            let (t, rem): (T, &[u8]) = FromBytes::from_bytes(stream)?;
+            *item = t;
+            stream = rem;
+        }
+        Ok((ret, stream))
+    }
+}
+
 impl ToBytes for String {
     fn to_bytes(&self) -> Vec<u8> {
         self.as_str().to_bytes()
