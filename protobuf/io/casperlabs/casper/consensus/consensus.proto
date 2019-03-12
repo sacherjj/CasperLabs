@@ -30,8 +30,8 @@ message Deploy {
         uint64 timestamp = 3;
         // Conversion rate between the cost of Wasm opcodes and the tokens sent by the `payment_code`.
         uint64 gas_price = 4;
-        // Hash of the code content in the body.
-        bytes code_hash = 5;
+        // Hash of the body structure as a whole.
+        bytes body_hash = 5;
     }
 
     message Body {
@@ -64,8 +64,8 @@ message Block {
         repeated bytes parent_hashes = 1;
         repeated Justification justifications = 2;
         GlobalState state = 3;
-        // Hash over the processed deploys in the body.
-        bytes deploys_hash = 4;
+        // Hash of the body structure as a whole.
+        bytes body_hash = 4;
         int64 timestamp = 5;
         uint64 version = 6;
         uint32 deploy_count = 7;
