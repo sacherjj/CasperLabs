@@ -113,6 +113,11 @@ object Configuration extends ParserImplicits {
       .flatMap(updateTls(_, defaultConfigFile).leftMap(NonEmptyList(_, Nil)))
       .fold(Invalid(_), Valid(_))
 
+  /**
+    * Updates Configuration 'Path' fields:
+    * If a field has [[relativeToDataDir]] annotation, then resolves it against server.dataDir
+    * Otherwise replaces a parent of a field to updated server.dataDir
+    */
   private[configuration] def updatePaths(c: Configuration, defaultDataDir: Path): Configuration = {
     import scala.language.experimental.macros
     import magnolia._
