@@ -9,8 +9,7 @@ import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.comm.{Endpoint, NodeIdentifier, PeerNode}
-import io.casperlabs.configuration.{ignore, relativeToDataDir}
-import io.casperlabs.node.configuration.Configuration.Influx
+import io.casperlabs.configuration.{ignore, SubConfig}
 import io.casperlabs.node.configuration.MagnoliaArbitrary._
 import io.casperlabs.node.configuration.Utils._
 import io.casperlabs.shared.StoreType
@@ -28,6 +27,7 @@ class ConfigurationSpec
     with GeneratorDrivenPropertyChecks
     with ArbitraryImplicits
     with ParserImplicits {
+
   val configFilename: String = s"test-configuration.toml"
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
@@ -130,9 +130,9 @@ class ConfigurationSpec
         |'customCertificateLocation' and 'customKeyLocation'
         |if certificate and key are custom""".stripMargin) {
     forAll { (maybeDataDir: Option[Path], maybeCert: Option[Path], maybeKey: Option[Path]) =>
-      import shapeless._
-      import cats.syntax.flatMap._
       import cats.instances.either._
+      import cats.syntax.flatMap._
+      import shapeless._
 
       /*_*/
       val confUpdatedDataDir =
@@ -283,15 +283,9 @@ class ConfigurationSpec
       def filter(fieldNames: List[String], a: A): List[(String, Path)]
     }
 
-    implicit def default[A](implicit ev1: A <:!< Path, ev2: A <:!< Product): Filter[A] =
-      (_, _) => Nil
-    implicit def option[A](implicit F: Filter[A]): Filter[Option[A]] =
-      (fieldNames, opt) => opt.toList.flatMap(v => F.filter(fieldNames, v))
-    implicit val pathFilter: Filter[Path] =
-      (fieldNames, p) => List((fieldNames.reverse.mkString("."), p))
-
-    object GenericFilter {
+    object Filter {
       type Typeclass[T] = Filter[T]
+
       def combine[T](caseClass: CaseClass[Typeclass, T]): Typeclass[T] =
         (fieldNames, v) =>
           caseClass.parameters.toList
@@ -299,9 +293,15 @@ class ConfigurationSpec
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] =
         (fieldNames, v) => sealedTrait.dispatch(v)(s => s.typeclass.filter(fieldNames, s.cast(v)))
       implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
+      implicit def default[A: NotPath: NotSubConfig]: Filter[A] =
+        (_, _) => Nil
+      implicit def option[A](implicit F: Filter[A]): Filter[Option[A]] =
+        (fieldNames, opt) => opt.toList.flatMap(v => F.filter(fieldNames, v))
+      implicit val pathFilter: Filter[Path] =
+        (fieldNames, p) => List((fieldNames.reverse.mkString("."), p))
     }
 
-    GenericFilter.gen[Configuration].filter(Nil, c)
+    Filter.gen[Configuration].filter(Nil, c)
   }
 
   def fallback(a: Configuration, b: Configuration): Configuration = {
@@ -313,25 +313,27 @@ class ConfigurationSpec
       def merge(a: A, b: A): A
     }
 
-    implicit def instance[A](implicit ev: A <:!< Product): Merge[A] = (a, _) => a
-    implicit def optionInflux: Merge[Option[Influx]] =
-      (maybeA, maybeB) =>
-        (maybeA, maybeB) match {
-          case (Some(a), Some(b)) => GenericMerge.gen[Influx].merge(a, b).some
-          case (Some(a), None)    => a.some
-          case (None, Some(b))    => b.some
-          case (None, None)       => None
-      }
-    implicit def optionPlain[A](implicit ev: A <:!< Product): Merge[Option[A]] = _ orElse _
-
-    object GenericMerge {
+    object Merge {
       type Typeclass[T] = Merge[T]
       def combine[T](caseClass: CaseClass[Typeclass, T]): Typeclass[T] =
         (a, b) => caseClass.construct(p => p.typeclass.merge(p.dereference(a), p.dereference(b)))
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
       implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
+
+      implicit def default[A: NotSubConfig: NotOption]: Merge[A] =
+        (a, _) => a
+      implicit def optionSubConfig[A: IsSubConfig](implicit M: Merge[A]): Merge[Option[A]] =
+        (maybeA, maybeB) =>
+          (maybeA, maybeB) match {
+            case (Some(a), Some(b)) => M.merge(a, b).some
+            case (Some(a), None)    => a.some
+            case (None, Some(b))    => b.some
+            case (None, None)       => None
+          }
+      implicit def optionPlain[A: NotSubConfig: NotOption]: Merge[Option[A]] = _ orElse _
     }
-    GenericMerge.gen[Configuration].merge(a, b)
+
+    Merge.gen[Configuration].merge(a, b)
   }
 
   def toToml(conf: Configuration): String = {
@@ -393,31 +395,21 @@ class ConfigurationSpec
     }
 
   def reduce[Accumulator](conf: Configuration, accumulator: Accumulator)(
-      innerFieldsMapper: Any => String)(
-      reducer: (Accumulator, List[String], String) => Accumulator): Accumulator = {
+      innerFieldsMapper: Any => String
+  )(reducer: (Accumulator, List[String], String) => Accumulator): Accumulator = {
     import magnolia._
 
     import scala.language.experimental.macros
+
+    type NotPeerNode[A] = A <:!< PeerNode
 
     trait Flattener[A] {
       def flatten(path: List[String], a: A): List[(List[String], String)]
     }
 
-    implicit val peerNode: Flattener[PeerNode] =
-      (path, a) => List((path, innerFieldsMapper(a)))
-    implicit def instance[A](implicit ev: A <:!< Product): Flattener[A] =
-      (path, a) => List((path, innerFieldsMapper(a)))
-    implicit def optionNestedInflux: Flattener[Option[Influx]] =
-      (path, opt) =>
-        opt.toList.flatMap(influx => GenericFlattener.gen[Influx].flatten(path, influx))
-    implicit def option[A](implicit ev: A <:!< Influx): Flattener[Option[A]] =
-      (path, opt) => opt.toList.map(a => (path, innerFieldsMapper(a)))
-
-    object GenericFlattener {
+    object Flattener {
       type Typeclass[T] = Flattener[T]
-      def combine[T](
-          caseClass: CaseClass[Typeclass, T]
-      )(implicit ev: T <:!< PeerNode): Typeclass[T] =
+      def combine[T: NotPeerNode](caseClass: CaseClass[Typeclass, T]): Typeclass[T] =
         (path, v) =>
           caseClass.parameters.toList
             .flatMap(
@@ -426,12 +418,22 @@ class ConfigurationSpec
                   List.empty
                 } else {
                   p.typeclass.flatten(path :+ p.label, p.dereference(v))
-              }
-          )
+                }
+            )
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
       implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
+
+      implicit val peerNode: Flattener[PeerNode] =
+        (path, a) => List((path, innerFieldsMapper(a)))
+      implicit def default[A: NotSubConfig]: Flattener[A] =
+        (path, a) => List((path, innerFieldsMapper(a)))
+      implicit def optionSubConfig[A: IsSubConfig](implicit F: Flattener[A]): Flattener[Option[A]] =
+        (path, opt) => opt.toList.flatMap(subconfig => F.flatten(path, subconfig))
+      implicit def optionPlain[A: NotSubConfig]: Flattener[Option[A]] =
+        (path, opt) => opt.toList.map(a => (path, innerFieldsMapper(a)))
     }
-    GenericFlattener
+
+    Flattener
       .gen[Configuration]
       .flatten(Nil, conf)
       .foldLeft(accumulator) {

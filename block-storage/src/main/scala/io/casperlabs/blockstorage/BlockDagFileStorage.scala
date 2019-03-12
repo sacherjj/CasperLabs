@@ -19,7 +19,7 @@ import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.protocol.BlockMessage
-import io.casperlabs.configuration.{ignore, relativeToDataDir}
+import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{AtomicMonadState, Log, LogSource}
@@ -485,7 +485,7 @@ object BlockDagFileStorage {
       @relativeToDataDir("block-dag-file-storage")
       dir: Path = Paths.get("nonreachable"),
       latestMessagesLogMaxSizeFactor: Int = 10
-  ) {
+  ) extends SubConfig {
     val latestMessagesLogPath: Path = dir.resolve("latest-messages-log")
     val latestMessagesCrcPath: Path = dir.resolve("latest-messages-crc")
     val blockMetadataLogPath: Path  = dir.resolve("block-metadata-log")

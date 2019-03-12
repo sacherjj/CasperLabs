@@ -6,9 +6,10 @@ import cats.syntax.apply._
 import cats.syntax.either._
 import cats.syntax.option._
 import cats.syntax.validated._
-import io.casperlabs.configuration.ignore
+import io.casperlabs.configuration.{ignore, SubConfig}
 import io.casperlabs.node.configuration.Utils._
 import magnolia._
+import shapeless.<:!<
 
 import scala.language.experimental.macros
 
@@ -61,7 +62,23 @@ private[configuration] trait ConfParserImplicits {
       .toValidatedNel
   }
 
-  implicit def strict[A](
+  implicit def optionableSubConfigs[A: IsSubConfig](
+      implicit
+      C: ConfParser[A]
+  ): ConfParser[Option[A]] =
+    (
+        cliByName: String => Option[String],
+        envVars: Map[String, String],
+        configFile: Option[Map[String, String]],
+        defaultConfigFile: Map[String, String],
+        pathToField: List[String]
+    ) =>
+      C.parse(cliByName, envVars, configFile, defaultConfigFile, pathToField) match {
+        case Invalid(e) if e.toList.exists(_.contains("must be defined")) => Valid(none[A])
+        case x                                                            => x.map(_.some)
+      }
+
+  implicit def strict[A: NotSubConfig](
       implicit
       P: Parser[A]
   ): ConfParser[A] =
@@ -72,7 +89,7 @@ private[configuration] trait ConfParserImplicits {
         defaultConfigFile: Map[String, String],
         pathToField: List[String]
     ) =>
-      fallbacking(P)
+      fallbacking(implicitly[NotSubConfig[A]], P)
         .parse(cliByName, envVars, configFile, defaultConfigFile, pathToField) match {
         case Valid(a) =>
           a.fold(
@@ -82,7 +99,9 @@ private[configuration] trait ConfParserImplicits {
         case invalid @ Invalid(_) => invalid
       }
 
-  implicit def fallbacking[A](implicit P: Parser[A]): ConfParser[Option[A]] = {
+  implicit def fallbacking[A: NotSubConfig](
+      implicit P: Parser[A]
+  ): ConfParser[Option[A]] = {
     (
         cliByName: String => Option[String],
         envVars: Map[String, String],

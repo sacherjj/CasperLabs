@@ -11,13 +11,17 @@ import io.casperlabs.casper.CasperConf
 import io.casperlabs.node.configuration.Utils._
 import io.casperlabs.comm.PeerNode
 import io.casperlabs.comm.transport.Tls
-import io.casperlabs.configuration.relativeToDataDir
+import io.casperlabs.configuration.{relativeToDataDir, SubConfig}
 import io.casperlabs.shared.StoreType
 import shapeless.<:!<
 import toml.Toml
 
 import scala.io.Source
 
+/**
+  * All subconfigs must extend the [[SubConfig]] trait.
+  * It's needed for proper hierarchy traversing by Magnolia typeclasses.
+  */
 final case class Configuration(
     server: Configuration.Server,
     grpc: Configuration.GrpcServer,
@@ -35,7 +39,7 @@ object Configuration extends ParserImplicits {
       zipkin: Boolean,
       sigar: Boolean,
       influx: Boolean
-  )
+  ) extends SubConfig
 
   case class Influx(
       hostname: String,
@@ -44,7 +48,7 @@ object Configuration extends ParserImplicits {
       protocol: String,
       user: Option[String],
       password: Option[String]
-  )
+  ) extends SubConfig
 
   case class Server(
       host: Option[String],
@@ -60,13 +64,13 @@ object Configuration extends ParserImplicits {
       maxNumOfConnections: Int,
       maxMessageSize: Int,
       chunkSize: Int
-  )
+  ) extends SubConfig
   case class GrpcServer(
       host: String,
       socket: Path,
       portExternal: Int,
       portInternal: Int
-  )
+  ) extends SubConfig
 
   sealed trait Command extends Product with Serializable
   object Command {
@@ -100,23 +104,7 @@ object Configuration extends ParserImplicits {
       configFile: Option[Map[String, String]],
       defaultDataDir: Path,
       defaultConfigFile: Map[String, String]
-  ): ValidatedNel[String, Configuration] = {
-    // Defined here because it clashes with other implicits
-    implicit def influx[A](implicit ev: A <:< Influx): ConfParser[Option[Influx]] =
-      (
-          cliByName: String => Option[String],
-          envVars: Map[String, String],
-          configFile: Option[Map[String, String]],
-          defaultConfigFile: Map[String, String],
-          pathToField: List[String]
-      ) =>
-        ConfParser
-          .gen[Influx]
-          .parse(cliByName, envVars, configFile, defaultConfigFile, pathToField) match {
-          case Invalid(e) if e.toList.exists(_.contains("must be defined")) => Valid(none[Influx])
-          case x                                                            => x.map(_.some)
-        }
-
+  ): ValidatedNel[String, Configuration] =
     ConfParser
       .gen[Configuration]
       .parse(cliByName, envVars, configFile, defaultConfigFile, Nil)
@@ -124,7 +112,6 @@ object Configuration extends ParserImplicits {
       .toEither
       .flatMap(updateTls(_, defaultConfigFile).leftMap(NonEmptyList(_, Nil)))
       .fold(Invalid(_), Valid(_))
-  }
 
   private[configuration] def updatePaths(c: Configuration, defaultDataDir: Path): Configuration = {
     import scala.language.experimental.macros
@@ -136,7 +123,7 @@ object Configuration extends ParserImplicits {
       def update(a: A): A
     }
 
-    implicit def default[A](implicit ev1: A <:!< Path, ev2: A <:!< Product): PathUpdater[A] =
+    implicit def default[A: NotPath: NotSubConfig]: PathUpdater[A] =
       identity(_)
     implicit def option[A](implicit U: PathUpdater[A]): PathUpdater[Option[A]] =
       opt => opt.map(U.update)
@@ -157,7 +144,7 @@ object Configuration extends ParserImplicits {
             relativePath.fold(p.typeclass.update(p.dereference(t)))(
               ann => dataDir.resolve(ann.relativePath).asInstanceOf[p.PType]
             )
-          }
+        }
 
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] =
         t => sealedTrait.dispatch(t)(s => s.typeclass.update(s.cast(t)))
