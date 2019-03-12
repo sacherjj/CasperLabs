@@ -333,7 +333,7 @@ class ExecEngineUtilTest
                           dag,
                           (_: BlockMetadata) => Seq.empty[TransformEntry].pure[Task]
                         )
-      (_, _, result, _) = computeResult
+      DeploysCheckpoint(_, _, result, _) = computeResult
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
@@ -402,7 +402,7 @@ class ExecEngineUtilTest
                               dag1,
                               (_: BlockMetadata) => Seq.empty[TransformEntry].pure[Task]
                             )
-        (preStateHash, computedTsHash, processedDeploys, _) = deploysCheckpoint
+        DeploysCheckpoint(preStateHash, computedTsHash, processedDeploys, _) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq.empty,
                   deploys = processedDeploys,

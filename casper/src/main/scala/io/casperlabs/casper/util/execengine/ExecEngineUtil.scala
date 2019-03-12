@@ -8,6 +8,9 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.{protocol, BlockException, PrettyPrinter}
 import io.casperlabs.casper.protocol.{BlockMessage, Bond, ProcessedDeploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
+import io.casperlabs.casper.protocol
+import io.casperlabs.casper.protocol.{BlockMessage, DeployData}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
@@ -16,12 +19,19 @@ import io.casperlabs.models.{DeployResult => _, _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
+case class DeploysCheckpoint(
+    preStateHash: StateHash,
+    postStateHash: StateHash,
+    deploysForBlock: Seq[ProcessedDeploy],
+    blockNumber: Long
+)
+
 object ExecEngineUtil {
   type StateHash = ByteString
 
-  def deploy2deploy(d: protocol.Deploy): Deploy =
-    d.raw.fold(Deploy()) {
-      case protocol.DeployData(
+  def deploy2deploy(d: DeployData): Deploy =
+    d match {
+      case DeployData(
           addr,
           time,
           sCode,
@@ -46,11 +56,11 @@ object ExecEngineUtil {
 
   def computeDeploysCheckpoint[F[_]: Sync: Log: ExecutionEngineService](
       parents: Seq[BlockMessage],
-      deploys: Seq[protocol.Deploy],
+      deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
       //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
       transforms: BlockMetadata => F[Seq[TransformEntry]]
-  ): F[(StateHash, StateHash, Seq[ProcessedDeploy], Long)] =
+  ): F[DeploysCheckpoint] =
     for {
       processedHash <- ExecEngineUtil.processDeploys(
                         parents,
@@ -95,12 +105,12 @@ object ExecEngineUtil {
         .mkString("\n")
       _ <- Log[F]
             .info(s"Block #$number created with effects:\n$msgBody")
-    } yield (preStateHash, postStateHash, deploysForBlock, number)
+    } yield DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number)
 
   def processDeploys[F[_]: Sync: ExecutionEngineService](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
-      deploys: Seq[protocol.Deploy],
+      deploys: Seq[DeployData],
       //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
       transforms: BlockMetadata => F[Seq[TransformEntry]]
   ): F[(StateHash, Seq[DeployResult])] =
@@ -187,5 +197,4 @@ object ExecEngineUtil {
         } yield result
       }
     } yield blockHashesToApply
-
 }

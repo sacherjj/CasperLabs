@@ -9,7 +9,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.{protocol, BlockException, PrettyPrinter}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{
   computeDeploysCheckpoint,
   findCommutingEffects,
@@ -62,8 +62,7 @@ object BlockGenerator {
                  //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
                  (_: BlockMetadata) => Seq.empty[TransformEntry].pure[F]
                )
-      (_, postStateHash, processedDeploys) = result
-    } yield (postStateHash, processedDeploys)
+    } yield (result.postStateHash, result.deploysForBlock)
 
   def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
       id: Int,
@@ -85,7 +84,7 @@ object BlockGenerator {
       dag: BlockDagRepresentation[F],
       //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
       transforms: BlockMetadata => F[Seq[TransformEntry]]
-  ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
+  ): F[DeploysCheckpoint] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
 
@@ -102,8 +101,7 @@ object BlockGenerator {
                  dag,
                  transforms
                )
-      (preStateHash, postStateHash, processedDeploys, _) = result
-    } yield (preStateHash, postStateHash, processedDeploys)
+    } yield result
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys

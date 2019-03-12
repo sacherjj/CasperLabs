@@ -14,7 +14,7 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.rholang._
 import io.casperlabs.catscontrib._
@@ -327,7 +327,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
       stateResult <- ExecEngineUtil
                       .computeDeploysCheckpoint(p, r, dag, f)
-      (preStateHash, postStateHash, deploysForBlock, number) = stateResult
+      DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number) = stateResult
       //TODO: compute bonds properly
       newBonds = ProtoUtil.bonds(p.head)
       postState = RChainState()
