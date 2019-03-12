@@ -274,34 +274,6 @@ class ConfigurationSpec
     }
   }
 
-  def replacePaths(c: Configuration, path: Path): Configuration = {
-    import magnolia._
-
-    import scala.language.experimental.macros
-
-    trait Replace[A] {
-      def replace(p: Path, a: A): A
-    }
-
-    implicit def default[A](implicit ev1: A <:!< Path, ev2: A <:!< Product): Replace[A] =
-      (_, a) => a
-    implicit def option[A](implicit F: Replace[A]): Replace[Option[A]] =
-      (p, o) => o.map(F.replace(p, _))
-    implicit val pathReplace: Replace[Path] =
-      (p, _) => p
-
-    object GenericReplace {
-      type Typeclass[T] = Replace[T]
-      def combine[T](caseClass: CaseClass[Typeclass, T]): Typeclass[T] =
-        (p, v) => caseClass.construct(param => param.typeclass.replace(p, param.dereference(v)))
-      def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] =
-        (p, v) => sealedTrait.dispatch(v)(s => s.typeclass.replace(p, s.cast(v)))
-      implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
-    }
-
-    GenericReplace.gen[Configuration].replace(path, c)
-  }
-
   def gatherPaths(c: Configuration): List[(String, Path)] = {
     import magnolia._
 
