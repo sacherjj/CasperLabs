@@ -16,18 +16,23 @@ pub fn read<T>(u_ptr: UPointer<T>) -> T
 where
     T: From<Value>,
 {
+    let key: Key = u_ptr.into();
+    let value = read_untyped(&key);
+    value.into()
+}
+
+fn read_untyped(key: &Key) -> Value {
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is
     //      dropped then key_ptr becomes invalid.
-    let key: Key = u_ptr.into();
-    let (key_ptr, key_size, _bytes) = to_ptr(&key);
+
+    let (key_ptr, key_size, _bytes) = to_ptr(key);
     let value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
     let value_ptr = alloc_bytes(value_size);
     let value_bytes = unsafe {
         ext_ffi::get_read(value_ptr);
         Vec::from_raw_parts(value_ptr, value_size, value_size)
     };
-    let value: Value = deserialize(&value_bytes).unwrap();
-    value.into()
+    deserialize(&value_bytes).unwrap()
 }
 
 /// Write the value under the key in the global state
