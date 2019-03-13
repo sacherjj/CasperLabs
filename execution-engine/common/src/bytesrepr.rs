@@ -119,7 +119,7 @@ impl FromBytes for Vec<u8> {
 impl ToBytes for Vec<u8> {
     fn to_bytes(&self) -> Vec<u8> {
         let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(4 + size as usize);
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize);
         result.extend(size.to_bytes());
         result.extend(self);
         result
@@ -251,7 +251,7 @@ impl FromBytes for [u8; N32] {
 
 impl<T: ToBytes> ToBytes for [T; N256] {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(4 + (self.len() * size_of::<T>()));
+        let mut result = Vec::with_capacity(U32_SIZE + (self.len() * size_of::<T>()));
         result.extend((N256 as u32).to_bytes());
         result.extend(self.iter().flat_map(ToBytes::to_bytes));
         result
