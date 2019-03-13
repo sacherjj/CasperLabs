@@ -94,7 +94,7 @@ private[configuration] final case class Options private (
     * Filled by [[io.casperlabs.configuration.cli.scallop]] macro
     */
   private val fields =
-    mutable.Map.empty[(ScallopConfBase, String), () => ScallopOption[String]]
+    mutable.Map.empty[(ScallopConfBase, CamelCase), () => ScallopOption[String]]
 
   def fieldByName(fieldName: CamelCase): Option[String] =
     subcommand
@@ -269,9 +269,11 @@ private[configuration] final case class Options private (
     @scallop
     val casperMinimumBond =
       gen[Long]("Minimum bond accepted by the PoS contract in the genesis block.")
+
     @scallop
     val casperMaximumBond =
       gen[Long]("Maximum bond accepted by the PoS contract in the genesis block.")
+
     @scallop
     val casperHasFaucet =
       gen[Flag]("True if there should be a public access CSPR faucet in the genesis block.")
@@ -281,6 +283,16 @@ private[configuration] final case class Options private (
       gen[PeerNode](
         "Bootstrap casperlabs node address for initial seed.",
         'b'
+      )
+
+    @scallop
+    val serverRelayFactor =
+      gen[Int]("Number of new nodes to which try to gossip a new block.")
+
+    @scallop
+    val serverRelaySaturation =
+      gen[Int](
+        "Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes."
       )
 
     @scallop
