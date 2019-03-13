@@ -583,9 +583,9 @@ class ValidateTest
       val storageDirectory                 = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long                = 1024L * 1024
       implicit val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-      casperSmartContractsApi.setBonds(bonds)
-      implicit val log = new LogStub[Task]
+      implicit val log                     = new LogStub[Task]
       for {
+        _   <- casperSmartContractsApi.setBonds(bonds)
         dag <- blockDagStorage.getRepresentation
         // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
         _ <- BlockGenerator

@@ -58,7 +58,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         timestamp   <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
         wallets     <- Genesis.getWallets[F](conf.walletsFile)
         bonds       <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
-        _           = ExecutionEngineService[F].setBonds(bonds)
+        _           <- ExecutionEngineService[F].setBonds(bonds)
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
         bap = new BlockApproverProtocol(
           validatorId.get,
@@ -82,7 +82,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       for {
         _     <- Log[F].info("Starting in create genesis mode")
         bonds <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
-        _     = ExecutionEngineService[F].setBonds(bonds)
+        _     <- ExecutionEngineService[F].setBonds(bonds)
         genesis <- Genesis[F](
                     conf.walletsFile,
                     conf.minimumBond,
@@ -128,7 +128,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         bonds       <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
         validators  <- CasperConf.parseValidatorsFile[F](conf.knownValidatorsFile)
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
-        _           = ExecutionEngineService[F].setBonds(bonds)
+        _           <- ExecutionEngineService[F].setBonds(bonds)
         bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]](
                       new BootstrapCasperHandler(
                         conf.shardId,

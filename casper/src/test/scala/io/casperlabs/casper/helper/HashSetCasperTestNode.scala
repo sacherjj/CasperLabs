@@ -2,7 +2,7 @@ package io.casperlabs.casper.helper
 
 import java.nio.file.{Files, Path, Paths}
 
-import cats.{Applicative, ApplicativeError, Id, Monad}
+import cats.{Applicative, ApplicativeError, Defer, Id, Monad}
 import cats.data.EitherT
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
@@ -351,7 +351,7 @@ object HashSetCasperTestNode {
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
-  def simpleEEApi[F[_]: Applicative](
+  def simpleEEApi[F[_]: Defer: Applicative](
       initialBonds: Map[Array[Byte], Long]
   ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
@@ -406,10 +406,12 @@ object HashSetCasperTestNode {
         )
       override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
         bonds.pure[F]
-      override def setBonds(newBonds: Map[Array[Byte], Long]): Unit =
-        bonds = newBonds.map {
-          case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
-        }.toSeq
+      override def setBonds(newBonds: Map[Array[Byte], Long]): F[Unit] =
+        Defer[F].defer(Applicative[F].unit.map { _ =>
+          bonds = newBonds.map {
+            case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
+          }.toSeq
+        })
       override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
         ().asRight[String].pure[F]
     }

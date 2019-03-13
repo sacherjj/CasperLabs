@@ -2,7 +2,7 @@ package io.casperlabs.smartcontracts
 
 import java.nio.file.Path
 
-import cats.Applicative
+import cats.{Applicative, Defer}
 import cats.effect.{Resource, Sync}
 import cats.syntax.applicative._
 import cats.syntax.either._
@@ -28,12 +28,12 @@ import scala.util.Either
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
   def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
-  def setBonds(bonds: Map[Array[Byte], Long]): Unit
+  def setBonds(bonds: Map[Array[Byte], Long]): F[Unit]
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
 
-class GrpcExecutionEngineService[F[_]: Sync: Log: TaskLift] private[smartcontracts] (
+class GrpcExecutionEngineService[F[_]: Defer: Applicative: Log: TaskLift] private[smartcontracts] (
     addr: Path,
     maxMessageSize: Int,
     initialBonds: Map[Array[Byte], Long],
@@ -103,10 +103,11 @@ class GrpcExecutionEngineService[F[_]: Sync: Log: TaskLift] private[smartcontrac
 
   // Todo Pass in the genesis bonds until we have a solution based on the BlockStore.
   override def setBonds(newBonds: Map[Array[Byte], Long]): F[Unit] =
-    Sync[F].delay {
+    Defer[F].defer(Applicative[F].pure {
       bonds = newBonds.map {
         case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
       }.toSeq
+    })
     }
   override def setBonds(bonds: Map[Array[Byte], Long]): Unit =
     initialBonds = bonds.map {

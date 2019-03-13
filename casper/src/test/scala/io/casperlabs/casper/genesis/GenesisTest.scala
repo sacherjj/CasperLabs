@@ -229,7 +229,7 @@ object GenesisTest {
   ): Task[BlockMessage] =
     for {
       bonds <- Genesis.getBonds[Task](genesisPath, bondsPath, numValidators)
-      _     = ExecutionEngineService[Task].setBonds(bonds)
+      _     <- ExecutionEngineService[Task].setBonds(bonds)
       genesis <- Genesis[Task](
                   walletsPath = nonExistentPath,
                   minimumBond = 1L,
