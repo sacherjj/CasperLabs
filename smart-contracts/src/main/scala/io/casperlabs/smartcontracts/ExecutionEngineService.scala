@@ -1,15 +1,12 @@
 package io.casperlabs.smartcontracts
 
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 
+import cats.Applicative
 import cats.effect.{Resource, Sync}
 import cats.syntax.applicative._
 import cats.syntax.either._
 import cats.syntax.functor._
-import cats.syntax.flatMap._
-import cats.syntax.apply._
-import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.Bond
 import io.casperlabs.crypto.codec.Base16
@@ -17,11 +14,6 @@ import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
-import io.grpc.ManagedChannel
-import io.grpc.netty.NettyChannelBuilder
-import io.netty.channel.epoll.{Epoll, EpollDomainSocketChannel, EpollEventLoopGroup}
-import io.netty.channel.kqueue.{KQueueDomainSocketChannel, KQueueEventLoopGroup}
-import io.netty.channel.unix.DomainSocketAddress
 import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
 
