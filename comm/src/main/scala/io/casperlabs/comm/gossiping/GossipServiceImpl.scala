@@ -11,7 +11,7 @@ import monix.tail.Iterant
 /** Server side implementation talking to the storage. */
 class GossipServiceImpl[F[_]: Sync](
     getBlock: ByteString => F[Block],
-    maxMessageSize: Int
+    maxChunkSize: Int
 ) extends GossipService[F] {
   import GossipServiceImpl.chunkIt
 
@@ -43,8 +43,8 @@ class GossipServiceImpl[F[_]: Sync](
     }
 
   def effectiveChunkSize(chunkSize: Int): Int =
-    if (0 < chunkSize && chunkSize < maxMessageSize) chunkSize
-    else maxMessageSize
+    if (0 < chunkSize && chunkSize < maxChunkSize) chunkSize
+    else maxChunkSize
 }
 
 object GossipServiceImpl {
