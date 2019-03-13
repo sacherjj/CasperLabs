@@ -1,6 +1,7 @@
 use super::alloc::collections::BTreeMap;
 use super::alloc::string::String;
 use super::alloc::vec::Vec;
+use core::mem::size_of;
 
 pub trait ToBytes {
     fn to_bytes(&self) -> Vec<u8>;
@@ -245,7 +246,7 @@ impl FromBytes for [u8; 32] {
 
 impl<T: ToBytes> ToBytes for [T; 256] {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(self.len() + 4);
+        let mut result = Vec::with_capacity(4 + (self.len() * size_of::<T>()));
         result.extend((256u32).to_bytes());
         let bytes = self.iter().flat_map(ToBytes::to_bytes);
         result.extend(bytes);
