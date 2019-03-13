@@ -3,29 +3,23 @@ package io.casperlabs.comm.gossiping
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.shared.Compression
 import org.scalatest._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
 import monix.eval.Task
 import monix.execution.Scheduler
 import scala.concurrent.duration._
 
-class GrpcGossipServiceSpec
-    extends WordSpecLike
-    with Matchers
-    with GeneratorDrivenPropertyChecks
-    with ArbitraryConsensus {
+class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryConsensus {
 
   import GrpcGossipServiceSpec._
   import Scheduler.Implicits.global
-
-  implicit override val generatorDrivenConfig =
-    PropertyCheckConfiguration(
-      minSuccessful = 3
-    )
 
   def runTest(test: Task[Unit]) =
     test.runSyncUnsafe(5.seconds)
 
   "getBlocksChunked" when {
+    // Just want to test with random blocks; variety doesn't matter.
+    implicit val config = PropertyCheckConfiguration(minSuccessful = 1)
+
     "no compression is supported" should {
       "return a stream of uncompressed chunks" in {
         forAll { (block: Block) =>
@@ -90,15 +84,37 @@ class GrpcGossipServiceSpec
     }
 
     "chunk size is specified" when {
+      def testChunkSize(block: Block, requestedChunkSize: Int, expectedChunkSize: Int): Task[Unit] =
+        for {
+          svc    <- TestService.fromBlock(block)
+          req    = GetBlockChunkedRequest(blockHash = block.blockHash, chunkSize = requestedChunkSize)
+          chunks <- svc.getBlockChunked(req).toListL
+        } yield {
+          Inspectors.forAll(chunks.tail.init) { chunk =>
+            chunk.getData.size shouldBe expectedChunkSize
+          }
+          chunks.last.getData.size should be <= expectedChunkSize
+        }
+
       "it is less then the maximum" should {
         "use the requested chunk size" in {
-          pending
+          forAll { (block: Block) =>
+            runTest {
+              val smallChunkSize = DefaultMaxChunkSize / 2
+              testChunkSize(block, smallChunkSize, smallChunkSize)
+            }
+          }
         }
       }
 
       "bigger than the maximum" should {
         "use the default chunk size" in {
-          pending
+          forAll { (block: Block) =>
+            runTest {
+              val bigChunkSize = DefaultMaxChunkSize * 2
+              testChunkSize(block, bigChunkSize, DefaultMaxChunkSize)
+            }
+          }
         }
       }
     }
