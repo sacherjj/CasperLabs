@@ -40,12 +40,10 @@ pub fn account_arb() -> impl Strategy<Value = common::value::Account> {
     })
 }
 
-pub fn contract_arb() -> impl Strategy<Value = common::value::Value> {
+pub fn contract_arb() -> impl Strategy<Value = common::value::Contract> {
     uref_map_arb(20).prop_flat_map(|urefs| {
-        vec(any::<u8>(), 1..1000).prop_map(move |body| Value::Contract {
-            bytes: body,
-            known_urefs: urefs.clone(),
-        })
+        vec(any::<u8>(), 1..1000)
+            .prop_map(move |body| common::value::Contract::new(body, urefs.clone()))
     })
 }
 
@@ -58,6 +56,6 @@ pub fn value_arb() -> impl Strategy<Value = common::value::Value> {
         (vec(any::<String>(), 1..500).prop_map(Value::ListString)),
         ("\\PC*", key_arb()).prop_map(|(n, k)| Value::NamedKey(n, k)),
         account_arb().prop_map(Value::Account),
-        contract_arb()
+        contract_arb().prop_map(Value::Contract)
     ]
 }

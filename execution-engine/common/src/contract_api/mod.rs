@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use crate::ext_ffi;
 use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::key::{Key, UREF_SIZE};
-use crate::value::Value;
+use crate::value::{Contract, Value};
 
 // Read value under the key in the global state
 pub fn read(key: &Key) -> Value {
@@ -69,7 +69,7 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
 // an unforgable reference.
 pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Value {
     let bytes = fn_bytes_by_name(name);
-    Value::Contract{ bytes, known_urefs }
+    Value::Contract(Contract::new(bytes, known_urefs))
 }
 
 // Gets the serialized bytes of an exported function (see `fn_by_name`), then
@@ -88,7 +88,7 @@ pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Key {
         tmp
     };
     let key = Key::Hash(fn_hash);
-    let value = Value::Contract{ bytes, known_urefs };
+    let value = Value::Contract(Contract::new(bytes, known_urefs));
     write(&key, &value);
     key
 }

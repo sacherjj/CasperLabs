@@ -57,10 +57,7 @@ impl TryFrom<&super::ipc::Transform> for storage::transform::Transform {
                 let ipc_contr = v.get_contract();
                 let contr_body = ipc_contr.get_body().to_vec();
                 let known_urefs: URefMap = ipc_contr.get_known_urefs().try_into()?;
-                transform_write(common::value::Value::Contract {
-                    bytes: contr_body,
-                    known_urefs: known_urefs.0,
-                })
+                transform_write(common::value::Contract::new(contr_body, known_urefs.0).into())
             } else if v.has_string_list() {
                 let list = v.get_string_list().list.to_vec();
                 transform_write(common::value::Value::ListString(list))
@@ -121,7 +118,8 @@ impl From<common::value::Value> for super::ipc::Value {
                 acc.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
                 tv.set_account(acc);
             }
-            common::value::Value::Contract { bytes, known_urefs } => {
+            common::value::Value::Contract(contract) => {
+                let (bytes, known_urefs) = contract.destructure();
                 let mut contr = super::ipc::Contract::new();
                 let urefs = URefMap(known_urefs).into();
                 contr.set_body(bytes);

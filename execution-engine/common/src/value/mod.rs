@@ -1,12 +1,14 @@
 pub mod account;
+pub mod contract;
 
-use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::iter;
 use crate::bytesrepr::{Error, FromBytes, ToBytes};
 use crate::key::{Key, UREF_SIZE};
 
 pub use self::account::Account;
+pub use self::contract::Contract;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Value {
@@ -17,10 +19,7 @@ pub enum Value {
     ListString(Vec<String>),
     NamedKey(String, Key),
     Account(account::Account),
-    Contract {
-        bytes: Vec<u8>,
-        known_urefs: BTreeMap<String, Key>,
-    },
+    Contract(contract::Contract),
 }
 
 const INT32_ID: u8 = 0;
@@ -67,18 +66,8 @@ impl ToBytes for Value {
                 result.append(&mut a.to_bytes());
                 result
             }
-            Contract { bytes, known_urefs } => {
-                let size: usize = 1 +              //size for ID
-                    4 +                            //size for length of bytes
-                    bytes.len() +                  //size for elements of bytes
-                    4 +                            //size for length of known_urefs
-                    UREF_SIZE * known_urefs.len(); //size for known_urefs elements
-
-                let mut result = Vec::with_capacity(size);
-                result.push(CONTRACT_ID);
-                result.append(&mut bytes.to_bytes());
-                result.append(&mut known_urefs.to_bytes());
-                result
+            Contract(c) => {
+                iter::once(CONTRACT_ID).chain(c.to_bytes()).collect()
             }
             NamedKey(n, k) => {
                 let size: usize = 1 + //size for ID
@@ -125,10 +114,8 @@ impl FromBytes for Value {
                 Ok((Account(a), rem))
             }
             CONTRACT_ID => {
-                let (bytes, rem1): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rest)?;
-                let (known_urefs, rem2): (BTreeMap<String, Key>, &[u8]) =
-                    FromBytes::from_bytes(rem1)?;
-                Ok((Contract { bytes, known_urefs }, rem2))
+                let (c, rem): (contract::Contract, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((Contract(c), rem))
             }
             NAMEDKEY_ID => {
                 let (name, rem1): (String, &[u8]) = FromBytes::from_bytes(rest)?;
@@ -153,7 +140,7 @@ impl Value {
             String(_) => String::from("String"),
             ByteArray(_) => String::from("ByteArray"),
             Account(_) => String::from("Account"),
-            Contract { .. } => String::from("Contract"),
+            Contract(_) => String::from("Contract"),
             NamedKey(_, _) => String::from("NamedKey"),
             ListString(_) => String::from("List[String]"),
         }
@@ -174,3 +161,8 @@ impl From<account::Account> for Value {
     }
 }
  
+impl From<contract::Contract> for Value {
+    fn from(c: contract::Contract) -> Self {
+        Value::Contract(c)
+    }
+}

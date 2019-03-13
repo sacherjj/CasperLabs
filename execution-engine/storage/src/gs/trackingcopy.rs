@@ -99,8 +99,8 @@ impl<R: DbReader> TrackingCopy<R> {
                         }
                     }
 
-                    Value::Contract { known_urefs, .. } => {
-                        if let Some(key) = known_urefs.get(name) {
+                    Value::Contract(contract) => {
+                        if let Some(key) = contract.urefs_lookup().get(name) {
                             self.read(*key).map_err(Err)
                         } else {
                             Err(Ok((i, format!("Name {} not found in Contract at path:", name))))
@@ -135,7 +135,7 @@ impl<R: DbReader> TrackingCopy<R> {
 #[cfg(test)]
 mod tests {
     use common::key::Key;
-    use common::value::{Account, Value};
+    use common::value::{Account, Contract, Value};
     use error::{Error, GlobalStateError};
     use gens::gens::*;
     use gs::inmem::InMemGS;
@@ -426,10 +426,7 @@ mod tests {
 
             let mut known_urefs = BTreeMap::new();
             known_urefs.insert(name.clone(), k);
-            let contract = Value::Contract {
-                bytes: body,
-                known_urefs,
-            };
+            let contract: Value = Contract::new(body, known_urefs).into();
             let contract_key = Key::Hash(hash);
             map.insert(contract_key, contract);
 
@@ -504,10 +501,7 @@ mod tests {
             // create contract which knows about value
             let mut contract_known_urefs = BTreeMap::new();
             contract_known_urefs.insert(state_name.clone(), k);
-            let contract = Value::Contract {
-                bytes: body,
-                known_urefs: contract_known_urefs,
-            };
+            let contract: Value = Contract::new(body, contract_known_urefs).into();
             let contract_key = Key::Hash(hash);
             map.insert(contract_key, contract);
 

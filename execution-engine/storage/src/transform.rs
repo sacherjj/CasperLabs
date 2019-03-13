@@ -42,12 +42,9 @@ impl Transform {
                 }
             },
             AddKeys(mut keys) => match v {
-                Value::Contract {
-                    mut known_urefs,
-                    bytes,
-                } => {
-                    known_urefs.append(&mut keys);
-                    Ok(Value::Contract { bytes, known_urefs })
+                Value::Contract(mut c) => {
+                    c.insert_urefs(&mut keys);
+                    Ok(c.into())
                 }
                 Value::Account(mut a) => {
                     a.insert_urefs(&mut keys);
