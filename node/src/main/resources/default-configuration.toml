@@ -40,7 +40,7 @@ max-message-size = 4194304
 # Size of chunks to split larger payloads into when streamed via transport layer.
 chunk-size = 1048576
 
-# Maximum amount of nodes to which try to gossip a new block.
+# Number of new nodes to which try to gossip a new block.
 relay-factor = 1
 
 # Maximum percentage (in between 0 and 100) of total amount of known nodes to which try to gossip a new block.
