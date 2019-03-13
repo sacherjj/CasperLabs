@@ -63,7 +63,9 @@ object Configuration extends ParserImplicits {
       storeType: StoreType,
       maxNumOfConnections: Int,
       maxMessageSize: Int,
-      chunkSize: Int
+      chunkSize: Int,
+      relayFactor: Int,
+      relaySaturation: Int
   ) extends SubConfig
   case class GrpcServer(
       host: String,
@@ -153,7 +155,7 @@ object Configuration extends ParserImplicits {
             relativePath.fold(p.typeclass.update(p.dereference(t)))(
               ann => dataDir.resolve(ann.relativePath).asInstanceOf[p.PType]
             )
-          }
+        }
 
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] =
         t => sealedTrait.dispatch(t)(s => s.typeclass.update(s.cast(t)))
