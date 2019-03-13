@@ -287,12 +287,12 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverRelayFactor =
-      gen[Int]("Maximum amount of nodes to which try to gossip a new block.")
+      gen[Int]("Number of new nodes to which try to gossip a new block.")
 
     @scallop
     val serverRelaySaturation =
       gen[Int](
-        "Maximum percentage (in between 0 and 100) of total amount of known nodes to which try to gossip a new block."
+        "Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes."
       )
 
     @scallop
