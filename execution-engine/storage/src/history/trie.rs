@@ -2,9 +2,12 @@
 
 use common::bytesrepr::{self, FromBytes, ToBytes};
 use shared::newtypes::Blake2bHash;
+use std::mem::size_of;
 use std::ops::Deref;
 
 const RADIX: usize = 256;
+
+const U32_SIZE: usize = size_of::<u32>();
 
 /// Represents a pointer to the next object in a Merkle Trie
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -32,7 +35,7 @@ impl Pointer {
 impl ToBytes for Pointer {
     fn to_bytes(&self) -> Vec<u8> {
         let mut hash_bytes = self.hash().to_bytes();
-        let mut ret = Vec::with_capacity(4 + hash_bytes.len());
+        let mut ret = Vec::with_capacity(U32_SIZE + hash_bytes.len());
         ret.append(&mut self.tag().to_bytes());
         ret.append(&mut hash_bytes);
         ret
@@ -151,7 +154,8 @@ impl<K: ToBytes, V: ToBytes> ToBytes for Trie<K, V> {
             Trie::Leaf { key, value } => {
                 let mut key_bytes = ToBytes::to_bytes(key);
                 let mut value_bytes = ToBytes::to_bytes(value);
-                let mut ret: Vec<u8> = Vec::with_capacity(4 + key_bytes.len() + value_bytes.len());
+                let mut ret: Vec<u8> =
+                    Vec::with_capacity(U32_SIZE + key_bytes.len() + value_bytes.len());
                 ret.append(&mut self.tag().to_bytes());
                 ret.append(&mut key_bytes);
                 ret.append(&mut value_bytes);
@@ -159,7 +163,7 @@ impl<K: ToBytes, V: ToBytes> ToBytes for Trie<K, V> {
             }
             Trie::Node { pointer_block } => {
                 let mut pointer_block_bytes = ToBytes::to_bytes(pointer_block.deref());
-                let mut ret: Vec<u8> = Vec::with_capacity(4 + pointer_block_bytes.len());
+                let mut ret: Vec<u8> = Vec::with_capacity(U32_SIZE + pointer_block_bytes.len());
                 ret.append(&mut self.tag().to_bytes());
                 ret.append(&mut pointer_block_bytes);
                 ret
@@ -168,7 +172,7 @@ impl<K: ToBytes, V: ToBytes> ToBytes for Trie<K, V> {
                 let mut affix_bytes = ToBytes::to_bytes(affix);
                 let mut pointer_bytes = ToBytes::to_bytes(pointer);
                 let mut ret: Vec<u8> =
-                    Vec::with_capacity(4 + affix_bytes.len() + pointer_bytes.len());
+                    Vec::with_capacity(U32_SIZE + affix_bytes.len() + pointer_bytes.len());
                 ret.append(&mut self.tag().to_bytes());
                 ret.append(&mut affix_bytes);
                 ret.append(&mut pointer_bytes);

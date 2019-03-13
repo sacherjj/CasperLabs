@@ -3,6 +3,12 @@ use super::alloc::string::String;
 use super::alloc::vec::Vec;
 use core::mem::{size_of, MaybeUninit};
 
+const I32_SIZE: usize = size_of::<i32>();
+const U32_SIZE: usize = size_of::<u32>();
+
+const N32: usize = 32;
+const N256: usize = 256;
+
 pub trait ToBytes {
     fn to_bytes(&self) -> Vec<u8>;
 }
@@ -58,8 +64,8 @@ impl ToBytes for i32 {
 }
 impl FromBytes for i32 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let mut container: [u8; 4] = [0u8; 4];
-        let (num_bytes, rem) = safe_split_at(bytes, 4)?;
+        let mut container: [u8; I32_SIZE] = [0u8; I32_SIZE];
+        let (num_bytes, rem) = safe_split_at(bytes, I32_SIZE)?;
         container.copy_from_slice(num_bytes);
         Ok((i32::from_le_bytes(container), rem))
     }
@@ -72,8 +78,8 @@ impl ToBytes for u32 {
 }
 impl FromBytes for u32 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let mut container: [u8; 4] = [0u8; 4];
-        let (num_bytes, rem) = safe_split_at(bytes, 4)?;
+        let mut container: [u8; U32_SIZE] = [0u8; U32_SIZE];
+        let (num_bytes, rem) = safe_split_at(bytes, U32_SIZE)?;
         container.copy_from_slice(num_bytes);
         Ok((u32::from_le_bytes(container), rem))
     }
@@ -120,7 +126,7 @@ impl ToBytes for Vec<u8> {
 impl FromBytes for Vec<i32> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (size, rest): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let mut result: Vec<i32> = Vec::with_capacity(4 * size as usize);
+        let mut result: Vec<i32> = Vec::with_capacity(I32_SIZE * size as usize);
         let mut stream = rest;
         for _ in 0..size {
             let (t, rem): (i32, &[u8]) = FromBytes::from_bytes(stream)?;
@@ -136,7 +142,7 @@ impl<T: ToBytes> ToBytes for Option<T> {
         match self {
             Some(v) => {
                 let mut value = v.to_bytes();
-                let mut result = Vec::with_capacity(4 + value.len());
+                let mut result = Vec::with_capacity(U32_SIZE + value.len());
                 result.append(&mut 1u32.to_bytes());
                 result.append(&mut value);
                 result
@@ -166,7 +172,7 @@ impl<T: FromBytes> FromBytes for Option<T> {
 impl ToBytes for Vec<i32> {
     fn to_bytes(&self) -> Vec<u8> {
         let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(4 + 4 * size as usize);
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + (I32_SIZE * size as usize));
         result.extend(size.to_bytes());
         result.extend(self.iter().flat_map(ToBytes::to_bytes));
         result
@@ -190,7 +196,7 @@ impl FromBytes for Vec<Vec<u8>> {
 impl ToBytes for Vec<Vec<u8>> {
     fn to_bytes(&self) -> Vec<u8> {
         let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(4 + size as usize);
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize);
         result.extend_from_slice(&size.to_bytes());
         for n in 0..size {
             result.extend_from_slice(&self[n as usize].to_bytes());
@@ -216,36 +222,33 @@ impl FromBytes for Vec<String> {
 impl ToBytes for Vec<String> {
     fn to_bytes(&self) -> Vec<u8> {
         let size = self.len() as u32;
-        let mut result = Vec::with_capacity(4);
+        let mut result = Vec::with_capacity(U32_SIZE);
         result.extend(size.to_bytes());
         let bytes = self.iter().flat_map(ToBytes::to_bytes);
         result.extend(bytes);
         result
     }
 }
-impl ToBytes for [u8; 32] {
+impl ToBytes for [u8; N32] {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(36);
-        result.extend((32u32).to_bytes());
+        let mut result = Vec::with_capacity(U32_SIZE + N32);
+        result.extend((N32 as u32).to_bytes());
         result.extend(self);
         result
     }
 }
-impl FromBytes for [u8; 32] {
+impl FromBytes for [u8; N32] {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (bts, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(bytes)?;
-        if bts.len() != 32 {
+        if bts.len() != N32 {
             Err(Error::FormattingError)
         } else {
-            let mut array = [0u8; 32];
+            let mut array = [0u8; N32];
             array.copy_from_slice(&bts);
             Ok((array, rem))
         }
     }
 }
-
-// preparing for a future macro
-const N256: usize = 256;
 
 impl<T: ToBytes> ToBytes for [T; N256] {
     fn to_bytes(&self) -> Vec<u8> {
@@ -313,7 +316,7 @@ where
             b
         });
 
-        let mut result = Vec::with_capacity(bytes.size_hint().0 + 4);
+        let mut result = Vec::with_capacity(U32_SIZE + bytes.size_hint().0);
         result.append(&mut num_keys.to_bytes());
         result.extend(bytes);
         result
@@ -342,7 +345,7 @@ impl ToBytes for str {
     fn to_bytes(&self) -> Vec<u8> {
         let bytes = self.as_bytes();
         let size = self.len();
-        let mut result = Vec::with_capacity(size + 4);
+        let mut result = Vec::with_capacity(U32_SIZE + size);
         result.extend((size as u32).to_bytes());
         result.extend(bytes);
         result
