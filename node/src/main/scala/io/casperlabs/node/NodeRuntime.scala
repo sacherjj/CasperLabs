@@ -77,7 +77,8 @@ class NodeRuntime private[node] (
 
   val main = GrpcExecutionEngineService[Effect](
     conf.grpc.socket,
-    conf.server.maxMessageSize
+    conf.server.maxMessageSize,
+    Map.empty
   ).use(runMain)
 
   def runMain(executionEngineService: ExecutionEngineService[Effect]) =

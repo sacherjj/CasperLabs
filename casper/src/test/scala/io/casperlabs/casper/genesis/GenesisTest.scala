@@ -245,7 +245,7 @@ object GenesisTest {
   ): Task[Unit] = {
     val storagePath             = mkStoragePath
     val genesisPath             = mkGenesisPath
-    val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task]()
+    val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
     val log                     = new LogStub[Task]
     val time                    = new LogicalTime[Task]
 

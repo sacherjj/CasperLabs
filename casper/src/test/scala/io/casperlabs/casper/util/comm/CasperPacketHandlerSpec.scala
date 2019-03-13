@@ -61,8 +61,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
     val storageSize: Long          = 1024L * 1024
 
-    implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task]()
-    casperSmartContractsApi.setBonds(bonds)
+    implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](bonds)
 
     val bap = new BlockApproverProtocol(
       validatorId,

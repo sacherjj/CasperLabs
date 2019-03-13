@@ -36,7 +36,7 @@ import scala.util.Either
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
   def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
-  def setBonds(bonds: Map[Array[Byte], Long])
+  def setBonds(bonds: Map[Array[Byte], Long]): Unit
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
@@ -44,10 +44,11 @@ import scala.util.Either
 class GrpcExecutionEngineService[F[_]: Sync: Log: TaskLift] private[smartcontracts] (
     addr: Path,
     maxMessageSize: Int,
+    initialBonds: Map[Array[Byte], Long],
     stub: Stub
 ) extends ExecutionEngineService[F] {
 
-  var initialBonds = Seq.empty[Bond]
+  private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
   override def emptyStateHash: ByteString = ByteString.copyFrom(Array.fill(32)(0.toByte))
 
@@ -106,9 +107,15 @@ class GrpcExecutionEngineService[F[_]: Sync: Log: TaskLift] private[smartcontrac
   // Todo
   override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
     // FIXME: Implement bonds!
-    initialBonds.pure[F]
+    bonds.pure[F]
 
   // Todo Pass in the genesis bonds until we have a solution based on the BlockStore.
+  override def setBonds(newBonds: Map[Array[Byte], Long]): F[Unit] =
+    Sync[F].delay {
+      bonds = newBonds.map {
+        case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
+      }.toSeq
+    }
   override def setBonds(bonds: Map[Array[Byte], Long]): Unit =
     initialBonds = bonds.map {
       case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
@@ -161,7 +168,8 @@ object ExecutionEngineService {
 object GrpcExecutionEngineService {
   def apply[F[_]: Sync: Log: TaskLift](
       addr: Path,
-      maxMessageSize: Int
+      maxMessageSize: Int,
+      initBonds: Map[Array[Byte], Long]
   ): Resource[F, GrpcExecutionEngineService[F]] =
-    new ExecutionEngineConf[F](addr, maxMessageSize).apply
+    new ExecutionEngineConf[F](addr, maxMessageSize, initBonds).apply
 }

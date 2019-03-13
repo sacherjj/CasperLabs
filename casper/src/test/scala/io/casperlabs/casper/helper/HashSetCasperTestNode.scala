@@ -78,12 +78,11 @@ class HashSetCasperTestNode[F[_]](
   implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
   implicit val rpConfAsk          = createRPConfAsk[F](local)
 
-  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F]()
-
   val bonds = genesis.body
     .flatMap(_.state.map(_.bonds.map(b => b.validator.toByteArray -> b.stake).toMap))
     .getOrElse(Map.empty)
-  casperSmartContractsApi.setBonds(bonds)
+
+  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds)
 
   val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 
@@ -352,11 +351,13 @@ object HashSetCasperTestNode {
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
-  def simpleEEApi[F[_]: Applicative](): ExecutionEngineService[F] =
-    new ExecutionEngineService[F]() {
+  def simpleEEApi[F[_]: Applicative](
+      initialBonds: Map[Array[Byte], Long]
+  ): ExecutionEngineService[F] =
+    new ExecutionEngineService[F] {
       import ipc._
-      private val zero         = Array.fill(32)(0.toByte)
-      private var initialBonds = Seq.empty[Bond]
+      private val zero  = Array.fill(32)(0.toByte)
+      private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
       private def getExecutionEffect(deploy: Deploy) = {
         val key           = Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
@@ -404,9 +405,9 @@ object HashSetCasperTestNode {
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
       override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
-        initialBonds.pure[F]
-      override def setBonds(bonds: Map[Array[Byte], Long]): Unit =
-        initialBonds = bonds.map {
+        bonds.pure[F]
+      override def setBonds(newBonds: Map[Array[Byte], Long]): Unit =
+        bonds = newBonds.map {
           case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
         }.toSeq
       override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =

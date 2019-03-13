@@ -23,7 +23,7 @@ class ExecEngineUtilTest
 
   implicit val logEff = new LogStub[Task]
 
-  implicit val executionEngineService = HashSetCasperTestNode.simpleEEApi[Task]()
+  implicit val executionEngineService = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
