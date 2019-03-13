@@ -1,5 +1,12 @@
 #![no_std]
-#![feature(alloc, allocator_api, core_intrinsics, lang_items, alloc_error_handler)]
+#![feature(
+    alloc,
+    allocator_api,
+    core_intrinsics,
+    lang_items,
+    alloc_error_handler,
+    maybe_uninit
+)]
 
 extern crate alloc;
 extern crate wee_alloc;

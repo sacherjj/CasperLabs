@@ -7,3 +7,5 @@ edition = "2018"
 [dependencies]
 proptest = "0.8.7"
 common = { path = "../common", features = ["std"], package = "casperlabs-contract-ffi" }
+shared = { path = "../shared" }
+storage = { path = "../storage" }

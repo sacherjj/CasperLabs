@@ -305,6 +305,8 @@ version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.1.1",
  "proptest 0.8.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "shared 0.1.0",
+ "storage 0.1.0",
 ]
 
 [[package]]
@@ -927,6 +929,7 @@ name = "shared"
 version = "0.1.0"
 dependencies = [
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "casperlabs-contract-ffi 0.1.1",
 ]
 
 [[package]]

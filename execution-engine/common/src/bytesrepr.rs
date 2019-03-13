@@ -1,6 +1,7 @@
 use super::alloc::collections::BTreeMap;
 use super::alloc::string::String;
 use super::alloc::vec::Vec;
+use core::mem::{size_of, MaybeUninit};
 
 pub trait ToBytes {
     fn to_bytes(&self) -> Vec<u8>;
@@ -239,6 +240,38 @@ impl FromBytes for [u8; 32] {
             let mut array = [0u8; 32];
             array.copy_from_slice(&bts);
             Ok((array, rem))
+        }
+    }
+}
+
+// preparing for a future macro
+const N256: usize = 256;
+
+impl<T: ToBytes> ToBytes for [T; N256] {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut result = Vec::with_capacity(4 + (self.len() * size_of::<T>()));
+        result.extend((N256 as u32).to_bytes());
+        let bytes = self.iter().flat_map(ToBytes::to_bytes);
+        result.extend(bytes);
+        result
+    }
+}
+
+impl<T: FromBytes> FromBytes for [T; N256] {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (size, mut stream): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        if size != N256 as u32 {
+            return Err(Error::FormattingError);
+        }
+        let mut arr: MaybeUninit<[T; N256]> = MaybeUninit::uninitialized();
+        let arr_ptr = arr.as_mut_ptr() as *mut T;
+        unsafe {
+            for i in 0..N256 {
+                let (t, rem): (T, &[u8]) = FromBytes::from_bytes(stream)?;
+                arr_ptr.add(i).write(t);
+                stream = rem;
+            }
+            Ok((arr.into_initialized(), stream))
         }
     }
 }
