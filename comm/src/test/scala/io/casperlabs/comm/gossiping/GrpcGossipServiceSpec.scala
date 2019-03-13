@@ -1,6 +1,7 @@
 package io.casperlabs.comm.gossiping
 
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.shared.Compression
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import monix.eval.Task
@@ -35,7 +36,8 @@ class GrpcGossipServiceSpec
               chunks <- svc.getBlockChunked(req).toListL
             } yield {
               chunks.head.content.isHeader shouldBe true
-              chunks.head.getHeader.compressionAlgorithm shouldBe ""
+              val header = chunks.head.getHeader
+              header.compressionAlgorithm shouldBe ""
               chunks.size should be > 1
 
               Inspectors.forAll(chunks.tail) { chunk =>
@@ -43,18 +45,47 @@ class GrpcGossipServiceSpec
                 chunk.getData.size should be <= DefaultMaxChunkSize
               }
 
-              val data = chunks.tail.flatMap(_.getData.toByteArray).toArray
-              data shouldBe block.toByteArray
-              chunks.head.getHeader.contentLength shouldBe data.size
+              val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
+              val original = block.toByteArray
+              header.contentLength shouldBe content.length
+              header.originalContentLength shouldBe original.length
+              content shouldBe original
             }
           }
         }
       }
     }
 
-    "gzip compression is supported" should {
+    "compression is supported" should {
       "return a stream of compressed chunks" in {
-        pending
+        forAll { (block: Block) =>
+          runTest {
+            for {
+              svc <- TestService.fromBlock(block)
+              req = GetBlockChunkedRequest(
+                blockHash = block.blockHash,
+                acceptedCompressionAlgorithms = Seq("lz4")
+              )
+              chunks <- svc.getBlockChunked(req).toListL
+            } yield {
+              chunks.head.content.isHeader shouldBe true
+              val header = chunks.head.getHeader
+              header.compressionAlgorithm shouldBe "lz4"
+
+              val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
+              val original = block.toByteArray
+              header.contentLength shouldBe content.length
+              header.originalContentLength shouldBe original.length
+
+              val decompressed = Compression
+                .decompress(content, header.originalContentLength)
+                .get
+
+              decompressed.size shouldBe original.size
+              decompressed shouldBe original
+            }
+          }
+        }
       }
     }
 
@@ -74,6 +105,12 @@ class GrpcGossipServiceSpec
 
     "iteration is abandoned" should {
       "cancel the source" in {
+        pending
+      }
+    }
+
+    "block cannot be found" should {
+      "return NOT_FOUND" in {
         pending
       }
     }

@@ -54,9 +54,11 @@ message Chunk {
     }
 
     message Header {
-        // Use the content_length to sanity check the size of the data in the chunks that follow.
-        uint32 content_length = 1;
         // Indicate if compression was used on the data. e.g. lz4
-        string compression_algorithm = 2;
+        string compression_algorithm = 1;
+        // Use the `content_length` to sanity check the size of the data in the chunks that follow.
+        uint32 content_length = 2;
+        // The original content length before any compression was applied.
+        uint32 original_content_length = 3;
     }
 }

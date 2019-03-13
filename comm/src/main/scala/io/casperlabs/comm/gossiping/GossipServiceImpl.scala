@@ -67,9 +67,11 @@ object GossipServiceImpl {
     }
 
     val header = Chunk.Header(
+      compressionAlgorithm = alg,
       // Sending the final length so the receiver knows how many chunks they are going to get.
       contentLength = content.length,
-      compressionAlgorithm = alg
+      // Sending the original length needed for decompression (at least the one we have now).
+      originalContentLength = data.length
     )
 
     val chunks = content.sliding(chunkSize, chunkSize).map { arr =>
