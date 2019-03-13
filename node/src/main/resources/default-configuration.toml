@@ -43,7 +43,7 @@ chunk-size = 1048576
 # Number of new nodes to which try to gossip a new block.
 relay-factor = 1
 
-# Maximum percentage (in between 0 and 100) of total amount of known nodes to which try to gossip a new block.
+# Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes.
 relay-saturation = 1
 
 # io.casperlabs.blockstorage.LMDBBlockStore.Config
