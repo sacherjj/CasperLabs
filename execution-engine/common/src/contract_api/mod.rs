@@ -31,7 +31,10 @@ where
 }
 
 // Write the value under the key in the global state
-pub fn write<T>(u_ptr: UPointer<T>, t: T) where Value: From<T> {
+pub fn write<T>(u_ptr: UPointer<T>, t: T)
+where
+    Value: From<T>,
+{
     let key = u_ptr.into();
     let value = t.into();
     write_untyped(&key, &value)
@@ -46,7 +49,10 @@ fn write_untyped(key: &Key, value: &Value) {
 }
 
 // Add the given value to the one  currently under the key in the global state
-pub fn add<T>(u_ptr: UPointer<T>, t: T) where Value: From<T> {
+pub fn add<T>(u_ptr: UPointer<T>, t: T)
+where
+    Value: From<T>,
+{
     let key = u_ptr.into();
     let value = t.into();
     add_untyped(&key, &value)
@@ -63,7 +69,10 @@ fn add_untyped(key: &Key, value: &Value) {
 }
 
 // Returns a new unforgable reference Key
-pub fn new_uref<T>(init: T) -> UPointer<T> where Value: From<T> {
+pub fn new_uref<T>(init: T) -> UPointer<T>
+where
+    Value: From<T>,
+{
     let key_ptr = alloc_bytes(UREF_SIZE);
     let bytes = unsafe {
         ext_ffi::new_uref(key_ptr);

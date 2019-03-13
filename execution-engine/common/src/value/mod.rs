@@ -1,11 +1,11 @@
 pub mod account;
 pub mod contract;
 
+use crate::bytesrepr::{Error, FromBytes, ToBytes};
+use crate::key::{Key, UREF_SIZE};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::iter;
-use crate::bytesrepr::{Error, FromBytes, ToBytes};
-use crate::key::{Key, UREF_SIZE};
 
 pub use self::account::Account;
 pub use self::contract::Contract;
@@ -66,9 +66,7 @@ impl ToBytes for Value {
                 result.append(&mut a.to_bytes());
                 result
             }
-            Contract(c) => {
-                iter::once(CONTRACT_ID).chain(c.to_bytes()).collect()
-            }
+            Contract(c) => iter::once(CONTRACT_ID).chain(c.to_bytes()).collect(),
             NamedKey(n, k) => {
                 let size: usize = 1 + //size for ID
                   4 +                 //size for length of String
@@ -131,7 +129,6 @@ impl FromBytes for Value {
     }
 }
 
-
 impl Value {
     pub fn type_string(&self) -> String {
         match self {
@@ -154,13 +151,12 @@ impl Value {
     }
 }
 
-
 impl From<account::Account> for Value {
     fn from(a: account::Account) -> Self {
         Value::Account(a)
     }
 }
- 
+
 impl From<contract::Contract> for Value {
     fn from(c: contract::Contract) -> Self {
         Value::Contract(c)

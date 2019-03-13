@@ -1,8 +1,8 @@
+use crate::bytesrepr::{Error, FromBytes, ToBytes};
+use crate::key::Key;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-use crate::bytesrepr::{Error, FromBytes, ToBytes};
-use crate::key::Key;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Account {
@@ -12,7 +12,6 @@ pub struct Account {
 }
 
 impl Account {
-
     pub fn new(public_key: [u8; 32], nonce: u64, known_urefs: BTreeMap<String, Key>) -> Self {
         Account {
             public_key,
@@ -42,7 +41,6 @@ impl Account {
     }
 }
 
-
 impl ToBytes for Account {
     fn to_bytes(&self) -> Vec<u8> {
         let mut result = Vec::new();
@@ -68,4 +66,3 @@ impl FromBytes for Account {
         ))
     }
 }
-

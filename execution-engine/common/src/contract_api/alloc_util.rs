@@ -1,6 +1,6 @@
+use crate::bytesrepr::ToBytes;
 use alloc::alloc::{Alloc, Global};
 use alloc::vec::Vec;
-use crate::bytesrepr::ToBytes;
 
 #[allow(clippy::zero_ptr)]
 pub fn alloc_bytes(n: usize) -> *mut u8 {
