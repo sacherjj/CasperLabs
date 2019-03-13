@@ -1,5 +1,6 @@
 package io.casperlabs.comm.gossiping
 
+import cats.syntax.option._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.shared.Compression
@@ -9,6 +10,8 @@ import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.reactive.Observable
+import monix.tail.Iterant
 import scala.concurrent.duration._
 
 class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryConsensus {
@@ -146,7 +149,49 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
 
     "iteration is abandoned" should {
       "cancel the source" in {
-        pending
+        forAll { (block: Block) =>
+          runTest {
+            // Capture the event when the Observable created from the Iterant is canceled.
+            var stopCount = 0
+            var nextCount = 0
+            implicit val oi = new ObservableIterant[Task] {
+              def toObservable[A](it: Iterant[Task, A]) =
+                Observable
+                  .fromReactivePublisher(it.toReactivePublisher)
+                  .doOnNext(_ => Task.delay(nextCount += 1))
+                  .doOnEarlyStop(Task.delay(stopCount += 1))
+
+              def toIterant[A](obs: Observable[A]) =
+                Iterant.fromReactivePublisher[Task, A](
+                  obs.toReactivePublisher,
+                  requestCount = 1,
+                  eagerBuffer = false
+                )
+            }
+
+            for {
+              // Pretend we are dealing with a gRPC source, i.e. using Observable.
+              stub <- TestService.fromBlock(block)
+              // Turn it back into how we'd consume it in code.
+              client <- GrpcGossipService.toGossipService[Task](stub)
+              req    = GetBlockChunkedRequest(blockHash = block.blockHash)
+              // Consume just the head, cancel the rest.
+              maybeHeader <- client
+                              .getBlockChunked(req)
+                              .foldWhileLeftEvalL(Task.now(none[Chunk.Header])) {
+                                case (None, chunk) if chunk.content.isHeader =>
+                                  Task.now(Right(Some(chunk.getHeader)))
+                                case _ =>
+                                  Task.now(Left(None))
+                              }
+            } yield {
+              maybeHeader should not be empty
+              stopCount shouldBe 1
+              // Once we consume the first message it seems to fetch another one.
+              nextCount shouldBe 2
+            }
+          }
+        }
       }
     }
   }
@@ -156,10 +201,10 @@ object GrpcGossipServiceSpec {
   val DefaultMaxChunkSize = 100 * 1024
 
   object TestService {
-    def fromBlock(block: Block)(implicit scheduler: Scheduler) =
+    def fromBlock(block: Block)(implicit oi: ObservableIterant[Task]) =
       fromGetBlock(hash => Option(block).filter(_.blockHash == hash))
 
-    def fromGetBlock(f: ByteString => Option[Block])(implicit scheduler: Scheduler) =
+    def fromGetBlock(f: ByteString => Option[Block])(implicit oi: ObservableIterant[Task]) =
       GrpcGossipService.fromGossipService[Task] {
         new GossipServiceImpl[Task](
           getBlock = hash => Task.now(f(hash)),

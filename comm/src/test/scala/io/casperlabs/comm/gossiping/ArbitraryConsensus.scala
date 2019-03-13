@@ -8,7 +8,7 @@ trait ArbitraryConsensus {
   import Arbitrary.arbitrary
 
   def genBytes(length: Int): Gen[ByteString] =
-    Gen.listOfN(length, Gen.choose(Byte.MinValue, Byte.MaxValue)).map { bytes =>
+    Gen.listOfN(length, arbitrary[Byte]).map { bytes =>
       ByteString.copyFrom(bytes.toArray)
     }
 
