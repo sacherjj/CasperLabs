@@ -1,5 +1,5 @@
 use crate::key::Key;
-use crate::value::{Account, Contract};
+use crate::value::Contract;
 use core::marker::PhantomData;
 
 // URef with type information about what value is in the global state
@@ -16,11 +16,6 @@ pub enum ContractPointer {
     URef(UPointer<Contract>),
 }
 
-pub enum AccountPointer {
-    Address([u8; 20]),
-    URef(UPointer<Account>),
-}
-
 impl<T> From<UPointer<T>> for Key {
     fn from(u_ptr: UPointer<T>) -> Self {
         Key::URef(u_ptr.0)
@@ -32,15 +27,6 @@ impl From<ContractPointer> for Key {
         match c_ptr {
             ContractPointer::Hash(h) => Key::Hash(h),
             ContractPointer::URef(u_ptr) => u_ptr.into(),
-        }
-    }
-}
-
-impl From<AccountPointer> for Key {
-    fn from(a_ptr: AccountPointer) -> Self {
-        match a_ptr {
-            AccountPointer::Address(a) => Key::Account(a),
-            AccountPointer::URef(u_ptr) => u_ptr.into(),
         }
     }
 }
