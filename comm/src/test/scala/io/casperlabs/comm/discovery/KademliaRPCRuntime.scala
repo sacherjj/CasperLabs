@@ -146,8 +146,8 @@ final class PingHandler[F[_]: Monad: Timer](
 final class LookupHandler[F[_]: Monad: Timer](
     response: Seq[PeerNode],
     delay: Option[FiniteDuration] = None
-) extends Handler[F, (PeerNode, Array[Byte])] {
-  def handle(peer: PeerNode): (PeerNode, Array[Byte]) => F[Seq[PeerNode]] =
+) extends Handler[F, (PeerNode, NodeIdentifier)] {
+  def handle(peer: PeerNode): (PeerNode, NodeIdentifier) => F[Seq[PeerNode]] =
     (p, a) =>
       for {
         _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)

@@ -101,9 +101,12 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
     }
 
     "doing a lookup to a remote peer" when {
-      val key = Array.ofDim[Byte](40)
-      Random.nextBytes(key)
-      val otherPeer = PeerNode.from(NodeIdentifier(key), "1.2.3.4", 0, 0)
+      val id = {
+        val key = Array.ofDim[Byte](40)
+        Random.nextBytes(key)
+        NodeIdentifier(key)
+      }
+      val otherPeer = PeerNode.from(id, "1.2.3.4", 0, 0)
 
       "everything is fine" should {
         "send and receive a list of peers" in
@@ -114,7 +117,7 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key, remote)
+            ): F[Seq[PeerNode]] = kademliaRPC.lookup(id, remote)
 
             val result: TwoNodesResult = run()
 
@@ -123,7 +126,7 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
             val (receiver, (sender, k)) = lookupHandler.received.head
             receiver shouldEqual result.remoteNode
             sender shouldEqual result.localNode
-            k should be(key)
+            k should be(id)
           }
       }
 
@@ -136,7 +139,7 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key, remote)
+            ): F[Seq[PeerNode]] = kademliaRPC.lookup(id, remote)
 
             val result: TwoNodesResult = run()
 
@@ -145,7 +148,7 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
             val (receiver, (sender, k)) = lookupHandler.received.head
             receiver shouldEqual result.remoteNode
             sender shouldEqual result.localNode
-            k should be(key)
+            k should be(id)
           }
       }
 
@@ -156,7 +159,7 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key, remote)
+            ): F[Seq[PeerNode]] = kademliaRPC.lookup(id, remote)
 
             val result: TwoNodesResult = run()
 
