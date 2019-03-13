@@ -2,12 +2,14 @@ package io.casperlabs.comm.gossiping
 
 import cats._
 import cats.implicits._
+import cats.effect._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.shared.StreamT
 import io.casperlabs.shared.Compression
+import monix.tail.Iterant
 
-class GossipServiceImpl[F[_]: Functor: Applicative](
+/** Server side implementation talking to the storage. */
+class GossipServiceImpl[F[_]: Sync](
     getBlock: ByteString => F[Block],
     maxMessageSize: Int
 ) extends GossipService[F] {
@@ -17,25 +19,27 @@ class GossipServiceImpl[F[_]: Functor: Applicative](
 
   def streamAncestorBlockSummaries(
       request: StreamAncestorBlockSummariesRequest
-  ): StreamT[F, BlockSummary] = ???
+  ): Iterant[F, BlockSummary] = ???
 
   def streamDagTipBlockSummaries(
       request: StreamDagTipBlockSummariesRequest
-  ): StreamT[F, BlockSummary] = ???
+  ): Iterant[F, BlockSummary] = ???
 
   def batchGetBlockSummaries(
       request: BatchGetBlockSummariesRequest
   ): F[BatchGetBlockSummariesResponse] = ???
 
-  def getBlockChunked(request: GetBlockChunkedRequest): F[StreamT[F, Chunk]] =
-    getBlock(request.blockHash).map { block =>
+  def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
+    Iterant.liftF {
+      getBlock(request.blockHash)
+    } flatMap { block =>
       val it = chunkIt(
         block.toByteArray,
         effectiveChunkSize(request.chunkSize),
         request.acceptedCompressionAlgorithms
       )
 
-      StreamT.fromIterator(it.pure[F])
+      Iterant.fromIterator(it)
     }
 
   def effectiveChunkSize(chunkSize: Int): Int =

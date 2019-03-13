@@ -2,7 +2,7 @@ package io.casperlabs.comm.gossiping
 
 import org.scalatest._
 
-class GossipServiceSpec extends WordSpecLike with Matchers {
+class GrpcGossipServiceSpec extends WordSpecLike with Matchers {
 
   "getBlocksChunked" when {
     "no compression is supported" should {
