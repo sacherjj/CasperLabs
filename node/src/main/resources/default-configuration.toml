@@ -41,7 +41,7 @@ max-message-size = 4194304
 chunk-size = 1048576
 
 # Number of new nodes to which try to gossip a new block.
-relay-factor = 1
+relay-factor = 2
 
 # Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes.
 relay-saturation = 100
