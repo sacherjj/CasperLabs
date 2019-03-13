@@ -119,12 +119,9 @@ pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Contrac
     let bytes = fn_bytes_by_name(name);
     let fn_hash = {
         let mut tmp = [0u8; 32];
-        let addr_ptr = alloc_bytes(32);
-        let bytes = unsafe {
-            ext_ffi::function_address(addr_ptr);
-            Vec::from_raw_parts(addr_ptr, 32, 32)
-        };
-        tmp.copy_from_slice(&bytes);
+        unsafe {
+            ext_ffi::function_address(tmp.as_mut_ptr());
+        }
         tmp
     };
     let key = Key::Hash(fn_hash);
