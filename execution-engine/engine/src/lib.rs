@@ -1,3 +1,4 @@
+#![feature(result_map_or_else)]
 extern crate common;
 extern crate core;
 extern crate parity_wasm;

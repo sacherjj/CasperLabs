@@ -2,7 +2,7 @@ use crate::transform::Transform;
 use common::bytesrepr::*;
 use common::key::Key;
 use common::value::Value;
-use error::{Error, GlobalStateError, RootNotFound};
+use error::{Error, GlobalStateError};
 use gs::*;
 use history::*;
 use shared::newtypes::Blake2bHash;
@@ -69,15 +69,15 @@ impl<K: Ord, V> InMemHist<K, V> {
 }
 
 impl History<InMemGS<Key, Value>> for InMemHist<Key, Value> {
-    type Error = RootNotFound;
+    type Error = GlobalStateError;
 
     fn checkout(
         &self,
         prestate_hash: Blake2bHash,
-    ) -> Result<TrackingCopy<InMemGS<Key, Value>>, RootNotFound> {
+    ) -> Result<Option<TrackingCopy<InMemGS<Key, Value>>>, Self::Error> {
         match self.history.get(&prestate_hash) {
-            None => Err(RootNotFound(prestate_hash)),
-            Some(gs) => Ok(TrackingCopy::new(gs.clone())),
+            None => Ok(None),
+            Some(gs) => Ok(Some(TrackingCopy::new(gs.clone()))),
         }
     }
 
@@ -85,53 +85,51 @@ impl History<InMemGS<Key, Value>> for InMemHist<Key, Value> {
         &mut self,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<CommitResult, RootNotFound> {
-        let mut base = {
-            let gs = self
-                .history
-                .get(&prestate_hash)
-                .ok_or_else(|| RootNotFound(prestate_hash))?;
-
-            BTreeMap::clone(&gs.0)
-        };
-
-        let result: Result<Blake2bHash, GlobalStateError> = effects
-            .into_iter()
-            .try_for_each(|(k, t)| {
-                let maybe_curr = base.remove(&k);
-                match maybe_curr {
-                    None => match t {
-                        Transform::Write(v) => {
-                            let _ = base.insert(k, v);
-                            Ok(())
+    ) -> Result<Option<Blake2bHash>, Self::Error> {
+        let base_result = self
+            .history
+            .get(&prestate_hash)
+            .map(|gs| BTreeMap::clone(&gs.0));
+        match base_result {
+            Some(mut base) => {
+                let result: Result<Blake2bHash, GlobalStateError> = effects
+                    .into_iter()
+                    .try_for_each(|(k, t)| {
+                        let maybe_curr = base.remove(&k);
+                        match maybe_curr {
+                            None => match t {
+                                Transform::Write(v) => {
+                                    let _ = base.insert(k, v);
+                                    Ok(())
+                                }
+                                _ => Err(Error::KeyNotFound(k)),
+                            },
+                            Some(curr) => {
+                                let new_value = t.apply(curr)?;
+                                let _ = base.insert(k, new_value);
+                                Ok(())
+                            }
                         }
-                        _ => Err(Error::KeyNotFound(k)),
-                    },
-                    Some(curr) => {
-                        let new_value = t.apply(curr)?;
-                        let _ = base.insert(k, new_value);
-                        Ok(())
-                    }
-                }
-            })
-            .and_then(|_| {
-                let hash = InMemHist::get_root_hash(&base);
-                self.history.insert(hash, InMemGS(Arc::new(base)));
-                Ok(hash)
-            });
+                    })
+                    .and_then(|_| {
+                        let hash = InMemHist::get_root_hash(&base);
+                        self.history.insert(hash, InMemGS(Arc::new(base)));
+                        Ok(hash)
+                    });
 
-        match result {
-            Ok(hash) => Ok(CommitResult::Success(hash)),
-            Err(err) => Ok(CommitResult::Failure(err)),
+                match result {
+                    Ok(hash) => Ok(Some(hash)),
+                    Err(err) => Err(err),
+                }
+            }
+            None => Ok(None),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use error::*;
     use gs::inmem::*;
-    use history::CommitResult;
     use std::sync::Arc;
     use transform::Transform;
 
@@ -158,7 +156,10 @@ mod tests {
     {
         let res = hist.checkout(hash);
         assert!(res.is_ok());
-        res.unwrap()
+        // The res is of type Result<Option<_>, _>> so we have to unwrap twice.
+        // This is fine to do in the test since the point of this method is to provide
+        // helper for the original method.
+        res.unwrap().unwrap()
     }
 
     fn commit<R, H>(
@@ -172,11 +173,10 @@ mod tests {
         H::Error: std::fmt::Debug,
     {
         let res = hist.commit(hash, effects);
-        assert!(res.is_ok());
-        match res.unwrap() {
-            CommitResult::Success(hash) => hash,
-            CommitResult::Failure(_) => panic!("Test commit failed but shouldn't."),
-        }
+        // The res is of type Result<Option<_>, _>> so we have to unwrap twice.
+        // This is fine to do in the test since the point of this method is to provide
+        // helper for the original method.
+        res.unwrap().unwrap()
     }
 
     #[test]
@@ -185,9 +185,7 @@ mod tests {
         // its content is as expeced.
         let empty_root_hash = [0u8; 32].into();
         let hist = prepopulated_hist();
-        let res = hist.checkout(empty_root_hash);
-        assert!(res.is_ok());
-        let mut tc = res.unwrap();
+        let mut tc = checkout(&hist, empty_root_hash);
         assert_eq!(tc.get(&KEY1).unwrap(), VALUE1);
         assert_eq!(tc.get(&KEY2).unwrap(), VALUE2);
     }
@@ -199,8 +197,7 @@ mod tests {
         let hist = prepopulated_hist();
         let missing_root: Blake2bHash = [1u8; 32].into();
         let res = hist.checkout(missing_root);
-        assert!(res.is_err());
-        assert_eq!(res.err(), Some(RootNotFound(missing_root)));
+        assert!(res.unwrap().is_none());
     }
 
     #[test]
