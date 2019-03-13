@@ -90,7 +90,7 @@ pub fn trie_arb() -> impl Strategy<Value = trie::Trie<Key, Value>> {
         trie_pointer_block_arb().prop_map(|pointer_block| trie::Trie::Node {
             pointer_block: Box::new(pointer_block)
         }),
-        (vec(any::<u8>(), 1..32), trie_pointer_arb())
+        (vec(any::<u8>(), 0..32), trie_pointer_arb())
             .prop_map(|(affix, pointer)| trie::Trie::Extension { affix, pointer })
     ]
 }
