@@ -49,9 +49,9 @@ impl Transform {
                     known_urefs.append(&mut keys);
                     Ok(Value::Contract { bytes, known_urefs })
                 }
-                Value::Acct(mut a) => {
+                Value::Account(mut a) => {
                     a.insert_urefs(&mut keys);
-                    Ok(Value::Acct(a))
+                    Ok(Value::Account(a))
                 }
                 other => {
                     let expected = String::from("Contract or Account");

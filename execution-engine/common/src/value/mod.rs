@@ -1,8 +1,12 @@
-use super::alloc::collections::btree_map::BTreeMap;
-use super::alloc::string::String;
-use super::alloc::vec::Vec;
-use super::bytesrepr::{Error, FromBytes, ToBytes};
-use super::key::{Key, UREF_SIZE};
+pub mod account;
+
+use alloc::collections::btree_map::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
+use crate::bytesrepr::{Error, FromBytes, ToBytes};
+use crate::key::{Key, UREF_SIZE};
+
+pub use self::account::Account;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Value {
@@ -12,7 +16,7 @@ pub enum Value {
     String(String),
     ListString(Vec<String>),
     NamedKey(String, Key),
-    Acct(Account),
+    Account(account::Account),
     Contract {
         bytes: Vec<u8>,
         known_urefs: BTreeMap<String, Key>,
@@ -57,7 +61,7 @@ impl ToBytes for Value {
                 result.append(&mut s.to_bytes());
                 result
             }
-            Acct(a) => {
+            Account(a) => {
                 let mut result = Vec::new();
                 result.push(ACCT_ID);
                 result.append(&mut a.to_bytes());
@@ -117,8 +121,8 @@ impl FromBytes for Value {
                 Ok((String(s), rem))
             }
             ACCT_ID => {
-                let (a, rem): (Account, &[u8]) = FromBytes::from_bytes(rest)?;
-                Ok((Acct(a), rem))
+                let (a, rem): (account::Account, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((Account(a), rem))
             }
             CONTRACT_ID => {
                 let (bytes, rem1): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rest)?;
@@ -140,37 +144,6 @@ impl FromBytes for Value {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Account {
-    public_key: [u8; 32],
-    nonce: u64,
-    known_urefs: BTreeMap<String, Key>,
-}
-
-impl ToBytes for Account {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::new();
-        result.extend(&self.public_key.to_bytes());
-        result.append(&mut self.nonce.to_bytes());
-        result.append(&mut self.known_urefs.to_bytes());
-        result
-    }
-}
-impl FromBytes for Account {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (public_key, rem1): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (nonce, rem2): (u64, &[u8]) = FromBytes::from_bytes(rem1)?;
-        let (known_urefs, rem3): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem2)?;
-        Ok((
-            Account {
-                public_key,
-                nonce,
-                known_urefs,
-            },
-            rem3,
-        ))
-    }
-}
 
 impl Value {
     pub fn type_string(&self) -> String {
@@ -179,47 +152,25 @@ impl Value {
             ListInt32(_) => String::from("List[Int32]"),
             String(_) => String::from("String"),
             ByteArray(_) => String::from("ByteArray"),
-            Acct(_) => String::from("Account"),
+            Account(_) => String::from("Account"),
             Contract { .. } => String::from("Contract"),
             NamedKey(_, _) => String::from("NamedKey"),
             ListString(_) => String::from("List[String]"),
         }
     }
 
-    pub fn as_account(&self) -> &Account {
+    pub fn as_account(&self) -> &account::Account {
         match self {
-            Acct(a) => a,
+            Account(a) => a,
             _ => panic!("Not an account: {:?}", self),
         }
     }
 }
 
-impl Account {
-    pub fn new(public_key: [u8; 32], nonce: u64, known_urefs: BTreeMap<String, Key>) -> Account {
-        Account {
-            public_key,
-            nonce,
-            known_urefs,
-        }
-    }
 
-    pub fn insert_urefs(&mut self, keys: &mut BTreeMap<String, Key>) {
-        self.known_urefs.append(keys);
-    }
-
-    pub fn urefs_lookup(&self) -> &BTreeMap<String, Key> {
-        &self.known_urefs
-    }
-
-    pub fn get_urefs_lookup(self) -> BTreeMap<String, Key> {
-        self.known_urefs
-    }
-
-    pub fn pub_key(&self) -> &[u8] {
-        &self.public_key
-    }
-
-    pub fn nonce(&self) -> u64 {
-        self.nonce
+impl From<account::Account> for Value {
+    fn from(a: account::Account) -> Self {
+        Value::Account(a)
     }
 }
+ 

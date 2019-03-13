@@ -57,7 +57,7 @@ pub fn value_arb() -> impl Strategy<Value = common::value::Value> {
         ("\\PC*".prop_map(Value::String)),
         (vec(any::<String>(), 1..500).prop_map(Value::ListString)),
         ("\\PC*", key_arb()).prop_map(|(n, k)| Value::NamedKey(n, k)),
-        account_arb().prop_map(Value::Acct),
+        account_arb().prop_map(Value::Account),
         contract_arb()
     ]
 }

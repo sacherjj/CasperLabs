@@ -52,7 +52,7 @@ impl TryFrom<&super::ipc::Transform> for storage::transform::Transform {
                 pub_key.clone_from_slice(&v.get_account().pub_key);
                 let account =
                     common::value::Account::new(pub_key, v.get_account().nonce as u64, uref_map.0);
-                transform_write(common::value::Value::Acct(account))
+                transform_write(common::value::Value::Account(account))
             } else if v.has_contract() {
                 let ipc_contr = v.get_contract();
                 let contr_body = ipc_contr.get_body().to_vec();
@@ -113,7 +113,7 @@ impl From<common::value::Value> for super::ipc::Value {
                 };
                 tv.set_named_key(named_key);
             }
-            common::value::Value::Acct(account) => {
+            common::value::Value::Account(account) => {
                 let mut acc = super::ipc::Account::new();
                 acc.set_pub_key(account.pub_key().to_vec());
                 acc.set_nonce(account.nonce());

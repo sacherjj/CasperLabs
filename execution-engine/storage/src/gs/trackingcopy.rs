@@ -91,7 +91,7 @@ impl<R: DbReader> TrackingCopy<R> {
             // to build an informative error message about why the query was not successful.
             |curr_value, (i, name)| -> Result<Value, Result<(usize, String), GlobalStateError>> {
                 match curr_value {
-                    Value::Acct(account) => {
+                    Value::Account(account) => {
                         if let Some(key) = account.urefs_lookup().get(name) {
                             self.read(*key).map_err(Err)
                         } else {
@@ -301,7 +301,7 @@ mod tests {
     fn tracking_copy_add_named_key() {
         // DB now holds an `Account` so that we can test adding a `NamedKey`
         let account = common::value::Account::new([0u8; 32], 0u64, BTreeMap::new());
-        let db = CountingDb::new_init(Value::Acct(account));
+        let db = CountingDb::new_init(Value::Account(account));
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
         let u1 = Key::URef([1u8; 32]);
@@ -469,7 +469,7 @@ mod tests {
                 known_urefs,
             );
             let account_key = Key::Account(address);
-            map.insert(account_key, Value::Acct(account));
+            map.insert(account_key, Value::Account(account));
 
             let gs = InMemGS::new(map);
             let mut tc = TrackingCopy::new(gs);
@@ -520,7 +520,7 @@ mod tests {
                 account_known_urefs,
             );
             let account_key = Key::Account(address);
-            map.insert(account_key, Value::Acct(account));
+            map.insert(account_key, Value::Account(account));
 
             let gs = InMemGS::new(map);
             let mut tc = TrackingCopy::new(gs);
