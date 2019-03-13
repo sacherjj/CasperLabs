@@ -48,6 +48,7 @@ impl ToBytes for u8 {
         result
     }
 }
+
 impl FromBytes for u8 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         match bytes.split_first() {
@@ -62,6 +63,7 @@ impl ToBytes for i32 {
         self.to_le_bytes().to_vec()
     }
 }
+
 impl FromBytes for i32 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let mut container: [u8; I32_SIZE] = [0u8; I32_SIZE];
@@ -76,6 +78,7 @@ impl ToBytes for u32 {
         self.to_le_bytes().to_vec()
     }
 }
+
 impl FromBytes for u32 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let mut container: [u8; U32_SIZE] = [0u8; U32_SIZE];
@@ -90,6 +93,7 @@ impl ToBytes for u64 {
         self.to_le_bytes().to_vec()
     }
 }
+
 impl FromBytes for u64 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let mut container: [u8; 8] = [0u8; 8];
@@ -155,6 +159,7 @@ impl<T: ToBytes> ToBytes for Option<T> {
         }
     }
 }
+
 impl<T: FromBytes> FromBytes for Option<T> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (size, rest): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
@@ -229,6 +234,7 @@ impl ToBytes for Vec<String> {
         result
     }
 }
+
 impl ToBytes for [u8; N32] {
     fn to_bytes(&self) -> Vec<u8> {
         let mut result = Vec::with_capacity(U32_SIZE + N32);
@@ -237,6 +243,7 @@ impl ToBytes for [u8; N32] {
         result
     }
 }
+
 impl FromBytes for [u8; N32] {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (bts, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(bytes)?;
@@ -284,6 +291,7 @@ impl ToBytes for String {
         self.as_str().to_bytes()
     }
 }
+
 impl FromBytes for String {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (str_bytes, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(bytes)?;
@@ -297,6 +305,7 @@ impl ToBytes for () {
         Vec::new()
     }
 }
+
 impl FromBytes for () {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         Ok(((), bytes))
@@ -322,6 +331,7 @@ where
         result
     }
 }
+
 impl<K, V> FromBytes for BTreeMap<K, V>
 where
     K: FromBytes + Ord,
