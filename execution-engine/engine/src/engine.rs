@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use storage::error::{GlobalStateError, RootNotFound};
+use storage::error::GlobalStateError;
 use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
 use storage::history::*;
 use storage::transform::Transform;
@@ -102,7 +102,7 @@ where
         }
     }
 
-    pub fn tracking_copy(&self, hash: Blake2bHash) -> Result<TrackingCopy<R>, RootNotFound> {
+    pub fn tracking_copy(&self, hash: Blake2bHash) -> Result<TrackingCopy<R>, H::Error> {
         self.state.lock().checkout(hash)
     }
 
@@ -119,7 +119,7 @@ where
         gas_limit: u64,
         executor: &E,
         preprocessor: &P,
-    ) -> Result<ExecutionResult, RootNotFound> {
+    ) -> Result<ExecutionResult, H::Error> {
         match preprocessor.preprocess(module_bytes, &self.wasm_costs) {
             Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
             Ok(module) => {
@@ -137,7 +137,7 @@ where
         &self,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<CommitResult, RootNotFound> {
+    ) -> Result<CommitResult, H::Error> {
         self.state.lock().commit(prestate_hash, effects)
     }
 }

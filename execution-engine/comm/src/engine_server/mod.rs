@@ -23,7 +23,12 @@ use mappings::*;
 // It will act as an entry point for execution of Wasm binaries.
 // Proto definitions should be translated into domain objects when Engine's API is invoked.
 // This way core won't depend on comm (outer layer) leading to cleaner design.
-impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineState<R, H> {
+impl<R, H> ipc_grpc::ExecutionEngineService for EngineState<R, H>
+where
+    R: DbReader,
+    H: History<R>,
+    H::Error: Into<ipc::RootNotFound>,
+{
     fn query(
         &self,
         _o: ::grpc::RequestOptions,
@@ -78,7 +83,10 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
         &self,
         _o: ::grpc::RequestOptions,
         p: ipc::ExecRequest,
-    ) -> grpc::SingleResponse<ipc::ExecResponse> {
+    ) -> grpc::SingleResponse<ipc::ExecResponse>
+    where
+        H::Error: Into<ipc::RootNotFound>,
+    {
         let executor = WasmiExecutor;
         let preprocessor = WasmiPreprocessor;
         // TODO: don't unwrap
@@ -119,20 +127,28 @@ impl<R: DbReader, H: History<R>> ipc_grpc::ExecutionEngineService for EngineStat
                 grpc::SingleResponse::completed(res)
             }
             Ok(effects) => {
-                let result = apply_effect_result_to_ipc(self.apply_effect(prestate_hash, effects));
+                let result =
+                    apply_effect_result_to_ipc::<R, H>(self.apply_effect(prestate_hash, effects));
                 grpc::SingleResponse::completed(result)
             }
         }
     }
 }
 
-fn run_deploys<A, R: DbReader, H: History<R>, E: Executor<A>, P: Preprocessor<A>>(
+fn run_deploys<A, R, H, E, P>(
     engine_state: &EngineState<R, H>,
     executor: &E,
     preprocessor: &P,
     prestate_hash: Blake2bHash,
     deploys: &[ipc::Deploy],
-) -> Result<Vec<DeployResult>, RootNotFound> {
+) -> Result<Vec<DeployResult>, RootNotFound>
+where
+    R: DbReader,
+    H: History<R>,
+    E: Executor<A>,
+    P: Preprocessor<A>,
+    H::Error: Into<ipc::RootNotFound>,
+{
     // We want to treat RootNotFound error differently b/c it should short-circuit
     // the execution of ALL deploys within the block. This is because all of them share
     // the same prestate and all of them would fail.
@@ -249,15 +265,19 @@ impl From<ExecutionResult> for DeployResult {
     }
 }
 
-fn apply_effect_result_to_ipc(
-    input: Result<storage::history::CommitResult, storage::error::RootNotFound>,
-) -> ipc::CommitResponse {
+fn apply_effect_result_to_ipc<R, H>(
+    input: Result<storage::history::CommitResult, H::Error>,
+) -> ipc::CommitResponse
+where
+    R: DbReader,
+    H: History<R>,
+    H::Error: Into<ipc::RootNotFound>,
+{
     match input {
-        Err(storage::error::RootNotFound(missing_root_hash)) => {
-            let mut err = ipc::RootNotFound::new();
+        Err(err) => {
+            let mut ipc_err = err.into();
             let mut tmp_res = ipc::CommitResponse::new();
-            err.set_hash(missing_root_hash.to_vec());
-            tmp_res.set_missing_prestate(err);
+            tmp_res.set_missing_prestate(ipc_err);
             tmp_res
         }
         Ok(history::CommitResult::Success(post_state_hash)) => {
