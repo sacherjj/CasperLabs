@@ -1,9 +1,13 @@
 package io.casperlabs.comm
 
-import java.nio.file._
-import io.casperlabs.comm.protocol.routing._
 import cats._, cats.data._, cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib._, Catscontrib._, ski._
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.comm.protocol.routing._
+import io.grpc.{Status, StatusRuntimeException}
+import java.nio.file._
+import scala.util.control.NoStackTrace
 
 // TODO we need lower level errors and general error, for now all in one place
 // TODO cleanup unused errors (UDP trash)
@@ -85,5 +89,31 @@ object CommError {
 
   implicit class CommErrorToMessage(commError: CommError) {
     val message: String = CommError.errorMessage(commError)
+  }
+}
+
+/** Errors that we want to propagate over gRPC interfaces,
+  * matching one of https://grpc.io/grpc-java/javadoc/io/grpc/Status.html */
+sealed trait ServiceError extends NoStackTrace
+object ServiceError {
+
+  type ServiceException = StatusRuntimeException with ServiceError
+
+  /** Factory to create and match gRPC errors. */
+  abstract class StatusError(status: Status) {
+    def apply(msg: String): ServiceException =
+      new StatusRuntimeException(status.withDescription(msg)) with ServiceError
+
+    def unapply(ex: Throwable): Option[String] = ex match {
+      case ex: StatusRuntimeException if ex.getStatus.getCode == status.getCode =>
+        Some(ex.getStatus.getDescription)
+      case _ =>
+        None
+    }
+  }
+
+  object NotFound extends StatusError(Status.NOT_FOUND) {
+    def block(blockHash: ByteString): ServiceException =
+      apply(s"Block ${Base16.encode(blockHash.toByteArray)} could not be found.")
   }
 }

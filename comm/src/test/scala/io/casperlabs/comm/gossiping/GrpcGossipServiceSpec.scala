@@ -1,7 +1,10 @@
 package io.casperlabs.comm.gossiping
 
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.shared.Compression
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.comm.ServiceError.NotFound
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
 import monix.eval.Task
@@ -119,31 +122,47 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
       }
     }
 
-    "iteration is abandoned" should {
-      "cancel the source" in {
-        pending
+    "block cannot be found" should {
+      "return NOT_FOUND" in {
+        forAll(genHash) { (hash: ByteString) =>
+          runTest {
+            for {
+              svc <- TestService.fromGetBlock(_ => None)
+              req = GetBlockChunkedRequest(blockHash = hash)
+              res <- svc.getBlockChunked(req).toListL.attempt
+            } yield {
+              res.isLeft shouldBe true
+              res.left.get match {
+                case NotFound(msg) =>
+                  msg shouldBe s"Block ${Base16.encode(hash.toByteArray)} could not be found."
+                case ex =>
+                  fail(s"Unexpected error: $ex")
+              }
+            }
+          }
+        }
       }
     }
 
-    "block cannot be found" should {
-      "return NOT_FOUND" in {
+    "iteration is abandoned" should {
+      "cancel the source" in {
         pending
       }
     }
   }
 }
 
-object GrpcGossipServiceSpec extends Matchers {
+object GrpcGossipServiceSpec {
   val DefaultMaxChunkSize = 100 * 1024
 
   object TestService {
     def fromBlock(block: Block)(implicit scheduler: Scheduler) =
+      fromGetBlock(hash => Option(block).filter(_.blockHash == hash))
+
+    def fromGetBlock(f: ByteString => Option[Block])(implicit scheduler: Scheduler) =
       GrpcGossipService.fromGossipService[Task] {
         new GossipServiceImpl[Task](
-          getBlock = hash => {
-            hash shouldBe block.blockHash
-            Task.now(block)
-          },
+          getBlock = hash => Task.now(f(hash)),
           maxChunkSize = DefaultMaxChunkSize
         )
       }

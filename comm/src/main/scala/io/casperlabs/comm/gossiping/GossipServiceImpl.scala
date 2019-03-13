@@ -6,11 +6,12 @@ import cats.effect._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
+import io.casperlabs.comm.ServiceError.NotFound
 import monix.tail.Iterant
 
 /** Server side implementation talking to the storage. */
 class GossipServiceImpl[F[_]: Sync](
-    getBlock: ByteString => F[Block],
+    getBlock: ByteString => F[Option[Block]],
     maxChunkSize: Int
 ) extends GossipService[F] {
   import GossipServiceImpl.chunkIt
@@ -32,14 +33,18 @@ class GossipServiceImpl[F[_]: Sync](
   def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
     Iterant.liftF {
       getBlock(request.blockHash)
-    } flatMap { block =>
-      val it = chunkIt(
-        block.toByteArray,
-        effectiveChunkSize(request.chunkSize),
-        request.acceptedCompressionAlgorithms
-      )
+    } flatMap {
+      case Some(block) =>
+        val it = chunkIt(
+          block.toByteArray,
+          effectiveChunkSize(request.chunkSize),
+          request.acceptedCompressionAlgorithms
+        )
 
-      Iterant.fromIterator(it)
+        Iterant.fromIterator(it)
+
+      case None =>
+        Iterant.raiseError(NotFound.block(request.blockHash))
     }
 
   def effectiveChunkSize(chunkSize: Int): Int =
