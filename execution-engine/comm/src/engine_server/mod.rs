@@ -133,6 +133,26 @@ where
             }
         }
     }
+
+    fn validate(&self, _o: ::grpc::RequestOptions, p: ValidateRequest) -> grpc::SingleResponse<ValidateResponse> {
+        let pay_mod = wabt::Module::read_binary(p.payment_code, &wabt::ReadBinaryOptions::default())
+            .and_then(|x| x.validate());
+        let ses_mod = wabt::Module::read_binary(p.session_code, &wabt::ReadBinaryOptions::default())
+            .and_then(|x| x.validate());
+
+        match pay_mod.and(ses_mod) {
+            Ok(_) => {
+                let mut result = ValidateResponse::new();
+                result.set_success(::protobuf::well_known_types::Empty::new());
+                grpc::SingleResponse::completed(result)
+            },
+            Err(cause) => {
+                let mut result = ValidateResponse::new();
+                result.set_failure(cause.to_string());
+                grpc::SingleResponse::completed(result)
+            },
+        }
+    }
 }
 
 fn run_deploys<A, R, H, E, P>(

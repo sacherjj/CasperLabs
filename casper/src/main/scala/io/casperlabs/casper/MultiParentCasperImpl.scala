@@ -1,6 +1,7 @@
 package io.casperlabs.casper
 
 import cats.Applicative
+import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
@@ -22,6 +23,7 @@ import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
+import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -214,10 +216,15 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       bufferContains     = state.blockBuffer.exists(_.blockHash == b.blockHash)
     } yield (blockStoreContains || bufferContains)
 
-  //TODO: verify wasm code correctness (done in rust but should be immediate so that we fail fast)
   //TODO: verify sig immediately (again, so we fail fast)
-  def deploy(d: DeployData): F[Either[Throwable, Unit]] = addDeploy(d) map Right.apply
-  //addDeploy(Deploy(d.sessionCode, Some(d))).map(_ => Right(()))
+  def deploy(d: DeployData): F[Either[Throwable, Unit]] = {
+    val req = ExecutionEngineService[F].verifyWasm(ValidateRequest(d.sessionCode, d.paymentCode))
+
+    EitherT(req)
+      .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
+      .flatMapF(_ => addDeploy(d) map (_.asRight[Throwable]))
+      .value
+  }
 
   def addDeploy(deployData: DeployData): F[Unit] =
     for {
