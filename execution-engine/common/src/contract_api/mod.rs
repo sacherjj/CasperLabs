@@ -11,7 +11,7 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-// Read value under the key in the global state
+/// Read value under the key in the global state
 pub fn read<T>(u_ptr: UPointer<T>) -> T
 where
     T: From<Value>,
@@ -30,7 +30,7 @@ where
     value.into()
 }
 
-// Write the value under the key in the global state
+/// Write the value under the key in the global state
 pub fn write<T>(u_ptr: UPointer<T>, t: T)
 where
     Value: From<T>,
@@ -48,7 +48,7 @@ fn write_untyped(key: &Key, value: &Value) {
     }
 }
 
-// Add the given value to the one  currently under the key in the global state
+/// Add the given value to the one currently under the key in the global state
 pub fn add<T>(u_ptr: UPointer<T>, t: T)
 where
     Value: From<T>,
@@ -68,7 +68,7 @@ fn add_untyped(key: &Key, value: &Value) {
     }
 }
 
-// Returns a new unforgable reference Key
+/// Returns a new unforgable pointer, where value is initialized to `init`
 pub fn new_uref<T>(init: T) -> UPointer<T>
 where
     Value: From<T>,
@@ -98,18 +98,18 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
     }
 }
 
-// Returns the serialized bytes of a function which is exported in the current module.
-// Note that the function is wrapped up in a new module and re-exported under the name
-//"call". `fn_bytes_by_name` is meant to be used when storing a contract on-chain at
-// an unforgable reference.
+/// Returns the serialized bytes of a function which is exported in the current module.
+/// Note that the function is wrapped up in a new module and re-exported under the name
+/// "call". `fn_bytes_by_name` is meant to be used when storing a contract on-chain at
+/// an unforgable reference.
 pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
     let bytes = fn_bytes_by_name(name);
     Contract::new(bytes, known_urefs)
 }
 
-// Gets the serialized bytes of an exported function (see `fn_by_name`), then
-// computes gets the address from the host to produce a key where the contract is then
-// stored in the global state. This key is returned.
+/// Gets the serialized bytes of an exported function (see `fn_by_name`), then
+/// computes gets the address from the host to produce a key where the contract is then
+/// stored in the global state. This key is returned.
 pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> ContractPointer {
     let bytes = fn_bytes_by_name(name);
     let fn_hash = {
@@ -128,9 +128,9 @@ pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Contrac
     ContractPointer::Hash(fn_hash)
 }
 
-// Return the i-th argument passed to the host for the current module
-// invokation. Note that this is only relevent to contracts stored on-chain
-// since a contract deployed directly is not invoked with any arguments.
+/// Return the i-th argument passed to the host for the current module
+/// invokation. Note that this is only relevent to contracts stored on-chain
+/// since a contract deployed directly is not invoked with any arguments.
 pub fn get_arg<T: FromBytes>(i: u32) -> T {
     let arg_size = unsafe { ext_ffi::load_arg(i) };
     let dest_ptr = alloc_bytes(arg_size);
@@ -142,9 +142,9 @@ pub fn get_arg<T: FromBytes>(i: u32) -> T {
     deserialize(&arg_bytes).unwrap()
 }
 
-// Return the unforgable reference known by the current module under the given name.
-// This either comes from the known_urefs of the account or contract,
-// depending on whether the current module is a sub-call or not.
+/// Return the unforgable reference known by the current module under the given name.
+/// This either comes from the known_urefs of the account or contract,
+/// depending on whether the current module is a sub-call or not.
 pub fn get_uref(name: &str) -> Key {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
     let dest_ptr = alloc_bytes(UREF_SIZE);
@@ -156,24 +156,24 @@ pub fn get_uref(name: &str) -> Key {
     deserialize(&uref_bytes).unwrap()
 }
 
-// Check if the given name corresponds to a known unforgable reference
+/// Check if the given name corresponds to a known unforgable reference
 pub fn has_uref(name: &str) -> bool {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
     let result = unsafe { ext_ffi::has_uref_name(name_ptr, name_size) };
     result == 0
 }
 
-// Add the given key to the known_urefs map under the given name
+/// Add the given key to the known_urefs map under the given name
 pub fn add_uref(name: &str, key: &Key) {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
     let (key_ptr, key_size, _bytes2) = to_ptr(key);
     unsafe { ext_ffi::add_uref(name_ptr, name_size, key_ptr, key_size) };
 }
 
-// Return `t` to the host, terminating the currently running module.
-// Note this function is only relevent to contracts stored on chain which
-// return a value to their caller. The return value of a directly deployed
-// contract is never looked at.
+/// Return `t` to the host, terminating the currently running module.
+/// Note this function is only relevent to contracts stored on chain which
+/// return a value to their caller. The return value of a directly deployed
+/// contract is never looked at.
 #[allow(clippy::ptr_arg)]
 pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<Key>) -> ! {
     let (ptr, size, _bytes) = to_ptr(t);
@@ -183,10 +183,10 @@ pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<Key>) -> ! {
     }
 }
 
-// Call the given contract, passing the given (serialized) arguments to
-// the host in order to have them available to the called contract during its
-// execution. The value returned from the contract call (see `ret` above) is
-// returned from this function.
+/// Call the given contract, passing the given (serialized) arguments to
+/// the host in order to have them available to the called contract during its
+/// execution. The value returned from the contract call (see `ret` above) is
+/// returned from this function.
 #[allow(clippy::ptr_arg)]
 pub fn call_contract<T: FromBytes>(
     c_ptr: ContractPointer,
