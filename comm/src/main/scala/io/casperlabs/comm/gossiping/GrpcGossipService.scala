@@ -16,7 +16,7 @@ object GrpcGossipService {
 	  * to be used as the "server side", i.e. to return data to another peer. */
   def fromGossipService[F[_]: Sync: Taskable: ObservableIterant](
       service: GossipService[F]
-  ): F[GossipingGrpcMonix.GossipService] = Sync[F].delay {
+  ): GossipingGrpcMonix.GossipService =
     new GossipingGrpcMonix.GossipService {
 
       /** Handle notification about some new blocks on the caller. */
@@ -41,13 +41,12 @@ object GrpcGossipService {
       def getBlockChunked(request: GetBlockChunkedRequest): Observable[Chunk] =
         service.getBlockChunked(request).toObservable
     }
-  }
 
   /** Create the internal interface from the Monix specific instance,
     * to be used as the "client side", i.e. to request data from another peer. */
   def toGossipService[F[_]: Sync: TaskLift: ObservableIterant](
       stub: GossipingGrpcMonix.GossipService
-  ): F[GossipService[F]] = Sync[F].delay {
+  ): GossipService[F] =
     new GossipService[F] {
 
       /** Notify the callee about new blocks. */
@@ -72,5 +71,4 @@ object GrpcGossipService {
       def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
         stub.getBlockChunked(request).toIterant
     }
-  }
 }
