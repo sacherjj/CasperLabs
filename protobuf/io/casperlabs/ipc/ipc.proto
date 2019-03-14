@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package io.casperlabs.ipc;
 
-import "google/protobuf/empty.proto";
-
 message Deploy {
     bytes address = 1; // length 20 bytes
     uint64 timestamp = 2;
@@ -233,8 +231,9 @@ message QueryResponse {
 
 
 message ValidateResponse {
+    message ValidateSuccess {};
     oneof result {
-        google.protobuf.Empty success = 1;
+        ValidateSuccess success = 1;
         string failure = 2;
     }
 }
