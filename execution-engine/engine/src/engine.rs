@@ -93,7 +93,7 @@ impl<H, R> EngineState<R, H>
 where
     H: History<R>,
     R: DbReader,
-    H::Error: Into<self::Error>,
+    H::Error: Into<Error>,
 {
     pub fn new(state: H) -> EngineState<R, H> {
         EngineState {

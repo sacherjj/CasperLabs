@@ -186,7 +186,7 @@ fn valid_uref() {
 
     // Use uref as the key to perform an action on the global state.
     // This should succeed because the uref is valid.
-    let _ = gs_write(&mut runtime, uref, value).expect("writing using valid uref should succeed");
+    gs_write(&mut runtime, uref, value).expect("writing using valid uref should succeed");
 }
 
 #[test]
