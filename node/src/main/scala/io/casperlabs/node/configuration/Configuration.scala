@@ -155,7 +155,7 @@ object Configuration extends ParserImplicits {
             relativePath.fold(p.typeclass.update(p.dereference(t)))(
               ann => dataDir.resolve(ann.relativePath).asInstanceOf[p.PType]
             )
-        }
+          }
 
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] =
         t => sealedTrait.dispatch(t)(s => s.typeclass.update(s.cast(t)))

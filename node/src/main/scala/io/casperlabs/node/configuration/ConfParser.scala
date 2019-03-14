@@ -70,7 +70,7 @@ private[configuration] trait ConfParserImplicits {
       C.parse(cliByName, envVars, configFile, defaultConfigFile, pathToField) match {
         case Invalid(e) if e.toList.exists(_.contains("must be defined")) => Valid(none[A])
         case x                                                            => x.map(_.some)
-    }
+      }
 
   implicit def strict[A: NotSubConfig](
       implicit
@@ -91,7 +91,7 @@ private[configuration] trait ConfParserImplicits {
               .invalidNel[A]
           )(_.validNel)
         case invalid @ Invalid(_) => invalid
-    }
+      }
 
   implicit def fallbacking[A: NotSubConfig](
       implicit P: Parser[A]
