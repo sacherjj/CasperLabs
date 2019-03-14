@@ -5,6 +5,7 @@ use crate::bytesrepr::{Error, FromBytes, ToBytes};
 use crate::key::{Key, UREF_SIZE};
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::convert::TryFrom;
 use core::iter;
 
 pub use self::account::Account;
@@ -151,14 +152,50 @@ impl Value {
     }
 }
 
-impl From<account::Account> for Value {
-    fn from(a: account::Account) -> Self {
-        Value::Account(a)
+macro_rules! from_try_from_impl {
+    ($type:ty, $variant:ident) => {
+        impl From<$type> for Value {
+            fn from(x: $type) -> Self {
+                Value::$variant(x)
+            }
+        }
+
+        impl TryFrom<Value> for $type {
+            type Error = ();
+
+            fn try_from(v: Value) -> Result<$type, ()> {
+                if let Value::$variant(x) = v {
+                    Ok(x)
+                } else {
+                    Err(())
+                }
+            }
+        }
+    };
+}
+
+from_try_from_impl!(i32, Int32);
+from_try_from_impl!(Vec<u8>, ByteArray);
+from_try_from_impl!(Vec<i32>, ListInt32);
+from_try_from_impl!(Vec<String>, ListString);
+from_try_from_impl!(String, String);
+from_try_from_impl!(account::Account, Account);
+from_try_from_impl!(contract::Contract, Contract);
+
+impl From<(String, Key)> for Value {
+    fn from(tuple: (String, Key)) -> Self {
+        Value::NamedKey(tuple.0, tuple.1)
     }
 }
 
-impl From<contract::Contract> for Value {
-    fn from(c: contract::Contract) -> Self {
-        Value::Contract(c)
+impl TryFrom<Value> for (String, Key) {
+    type Error = ();
+    
+    fn try_from(v: Value) -> Result<(String, Key), ()> {
+        if let Value::NamedKey(name, key) = v {
+            Ok((name, key))
+        } else {
+            Err(())
+        }
     }
 }
