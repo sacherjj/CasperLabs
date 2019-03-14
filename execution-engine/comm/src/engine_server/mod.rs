@@ -28,8 +28,7 @@ impl<R, H> ipc_grpc::ExecutionEngineService for EngineState<R, H>
 where
     R: DbReader,
     H: History<R>,
-    H::Error: Into<EngineError>,
-    H::Error: Debug,
+    H::Error: Into<EngineError> + Debug,
 {
     fn query(
         &self,
