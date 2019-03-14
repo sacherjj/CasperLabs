@@ -51,9 +51,7 @@ pub fn contract_arb() -> impl Strategy<Value = common::value::Contract> {
 }
 
 pub fn u512_arb() -> impl Strategy<Value = common::value::U512> {
-    vec(any::<u8>(), 0..64).prop_map(|b| {
-        U512::from_little_endian(b.as_slice())
-    })
+    vec(any::<u8>(), 0..64).prop_map(|b| U512::from_little_endian(b.as_slice()))
 }
 
 pub fn value_arb() -> impl Strategy<Value = common::value::Value> {
