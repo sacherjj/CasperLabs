@@ -50,6 +50,12 @@ pub fn contract_arb() -> impl Strategy<Value = common::value::Contract> {
     })
 }
 
+pub fn u512_arb() -> impl Strategy<Value = common::value::U512> {
+    vec(any::<u8>(), 0..64).prop_map(|b| {
+        U512::from_little_endian(b.as_slice())
+    })
+}
+
 pub fn value_arb() -> impl Strategy<Value = common::value::Value> {
     prop_oneof![
         (any::<i32>().prop_map(Value::Int32)),
@@ -59,7 +65,8 @@ pub fn value_arb() -> impl Strategy<Value = common::value::Value> {
         (vec(any::<String>(), 1..500).prop_map(Value::ListString)),
         ("\\PC*", key_arb()).prop_map(|(n, k)| Value::NamedKey(n, k)),
         account_arb().prop_map(Value::Account),
-        contract_arb().prop_map(Value::Contract)
+        contract_arb().prop_map(Value::Contract),
+        u512_arb().prop_map(Value::UInt512)
     ]
 }
 

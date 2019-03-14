@@ -11,10 +11,12 @@ use core::iter;
 
 pub use self::account::Account;
 pub use self::contract::Contract;
+pub use self::u512::U512;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Value {
     Int32(i32),
+    UInt512(U512),
     ByteArray(Vec<u8>),
     ListInt32(Vec<i32>),
     String(String),
@@ -32,6 +34,7 @@ const ACCT_ID: u8 = 4;
 const CONTRACT_ID: u8 = 5;
 const NAMEDKEY_ID: u8 = 6;
 const LISTSTRING_ID: u8 = 7;
+const U512_ID: u8 = 8;
 
 use self::Value::*;
 
@@ -42,6 +45,12 @@ impl ToBytes for Value {
                 let mut result = Vec::with_capacity(5);
                 result.push(INT32_ID);
                 result.append(&mut i.to_bytes());
+                result
+            }
+            UInt512(u) => {
+                let mut result = Vec::new();
+                result.push(U512_ID);
+                result.append(&mut u.to_bytes());
                 result
             }
             ByteArray(arr) => {
@@ -97,6 +106,10 @@ impl FromBytes for Value {
                 let (i, rem): (i32, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((Int32(i), rem))
             }
+            U512_ID => {
+                let (u, rem): (U512, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((UInt512(u), rem))
+            }
             BYTEARRAY_ID => {
                 let (arr, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((ByteArray(arr), rem))
@@ -135,6 +148,7 @@ impl Value {
     pub fn type_string(&self) -> String {
         match self {
             Int32(_) => String::from("Int32"),
+            UInt512(_) => String::from("UInt512"),
             ListInt32(_) => String::from("List[Int32]"),
             String(_) => String::from("String"),
             ByteArray(_) => String::from("ByteArray"),

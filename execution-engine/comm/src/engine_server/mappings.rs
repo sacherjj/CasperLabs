@@ -90,6 +90,9 @@ impl From<common::value::Value> for super::ipc::Value {
             common::value::Value::Int32(i) => {
                 tv.set_integer(i);
             }
+            common::value::Value::UInt512(_u) => {
+                panic!("ipc not yet implemented for U512");
+            }
             common::value::Value::ByteArray(arr) => {
                 tv.set_byte_arr(arr);
             }

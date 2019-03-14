@@ -89,6 +89,11 @@ proptest! {
     }
 
     #[test]
+    fn test_u512_serialization(u in u512_arb()) {
+        assert!(test_serialization_roundtrip(&u));
+    }
+
+    #[test]
     fn test_key_serialization(key in key_arb()) {
         assert!(test_serialization_roundtrip(&key));
     }
