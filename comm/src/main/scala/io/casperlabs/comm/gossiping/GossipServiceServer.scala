@@ -9,12 +9,12 @@ import io.casperlabs.shared.Compression
 import io.casperlabs.comm.ServiceError.NotFound
 import monix.tail.Iterant
 
-/** Server side implementation talking to the storage. */
-class GossipServiceImpl[F[_]: Sync](
+/** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
+class GossipServiceServer[F[_]: Sync](
     getBlock: ByteString => F[Option[Block]],
     maxChunkSize: Int
 ) extends GossipService[F] {
-  import GossipServiceImpl.chunkIt
+  import GossipServiceServer.chunkIt
 
   def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] = ???
 
@@ -52,7 +52,7 @@ class GossipServiceImpl[F[_]: Sync](
     else maxChunkSize
 }
 
-object GossipServiceImpl {
+object GossipServiceServer {
   type Compressor = Array[Byte] => Array[Byte]
 
   val compressors: Map[String, Compressor] = Map(

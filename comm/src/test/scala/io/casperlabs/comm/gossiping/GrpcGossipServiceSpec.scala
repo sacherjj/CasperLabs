@@ -237,7 +237,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
         services = List(
           (scheduler: Scheduler) =>
             GrpcGossipService.fromGossipService[Task] {
-              new GossipServiceImpl[Task](
+              new GossipServiceServer[Task](
                 getBlock = hash => Task.now(f(hash)),
                 maxChunkSize = DefaultMaxChunkSize
               )
