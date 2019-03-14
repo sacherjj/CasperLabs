@@ -143,7 +143,7 @@ where
         match pay_mod.and(ses_mod) {
             Ok(_) => {
                 let mut result = ValidateResponse::new();
-                result.set_success(::protobuf::well_known_types::Empty::new());
+                result.set_success(ValidateResponse_ValidateSuccess::new());
                 grpc::SingleResponse::completed(result)
             },
             Err(cause) => {
