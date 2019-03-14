@@ -103,6 +103,9 @@ message Value {
         Contract contract = 6;
         StringList string_list = 7;
         NamedKey named_key = 8;
+        // Represent the number as a string for
+        // easy portability between rust and scala.
+        string big_int = 9;
     }
 }
  

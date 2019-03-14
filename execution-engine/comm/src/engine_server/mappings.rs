@@ -43,6 +43,10 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             let v = tr.get_write().get_value();
             if v.has_integer() {
                 transform_write(common::value::Value::Int32(v.get_integer()))
+            } else if v.has_big_int() {
+                let u = common::value::U512::from_dec_str(v.get_big_int())
+                    .map_err(|e| ParsingError(format!("{:?}", e)))?;
+                transform_write(common::value::Value::UInt512(u))
             } else if v.has_byte_arr() {
                 let v: Vec<u8> = Vec::from(v.get_byte_arr());
                 transform_write(common::value::Value::ByteArray(v))
@@ -90,9 +94,7 @@ impl From<common::value::Value> for super::ipc::Value {
             common::value::Value::Int32(i) => {
                 tv.set_integer(i);
             }
-            common::value::Value::UInt512(_u) => {
-                panic!("ipc not yet implemented for U512");
-            }
+            common::value::Value::UInt512(u) => tv.set_big_int(format!("{}", u)),
             common::value::Value::ByteArray(arr) => {
                 tv.set_byte_arr(arr);
             }
