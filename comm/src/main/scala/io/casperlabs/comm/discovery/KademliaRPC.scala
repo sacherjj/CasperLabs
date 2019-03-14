@@ -1,20 +1,13 @@
 package io.casperlabs.comm.discovery
 
-import scala.concurrent.duration.Duration
-
-import cats._, cats.data._
-
-import io.casperlabs.catscontrib.{MonadTrans, _}
-import io.casperlabs.catscontrib.Catscontrib._
-import io.casperlabs.comm.PeerNode
-import io.casperlabs.comm.protocol.routing._
+import io.casperlabs.comm.{NodeIdentifier, PeerNode}
 
 trait KademliaRPC[F[_]] {
   def ping(node: PeerNode): F[Boolean]
-  def lookup(key: Seq[Byte], peer: PeerNode): F[Seq[PeerNode]]
+  def lookup(id: NodeIdentifier, peer: PeerNode): F[Seq[PeerNode]]
   def receive(
       pingHandler: PeerNode => F[Unit],
-      lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
+      lookupHandler: (PeerNode, NodeIdentifier) => F[Seq[PeerNode]]
   ): F[Unit]
   def shutdown(): F[Unit]
 }

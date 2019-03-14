@@ -45,11 +45,11 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
                 ).attempt
     } yield pongErr.fold(kp(false), kp(true))
 
-  def lookup(key: Seq[Byte], peer: PeerNode): Task[Seq[PeerNode]] =
+  def lookup(id: NodeIdentifier, peer: PeerNode): Task[Seq[PeerNode]] =
     for {
       _      <- Metrics[Task].incrementCounter("protocol-lookup-send")
       local  <- peerNodeAsk.ask
-      lookup = Lookup().withId(ByteString.copyFrom(key.toArray)).withSender(node(local))
+      lookup = Lookup().withId(ByteString.copyFrom(id.key.toArray)).withSender(node(local))
       responseErr <- withClient(peer)(
                       _.sendLookup(lookup)
                         .timer("lookup-time")
@@ -86,7 +86,7 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
 
   def receive(
       pingHandler: PeerNode => Task[Unit],
-      lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
+      lookupHandler: (PeerNode, NodeIdentifier) => Task[Seq[PeerNode]]
   ): Task[Unit] =
     cell.modify { s =>
       Task.delay {
@@ -150,11 +150,11 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
 
   class SimpleKademliaRPCService(
       pingHandler: PeerNode => Task[Unit],
-      lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
+      lookupHandler: (PeerNode, NodeIdentifier) => Task[Seq[PeerNode]]
   ) extends KademliaGrpcMonix.KademliaRPCService {
 
     def sendLookup(lookup: Lookup): Task[LookupResponse] = {
-      val id               = lookup.id.toByteArray
+      val id               = NodeIdentifier(lookup.id.toByteArray)
       val sender: PeerNode = toPeerNode(lookup.sender.get)
       lookupHandler(sender, id)
         .map(peers => LookupResponse().withNodes(peers.map(node)))

@@ -28,7 +28,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Met
     timeout: FiniteDuration
 ) extends NodeDiscovery[F] {
 
-  private val table = PeerTable[PeerNode](id.key)
+  private val table = PeerTable(id)
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
@@ -42,7 +42,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Met
   private def pingHandler(peer: PeerNode): F[Unit] =
     addNode(peer) *> Metrics[F].incrementCounter("handle.ping")
 
-  private def lookupHandler(peer: PeerNode, id: Array[Byte]): F[Seq[PeerNode]] =
+  private def lookupHandler(peer: PeerNode, id: NodeIdentifier): F[Seq[PeerNode]] =
     for {
       peers <- Sync[F].delay(table.lookup(id))
       _     <- Metrics[F].incrementCounter("handle.lookup")
@@ -88,13 +88,13 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Met
         val differentBit = 1 << (dist % 8)
         target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
         KademliaRPC[F]
-          .lookup(target, peerSet.head)
+          .lookup(NodeIdentifier(target), peerSet.head)
           .map { results =>
             potentials ++ results.filter(
               r =>
                 !potentials.contains(r)
                   && r.id.key != id.key
-                  && table.find(r.id.key).isEmpty
+                  && table.find(r.id).isEmpty
             )
           } >>= (find(peerSet.tail, _, i + 1))
       } else {
