@@ -489,9 +489,10 @@ class ExecEngineUtilTest
           override def commit(prestate: ByteString, effects: Seq[TransformEntry]) = Task.delay {
             new Throwable("failed when commit transform").asLeft
           }
-          override def computeBonds(hash: ByteString)(implicit log: Log[Task])   = ???
-          override def setBonds(bonds: Map[Array[Byte], Long])                   = ???
-          override def query(state: ByteString, baseKey: Key, path: Seq[String]) = ???
+          override def computeBonds(hash: ByteString)(implicit log: Log[Task])            = ???
+          override def setBonds(bonds: Map[Array[Byte], Long])                            = ???
+          override def query(state: ByteString, baseKey: Key, path: Seq[String])          = ???
+          override def verifyWasm(contracts: ValidateRequest): Task[Either[String, Unit]] = ???
         }
 
       val failedCommitEEService: ExecutionEngineService[Task] =
@@ -519,9 +520,10 @@ class ExecEngineUtilTest
           override def commit(prestate: ByteString, effects: Seq[TransformEntry]) = Task.delay {
             new Throwable("failed when commit transform").asLeft
           }
-          override def computeBonds(hash: ByteString)(implicit log: Log[Task])   = ???
-          override def setBonds(bonds: Map[Array[Byte], Long])                   = ???
-          override def query(state: ByteString, baseKey: Key, path: Seq[String]) = ???
+          override def computeBonds(hash: ByteString)(implicit log: Log[Task])            = ???
+          override def setBonds(bonds: Map[Array[Byte], Long])                            = ???
+          override def query(state: ByteString, baseKey: Key, path: Seq[String])          = ???
+          override def verifyWasm(contracts: ValidateRequest): Task[Either[String, Unit]] = ???
         }
 
       val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1L)

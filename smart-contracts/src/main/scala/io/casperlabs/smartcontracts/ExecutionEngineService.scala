@@ -2,11 +2,13 @@ package io.casperlabs.smartcontracts
 
 import java.nio.file.Path
 
-import cats.{Applicative, Defer}
 import cats.effect.{Resource, Sync}
 import cats.syntax.applicative._
 import cats.syntax.either._
 import cats.syntax.functor._
+import cats.syntax.flatMap._
+import cats.syntax.apply._
+import cats.{Applicative, Defer, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.Bond
 import io.casperlabs.crypto.codec.Base16
@@ -33,7 +35,7 @@ import scala.util.Either
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
 
-class GrpcExecutionEngineService[F[_]: Defer: Applicative: Log: TaskLift] private[smartcontracts] (
+class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smartcontracts] (
     addr: Path,
     maxMessageSize: Int,
     initialBonds: Map[Array[Byte], Long],
@@ -108,11 +110,6 @@ class GrpcExecutionEngineService[F[_]: Defer: Applicative: Log: TaskLift] privat
         case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
       }.toSeq
     })
-    }
-  override def setBonds(bonds: Map[Array[Byte], Long]): Unit =
-    initialBonds = bonds.map {
-      case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
-    }.toSeq
   override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
     stub.validate(contracts).to[F] >>= (
       _.result match {
@@ -152,7 +149,7 @@ object ExecutionEngineService {
           .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented")))
       override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
         Seq.empty[Bond].pure
-      override def setBonds(bonds: Map[Array[Byte], Long]): Unit = ()
+      override def setBonds(bonds: Map[Array[Byte], Long]): F[Unit] = Applicative[F].unit
       override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
         ().asRight[String].pure[F]
     }
