@@ -91,7 +91,7 @@ impl<R: DbReader> TrackingCopy<R> {
             // to build an informative error message about why the query was not successful.
             |curr_value, (i, name)| -> Result<Value, Result<(usize, String), GlobalStateError>> {
                 match curr_value {
-                    Value::Acct(account) => {
+                    Value::Account(account) => {
                         if let Some(key) = account.urefs_lookup().get(name) {
                             self.read(*key).map_err(Err)
                         } else {
@@ -99,8 +99,8 @@ impl<R: DbReader> TrackingCopy<R> {
                         }
                     }
 
-                    Value::Contract { known_urefs, .. } => {
-                        if let Some(key) = known_urefs.get(name) {
+                    Value::Contract(contract) => {
+                        if let Some(key) = contract.urefs_lookup().get(name) {
                             self.read(*key).map_err(Err)
                         } else {
                             Err(Ok((i, format!("Name {} not found in Contract at path:", name))))
@@ -135,7 +135,7 @@ impl<R: DbReader> TrackingCopy<R> {
 #[cfg(test)]
 mod tests {
     use common::key::Key;
-    use common::value::{Account, Value};
+    use common::value::{Account, Contract, Value};
     use error::{Error, GlobalStateError};
     use gens::gens::*;
     use gs::inmem::InMemGS;
@@ -301,7 +301,7 @@ mod tests {
     fn tracking_copy_add_named_key() {
         // DB now holds an `Account` so that we can test adding a `NamedKey`
         let account = common::value::Account::new([0u8; 32], 0u64, BTreeMap::new());
-        let db = CountingDb::new_init(Value::Acct(account));
+        let db = CountingDb::new_init(Value::Account(account));
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
         let u1 = Key::URef([1u8; 32]);
@@ -426,10 +426,7 @@ mod tests {
 
             let mut known_urefs = BTreeMap::new();
             known_urefs.insert(name.clone(), k);
-            let contract = Value::Contract {
-                bytes: body,
-                known_urefs,
-            };
+            let contract: Value = Contract::new(body, known_urefs).into();
             let contract_key = Key::Hash(hash);
             map.insert(contract_key, contract);
 
@@ -469,7 +466,7 @@ mod tests {
                 known_urefs,
             );
             let account_key = Key::Account(address);
-            map.insert(account_key, Value::Acct(account));
+            map.insert(account_key, Value::Account(account));
 
             let gs = InMemGS::new(map);
             let mut tc = TrackingCopy::new(gs);
@@ -504,10 +501,7 @@ mod tests {
             // create contract which knows about value
             let mut contract_known_urefs = BTreeMap::new();
             contract_known_urefs.insert(state_name.clone(), k);
-            let contract = Value::Contract {
-                bytes: body,
-                known_urefs: contract_known_urefs,
-            };
+            let contract: Value = Contract::new(body, contract_known_urefs).into();
             let contract_key = Key::Hash(hash);
             map.insert(contract_key, contract);
 
@@ -520,7 +514,7 @@ mod tests {
                 account_known_urefs,
             );
             let account_key = Key::Account(address);
-            map.insert(account_key, Value::Acct(account));
+            map.insert(account_key, Value::Account(account));
 
             let gs = InMemGS::new(map);
             let mut tc = TrackingCopy::new(gs);

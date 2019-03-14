@@ -21,7 +21,7 @@ pub trait DbReader {
 pub fn mocked_account(account_addr: [u8; 20]) -> BTreeMap<Key, Value> {
     let account = Account::new([48u8; 32], 0, BTreeMap::new());
     let mut map = BTreeMap::new();
-    map.insert(Key::Account(account_addr), Value::Acct(account));
+    map.insert(Key::Account(account_addr), Value::Account(account));
 
     map
 }

@@ -42,16 +42,13 @@ impl Transform {
                 }
             },
             AddKeys(mut keys) => match v {
-                Value::Contract {
-                    mut known_urefs,
-                    bytes,
-                } => {
-                    known_urefs.append(&mut keys);
-                    Ok(Value::Contract { bytes, known_urefs })
+                Value::Contract(mut c) => {
+                    c.insert_urefs(&mut keys);
+                    Ok(c.into())
                 }
-                Value::Acct(mut a) => {
+                Value::Account(mut a) => {
                     a.insert_urefs(&mut keys);
-                    Ok(Value::Acct(a))
+                    Ok(Value::Account(a))
                 }
                 other => {
                     let expected = String::from("Contract or Account");

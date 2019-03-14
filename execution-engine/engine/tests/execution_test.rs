@@ -127,7 +127,7 @@ fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
 fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS<Key, Value>> {
     let root_hash: Blake2bHash = [0u8; 32].into();
     let mut hist = InMemHist::new(&root_hash);
-    let transform = Transform::Write(value::Value::Acct(init_account.clone()));
+    let transform = Transform::Write(value::Value::Account(init_account.clone()));
 
     let mut m = HashMap::new();
     m.insert(init_key, transform);

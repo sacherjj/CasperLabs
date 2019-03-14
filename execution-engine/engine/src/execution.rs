@@ -369,11 +369,11 @@ impl<'a, R: DbReader> Runtime<'a, R> {
 
         let key = self.context.deserialize_key(&key_bytes)?;
         let (args, module, mut refs) = {
-            if let Value::Contract { bytes, known_urefs } = self.state.read(key)? {
+            if let Value::Contract(contract) = self.state.read(key)? {
                 let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
-                let module = parity_wasm::deserialize_buffer(&bytes)?;
+                let module = parity_wasm::deserialize_buffer(contract.bytes())?;
 
-                Ok((args, module, known_urefs.clone()))
+                Ok((args, module, contract.urefs_lookup().clone()))
             } else {
                 Err(Error::FunctionNotFound(format!(
                     "Value at {:?} is not a contract",

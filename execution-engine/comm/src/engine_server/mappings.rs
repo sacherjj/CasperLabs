@@ -56,15 +56,12 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                 pub_key.clone_from_slice(&v.get_account().pub_key);
                 let account =
                     common::value::Account::new(pub_key, v.get_account().nonce as u64, uref_map.0);
-                transform_write(common::value::Value::Acct(account))
+                transform_write(common::value::Value::Account(account))
             } else if v.has_contract() {
                 let ipc_contr = v.get_contract();
                 let contr_body = ipc_contr.get_body().to_vec();
                 let known_urefs: URefMap = ipc_contr.get_known_urefs().try_into()?;
-                transform_write(common::value::Value::Contract {
-                    bytes: contr_body,
-                    known_urefs: known_urefs.0,
-                })
+                transform_write(common::value::Contract::new(contr_body, known_urefs.0).into())
             } else if v.has_string_list() {
                 let list = v.get_string_list().list.to_vec();
                 transform_write(common::value::Value::ListString(list))
@@ -117,7 +114,7 @@ impl From<common::value::Value> for super::ipc::Value {
                 };
                 tv.set_named_key(named_key);
             }
-            common::value::Value::Acct(account) => {
+            common::value::Value::Account(account) => {
                 let mut acc = super::ipc::Account::new();
                 acc.set_pub_key(account.pub_key().to_vec());
                 acc.set_nonce(account.nonce());
@@ -125,7 +122,8 @@ impl From<common::value::Value> for super::ipc::Value {
                 acc.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
                 tv.set_account(acc);
             }
-            common::value::Value::Contract { bytes, known_urefs } => {
+            common::value::Value::Contract(contract) => {
+                let (bytes, known_urefs) = contract.destructure();
                 let mut contr = super::ipc::Contract::new();
                 let urefs = URefMap(known_urefs).into();
                 contr.set_body(bytes);
