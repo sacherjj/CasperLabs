@@ -9,6 +9,8 @@
 )]
 
 extern crate alloc;
+#[macro_use]
+extern crate uint;
 extern crate wee_alloc;
 
 #[cfg(not(feature = "std"))]

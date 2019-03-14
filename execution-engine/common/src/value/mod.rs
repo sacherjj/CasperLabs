@@ -1,5 +1,6 @@
 pub mod account;
 pub mod contract;
+pub mod u512;
 
 use crate::bytesrepr::{Error, FromBytes, ToBytes};
 use crate::key::{Key, UREF_SIZE};
