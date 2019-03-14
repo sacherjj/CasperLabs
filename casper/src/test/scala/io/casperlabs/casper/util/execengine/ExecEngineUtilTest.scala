@@ -7,12 +7,12 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.ipc._
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 class ExecEngineUtilTest
@@ -23,7 +23,8 @@ class ExecEngineUtilTest
 
   implicit val logEff = new LogStub[Task]
 
-  implicit val executionEngineService = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
+  implicit val executionEngineService: ExecutionEngineService[Task] =
+    HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -319,10 +320,13 @@ class ExecEngineUtilTest
       } yield result
   }
 
-  def computeSingleProcessedDeploy[F[_]: ExecutionEngineService](
+  def computeSingleProcessedDeploy(
       dag: BlockDagRepresentation[Task],
-      deploy: Deploy*
-  )(implicit blockStore: BlockStore[Task]): Task[Seq[ProcessedDeploy]] =
+      deploy: DeployData*
+  )(
+      implicit blockStore: BlockStore[Task],
+      executionEngineService: ExecutionEngineService[Task]
+  ): Task[Seq[ProcessedDeploy]] =
     for {
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
@@ -467,6 +471,115 @@ class ExecEngineUtilTest
                       )
         _ = withClue("Main parent hasn't been filtered out: ") { blockHashes.size shouldBe (1) }
 
+      } yield ()
+  }
+
+  "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val failedExecEEService: ExecutionEngineService[Task] =
+        new ExecutionEngineService[Task] {
+          override def emptyStateHash = ByteString.copyFrom(Array.fill(32)(0.toByte))
+          override def exec(
+              prestate: ByteString,
+              deploys: Seq[Deploy]
+          ): Task[Either[Throwable, Seq[DeployResult]]] =
+            Task.now {
+              new Throwable("failed when exec deploys").asLeft
+            }
+          override def commit(prestate: ByteString, effects: Seq[TransformEntry]) = Task.delay {
+            new Throwable("failed when commit transform").asLeft
+          }
+          override def computeBonds(hash: ByteString)(implicit log: Log[Task])   = ???
+          override def setBonds(bonds: Map[Array[Byte], Long])                   = ???
+          override def query(state: ByteString, baseKey: Key, path: Seq[String]) = ???
+        }
+
+      val failedCommitEEService: ExecutionEngineService[Task] =
+        new ExecutionEngineService[Task] {
+          private def getExecutionEffect(deploy: Deploy) = {
+            val key =
+              Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
+            val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
+            val op            = Op(Op.OpInstance.Read(ReadOp()))
+            val transforEntry = TransformEntry(Some(key), Some(transform))
+            val opEntry       = OpEntry(Some(key), Some(op))
+            ExecutionEffect(Seq(opEntry), Seq(transforEntry))
+          }
+          override def emptyStateHash = ByteString.copyFrom(Array.fill(32)(0.toByte))
+          override def exec(
+              prestate: ByteString,
+              deploys: Seq[Deploy]
+          ): Task[Either[Throwable, Seq[DeployResult]]] =
+            Task.now {
+              deploys
+                .map(d => DeployResult(10, DeployResult.Result.Effects(getExecutionEffect(d))))
+                .asRight[Throwable]
+            }
+
+          override def commit(prestate: ByteString, effects: Seq[TransformEntry]) = Task.delay {
+            new Throwable("failed when commit transform").asLeft
+          }
+          override def computeBonds(hash: ByteString)(implicit log: Log[Task])   = ???
+          override def setBonds(bonds: Map[Array[Byte], Long])                   = ???
+          override def query(state: ByteString, baseKey: Key, path: Seq[String]) = ???
+        }
+
+      val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1L)
+      val b1DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
+      val b2DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
+      val b3DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
+
+      /*
+       * DAG Looks like this:
+       *
+       *           b3
+       *          /  \
+       *        b1    b2
+       *         \    /
+       *         genesis
+       */
+
+      def step(index: Int, genesis: BlockMessage)(
+          implicit executionEngineService: ExecutionEngineService[Task]
+      ) =
+        for {
+          b1  <- blockDagStorage.lookupByIdUnsafe(index)
+          dag <- blockDagStorage.getRepresentation
+          computeBlockCheckpointResult <- computeBlockCheckpoint(
+                                           b1,
+                                           genesis,
+                                           dag
+                                         )
+          (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
+          result <- injectPostStateHash[Task](
+                     index,
+                     b1,
+                     postB1StateHash,
+                     postB1ProcessedDeploys
+                   )
+        } yield postB1StateHash
+
+      for {
+        genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
+        b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+        b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+        b3      <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
+        _       <- step(0, genesis)
+        _       <- step(1, genesis)
+        r1 <- step(2, genesis)(failedExecEEService).onErrorHandleWith { ex =>
+               Task.now {
+                 ex.getMessage should startWith("failed when exec")
+                 ByteString.copyFromUtf8("succeed")
+               }
+             }
+        _ = r1 should be(ByteString.copyFromUtf8("succeed"))
+        r2 <- step(2, genesis)(failedCommitEEService).onErrorHandleWith { ex =>
+               Task.now {
+                 ex.getMessage should startWith("failed when commit")
+                 ByteString.copyFromUtf8("succeed")
+               }
+             }
+        _ = r1 should be(ByteString.copyFromUtf8("succeed"))
       } yield ()
   }
 
