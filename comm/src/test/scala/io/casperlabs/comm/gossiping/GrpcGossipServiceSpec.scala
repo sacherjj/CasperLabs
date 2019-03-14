@@ -13,7 +13,7 @@ import io.grpc.netty.NettyChannelBuilder
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
 import monix.eval.Task
-import monix.execution.Scheduler
+import monix.execution.{ExecutionModel, Scheduler}
 import monix.reactive.Observable
 import monix.tail.Iterant
 import scala.concurrent.duration._
@@ -164,7 +164,8 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
             // Capture the event when the Observable created from the Iterant is canceled.
             var stopCount = 0
             var nextCount = 0
-            implicit val oi = new ObservableIterant[Task] {
+
+            val oi = new ObservableIterant[Task] {
               // This should count on the server side.
               def toObservable[A](it: Iterant[Task, A]) =
                 Observable
@@ -181,7 +182,10 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
                 )
             }
 
-            TestClient.fromBlock(block).use { stub =>
+            // Restrict the client to request 1 item at a time.
+            val scheduler = Scheduler(ExecutionModel.BatchedExecution(1))
+
+            TestClient.fromBlock(block)(oi, scheduler).use { stub =>
               // Turn the stub (using Observables) back to the internal interface (using Iterant).
               val svc = GrpcGossipService.toGossipService[Task](stub)
               val req = GetBlockChunkedRequest(blockHash = block.blockHash)
@@ -199,18 +203,15 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
                 all        <- svc.getBlockChunked(req).toListL
               } yield {
                 maybeHeader should not be empty
-                withClue(
-                  s"onNext called $firstCount / ${all.size} times; recommended batch size was ${implicitly[Scheduler].executionModel.recommendedBatchSize}."
-                ) {
-                  firstCount should be < all.size
+                // We should stop early, and with the batch restriction just after a few items pulled.
+                firstCount should be < all.size
 
-                  // This worked when we weren't going over gRPC, just using the abstractions.
-                  // Maybe it's worth trying with `bracket` to see if we can observe stops any other way.
-                  // The feed still seems to stop early, but I'm just not exactly sure sure when the
-                  // server side resources are freed.
-                  // To be fair doOnEarlyStop didn't seem to trigger with simple Observable(1,2,3) either.
-                  //stopCount shouldBe 1
-                }
+                // This worked when we weren't going over gRPC, just using the abstractions.
+                // Maybe it's worth trying with `bracket` to see if we can observe stops any other way.
+                // The feed still seems to stop early, but I'm just not exactly sure sure when the
+                // server side resources are freed.
+                // To be fair doOnEarlyStop didn't seem to trigger with simple Observable(1,2,3) either.
+                //stopCount shouldBe 1
               }
             }
           }
@@ -270,7 +271,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
       )
 
       for {
-        server  <- serverR
+        _       <- serverR
         channel <- channelR
       } yield {
         new GossipingGrpcMonix.GossipServiceStub(channel)
