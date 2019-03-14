@@ -26,9 +26,9 @@ class GossipServiceServer[F[_]: Sync](
       request: StreamDagTipBlockSummariesRequest
   ): Iterant[F, BlockSummary] = ???
 
-  def batchGetBlockSummaries(
-      request: BatchGetBlockSummariesRequest
-  ): F[BatchGetBlockSummariesResponse] = ???
+  def streamBlockSummaries(
+      request: StreamBlockSummariesRequest
+  ): Iterant[F, BlockSummary] = ???
 
   def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
     Iterant.liftF {
