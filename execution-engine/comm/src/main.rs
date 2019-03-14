@@ -5,8 +5,8 @@ extern crate grpc;
 extern crate protobuf;
 extern crate shared;
 extern crate storage;
-extern crate wasm_prep;
 extern crate wabt;
+extern crate wasm_prep;
 
 pub mod engine_server;
 
@@ -28,7 +28,8 @@ fn main() {
     }
 
     let init_state = storage::gs::mocked_account([48u8; 20]);
-    let engine_state = EngineState::new(InMemHist::new_initialized(&([0u8; 32].into()), init_state));
+    let engine_state =
+        EngineState::new(InMemHist::new_initialized(&([0u8; 32].into()), init_state));
     let server_builder = engine_server::new(socket, engine_state);
     let _server = server_builder.build().expect("Start server");
 
