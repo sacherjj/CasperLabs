@@ -3,6 +3,7 @@ package io.casperlabs.comm.gossiping
 import cats.effect._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.catscontrib.Taskable
+import io.casperlabs.catscontrib.Catscontrib.ToTaskableOps
 import monix.eval.{Task, TaskLift}
 import monix.execution.Scheduler
 import monix.reactive.Observable
@@ -21,7 +22,7 @@ object GrpcGossipService {
 
       /** Handle notification about some new blocks on the caller. */
       def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
-        Taskable[F].toTask(service.newBlocks(request))
+        service.newBlocks(request).toTask
 
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
@@ -36,7 +37,7 @@ object GrpcGossipService {
       def batchGetBlockSummaries(
           request: BatchGetBlockSummariesRequest
       ): Task[BatchGetBlockSummariesResponse] =
-        Taskable[F].toTask(service.batchGetBlockSummaries(request))
+        service.batchGetBlockSummaries(request).toTask
 
       def getBlockChunked(request: GetBlockChunkedRequest): Observable[Chunk] =
         service.getBlockChunked(request).toObservable

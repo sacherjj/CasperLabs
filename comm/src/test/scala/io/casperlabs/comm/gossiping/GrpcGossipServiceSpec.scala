@@ -202,7 +202,6 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
                 firstCount <- Task.delay(nextCount)
                 all        <- svc.getBlockChunked(req).toListL
               } yield {
-                maybeHeader should not be empty
                 // We should stop early, and with the batch restriction just after a few items pulled.
                 firstCount should be < all.size
 
