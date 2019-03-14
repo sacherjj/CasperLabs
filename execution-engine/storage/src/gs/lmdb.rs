@@ -1,7 +1,7 @@
 use common::bytesrepr::{deserialize, ToBytes};
 use common::key::Key;
 use common::value::Value;
-use error::{Error, GlobalStateError, RootNotFound};
+use error::{Error, GlobalStateError};
 use gs::{DbReader, TrackingCopy};
 use history::*;
 use rkv::store::single::SingleStore;
@@ -103,9 +103,12 @@ impl DbReader for LmdbGs {
 }
 
 impl History<Self> for LmdbGs {
-    type Error = RootNotFound;
+    type Error = GlobalStateError;
 
-    fn checkout(&self, _prestate_hash: Blake2bHash) -> Result<TrackingCopy<LmdbGs>, RootNotFound> {
+    fn checkout(
+        &self,
+        _prestate_hash: Blake2bHash,
+    ) -> Result<Option<TrackingCopy<LmdbGs>>, Self::Error> {
         unimplemented!("LMDB History not implemented")
     }
 
@@ -113,7 +116,7 @@ impl History<Self> for LmdbGs {
         &mut self,
         _prestate_hash: Blake2bHash,
         _effects: HashMap<Key, Transform>,
-    ) -> Result<CommitResult, RootNotFound> {
+    ) -> Result<Option<Blake2bHash>, Self::Error> {
         unimplemented!("LMDB History not implemented")
     }
 }

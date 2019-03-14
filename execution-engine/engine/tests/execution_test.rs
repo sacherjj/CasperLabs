@@ -135,7 +135,8 @@ fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS
         .expect("Creation of mocked account should be a success.");
 
     hist.checkout(root_hash)
-        .expect("Checkout of root hash should be a success.")
+        .expect("Checkout should not throw errors.")
+        .expect("Root hash should exist.")
 }
 
 fn mock_context<'a>(
@@ -185,7 +186,7 @@ fn valid_uref() {
 
     // Use uref as the key to perform an action on the global state.
     // This should succeed because the uref is valid.
-    let _ = gs_write(&mut runtime, uref, value).expect("writing using valid uref should succeed");
+    gs_write(&mut runtime, uref, value).expect("writing using valid uref should succeed");
 }
 
 #[test]

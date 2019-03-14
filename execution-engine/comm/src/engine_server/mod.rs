@@ -1,13 +1,14 @@
 use std::marker::{Send, Sync};
 
 use common::key::Key;
-use execution_engine::engine::EngineState;
+use execution_engine::engine::{EngineState, Error as EngineError};
 use execution_engine::execution::{Executor, WasmiExecutor};
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::fmt::Debug;
 use storage::gs::{trackingcopy::QueryResult, DbReader};
 use storage::history::*;
 use storage::transform::Transform;
@@ -27,7 +28,8 @@ impl<R, H> ipc_grpc::ExecutionEngineService for EngineState<R, H>
 where
     R: DbReader,
     H: History<R>,
-    H::Error: Into<ipc::RootNotFound>,
+    H::Error: Into<EngineError>,
+    H::Error: Debug,
 {
     fn query(
         &self,
@@ -44,36 +46,43 @@ where
             }
             Ok(key) => {
                 let path = p.get_path();
+                match self.tracking_copy(state_hash) {
+                    Err(storage_error) => {
+                        let mut result = ipc::QueryResponse::new();
+                        let error = format!("Error during checkout out Trie: {:?}", storage_error);
+                        result.set_failure(error);
+                        grpc::SingleResponse::completed(result)
+                    }
+                    Ok(None) => {
+                        let mut result = ipc::QueryResponse::new();
+                        let error = format!("Root not found: {:?}", state_hash);
+                        result.set_failure(error);
+                        grpc::SingleResponse::completed(result)
+                    }
+                    Ok(Some(mut tc)) => {
+                        let response = match tc.query(key, path) {
+                            Err(err) => {
+                                let mut result = ipc::QueryResponse::new();
+                                let error = format!("{:?}", err);
+                                result.set_failure(error);
+                                result
+                            }
 
-                if let Ok(mut tc) = self.tracking_copy(state_hash) {
-                    let response = match tc.query(key, path) {
-                        Err(err) => {
-                            let mut result = ipc::QueryResponse::new();
-                            let error = format!("{:?}", err);
-                            result.set_failure(error);
-                            result
-                        }
+                            Ok(QueryResult::ValueNotFound(full_path)) => {
+                                let mut result = ipc::QueryResponse::new();
+                                let error = format!("Value not found: {:?}", full_path);
+                                result.set_failure(error);
+                                result
+                            }
 
-                        Ok(QueryResult::ValueNotFound(full_path)) => {
-                            let mut result = ipc::QueryResponse::new();
-                            let error = format!("Value not found: {:?}", full_path);
-                            result.set_failure(error);
-                            result
-                        }
-
-                        Ok(QueryResult::Success(value)) => {
-                            let mut result = ipc::QueryResponse::new();
-                            result.set_success(value.into());
-                            result
-                        }
-                    };
-
-                    grpc::SingleResponse::completed(response)
-                } else {
-                    let mut result = ipc::QueryResponse::new();
-                    let error = format!("Root not found: {:?}", state_hash);
-                    result.set_failure(error);
-                    grpc::SingleResponse::completed(result)
+                            Ok(QueryResult::Success(value)) => {
+                                let mut result = ipc::QueryResponse::new();
+                                result.set_success(value.into());
+                                result
+                            }
+                        };
+                        grpc::SingleResponse::completed(response)
+                    }
                 }
             }
         }
@@ -85,7 +94,7 @@ where
         p: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse>
     where
-        H::Error: Into<ipc::RootNotFound>,
+        H::Error: Into<EngineError>,
     {
         let executor = WasmiExecutor;
         let preprocessor = WasmiPreprocessor;
@@ -129,6 +138,7 @@ where
             }
             Ok(effects) => {
                 let result = grpc_response_from_commit_result::<R, H>(
+                    prestate_hash,
                     self.apply_effect(prestate_hash, effects),
                 );
                 grpc::SingleResponse::completed(result)
@@ -175,7 +185,7 @@ where
     H: History<R>,
     E: Executor<A>,
     P: Preprocessor<A>,
-    H::Error: Into<ipc::RootNotFound>,
+    H::Error: Into<EngineError>,
 {
     // We want to treat RootNotFound error differently b/c it should short-circuit
     // the execution of ALL deploys within the block. This is because all of them share

@@ -4,6 +4,7 @@ use std::convert::{TryFrom, TryInto};
 use execution_engine::engine::{Error as EngineError, ExecutionResult};
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
+use shared::newtypes::Blake2bHash;
 use storage::error::{Error::*, RootNotFound};
 use storage::{gs, history, op, transform};
 
@@ -397,21 +398,24 @@ impl From<ExecutionResult> for ipc::DeployResult {
 }
 
 pub fn grpc_response_from_commit_result<R, H>(
-    input: Result<storage::history::CommitResult, H::Error>,
+    prestate_hash: Blake2bHash,
+    input: Result<Option<Blake2bHash>, H::Error>,
 ) -> ipc::CommitResponse
 where
     R: gs::DbReader,
     H: history::History<R>,
-    H::Error: Into<ipc::RootNotFound>,
+    H::Error: Into<EngineError>,
+    H::Error: std::fmt::Debug,
 {
     match input {
-        Err(err) => {
-            let mut ipc_err = err.into();
+        Ok(None) => {
+            let mut root = ipc::RootNotFound::new();
+            root.set_hash(prestate_hash.to_vec());
             let mut tmp_res = ipc::CommitResponse::new();
-            tmp_res.set_missing_prestate(ipc_err);
+            tmp_res.set_missing_prestate(root);
             tmp_res
         }
-        Ok(history::CommitResult::Success(post_state_hash)) => {
+        Ok(Some(post_state_hash)) => {
             println!("Effects applied. New state hash is: {:?}", post_state_hash);
             let mut commit_result = ipc::CommitResult::new();
             let mut tmp_res = ipc::CommitResponse::new();
@@ -420,7 +424,7 @@ where
             tmp_res
         }
         // TODO(mateusz.gorski): We should be more specific about errors here.
-        Ok(history::CommitResult::Failure(storage_error)) => {
+        Err(storage_error) => {
             println!("Error {:?} when applying effects", storage_error);
             let mut err = ipc::PostEffectsError::new();
             let mut tmp_res = ipc::CommitResponse::new();

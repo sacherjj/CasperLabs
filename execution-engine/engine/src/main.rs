@@ -124,20 +124,18 @@ fn main() {
             }) => {
                 println!("Cost of executing the contract was: {}", cost);
                 match engine_state.apply_effect(state_hash, effects.1) {
-                    Err(storage::error::RootNotFound(hash)) => println!(
+                    Ok(None) => println!(
                         "Result for file {}: root {:?} not found.",
-                        wasm_bytes.path, hash
+                        wasm_bytes.path, state_hash
                     ),
-                    Ok(storage::history::CommitResult::Success(new_root_hash)) => {
+                    Ok(Some(new_root_hash)) => {
                         println!(
                             "Result for file {}: Success! New post state hash: {:?}",
                             wasm_bytes.path, new_root_hash
                         );
                         state_hash = new_root_hash; // we need to keep updating the post state hash after each deploy
                     }
-                    Ok(storage::history::CommitResult::Failure(storage_err)) => {
-                        eprintln!("Error when applying effects {:?}", storage_err)
-                    }
+                    Err(storage_err) => eprintln!("Error when applying effects {:?}", storage_err),
                 }
             }
             Ok(ExecutionResult {
