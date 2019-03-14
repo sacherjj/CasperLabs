@@ -81,7 +81,7 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
                 .decompress(content, header.originalContentLength)
                 .get
 
-              decompressed.size shouldBe original.size
+              decompressed.length shouldBe original.length
               decompressed shouldBe original
             }
           }

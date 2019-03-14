@@ -10,6 +10,7 @@ import monix.tail.Iterant
 
 /** Adapt the GossipService to Monix generated interfaces. */
 object GrpcGossipService {
+  import ObservableIterant.syntax._
 
   /** Create Monix specific instance from the internal interface,
 	  * to be used as the "server side", i.e. to return data to another peer. */
@@ -25,12 +26,12 @@ object GrpcGossipService {
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
       ): Observable[BlockSummary] =
-        ObservableIterant[F].toObservable(service.streamAncestorBlockSummaries(request))
+        service.streamAncestorBlockSummaries(request).toObservable
 
       def streamDagTipBlockSummaries(
           request: StreamDagTipBlockSummariesRequest
       ): Observable[BlockSummary] =
-        ObservableIterant[F].toObservable(service.streamDagTipBlockSummaries(request))
+        service.streamDagTipBlockSummaries(request).toObservable
 
       def batchGetBlockSummaries(
           request: BatchGetBlockSummariesRequest
@@ -38,7 +39,7 @@ object GrpcGossipService {
         Taskable[F].toTask(service.batchGetBlockSummaries(request))
 
       def getBlockChunked(request: GetBlockChunkedRequest): Observable[Chunk] =
-        ObservableIterant[F].toObservable(service.getBlockChunked(request))
+        service.getBlockChunked(request).toObservable
     }
   }
 
@@ -51,25 +52,25 @@ object GrpcGossipService {
 
       /** Notify the callee about new blocks. */
       def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
-        TaskLift[F].taskLift(stub.newBlocks(request))
+        stub.newBlocks(request).to[F]
 
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
-        ObservableIterant[F].toIterant(stub.streamAncestorBlockSummaries(request))
+        stub.streamAncestorBlockSummaries(request).toIterant
 
       def streamDagTipBlockSummaries(
           request: StreamDagTipBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
-        ObservableIterant[F].toIterant(stub.streamDagTipBlockSummaries(request))
+        stub.streamDagTipBlockSummaries(request).toIterant
 
       def batchGetBlockSummaries(
           request: BatchGetBlockSummariesRequest
       ): F[BatchGetBlockSummariesResponse] =
-        TaskLift[F].taskLift(stub.batchGetBlockSummaries(request))
+        stub.batchGetBlockSummaries(request).to[F]
 
       def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
-        ObservableIterant[F].toIterant(stub.getBlockChunked(request))
+        stub.getBlockChunked(request).toIterant
     }
   }
 }

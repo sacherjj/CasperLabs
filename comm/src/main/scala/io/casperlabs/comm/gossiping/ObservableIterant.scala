@@ -22,4 +22,13 @@ object ObservableIterant {
       def toIterant[A](obs: Observable[A]) =
         Iterant.fromReactivePublisher[F, A](obs.toReactivePublisher)
     }
+
+  object syntax {
+    implicit class `Iterant => Observable`[F[_], A](it: Iterant[F, A]) {
+      def toObservable(implicit oi: ObservableIterant[F]) = oi.toObservable(it)
+    }
+    implicit class `Observable => Iterant`[A](obs: Observable[A]) {
+      def toIterant[F[_]](implicit oi: ObservableIterant[F]) = oi.toIterant(obs)
+    }
+  }
 }

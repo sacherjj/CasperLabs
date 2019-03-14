@@ -30,7 +30,7 @@ trait ArbitraryConsensus {
       parentCount        <- Gen.choose(1, 5)
       parentHashes       <- Gen.listOfN(parentCount, genHash)
       deployCount        <- Gen.choose(1, 10)
-      deploys            <- Gen.listOfN(deployCount, processedDeployGen.arbitrary)
+      deploys            <- Gen.listOfN(deployCount, arbitrary[Block.ProcessedDeploy])
       bodyHash           <- genHash
       preStateHash       <- genHash
       postStateHash      <- genHash
