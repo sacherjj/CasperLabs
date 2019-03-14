@@ -121,29 +121,21 @@ where
         executor: &E,
         preprocessor: &P,
     ) -> Result<ExecutionResult, RootNotFound> {
-        preprocessor
-            .preprocess(module_bytes, &self.wasm_costs)
-            .map_or_else(
-                |error| Ok(ExecutionResult::failure(error.into(), 0)),
-                |module| {
-                    self.state.lock().checkout(prestate_hash).map_or_else(
-                        |error| Ok(ExecutionResult::failure(error.into(), 0)),
-                        |checkout_result| match checkout_result {
-                            None => Err(RootNotFound(prestate_hash)),
-                            Some(mut tc) => {
-                                match executor
-                                    .exec(module, address, timestamp, nonce, gas_limit, &mut tc)
-                                {
-                                    (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
-                                    (Err(error), cost) => {
-                                        Ok(ExecutionResult::failure(error.into(), cost))
-                                    }
-                                }
-                            }
-                        },
-                    )
+        match preprocessor.preprocess(module_bytes, &self.wasm_costs) {
+            Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
+            Ok(module) => match self.state.lock().checkout(prestate_hash) {
+                Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
+                Ok(checkout_result) => match checkout_result {
+                    None => Err(RootNotFound(prestate_hash)),
+                    Some(mut tc) => {
+                        match executor.exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
+                            (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
+                            (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),
+                        }
+                    }
                 },
-            )
+            },
+        }
     }
 
     pub fn apply_effect(

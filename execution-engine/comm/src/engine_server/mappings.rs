@@ -404,8 +404,7 @@ pub fn grpc_response_from_commit_result<R, H>(
 where
     R: gs::DbReader,
     H: history::History<R>,
-    H::Error: Into<EngineError>,
-    H::Error: std::fmt::Debug,
+    H::Error: Into<EngineError> + std::fmt::Debug,
 {
     match input {
         Ok(None) => {
