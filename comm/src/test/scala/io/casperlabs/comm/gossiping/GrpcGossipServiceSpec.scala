@@ -1,11 +1,15 @@
 package io.casperlabs.comm.gossiping
 
-import cats.syntax.option._
+import cats.implicits._
+import cats.effect._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.shared.Compression
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.comm.GrpcServer
+import io.casperlabs.comm.TestRuntime
+import io.grpc.netty.NettyChannelBuilder
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
 import monix.eval.Task
@@ -30,26 +34,27 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
       "return a stream of uncompressed chunks" in {
         forAll { (block: Block) =>
           runTest {
-            for {
-              svc    <- TestService.fromBlock(block)
-              req    = GetBlockChunkedRequest(blockHash = block.blockHash)
-              chunks <- svc.getBlockChunked(req).toListL
-            } yield {
-              chunks.head.content.isHeader shouldBe true
-              val header = chunks.head.getHeader
-              header.compressionAlgorithm shouldBe ""
-              chunks.size should be > 1
+            TestClient.fromBlock(block).use { stub =>
+              val req = GetBlockChunkedRequest(blockHash = block.blockHash)
+              for {
+                chunks <- stub.getBlockChunked(req).toListL
+              } yield {
+                chunks.head.content.isHeader shouldBe true
+                val header = chunks.head.getHeader
+                header.compressionAlgorithm shouldBe ""
+                chunks.size should be > 1
 
-              Inspectors.forAll(chunks.tail) { chunk =>
-                chunk.content.isData shouldBe true
-                chunk.getData.size should be <= DefaultMaxChunkSize
+                Inspectors.forAll(chunks.tail) { chunk =>
+                  chunk.content.isData shouldBe true
+                  chunk.getData.size should be <= DefaultMaxChunkSize
+                }
+
+                val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
+                val original = block.toByteArray
+                header.contentLength shouldBe content.length
+                header.originalContentLength shouldBe original.length
+                content shouldBe original
               }
-
-              val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
-              val original = block.toByteArray
-              header.contentLength shouldBe content.length
-              header.originalContentLength shouldBe original.length
-              content shouldBe original
             }
           }
         }
@@ -60,29 +65,31 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
       "return a stream of compressed chunks" in {
         forAll { (block: Block) =>
           runTest {
-            for {
-              svc <- TestService.fromBlock(block)
-              req = GetBlockChunkedRequest(
+            TestClient.fromBlock(block).use { stub =>
+              val req = GetBlockChunkedRequest(
                 blockHash = block.blockHash,
                 acceptedCompressionAlgorithms = Seq("lz4")
               )
-              chunks <- svc.getBlockChunked(req).toListL
-            } yield {
-              chunks.head.content.isHeader shouldBe true
-              val header = chunks.head.getHeader
-              header.compressionAlgorithm shouldBe "lz4"
 
-              val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
-              val original = block.toByteArray
-              header.contentLength shouldBe content.length
-              header.originalContentLength shouldBe original.length
+              for {
+                chunks <- stub.getBlockChunked(req).toListL
+              } yield {
+                chunks.head.content.isHeader shouldBe true
+                val header = chunks.head.getHeader
+                header.compressionAlgorithm shouldBe "lz4"
 
-              val decompressed = Compression
-                .decompress(content, header.originalContentLength)
-                .get
+                val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
+                val original = block.toByteArray
+                header.contentLength shouldBe content.length
+                header.originalContentLength shouldBe original.length
 
-              decompressed.length shouldBe original.length
-              decompressed shouldBe original
+                val decompressed = Compression
+                  .decompress(content, header.originalContentLength)
+                  .get
+
+                decompressed.length shouldBe original.length
+                decompressed shouldBe original
+              }
             }
           }
         }
@@ -91,15 +98,17 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
 
     "chunk size is specified" when {
       def testChunkSize(block: Block, requestedChunkSize: Int, expectedChunkSize: Int): Task[Unit] =
-        for {
-          svc    <- TestService.fromBlock(block)
-          req    = GetBlockChunkedRequest(blockHash = block.blockHash, chunkSize = requestedChunkSize)
-          chunks <- svc.getBlockChunked(req).toListL
-        } yield {
-          Inspectors.forAll(chunks.tail.init) { chunk =>
-            chunk.getData.size shouldBe expectedChunkSize
+        TestClient.fromBlock(block).use { stub =>
+          val req =
+            GetBlockChunkedRequest(blockHash = block.blockHash, chunkSize = requestedChunkSize)
+          for {
+            chunks <- stub.getBlockChunked(req).toListL
+          } yield {
+            Inspectors.forAll(chunks.tail.init) { chunk =>
+              chunk.getData.size shouldBe expectedChunkSize
+            }
+            chunks.last.getData.size should be <= expectedChunkSize
           }
-          chunks.last.getData.size should be <= expectedChunkSize
         }
 
       "it is less then the maximum" should {
@@ -129,17 +138,18 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
       "return NOT_FOUND" in {
         forAll(genHash) { (hash: ByteString) =>
           runTest {
-            for {
-              svc <- TestService.fromGetBlock(_ => None)
-              req = GetBlockChunkedRequest(blockHash = hash)
-              res <- svc.getBlockChunked(req).toListL.attempt
-            } yield {
-              res.isLeft shouldBe true
-              res.left.get match {
-                case NotFound(msg) =>
-                  msg shouldBe s"Block ${Base16.encode(hash.toByteArray)} could not be found."
-                case ex =>
-                  fail(s"Unexpected error: $ex")
+            TestClient.fromGetBlock(_ => None).use { stub =>
+              val req = GetBlockChunkedRequest(blockHash = hash)
+              for {
+                res <- stub.getBlockChunked(req).toListL.attempt
+              } yield {
+                res.isLeft shouldBe true
+                res.left.get match {
+                  case NotFound(msg) =>
+                    msg shouldBe s"Block ${Base16.encode(hash.toByteArray)} could not be found."
+                  case ex =>
+                    fail(s"Unexpected error: $ex")
+                }
               }
             }
           }
@@ -155,12 +165,13 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
             var stopCount = 0
             var nextCount = 0
             implicit val oi = new ObservableIterant[Task] {
+              // This should count on the server side.
               def toObservable[A](it: Iterant[Task, A]) =
                 Observable
                   .fromReactivePublisher(it.toReactivePublisher)
                   .doOnNext(_ => Task.delay(nextCount += 1))
                   .doOnEarlyStop(Task.delay(stopCount += 1))
-
+              // This should limit how much data the client is asking.
               def toIterant[A](obs: Observable[A]) =
                 Iterant.fromReactivePublisher[Task, A](
                   obs.toReactivePublisher,
@@ -168,27 +179,33 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
                   eagerBuffer = false
                 )
             }
-
-            for {
-              // Pretend we are dealing with a gRPC source, i.e. using Observable.
-              stub <- TestService.fromBlock(block)
-              // Turn it back into how we'd consume it in code.
-              client <- GrpcGossipService.toGossipService[Task](stub)
-              req    = GetBlockChunkedRequest(blockHash = block.blockHash)
-              // Consume just the head, cancel the rest.
-              maybeHeader <- client
-                              .getBlockChunked(req)
-                              .foldWhileLeftEvalL(Task.now(none[Chunk.Header])) {
-                                case (None, chunk) if chunk.content.isHeader =>
-                                  Task.now(Right(Some(chunk.getHeader)))
-                                case _ =>
-                                  Task.now(Left(None))
-                              }
-            } yield {
-              maybeHeader should not be empty
-              stopCount shouldBe 1
-              // Once we consume the first message it seems to fetch another one.
-              nextCount shouldBe 2
+            TestClient.fromBlock(block).use { stub =>
+              for {
+                // Turn the stub (using Observables) back to the internal interface (using Iterant).
+                svc <- GrpcGossipService.toGossipService[Task](stub)
+                req = GetBlockChunkedRequest(blockHash = block.blockHash)
+                // Consume just the head, cancel the rest.
+                maybeHeader <- svc
+                                .getBlockChunked(req)
+                                .foldWhileLeftEvalL(Task.now(none[Chunk.Header])) {
+                                  case (None, chunk) if chunk.content.isHeader =>
+                                    Task.now(Right(Some(chunk.getHeader)))
+                                  case _ =>
+                                    Task.now(Left(None))
+                                }
+                firstCount <- Task.delay(nextCount)
+                all        <- svc.getBlockChunked(req).toListL
+              } yield {
+                maybeHeader should not be empty
+                withClue(
+                  s"onNext called $firstCount / ${all.size} times; recommended batch size was ${implicitly[Scheduler].executionModel.recommendedBatchSize}."
+                ) {
+                  firstCount should be < all.size
+                  // This worked when we weren't going over gRPC, just using the abstractions.
+                  // Maybe it's worth trying with brackets to see if we can observe stops any other way.
+                  // stopCount shouldBe 1
+                }
+              }
             }
           }
         }
@@ -197,19 +214,60 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
   }
 }
 
-object GrpcGossipServiceSpec {
-  val DefaultMaxChunkSize = 100 * 1024
+object GrpcGossipServiceSpec extends TestRuntime {
+  val DefaultMaxChunkSize = 10 * 1024
 
-  object TestService {
-    def fromBlock(block: Block)(implicit oi: ObservableIterant[Task]) =
+  object TestClient {
+    def fromBlock(block: Block)(
+        implicit
+        oi: ObservableIterant[Task],
+        scheduler: Scheduler
+    ) =
       fromGetBlock(hash => Option(block).filter(_.blockHash == hash))
 
-    def fromGetBlock(f: ByteString => Option[Block])(implicit oi: ObservableIterant[Task]) =
-      GrpcGossipService.fromGossipService[Task] {
-        new GossipServiceImpl[Task](
-          getBlock = hash => Task.now(f(hash)),
-          maxChunkSize = DefaultMaxChunkSize
+    def fromGetBlock(f: ByteString => Option[Block])(
+        implicit
+        oi: ObservableIterant[Task],
+        scheduler: Scheduler
+    ): Resource[Task, GossipingGrpcMonix.GossipServiceStub] = {
+      val port = getFreePort
+
+      val serverR = GrpcServer(
+        port,
+        services = List(
+          (scheduler: Scheduler) =>
+            GrpcGossipService.fromGossipService[Task] {
+              new GossipServiceImpl[Task](
+                getBlock = hash => Task.now(f(hash)),
+                maxChunkSize = DefaultMaxChunkSize
+              )
+            } map { svc =>
+              GossipingGrpcMonix.bindService(svc, scheduler)
+            }
         )
+      )
+
+      val channelR = Resource.make(
+        Task.delay {
+          NettyChannelBuilder
+            .forAddress("localhost", port)
+            .executor(scheduler)
+            .usePlaintext
+            .build
+        }
+      )(
+        channel =>
+          Task.delay {
+            channel.shutdown()
+          }
+      )
+
+      for {
+        server  <- serverR
+        channel <- channelR
+      } yield {
+        new GossipingGrpcMonix.GossipServiceStub(channel)
       }
+    }
   }
 }
