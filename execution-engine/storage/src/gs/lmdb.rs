@@ -102,13 +102,14 @@ impl DbReader for LmdbGs {
     }
 }
 
-impl History<Self> for LmdbGs {
+impl History for LmdbGs {
     type Error = GlobalStateError;
+    type Reader = Self;
 
     fn checkout(
         &self,
         _prestate_hash: Blake2bHash,
-    ) -> Result<Option<TrackingCopy<LmdbGs>>, Self::Error> {
+    ) -> Result<Option<TrackingCopy<Self::Reader>>, Self::Error> {
         unimplemented!("LMDB History not implemented")
     }
 

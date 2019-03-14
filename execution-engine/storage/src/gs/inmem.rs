@@ -68,13 +68,14 @@ impl<K: Ord, V> InMemHist<K, V> {
     }
 }
 
-impl History<InMemGS<Key, Value>> for InMemHist<Key, Value> {
+impl History for InMemHist<Key, Value> {
     type Error = GlobalStateError;
+    type Reader = InMemGS<Key, Value>;
 
     fn checkout(
         &self,
         prestate_hash: Blake2bHash,
-    ) -> Result<Option<TrackingCopy<InMemGS<Key, Value>>>, Self::Error> {
+    ) -> Result<Option<TrackingCopy<Self::Reader>>, Self::Error> {
         match self.history.get(&prestate_hash) {
             None => Ok(None),
             Some(gs) => Ok(Some(TrackingCopy::new(gs.clone()))),
@@ -148,10 +149,9 @@ mod tests {
         InMemHist { history }
     }
 
-    fn checkout<R, H>(hist: &H, hash: Blake2bHash) -> TrackingCopy<R>
+    fn checkout<H>(hist: &H, hash: Blake2bHash) -> TrackingCopy<H::Reader>
     where
-        R: DbReader,
-        H: History<R>,
+        H: History,
         H::Error: std::fmt::Debug,
     {
         let res = hist.checkout(hash);
@@ -162,14 +162,9 @@ mod tests {
         res.unwrap().unwrap()
     }
 
-    fn commit<R, H>(
-        hist: &mut H,
-        hash: Blake2bHash,
-        effects: HashMap<Key, Transform>,
-    ) -> Blake2bHash
+    fn commit<H>(hist: &mut H, hash: Blake2bHash, effects: HashMap<Key, Transform>) -> Blake2bHash
     where
-        R: DbReader,
-        H: History<R>,
+        H: History,
         H::Error: std::fmt::Debug,
     {
         let res = hist.commit(hash, effects);

@@ -397,13 +397,12 @@ impl From<ExecutionResult> for ipc::DeployResult {
     }
 }
 
-pub fn grpc_response_from_commit_result<R, H>(
+pub fn grpc_response_from_commit_result<H>(
     prestate_hash: Blake2bHash,
     input: Result<Option<Blake2bHash>, H::Error>,
 ) -> ipc::CommitResponse
 where
-    R: gs::DbReader,
-    H: history::History<R>,
+    H: history::History,
     H::Error: Into<EngineError> + std::fmt::Debug,
 {
     match input {

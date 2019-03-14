@@ -9,7 +9,7 @@ use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::Debug;
-use storage::gs::{trackingcopy::QueryResult, DbReader};
+use storage::gs::trackingcopy::QueryResult;
 use storage::history::*;
 use storage::transform::Transform;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
@@ -24,10 +24,9 @@ use mappings::*;
 // It will act as an entry point for execution of Wasm binaries.
 // Proto definitions should be translated into domain objects when Engine's API is invoked.
 // This way core won't depend on comm (outer layer) leading to cleaner design.
-impl<R, H> ipc_grpc::ExecutionEngineService for EngineState<R, H>
+impl<H> ipc_grpc::ExecutionEngineService for EngineState<H>
 where
-    R: DbReader,
-    H: History<R>,
+    H: History,
     H::Error: Into<EngineError> + Debug,
 {
     fn query(
@@ -136,7 +135,7 @@ where
                 grpc::SingleResponse::completed(res)
             }
             Ok(effects) => {
-                let result = grpc_response_from_commit_result::<R, H>(
+                let result = grpc_response_from_commit_result::<H>(
                     prestate_hash,
                     self.apply_effect(prestate_hash, effects),
                 );
@@ -172,16 +171,15 @@ where
     }
 }
 
-fn run_deploys<A, R, H, E, P>(
-    engine_state: &EngineState<R, H>,
+fn run_deploys<A, H, E, P>(
+    engine_state: &EngineState<H>,
     executor: &E,
     preprocessor: &P,
     prestate_hash: Blake2bHash,
     deploys: &[ipc::Deploy],
 ) -> Result<Vec<DeployResult>, RootNotFound>
 where
-    R: DbReader,
-    H: History<R>,
+    H: History,
     E: Executor<A>,
     P: Preprocessor<A>,
     H::Error: Into<EngineError>,
