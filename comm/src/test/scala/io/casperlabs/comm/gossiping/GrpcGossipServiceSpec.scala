@@ -36,9 +36,7 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
           runTest {
             TestClient.fromBlock(block).use { stub =>
               val req = GetBlockChunkedRequest(blockHash = block.blockHash)
-              for {
-                chunks <- stub.getBlockChunked(req).toListL
-              } yield {
+              stub.getBlockChunked(req).toListL.map { chunks =>
                 chunks.head.content.isHeader shouldBe true
                 val header = chunks.head.getHeader
                 header.compressionAlgorithm shouldBe ""
@@ -71,9 +69,7 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
                 acceptedCompressionAlgorithms = Seq("lz4")
               )
 
-              for {
-                chunks <- stub.getBlockChunked(req).toListL
-              } yield {
+              stub.getBlockChunked(req).toListL.map { chunks =>
                 chunks.head.content.isHeader shouldBe true
                 val header = chunks.head.getHeader
                 header.compressionAlgorithm shouldBe "lz4"
@@ -101,9 +97,7 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
         TestClient.fromBlock(block).use { stub =>
           val req =
             GetBlockChunkedRequest(blockHash = block.blockHash, chunkSize = requestedChunkSize)
-          for {
-            chunks <- stub.getBlockChunked(req).toListL
-          } yield {
+          stub.getBlockChunked(req).toListL.map { chunks =>
             Inspectors.forAll(chunks.tail.init) { chunk =>
               chunk.getData.size shouldBe expectedChunkSize
             }
@@ -140,9 +134,7 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
           runTest {
             TestClient.fromGetBlock(_ => None).use { stub =>
               val req = GetBlockChunkedRequest(blockHash = hash)
-              for {
-                res <- stub.getBlockChunked(req).toListL.attempt
-              } yield {
+              stub.getBlockChunked(req).toListL.attempt.map { res =>
                 res.isLeft shouldBe true
                 res.left.get match {
                   case NotFound(msg) =>
