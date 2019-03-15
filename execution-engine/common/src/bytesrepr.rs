@@ -17,10 +17,15 @@ pub trait FromBytes: Sized {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error>;
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Fail, PartialEq, Eq, Clone)]
 pub enum Error {
+    #[fail(display = "Deserialization error: early end of stream")]
     EarlyEndOfStream,
+
+    #[fail(display = "Deserialization error: formatting error")]
     FormattingError,
+
+    #[fail(display = "Deserialization error: left-over bytes")]
     LeftOverBytes,
 }
 

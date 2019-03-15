@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate failure;
+
 extern crate common;
 extern crate parking_lot;
 extern crate rkv;
