@@ -3,7 +3,7 @@ package io.casperlabs.comm.gossiping
 import cats.implicits._
 import cats.effect._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.comm.ServiceError.NotFound
@@ -17,6 +17,7 @@ import monix.reactive.Observable
 import monix.tail.Iterant
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
+import org.scalacheck.{Arbitrary, Gen}, Arbitrary.arbitrary
 import scala.concurrent.duration._
 
 class GrpcGossipServiceSpec
@@ -49,9 +50,9 @@ class GrpcGossipServiceSpec
     test.runSyncUnsafe(5.seconds)
   }
 
-  // Using nested suites so it's easy to comment some out.
   override def nestedSuites = Vector(
-    GetBlockChunkedSpec
+    GetBlockChunkedSpec,
+    StreamBlockSummariesSpec
   )
 
   object GetBlockChunkedSpec extends WordSpecLike {
@@ -231,6 +232,37 @@ class GrpcGossipServiceSpec
       }
     }
   }
+
+  object StreamBlockSummariesSpec extends WordSpecLike {
+    implicit val config  = PropertyCheckConfiguration(minSuccessful = 5)
+    implicit val hashGen = Arbitrary(genHash)
+
+    "streamBlockSummaries" when {
+      "called with a mix of known and unknown hashes" should {
+        "return a stream of the known summaries" in {
+          val genTestData = for {
+            summaries <- arbitrary[Set[BlockSummary]]
+            known     <- Gen.someOf(summaries.map(_.blockHash))
+            other     <- arbitrary[Set[ByteString]]
+          } yield (summaries, known, other)
+
+          forAll(genTestData) {
+            case (summaries, known, other) =>
+              runTestUnsafe(TestData(summaries = summaries.toSeq)) {
+                val req =
+                  StreamBlockSummariesRequest(
+                    // Sending some unknown ones to see that it won't choke on them.
+                    blockHashes = (known ++ other).toSeq
+                  )
+                stub.streamBlockSummaries(req).toListL.map { found =>
+                  found.map(_.blockHash) should contain theSameElementsAs known
+                }
+              }
+          }
+        }
+      }
+    }
+  }
 }
 
 object GrpcGossipServiceSpec extends TestRuntime {
@@ -242,13 +274,27 @@ object GrpcGossipServiceSpec extends TestRuntime {
     new String(md.digest(data))
   }
 
-  case class TestData(blocks: Map[ByteString, Block] = Map.empty)
+  trait TestData {
+    val summaries: Map[ByteString, BlockSummary]
+    val blocks: Map[ByteString, Block]
+  }
 
   object TestData {
-    val empty =
-      TestData()
-    def fromBlock(block: Block) =
-      TestData(blocks = Map(block.blockHash -> block))
+    val empty = TestData()
+
+    def fromBlock(block: Block) = TestData(blocks = Seq(block))
+
+    def apply(
+        summaries: Seq[BlockSummary] = Seq.empty,
+        blocks: Seq[Block] = Seq.empty
+    ): TestData = {
+      val ss = summaries
+      val bs = blocks
+      new TestData {
+        val summaries = ss.groupBy(_.blockHash).mapValues(_.head)
+        val blocks    = bs.groupBy(_.blockHash).mapValues(_.head)
+      }
+    }
   }
 
   object TestEnvironment {
@@ -259,13 +305,14 @@ object GrpcGossipServiceSpec extends TestRuntime {
     ): Resource[Task, GossipingGrpcMonix.GossipServiceStub] = {
       val port = getFreePort
 
-      val serverR = GrpcServer(
+      val serverR = GrpcServer[Task](
         port,
         services = List(
           (scheduler: Scheduler) =>
             Task.delay {
               val svc = GrpcGossipService.fromGossipService {
                 new GossipServiceServer[Task](
+                  getBlockSummary = hash => Task.now(testData.get.summaries.get(hash)),
                   getBlock = hash => Task.now(testData.get.blocks.get(hash)),
                   maxChunkSize = DefaultMaxChunkSize
                 )
