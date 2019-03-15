@@ -91,6 +91,10 @@ message NamedKey {
     string name = 1;
     Key key = 2;
 }
+message RustBigInt {
+    string value = 1;
+    uint32 bit_width = 2;
+}
 
 // Things to store under the key in the global state.
 message Value {
@@ -105,7 +109,7 @@ message Value {
         NamedKey named_key = 8;
         // Represent the number as a string for
         // easy portability between rust and scala.
-        string big_int = 9;
+        RustBigInt big_int = 9;
     }
 }
  
