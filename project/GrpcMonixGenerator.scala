@@ -196,6 +196,11 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
             s"override def subscribe(subscriber: SubscriberR[_ >: ${method.scalaOut}]): Unit = {"
           )
           .indent
+          // https://github.com/higherkindness/mu/issues/192
+          // I actually tried adding a subscriber that calls .cancel on the call,
+          // but the result was an exception received on the server side about the closed channel
+          // when it was trying to call onComplete, which it might do after it received the cancel request, not sure.
+          .add("subscriber.onSubscribe(Subscription.empty)")
           .add("ClientCalls.asyncServerStreamingCall(")
           .addIndented(
             s"channel.newCall(${method.descriptorName}, options),",
@@ -364,6 +369,7 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
       .add("import _root_.io.grpc.stub.{ AbstractStub, ClientCalls, ServerCalls, StreamObserver }")
       .add("import _root_.monix.eval.Task")
       .add("import _root_.monix.execution.{ Cancelable, Scheduler }")
+      .add("import _root_.monix.execution.rstreams.Subscription")
       .add("import _root_.monix.reactive.Observable")
       .add(
         "import _root_.org.reactivestreams.{ Publisher => PublisherR, Subscriber => SubscriberR }"
