@@ -52,19 +52,19 @@ impl ToBytes for Value {
                 result
             }
             UInt128(u) => {
-                let mut result = Vec::with_capacity(17); //1 + 16
+                let mut result = Vec::with_capacity(1 + 16);
                 result.push(U128_ID);
                 result.append(&mut u.to_bytes());
                 result
             }
             UInt256(u) => {
-                let mut result = Vec::with_capacity(33); //1 + 32
+                let mut result = Vec::with_capacity(1 + 32);
                 result.push(U256_ID);
                 result.append(&mut u.to_bytes());
                 result
             }
             UInt512(u) => {
-                let mut result = Vec::with_capacity(65); //1 + 64
+                let mut result = Vec::with_capacity(1 + 64);
                 result.push(U512_ID);
                 result.append(&mut u.to_bytes());
                 result
