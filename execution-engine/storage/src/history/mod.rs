@@ -2,7 +2,7 @@ use common::key::Key;
 use gs::{DbReader, TrackingCopy};
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
-use transform::Transform;
+use transform::{Transform, TypeMismatch};
 
 // needs to be public for use in the gens crate
 pub mod trie;
@@ -11,6 +11,7 @@ pub enum CommitResult {
     RootNotFound,
     Success(Blake2bHash),
     KeyNotFound(Key),
+    TypeMismatch(TypeMismatch),
 }
 
 pub trait History {

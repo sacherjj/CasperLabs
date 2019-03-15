@@ -6,7 +6,9 @@ use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
 use storage::error::GlobalStateError;
+use storage::gs::trackingcopy::AddResult;
 use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
+use storage::transform::TypeMismatch;
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
@@ -28,6 +30,7 @@ pub enum Error {
     Storage(GlobalStateError),
     BytesRepr(BytesReprError),
     KeyNotFound(Key),
+    TypeMismatch(TypeMismatch),
     ForgedReference(Key),
     NoImportedMemory,
     ArgIndexOutOfBounds(usize),
@@ -313,12 +316,8 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let key = self.key_from_mem(key_ptr, key_size)?;
         self.context.insert_named_uref(name.clone(), key);
-        err_on_missing_key(
-            key,
-            self.state
-                .add(self.context.base_key, Value::NamedKey(name, key)),
-        )
-        .map_err(Into::into)
+        let base_key = self.context.base_key;
+        self.add_transforms(base_key, Value::NamedKey(name, key))
     }
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
@@ -440,12 +439,23 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         value_size: u32,
     ) -> Result<(), Trap> {
         let (key, value) = self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)?;
-        err_on_missing_key(key, self.state.add(key, value)).map_err(Into::into)
+        self.add_transforms(key, value)
     }
 
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
         err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
+    }
+
+    fn add_transforms(&mut self, key: Key, value: Value) -> Result<(), Trap> {
+        match self.state.add(key, value) {
+            Err(storage_error) => Err(storage_error.into()),
+            Ok(AddResult::Success) => Ok(()),
+            Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key).into()),
+            Ok(AddResult::TypeMismatch(type_mismatch)) => {
+                Err(Error::TypeMismatch(type_mismatch).into())
+            }
+        }
     }
 
     pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {

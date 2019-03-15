@@ -3,7 +3,6 @@ use std::fmt;
 use common::bytesrepr;
 use rkv::error::StoreError;
 use shared::newtypes::Blake2bHash;
-use transform::TypeMismatch;
 use wasmi::HostError;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -11,7 +10,6 @@ pub struct RootNotFound(pub Blake2bHash);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
-    TransformTypeMismatch(TypeMismatch),
     // mateusz.gorski: I think that these errors should revert any changes made
     // to Global State and most probably kill the node.
     RkvError(String), //TODO: capture error better
@@ -37,11 +35,5 @@ impl From<StoreError> for GlobalStateError {
 impl From<bytesrepr::Error> for GlobalStateError {
     fn from(e: bytesrepr::Error) -> Self {
         Error::BytesRepr(e)
-    }
-}
-
-impl From<TypeMismatch> for GlobalStateError {
-    fn from(tm: TypeMismatch) -> Self {
-        Error::TransformTypeMismatch(tm)
     }
 }

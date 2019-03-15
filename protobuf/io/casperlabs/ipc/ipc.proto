@@ -46,7 +46,8 @@ message CommitResponse {
         CommitResult success = 1;
         RootNotFound missing_prestate = 2;
         Key key_not_found = 3;
-        PostEffectsError failed_transform = 4;
+        TypeMismatch type_mismatch = 4;
+        PostEffectsError failed_transform = 5;
     }
 }
 
@@ -141,19 +142,17 @@ message TransformWrite {
     Value value = 1;
 }
 message TransformFailure {
-    StorageTypeMismatch error = 1;
+    TypeMismatch error = 1;
 }
  
 //Errors which may occur while interacting with global state
 message StorageError {
     oneof error_instance {
-        Key key_not_found = 1;
-        StorageTypeMismatch type_mismatch = 2;
-        BytesReprError bytes_repr = 3;
-        RkvError rkv = 4;
+        BytesReprError bytes_repr = 1;
+        RkvError rkv = 2;
     }
 }
-message StorageTypeMismatch {
+message TypeMismatch {
     string expected = 1;
     string found = 2;
 }
