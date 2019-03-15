@@ -2,11 +2,7 @@ use std::fmt;
 
 use common::bytesrepr;
 use rkv::error::StoreError;
-use shared::newtypes::Blake2bHash;
 use wasmi::HostError;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct RootNotFound(pub Blake2bHash);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {

@@ -11,7 +11,7 @@ use std::iter::Iterator;
 
 use clap::{App, Arg};
 
-use execution_engine::engine::{EngineState, ExecutionResult};
+use execution_engine::engine::{EngineState, ExecutionResult, RootNotFound};
 use execution_engine::execution::WasmiExecutor;
 use shared::newtypes::Blake2bHash;
 use storage::gs::inmem::InMemHist;
@@ -115,7 +115,7 @@ fn main() {
             &wasmi_preprocessor,
         );
         match result {
-            Err(storage::error::RootNotFound(hash)) => println!(
+            Err(RootNotFound(hash)) => println!(
                 "Result for file {}: root {:?} not found.",
                 wasm_bytes.path, hash
             ),

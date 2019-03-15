@@ -3,12 +3,15 @@ use execution::{Error as ExecutionError, Executor};
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
-use storage::error::{GlobalStateError, RootNotFound};
+use storage::error::GlobalStateError;
 use storage::gs::{ExecutionEffect, TrackingCopy};
 use storage::history::*;
 use storage::transform::Transform;
 use vm::wasm_costs::WasmCosts;
 use wasm_prep::Preprocessor;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RootNotFound(pub Blake2bHash);
 
 pub struct EngineState<H>
 where
