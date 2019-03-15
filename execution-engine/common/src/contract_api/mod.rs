@@ -10,15 +10,19 @@ use crate::value::{Contract, Value};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::convert::{TryFrom, TryInto};
 
 /// Read value under the key in the global state
 pub fn read<T>(u_ptr: UPointer<T>) -> T
 where
-    T: From<Value>,
+    T: TryFrom<Value>,
 {
     let key: Key = u_ptr.into();
     let value = read_untyped(&key);
-    value.into()
+    value
+        .try_into()
+        .map_err(|_| "T could not be derived from Value")
+        .unwrap()
 }
 
 fn read_untyped(key: &Key) -> Value {

@@ -3,6 +3,7 @@ use crate::value::Contract;
 use core::marker::PhantomData;
 
 // URef with type information about what value is in the global state
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct UPointer<T>([u8; 32], PhantomData<T>);
 
 impl<T> UPointer<T> {
@@ -11,6 +12,7 @@ impl<T> UPointer<T> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContractPointer {
     Hash([u8; 32]),
     URef(UPointer<Contract>),
