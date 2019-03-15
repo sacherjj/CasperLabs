@@ -1,10 +1,8 @@
 use std::fmt;
 
 use common::bytesrepr;
-use common::key::Key;
 use rkv::error::StoreError;
 use shared::newtypes::Blake2bHash;
-use std::fmt::Debug;
 use transform::TypeMismatch;
 use wasmi::HostError;
 
@@ -12,8 +10,7 @@ use wasmi::HostError;
 pub struct RootNotFound(pub Blake2bHash);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Error<K: Debug> {
-    KeyNotFound(K),
+pub enum Error {
     TransformTypeMismatch(TypeMismatch),
     // mateusz.gorski: I think that these errors should revert any changes made
     // to Global State and most probably kill the node.
@@ -21,9 +18,9 @@ pub enum Error<K: Debug> {
     BytesRepr(bytesrepr::Error),
 }
 
-pub type GlobalStateError = Error<Key>;
+pub type GlobalStateError = Error;
 
-impl<A: Debug> fmt::Display for Error<A> {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }

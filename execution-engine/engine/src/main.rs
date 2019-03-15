@@ -15,6 +15,7 @@ use execution_engine::engine::{EngineState, ExecutionResult};
 use execution_engine::execution::WasmiExecutor;
 use shared::newtypes::Blake2bHash;
 use storage::gs::inmem::InMemHist;
+use storage::history::CommitResult;
 use wasm_prep::WasmiPreprocessor;
 
 #[derive(Debug)]
@@ -124,11 +125,15 @@ fn main() {
             }) => {
                 println!("Cost of executing the contract was: {}", cost);
                 match engine_state.apply_effect(state_hash, effects.1) {
-                    Ok(None) => println!(
+                    Ok(CommitResult::RootNotFound) => println!(
                         "Result for file {}: root {:?} not found.",
                         wasm_bytes.path, state_hash
                     ),
-                    Ok(Some(new_root_hash)) => {
+                    Ok(CommitResult::KeyNotFound(key)) => println!(
+                        "Result for file {}: key {:?} not found.",
+                        wasm_bytes.path, key
+                    ),
+                    Ok(CommitResult::Success(new_root_hash)) => {
                         println!(
                             "Result for file {}: Success! New post state hash: {:?}",
                             wasm_bytes.path, new_root_hash

@@ -15,7 +15,7 @@ pub use self::trackingcopy::TrackingCopy;
 pub struct ExecutionEffect(pub HashMap<Key, Op>, pub HashMap<Key, Transform>);
 
 pub trait DbReader {
-    fn get(&self, k: &Key) -> Result<Value, GlobalStateError>;
+    fn get(&self, k: &Key) -> Result<Option<Value>, GlobalStateError>;
 }
 
 pub fn mocked_account(account_addr: [u8; 20]) -> BTreeMap<Key, Value> {
