@@ -51,7 +51,7 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
                 val original = block.toByteArray
                 header.contentLength shouldBe content.length
                 header.originalContentLength shouldBe original.length
-                content shouldBe original
+                md5(content) shouldBe md5(original)
               }
             }
           }
@@ -83,8 +83,7 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
                   .decompress(content, header.originalContentLength)
                   .get
 
-                decompressed.length shouldBe original.length
-                decompressed shouldBe original
+                md5(decompressed) shouldBe md5(original)
               }
             }
           }
@@ -213,7 +212,13 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
 }
 
 object GrpcGossipServiceSpec extends TestRuntime {
+  // Specify small enough chunks so we see lots of messages and can tell that it terminated early.
   val DefaultMaxChunkSize = 10 * 1024
+
+  def md5(data: Array[Byte]): String = {
+    val md = java.security.MessageDigest.getInstance("MD5")
+    new String(md.digest(data))
+  }
 
   object TestClient {
     def fromBlock(block: Block)(
