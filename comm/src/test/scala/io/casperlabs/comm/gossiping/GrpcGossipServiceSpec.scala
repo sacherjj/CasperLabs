@@ -10,31 +10,59 @@ import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.GrpcServer
 import io.casperlabs.comm.TestRuntime
 import io.grpc.netty.NettyChannelBuilder
-import org.scalatest._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
+import java.util.concurrent.atomic.AtomicReference
 import monix.eval.Task
 import monix.execution.{ExecutionModel, Scheduler}
 import monix.reactive.Observable
 import monix.tail.Iterant
+import org.scalatest._
+import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
 import scala.concurrent.duration._
 
-class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryConsensus {
+class GrpcGossipServiceSpec
+    extends refspec.RefSpecLike
+    with Matchers
+    with BeforeAndAfterAll
+    with ArbitraryConsensus {
 
   import GrpcGossipServiceSpec._
   import Scheduler.Implicits.global
 
-  def runTest(test: Task[Unit]) =
-    test.runSyncUnsafe(5.seconds)
+  // Test data that we can set in each test.
+  val testDataRef = new AtomicReference(TestData.empty)
+  // Set up the server and client once, to be shared, to make tests faster.
+  var stub: GossipingGrpcMonix.GossipServiceStub = _
+  var shutdown: Task[Unit]                       = _
 
-  "getBlocksChunked" when {
+  override def beforeAll() =
+    TestEnvironment(testDataRef).allocated.foreach {
+      case (stub, shutdown) =>
+        this.stub = stub
+        this.shutdown = shutdown
+    }
+
+  override def afterAll() =
+    shutdown.runSyncUnsafe(10.seconds)
+
+  def runTestUnsafe(testData: TestData)(test: Task[Unit]) = {
+    testDataRef.set(testData)
+    test.runSyncUnsafe(5.seconds)
+  }
+
+  // Using nested suites so it's easy to comment some out.
+  override def nestedSuites = Vector(
+    GetBlockChunkedSpec
+  )
+
+  object GetBlockChunkedSpec extends WordSpecLike {
     // Just want to test with random blocks; variety doesn't matter.
     implicit val config = PropertyCheckConfiguration(minSuccessful = 1)
 
-    "no compression is supported" should {
-      "return a stream of uncompressed chunks" in {
-        forAll { (block: Block) =>
-          runTest {
-            TestClient.fromBlock(block).use { stub =>
+    "getBlocksChunked" when {
+      "no compression is supported" should {
+        "return a stream of uncompressed chunks" in {
+          forAll { (block: Block) =>
+            runTestUnsafe(TestData.fromBlock(block)) {
               val req = GetBlockChunkedRequest(blockHash = block.blockHash)
               stub.getBlockChunked(req).toListL.map { chunks =>
                 chunks.head.content.isHeader shouldBe true
@@ -57,13 +85,11 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
           }
         }
       }
-    }
 
-    "compression is supported" should {
-      "return a stream of compressed chunks" in {
-        forAll { (block: Block) =>
-          runTest {
-            TestClient.fromBlock(block).use { stub =>
+      "compression is supported" should {
+        "return a stream of compressed chunks" in {
+          forAll { (block: Block) =>
+            runTestUnsafe(TestData.fromBlock(block)) {
               val req = GetBlockChunkedRequest(
                 blockHash = block.blockHash,
                 acceptedCompressionAlgorithms = Seq("lz4")
@@ -89,49 +115,43 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
           }
         }
       }
-    }
 
-    "chunk size is specified" when {
-      def testChunkSize(block: Block, requestedChunkSize: Int, expectedChunkSize: Int): Task[Unit] =
-        TestClient.fromBlock(block).use { stub =>
-          val req =
-            GetBlockChunkedRequest(blockHash = block.blockHash, chunkSize = requestedChunkSize)
-          stub.getBlockChunked(req).toListL.map { chunks =>
-            Inspectors.forAll(chunks.tail.init) { chunk =>
-              chunk.getData.size shouldBe expectedChunkSize
+      "chunk size is specified" when {
+        def testChunkSize(block: Block, requestedChunkSize: Int, expectedChunkSize: Int): Unit =
+          runTestUnsafe(TestData.fromBlock(block)) {
+            val req =
+              GetBlockChunkedRequest(blockHash = block.blockHash, chunkSize = requestedChunkSize)
+            stub.getBlockChunked(req).toListL.map { chunks =>
+              Inspectors.forAll(chunks.tail.init) { chunk =>
+                chunk.getData.size shouldBe expectedChunkSize
+              }
+              chunks.last.getData.size should be <= expectedChunkSize
             }
-            chunks.last.getData.size should be <= expectedChunkSize
           }
-        }
 
-      "it is less then the maximum" should {
-        "use the requested chunk size" in {
-          forAll { (block: Block) =>
-            runTest {
+        "it is less then the maximum" should {
+          "use the requested chunk size" in {
+            forAll { (block: Block) =>
               val smallChunkSize = DefaultMaxChunkSize / 2
               testChunkSize(block, smallChunkSize, smallChunkSize)
             }
           }
         }
-      }
 
-      "bigger than the maximum" should {
-        "use the default chunk size" in {
-          forAll { (block: Block) =>
-            runTest {
+        "bigger than the maximum" should {
+          "use the default chunk size" in {
+            forAll { (block: Block) =>
               val bigChunkSize = DefaultMaxChunkSize * 2
               testChunkSize(block, bigChunkSize, DefaultMaxChunkSize)
             }
           }
         }
       }
-    }
 
-    "block cannot be found" should {
-      "return NOT_FOUND" in {
-        forAll(genHash) { (hash: ByteString) =>
-          runTest {
-            TestClient.fromGetBlock(_ => None).use { stub =>
+      "block cannot be found" should {
+        "return NOT_FOUND" in {
+          forAll(genHash) { (hash: ByteString) =>
+            runTestUnsafe(TestData.empty) {
               val req = GetBlockChunkedRequest(blockHash = hash)
               stub.getBlockChunked(req).toListL.attempt.map { res =>
                 res.isLeft shouldBe true
@@ -146,62 +166,64 @@ class GrpcGossipServiceSpec extends WordSpecLike with Matchers with ArbitraryCon
           }
         }
       }
-    }
 
-    "iteration is abandoned" should {
-      "cancel the source" in {
-        forAll { (block: Block) =>
-          runTest {
-            // Capture the event when the Observable created from the Iterant is canceled.
-            var stopCount = 0
-            var nextCount = 0
+      "iteration is abandoned" should {
+        "cancel the source" in {
+          forAll { (block: Block) =>
+            runTestUnsafe(TestData.fromBlock(block)) {
+              // Capture the event when the Observable created from the Iterant is canceled.
+              var stopCount = 0
+              var nextCount = 0
 
-            val oi = new ObservableIterant[Task] {
-              // This should count on the server side.
-              def toObservable[A](it: Iterant[Task, A]) =
-                Observable
-                  .fromReactivePublisher(it.toReactivePublisher)
-                  .doOnNext(_ => Task.delay(nextCount += 1))
-                  .doOnEarlyStop(Task.delay(stopCount += 1))
-              // This should limit how much data the client is asking.
-              // Except the code generated by GrpcMonix is using an independent buffer size.
-              def toIterant[A](obs: Observable[A]) =
-                Iterant.fromReactivePublisher[Task, A](
-                  obs.toReactivePublisher,
-                  requestCount = 1,
-                  eagerBuffer = false
-                )
-            }
+              val oi = new ObservableIterant[Task] {
+                // This should count on the server side.
+                def toObservable[A](it: Iterant[Task, A]) =
+                  Observable
+                    .fromReactivePublisher(it.toReactivePublisher)
+                    .doOnNext(_ => Task.delay(nextCount += 1))
+                    .doOnEarlyStop(Task.delay(stopCount += 1))
+                // This should limit how much data the client is asking.
+                // Except the code generated by GrpcMonix is using an independent buffer size.
+                def toIterant[A](obs: Observable[A]) =
+                  Iterant.fromReactivePublisher[Task, A](
+                    obs.toReactivePublisher,
+                    requestCount = 1,
+                    eagerBuffer = false
+                  )
+              }
 
-            // Restrict the client to request 1 item at a time.
-            val scheduler = Scheduler(ExecutionModel.BatchedExecution(1))
+              // Restrict the client to request 1 item at a time.
+              val scheduler = Scheduler(ExecutionModel.BatchedExecution(1))
 
-            TestClient.fromBlock(block)(oi, scheduler).use { stub =>
-              // Turn the stub (using Observables) back to the internal interface (using Iterant).
-              val svc = GrpcGossipService.toGossipService[Task](stub)
-              val req = GetBlockChunkedRequest(blockHash = block.blockHash)
-              for {
-                // Consume just the head, cancel the rest. This could be used to keep track of total content size.
-                maybeHeader <- svc
-                                .getBlockChunked(req)
-                                .foldWhileLeftEvalL(Task.now(none[Chunk.Header])) {
-                                  case (None, chunk) if chunk.content.isHeader =>
-                                    Task.now(Right(Some(chunk.getHeader)))
-                                  case _ =>
-                                    Task.now(Left(None))
-                                }
-                firstCount <- Task.delay(nextCount)
-                all        <- svc.getBlockChunked(req).toListL
-              } yield {
-                // We should stop early, and with the batch restriction just after a few items pulled.
-                firstCount should be < all.size
+              TestEnvironment(testDataRef)(oi, scheduler).use { stub =>
+                // Turn the stub (using Observables) back to the internal interface (using Iterant).
+                val svc = GrpcGossipService.toGossipService[Task](stub)
+                val req = GetBlockChunkedRequest(blockHash = block.blockHash)
+                for {
+                  // Consume just the head, cancel the rest. This could be used to keep track of total content size.
+                  maybeHeader <- svc
+                                  .getBlockChunked(req)
+                                  .foldWhileLeftEvalL(Task.now(none[Chunk.Header])) {
+                                    case (None, chunk) if chunk.content.isHeader =>
+                                      Task.now(Right(Some(chunk.getHeader)))
+                                    case _ =>
+                                      Task.now(Left(None))
+                                  }
+                  firstCount <- Task.delay(nextCount)
+                  all        <- svc.getBlockChunked(req).toListL
+                } yield {
+                  maybeHeader should not be empty
 
-                // This worked when we weren't going over gRPC, just using the abstractions.
-                // Maybe it's worth trying with `bracket` to see if we can observe stops any other way.
-                // The feed still seems to stop early, but I'm just not exactly sure sure when the
-                // server side resources are freed.
-                // To be fair doOnEarlyStop didn't seem to trigger with simple Observable(1,2,3) either.
-                //stopCount shouldBe 1
+                  // We should stop early, and with the batch restriction just after a few items pulled.
+                  firstCount should be < all.size
+
+                  // This worked when we weren't going over gRPC, just using the abstractions.
+                  // Maybe it's worth trying with `bracket` to see if we can observe stops any other way.
+                  // The feed still seems to stop early, but I'm just not exactly sure sure when the
+                  // server side resources are freed.
+                  // To be fair doOnEarlyStop didn't seem to trigger with simple Observable(1,2,3) either.
+                  //stopCount shouldBe 1
+                }
               }
             }
           }
@@ -220,15 +242,17 @@ object GrpcGossipServiceSpec extends TestRuntime {
     new String(md.digest(data))
   }
 
-  object TestClient {
-    def fromBlock(block: Block)(
-        implicit
-        oi: ObservableIterant[Task],
-        scheduler: Scheduler
-    ) =
-      fromGetBlock(hash => Option(block).filter(_.blockHash == hash))
+  case class TestData(blocks: Map[ByteString, Block] = Map.empty)
 
-    def fromGetBlock(f: ByteString => Option[Block])(
+  object TestData {
+    val empty =
+      TestData()
+    def fromBlock(block: Block) =
+      TestData(blocks = Map(block.blockHash -> block))
+  }
+
+  object TestEnvironment {
+    def apply(testData: AtomicReference[TestData])(
         implicit
         oi: ObservableIterant[Task],
         scheduler: Scheduler
@@ -242,7 +266,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
             Task.delay {
               val svc = GrpcGossipService.fromGossipService {
                 new GossipServiceServer[Task](
-                  getBlock = hash => Task.now(f(hash)),
+                  getBlock = hash => Task.now(testData.get.blocks.get(hash)),
                   maxChunkSize = DefaultMaxChunkSize
                 )
               }
