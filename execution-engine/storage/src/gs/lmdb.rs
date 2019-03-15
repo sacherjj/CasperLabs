@@ -34,7 +34,7 @@ impl LmdbGs {
         Ok(LmdbGs { store, env })
     }
 
-    pub fn read(&self, k: &Key) -> Result<Value, GlobalStateError> {
+    pub fn read(&self, k: &Key) -> Result<Option<Value>, GlobalStateError> {
         self.env
             .read()
             .map_err(|_| Error::RkvError(String::from("Couldn't get read lock to LMDB env.")))
@@ -43,10 +43,10 @@ impl LmdbGs {
                 let maybe_curr = self.store.get(&r, k)?;
 
                 match maybe_curr {
-                    None => Err(Error::KeyNotFound(*k)),
+                    None => Ok(None),
                     Some(rkv::Value::Blob(bytes)) => {
                         let value = deserialize(bytes)?;
-                        Ok(value)
+                        Ok(Some(value))
                     }
                     // If we always store values as Blobs this case will never come
                     // up. TODO: Use other variants of rkb::Value (e.g. I64, Str)?
@@ -93,7 +93,7 @@ impl LmdbGs {
 }
 
 impl DbReader for LmdbGs {
-    fn get(&self, k: &Key) -> Result<Value, GlobalStateError> {
+    fn get(&self, k: &Key) -> Result<Option<Value>, GlobalStateError> {
         // TODO: The `Reader` should really be static for the DbReader instance,
         // i.e. just by creating a DbReader for LMDB it should create a `Reader`
         // to go with it. This would prevent the database from being modified while
@@ -117,7 +117,7 @@ impl History for LmdbGs {
         &mut self,
         _prestate_hash: Blake2bHash,
         _effects: HashMap<Key, Transform>,
-    ) -> Result<Option<Blake2bHash>, Self::Error> {
+    ) -> Result<CommitResult, Self::Error> {
         unimplemented!("LMDB History not implemented")
     }
 }
@@ -153,9 +153,9 @@ mod tests {
 
         proptest!(|(k in key_arb(), v in value_arb())| {
           let write = lmdb.write_single(k, &v);
-          let read = lmdb.read(&k);
+          let read = lmdb.read(&k).unwrap().unwrap();
           assert_matches!(write, Ok(_));
-          prop_assert_eq!(read, Ok(v.clone()));
+          prop_assert_eq!(read, v.clone());
         });
     }
 }

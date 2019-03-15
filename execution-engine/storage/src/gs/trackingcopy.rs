@@ -30,45 +30,60 @@ impl<R: DbReader> TrackingCopy<R> {
         }
     }
 
-    pub fn get(&mut self, k: &Key) -> Result<Value, GlobalStateError> {
+    pub fn get(&mut self, k: &Key) -> Result<Option<Value>, GlobalStateError> {
         if let Some(value) = self.cache.get(k) {
-            return Ok(value.clone());
+            return Ok(Some(value.clone()));
         }
-        let value = self.reader.get(k)?;
-        let _ = self.cache.insert(*k, value.clone());
-        Ok(value)
+        if let Some(value) = self.reader.get(k)? {
+            self.cache.insert(*k, value.clone());
+            Ok(Some(value))
+        } else {
+            Ok(None)
+        }
     }
 
-    pub fn read(&mut self, k: Key) -> Result<Value, GlobalStateError> {
-        let value = self.get(&k)?;
-        add(&mut self.ops, k, Op::Read);
-        Ok(value)
+    pub fn read(&mut self, k: Key) -> Result<Option<Value>, GlobalStateError> {
+        if let Some(value) = self.get(&k)? {
+            add(&mut self.ops, k, Op::Read);
+            Ok(Some(value))
+        } else {
+            Ok(None)
+        }
     }
+
     pub fn write(&mut self, k: Key, v: Value) -> Result<(), GlobalStateError> {
         let _ = self.cache.insert(k, v.clone());
         add(&mut self.ops, k, Op::Write);
         add(&mut self.fns, k, Transform::Write(v));
         Ok(())
     }
-    pub fn add(&mut self, k: Key, v: Value) -> Result<(), GlobalStateError> {
-        let curr = self.get(&k)?;
-        let t = match v {
-            Value::Int32(i) => Ok(Transform::AddInt32(i)),
-            Value::NamedKey(n, k) => {
-                let mut map = BTreeMap::new();
-                map.insert(n, k);
-                Ok(Transform::AddKeys(map))
+
+    /// Ok(None) represents missing key to which we want to "add" some value.
+    /// Ok(Some(unit)) represents successful operation.
+    /// Err(error) is reserved for unexpected errors when accessing global state.
+    pub fn add(&mut self, k: Key, v: Value) -> Result<Option<()>, GlobalStateError> {
+        match self.get(&k)? {
+            None => Ok(None),
+            Some(curr) => {
+                let t = match v {
+                    Value::Int32(i) => Ok(Transform::AddInt32(i)),
+                    Value::NamedKey(n, k) => {
+                        let mut map = BTreeMap::new();
+                        map.insert(n, k);
+                        Ok(Transform::AddKeys(map))
+                    }
+                    other => Err(TypeMismatch::new(
+                        "Int32 or NamedKey".to_string(),
+                        other.type_string(),
+                    )),
+                }?;
+                let new_value = t.clone().apply(curr)?;
+                let _ = self.cache.insert(k, new_value);
+                add(&mut self.ops, k, Op::Add);
+                add(&mut self.fns, k, t);
+                Ok(Some(()))
             }
-            other => Err(TypeMismatch::new(
-                "Int32 or NamedKey".to_string(),
-                other.type_string(),
-            )),
-        }?;
-        let new_value = t.clone().apply(curr)?;
-        let _ = self.cache.insert(k, new_value);
-        add(&mut self.ops, k, Op::Add);
-        add(&mut self.fns, k, t);
-        Ok(())
+        }
     }
 
     pub fn effect(&self) -> ExecutionEffect {
@@ -80,55 +95,86 @@ impl<R: DbReader> TrackingCopy<R> {
         base_key: Key,
         path: &[String],
     ) -> Result<QueryResult, GlobalStateError> {
-        let base_value = self.read(base_key)?;
+        match self.read(base_key)? {
+            None => Ok(QueryResult::ValueNotFound(self.error_path_msg(
+                base_key,
+                path,
+                "".to_owned(),
+                0 as usize,
+            ))),
+            Some(base_value) => {
+                let result = path.iter().enumerate().try_fold(
+                    base_value,
+                    // We encode the two possible short-circuit conditions with
+                    // Result<(usize, String), Error>, where the Ok(_) case corresponds to
+                    // QueryResult::ValueNotFound and Err(_) corresponds to
+                    // a storage-related error. The information in the Ok(_) case is used
+                    // to build an informative error message about why the query was not successful.
+                    |curr_value, (i, name)| -> Result<Value, Result<(usize, String), GlobalStateError>> {
+                        match curr_value {
+                            Value::Account(account) => {
+                                if let Some(key) = account.urefs_lookup().get(name) {
+                                    self.read_key_or_stop(*key, i)
+                                } else {
+                                    Err(Ok((i, format!("Name {} not found in Account at path:", name))))
+                                }
+                            }
 
-        let result = path.iter().enumerate().try_fold(
-            base_value,
-            // We encode the two possible short-circuit conditions with
-            // Result<(usize, String), Error>, where the Ok(_) case corresponds to
-            // QueryResult::ValueNotFound and Err(_) corresponds to
-            // a storage-related error. The information in the Ok(_) case is used
-            // to build an informative error message about why the query was not successful.
-            |curr_value, (i, name)| -> Result<Value, Result<(usize, String), GlobalStateError>> {
-                match curr_value {
-                    Value::Account(account) => {
-                        if let Some(key) = account.urefs_lookup().get(name) {
-                            self.read(*key).map_err(Err)
-                        } else {
-                            Err(Ok((i, format!("Name {} not found in Account at path:", name))))
+                            Value::Contract(contract) => {
+                                if let Some(key) = contract.urefs_lookup().get(name) {
+                                    self.read_key_or_stop(*key, i)
+                                } else {
+                                    Err(Ok((i, format!("Name {} not found in Contract at path:", name))))
+                                }
+                            }
+
+                            other => Err(
+                                Ok((i, format!("Name {} cannot be followed from value {:?} because it is neither an account nor contract. Value found at path:", name, other)))
+                                ),
                         }
-                    }
+                    },
+                );
 
-                    Value::Contract(contract) => {
-                        if let Some(key) = contract.urefs_lookup().get(name) {
-                            self.read(*key).map_err(Err)
-                        } else {
-                            Err(Ok((i, format!("Name {} not found in Contract at path:", name))))
-                        }
-                    }
-
-                    other => Err(
-                        Ok((i, format!("Name {} cannot be followed from value {:?} because it is neither an account nor contract. Value found at path:", name, other)))
-                    ),
+                match result {
+                    Ok(value) => Ok(QueryResult::Success(value)),
+                    Err(Ok((i, s))) => Ok(QueryResult::ValueNotFound(
+                        self.error_path_msg(base_key, path, s, i),
+                    )),
+                    Err(Err(err)) => Err(err),
                 }
-            },
-        );
-
-        match result {
-            Ok(value) => Ok(QueryResult::Success(value)),
-
-            Err(Ok((i, s))) => {
-                let mut error_msg = format!("{} {:?}", s, base_key);
-                //include the partial path to the account/contract/value which failed
-                for p in path.iter().take(i) {
-                    error_msg.push_str("/");
-                    error_msg.push_str(p);
-                }
-                Ok(QueryResult::ValueNotFound(error_msg))
             }
-
-            Err(Err(err)) => Err(err),
         }
+    }
+
+    fn read_key_or_stop(
+        &mut self,
+        key: Key,
+        i: usize,
+    ) -> Result<Value, Result<(usize, String), GlobalStateError>> {
+        match self.read(key) {
+            // continue recursing
+            Ok(Some(value)) => Ok(value),
+            // key not found in the global state; stop recursing
+            Ok(None) => Err(Ok((i, format!("Name {:?} not found: ", key)))),
+            // global state access error; stop recursing
+            Err(error) => Err(Err(error)),
+        }
+    }
+
+    fn error_path_msg(
+        &self,
+        key: Key,
+        path: &[String],
+        missing_key: String,
+        missing_at_index: usize,
+    ) -> String {
+        let mut error_msg = format!("{} {:?}", missing_key, key);
+        //include the partial path to the account/contract/value which failed
+        for p in path.iter().take(missing_at_index) {
+            error_msg.push_str("/");
+            error_msg.push_str(p);
+        }
+        error_msg
     }
 }
 
@@ -171,19 +217,19 @@ mod tests {
     }
 
     impl DbReader for CountingDb {
-        fn get(&self, _k: &Key) -> Result<Value, GlobalStateError> {
+        fn get(&self, _k: &Key) -> Result<Option<Value>, GlobalStateError> {
             let count = self.count.get();
             let value = match self.value {
                 Some(ref v) => v.clone(),
                 None => Value::Int32(count),
             };
             self.count.set(count + 1);
-            Ok(value)
+            Ok(Some(value))
         }
     }
 
     impl DbReader for Rc<CountingDb> {
-        fn get(&self, k: &Key) -> Result<Value, GlobalStateError> {
+        fn get(&self, k: &Key) -> Result<Option<Value>, GlobalStateError> {
             CountingDb::get(self, k)
         }
     }
@@ -205,14 +251,14 @@ mod tests {
         let mut tc = TrackingCopy::new(db_ref.clone());
         let k = Key::Hash([0u8; 32]);
 
-        let zero = Ok(Value::Int32(0));
+        let zero = Value::Int32(0);
         // first read
-        let value = tc.read(k);
+        let value = tc.read(k).unwrap().unwrap();
         assert_eq!(value, zero);
 
         // second read; should use cache instead
         // of going back to the DB
-        let value = tc.read(k);
+        let value = tc.read(k).unwrap().unwrap();
         let db_value = db_ref.count.get();
         assert_eq!(value, zero);
         assert_eq!(db_value, 1);
@@ -224,8 +270,8 @@ mod tests {
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
-        let zero = Ok(Value::Int32(0));
-        let value = tc.read(k);
+        let zero = Value::Int32(0);
+        let value = tc.read(k).unwrap().unwrap();
         // value read correctly
         assert_eq!(value, zero);
         // read does not cause any transform
@@ -408,7 +454,7 @@ mod tests {
 
             if missing_key != k {
                 let result = tc.query(missing_key, &empty_path);
-                assert_matches!(result, Err(Error::KeyNotFound(_)));
+                assert_matches!(result, Ok(QueryResult::ValueNotFound(_)));
             }
         }
 

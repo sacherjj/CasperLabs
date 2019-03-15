@@ -45,7 +45,8 @@ message CommitResponse {
     oneof result {
         CommitResult success = 1;
         RootNotFound missing_prestate = 2;
-        PostEffectsError failed_transform = 3;
+        Key key_not_found = 3;
+        PostEffectsError failed_transform = 4;
     }
 }
 

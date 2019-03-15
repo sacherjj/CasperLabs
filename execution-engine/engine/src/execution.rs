@@ -27,6 +27,7 @@ pub enum Error {
     Interpreter(InterpreterError),
     Storage(GlobalStateError),
     BytesRepr(BytesReprError),
+    KeyNotFound(Key),
     ForgedReference(Key),
     NoImportedMemory,
     ArgIndexOutOfBounds(usize),
@@ -312,9 +313,12 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let key = self.key_from_mem(key_ptr, key_size)?;
         self.context.insert_named_uref(name.clone(), key);
-        self.state
-            .add(self.context.base_key, Value::NamedKey(name, key))
-            .map_err(Into::into)
+        err_on_missing_key(
+            key,
+            self.state
+                .add(self.context.base_key, Value::NamedKey(name, key)),
+        )
+        .map_err(Into::into)
     }
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
@@ -369,16 +373,21 @@ impl<'a, R: DbReader> Runtime<'a, R> {
 
         let key = self.context.deserialize_key(&key_bytes)?;
         let (args, module, mut refs) = {
-            if let Value::Contract(contract) = self.state.read(key)? {
-                let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
-                let module = parity_wasm::deserialize_buffer(contract.bytes())?;
+            match self.state.read(key)? {
+                None => Err(Error::KeyNotFound(key)),
+                Some(value) => {
+                    if let Value::Contract(contract) = value {
+                        let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
+                        let module = parity_wasm::deserialize_buffer(contract.bytes())?;
 
-                Ok((args, module, contract.urefs_lookup().clone()))
-            } else {
-                Err(Error::FunctionNotFound(format!(
-                    "Value at {:?} is not a contract",
-                    key
-                )))
+                        Ok((args, module, contract.urefs_lookup().clone()))
+                    } else {
+                        Err(Error::FunctionNotFound(format!(
+                            "Value at {:?} is not a contract",
+                            key
+                        )))
+                    }
+                }
             }
         }?;
 
@@ -431,12 +440,12 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         value_size: u32,
     ) -> Result<(), Trap> {
         let (key, value) = self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)?;
-        self.state.add(key, value).map_err(Into::into)
+        err_on_missing_key(key, self.state.add(key, value)).map_err(Into::into)
     }
 
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        self.state.read(key).map_err(Into::into)
+        err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
     }
 
     pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
@@ -456,6 +465,17 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         self.memory
             .set(key_ptr, &key.to_bytes())
             .map_err(|e| Error::Interpreter(e).into())
+    }
+}
+
+fn err_on_missing_key<A>(key: Key, r: Result<Option<A>, GlobalStateError>) -> Result<A, Error>
+where
+    GlobalStateError: Into<Error>,
+{
+    match r {
+        Ok(None) => Err(Error::KeyNotFound(key)),
+        Err(error) => Err(error.into()),
+        Ok(Some(v)) => Ok(v),
     }
 }
 
@@ -898,7 +918,12 @@ impl Executor<Module> for WasmiExecutor {
     ) -> (Result<ExecutionEffect, Error>, u64) {
         let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
         let acct_key = Key::Account(account_addr);
-        let value = on_fail_charge!(tc.get(&acct_key), 0);
+        let value = on_fail_charge! {
+        match tc.get(&acct_key) {
+            Ok(None) => Err(Error::KeyNotFound(acct_key)),
+            Err(error) => Err(error.into()),
+            Ok(Some(value)) => Ok(value)
+        }, 0 };
         let account = value.as_account();
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashSet<Key> = uref_lookup_local.values().cloned().collect();

@@ -2,7 +2,7 @@ use crate::transform::Transform;
 use common::bytesrepr::*;
 use common::key::Key;
 use common::value::Value;
-use error::{Error, GlobalStateError};
+use error::GlobalStateError;
 use gs::*;
 use history::*;
 use shared::newtypes::Blake2bHash;
@@ -23,11 +23,8 @@ impl<K, V> Clone for InMemGS<K, V> {
 }
 
 impl DbReader for InMemGS<Key, Value> {
-    fn get(&self, k: &Key) -> Result<Value, GlobalStateError> {
-        match self.0.get(k) {
-            None => Err(Error::KeyNotFound(*k)),
-            Some(v) => Ok(v.clone()),
-        }
+    fn get(&self, k: &Key) -> Result<Option<Value>, GlobalStateError> {
+        Ok(self.0.get(k).map(Clone::clone))
     }
 }
 
@@ -86,44 +83,33 @@ impl History for InMemHist<Key, Value> {
         &mut self,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<Option<Blake2bHash>, Self::Error> {
+    ) -> Result<CommitResult, Self::Error> {
         let base_result = self
             .history
             .get(&prestate_hash)
             .map(|gs| BTreeMap::clone(&gs.0));
         match base_result {
             Some(mut base) => {
-                let result: Result<Blake2bHash, GlobalStateError> = effects
-                    .into_iter()
-                    .try_for_each(|(k, t)| {
-                        let maybe_curr = base.remove(&k);
-                        match maybe_curr {
-                            None => match t {
-                                Transform::Write(v) => {
-                                    let _ = base.insert(k, v);
-                                    Ok(())
-                                }
-                                _ => Err(Error::KeyNotFound(k)),
-                            },
-                            Some(curr) => {
-                                let new_value = t.apply(curr)?;
-                                let _ = base.insert(k, new_value);
-                                Ok(())
+                for (k, t) in effects.into_iter() {
+                    let maybe_curr = base.remove(&k);
+                    match maybe_curr {
+                        None => match t {
+                            Transform::Write(v) => {
+                                base.insert(k, v);
                             }
+                            _ => return Ok(CommitResult::KeyNotFound(k)),
+                        },
+                        Some(curr) => {
+                            let new_value = t.apply(curr)?;
+                            base.insert(k, new_value);
                         }
-                    })
-                    .and_then(|_| {
-                        let hash = InMemHist::get_root_hash(&base);
-                        self.history.insert(hash, InMemGS(Arc::new(base)));
-                        Ok(hash)
-                    });
-
-                match result {
-                    Ok(hash) => Ok(Some(hash)),
-                    Err(err) => Err(err),
+                    }
                 }
+                let hash = InMemHist::get_root_hash(&base);
+                self.history.insert(hash, InMemGS(Arc::new(base)));
+                Ok(CommitResult::Success(hash))
             }
-            None => Ok(None),
+            None => Ok(CommitResult::RootNotFound),
         }
     }
 }
@@ -171,7 +157,11 @@ mod tests {
         // The res is of type Result<Option<_>, _>> so we have to unwrap twice.
         // This is fine to do in the test since the point of this method is to provide
         // helper for the original method.
-        res.unwrap().unwrap()
+        if let CommitResult::Success(new_hash) = res.unwrap() {
+            new_hash
+        } else {
+            panic!("Test commit failed.")
+        }
     }
 
     #[test]
@@ -181,8 +171,8 @@ mod tests {
         let empty_root_hash = [0u8; 32].into();
         let hist = prepopulated_hist();
         let mut tc = checkout(&hist, empty_root_hash);
-        assert_eq!(tc.get(&KEY1).unwrap(), VALUE1);
-        assert_eq!(tc.get(&KEY2).unwrap(), VALUE2);
+        assert_eq!(tc.get(&KEY1).unwrap().unwrap(), VALUE1);
+        assert_eq!(tc.get(&KEY2).unwrap().unwrap(), VALUE2);
     }
 
     #[test]
@@ -212,8 +202,8 @@ mod tests {
         let hash_res = commit(&mut hist, empty_root_hash, effects.1);
         // checkout to the new hash
         let mut tc_2 = checkout(&hist, hash_res);
-        assert_eq!(tc_2.get(&KEY1).unwrap(), Value::Int32(2));
-        assert_eq!(tc_2.get(&KEY2).unwrap(), new_v2);
+        assert_eq!(tc_2.get(&KEY1).unwrap().unwrap(), Value::Int32(2));
+        assert_eq!(tc_2.get(&KEY2).unwrap().unwrap(), new_v2);
     }
 
     #[test]
@@ -234,15 +224,15 @@ mod tests {
         let value3 = Value::Int32(3);
         let write_res = tc.write(key3, value3.clone());
         assert!(write_res.is_ok());
-        assert_eq!(tc.get(&key3).unwrap(), value3);
+        assert_eq!(tc.get(&key3).unwrap().unwrap(), value3);
         let effects = tc.effect();
         // commit changes from the tracking copy
         let _ = commit(&mut gs, empty_root_hash, effects.1);
         // checkout to the empty root hash
         let mut tc_2 = checkout(&gs, empty_root_hash);
-        assert_eq!(tc_2.get(&KEY1).unwrap(), VALUE1);
-        assert_eq!(tc_2.get(&KEY2).unwrap(), VALUE2);
+        assert_eq!(tc_2.get(&KEY1).unwrap().unwrap(), VALUE1);
+        assert_eq!(tc_2.get(&KEY2).unwrap().unwrap(), VALUE2);
         // test that value inserted later are not visible in the past commits.
-        assert!(tc_2.get(&key3).is_err());
+        assert_eq!(tc_2.get(&key3), Ok(None));
     }
 }

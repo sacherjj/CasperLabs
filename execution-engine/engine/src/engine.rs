@@ -140,7 +140,7 @@ where
         &self,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<Option<Blake2bHash>, H::Error> {
+    ) -> Result<CommitResult, H::Error> {
         self.state.lock().commit(prestate_hash, effects)
     }
 }

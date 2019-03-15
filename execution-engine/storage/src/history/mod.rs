@@ -7,6 +7,12 @@ use transform::Transform;
 // needs to be public for use in the gens crate
 pub mod trie;
 
+pub enum CommitResult {
+    RootNotFound,
+    Success(Blake2bHash),
+    KeyNotFound(Key),
+}
+
 pub trait History {
     type Error;
     type Reader: DbReader;
@@ -23,5 +29,5 @@ pub trait History {
         &mut self,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<Option<Blake2bHash>, Self::Error>;
+    ) -> Result<CommitResult, Self::Error>;
 }
