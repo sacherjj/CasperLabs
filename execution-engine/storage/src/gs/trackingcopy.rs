@@ -20,6 +20,13 @@ pub struct TrackingCopy<R: DbReader> {
     fns: HashMap<Key, Transform>,
 }
 
+#[derive(Debug)]
+pub enum AddResult {
+    Success,
+    KeyNotFound(Key),
+    TypeMismatch(TypeMismatch),
+}
+
 impl<R: DbReader> TrackingCopy<R> {
     pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
@@ -61,27 +68,33 @@ impl<R: DbReader> TrackingCopy<R> {
     /// Ok(None) represents missing key to which we want to "add" some value.
     /// Ok(Some(unit)) represents successful operation.
     /// Err(error) is reserved for unexpected errors when accessing global state.
-    pub fn add(&mut self, k: Key, v: Value) -> Result<Option<()>, GlobalStateError> {
+    pub fn add(&mut self, k: Key, v: Value) -> Result<AddResult, GlobalStateError> {
         match self.get(&k)? {
-            None => Ok(None),
+            None => Ok(AddResult::KeyNotFound(k)),
             Some(curr) => {
                 let t = match v {
-                    Value::Int32(i) => Ok(Transform::AddInt32(i)),
+                    Value::Int32(i) => Transform::AddInt32(i),
                     Value::NamedKey(n, k) => {
                         let mut map = BTreeMap::new();
                         map.insert(n, k);
-                        Ok(Transform::AddKeys(map))
+                        Transform::AddKeys(map)
                     }
-                    other => Err(TypeMismatch::new(
-                        "Int32 or NamedKey".to_string(),
-                        other.type_string(),
-                    )),
-                }?;
-                let new_value = t.clone().apply(curr)?;
-                let _ = self.cache.insert(k, new_value);
-                add(&mut self.ops, k, Op::Add);
-                add(&mut self.fns, k, t);
-                Ok(Some(()))
+                    other => {
+                        return Ok(AddResult::TypeMismatch(TypeMismatch::new(
+                            "Int32 or NamedKey".to_string(),
+                            other.type_string(),
+                        )))
+                    }
+                };
+                match t.clone().apply(curr) {
+                    Ok(new_value) => {
+                        let _ = self.cache.insert(k, new_value);
+                        add(&mut self.ops, k, Op::Add);
+                        add(&mut self.fns, k, t);
+                        Ok(AddResult::Success)
+                    }
+                    Err(type_mismatch) => Ok(AddResult::TypeMismatch(type_mismatch)),
+                }
             }
         }
     }
@@ -182,10 +195,10 @@ impl<R: DbReader> TrackingCopy<R> {
 mod tests {
     use common::key::Key;
     use common::value::{Account, Contract, Value};
-    use error::{Error, GlobalStateError};
+    use error::GlobalStateError;
     use gens::gens::*;
     use gs::inmem::InMemGS;
-    use gs::{trackingcopy::QueryResult, DbReader, TrackingCopy};
+    use gs::{trackingcopy::AddResult, trackingcopy::QueryResult, DbReader, TrackingCopy};
     use op::Op;
     use proptest::collection::vec;
     use proptest::prelude::*;
@@ -364,7 +377,7 @@ mod tests {
 
         // adding the wrong type should fail
         let failed_add = tc.add(k, Value::Int32(3));
-        assert_matches!(failed_add, Err(Error::TransformTypeMismatch { .. }));
+        assert_matches!(failed_add, Ok(AddResult::TypeMismatch(_)));
         assert_eq!(tc.ops.is_empty(), true);
         assert_eq!(tc.fns.is_empty(), true);
 

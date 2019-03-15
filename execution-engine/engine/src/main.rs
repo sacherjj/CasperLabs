@@ -133,6 +133,9 @@ fn main() {
                         "Result for file {}: key {:?} not found.",
                         wasm_bytes.path, key
                     ),
+                    Ok(CommitResult::TypeMismatch(type_mismatch)) => {
+                        println!("Result for file {}: {:?}", wasm_bytes.path, type_mismatch)
+                    }
                     Ok(CommitResult::Success(new_root_hash)) => {
                         println!(
                             "Result for file {}: Success! New post state hash: {:?}",

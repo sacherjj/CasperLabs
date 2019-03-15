@@ -6,7 +6,7 @@ use execution_engine::execution::Error as ExecutionError;
 use ipc;
 use shared::newtypes::Blake2bHash;
 use storage::error::{Error::*, RootNotFound};
-use storage::{gs, history, history::CommitResult, op, transform};
+use storage::{gs, history, history::CommitResult, op, transform, transform::TypeMismatch};
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {
@@ -325,6 +325,16 @@ impl From<RootNotFound> for ipc::RootNotFound {
     }
 }
 
+impl From<TypeMismatch> for ipc::TypeMismatch {
+    fn from(type_mismatch: TypeMismatch) -> ipc::TypeMismatch {
+        let TypeMismatch { expected, found } = type_mismatch;
+        let mut tm = ipc::TypeMismatch::new();
+        tm.set_expected(expected);
+        tm.set_found(found);
+        tm
+    }
+}
+
 impl From<ExecutionResult> for ipc::DeployResult {
     fn from(er: ExecutionResult) -> ipc::DeployResult {
         match er {
@@ -349,13 +359,6 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     EngineError::StorageError(storage_err) => {
                         let mut err = match storage_err {
                             RkvError(error_msg) => wasm_error(error_msg),
-                            TransformTypeMismatch(transform::TypeMismatch { expected, found }) => {
-                                let msg = format!(
-                                    "Type mismatch. Expected {:?}, found {:?}",
-                                    expected, found
-                                );
-                                wasm_error(msg)
-                            }
                             BytesRepr(bytesrepr_err) => {
                                 let msg =
                                     format!("Error with byte representation: {:?}", bytesrepr_err);
@@ -424,6 +427,11 @@ where
         Ok(CommitResult::KeyNotFound(key)) => {
             let mut commit_response = ipc::CommitResponse::new();
             commit_response.set_key_not_found((&key).into());
+            commit_response
+        }
+        Ok(CommitResult::TypeMismatch(type_mismatch)) => {
+            let mut commit_response = ipc::CommitResponse::new();
+            commit_response.set_type_mismatch(type_mismatch.into());
             commit_response
         }
         // TODO(mateusz.gorski): We should be more specific about errors here.
@@ -522,11 +530,6 @@ mod tests {
         use storage::error::Error::*;
         let cost: u64 = 100;
         assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
-        let type_mismatch = storage::transform::TypeMismatch {
-            expected: "expected".to_owned(),
-            found: "found".to_owned(),
-        };
-        assert_eq!(test_cost(cost, TransformTypeMismatch(type_mismatch)), cost);
         let bytesrepr_err = common::bytesrepr::Error::EarlyEndOfStream;
         assert_eq!(test_cost(cost, BytesRepr(bytesrepr_err)), cost);
     }

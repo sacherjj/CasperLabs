@@ -99,10 +99,14 @@ impl History for InMemHist<Key, Value> {
                             }
                             _ => return Ok(CommitResult::KeyNotFound(k)),
                         },
-                        Some(curr) => {
-                            let new_value = t.apply(curr)?;
-                            base.insert(k, new_value);
-                        }
+                        Some(curr) => match t.apply(curr) {
+                            Ok(new_value) => {
+                                base.insert(k, new_value);
+                            }
+                            Err(type_mismatch) => {
+                                return Ok(CommitResult::TypeMismatch(type_mismatch))
+                            }
+                        },
                     }
                 }
                 let hash = InMemHist::get_root_hash(&base);
