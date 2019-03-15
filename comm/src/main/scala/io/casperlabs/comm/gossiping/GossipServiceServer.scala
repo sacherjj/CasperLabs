@@ -8,6 +8,8 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
 import io.casperlabs.comm.ServiceError.NotFound
 import monix.tail.Iterant
+import scala.collection.mutable.PriorityQueue
+import scala.math.Ordering
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
 class GossipServiceServer[F[_]: Sync](
@@ -15,13 +17,56 @@ class GossipServiceServer[F[_]: Sync](
     getBlock: ByteString => F[Option[Block]],
     maxChunkSize: Int
 ) extends GossipService[F] {
-  import GossipServiceServer.chunkIt
+  import GossipServiceServer._
 
   def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] = ???
 
   def streamAncestorBlockSummaries(
       request: StreamAncestorBlockSummariesRequest
-  ): Iterant[F, BlockSummary] = ???
+  ): Iterant[F, BlockSummary] = {
+    // Visit blocks in simple BFS order rather than try to establish topological sorting becuase BFS
+    // is invariant in maximum depth, while topological sorting could depend on whether we traversed
+    // backwards enough to re-join forks with different lengths of sub-paths.
+    implicit val ord = breadthFirstOrdering
+    // We return known hashes but not their parents.
+    val knownHashes = request.knownBlockHashes.toSet
+
+    def loop(
+        queue: PriorityQueue[(Int, ByteString)],
+        visited: Set[ByteString]
+    ): Iterant[F, BlockSummary] =
+      if (queue.isEmpty)
+        Iterant.empty
+      else {
+        queue.dequeue() match {
+          case (_, blockHash) if visited(blockHash) =>
+            loop(queue, visited)
+
+          case (depth, blockHash) =>
+            Iterant.liftF(getBlockSummary(blockHash)) flatMap {
+              case None =>
+                loop(queue, visited + blockHash)
+
+              case Some(summary) =>
+                if (depth < request.maxDepth && !knownHashes(summary.blockHash)) {
+                  val ancestors =
+                    summary.getHeader.parentHashes ++
+                      summary.getHeader.justifications.map(_.latestBlockHash)
+
+                  queue.enqueue(ancestors.map(depth + 1 -> _): _*)
+                }
+
+                Iterant.pure(summary) ++ loop(queue, visited + blockHash)
+            }
+        }
+      }
+
+    Iterant.delay {
+      PriorityQueue(request.targetBlockHashes.map(0 -> _): _*) -> Set.empty[ByteString]
+    } flatMap {
+      case (queue, visited) => loop(queue, visited)
+    }
+  }
 
   def streamDagTipBlockSummaries(
       request: StreamDagTipBlockSummariesRequest
@@ -89,5 +134,13 @@ object GossipServiceServer {
     }
 
     Iterator(Chunk().withHeader(header)) ++ chunks
+  }
+
+  // Return `true` for the item that is "less important" then the other.
+  val breadthFirstOrdering: Ordering[(Int, ByteString)] = Ordering.fromLessThan {
+    case ((d1, h1), (d2, h2)) if d1 == d2 =>
+      h1.hashCode > h2.hashCode // Just want some stable order for hashes
+    case ((d1, _), (d2, _)) =>
+      d1 > d2
   }
 }
