@@ -2,7 +2,7 @@ use crate::transform::Transform;
 use common::bytesrepr::*;
 use common::key::Key;
 use common::value::Value;
-use error::GlobalStateError;
+use error::Error;
 use gs::*;
 use history::*;
 use shared::newtypes::Blake2bHash;
@@ -23,7 +23,7 @@ impl<K, V> Clone for InMemGS<K, V> {
 }
 
 impl DbReader for InMemGS<Key, Value> {
-    fn get(&self, k: &Key) -> Result<Option<Value>, GlobalStateError> {
+    fn get(&self, k: &Key) -> Result<Option<Value>, Error> {
         Ok(self.0.get(k).map(Clone::clone))
     }
 }
@@ -66,7 +66,7 @@ impl<K: Ord, V> InMemHist<K, V> {
 }
 
 impl History for InMemHist<Key, Value> {
-    type Error = GlobalStateError;
+    type Error = Error;
     type Reader = InMemGS<Key, Value>;
 
     fn checkout(
@@ -237,6 +237,6 @@ mod tests {
         assert_eq!(tc_2.get(&KEY1).unwrap().unwrap(), VALUE1);
         assert_eq!(tc_2.get(&KEY2).unwrap().unwrap(), VALUE2);
         // test that value inserted later are not visible in the past commits.
-        assert_eq!(tc_2.get(&key3), Ok(None));
+        assert_eq!(tc_2.get(&key3).unwrap(), None);
     }
 }

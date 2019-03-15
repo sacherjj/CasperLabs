@@ -5,7 +5,6 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
-use storage::error::GlobalStateError;
 use storage::gs::trackingcopy::AddResult;
 use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
 use storage::transform::TypeMismatch;
@@ -27,7 +26,7 @@ use std::fmt;
 #[derive(Debug)]
 pub enum Error {
     Interpreter(InterpreterError),
-    Storage(GlobalStateError),
+    Storage(storage::error::Error),
     BytesRepr(BytesReprError),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
@@ -59,8 +58,8 @@ impl From<InterpreterError> for Error {
     }
 }
 
-impl From<GlobalStateError> for Error {
-    fn from(e: GlobalStateError) -> Self {
+impl From<storage::error::Error> for Error {
+    fn from(e: storage::error::Error) -> Self {
         Error::Storage(e)
     }
 }
@@ -478,9 +477,9 @@ impl<'a, R: DbReader> Runtime<'a, R> {
     }
 }
 
-fn err_on_missing_key<A>(key: Key, r: Result<Option<A>, GlobalStateError>) -> Result<A, Error>
+fn err_on_missing_key<A>(key: Key, r: Result<Option<A>, storage::error::Error>) -> Result<A, Error>
 where
-    GlobalStateError: Into<Error>,
+    Error: Into<Error>,
 {
     match r {
         Ok(None) => Err(Error::KeyNotFound(key)),

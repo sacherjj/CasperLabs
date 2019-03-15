@@ -12,7 +12,6 @@ pub enum Error {
     BytesRepr(bytesrepr::Error),
 }
 
-pub type GlobalStateError = Error;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -20,15 +19,15 @@ impl fmt::Display for Error {
     }
 }
 
-impl HostError for GlobalStateError {}
+impl HostError for Error {}
 
-impl From<StoreError> for GlobalStateError {
+impl From<StoreError> for Error {
     fn from(e: StoreError) -> Self {
         Error::RkvError(e.to_string())
     }
 }
 
-impl From<bytesrepr::Error> for GlobalStateError {
+impl From<bytesrepr::Error> for Error {
     fn from(e: bytesrepr::Error) -> Self {
         Error::BytesRepr(e)
     }
