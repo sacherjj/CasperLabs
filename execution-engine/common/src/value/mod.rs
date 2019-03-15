@@ -1,6 +1,6 @@
 pub mod account;
 pub mod contract;
-pub mod u512;
+pub mod uint;
 
 use crate::bytesrepr::{Error, FromBytes, ToBytes};
 use crate::key::{Key, UREF_SIZE};
@@ -11,11 +11,13 @@ use core::iter;
 
 pub use self::account::Account;
 pub use self::contract::Contract;
-pub use self::u512::U512;
+pub use self::uint::{U128, U256, U512};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Value {
     Int32(i32),
+    UInt128(U128),
+    UInt256(U256),
     UInt512(U512),
     ByteArray(Vec<u8>),
     ListInt32(Vec<i32>),
@@ -34,7 +36,9 @@ const ACCT_ID: u8 = 4;
 const CONTRACT_ID: u8 = 5;
 const NAMEDKEY_ID: u8 = 6;
 const LISTSTRING_ID: u8 = 7;
-const U512_ID: u8 = 8;
+const U128_ID: u8 = 8;
+const U256_ID: u8 = 9;
+const U512_ID: u8 = 10;
 
 use self::Value::*;
 
@@ -47,8 +51,20 @@ impl ToBytes for Value {
                 result.append(&mut i.to_bytes());
                 result
             }
+            UInt128(u) => {
+                let mut result = Vec::with_capacity(17); //1 + 16
+                result.push(U128_ID);
+                result.append(&mut u.to_bytes());
+                result
+            }
+            UInt256(u) => {
+                let mut result = Vec::with_capacity(33); //1 + 32
+                result.push(U256_ID);
+                result.append(&mut u.to_bytes());
+                result
+            }
             UInt512(u) => {
-                let mut result = Vec::new();
+                let mut result = Vec::with_capacity(65); //1 + 64
                 result.push(U512_ID);
                 result.append(&mut u.to_bytes());
                 result
@@ -106,6 +122,14 @@ impl FromBytes for Value {
                 let (i, rem): (i32, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((Int32(i), rem))
             }
+            U128_ID => {
+                let (u, rem): (U128, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((UInt128(u), rem))
+            }
+            U256_ID => {
+                let (u, rem): (U256, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((UInt256(u), rem))
+            }
             U512_ID => {
                 let (u, rem): (U512, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((UInt512(u), rem))
@@ -148,6 +172,8 @@ impl Value {
     pub fn type_string(&self) -> String {
         match self {
             Int32(_) => String::from("Int32"),
+            UInt128(_) => String::from("UInt128"),
+            UInt256(_) => String::from("UInt256"),
             UInt512(_) => String::from("UInt512"),
             ListInt32(_) => String::from("List[Int32]"),
             String(_) => String::from("String"),
@@ -190,6 +216,9 @@ macro_rules! from_try_from_impl {
 }
 
 from_try_from_impl!(i32, Int32);
+from_try_from_impl!(U128, UInt128);
+from_try_from_impl!(U256, UInt256);
+from_try_from_impl!(U512, UInt512);
 from_try_from_impl!(Vec<u8>, ByteArray);
 from_try_from_impl!(Vec<i32>, ListInt32);
 from_try_from_impl!(Vec<String>, ListString);

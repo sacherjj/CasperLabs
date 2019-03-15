@@ -50,6 +50,14 @@ pub fn contract_arb() -> impl Strategy<Value = common::value::Contract> {
     })
 }
 
+pub fn u128_arb() -> impl Strategy<Value = common::value::U128> {
+    vec(any::<u8>(), 0..16).prop_map(|b| U128::from_little_endian(b.as_slice()))
+}
+
+pub fn u256_arb() -> impl Strategy<Value = common::value::U256> {
+    vec(any::<u8>(), 0..32).prop_map(|b| U256::from_little_endian(b.as_slice()))
+}
+
 pub fn u512_arb() -> impl Strategy<Value = common::value::U512> {
     vec(any::<u8>(), 0..64).prop_map(|b| U512::from_little_endian(b.as_slice()))
 }
@@ -64,6 +72,8 @@ pub fn value_arb() -> impl Strategy<Value = common::value::Value> {
         ("\\PC*", key_arb()).prop_map(|(n, k)| Value::NamedKey(n, k)),
         account_arb().prop_map(Value::Account),
         contract_arb().prop_map(Value::Contract),
+        u128_arb().prop_map(Value::UInt128),
+        u256_arb().prop_map(Value::UInt256),
         u512_arb().prop_map(Value::UInt512)
     ]
 }

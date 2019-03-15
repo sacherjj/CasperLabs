@@ -44,9 +44,19 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             if v.has_integer() {
                 transform_write(common::value::Value::Int32(v.get_integer()))
             } else if v.has_big_int() {
-                let u = common::value::U512::from_dec_str(v.get_big_int())
-                    .map_err(|e| ParsingError(format!("{:?}", e)))?;
-                transform_write(common::value::Value::UInt512(u))
+                let n = v.get_big_int();
+                let n_digs = n.len();
+                let maybe_v = if n_digs < 39 {
+                    // 2^128 ~= 3.4 x 10^38
+                    common::value::U128::from_dec_str(n).map(common::value::Value::from)
+                } else if n_digs < 78 {
+                    // 2^256 ~= 1.2 x 10^77
+                    common::value::U256::from_dec_str(n).map(common::value::Value::from)
+                } else {
+                    common::value::U512::from_dec_str(n).map(common::value::Value::from)
+                };
+                let v = maybe_v.map_err(|e| ParsingError(format!("{:?}", e)))?;
+                transform_write(v)
             } else if v.has_byte_arr() {
                 let v: Vec<u8> = Vec::from(v.get_byte_arr());
                 transform_write(common::value::Value::ByteArray(v))
@@ -94,6 +104,8 @@ impl From<common::value::Value> for super::ipc::Value {
             common::value::Value::Int32(i) => {
                 tv.set_integer(i);
             }
+            common::value::Value::UInt128(u) => tv.set_big_int(format!("{}", u)),
+            common::value::Value::UInt256(u) => tv.set_big_int(format!("{}", u)),
             common::value::Value::UInt512(u) => tv.set_big_int(format!("{}", u)),
             common::value::Value::ByteArray(arr) => {
                 tv.set_byte_arr(arr);
