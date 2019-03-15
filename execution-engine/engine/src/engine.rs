@@ -3,7 +3,6 @@ use execution::{Error as ExecutionError, Executor};
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
-use storage::error::GlobalStateError;
 use storage::gs::{ExecutionEffect, TrackingCopy};
 use storage::history::*;
 use storage::transform::Transform;
@@ -48,7 +47,7 @@ impl ExecutionResult {
 pub enum Error {
     PreprocessingError(String),
     ExecError(ExecutionError),
-    StorageError(GlobalStateError),
+    StorageError(storage::error::Error),
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -77,8 +76,8 @@ impl From<wasm_prep::PreprocessingError> for Error {
     }
 }
 
-impl From<GlobalStateError> for Error {
-    fn from(error: GlobalStateError) -> Self {
+impl From<storage::error::Error> for Error {
+    fn from(error: storage::error::Error) -> Self {
         Error::StorageError(error)
     }
 }
