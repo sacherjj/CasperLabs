@@ -5,7 +5,6 @@ use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFou
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
 use shared::newtypes::Blake2bHash;
-use storage::error::Error::*;
 use storage::{gs, history, history::CommitResult, op, transform, transform::TypeMismatch};
 
 /// Helper method for turning instances of Value into Transform::Write.
@@ -357,14 +356,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
                     EngineError::StorageError(storage_err) => {
-                        let mut err = match storage_err {
-                            RkvError(error_msg) => wasm_error(error_msg),
-                            BytesRepr(bytesrepr_err) => {
-                                let msg =
-                                    format!("Error with byte representation: {:?}", bytesrepr_err);
-                                wasm_error(msg)
-                            }
-                        };
+                        let mut err = wasm_error(storage_err.to_string());
                         err.set_cost(cost);
                         err
                     }
@@ -529,7 +521,8 @@ mod tests {
     fn storage_error_has_cost() {
         use storage::error::Error::*;
         let cost: u64 = 100;
-        assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
+        // TODO: actually create an Rkv error
+        // assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
         let bytesrepr_err = common::bytesrepr::Error::EarlyEndOfStream;
         assert_eq!(test_cost(cost, BytesRepr(bytesrepr_err)), cost);
     }
