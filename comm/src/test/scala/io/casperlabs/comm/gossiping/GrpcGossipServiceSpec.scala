@@ -271,6 +271,60 @@ class GrpcGossipServiceSpec
       }
     }
   }
+
+  object StreamAncestorBlockSummariesSpec extends WordSpecLike {
+    implicit val config = PropertyCheckConfiguration(minSuccessful = 10)
+
+    "streamAncestorBlockSummaries" when {
+      "called with unknown target hashes" should {
+        "return an empty stream" in {
+          pending
+        }
+      }
+
+      "called with a depth of 0" should {
+        "return just the target summaries" in {
+          pending
+        }
+      }
+
+      "called with a depth of 1" should {
+        "return the targets and their parents" in {
+          pending
+        }
+      }
+
+      "called with a single target and maximum depth" should {
+        "return all ancestors of the target up to that depth" in {
+          pending
+        }
+
+        "return results in reverse breadth first order" in {
+          pending
+        }
+      }
+
+      "called with many targets and maximum depth" should {
+        "start with the targets" in {
+          pending
+        }
+
+        "return results in the same order regardless of depth" in {
+          pending
+        }
+
+        "return all ancestors up to that depth from any of the targets" in {
+          pending
+        }
+      }
+
+      "called with some known hashes" should {
+        "stop traversing ancestors beyond the known hashes" in {
+          pending
+        }
+      }
+    }
+  }
 }
 
 object GrpcGossipServiceSpec extends TestRuntime {
