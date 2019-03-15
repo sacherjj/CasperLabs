@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
-use execution_engine::engine::{Error as EngineError, ExecutionResult};
+use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
 use shared::newtypes::Blake2bHash;
-use storage::error::{Error::*, RootNotFound};
+use storage::error::Error::*;
 use storage::{gs, history, history::CommitResult, op, transform, transform::TypeMismatch};
 
 /// Helper method for turning instances of Value into Transform::Write.
@@ -460,7 +460,7 @@ fn wasm_error(msg: String) -> ipc::DeployResult {
 mod tests {
     use super::wasm_error;
     use common::key::Key;
-    use execution_engine::engine::{Error as EngineError, ExecutionResult};
+    use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
     use shared::newtypes::Blake2bHash;
     use std::collections::HashMap;
     use std::convert::TryInto;
@@ -483,7 +483,7 @@ mod tests {
     #[test]
     fn deploy_result_to_ipc_missing_root() {
         let root_hash: Blake2bHash = [1u8; 32].into();
-        let mut result: super::ipc::RootNotFound = storage::error::RootNotFound(root_hash).into();
+        let mut result: super::ipc::RootNotFound = RootNotFound(root_hash).into();
         let ipc_missing_hash = result.take_hash();
         assert_eq!(root_hash.to_vec(), ipc_missing_hash);
     }
