@@ -161,7 +161,7 @@ impl From<transform::Transform> for super::ipc::Transform {
             }
             transform::Transform::Failure(transform::TypeMismatch { expected, found }) => {
                 let mut fail = super::ipc::TransformFailure::new();
-                let mut typemismatch_err = super::ipc::StorageTypeMismatch::new();
+                let mut typemismatch_err = super::ipc::TypeMismatch::new();
                 typemismatch_err.set_expected(expected.to_owned());
                 typemismatch_err.set_found(found.to_owned());
                 fail.set_error(typemismatch_err);
