@@ -69,13 +69,10 @@ impl History for InMemHist<Key, Value> {
     type Error = Error;
     type Reader = InMemGS<Key, Value>;
 
-    fn checkout(
-        &self,
-        prestate_hash: Blake2bHash,
-    ) -> Result<Option<TrackingCopy<Self::Reader>>, Self::Error> {
+    fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {
         match self.history.get(&prestate_hash) {
             None => Ok(None),
-            Some(gs) => Ok(Some(TrackingCopy::new(gs.clone()))),
+            Some(gs) => Ok(Some(gs.clone())),
         }
     }
 
@@ -149,7 +146,7 @@ mod tests {
         // The res is of type Result<Option<_>, _>> so we have to unwrap twice.
         // This is fine to do in the test since the point of this method is to provide
         // helper for the original method.
-        res.unwrap().unwrap()
+        TrackingCopy::new(res.unwrap().unwrap())
     }
 
     fn commit<H>(hist: &mut H, hash: Blake2bHash, effects: HashMap<Key, Transform>) -> Blake2bHash

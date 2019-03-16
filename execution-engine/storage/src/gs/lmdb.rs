@@ -1,7 +1,7 @@
 use common::key::Key;
 use common::value::Value;
 use error::Error;
-use gs::{DbReader, TrackingCopy};
+use gs::DbReader;
 use history::*;
 use rkv::store::single::SingleStore;
 use rkv::Rkv;
@@ -54,10 +54,7 @@ impl History for LmdbGs {
     type Error = Error;
     type Reader = Self;
 
-    fn checkout(
-        &self,
-        _prestate_hash: Blake2bHash,
-    ) -> Result<Option<TrackingCopy<Self::Reader>>, Self::Error> {
+    fn checkout(&self, _prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {
         unimplemented!("LMDB History not implemented")
     }
 

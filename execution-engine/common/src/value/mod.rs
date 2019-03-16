@@ -190,7 +190,7 @@ impl From<(String, Key)> for Value {
 
 impl TryFrom<Value> for (String, Key) {
     type Error = ();
-    
+
     fn try_from(v: Value) -> Result<(String, Key), ()> {
         if let Value::NamedKey(name, key) = v {
             Ok((name, key))

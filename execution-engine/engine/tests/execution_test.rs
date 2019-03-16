@@ -134,9 +134,12 @@ fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS
     hist.commit(root_hash, m)
         .expect("Creation of mocked account should be a success.");
 
-    hist.checkout(root_hash)
+    let reader = hist
+        .checkout(root_hash)
         .expect("Checkout should not throw errors.")
-        .expect("Root hash should exist.")
+        .expect("Root hash should exist.");
+
+    TrackingCopy::new(reader)
 }
 
 fn mock_context<'a>(

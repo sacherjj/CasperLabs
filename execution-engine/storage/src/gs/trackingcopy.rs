@@ -103,11 +103,7 @@ impl<R: DbReader> TrackingCopy<R> {
         ExecutionEffect(self.ops.clone(), self.fns.clone())
     }
 
-    pub fn query(
-        &mut self,
-        base_key: Key,
-        path: &[String],
-    ) -> Result<QueryResult, Error> {
+    pub fn query(&mut self, base_key: Key, path: &[String]) -> Result<QueryResult, Error> {
         match self.read(base_key)? {
             None => Ok(QueryResult::ValueNotFound(self.error_path_msg(
                 base_key,

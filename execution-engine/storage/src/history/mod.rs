@@ -1,5 +1,5 @@
 use common::key::Key;
-use gs::{DbReader, TrackingCopy};
+use gs::DbReader;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use transform::{Transform, TypeMismatch};
@@ -19,10 +19,7 @@ pub trait History {
     type Reader: DbReader;
 
     /// Checkouts to the post state of a specific block.
-    fn checkout(
-        &self,
-        prestate_hash: Blake2bHash,
-    ) -> Result<Option<TrackingCopy<Self::Reader>>, Self::Error>;
+    fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error>;
 
     /// Applies changes and returns a new post state hash.
     /// block_hash is used for computing a deterministic and unique keys.
