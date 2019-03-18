@@ -78,10 +78,11 @@ pipeline:
     commands:
       - sbt test
 
-  docker-build-node-and-client:
+  docker-build-node-engine-and-client:
     <<: *sbtenv
     commands:
       - sbt node/docker:publishLocal client/docker:publishLocal
+      - make docker-build/execution-engine
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 

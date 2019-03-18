@@ -20,4 +20,5 @@ ADD ./casperlabs-engine-grpc-server*.deb /opt/docker/
 RUN dpkg -i \
     --ignore-depends libgcc1 \
     --ignore-depends libc6 \
+    --ignore-depends libstdc++6 \
     /opt/docker/casperlabs-engine-grpc-server*.deb
