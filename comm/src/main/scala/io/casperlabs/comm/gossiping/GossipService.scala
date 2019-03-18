@@ -15,9 +15,9 @@ trait GossipService[F[_]] {
       request: StreamDagTipBlockSummariesRequest
   ): Iterant[F, BlockSummary]
 
-  def batchGetBlockSummaries(
-      request: BatchGetBlockSummariesRequest
-  ): F[BatchGetBlockSummariesResponse]
+  def streamBlockSummaries(
+      request: StreamBlockSummariesRequest
+  ): Iterant[F, BlockSummary]
 
   /** Get a full block in chunks, optionally compressed, so that it can be transferred over the wire. */
   def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk]

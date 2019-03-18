@@ -34,10 +34,10 @@ object GrpcGossipService {
       ): Observable[BlockSummary] =
         service.streamDagTipBlockSummaries(request).toObservable
 
-      def batchGetBlockSummaries(
-          request: BatchGetBlockSummariesRequest
-      ): Task[BatchGetBlockSummariesResponse] =
-        service.batchGetBlockSummaries(request).toTask
+      def streamBlockSummaries(
+          request: StreamBlockSummariesRequest
+      ): Observable[BlockSummary] =
+        service.streamBlockSummaries(request).toObservable
 
       def getBlockChunked(request: GetBlockChunkedRequest): Observable[Chunk] =
         service.getBlockChunked(request).toObservable
@@ -64,10 +64,10 @@ object GrpcGossipService {
       ): Iterant[F, BlockSummary] =
         stub.streamDagTipBlockSummaries(request).toIterant
 
-      def batchGetBlockSummaries(
-          request: BatchGetBlockSummariesRequest
-      ): F[BatchGetBlockSummariesResponse] =
-        stub.batchGetBlockSummaries(request).to[F]
+      def streamBlockSummaries(
+          request: StreamBlockSummariesRequest
+      ): Iterant[F, BlockSummary] =
+        stub.streamBlockSummaries(request).toIterant
 
       def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
         stub.getBlockChunked(request).toIterant

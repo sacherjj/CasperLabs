@@ -11,6 +11,7 @@ import monix.tail.Iterant
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
 class GossipServiceServer[F[_]: Sync](
+    getBlockSummary: ByteString => F[Option[BlockSummary]],
     getBlock: ByteString => F[Option[Block]],
     maxChunkSize: Int
 ) extends GossipService[F] {
@@ -26,9 +27,13 @@ class GossipServiceServer[F[_]: Sync](
       request: StreamDagTipBlockSummariesRequest
   ): Iterant[F, BlockSummary] = ???
 
-  def batchGetBlockSummaries(
-      request: BatchGetBlockSummariesRequest
-  ): F[BatchGetBlockSummariesResponse] = ???
+  def streamBlockSummaries(
+      request: StreamBlockSummariesRequest
+  ): Iterant[F, BlockSummary] =
+    Iterant[F]
+      .fromSeq(request.blockHashes)
+      .mapEval(getBlockSummary)
+      .flatMap(Iterant.fromIterable(_))
 
   def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
     Iterant.liftF {
