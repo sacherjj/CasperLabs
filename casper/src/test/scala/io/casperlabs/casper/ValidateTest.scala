@@ -17,7 +17,7 @@ import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ExecutionEngineServiceStub}
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -331,7 +331,7 @@ class ValidateTest
 
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      implicit val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+      implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
       val validators = Vector(
         generateValidator("Validator 1"),
         generateValidator("Validator 2"),
@@ -582,7 +582,7 @@ class ValidateTest
 
       val storageDirectory                 = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long                = 1024L * 1024
-      implicit val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+      implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
       implicit val log                     = new LogStub[Task]
       for {
         _   <- casperSmartContractsApi.setBonds(bonds)

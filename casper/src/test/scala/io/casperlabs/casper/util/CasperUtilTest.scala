@@ -17,6 +17,7 @@ import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import monix.eval.Task
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
@@ -35,7 +36,7 @@ class CasperUtilTest
     with BlockDagStorageFixture {
 
   implicit val logEff                  = new LogStub[Task]()
-  implicit val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+  implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
 
   "isInMainChain" should "classify appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>

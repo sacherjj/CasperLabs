@@ -7,8 +7,7 @@ import cats.syntax.applicative._
 import cats.syntax.either._
 import cats.syntax.functor._
 import cats.syntax.flatMap._
-import cats.syntax.apply._
-import cats.{Applicative, Defer, Monad}
+import cats.{Applicative, Defer}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.Bond
 import io.casperlabs.crypto.codec.Base16
@@ -127,32 +126,6 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
 
 object ExecutionEngineService {
   type Stub = IpcGrpcMonix.ExecutionEngineServiceStub
-
-  def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
-    new ExecutionEngineService[F] {
-      override def emptyStateHash: ByteString = ByteString.EMPTY
-      override def exec(
-          prestate: ByteString,
-          deploys: Seq[Deploy]
-      ): F[Either[Throwable, Seq[DeployResult]]] =
-        Seq.empty[DeployResult].asRight[Throwable].pure
-      override def commit(
-          prestate: ByteString,
-          effects: Seq[TransformEntry]
-      ): F[Either[Throwable, ByteString]] = ByteString.EMPTY.asRight[Throwable].pure
-      override def query(
-          state: ByteString,
-          baseKey: Key,
-          path: Seq[String]
-      ): F[Either[Throwable, Value]] =
-        Applicative[F]
-          .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented")))
-      override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
-        Seq.empty[Bond].pure
-      override def setBonds(bonds: Map[Array[Byte], Long]): F[Unit] = Applicative[F].unit
-      override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
-        ().asRight[String].pure[F]
-    }
 }
 
 object GrpcExecutionEngineService {
