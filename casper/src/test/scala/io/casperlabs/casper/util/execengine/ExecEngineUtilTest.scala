@@ -501,7 +501,7 @@ class ExecEngineUtilTest
             val key =
               Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
             val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
-            val op            = Op(Op.OpInstance.Read(ReadOp()))
+            val op            = Op(Op.OpInstance.Noop(io.casperlabs.ipc.NoOp()))
             val transforEntry = TransformEntry(Some(key), Some(transform))
             val opEntry       = OpEntry(Some(key), Some(op))
             ExecutionEffect(Seq(opEntry), Seq(transforEntry))
