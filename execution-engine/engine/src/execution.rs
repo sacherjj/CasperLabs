@@ -426,8 +426,9 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         value_ptr: u32,
         value_size: u32,
     ) -> Result<(), Trap> {
-        let (key, value) = self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)?;
-        self.state.write(key, value).map_err(Into::into)
+        self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)
+            .map(|(key, value)| self.state.write(key, value))
+            .map_err(Into::into)
     }
 
     pub fn add(

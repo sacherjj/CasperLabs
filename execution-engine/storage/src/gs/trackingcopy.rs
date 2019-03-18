@@ -58,11 +58,10 @@ impl<R: DbReader> TrackingCopy<R> {
         }
     }
 
-    pub fn write(&mut self, k: Key, v: Value) -> Result<(), Error> {
+    pub fn write(&mut self, k: Key, v: Value) {
         let _ = self.cache.insert(k, v.clone());
         add(&mut self.ops, k, Op::Write);
         add(&mut self.fns, k, Transform::Write(v));
-        Ok(())
     }
 
     /// Ok(None) represents missing key to which we want to "add" some value.
@@ -301,8 +300,7 @@ mod tests {
         let two = Value::Int32(2);
 
         // writing should work
-        let write = tc.write(k, one.clone());
-        assert_matches!(write, Ok(_));
+        tc.write(k, one.clone());
         // write does not need to query the DB
         let db_value = db_ref.count.get();
         assert_eq!(db_value, 0);
@@ -314,8 +312,7 @@ mod tests {
         assert_eq!(tc.ops.get(&k), Some(&Op::Write));
 
         // writing again should update the values
-        let write = tc.write(k, two.clone());
-        assert_matches!(write, Ok(_));
+        tc.write(k, two.clone());
         let db_value = db_ref.count.get();
         assert_eq!(db_value, 0);
         assert_eq!(tc.fns.len(), 1);

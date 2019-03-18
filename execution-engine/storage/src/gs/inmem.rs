@@ -196,8 +196,7 @@ mod tests {
         let add_res = tc.add(KEY1, Value::Int32(1));
         assert!(add_res.is_ok());
         let new_v2 = Value::String("I am String now!".to_owned());
-        let write_res = tc.write(KEY2, new_v2.clone());
-        assert!(write_res.is_ok());
+        tc.write(KEY2, new_v2.clone());
         let effects = tc.effect();
         // commit changes from the tracking copy
         let hash_res = commit(&mut hist, empty_root_hash, effects.1);
@@ -219,12 +218,10 @@ mod tests {
         let add_res = tc.add(KEY1, Value::Int32(1));
         assert!(add_res.is_ok());
         let new_v2 = Value::String("I am String now!".to_owned());
-        let write_res = tc.write(KEY2, new_v2.clone());
-        assert!(write_res.is_ok());
+        tc.write(KEY2, new_v2.clone());
         let key3 = Key::Account([3u8; 20]);
         let value3 = Value::Int32(3);
-        let write_res = tc.write(key3, value3.clone());
-        assert!(write_res.is_ok());
+        tc.write(key3, value3.clone());
         assert_eq!(tc.get(&key3).unwrap().unwrap(), value3);
         let effects = tc.effect();
         // commit changes from the tracking copy
