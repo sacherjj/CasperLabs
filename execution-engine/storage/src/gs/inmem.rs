@@ -22,7 +22,7 @@ impl<K, V> Clone for InMemGS<K, V> {
 }
 
 impl DbReader for InMemGS<Key, Value> {
-    type Error = ();
+    type Error = !;
     fn get(&self, k: &Key) -> Result<Option<Value>, Self::Error> {
         Ok(self.0.get(k).map(Clone::clone))
     }
@@ -66,7 +66,7 @@ impl<K: Ord, V> InMemHist<K, V> {
 }
 
 impl History for InMemHist<Key, Value> {
-    type Error = ();
+    type Error = !;
     type Reader = InMemGS<Key, Value>;
 
     fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {

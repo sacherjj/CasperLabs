@@ -88,8 +88,8 @@ impl From<ExecutionError> for Error {
     }
 }
 
-impl From<()> for Error {
-    fn from(_error: ()) -> Self {
+impl From<!> for Error {
+    fn from(_error: !) -> Self {
         Error::PreprocessingError("Should never happen.".to_owned())
     }
 }

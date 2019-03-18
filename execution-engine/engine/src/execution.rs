@@ -71,8 +71,8 @@ impl From<BytesReprError> for Error {
     }
 }
 
-impl From<()> for Error {
-    fn from(_err: ()) -> Error {
+impl From<!> for Error {
+    fn from(_err: !) -> Error {
         Error::UnknownError("Should never happen.".to_owned())
     }
 }
