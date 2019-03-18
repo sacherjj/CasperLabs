@@ -2,7 +2,7 @@ use std::marker::{Send, Sync};
 
 use common::key::Key;
 use execution_engine::engine::{EngineState, Error as EngineError};
-use execution_engine::execution::{Executor, WasmiExecutor};
+use execution_engine::execution::{Error as ExecutionError, Executor, WasmiExecutor};
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use shared::newtypes::Blake2bHash;
@@ -29,6 +29,8 @@ where
     H: History,
     EngineError: From<H::Error>,
     H::Error: Debug,
+    <<H as storage::history::History>::Reader as storage::gs::DbReader>::Error:
+        Into<ExecutionError>,
 {
     fn query(
         &self,
@@ -91,10 +93,7 @@ where
         &self,
         _o: ::grpc::RequestOptions,
         p: ipc::ExecRequest,
-    ) -> grpc::SingleResponse<ipc::ExecResponse>
-    where
-        H::Error: Into<EngineError>,
-    {
+    ) -> grpc::SingleResponse<ipc::ExecResponse> {
         let executor = WasmiExecutor;
         let preprocessor = WasmiPreprocessor;
         // TODO: don't unwrap
@@ -184,6 +183,8 @@ where
     E: Executor<A>,
     P: Preprocessor<A>,
     EngineError: From<H::Error>,
+    <<H as storage::history::History>::Reader as storage::gs::DbReader>::Error:
+        Into<ExecutionError>,
 {
     // We want to treat RootNotFound error differently b/c it should short-circuit
     // the execution of ALL deploys within the block. This is because all of them share

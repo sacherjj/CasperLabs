@@ -88,10 +88,18 @@ impl From<ExecutionError> for Error {
     }
 }
 
+impl From<()> for Error {
+    fn from(_error: ()) -> Self {
+        Error::PreprocessingError("Should never happen.".to_owned())
+    }
+}
+
 impl<H> EngineState<H>
 where
     H: History,
     Error: From<H::Error>,
+    <<H as storage::history::History>::Reader as storage::gs::DbReader>::Error:
+        Into<ExecutionError>,
 {
     pub fn new(state: H) -> EngineState<H> {
         EngineState {

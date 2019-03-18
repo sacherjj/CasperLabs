@@ -127,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "casperlabs-contract-ffi"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "wee_alloc 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -137,7 +137,7 @@ dependencies = [
 name = "casperlabs-engine-grpc-server"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.1.1",
+ "casperlabs-contract-ffi 0.2.0",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "execution-engine 0.1.0",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -252,7 +252,7 @@ name = "execution-engine"
 version = "0.1.0"
 dependencies = [
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "casperlabs-contract-ffi 0.1.1",
+ "casperlabs-contract-ffi 0.2.0",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -336,7 +336,7 @@ dependencies = [
 name = "gens"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.1.1",
+ "casperlabs-contract-ffi 0.2.0",
  "proptest 0.8.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "shared 0.1.0",
  "storage 0.1.0",
@@ -992,7 +992,7 @@ name = "shared"
 version = "0.1.0"
 dependencies = [
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "casperlabs-contract-ffi 0.1.1",
+ "casperlabs-contract-ffi 0.2.0",
 ]
 
 [[package]]
@@ -1019,7 +1019,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "storage"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.1.1",
+ "casperlabs-contract-ffi 0.2.0",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "gens 0.1.0",
  "matches 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1098,7 +1098,7 @@ dependencies = [
 name = "tests"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.1.1",
+ "casperlabs-contract-ffi 0.2.0",
  "gens 0.1.0",
  "proptest 0.8.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

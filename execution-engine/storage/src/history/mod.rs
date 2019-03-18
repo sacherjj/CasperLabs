@@ -16,7 +16,7 @@ pub enum CommitResult {
 
 pub trait History {
     type Error;
-    type Reader: DbReader;
+    type Reader: DbReader<Error = Self::Error>;
 
     /// Checkouts to the post state of a specific block.
     fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error>;

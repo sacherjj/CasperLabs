@@ -21,6 +21,9 @@ use wasm_prep::MAX_MEM_PAGES;
 use wasmi::memory_units::Pages;
 use wasmi::{MemoryInstance, MemoryRef};
 
+// Doesn't compile because neither of types (), wasmi::HostError is defined in this crate.
+impl From<()> for wasmi::HostError { }
+
 struct MockEnv {
     key: Key,
     account: value::Account,
