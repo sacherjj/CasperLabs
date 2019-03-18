@@ -16,34 +16,34 @@ object ExecutionEngineServiceStub {
   type Bonds = Map[Array[Byte], Long]
 
   def mock[F[_]](
-      exec: (ByteString, Seq[Deploy]) => F[Either[Throwable, Seq[DeployResult]]],
-      commit: (ByteString, Seq[TransformEntry]) => F[Either[Throwable, ByteString]],
-      query: (ByteString, Key, Seq[String]) => F[Either[Throwable, Value]],
-      computeBonds: ByteString => F[Seq[Bond]],
-      setBonds: Bonds => F[Unit],
-      veriyWasm: ValidateRequest => F[Either[String, Unit]]
+      execFunc: (ByteString, Seq[Deploy]) => F[Either[Throwable, Seq[DeployResult]]],
+      commitFunc: (ByteString, Seq[TransformEntry]) => F[Either[Throwable, ByteString]],
+      queryFunc: (ByteString, Key, Seq[String]) => F[Either[Throwable, Value]],
+      computeBondsFunc: ByteString => F[Seq[Bond]],
+      setBondsFunc: Bonds => F[Unit],
+      verifyWasmFunc: ValidateRequest => F[Either[String, Unit]]
   ): ExecutionEngineService[F] = new ExecutionEngineService[F] {
     override def emptyStateHash: ByteString = ByteString.EMPTY
     override def exec(
         prestate: ByteString,
         deploys: Seq[Deploy]
     ): F[Either[Throwable, Seq[DeployResult]]] =
-      exec(prestate, deploys)
+      execFunc(prestate, deploys)
     override def commit(
         prestate: ByteString,
         effects: Seq[TransformEntry]
-    ): F[Either[Throwable, ByteString]] = commit(prestate, effects)
+    ): F[Either[Throwable, ByteString]] = commitFunc(prestate, effects)
     override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
-      computeBonds(hash)
+      computeBondsFunc(hash)
     override def setBonds(bonds: Map[Array[Byte], Long]): F[Unit] =
-      setBonds(bonds)
+      setBondsFunc(bonds)
     override def query(
         state: ByteString,
         baseKey: Key,
         path: Seq[String]
-    ): F[Either[Throwable, Value]] = query(state, baseKey, path)
+    ): F[Either[Throwable, Value]] = queryFunc(state, baseKey, path)
     override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
-      verifyWasm(contracts)
+      verifyWasmFunc(contracts)
   }
 
   def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
