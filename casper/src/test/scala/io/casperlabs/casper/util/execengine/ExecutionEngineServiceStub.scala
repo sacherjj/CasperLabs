@@ -47,29 +47,15 @@ object ExecutionEngineServiceStub {
   }
 
   def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
-    new ExecutionEngineService[F] {
-      override def emptyStateHash: ByteString = ByteString.EMPTY
-      override def exec(
-          prestate: ByteString,
-          deploys: Seq[Deploy]
-      ): F[Either[Throwable, Seq[DeployResult]]] =
-        Seq.empty[DeployResult].asRight[Throwable].pure
-      override def commit(
-          prestate: ByteString,
-          effects: Seq[TransformEntry]
-      ): F[Either[Throwable, ByteString]] = ByteString.EMPTY.asRight[Throwable].pure
-      override def query(
-          state: ByteString,
-          baseKey: Key,
-          path: Seq[String]
-      ): F[Either[Throwable, Value]] =
+    mock[F](
+      (_, _) => Seq.empty[DeployResult].asRight[Throwable].pure,
+      (_, _) => ByteString.EMPTY.asRight[Throwable].pure,
+      (_, _, _) =>
         Applicative[F]
-          .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented")))
-      override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
-        Seq.empty[Bond].pure
-      override def setBonds(bonds: Map[Array[Byte], Long]): F[Unit] = Applicative[F].unit
-      override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
-        ().asRight[String].pure[F]
-    }
+          .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented"))),
+      _ => Seq.empty[Bond].pure,
+      _ => Applicative[F].unit,
+      _ => ().asRight[String].pure[F]
+    )
 
 }
