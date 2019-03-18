@@ -6,12 +6,20 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.{protocol, BlockException, PrettyPrinter}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
+import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.{
+  computeDeploysCheckpoint,
+  findCommutingEffects,
+  processDeploys,
+  StateHash
+}
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.ipc.{DeployResult, TransformEntry}
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -26,8 +34,7 @@ object BlockGenerator {
 
   def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: Log](
       id: Int,
-      genesis: BlockMessage,
-      runtimeManager: RuntimeManager[F]
+      genesis: BlockMessage
   ): F[BlockMessage] =
     for {
       b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id)
@@ -35,8 +42,7 @@ object BlockGenerator {
       computeBlockCheckpointResult <- computeBlockCheckpoint[F](
                                        b,
                                        genesis,
-                                       dag,
-                                       runtimeManager
+                                       dag
                                      )
       (postStateHash, processedDeploys) = computeBlockCheckpointResult
       _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
@@ -45,14 +51,17 @@ object BlockGenerator {
   def computeBlockCheckpoint[F[_]: Sync: BlockStore: ExecutionEngineService: Log](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
+      dag: BlockDagRepresentation[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] =
     for {
-      result <- InterpreterUtil
-                 .computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
-      Right((preStateHash, postStateHash, processedDeploys)) = result
-    } yield (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
+      result <- computeBlockCheckpointFromDeploys[F](
+                 b,
+                 genesis,
+                 dag,
+                 //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
+                 (_: BlockMetadata) => Seq.empty[TransformEntry].pure[F]
+               )
+    } yield (result.postStateHash, result.deploysForBlock)
 
   def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
       id: Int,
@@ -66,6 +75,116 @@ object BlockGenerator {
     val updatedBlock = b.withBody(updatedBlockBody)
     BlockStore[F].put(b.blockHash, updatedBlock) *>
       IndexedBlockDagStorage[F].inject(id, updatedBlock)
+  }
+
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Log: ExecutionEngineService](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDagRepresentation[F],
+      //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
+      transforms: BlockMetadata => F[Seq[TransformEntry]]
+  ): F[DeploysCheckpoint] =
+    for {
+      parents <- ProtoUtil.unsafeGetParents[F](b)
+
+      deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
+
+      _ = assert(
+        parents.nonEmpty || (parents.isEmpty && b == genesis),
+        "Received a different genesis block."
+      )
+
+      result <- computeDeploysCheckpoint[F](
+                 parents,
+                 deploys,
+                 dag,
+                 transforms
+               )
+    } yield result
+
+  //Returns (None, checkpoints) if the block's tuplespace hash
+  //does not match the computed hash based on the deploys
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
+      b: BlockMessage,
+      dag: BlockDagRepresentation[F],
+      //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
+      transform: BlockMetadata => F[Seq[TransformEntry]]
+  ): F[Either[BlockException, Option[StateHash]]] = {
+    val preStateHash = ProtoUtil.preStateHash(b)
+    val tsHash       = ProtoUtil.tuplespace(b)
+    val deploys      = ProtoUtil.deploys(b).flatMap(_.deploy)
+    val timestamp    = Some(b.header.get.timestamp) // TODO: Ensure header exists through type
+    for {
+      parents                              <- ProtoUtil.unsafeGetParents[F](b)
+      processedHash                        <- processDeploys(parents, dag, deploys, transform)
+      (computePreStateHash, deployResults) = processedHash
+      _                                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
+      result <- processPossiblePreStateHash[F](
+                 preStateHash,
+                 tsHash,
+                 deployResults,
+                 computePreStateHash,
+                 timestamp,
+                 deploys
+               )
+    } yield result
+  }
+
+  private def processPossiblePreStateHash[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
+      preStateHash: StateHash,
+      tsHash: Option[StateHash],
+      deployResults: Seq[DeployResult],
+      computedPreStateHash: StateHash,
+      time: Option[Long],
+      deploys: Seq[DeployData]
+  ): F[Either[BlockException, Option[StateHash]]] =
+    if (preStateHash == computedPreStateHash) {
+      processPreStateHash[F](
+        preStateHash,
+        tsHash,
+        deployResults,
+        computedPreStateHash,
+        time,
+        deploys
+      )
+    } else {
+      Log[F].warn(
+        s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
+          .buildString(preStateHash)}"
+      ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
+    }
+
+  private def processPreStateHash[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
+      preStateHash: StateHash,
+      tsHash: Option[StateHash],
+      processedDeploys: Seq[DeployResult],
+      possiblePreStateHash: StateHash,
+      time: Option[Long],
+      deploys: Seq[DeployData]
+  ): F[Either[BlockException, Option[StateHash]]] = {
+    val deployLookup     = processedDeploys.zip(deploys).toMap
+    val commutingEffects = findCommutingEffects(processedDeploys)
+    val transforms       = commutingEffects.unzip._1.flatMap(_.transformMap)
+    ExecutionEngineService[F].commit(preStateHash, transforms).flatMap {
+      case Left(ex) =>
+        Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
+          .leftCast[BlockException]
+          .pure[F]
+      case Right(computedStateHash) =>
+        if (tsHash.contains(computedStateHash)) {
+          //state hash in block matches computed hash!
+          Right(Option(computedStateHash))
+            .leftCast[BlockException]
+            .pure[F]
+        } else {
+          // state hash in block does not match computed hash -- invalid!
+          // return no state hash, do not update the state hash set
+          Log[F].warn(
+            s"Tuplespace hash ${PrettyPrinter.buildString(tsHash.getOrElse(ByteString.EMPTY))} does not match computed hash ${PrettyPrinter
+              .buildString(computedStateHash)}."
+          ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
+        }
+    }
   }
 }
 
