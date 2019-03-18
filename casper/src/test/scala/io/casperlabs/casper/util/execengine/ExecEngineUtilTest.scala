@@ -7,8 +7,9 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.ipc._
-import io.casperlabs.models.BlockMetadata
+import io.casperlabs.models.{BlockMetadata, SmartContractEngineError}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -477,54 +478,38 @@ class ExecEngineUtilTest
   "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val failedExecEEService: ExecutionEngineService[Task] =
-        new ExecutionEngineService[Task] {
-          override def emptyStateHash = ByteString.copyFrom(Array.fill(32)(0.toByte))
-          override def exec(
-              prestate: ByteString,
-              deploys: Seq[Deploy]
-          ): Task[Either[Throwable, Seq[DeployResult]]] =
-            Task.now {
-              new Throwable("failed when exec deploys").asLeft
-            }
-          override def commit(prestate: ByteString, effects: Seq[TransformEntry]) = Task.delay {
-            new Throwable("failed when commit transform").asLeft
-          }
-          override def computeBonds(hash: ByteString)(implicit log: Log[Task])            = ???
-          override def setBonds(bonds: Map[Array[Byte], Long])                            = ???
-          override def query(state: ByteString, baseKey: Key, path: Seq[String])          = ???
-          override def verifyWasm(contracts: ValidateRequest): Task[Either[String, Unit]] = ???
-        }
+        mock[Task](
+          (_, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
+          (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
+          (_, _, _) => new SmartContractEngineError("unimplemented").asLeft.pure[Task],
+          _ => Seq.empty[Bond].pure[Task],
+          _ => Task.unit,
+          _ => ().asRight[String].pure[Task]
+        )
 
       val failedCommitEEService: ExecutionEngineService[Task] =
-        new ExecutionEngineService[Task] {
-          private def getExecutionEffect(deploy: Deploy) = {
-            val key =
-              Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
-            val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
-            val op            = Op(Op.OpInstance.Noop(io.casperlabs.ipc.NoOp()))
-            val transforEntry = TransformEntry(Some(key), Some(transform))
-            val opEntry       = OpEntry(Some(key), Some(op))
-            ExecutionEffect(Seq(opEntry), Seq(transforEntry))
-          }
-          override def emptyStateHash = ByteString.copyFrom(Array.fill(32)(0.toByte))
-          override def exec(
-              prestate: ByteString,
-              deploys: Seq[Deploy]
-          ): Task[Either[Throwable, Seq[DeployResult]]] =
+        mock[Task](
+          (_, deploys) =>
             Task.now {
+              def getExecutionEffect(deploy: Deploy) = {
+                val key =
+                  Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
+                val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
+                val op            = Op(Op.OpInstance.Noop(io.casperlabs.ipc.NoOp()))
+                val transforEntry = TransformEntry(Some(key), Some(transform))
+                val opEntry       = OpEntry(Some(key), Some(op))
+                ExecutionEffect(Seq(opEntry), Seq(transforEntry))
+              }
               deploys
                 .map(d => DeployResult(10, DeployResult.Result.Effects(getExecutionEffect(d))))
                 .asRight[Throwable]
-            }
-
-          override def commit(prestate: ByteString, effects: Seq[TransformEntry]) = Task.delay {
-            new Throwable("failed when commit transform").asLeft
-          }
-          override def computeBonds(hash: ByteString)(implicit log: Log[Task])            = ???
-          override def setBonds(bonds: Map[Array[Byte], Long])                            = ???
-          override def query(state: ByteString, baseKey: Key, path: Seq[String])          = ???
-          override def verifyWasm(contracts: ValidateRequest): Task[Either[String, Unit]] = ???
-        }
+          },
+          (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
+          (_, _, _) => new SmartContractEngineError("unimplemented").asLeft.pure[Task],
+          _ => Seq.empty[Bond].pure[Task],
+          _ => Task.unit,
+          _ => ().asRight[String].pure[Task]
+        )
 
       val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1L)
       val b1DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
