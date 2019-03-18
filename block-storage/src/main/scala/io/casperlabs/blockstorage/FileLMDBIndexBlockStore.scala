@@ -113,11 +113,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
                                           checkpoint.storagePath,
                                           RandomAccessIO.Read
                                         )
-                                      } { storageFile =>
-                                        readBlockMessageFromFile(storageFile)
-                                      } { storageFile =>
-                                        storageFile.close
-                                      }
+                                      }(readBlockMessageFromFile)(_.close())
                                     case None =>
                                       RaiseIOError[F].raise[BlockMessage](
                                         UnavailableReferencedCheckpoint(
@@ -329,7 +325,7 @@ object FileLMDBIndexBlockStore {
   def create[F[_]: Monad: Concurrent: Log](config: Config): F[StorageErr[BlockStore[F]]] =
     for {
       notExists <- Sync[F].delay(Files.notExists(config.indexPath))
-      _         <- if (notExists) Sync[F].delay(Files.createDirectories(config.indexPath)) else ().pure[F]
+      _         <- Sync[F].delay(Files.createDirectories(config.indexPath)).whenA(notExists)
       env <- Sync[F].delay {
               val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
               Env

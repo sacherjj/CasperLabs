@@ -3,7 +3,7 @@ package io.casperlabs.blockstorage
 import java.nio.file.{Path, StandardCopyOption}
 import java.nio.{BufferUnderflowException, ByteBuffer}
 
-import cats.Monad
+import cats.{Monad, MonadError}
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
@@ -20,6 +20,7 @@ import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.catscontrib.MonadStateOps._
+import io.casperlabs.catscontrib.ski._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{AtomicMonadState, Log, LogSource}
@@ -51,6 +52,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
     blockMetadataCrcPath: Path,
     state: MonadState[F, BlockDagFileStorageState[F]]
 ) extends BlockDagStorage[F] {
+  import BlockDagFileStorage._
+
   private implicit val logSource = LogSource(BlockDagFileStorage.getClass)
 
   private case class FileDagRepresentation(
@@ -85,25 +88,30 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
                      } yield result
                  }
       } yield result
+
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
       dataLookup
         .get(blockHash)
         .fold(
           BlockStore[F].get(blockHash).map(_.map(BlockMetadata.fromBlock))
         )(blockMetadata => Option(blockMetadata).pure[F])
+
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.get(blockHash).fold(BlockStore[F].contains(blockHash))(_ => true.pure[F])
+
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
       if (startBlockNumber >= sortOffset) {
         val offset = startBlockNumber - sortOffset
-        assert(offset.isValidInt)
-        topoSortVector.drop(offset.toInt).pure[F]
+        assertCond[F]("Topo sort offset is not a valid Int", offset.isValidInt) map
+          kp(topoSortVector.drop(offset.toInt))
       } else if (sortOffset - startBlockNumber + topoSortVector.length < Int.MaxValue) { // Max Vector length
         lock.withPermit(
           for {
             checkpoints          <- (state >> 'checkpoints).get
             checkpointsWithIndex = checkpoints.zipWithIndex
-            checkpointsToLoad    = checkpointsWithIndex.filter(startBlockNumber < _._1.end)
+            checkpointsToLoad = checkpointsWithIndex.filter {
+              case (checkpoint, _) => startBlockNumber < checkpoint.end
+            }
             checkpointsDagInfos <- checkpointsToLoad.traverse {
                                     case (startingCheckpoint, index) =>
                                       loadCheckpointDagInfo(startingCheckpoint, index)
@@ -121,21 +129,27 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
           TopoSortLengthIsTooBig(sortOffset - startBlockNumber + topoSortVector.length)
         )
       }
+
     def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] = {
       val startBlockNumber = Math.max(0L, sortOffset - (tailLength - topoSortVector.length))
       topoSort(startBlockNumber)
     }
+
     def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
       topoSort(startBlockNumber).map { topologicalSorting =>
         val order = topologicalSorting.flatten.zipWithIndex.toMap
         Ordering.by(b => order(b.blockHash))
       }
+
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
+
     def latestMessage(validator: Validator): F[Option[BlockMetadata]] =
       latestMessagesMap.get(validator).flatTraverse(lookup)
+
     def latestMessageHashes: F[Map[Validator, BlockHash]] =
       latestMessagesMap.pure[F]
+
     def latestMessages: F[Map[Validator, BlockMetadata]] =
       latestMessagesMap.toList
         .traverse {
@@ -149,12 +163,10 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
       RandomAccessIO.open[F](checkpoint.path, RandomAccessIO.Read)
     )(_.close)
     for {
-      blockMetadataList <- checkpointDataInputResource.use { checkpointDataInput =>
-                            BlockDagFileStorage.readDataLookupData(checkpointDataInput)
-                          }
-      dataLookup = blockMetadataList.toMap
-      childMap   = BlockDagFileStorage.extractChildMap(blockMetadataList)
-      topoSort   = BlockDagFileStorage.extractTopoSort(blockMetadataList)
+      blockMetadataList <- checkpointDataInputResource.use(readDataLookupData[F])
+      dataLookup        = blockMetadataList.toMap
+      childMap          = extractChildMap(blockMetadataList)
+      topoSort          <- extractTopoSort[F](blockMetadataList)
     } yield CheckpointedDagInfo(childMap, dataLookup, topoSort, checkpoint.start)
   }
 
@@ -294,64 +306,66 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
 
   def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
     lock.withPermit(
-      for {
-        alreadyStored <- (state >> 'dataLookup).get.map(_.contains(block.blockHash))
-        _ <- if (alreadyStored) {
-              Log[F].warn(s"Block ${Base16.encode(block.blockHash.toByteArray)} is already stored")
-            } else {
-              for {
-                _             <- squashLatestMessagesDataFileIfNeeded()
-                blockMetadata = BlockMetadata.fromBlock(block)
-                _             = assert(block.blockHash.size == 32)
-                _             <- (state >> 'dataLookup).modify(_.updated(block.blockHash, blockMetadata))
-                _ <- (state >> 'childMap).modify(
-                      childMap =>
-                        parentHashes(block)
-                          .foldLeft(childMap) {
-                            case (acc, p) =>
-                              val currChildren = acc.getOrElse(p, Set.empty[BlockHash])
-                              acc.updated(p, currChildren + block.blockHash)
-                          }
-                          .updated(block.blockHash, Set.empty[BlockHash])
-                    )
-                _ <- (state >> 'topoSort).modify(
-                      TopologicalSortUtil.update(_, 0L, block)
-                    )
-                //Block which contains newly bonded validators will not
-                //have those validators in its justification
-                newValidators = bonds(block)
-                  .map(_.validator)
-                  .toSet
-                  .diff(block.justifications.map(_.validator).toSet)
-                newValidatorsWithSender <- if (block.sender.isEmpty) {
-                                            // Ignore empty sender for special cases such as genesis block
-                                            Log[F].warn(
-                                              s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
-                                            ) *> newValidators.pure[F]
-                                          } else if (block.sender.size() == 32) {
-                                            (newValidators + block.sender).pure[F]
-                                          } else {
-                                            Sync[F].raiseError[Set[ByteString]](
-                                              BlockSenderIsMalformed(block)
-                                            )
-                                          }
-                _ <- (state >> 'latestMessages).modify { latestMessages =>
-                      newValidatorsWithSender.foldLeft(latestMessages) {
-                        //Update new validators with block in which
-                        //they were bonded (i.e. this block)
-                        case (acc, v) => acc.updated(v, block.blockHash)
-                      }
-                    }
-                _ <- updateLatestMessagesFile(
-                      (newValidators + block.sender).toList,
-                      block.blockHash
-                    )
-                _ <- updateDataLookupFile(blockMetadata)
-              } yield ()
-            }
-        dag <- representation
-      } yield dag
+      (state >> 'dataLookup).get
+        .map(_.contains(block.blockHash))
+        .ifM(
+          Log[F].warn(s"Block ${Base16.encode(block.blockHash.toByteArray)} is already stored"),
+          insertBlock(block)
+        ) *> representation
     )
+
+  private def insertBlock(block: BlockMessage) =
+    for {
+      _             <- squashLatestMessagesDataFileIfNeeded()
+      blockMetadata = BlockMetadata.fromBlock(block)
+      _ <- assertCond[F](
+            "Cannot insert block: blockHash.size != 32",
+            block.blockHash.size == 32
+          )
+      _ <- (state >> 'dataLookup).modify(_.updated(block.blockHash, blockMetadata))
+      _ <- (state >> 'childMap).modify(
+            parentHashes(block)
+              .foldLeft(_) {
+                case (acc, p) =>
+                  val currChildren = acc.getOrElse(p, Set.empty[BlockHash])
+                  acc.updated(p, currChildren + block.blockHash)
+              }
+              .updated(block.blockHash, Set.empty[BlockHash])
+          )
+      _ <- (state >> 'topoSort).modify(
+            TopologicalSortUtil.update(_, 0L, block)
+          )
+      //Block which contains newly bonded validators will not
+      //have those validators in its justification
+      newValidators = bonds(block)
+        .map(_.validator)
+        .toSet
+        .diff(block.justifications.map(_.validator).toSet)
+      newValidatorsWithSender <- if (block.sender.isEmpty) {
+                                  // Ignore empty sender for special cases such as genesis block
+                                  Log[F].warn(
+                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                  ) *> newValidators.pure[F]
+                                } else if (block.sender.size() == 32) {
+                                  (newValidators + block.sender).pure[F]
+                                } else {
+                                  Sync[F].raiseError[Set[ByteString]](
+                                    BlockSenderIsMalformed(block)
+                                  )
+                                }
+      _ <- (state >> 'latestMessages).modify {
+            newValidatorsWithSender.foldLeft(_) {
+              //Update new validators with block in which
+              //they were bonded (i.e. this block)
+              case (acc, v) => acc.updated(v, block.blockHash)
+            }
+          }
+      _ <- updateLatestMessagesFile(
+            (newValidators + block.sender).toList,
+            block.blockHash
+          )
+      _ <- updateDataLookupFile(blockMetadata)
+    } yield ()
 
   def checkpoint(): F[Unit] =
     ().pure[F]
@@ -409,6 +423,9 @@ object BlockDagFileStorage {
       checkpointsDirPath: Path,
       latestMessagesLogMaxSizeFactor: Int = 10
   )
+
+  def assertCond[F[_]: MonadError[?[_], Throwable]](errMsg: String, b: => Boolean): F[Unit] =
+    MonadError[F, Throwable].raiseError(new IllegalArgumentException(errMsg)).whenA(!b)
 
   private[blockstorage] final case class CheckpointedDagInfo(
       childMap: Map[BlockHash, Set[BlockHash]],
@@ -563,7 +580,8 @@ object BlockDagFileStorage {
         val withoutLastCalculatedCrc = calculateDataLookupCrc[F](dataLookupList.init)
         withoutLastCalculatedCrc.value.flatMap { withoutLastCalculatedCrcValue =>
           if (withoutLastCalculatedCrcValue == readDataLookupCrc) {
-            val byteString                    = dataLookupList.last._2.toByteString
+            val (_, blockMetadata)            = dataLookupList.last
+            val byteString                    = blockMetadata.toByteString
             val lastDataLookupEntrySize: Long = 4L + byteString.size()
             for {
               length <- dataLookupRandomAccessFile.length
@@ -586,7 +604,9 @@ object BlockDagFileStorage {
   private def extractChildMap(
       dataLookup: List[(BlockHash, BlockMetadata)]
   ): Map[BlockHash, Set[BlockHash]] =
-    dataLookup.foldLeft(dataLookup.map(_._1 -> Set.empty[BlockHash]).toMap) {
+    dataLookup.foldLeft(
+      dataLookup.map { case (blockHash, _) => blockHash -> Set.empty[BlockHash] }.toMap
+    ) {
       case (childMap, (_, blockMetadata)) =>
         blockMetadata.parents.foldLeft(childMap) {
           case (acc, p) =>
@@ -595,14 +615,18 @@ object BlockDagFileStorage {
         }
     }
 
-  private def extractTopoSort(
+  private def extractTopoSort[F[_]: MonadError[?[_], Throwable]](
       dataLookup: List[(BlockHash, BlockMetadata)]
-  ): Vector[Vector[BlockHash]] = {
+  ): F[Vector[Vector[BlockHash]]] = {
     val blockMetadatas = dataLookup.map(_._2).toVector
     val indexedTopoSort =
       blockMetadatas.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector.sortBy(_._1)
-    assert(indexedTopoSort.zipWithIndex.forall { case ((readI, _), i) => readI == i })
-    indexedTopoSort.map(_._2)
+    val topoSortInvariant = indexedTopoSort.zipWithIndex.forall {
+      case ((readI, _), i) => readI == i
+    }
+    assertCond[F]("Topo sort invariant is violated", topoSortInvariant) map kp(
+      indexedTopoSort.map(_._2)
+    )
   }
 
   private def loadCheckpoints[F[_]: Sync: Log: RaiseIOError](
@@ -678,7 +702,7 @@ object BlockDagFileStorage {
                          }
       (dataLookupList, calculatedDataLookupCrc) = dataLookupResult
       childMap                                  = extractChildMap(dataLookupList)
-      topoSort                                  = extractTopoSort(dataLookupList)
+      topoSort                                  <- extractTopoSort[F](dataLookupList)
       sortedCheckpoints                         <- loadCheckpoints(config.checkpointsDirPath)
       latestMessagesLogOutputStream <- FileOutputStreamIO.open[F](
                                         config.latestMessagesLogPath,
