@@ -27,7 +27,8 @@ use mappings::*;
 impl<H> ipc_grpc::ExecutionEngineService for EngineState<H>
 where
     H: History,
-    H::Error: Into<EngineError> + Debug,
+    EngineError: From<H::Error>,
+    H::Error: Debug,
 {
     fn query(
         &self,
@@ -182,7 +183,7 @@ where
     H: History,
     E: Executor<A>,
     P: Preprocessor<A>,
-    H::Error: Into<EngineError>,
+    EngineError: From<H::Error>,
 {
     // We want to treat RootNotFound error differently b/c it should short-circuit
     // the execution of ALL deploys within the block. This is because all of them share

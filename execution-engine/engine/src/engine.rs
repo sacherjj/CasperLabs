@@ -91,7 +91,7 @@ impl From<ExecutionError> for Error {
 impl<H> EngineState<H>
 where
     H: History,
-    H::Error: Into<Error>,
+    Error: From<H::Error>,
 {
     pub fn new(state: H) -> EngineState<H> {
         EngineState {
@@ -104,7 +104,7 @@ where
         &self,
         hash: Blake2bHash,
     ) -> Result<Option<TrackingCopy<H::Reader>>, Error> {
-        match self.state.lock().checkout(hash).map_err(Into::into)? {
+        match self.state.lock().checkout(hash)? {
             Some(tc) => Ok(Some(TrackingCopy::new(tc))),
             None => Ok(None),
         }
