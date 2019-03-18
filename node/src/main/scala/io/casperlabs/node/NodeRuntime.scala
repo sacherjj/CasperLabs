@@ -4,8 +4,10 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.mtl.MonadState
 import cats.syntax.applicative._
 import cats.syntax.apply._
+import cats.syntax.flatMap._
 import cats.syntax.functor._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{BlockStore, InMemBlockDagStorage, InMemBlockStore}
@@ -37,6 +39,7 @@ import kamon._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
+import com.olegpy.meow.effects._
 
 import scala.concurrent.duration._
 
@@ -50,6 +53,8 @@ class NodeRuntime private[node] (
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
   private[this] val grpcScheduler =
     Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
+
+  private val initPeer = if (conf.server.standalone) None else Some(conf.server.bootstrap)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -79,27 +84,21 @@ class NodeRuntime private[node] (
   val main = GrpcExecutionEngineService[Effect](
     conf.grpcServer.socket,
     conf.server.maxMessageSize
-  ).use(runMain)
+  ) use { ee =>
+    val rpConfState = localPeerNode[Task].flatMap(rpConf[Task]).toEffect
+    rpConfState >>= (_.runState(runMain(ee, _)))
+  }
 
-  def runMain(executionEngineService: ExecutionEngineService[Effect]) =
+  def runMain(
+      implicit
+      executionEngineService: ExecutionEngineService[Effect],
+      rpConfState: MonadState[Task, RPConf]
+  ) =
     for {
-      local <- WhoAmI
-                .fetchLocalPeerNode[Task](
-                  conf.server.host,
-                  conf.server.port,
-                  conf.server.kademliaPort,
-                  conf.server.noUpnp,
-                  id
-                )
-                .toEffect
-
-      defaultTimeout = conf.server.defaultTimeout.millis
-
-      initPeer             = if (conf.server.standalone) None else Some(conf.server.bootstrap)
-      rpConfState          = effects.rpConfState(rpConf(local, initPeer))
-      rpConfAsk            = effects.rpConfAsk(rpConfState)
-      peerNodeAsk          = effects.peerNodeAsk(rpConfState)
       rpConnections        <- effects.rpConnections.toEffect
+      defaultTimeout       = conf.server.defaultTimeout.millis
+      rpConfAsk            = effects.rpConfAsk
+      peerNodeAsk          = effects.peerNodeAsk
       metrics              = diagnostics.effects.metrics[Task]
       kademliaConnections  <- CachedConnections[Task, KademliaConnTag](Task.catsAsync, metrics).toEffect
       tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
@@ -393,8 +392,18 @@ class NodeRuntime private[node] (
     numOfConnectionsPinged = 10
   ) // TODO read from conf
 
-  private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
-    RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
+  private def rpConf[F[_]: Sync](local: PeerNode) =
+    Ref.of(RPConf(local, initPeer, defaultTimeout, rpClearConnConf))
+
+  private def localPeerNode[F[_]: Sync: Log] =
+    WhoAmI
+      .fetchLocalPeerNode[F](
+        conf.server.host,
+        conf.server.port,
+        conf.server.kademliaPort,
+        conf.server.noUpnp,
+        id
+      )
 }
 
 object NodeRuntime {

@@ -19,9 +19,9 @@ import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.shared.ByteStringOps._
-import io.casperlabs.shared.{AtomicMonadState, Log}
-import monix.execution.atomic.AtomicAny
+import io.casperlabs.shared.Log
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 
@@ -298,27 +298,28 @@ object FileLMDBIndexBlockStore {
               }
       blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath, RandomAccessIO.ReadWrite)
       sortedCheckpointsEither      <- loadCheckpoints(checkpointsDirPath)
-      result = sortedCheckpointsEither match {
-        case Right(sortedCheckpoints) =>
-          val checkpointsMap = sortedCheckpoints.map(c => c.index -> c).toMap
-          val currentIndex   = sortedCheckpoints.lastOption.map(_.index + 1).getOrElse(0)
-          val initialState = FileLMDBIndexBlockStoreState[F](
-            blockMessageRandomAccessFile,
-            checkpointsMap,
-            currentIndex
-          )
-          (new FileLMDBIndexBlockStore[F](
-            lock,
-            env,
-            index,
-            storagePath,
-            checkpointsDirPath,
-            new AtomicMonadState[F, FileLMDBIndexBlockStoreState[F]](
-              AtomicAny(initialState)
-            )
-          ): BlockStore[F]).asRight[StorageError]
-        case Left(e) => e.asLeft[BlockStore[F]]
-      }
+      result <- sortedCheckpointsEither match {
+                 case Right(sortedCheckpoints) =>
+                   val checkpointsMap = sortedCheckpoints.map(c => c.index -> c).toMap
+                   val currentIndex   = sortedCheckpoints.lastOption.map(_.index + 1).getOrElse(0)
+                   val initialState = FileLMDBIndexBlockStoreState[F](
+                     blockMessageRandomAccessFile,
+                     checkpointsMap,
+                     currentIndex
+                   )
+
+                   initialState.useStateByRef[F] { st =>
+                     (new FileLMDBIndexBlockStore[F](
+                       lock,
+                       env,
+                       index,
+                       storagePath,
+                       checkpointsDirPath,
+                       st
+                     ): BlockStore[F]).asRight[StorageError]
+                   }
+                 case Left(e) => e.asLeft[BlockStore[F]].pure[F]
+               }
     } yield result
   }
 

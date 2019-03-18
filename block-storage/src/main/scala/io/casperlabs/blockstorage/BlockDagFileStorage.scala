@@ -23,8 +23,7 @@ import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockMetadata
-import io.casperlabs.shared.{AtomicMonadState, Log, LogSource}
-import monix.execution.atomic.AtomicAny
+import io.casperlabs.shared.{Log, LogSource}
 
 import scala.ref.WeakReference
 import scala.util.matching.Regex
@@ -725,16 +724,9 @@ object BlockDagFileStorage {
         blockMetadataLogOutputStream = blockMetadataLogOutputStream,
         blockMetadataCrc = calculatedDataLookupCrc
       )
-    } yield
-      new BlockDagFileStorage[F](
-        lock,
-        config.latestMessagesLogPath,
-        config.latestMessagesCrcPath,
-        config.latestMessagesLogMaxSizeFactor,
-        config.blockMetadataLogPath,
-        config.blockMetadataCrcPath,
-        new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
-      )
+
+      res <- blockDagFileStorageState[F](config, lock, state)
+    } yield res
   }
 
   def createEmptyFromGenesis[F[_]: Concurrent: Log: BlockStore](
@@ -790,7 +782,17 @@ object BlockDagFileStorage {
         blockMetadataLogOutputStream = blockMetadataLogOutputStream,
         blockMetadataCrc = blockMetadataCrc
       )
-    } yield
+
+      res <- blockDagFileStorageState[F](config, lock, state)
+    } yield res
+  }
+
+  private def blockDagFileStorageState[F[_]: Concurrent: Log: BlockStore: RaiseIOError](
+      config: Config,
+      lock: Semaphore[F],
+      state: BlockDagFileStorageState[F]
+  ) =
+    state.useStateByRef[F](
       new BlockDagFileStorage[F](
         lock,
         config.latestMessagesLogPath,
@@ -798,7 +800,7 @@ object BlockDagFileStorage {
         config.latestMessagesLogMaxSizeFactor,
         config.blockMetadataLogPath,
         config.blockMetadataCrcPath,
-        new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
+        _
       )
-  }
+    )
 }
