@@ -19,6 +19,7 @@ import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{AtomicMonadState, Log, LogSource}
@@ -51,87 +52,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
     state: MonadState[F, BlockDagFileStorageState[F]]
 ) extends BlockDagStorage[F] {
   private implicit val logSource = LogSource(BlockDagFileStorage.getClass)
-
-  private[this] def getLatestMessages: F[Map[Validator, BlockHash]] =
-    state.get.map(_.latestMessages)
-  private[this] def getChildMap: F[Map[BlockHash, Set[BlockHash]]] =
-    state.get.map(_.childMap)
-  private[this] def getDataLookup: F[Map[BlockHash, BlockMetadata]] =
-    state.get.map(_.dataLookup)
-  private[this] def getTopoSort: F[Vector[Vector[BlockHash]]] =
-    state.get.map(_.topoSort)
-  private[this] def getSortOffset: F[Long] =
-    state.get.map(_.sortOffset)
-  private[this] def getCheckpoints: F[List[Checkpoint]] =
-    state.get.map(_.checkpoints)
-  private[this] def getLatestMessagesLogOutputStream: F[FileOutputStreamIO[F]] =
-    state.get.map(_.latestMessagesLogOutputStream)
-  private[this] def getLatestMessagesLogSize: F[Int] =
-    state.get.map(_.latestMessagesLogSize)
-  private[this] def getLatestMessagesCrc: F[Crc32[F]] =
-    state.get.map(_.latestMessagesCrc)
-  private[this] def getBlockMetadataLogOutputStream: F[FileOutputStreamIO[F]] =
-    state.get.map(_.blockMetadataLogOutputStream)
-  private[this] def getBlockMetadataCrc: F[Crc32[F]] =
-    state.get.map(_.blockMetadataCrc)
-
-  private[this] def setLatestMessages(v: Map[Validator, BlockHash]): F[Unit] =
-    state.modify(s => s.copy(latestMessages = v))
-  private[this] def setChildMap(v: Map[BlockHash, Set[BlockHash]]): F[Unit] =
-    state.modify(s => s.copy(childMap = v))
-  private[this] def setDataLookup(v: Map[BlockHash, BlockMetadata]): F[Unit] =
-    state.modify(s => s.copy(dataLookup = v))
-  private[this] def setTopoSort(v: Vector[Vector[BlockHash]]): F[Unit] =
-    state.modify(s => s.copy(topoSort = v))
-  private[this] def setSortOffset(v: Long): F[Unit] =
-    state.modify(s => s.copy(sortOffset = v))
-  private[this] def setCheckpoints(v: List[Checkpoint]): F[Unit] =
-    state.modify(s => s.copy(checkpoints = v))
-  private[this] def setLatestMessagesLogOutputStream(v: FileOutputStreamIO[F]): F[Unit] =
-    state.modify(s => s.copy(latestMessagesLogOutputStream = v))
-  private[this] def setLatestMessagesLogSize(v: Int): F[Unit] =
-    state.modify(s => s.copy(latestMessagesLogSize = v))
-  private[this] def setLatestMessagesCrc(v: Crc32[F]): F[Unit] =
-    state.modify(s => s.copy(latestMessagesCrc = v))
-  private[this] def setBlockMetadataLogOutputStream(v: FileOutputStreamIO[F]): F[Unit] =
-    state.modify(s => s.copy(blockMetadataLogOutputStream = v))
-  private[this] def setBlockMetadataCrc(v: Crc32[F]): F[Unit] =
-    state.modify(s => s.copy(blockMetadataCrc = v))
-
-  private[this] def modifyLatestMessages(
-      f: Map[Validator, BlockHash] => Map[Validator, BlockHash]
-  ): F[Unit] =
-    state.modify(s => s.copy(latestMessages = f(s.latestMessages)))
-  private[this] def modifyChildMap(
-      f: Map[BlockHash, Set[BlockHash]] => Map[BlockHash, Set[BlockHash]]
-  ): F[Unit] =
-    state.modify(s => s.copy(childMap = f(s.childMap)))
-  private[this] def modifyDataLookup(
-      f: Map[BlockHash, BlockMetadata] => Map[BlockHash, BlockMetadata]
-  ): F[Unit] =
-    state.modify(s => s.copy(dataLookup = f(s.dataLookup)))
-  private[this] def modifyTopoSort(
-      f: Vector[Vector[BlockHash]] => Vector[Vector[BlockHash]]
-  ): F[Unit] =
-    state.modify(s => s.copy(topoSort = f(s.topoSort)))
-  private[this] def modifySortOffset(f: Long => Long): F[Unit] =
-    state.modify(s => s.copy(sortOffset = f(s.sortOffset)))
-  private[this] def modifyCheckpoints(f: List[Checkpoint] => List[Checkpoint]): F[Unit] =
-    state.modify(s => s.copy(checkpoints = f(s.checkpoints)))
-  private[this] def modifyLatestMessagesLogOutputStream(
-      f: FileOutputStreamIO[F] => FileOutputStreamIO[F]
-  ): F[Unit] =
-    state.modify(s => s.copy(latestMessagesLogOutputStream = f(s.latestMessagesLogOutputStream)))
-  private[this] def modifyLatestMessagesLogSize(f: Int => Int): F[Unit] =
-    state.modify(s => s.copy(latestMessagesLogSize = f(s.latestMessagesLogSize)))
-  private[this] def modifyLatestMessagesCrc(f: Crc32[F] => Crc32[F]): F[Unit] =
-    state.modify(s => s.copy(latestMessagesCrc = f(s.latestMessagesCrc)))
-  private[this] def modifyBlockMetadataLogOutputStream(
-      f: FileOutputStreamIO[F] => FileOutputStreamIO[F]
-  ): F[Unit] =
-    state.modify(s => s.copy(blockMetadataLogOutputStream = f(s.blockMetadataLogOutputStream)))
-  private[this] def modifyBlockMetadataCrc(f: Crc32[F] => Crc32[F]): F[Unit] =
-    state.modify(s => s.copy(blockMetadataCrc = f(s.blockMetadataCrc)))
 
   private case class FileDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
@@ -181,7 +101,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
       } else if (sortOffset - startBlockNumber + topoSortVector.length < Int.MaxValue) { // Max Vector length
         lock.withPermit(
           for {
-            checkpoints          <- getCheckpoints
+            checkpoints          <- (state >> 'checkpoints).get
             checkpointsWithIndex = checkpoints.zipWithIndex
             checkpointsToLoad    = checkpointsWithIndex.filter(startBlockNumber < _._1.end)
             checkpointsDagInfos <- checkpointsToLoad.traverse {
@@ -246,13 +166,13 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
         for {
           loadedDagInfo <- loadDagInfo(checkpoint)
           newCheckpoint = checkpoint.copy(dagInfo = Some(WeakReference(loadedDagInfo)))
-          _             <- modifyCheckpoints(_.patch(index, List(newCheckpoint), 1))
+          _             <- (state >> 'checkpoints).modify(_.patch(index, List(newCheckpoint), 1))
         } yield loadedDagInfo
     }
 
   private def loadCheckpoint(offset: Long): F[Option[CheckpointedDagInfo]] =
     for {
-      checkpoints <- getCheckpoints
+      checkpoints <- (state >> 'checkpoints).get
       neededCheckpoint = checkpoints.zipWithIndex.find {
         case (c, _) => c.start <= offset && offset < c.end
       }
@@ -268,11 +188,11 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
 
   private def updateLatestMessagesFile(validators: List[Validator], blockHash: BlockHash): F[Unit] =
     for {
-      latestMessagesCrc <- getLatestMessagesCrc
+      latestMessagesCrc <- (state >> 'latestMessagesCrc).get
       _ <- validators.traverse_ { validator =>
             val toAppend = validator.concat(blockHash).toByteArray
             for {
-              latestMessagesLogOutputStream <- getLatestMessagesLogOutputStream
+              latestMessagesLogOutputStream <- (state >> 'latestMessagesLogOutputStream).get
               _                             <- latestMessagesLogOutputStream.write(toAppend)
               _                             <- latestMessagesLogOutputStream.flush
               _ <- latestMessagesCrc.update(toAppend).flatMap { _ =>
@@ -280,7 +200,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
                   }
             } yield ()
           }
-      _ <- modifyLatestMessagesLogSize(_ + 1)
+      _ <- (state >> 'latestMessagesLogSize).modify(_ + 1)
     } yield ()
 
   private def updateLatestMessagesCrcFile(newCrc: Crc32[F]): F[Unit] =
@@ -296,8 +216,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
 
   private def squashLatestMessagesDataFile(): F[Unit] =
     for {
-      latestMessages                <- getLatestMessages
-      latestMessagesLogOutputStream <- getLatestMessagesLogOutputStream
+      latestMessages                <- (state >> 'latestMessages).get
+      latestMessagesLogOutputStream <- (state >> 'latestMessagesLogOutputStream).get
       _                             <- latestMessagesLogOutputStream.close
       tmpSquashedData <- createTemporaryFile(
                           "casperlabs-block-dag-store-latest-messages-",
@@ -324,15 +244,15 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
       _                <- replaceFile(tmpSquashedCrc, latestMessagesCrcFilePath)
       newLatestMessagesLogOutputStream <- FileOutputStreamIO
                                            .open[F](latestMessagesDataFilePath, true)
-      _ <- setLatestMessagesLogOutputStream(newLatestMessagesLogOutputStream)
-      _ <- setLatestMessagesCrc(squashedCrc)
-      _ <- setLatestMessagesLogSize(0)
+      _ <- (state >> 'latestMessagesLogOutputStream).set(newLatestMessagesLogOutputStream)
+      _ <- (state >> 'latestMessagesCrc).set(squashedCrc)
+      _ <- (state >> 'latestMessagesLogSize).set(0)
     } yield ()
 
   private def squashLatestMessagesDataFileIfNeeded(): F[Unit] =
     for {
-      latestMessages        <- getLatestMessages
-      latestMessagesLogSize <- getLatestMessagesLogSize
+      latestMessages        <- (state >> 'latestMessages).get
+      latestMessagesLogSize <- (state >> 'latestMessagesLogSize).get
       result <- if (latestMessagesLogSize > latestMessages.size * latestMessagesLogMaxSizeFactor) {
                  squashLatestMessagesDataFile()
                } else {
@@ -342,10 +262,10 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
 
   private def updateDataLookupFile(blockMetadata: BlockMetadata): F[Unit] =
     for {
-      dataLookupCrc          <- getBlockMetadataCrc
+      dataLookupCrc          <- (state >> 'blockMetadataCrc).get
       blockBytes             = blockMetadata.toByteString
       toAppend               = blockBytes.size.toByteString.concat(blockBytes).toByteArray
-      dataLookupOutputStream <- getBlockMetadataLogOutputStream
+      dataLookupOutputStream <- (state >> 'blockMetadataLogOutputStream).get
       _                      <- dataLookupOutputStream.write(toAppend)
       _                      <- dataLookupOutputStream.flush
       _                      <- dataLookupCrc.update(toAppend)
@@ -361,13 +281,13 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
     } yield ()
 
   private def representation: F[BlockDagRepresentation[F]] =
-    for {
-      latestMessages <- getLatestMessages
-      childMap       <- getChildMap
-      dataLookup     <- getDataLookup
-      topoSort       <- getTopoSort
-      sortOffset     <- getSortOffset
-    } yield FileDagRepresentation(latestMessages, childMap, dataLookup, topoSort, sortOffset)
+    (
+      (state >> 'latestMessages).get,
+      (state >> 'childMap).get,
+      (state >> 'dataLookup).get,
+      (state >> 'topoSort).get,
+      (state >> 'sortOffset).get
+    ) mapN FileDagRepresentation.apply
 
   def getRepresentation: F[BlockDagRepresentation[F]] =
     lock.withPermit(representation)
@@ -375,7 +295,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
   def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
     lock.withPermit(
       for {
-        alreadyStored <- getDataLookup.map(_.contains(block.blockHash))
+        alreadyStored <- (state >> 'dataLookup).get.map(_.contains(block.blockHash))
         _ <- if (alreadyStored) {
               Log[F].warn(s"Block ${Base16.encode(block.blockHash.toByteArray)} is already stored")
             } else {
@@ -383,8 +303,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
                 _             <- squashLatestMessagesDataFileIfNeeded()
                 blockMetadata = BlockMetadata.fromBlock(block)
                 _             = assert(block.blockHash.size == 32)
-                _             <- modifyDataLookup(_.updated(block.blockHash, blockMetadata))
-                _ <- modifyChildMap(
+                _             <- (state >> 'dataLookup).modify(_.updated(block.blockHash, blockMetadata))
+                _ <- (state >> 'childMap).modify(
                       childMap =>
                         parentHashes(block)
                           .foldLeft(childMap) {
@@ -394,7 +314,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
                           }
                           .updated(block.blockHash, Set.empty[BlockHash])
                     )
-                _ <- modifyTopoSort(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
+                _ <- (state >> 'topoSort).modify(
+                      TopologicalSortUtil.update(_, 0L, block)
+                    )
                 //Block which contains newly bonded validators will not
                 //have those validators in its justification
                 newValidators = bonds(block)
@@ -413,7 +335,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
                                               BlockSenderIsMalformed(block)
                                             )
                                           }
-                _ <- modifyLatestMessages { latestMessages =>
+                _ <- (state >> 'latestMessages).modify { latestMessages =>
                       newValidatorsWithSender.foldLeft(latestMessages) {
                         //Update new validators with block in which
                         //they were bonded (i.e. this block)
@@ -437,9 +359,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
   def clear(): F[Unit] =
     lock.withPermit(
       for {
-        latestMessagesLogOutputStream <- getLatestMessagesLogOutputStream
+        latestMessagesLogOutputStream <- (state >> 'latestMessagesLogOutputStream).get
         _                             <- latestMessagesLogOutputStream.close
-        blockMetadataLogOutputStream  <- getBlockMetadataLogOutputStream
+        blockMetadataLogOutputStream  <- (state >> 'blockMetadataLogOutputStream).get
         _                             <- blockMetadataLogOutputStream.close
         _                             <- writeToFile(latestMessagesDataFilePath, Array.emptyByteArray)
         _                             <- writeToFile(blockMetadataLogPath, Array.emptyByteArray)
@@ -449,27 +371,27 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
         newBlockMetadataCrc           <- Crc32.emptyF[F]()
         newBlockMetadataCrcBytes      <- newBlockMetadataCrc.bytes
         _                             <- writeToFile(blockMetadataCrcPath, newBlockMetadataCrcBytes)
-        _                             <- setDataLookup(Map.empty)
-        _                             <- setChildMap(Map.empty)
-        _                             <- setTopoSort(Vector.empty)
-        _                             <- setLatestMessages(Map.empty)
+        _                             <- (state >> 'dataLookup).set(Map.empty)
+        _                             <- (state >> 'childMap).set(Map.empty)
+        _                             <- (state >> 'topoSort).set(Vector.empty)
+        _                             <- (state >> 'latestMessages).set(Map.empty)
         newLatestMessagesLogOutputStream <- FileOutputStreamIO
                                              .open[F](latestMessagesDataFilePath, true)
-        _                               <- setLatestMessagesLogOutputStream(newLatestMessagesLogOutputStream)
+        _                               <- (state >> 'latestMessagesLogOutputStream).set(newLatestMessagesLogOutputStream)
         newBlockMetadataLogOutputStream <- FileOutputStreamIO.open[F](blockMetadataLogPath, true)
-        _                               <- setBlockMetadataLogOutputStream(newBlockMetadataLogOutputStream)
-        _                               <- setLatestMessagesLogSize(0)
-        _                               <- setLatestMessagesCrc(newLatestMessagesCrc)
-        _                               <- setBlockMetadataCrc(newBlockMetadataCrc)
+        _                               <- (state >> 'blockMetadataLogOutputStream).set(newBlockMetadataLogOutputStream)
+        _                               <- (state >> 'latestMessagesLogSize).set(0)
+        _                               <- (state >> 'latestMessagesCrc).set(newLatestMessagesCrc)
+        _                               <- (state >> 'blockMetadataCrc).set(newBlockMetadataCrc)
       } yield ()
     )
 
   def close(): F[Unit] =
     lock.withPermit(
       for {
-        latestMessagesLogOutputStream <- getLatestMessagesLogOutputStream
+        latestMessagesLogOutputStream <- (state >> 'latestMessagesLogOutputStream).get
         _                             <- latestMessagesLogOutputStream.close
-        blockMetadataLogOutputStream  <- getBlockMetadataLogOutputStream
+        blockMetadataLogOutputStream  <- (state >> 'blockMetadataLogOutputStream).get
         _                             <- blockMetadataLogOutputStream.close
       } yield ()
     )
