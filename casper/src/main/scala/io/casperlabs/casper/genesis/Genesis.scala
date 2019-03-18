@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.{Applicative, Foldable, Monad}
+import cats.{Applicative, Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol
@@ -38,7 +38,7 @@ object Genesis {
   ): List[DeployData] =
     List()
 
-  def withContracts[F[_]: Concurrent: Log: ExecutionEngineService](
+  def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
       initial: BlockMessage,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
@@ -52,18 +52,16 @@ object Genesis {
       startHash
     )
 
-  def withContracts[F[_]: Concurrent: Log: ExecutionEngineService](
+  def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
       blessedTerms: List[DeployData],
       initial: BlockMessage,
       startHash: StateHash
   ): F[BlockMessage] =
     for {
-      possibleResult <- ExecutionEngineService[F]
-                         .exec(startHash, blessedTerms.map(ExecEngineUtil.deploy2deploy))
-      processedDeploys <- possibleResult match {
-                           case Left(ex)             => Concurrent[F].raiseError(ex)
-                           case Right(deployResults) => deployResults.pure[F]
-                         }
+      processedDeploys <- MonadError[F, Throwable].rethrow(
+                           ExecutionEngineService[F]
+                             .exec(startHash, blessedTerms.map(ExecEngineUtil.deploy2deploy))
+                         )
       deployLookup = processedDeploys.zip(blessedTerms).toMap
       // Todo We shouldn't need to do any commutivity checking for the genesis block.
       // Either we make it a "SEQ" block (which is not a feature that exists yet)
@@ -84,8 +82,10 @@ object Genesis {
           )
         }
       }
-      transforms    = commutingEffects.unzip._1.flatMap(_.transformMap)
-      postStateHash <- Sync[F].rethrow(ExecutionEngineService[F].commit(startHash, transforms))
+      transforms = commutingEffects.unzip._1.flatMap(_.transformMap)
+      postStateHash <- MonadError[F, Throwable].rethrow(
+                        ExecutionEngineService[F].commit(startHash, transforms)
+                      )
       stateWithContracts = for {
         bd <- initial.body
         ps <- bd.state

@@ -1113,7 +1113,9 @@ object HashSetCasperTest {
     val initial                          = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "casperlabs")
     implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
     val emptyStateHash                   = casperSmartContractsApi.emptyStateHash
-    val validators                       = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+    val validators = bonds.map {
+      case (id, stake) => ProofOfStakeValidator(id, stake)
+    }.toSeq
     val genesis = Genesis
       .withContracts[Task](
         initial,
