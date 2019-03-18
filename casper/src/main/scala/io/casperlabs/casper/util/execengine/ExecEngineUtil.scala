@@ -1,18 +1,14 @@
 package io.casperlabs.casper.util.execengine
 
-import cats.Monad
-import cats.effect.Sync
 import cats.implicits._
+import cats.{Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.casper.{protocol, BlockException, PrettyPrinter}
-import io.casperlabs.casper.protocol.{BlockMessage, Bond, ProcessedDeploy}
+import io.casperlabs.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
-import io.casperlabs.casper.protocol
-import io.casperlabs.casper.protocol.{BlockMessage, DeployData}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.casper.{PrettyPrinter, protocol}
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.{DeployResult => _, _}
@@ -54,7 +50,7 @@ object ExecEngineUtil {
         )
     }
 
-  def computeDeploysCheckpoint[F[_]: Sync: Log: ExecutionEngineService](
+  def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: Log: ExecutionEngineService](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
@@ -86,8 +82,10 @@ object ExecEngineUtil {
           )
         }
       }
-      transforms    = commutingEffects.unzip._1.flatMap(_.transformMap)
-      postStateHash <- Sync[F].rethrow(ExecutionEngineService[F].commit(preStateHash, transforms))
+      transforms = commutingEffects.unzip._1.flatMap(_.transformMap)
+      postStateHash <- MonadError[F, Throwable].rethrow(
+                        ExecutionEngineService[F].commit(preStateHash, transforms)
+                      )
       maxBlockNumber = parents.foldLeft(-1L) {
         case (acc, b) => math.max(acc, blockNumber(b))
       }
@@ -103,7 +101,7 @@ object ExecEngineUtil {
             .info(s"Block #$number created with effects:\n$msgBody")
     } yield DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number)
 
-  def processDeploys[F[_]: Sync: ExecutionEngineService](
+  def processDeploys[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       deploys: Seq[DeployData],
@@ -113,7 +111,7 @@ object ExecEngineUtil {
     for {
       prestate <- computePrestate[F](parents.toList, dag, transforms)
       ds       = deploys.map(deploy2deploy)
-      result   <- Sync[F].rethrow(ExecutionEngineService[F].exec(prestate, ds))
+      result   <- MonadError[F, Throwable].rethrow(ExecutionEngineService[F].exec(prestate, ds))
     } yield (prestate, result)
 
   //TODO: actually find which ones commute
@@ -128,7 +126,7 @@ object ExecEngineUtil {
         Some((eff, cost))
     }
 
-  def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
+  def effectsForBlock[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       transforms: BlockMetadata => F[Seq[TransformEntry]]
@@ -146,7 +144,7 @@ object ExecEngineUtil {
       transformMap                 = findCommutingEffects(processedDeploys).unzip._1.flatMap(_.transformMap)
     } yield (prestate, transformMap)
 
-  private def computePrestate[F[_]: Sync: ExecutionEngineService](
+  private def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
       parents: List[BlockMessage],
       dag: BlockDagRepresentation[F],
       transforms: BlockMetadata => F[Seq[TransformEntry]]
@@ -159,7 +157,9 @@ object ExecEngineUtil {
         bs       <- blocksToApply[F](parents, dag)
         diffs    <- bs.traverse(transforms).map(_.flatten)
         prestate = ProtoUtil.postStateHash(initParent)
-        result   <- Sync[F].rethrow(ExecutionEngineService[F].commit(prestate, diffs))
+        result <- MonadError[F, Throwable].rethrow(
+                   ExecutionEngineService[F].commit(prestate, diffs)
+                 )
       } yield result
   }
 
