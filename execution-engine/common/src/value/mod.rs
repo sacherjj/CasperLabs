@@ -1,22 +1,31 @@
-use super::alloc::collections::btree_map::BTreeMap;
-use super::alloc::string::String;
-use super::alloc::vec::Vec;
-use super::bytesrepr::{Error, FromBytes, ToBytes};
-use super::key::{Key, UREF_SIZE};
+pub mod account;
+pub mod contract;
+pub mod uint;
+
+use crate::bytesrepr::{Error, FromBytes, ToBytes};
+use crate::key::{Key, UREF_SIZE};
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::convert::TryFrom;
+use core::iter;
+
+pub use self::account::Account;
+pub use self::contract::Contract;
+pub use self::uint::{U128, U256, U512};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Value {
     Int32(i32),
+    UInt128(U128),
+    UInt256(U256),
+    UInt512(U512),
     ByteArray(Vec<u8>),
     ListInt32(Vec<i32>),
     String(String),
     ListString(Vec<String>),
     NamedKey(String, Key),
-    Acct(Account),
-    Contract {
-        bytes: Vec<u8>,
-        known_urefs: BTreeMap<String, Key>,
-    },
+    Account(account::Account),
+    Contract(contract::Contract),
 }
 
 const INT32_ID: u8 = 0;
@@ -27,6 +36,9 @@ const ACCT_ID: u8 = 4;
 const CONTRACT_ID: u8 = 5;
 const NAMEDKEY_ID: u8 = 6;
 const LISTSTRING_ID: u8 = 7;
+const U128_ID: u8 = 8;
+const U256_ID: u8 = 9;
+const U512_ID: u8 = 10;
 
 use self::Value::*;
 
@@ -37,6 +49,24 @@ impl ToBytes for Value {
                 let mut result = Vec::with_capacity(5);
                 result.push(INT32_ID);
                 result.append(&mut i.to_bytes());
+                result
+            }
+            UInt128(u) => {
+                let mut result = Vec::with_capacity(1 + 16);
+                result.push(U128_ID);
+                result.append(&mut u.to_bytes());
+                result
+            }
+            UInt256(u) => {
+                let mut result = Vec::with_capacity(1 + 32);
+                result.push(U256_ID);
+                result.append(&mut u.to_bytes());
+                result
+            }
+            UInt512(u) => {
+                let mut result = Vec::with_capacity(1 + 64);
+                result.push(U512_ID);
+                result.append(&mut u.to_bytes());
                 result
             }
             ByteArray(arr) => {
@@ -57,25 +87,13 @@ impl ToBytes for Value {
                 result.append(&mut s.to_bytes());
                 result
             }
-            Acct(a) => {
+            Account(a) => {
                 let mut result = Vec::new();
                 result.push(ACCT_ID);
                 result.append(&mut a.to_bytes());
                 result
             }
-            Contract { bytes, known_urefs } => {
-                let size: usize = 1 +              //size for ID
-                    4 +                            //size for length of bytes
-                    bytes.len() +                  //size for elements of bytes
-                    4 +                            //size for length of known_urefs
-                    UREF_SIZE * known_urefs.len(); //size for known_urefs elements
-
-                let mut result = Vec::with_capacity(size);
-                result.push(CONTRACT_ID);
-                result.append(&mut bytes.to_bytes());
-                result.append(&mut known_urefs.to_bytes());
-                result
-            }
+            Contract(c) => iter::once(CONTRACT_ID).chain(c.to_bytes()).collect(),
             NamedKey(n, k) => {
                 let size: usize = 1 + //size for ID
                   4 +                 //size for length of String
@@ -104,6 +122,18 @@ impl FromBytes for Value {
                 let (i, rem): (i32, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((Int32(i), rem))
             }
+            U128_ID => {
+                let (u, rem): (U128, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((UInt128(u), rem))
+            }
+            U256_ID => {
+                let (u, rem): (U256, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((UInt256(u), rem))
+            }
+            U512_ID => {
+                let (u, rem): (U512, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((UInt512(u), rem))
+            }
             BYTEARRAY_ID => {
                 let (arr, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((ByteArray(arr), rem))
@@ -117,14 +147,12 @@ impl FromBytes for Value {
                 Ok((String(s), rem))
             }
             ACCT_ID => {
-                let (a, rem): (Account, &[u8]) = FromBytes::from_bytes(rest)?;
-                Ok((Acct(a), rem))
+                let (a, rem): (account::Account, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((Account(a), rem))
             }
             CONTRACT_ID => {
-                let (bytes, rem1): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rest)?;
-                let (known_urefs, rem2): (BTreeMap<String, Key>, &[u8]) =
-                    FromBytes::from_bytes(rem1)?;
-                Ok((Contract { bytes, known_urefs }, rem2))
+                let (c, rem): (contract::Contract, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((Contract(c), rem))
             }
             NAMEDKEY_ID => {
                 let (name, rem1): (String, &[u8]) = FromBytes::from_bytes(rest)?;
@@ -140,86 +168,78 @@ impl FromBytes for Value {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Account {
-    public_key: [u8; 32],
-    nonce: u64,
-    known_urefs: BTreeMap<String, Key>,
-}
-
-impl ToBytes for Account {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::new();
-        result.extend(&self.public_key.to_bytes());
-        result.append(&mut self.nonce.to_bytes());
-        result.append(&mut self.known_urefs.to_bytes());
-        result
-    }
-}
-impl FromBytes for Account {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (public_key, rem1): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (nonce, rem2): (u64, &[u8]) = FromBytes::from_bytes(rem1)?;
-        let (known_urefs, rem3): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem2)?;
-        Ok((
-            Account {
-                public_key,
-                nonce,
-                known_urefs,
-            },
-            rem3,
-        ))
-    }
-}
-
 impl Value {
     pub fn type_string(&self) -> String {
         match self {
             Int32(_) => String::from("Int32"),
+            UInt128(_) => String::from("UInt128"),
+            UInt256(_) => String::from("UInt256"),
+            UInt512(_) => String::from("UInt512"),
             ListInt32(_) => String::from("List[Int32]"),
             String(_) => String::from("String"),
             ByteArray(_) => String::from("ByteArray"),
-            Acct(_) => String::from("Account"),
-            Contract { .. } => String::from("Contract"),
+            Account(_) => String::from("Account"),
+            Contract(_) => String::from("Contract"),
             NamedKey(_, _) => String::from("NamedKey"),
             ListString(_) => String::from("List[String]"),
         }
     }
 
-    pub fn as_account(&self) -> &Account {
+    pub fn as_account(&self) -> &account::Account {
         match self {
-            Acct(a) => a,
+            Account(a) => a,
             _ => panic!("Not an account: {:?}", self),
         }
     }
 }
 
-impl Account {
-    pub fn new(public_key: [u8; 32], nonce: u64, known_urefs: BTreeMap<String, Key>) -> Account {
-        Account {
-            public_key,
-            nonce,
-            known_urefs,
+macro_rules! from_try_from_impl {
+    ($type:ty, $variant:ident) => {
+        impl From<$type> for Value {
+            fn from(x: $type) -> Self {
+                Value::$variant(x)
+            }
         }
-    }
 
-    pub fn insert_urefs(&mut self, keys: &mut BTreeMap<String, Key>) {
-        self.known_urefs.append(keys);
-    }
+        impl TryFrom<Value> for $type {
+            type Error = ();
 
-    pub fn urefs_lookup(&self) -> &BTreeMap<String, Key> {
-        &self.known_urefs
-    }
+            fn try_from(v: Value) -> Result<$type, ()> {
+                if let Value::$variant(x) = v {
+                    Ok(x)
+                } else {
+                    Err(())
+                }
+            }
+        }
+    };
+}
 
-    pub fn get_urefs_lookup(self) -> BTreeMap<String, Key> {
-        self.known_urefs
-    }
+from_try_from_impl!(i32, Int32);
+from_try_from_impl!(U128, UInt128);
+from_try_from_impl!(U256, UInt256);
+from_try_from_impl!(U512, UInt512);
+from_try_from_impl!(Vec<u8>, ByteArray);
+from_try_from_impl!(Vec<i32>, ListInt32);
+from_try_from_impl!(Vec<String>, ListString);
+from_try_from_impl!(String, String);
+from_try_from_impl!(account::Account, Account);
+from_try_from_impl!(contract::Contract, Contract);
 
-    pub fn pub_key(&self) -> &[u8] {
-        &self.public_key
+impl From<(String, Key)> for Value {
+    fn from(tuple: (String, Key)) -> Self {
+        Value::NamedKey(tuple.0, tuple.1)
     }
+}
 
-    pub fn nonce(&self) -> u64 {
-        self.nonce
+impl TryFrom<Value> for (String, Key) {
+    type Error = ();
+    
+    fn try_from(v: Value) -> Result<(String, Key), ()> {
+        if let Value::NamedKey(name, key) = v {
+            Ok((name, key))
+        } else {
+            Err(())
+        }
     }
 }

@@ -1,11 +1,12 @@
 package io.casperlabs.casper
 
-import java.nio.file.Path
+import java.nio.file.{Path, Paths}
 
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib.Capture
+import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
 import io.casperlabs.shared.{Log, LogSource}
@@ -15,42 +16,45 @@ import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
 final case class CasperConf(
-    publicKeyBase16: Option[String],
-    privateKey: Option[Either[String, Path]],
-    sigAlgorithm: String,
+    validatorPublicKey: Option[String],
+    validatorPrivateKey: Option[String],
+    validatorPrivateKeyPath: Option[Path],
+    validatorSigAlgorithm: String,
     bondsFile: Path,
-    knownValidatorsFile: Option[String],
+    knownValidatorsFile: Option[Path],
     numValidators: Int,
-    genesisPath: Path,
+    @ignore
+    @relativeToDataDir("genesis")
+    genesisPath: Path = Paths.get("nonreachable"),
     walletsFile: Path,
     minimumBond: Long,
     maximumBond: Long,
     hasFaucet: Boolean,
     requiredSigs: Int,
     shardId: String,
-    createGenesis: Boolean,
+    standalone: Boolean,
     approveGenesis: Boolean,
     approveGenesisInterval: FiniteDuration,
     approveGenesisDuration: FiniteDuration,
     deployTimestamp: Option[Long]
-)
+) extends SubConfig
 
 object CasperConf {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def parseValidatorsFile[F[_]: Monad: Capture: Log](
-      knownValidatorsFile: Option[String]
+      knownValidatorsFile: Option[Path]
   ): F[Set[ByteString]] =
     knownValidatorsFile match {
       //TODO: Add default set? Throw error?
       case None => Set.empty[ByteString].pure[F]
 
-      case Some(file) =>
+      case Some(path) =>
         Capture[F]
           .capture {
             Try(
               Source
-                .fromFile(file)
+                .fromFile(path.toFile)
                 .getLines()
                 .map(line => ByteString.copyFrom(Base16.decode(line)))
                 .toSet

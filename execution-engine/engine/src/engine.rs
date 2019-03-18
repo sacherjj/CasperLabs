@@ -3,24 +3,23 @@ use execution::{Error as ExecutionError, Executor};
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
-use std::marker::PhantomData;
-use storage::error::{GlobalStateError, RootNotFound};
-use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
+use storage::gs::{ExecutionEffect, TrackingCopy};
 use storage::history::*;
 use storage::transform::Transform;
 use vm::wasm_costs::WasmCosts;
 use wasm_prep::Preprocessor;
 
-pub struct EngineState<R, H>
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RootNotFound(pub Blake2bHash);
+
+pub struct EngineState<H>
 where
-    R: DbReader,
-    H: History<R>,
+    H: History,
 {
     // Tracks the "state" of the blockchain (or is an interface to it).
     // I think it should be constrained with a lifetime parameter.
     state: Mutex<H>,
     wasm_costs: WasmCosts,
-    _phantom: PhantomData<R>,
 }
 
 pub struct ExecutionResult {
@@ -48,7 +47,7 @@ impl ExecutionResult {
 pub enum Error {
     PreprocessingError(String),
     ExecError(ExecutionError),
-    StorageError(GlobalStateError),
+    StorageError(storage::error::Error),
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -77,8 +76,8 @@ impl From<wasm_prep::PreprocessingError> for Error {
     }
 }
 
-impl From<GlobalStateError> for Error {
-    fn from(error: GlobalStateError) -> Self {
+impl From<storage::error::Error> for Error {
+    fn from(error: storage::error::Error) -> Self {
         Error::StorageError(error)
     }
 }
@@ -89,21 +88,23 @@ impl From<ExecutionError> for Error {
     }
 }
 
-impl<H, R> EngineState<R, H>
+impl<H> EngineState<H>
 where
-    H: History<R>,
-    R: DbReader,
+    H: History,
+    H::Error: Into<Error>,
 {
-    pub fn new(state: H) -> EngineState<R, H> {
+    pub fn new(state: H) -> EngineState<H> {
         EngineState {
             state: Mutex::new(state),
             wasm_costs: WasmCosts::new(),
-            _phantom: PhantomData,
         }
     }
 
-    pub fn tracking_copy(&self, hash: Blake2bHash) -> Result<TrackingCopy<R>, RootNotFound> {
-        self.state.lock().checkout(hash)
+    pub fn tracking_copy(
+        &self,
+        hash: Blake2bHash,
+    ) -> Result<Option<TrackingCopy<H::Reader>>, Error> {
+        self.state.lock().checkout(hash).map_err(Into::into)
     }
 
     // TODO run_deploy should perform preprocessing and validation of the deploy.
@@ -122,14 +123,18 @@ where
     ) -> Result<ExecutionResult, RootNotFound> {
         match preprocessor.preprocess(module_bytes, &self.wasm_costs) {
             Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
-            Ok(module) => {
-                let mut tc: storage::gs::TrackingCopy<R> =
-                    self.state.lock().checkout(prestate_hash)?;
-                match executor.exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
-                    (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
-                    (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),
-                }
-            }
+            Ok(module) => match self.state.lock().checkout(prestate_hash) {
+                Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
+                Ok(checkout_result) => match checkout_result {
+                    None => Err(RootNotFound(prestate_hash)),
+                    Some(mut tc) => {
+                        match executor.exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
+                            (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
+                            (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),
+                        }
+                    }
+                },
+            },
         }
     }
 
@@ -137,7 +142,7 @@ where
         &self,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<CommitResult, RootNotFound> {
+    ) -> Result<CommitResult, H::Error> {
         self.state.lock().commit(prestate_hash, effects)
     }
 }

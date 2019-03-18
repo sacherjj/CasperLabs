@@ -33,9 +33,6 @@ service DeployService {
     rpc findBlockWithDeploy (FindDeployInBlockQuery) returns (BlockQueryResponse) {
     }
     rpc queryState (QueryStateRequest) returns (QueryStateResponse) {}
-    //TODO: delete this
-    rpc previewPrivateNames (PrivateNamePreviewQuery) returns (PrivateNamePreviewResponse) {
-    }
 }
 
 message QueryStateRequest {

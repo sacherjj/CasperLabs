@@ -1,22 +1,28 @@
 use common::key::Key;
-use error::{GlobalStateError, RootNotFound};
 use gs::{DbReader, TrackingCopy};
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
-use transform::Transform;
+use transform::{Transform, TypeMismatch};
 
-// TODO: remove annotation
-#[allow(dead_code)]
-mod trie;
+// needs to be public for use in the gens crate
+pub mod trie;
 
 pub enum CommitResult {
+    RootNotFound,
     Success(Blake2bHash),
-    Failure(GlobalStateError),
+    KeyNotFound(Key),
+    TypeMismatch(TypeMismatch),
 }
 
-pub trait History<R: DbReader> {
+pub trait History {
+    type Error;
+    type Reader: DbReader;
+
     /// Checkouts to the post state of a specific block.
-    fn checkout(&self, prestate_hash: Blake2bHash) -> Result<TrackingCopy<R>, RootNotFound>;
+    fn checkout(
+        &self,
+        prestate_hash: Blake2bHash,
+    ) -> Result<Option<TrackingCopy<Self::Reader>>, Self::Error>;
 
     /// Applies changes and returns a new post state hash.
     /// block_hash is used for computing a deterministic and unique keys.
@@ -24,5 +30,5 @@ pub trait History<R: DbReader> {
         &mut self,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<CommitResult, RootNotFound>;
+    ) -> Result<CommitResult, Self::Error>;
 }

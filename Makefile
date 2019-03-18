@@ -2,9 +2,9 @@ DOCKER_USERNAME ?= casperlabs
 DOCKER_PUSH_LATEST ?= false
 # Use the git tag / hash as version. Easy to pinpoint. `git tag` can return more than 1 though. `git rev-parse --short HEAD` would just be the commit.
 $(eval TAGS_OR_SHA = $(shell git tag -l --points-at HEAD | grep -e . || git describe --tags --always --long))
-# Try to use the semantic version with any leading `v` stripped. TODO: MacOS doesn't support -Po
+# Try to use the semantic version with any leading `v` stripped.
 $(eval SEMVER_REGEX = 'v?\K\d+\.\d+(\.\d+)?')
-$(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -Po $(SEMVER_REGEX) | tail -n 1 | grep -e . || echo $(TAGS_OR_SHA)))
+$(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -oE 'v?[0-9]+(\.[0-9]){1,2}$$' | sed 's/^v//' || echo $(TAGS_OR_SHA)))
 
 # All rust related source code. If every Rust module depends on everything then transitive dependencies are not a problem.
 # But with comm/build.rs compiling .proto to .rs every time we build the timestamps are updated as well, so filter those and depend on .proto instead.

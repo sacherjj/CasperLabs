@@ -4,7 +4,6 @@ import cats.effect.{Sync, Timer}
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import io.casperlabs.client.configuration._
-import io.casperlabs.ipc
 import io.casperlabs.casper.protocol
 import io.casperlabs.shared.{Log, LogSource, UncaughtExceptionLogger}
 import monix.eval.Task

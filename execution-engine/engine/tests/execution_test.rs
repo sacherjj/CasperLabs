@@ -127,7 +127,7 @@ fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
 fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS<Key, Value>> {
     let root_hash: Blake2bHash = [0u8; 32].into();
     let mut hist = InMemHist::new(&root_hash);
-    let transform = Transform::Write(value::Value::Acct(init_account.clone()));
+    let transform = Transform::Write(value::Value::Account(init_account.clone()));
 
     let mut m = HashMap::new();
     m.insert(init_key, transform);
@@ -135,7 +135,8 @@ fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS
         .expect("Creation of mocked account should be a success.");
 
     hist.checkout(root_hash)
-        .expect("Checkout of root hash should be a success.")
+        .expect("Checkout should not throw errors.")
+        .expect("Root hash should exist.")
 }
 
 fn mock_context<'a>(
@@ -185,7 +186,7 @@ fn valid_uref() {
 
     // Use uref as the key to perform an action on the global state.
     // This should succeed because the uref is valid.
-    let _ = gs_write(&mut runtime, uref, value).expect("writing using valid uref should succeed");
+    gs_write(&mut runtime, uref, value).expect("writing using valid uref should succeed");
 }
 
 #[test]

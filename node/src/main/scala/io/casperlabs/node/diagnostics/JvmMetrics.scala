@@ -5,7 +5,7 @@ import cats._, cats.data._, cats.implicits._
 import io.casperlabs.catscontrib.MonadTrans
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.model.diagnostics._
+import io.casperlabs.node.api.diagnostics._
 
 trait JvmMetrics[F[_]] {
   def processCpu: F[ProcessCpu]

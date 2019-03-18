@@ -1,3 +1,4 @@
+# io.casperlabs.node.configuration.Configuration.Server
 [server]
 
 # Hostname or IP of this node.
@@ -24,9 +25,6 @@ default-timeout = 2000
 # Bootstrap casperlabs node address for initial seed.
 bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
 
-# Start a stand-alone node (no bootstrapping).
-standalone = false
-
 # Type of Casperlabs space backing store. Valid values are: lmdb, inmem, mixed.
 store-type = "lmdb"
 
@@ -42,7 +40,13 @@ max-message-size = 4194304
 # Size of chunks to split larger payloads into when streamed via transport layer.
 chunk-size = 1048576
 
+# Number of new nodes to which try to gossip a new block.
+relay-factor = 2
 
+# Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes.
+relay-saturation = 100
+
+# io.casperlabs.blockstorage.LMDBBlockStore.Config
 [lmdb]
 
 # LMDB blockstorage  map size (in bytes).
@@ -58,15 +62,14 @@ max-readers = 126
 use-tls = false
 
 
+# io.casperlabs.blockstorage.BlockDagFileStorage.Config
 [blockstorage]
-
-# Directory for block dag file storage.
-dir = "$HOME/.casperlabs/blockstorage"
 
 # Size factor for squashing block storage latest messages.
 latest-messages-log-max-size-factor = 10
 
 
+# io.casperlabs.node.configuration.Configuration.GrpcServer
 [grpc]
 
 # Externally addressable hostname or IP of node on which gRPC service is running.
@@ -82,6 +85,7 @@ port-external = 40401
 port-internal = 40402
 
 
+# io.casperlabs.comm.transport.Tls
 [tls]
 
 # Path to node's X.509 certificate file, that is being used for identification.
@@ -94,6 +98,7 @@ key = "$HOME/.casperlabs/node.key.pem"
 secure-random-non-blocking = false
 
 
+# io.casperlabs.casper.CasperConf
 [casper]
 
 # Base16 encoding of the public key to use for signing a proposed blocks.
@@ -146,8 +151,11 @@ has-faucet = false
 # Number of signatures from trusted validators required to creating an approved genesis block.
 required-sigs = 0
 
-# Identifier of the shard this node is connected to
+# Identifier of the shard this node is connected to.
 shard-id = "casperlabs"
+
+# Start a stand-alone node (no bootstrapping).
+standalone = false
 
 # Start a node as a genesis validator.
 approve-genesis = false
@@ -162,6 +170,7 @@ approve-genesis-duration = "5minutes"
 # deploy-timestamp =
 
 
+# io.casperlabs.node.configuration.Configuration.Kamon
 [metrics]
 
 # Enable the Prometheus metrics reporter.
@@ -173,7 +182,11 @@ zipkin = false
 # Enable Sigar host system metrics.
 sigar = false
 
+# Enable Influx system metrics.
+influx = false
 
+
+# io.casperlabs.node.configuration.Configuration.Influx
 [influx]
 
 # Hostname or IP of the Influx instance.
@@ -187,9 +200,6 @@ sigar = false
 
 # Protocol used in Influx.
 # protocol = "https"
-
-
-[influx-auth]
 
 # Username for Influx database authentication.
 # user = "user"

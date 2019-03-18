@@ -18,11 +18,11 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   val DISTANCE_4 = Some(4)
   val DISTANCE_6 = Some(6)
 
-  var table       = PeerTable[PeerNode](local.key, 3)
+  var table       = PeerTable(local.id, 3)
   var pingedPeers = mutable.MutableList.empty[PeerNode]
 
   override def beforeEach(): Unit = {
-    table = PeerTable[PeerNode](local.key, 3)
+    table = PeerTable(local.id, 3)
     pingedPeers = mutable.MutableList.empty[PeerNode]
     // peer1-4 distance is 4
     table.distance(peer1) shouldBe DISTANCE_4
@@ -149,7 +149,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   }
 
   private def bucketEntriesAt(distance: Option[Int]): Seq[PeerNode] =
-    distance.map(d => table.table(d).map(_.entry)).getOrElse(Seq.empty[PeerNode])
+    distance.map(d => table.table(d).map(_.node)).getOrElse(Seq.empty[PeerNode])
 
   private val pingOk: KademliaRPC[Id]   = new KademliaRPCMock(returns = true)
   private val pingFail: KademliaRPC[Id] = new KademliaRPCMock(returns = false)
@@ -159,10 +159,10 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       pingedPeers += peer
       returns
     }
-    def lookup(key: Seq[Byte], peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
+    def lookup(id: NodeIdentifier, peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
     def receive(
         pingHandler: PeerNode => Id[Unit],
-        lookupHandler: (PeerNode, Array[Byte]) => Id[Seq[PeerNode]]
+        lookupHandler: (PeerNode, NodeIdentifier) => Id[Seq[PeerNode]]
     ): Id[Unit]              = ()
     def shutdown(): Id[Unit] = ()
   }

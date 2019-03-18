@@ -14,10 +14,9 @@ import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.discovery.NodeDiscovery
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.effects
 import io.casperlabs.node.diagnostics.{JvmMetrics, NodeMetrics}
-import io.casperlabs.node.diagnostics
-import io.casperlabs.node.model.diagnostics.DiagnosticsGrpcMonix
+import io.casperlabs.node.diagnostics.effects
+import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
 import io.casperlabs.shared._
 import io.grpc.Server
 import io.grpc.netty.NettyServerBuilder
@@ -65,7 +64,7 @@ object GrpcServer {
           .forPort(port)
           .executor(grpcExecutor)
           .maxMessageSize(maxMessageSize)
-          .addService(DiagnosticsGrpcMonix.bindService(diagnostics.effects.grpc, grpcExecutor))
+          .addService(DiagnosticsGrpcMonix.bindService(effects.grpc, grpcExecutor))
           .build
       )
     }

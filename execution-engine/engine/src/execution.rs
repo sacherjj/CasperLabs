@@ -5,8 +5,9 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
-use storage::error::GlobalStateError;
+use storage::gs::trackingcopy::AddResult;
 use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
+use storage::transform::TypeMismatch;
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
@@ -25,8 +26,10 @@ use std::fmt;
 #[derive(Debug)]
 pub enum Error {
     Interpreter(InterpreterError),
-    Storage(GlobalStateError),
+    Storage(storage::error::Error),
     BytesRepr(BytesReprError),
+    KeyNotFound(Key),
+    TypeMismatch(TypeMismatch),
     ForgedReference(Key),
     NoImportedMemory,
     ArgIndexOutOfBounds(usize),
@@ -55,8 +58,8 @@ impl From<InterpreterError> for Error {
     }
 }
 
-impl From<GlobalStateError> for Error {
-    fn from(e: GlobalStateError) -> Self {
+impl From<storage::error::Error> for Error {
+    fn from(e: storage::error::Error) -> Self {
         Error::Storage(e)
     }
 }
@@ -312,9 +315,8 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let key = self.key_from_mem(key_ptr, key_size)?;
         self.context.insert_named_uref(name.clone(), key);
-        self.state
-            .add(self.context.base_key, Value::NamedKey(name, key))
-            .map_err(Into::into)
+        let base_key = self.context.base_key;
+        self.add_transforms(base_key, Value::NamedKey(name, key))
     }
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
@@ -369,16 +371,21 @@ impl<'a, R: DbReader> Runtime<'a, R> {
 
         let key = self.context.deserialize_key(&key_bytes)?;
         let (args, module, mut refs) = {
-            if let Value::Contract { bytes, known_urefs } = self.state.read(key)? {
-                let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
-                let module = parity_wasm::deserialize_buffer(&bytes)?;
+            match self.state.read(key)? {
+                None => Err(Error::KeyNotFound(key)),
+                Some(value) => {
+                    if let Value::Contract(contract) = value {
+                        let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
+                        let module = parity_wasm::deserialize_buffer(contract.bytes())?;
 
-                Ok((args, module, known_urefs.clone()))
-            } else {
-                Err(Error::FunctionNotFound(format!(
-                    "Value at {:?} is not a contract",
-                    key
-                )))
+                        Ok((args, module, contract.urefs_lookup().clone()))
+                    } else {
+                        Err(Error::FunctionNotFound(format!(
+                            "Value at {:?} is not a contract",
+                            key
+                        )))
+                    }
+                }
             }
         }?;
 
@@ -431,12 +438,23 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         value_size: u32,
     ) -> Result<(), Trap> {
         let (key, value) = self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)?;
-        self.state.add(key, value).map_err(Into::into)
+        self.add_transforms(key, value)
     }
 
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        self.state.read(key).map_err(Into::into)
+        err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
+    }
+
+    fn add_transforms(&mut self, key: Key, value: Value) -> Result<(), Trap> {
+        match self.state.add(key, value) {
+            Err(storage_error) => Err(storage_error.into()),
+            Ok(AddResult::Success) => Ok(()),
+            Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key).into()),
+            Ok(AddResult::TypeMismatch(type_mismatch)) => {
+                Err(Error::TypeMismatch(type_mismatch).into())
+            }
+        }
     }
 
     pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
@@ -456,6 +474,17 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         self.memory
             .set(key_ptr, &key.to_bytes())
             .map_err(|e| Error::Interpreter(e).into())
+    }
+}
+
+fn err_on_missing_key<A>(key: Key, r: Result<Option<A>, storage::error::Error>) -> Result<A, Error>
+where
+    Error: Into<Error>,
+{
+    match r {
+        Ok(None) => Err(Error::KeyNotFound(key)),
+        Err(error) => Err(error.into()),
+        Ok(Some(v)) => Ok(v),
     }
 }
 
@@ -898,7 +927,12 @@ impl Executor<Module> for WasmiExecutor {
     ) -> (Result<ExecutionEffect, Error>, u64) {
         let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
         let acct_key = Key::Account(account_addr);
-        let value = on_fail_charge!(tc.get(&acct_key), 0);
+        let value = on_fail_charge! {
+        match tc.get(&acct_key) {
+            Ok(None) => Err(Error::KeyNotFound(acct_key)),
+            Err(error) => Err(error.into()),
+            Ok(Some(value)) => Ok(value)
+        }, 0 };
         let account = value.as_account();
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashSet<Key> = uref_lookup_local.values().cloned().collect();

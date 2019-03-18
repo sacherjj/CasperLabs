@@ -1,6 +1,6 @@
 package io.casperlabs.blockstorage
 
-import java.nio.file.{Path, StandardCopyOption}
+import java.nio.file.{Path, Paths, StandardCopyOption}
 import java.nio.{BufferUnderflowException, ByteBuffer}
 
 import cats.{Monad, MonadError}
@@ -19,6 +19,7 @@ import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.crypto.codec.Base16
@@ -415,13 +416,17 @@ object BlockDagFileStorage {
   private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r
 
   final case class Config(
-      latestMessagesLogPath: Path,
-      latestMessagesCrcPath: Path,
-      blockMetadataLogPath: Path,
-      blockMetadataCrcPath: Path,
-      checkpointsDirPath: Path,
+      @ignore
+      @relativeToDataDir("block-dag-file-storage")
+      dir: Path = Paths.get("nonreachable"),
       latestMessagesLogMaxSizeFactor: Int = 10
-  )
+  ) extends SubConfig {
+    val latestMessagesLogPath: Path = dir.resolve("latest-messages-log")
+    val latestMessagesCrcPath: Path = dir.resolve("latest-messages-crc")
+    val blockMetadataLogPath: Path  = dir.resolve("block-metadata-log")
+    val blockMetadataCrcPath: Path  = dir.resolve("block-metadata-crc")
+    val checkpointsDirPath: Path    = dir.resolve("checkpoints")
+  }
 
   def assertCond[F[_]: MonadError[?[_], Throwable]](errMsg: String, b: => Boolean): F[Unit] =
     MonadError[F, Throwable].raiseError(new IllegalArgumentException(errMsg)).whenA(!b)

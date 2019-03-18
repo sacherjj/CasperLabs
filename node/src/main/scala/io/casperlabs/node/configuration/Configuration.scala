@@ -1,54 +1,54 @@
 package io.casperlabs.node.configuration
 import java.nio.file.{Path, Paths}
 
-import cats.data.Validated._
-import cats.data.ValidatedNel
-import cats.syntax.apply._
+import cats.data.Validated.{Invalid, Valid}
+import cats.data.{NonEmptyList, ValidatedNel}
 import cats.syntax.either._
+import cats.syntax.option._
 import cats.syntax.validated._
 import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
+import io.casperlabs.node.configuration.Utils._
 import io.casperlabs.comm.PeerNode
+import io.casperlabs.comm.transport.Tls
+import io.casperlabs.configuration.{relativeToDataDir, SubConfig}
 import io.casperlabs.shared.StoreType
-import shapeless._
+import shapeless.<:!<
 import toml.Toml
 
 import scala.io.Source
-import scala.util.Try
 
+/**
+  * All subconfigs must extend the [[SubConfig]] trait.
+  * It's needed for proper hierarchy traversing by Magnolia typeclasses.
+  */
 final case class Configuration(
-    command: Configuration.Command,
     server: Configuration.Server,
-    grpcServer: Configuration.GrpcServer,
-    tls: Configuration.Tls,
+    grpc: Configuration.GrpcServer,
+    tls: Tls,
     casper: CasperConf,
-    blockStorage: LMDBBlockStore.Config,
-    blockDagStorage: BlockDagFileStorage.Config,
-    kamon: Configuration.Kamon
+    lmdb: LMDBBlockStore.Config,
+    blockstorage: BlockDagFileStorage.Config,
+    metrics: Configuration.Kamon,
+    influx: Option[Configuration.Influx]
 )
 
-private case class DefaultConf(c: ConfigurationSoft) extends AnyVal
-
-object Configuration {
+object Configuration extends ParserImplicits {
   case class Kamon(
       prometheus: Boolean,
-      influx: Option[Influx],
       zipkin: Boolean,
-      sigar: Boolean
-  )
+      sigar: Boolean,
+      influx: Boolean
+  ) extends SubConfig
 
   case class Influx(
       hostname: String,
       port: Int,
       database: String,
       protocol: String,
-      authentication: Option[InfluxDbAuthentication]
-  )
-
-  case class InfluxDbAuthentication(
-      user: String,
-      password: String
-  )
+      user: Option[String],
+      password: Option[String]
+  ) extends SubConfig
 
   case class Server(
       host: Option[String],
@@ -59,27 +59,20 @@ object Configuration {
       noUpnp: Boolean,
       defaultTimeout: Int,
       bootstrap: PeerNode,
-      standalone: Boolean,
-      genesisValidator: Boolean,
       dataDir: Path,
       storeType: StoreType,
       maxNumOfConnections: Int,
       maxMessageSize: Int,
-      chunkSize: Int
-  )
+      chunkSize: Int,
+      relayFactor: Int,
+      relaySaturation: Int
+  ) extends SubConfig
   case class GrpcServer(
       host: String,
       socket: Path,
       portExternal: Int,
       portInternal: Int
-  )
-  case class Tls(
-      certificate: Path,
-      key: Path,
-      customCertificateLocation: Boolean,
-      customKeyLocation: Boolean,
-      secureRandomNonBlocking: Boolean
-  )
+  ) extends SubConfig
 
   sealed trait Command extends Product with Serializable
   object Command {
@@ -90,276 +83,134 @@ object Configuration {
   def parse(
       args: Array[String],
       envVars: Map[String, String]
-  ): ValidatedNel[String, Configuration] = {
-    val either = for {
-      defaults      <- ConfigurationSoft.tryDefault
-      defaultValues <- Configuration.readDefaultConfig
-      options       <- Options.safeCreate(args, defaultValues)
-      command       <- options.parseCommand
-      confSoft      <- ConfigurationSoft.parse(args, envVars)
-    } yield parseToActual(command, defaults, confSoft)
-
-    either.fold(_.invalidNel[Configuration], identity)
+  ): ValidatedNel[String, (Command, Configuration)] = {
+    val res = for {
+      defaultRaw         <- readFile(Source.fromResource("default-configuration.toml"))
+      defaults           <- parseToml(defaultRaw)
+      options            <- Options.safeCreate(args, defaults)
+      command            <- options.parseCommand
+      defaultDataDir     <- readDefaultDataDir
+      maybeRawConfigFile <- options.readConfigFile
+      maybeConfigFile <- maybeRawConfigFile.fold(none[Map[CamelCase, String]].asRight[String])(
+                          parseToml(_).map(_.some)
+                        )
+      envSnakeCase = envVars.flatMap {
+        case (k, v) if k.startsWith("CL_") && isSnakeCase(k) => List(SnakeCase(k) -> v)
+        case _                                               => Nil
+      }
+    } yield
+      parse(options.fieldByName, envSnakeCase, maybeConfigFile, defaultDataDir, defaults)
+        .map(conf => (command, conf))
+    res.fold(_.invalidNel[(Command, Configuration)], identity)
   }
 
-  private[configuration] def parseToActual(
-      command: Command,
-      defaultConf: ConfigurationSoft,
-      confSoft: ConfigurationSoft
-  ): ValidatedNel[String, Configuration] = {
-    implicit val default: DefaultConf = DefaultConf(defaultConf)
-    implicit val c: ConfigurationSoft = confSoft
-    (
-      parseServer,
-      parseGrpcServer,
-      parseTls,
-      parseCasper,
-      parseBlockStorage,
-      parseBlockDagStorage,
-      parseKamon
-    ).mapN(Configuration(command, _, _, _, _, _, _, _))
-  }
+  private def parse(
+      cliByName: CamelCase => Option[String],
+      envVars: Map[SnakeCase, String],
+      configFile: Option[Map[CamelCase, String]],
+      defaultDataDir: Path,
+      defaultConfigFile: Map[CamelCase, String]
+  ): ValidatedNel[String, Configuration] =
+    ConfParser
+      .gen[Configuration]
+      .parse(cliByName, envVars, configFile, defaultConfigFile, Nil)
+      .map(updatePaths(_, defaultDataDir))
+      .toEither
+      .flatMap(updateTls(_, defaultConfigFile).leftMap(NonEmptyList(_, Nil)))
+      .fold(Invalid(_), Valid(_))
 
-  private def parseKamon(
-      implicit
-      default: DefaultConf,
-      conf: ConfigurationSoft
-  ): ValidatedNel[String, Kamon] = {
-    val influx = parseInflux.toOption
+  /**
+    * Updates Configuration 'Path' fields:
+    * If a field has [[relativeToDataDir]] annotation, then resolves it against server.dataDir
+    * Otherwise replaces a parent of a field to updated server.dataDir
+    */
+  private[configuration] def updatePaths(c: Configuration, defaultDataDir: Path): Configuration = {
+    import scala.language.experimental.macros
+    import magnolia._
 
-    (
-      toValidated(_.metrics.prometheus, "Kamon.prometheus"),
-      toValidated(_.metrics.zipkin, "Kamon.zipkin"),
-      toValidated(_.metrics.sigar, "Kamon.sigar")
-    ) mapN (Kamon(_, influx, _, _))
-  }
+    val dataDir = c.server.dataDir
 
-  private def parseInflux(
-      implicit
-      default: DefaultConf,
-      conf: ConfigurationSoft
-  ): ValidatedNel[String, Influx] = {
-    val influxAuth = parseInfluxAuth.toOption
-    (
-      toValidated(_.influx.hostname, "Influx.hostname"),
-      toValidated(_.influx.port, "Influx.port"),
-      toValidated(_.influx.database, "Influx.database"),
-      toValidated(_.influx.protocol, "Influx.protocol")
-    ) mapN (Influx(_, _, _, _, influxAuth))
-  }
-
-  private def parseInfluxAuth(
-      implicit
-      default: DefaultConf,
-      conf: ConfigurationSoft
-  ): ValidatedNel[String, InfluxDbAuthentication] =
-    (
-      toValidated(_.influxAuth.user, "[Influx.authentication.user]"),
-      toValidated(_.influxAuth.password, "[Influx.authentication.password]")
-    ) mapN InfluxDbAuthentication
-
-  private def parseServer(
-      implicit
-      default: DefaultConf,
-      conf: ConfigurationSoft
-  ): ValidatedNel[String, Configuration.Server] =
-    (
-      conf.server.host.validNel[String],
-      toValidated(_.server.port, "Server.port"),
-      toValidated(_.server.httpPort, "Server.httpPort"),
-      toValidated(_.server.kademliaPort, "Server.kademliaPort"),
-      toValidated(_.server.dynamicHostAddress, "Server.dynamicHostAddress"),
-      toValidated(_.server.noUpnp, "Server.noUpnp"),
-      toValidated(_.server.defaultTimeout, "Server.defaultTimeout"),
-      toValidated(_.server.bootstrap, "Server.bootstrap"),
-      toValidated(_.server.standalone, "Server.standalone"),
-      toValidated(_.casper.approveGenesis, "Casper.approveGenesis"),
-      toValidated(_.server.dataDir, "Server.dataDir"),
-      toValidated(_.server.storeType, "Server.storeType"),
-      toValidated(_.server.maxNumOfConnections, "Server.maxNumOfConnections"),
-      toValidated(_.server.maxMessageSize, "Server.maxMessageSize"),
-      toValidated(_.server.chunkSize, "Server.chunkSize")
-    ).mapN(Configuration.Server.apply).map { server =>
-      // Do not exceed HTTP2 RFC 7540
-      val maxMessageSize = Math.min(server.maxMessageSize, 16 * 1024 * 1024)
-      val chunkSize      = Math.min(server.chunkSize, maxMessageSize)
-      server.copy(
-        maxMessageSize = maxMessageSize,
-        chunkSize = chunkSize
-      )
+    trait PathUpdater[A] {
+      def update(a: A): A
     }
 
-  private def parseGrpcServer(
-      implicit
-      default: DefaultConf,
-      conf: ConfigurationSoft
-  ): ValidatedNel[String, Configuration.GrpcServer] =
-    (
-      toValidated(_.grpc.host, "GrpcServer.host"),
-      toValidated(_.grpc.socket, "GrpcServer.socket"),
-      toValidated(_.grpc.portExternal, "GrpcServer.portExternal"),
-      toValidated(_.grpc.portInternal, "GrpcServer.portInternal")
-    ).mapN(Configuration.GrpcServer.apply)
+    implicit def default[A: NotPath: NotSubConfig]: PathUpdater[A] =
+      identity(_)
+    implicit def option[A](implicit U: PathUpdater[A]): PathUpdater[Option[A]] =
+      opt => opt.map(U.update)
 
-  private def parseTls(
-      implicit
-      default: DefaultConf,
-      conf: ConfigurationSoft
-  ): ValidatedNel[String, Configuration.Tls] =
-    (
-      default.c.server.dataDir.fold("Default Server.dataDir".invalidNel[Path])(_.validNel[String]),
-      toValidated(_.server.dataDir, "Server.dataDir"),
-      default.c.tls.certificate
-        .fold("Default Tls.certificate".invalidNel[Path])(_.validNel[String]),
-      default.c.tls.key.fold("Default Tls.key".invalidNel[Path])(_.validNel[String]),
-      toValidated(_.tls.certificate, "Tls.certificate"),
-      toValidated(_.tls.key, "Tls.key"),
-      toValidated(_.tls.secureRandomNonBlocking, "Tls.secureRandomNonBlocking")
-    ).mapN(
-      (
-          defaultDataDir,
-          dataDir,
-          defaultCertificate,
-          defaultKey,
-          certificate,
-          key,
-          secureRandomNonBlocking
-      ) => {
-        val isCertificateCustomLocation =
-          certificate.toAbsolutePath.toString
-            .stripPrefix(dataDir.toAbsolutePath.toString) !=
-            defaultCertificate.toAbsolutePath.toString
-              .stripPrefix(defaultDataDir.toAbsolutePath.toString)
-        val isKeyCustomLocation = key.toAbsolutePath.toString
-          .stripPrefix(dataDir.toAbsolutePath.toString) !=
-          defaultKey.toAbsolutePath.toString
-            .stripPrefix(defaultDataDir.toAbsolutePath.toString)
+    implicit val pathUpdater: PathUpdater[Path] = (path: Path) =>
+      Paths.get(replacePrefix(path, defaultDataDir, dataDir))
 
-        Configuration.Tls(
-          certificate,
-          key,
-          isCertificateCustomLocation,
-          isKeyCustomLocation,
-          secureRandomNonBlocking
-        )
-      }
-    )
+    object GenericPathUpdater {
+      type Typeclass[T] = PathUpdater[T]
 
-  private def parseCasper(
-      implicit
-      default: DefaultConf,
-      conf: ConfigurationSoft
-  ): ValidatedNel[String, CasperConf] =
-    (
-      conf.casper.validatorPublicKey.validNel[String],
-      conf.casper.validatorPrivateKey
-        .map(_.asLeft[Path])
-        .orElse(conf.casper.validatorPrivateKeyPath.map(_.asRight[String]))
-        .validNel[String],
-      toValidated(_.casper.validatorSigAlgorithm, "Casper.sigAlgorithm"),
-      toValidated(_.casper.bondsFile, "Casper.bondsFile"),
-      conf.casper.knownValidatorsFile.validNel[String],
-      toValidated(_.casper.numValidators, "Casper.numValidators"),
-      toValidated(_.casper.genesisPath.withDataDir, "Casper.genesisPath"),
-      toValidated(_.casper.walletsFile, "Casper.walletsFile"),
-      toValidated(_.casper.minimumBond, "Casper.minimumBond"),
-      toValidated(_.casper.maximumBond, "Casper.maximumBond"),
-      toValidated(_.casper.hasFaucet, "Casper.hasFaucet"),
-      toValidated(_.casper.requiredSigs, "Casper.requiredSigs"),
-      toValidated(_.casper.shardId, "Casper.shardId"),
-      toValidated(_.server.standalone, "Server.standalone"),
-      toValidated(_.casper.approveGenesis, "Casper.approveGenesis"),
-      toValidated(_.casper.approveGenesisInterval, "Casper.approveGenesisInterval"),
-      toValidated(_.casper.approveGenesisDuration, "Casper.approveGenesisDuration"),
-      conf.casper.deployTimestamp.validNel[String]
-    ).mapN(CasperConf.apply)
+      def combine[T](caseClass: CaseClass[Typeclass, T]): Typeclass[T] =
+        t =>
+          caseClass.construct { p =>
+            val relativePath = p.annotations
+              .find(_.isInstanceOf[relativeToDataDir])
+              .map(_.asInstanceOf[relativeToDataDir])
 
-  private def parseBlockStorage(
-      implicit
-      default: DefaultConf,
-      conf: ConfigurationSoft
-  ): ValidatedNel[String, LMDBBlockStore.Config] =
-    (
-      toValidated(_.lmdb.path.withDataDir, "Lmdb.path"),
-      toValidated(_.lmdb.blockStoreSize, "Lmdb.blockStoreSize"),
-      toValidated(_.lmdb.maxDbs, "Lmdb.maxDbs"),
-      toValidated(_.lmdb.maxReaders, "Lmdb.maxReaders"),
-      toValidated(_.lmdb.useTls, "Lmdb.useTls")
-    ).mapN(LMDBBlockStore.Config.apply)
+            relativePath.fold(p.typeclass.update(p.dereference(t)))(
+              ann => dataDir.resolve(ann.relativePath).asInstanceOf[p.PType]
+            )
+          }
 
-  private def parseBlockDagStorage(
-      implicit
-      default: DefaultConf,
-      conf: ConfigurationSoft
-  ): ValidatedNel[String, BlockDagFileStorage.Config] =
-    (
-      toValidated(
-        _.blockstorage.latestMessagesLogPath.withDataDir,
-        "BlockDagFileStorage.latestMessagesLogPath"
-      ),
-      toValidated(
-        _.blockstorage.latestMessagesCrcPath.withDataDir,
-        "BlockDagFileStorage.latestMessagesCrcPath"
-      ),
-      toValidated(
-        _.blockstorage.blockMetadataLogPath.withDataDir,
-        "BlockDagFileStorage.blockMetadataLogPath"
-      ),
-      toValidated(
-        _.blockstorage.blockMetadataCrcPath.withDataDir,
-        "BlockDagFileStorage.blockMetadataCrcPath"
-      ),
-      toValidated(
-        _.blockstorage.checkpointsDirPath.withDataDir,
-        "BlockDagFileStorage.checkpointsDirPath"
-      ),
-      toValidated(
-        _.blockstorage.latestMessagesLogMaxSizeFactor,
-        "BlockDagFileStorage.latestMessagesLogMaxSizeFactor"
-      )
-    ).mapN(BlockDagFileStorage.Config.apply)
+      def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] =
+        t => sealedTrait.dispatch(t)(s => s.typeclass.update(s.cast(t)))
 
-  private[configuration] def toValidated[A](
-      selectField: ConfigurationSoft => Option[A],
-      fieldName: String
-  )(
-      implicit
-      ev: A <:!< ConfigurationSoft.RelativePath,
-      c: ConfigurationSoft,
-      d: DefaultConf
-  ): ValidatedNel[String, A] = {
-    def adjustPath(path: Path): Option[Path] =
-      for {
-        defaultDataDir <- d.c.server.dataDir
-        dataDir        <- c.server.dataDir
-        newPath = path.toAbsolutePath.toString
-          .replace(defaultDataDir.toAbsolutePath.toString, dataDir.toAbsolutePath.toString)
-      } yield Paths.get(newPath)
-
-    selectField(c)
-      .flatMap {
-        case p: Path => adjustPath(p).asInstanceOf[Option[A]]
-        case v       => Some(v)
-      }
-      .fold(s"$fieldName is not defined".invalidNel[A])(_.validNel[String])
+      implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
+    }
+    GenericPathUpdater.gen[Configuration].update(c)
   }
 
-  private[configuration] def combineWithDataDir(
-      relativePath: ConfigurationSoft => String
-  )(implicit c: ConfigurationSoft): ConfigurationSoft => Option[Path] =
-    _ => c.server.dataDir.map(_.resolve(relativePath(c)))
+  private[configuration] def updateTls(
+      c: Configuration,
+      defaultConfigFile: Map[CamelCase, String]
+  ): Either[String, Configuration] = {
+    val dataDir = c.server.dataDir
+    for {
+      defaultDataDir <- readDefaultDataDir
+      defaultCertificate <- defaultConfigFile
+                             .get(CamelCase("tlsCertificate"))
+                             .fold("tls.certificate must have default value".asLeft[Path])(
+                               s => Parser[Path].parse(s)
+                             )
+      defaultKey <- defaultConfigFile
+                     .get(CamelCase("tlsKey"))
+                     .fold("tls.key must have default value".asLeft[Path])(
+                       s => Parser[Path].parse(s)
+                     )
+    } yield {
+      val isCertCustomLocation = stripPrefix(c.tls.certificate, dataDir) != stripPrefix(
+        defaultCertificate,
+        defaultDataDir
+      )
+      val isKeyCustomLocation =
+        stripPrefix(c.tls.key, dataDir) !=
+          stripPrefix(defaultKey, defaultDataDir)
+      c.copy(
+        tls = c.tls.copy(
+          customCertificateLocation = isCertCustomLocation,
+          customKeyLocation = isKeyCustomLocation
+        )
+      )
+    }
+  }
 
-  private[configuration] def readDefaultConfig: Either[String, Map[String, String]] = {
-    def readRawDefaultConfig: Either[String, String] =
-      Try(Source.fromResource("default-configuration.toml").mkString).toEither.leftMap(_.getMessage)
+  private def readDefaultDataDir: Either[String, Path] =
+    for {
+      defaultRaw <- readFile(Source.fromResource("default-configuration.toml"))
+      defaults   <- parseToml(defaultRaw)
+      dataDir <- defaults
+                  .get(CamelCase("serverDataDir"))
+                  .fold("server default data dir must be defined".asLeft[Path])(
+                    s => Parser[Path].parse(s)
+                  )
+    } yield dataDir
 
-    def dashToCamel(s: String): String =
-      s.foldLeft(("", false)) {
-          case ((acc, _), '-')   => (acc, true)
-          case ((acc, true), c)  => (acc + c.toUpper, false)
-          case ((acc, false), c) => (acc + c, false)
-        }
-        ._1
+  private[configuration] def parseToml(content: String): Either[String, Map[CamelCase, String]] = {
 
     def flatten(t: Map[String, toml.Value]): Map[String, String] =
       t.toList.flatMap {
@@ -372,7 +223,6 @@ object Configuration {
       }.toMap
 
     for {
-      content      <- readRawDefaultConfig
       tbl          <- Toml.parse(content)
       dashifiedMap = flatten(tbl.values)
     } yield

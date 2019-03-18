@@ -5,26 +5,25 @@ import java.nio.file.Path
 import cats.syntax.either._
 import cats.syntax.option._
 import io.casperlabs.comm.PeerNode
+import io.casperlabs.configuration.cli.scallop
 import io.casperlabs.node.BuildInfo
-import io.casperlabs.shared.{scallop, StoreType}
+import io.casperlabs.node.configuration.Utils._
+import io.casperlabs.shared.StoreType
 import org.rogach.scallop._
 
 import scala.collection.mutable
-import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
 import scala.language.implicitConversions
 
-private[configuration] object Converter {
+private[configuration] object Converter extends ParserImplicits {
   import Options._
 
   implicit val bootstrapAddressConverter: ValueConverter[PeerNode] = new ValueConverter[PeerNode] {
     def parse(s: List[(String, List[String])]): Either[String, Option[PeerNode]] =
       s match {
         case (_, uri :: Nil) :: Nil =>
-          PeerNode
-            .fromAddress(uri)
-            .map(u => Right(Some(u)))
-            .getOrElse(Left("can't parse the casperlabs node bootstrap address"))
+          Parser[PeerNode].parse(uri).map(_.some)
         case Nil => Right(None)
         case _   => Left("provide the casperlabs node bootstrap address")
       }
@@ -45,10 +44,7 @@ private[configuration] object Converter {
       override def parse(s: List[(String, List[String])]): Either[String, Option[FiniteDuration]] =
         s match {
           case (_, duration :: Nil) :: Nil =>
-            val finiteDuration = Some(Duration(duration)).collect { case f: FiniteDuration => f }
-            finiteDuration.fold[Either[String, Option[FiniteDuration]]](
-              Left("Expected finite duration.")
-            )(fd => Right(Some(fd)))
+            Parser[FiniteDuration].parse(duration).map(_.some)
           case Nil => Right(None)
           case _   => Left("Provide a duration.")
         }
@@ -60,10 +56,7 @@ private[configuration] object Converter {
     def parse(s: List[(String, List[String])]): Either[String, Option[StoreType]] =
       s match {
         case (_, storeType :: Nil) :: Nil =>
-          StoreType
-            .from(storeType)
-            .map(u => Right(Some(u)))
-            .getOrElse(Left("can't parse the store type"))
+          Parser[StoreType].parse(storeType).map(_.some)
         case Nil => Right(None)
         case _   => Left("provide the store type")
       }
@@ -79,18 +72,14 @@ private[configuration] object Options {
 
   def flag(b: Boolean): Flag = b.asInstanceOf[Flag]
 
-  // We need this conversion because ScallopOption[A] is invariant in A
-  implicit def scallopOptionFlagToBoolean(so: ScallopOption[Flag]): ScallopOption[Boolean] =
-    so.map(identity)
-
-  def safeCreate(args: Seq[String], defaults: Map[String, String]): Either[String, Options] =
+  def safeCreate(args: Seq[String], defaults: Map[CamelCase, String]): Either[String, Options] =
     Either.catchNonFatal(Options(args, defaults)).leftMap(_.getMessage)
 }
 
 //noinspection TypeAnnotation
 private[configuration] final case class Options private (
     arguments: Seq[String],
-    defaults: Map[String, String]
+    defaults: Map[CamelCase, String]
 ) extends ScallopConf(arguments) {
   helpWidth(120)
   import Converter._
@@ -102,123 +91,12 @@ private[configuration] final case class Options private (
 
   /**
     * Converts between string representation of field name and its actual value
-    * Filled by [[io.casperlabs.shared.scallop]] macro
+    * Filled by [[io.casperlabs.configuration.cli.scallop]] macro
     */
   private val fields =
-    mutable.Map.empty[(ScallopConfBase, String), () => ScallopOption[String]]
+    mutable.Map.empty[(ScallopConfBase, CamelCase), () => ScallopOption[String]]
 
-  implicit def scallopOptionToOption[A](so: ScallopOption[A]): Option[A] = so.toOption
-
-  def parseConf: Either[String, ConfigurationSoft] = {
-    for {
-      c <- parseCommand
-    } yield {
-      val server = ConfigurationSoft.Server(
-        run.serverHost,
-        run.serverPort,
-        run.serverHttpPort,
-        run.serverKademliaPort,
-        run.serverDynamicHostAddress,
-        run.serverNoUpnp,
-        run.serverDefaultTimeout,
-        run.serverBootstrap,
-        run.serverStandalone,
-        run.serverStoreType,
-        run.serverDataDir,
-        run.serverMaxNumOfConnections,
-        c match {
-          case _: Configuration.Command.Diagnostics.type =>
-            diagnostics.serverMaxMessageSize
-          case _: Configuration.Command.Run.type => run.serverMaxMessageSize
-        },
-        c match {
-          case _: Configuration.Command.Diagnostics.type =>
-            diagnostics.serverChunkSize
-          case _: Configuration.Command.Run.type => run.serverChunkSize
-        }
-      )
-      val grpcServer = ConfigurationSoft.GrpcServer(
-        c match {
-          case _: Configuration.Command.Diagnostics.type =>
-            diagnostics.grpcHost
-          case _: Configuration.Command.Run.type =>
-            run.grpcHost
-        },
-        run.grpcSocket,
-        c match {
-          case _: Configuration.Command.Diagnostics.type =>
-            diagnostics.grpcPortExternal
-          case _: Configuration.Command.Run.type => run.grpcPortExternal
-        },
-        run.grpcPortInternal
-      )
-      val tls = ConfigurationSoft.Tls(
-        run.tlsCertificate,
-        run.tlsKey,
-        run.tlsSecureRandomNonBlocking
-      )
-      val casper = ConfigurationSoft.Casper(
-        run.casperValidatorPublicKey,
-        run.casperValidatorPrivateKey,
-        run.casperValidatorPrivateKeyPath,
-        run.casperValidatorSigAlgorithm,
-        run.casperBondsFile,
-        run.casperKnownValidatorsFile,
-        run.casperNumValidators,
-        run.casperWalletsFile,
-        run.casperMinimumBond,
-        run.casperMaximumBond,
-        run.casperHasFaucet,
-        run.casperRequiredSigs,
-        run.casperShardId,
-        run.casperApproveGenesis,
-        run.casperApproveGenesisInterval,
-        run.casperApproveGenesisDuration,
-        run.casperDeployTimestamp
-      )
-
-      val lmdb = ConfigurationSoft.LmdbBlockStore(
-        run.lmdbBlockStoreSize,
-        run.lmdbMaxDbs,
-        run.lmdbMaxReaders,
-        run.lmdbUseTls
-      )
-
-      val blockstorage = ConfigurationSoft.BlockDagFileStorage(
-        run.blockstorageLatestMessagesLogMaxSizeFactor
-      )
-
-      val metrics = ConfigurationSoft.Metrics(
-        run.metricsPrometheus,
-        run.metricsZipkin,
-        run.metricsSigar
-      )
-
-      val influx = ConfigurationSoft.Influx(
-        run.influxHostname,
-        run.influxPort,
-        run.influxDatabase,
-        run.influxProtocol
-      )
-
-      ConfigurationSoft(
-        server,
-        grpcServer,
-        tls,
-        casper,
-        lmdb,
-        blockstorage,
-        metrics,
-        influx,
-        ConfigurationSoft.InfluxAuth(
-          None,
-          None
-        )
-      )
-    }
-  }
-
-  def fieldByName(fieldName: String): Option[String] =
+  def fieldByName(fieldName: CamelCase): Option[String] =
     subcommand
       .flatMap(command => fields.get((command, fieldName)).flatMap(_.apply().toOption))
 
@@ -283,6 +161,7 @@ private[configuration] final case class Options private (
   addSubcommand(diagnostics)
 
   val run = new Subcommand("run") {
+
     helpWidth(120)
 
     @scallop
@@ -373,7 +252,7 @@ private[configuration] final case class Options private (
       )
     @scallop
     val casperKnownValidatorsFile =
-      gen[String](
+      gen[Path](
         "Path to plain text file listing the public keys of validators known to the user (one per line). " +
           "Signatures from these validators are required in order to accept a block which starts the local" +
           s"node's view of the blockDAG."
@@ -390,9 +269,11 @@ private[configuration] final case class Options private (
     @scallop
     val casperMinimumBond =
       gen[Long]("Minimum bond accepted by the PoS contract in the genesis block.")
+
     @scallop
     val casperMaximumBond =
       gen[Long]("Maximum bond accepted by the PoS contract in the genesis block.")
+
     @scallop
     val casperHasFaucet =
       gen[Flag]("True if there should be a public access CSPR faucet in the genesis block.")
@@ -405,7 +286,17 @@ private[configuration] final case class Options private (
       )
 
     @scallop
-    val serverStandalone =
+    val serverRelayFactor =
+      gen[Int]("Number of new nodes to which try to gossip a new block.")
+
+    @scallop
+    val serverRelaySaturation =
+      gen[Int](
+        "Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes."
+      )
+
+    @scallop
+    val casperStandalone =
       gen[Flag](
         "Start a stand-alone node (no bootstrapping).",
         's'
@@ -456,6 +347,7 @@ private[configuration] final case class Options private (
     @scallop
     val serverMaxNumOfConnections =
       gen[Int]("Maximum number of peers allowed to connect to the node.")
+
     @scallop
     val lmdbBlockStoreSize =
       gen[Long]("Casper BlockStore map size (in bytes).")
@@ -517,6 +409,10 @@ private[configuration] final case class Options private (
     @scallop
     val metricsSigar =
       gen[Flag]("Enable Sigar host system metrics.")
+
+    @scallop
+    val metricsInflux =
+      gen[Flag]("Enable Influx system metrics.")
 
     @scallop
     val influxHostname =

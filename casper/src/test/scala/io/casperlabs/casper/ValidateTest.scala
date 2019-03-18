@@ -7,19 +7,19 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, BlockUtil}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import io.casperlabs.catscontrib.ToAbstractContext
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.util.rholang.Resources.mkRuntimeManager
+import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ExecutionEngineServiceStub}
+import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -34,7 +34,6 @@ class ValidateTest
     with BlockGenerator
     with BlockDagStorageFixture {
   implicit val log              = new LogStub[Task]
-  implicit val absId            = ToAbstractContext.idToAbstractContext
   implicit val raiseValidateErr = Validate.raiseValidateErrorThroughSync[Task]
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.
@@ -332,7 +331,7 @@ class ValidateTest
 
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      implicit val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+      implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
       val validators = Vector(
         generateValidator("Validator 1"),
         generateValidator("Validator 2"),
@@ -373,33 +372,30 @@ class ValidateTest
         b7 <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
         b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
         b9 <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0) //empty justification
-        result <- mkRuntimeManager("casper-util-test")
-                   .use { runtimeManager =>
-                     for {
-                       dag <- blockDagStorage.getRepresentation
+        result <- for {
+                   dag <- blockDagStorage.getRepresentation
 
-                       // Valid
-                       _ <- Validate.parents[Task](b0, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b1, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b2, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b3, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b4, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b5, b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b6, b0, b0.blockHash, dag)
+                   // Valid
+                   _ <- Validate.parents[Task](b0, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b1, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b2, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b3, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b4, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b5, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b6, b0, b0.blockHash, dag)
 
-                       // Not valid
-                       _ <- Validate.parents[Task](b7, b0, b0.blockHash, dag).attempt
-                       _ <- Validate.parents[Task](b8, b0, b0.blockHash, dag).attempt
-                       _ <- Validate.parents[Task](b9, b0, b0.blockHash, dag).attempt
+                   // Not valid
+                   _ <- Validate.parents[Task](b7, b0, b0.blockHash, dag).attempt
+                   _ <- Validate.parents[Task](b8, b0, b0.blockHash, dag).attempt
+                   _ <- Validate.parents[Task](b9, b0, b0.blockHash, dag).attempt
 
-                       _ = log.warns should have size (3)
-                       result = log.warns.forall(
-                         _.contains("block parents did not match estimate based on justification")
-                       ) should be(
-                         true
-                       )
-                     } yield result
-                   }
+                   _ = log.warns should have size (3)
+                   result = log.warns.forall(
+                     _.contains("block parents did not match estimate based on justification")
+                   ) should be(
+                     true
+                   )
+                 } yield result
       } yield result
   }
 
@@ -584,14 +580,20 @@ class ValidateTest
       val genesis         = HashSetCasperTest.createGenesis(bonds)
       val genesisBonds    = ProtoUtil.bonds(genesis)
 
-      val storageDirectory        = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-      val storageSize: Long       = 1024L * 1024
-      val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-      val runtimeManager          = RuntimeManager[Task](casperSmartContractsApi, bonds)
-      implicit val log            = new LogStub[Task]
+      val storageDirectory                 = Files.createTempDirectory(s"hash-set-casper-test-genesis")
+      val storageSize: Long                = 1024L * 1024
+      implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
+      implicit val log                     = new LogStub[Task]
       for {
-        dag               <- blockDagStorage.getRepresentation
-        _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
+        _   <- casperSmartContractsApi.setBonds(bonds)
+        dag <- blockDagStorage.getRepresentation
+        // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
+        _ <- BlockGenerator
+              .validateBlockCheckpoint[Task](
+                genesis,
+                dag,
+                (_: BlockMetadata) => Seq.empty[TransformEntry].pure[Task]
+              )
         _                 <- Validate.bondsCache[Task](genesis, genesisBonds) shouldBeF Unit
         modifiedBonds     = Seq.empty[Bond]
         modifiedPostState = genesis.getBody.getState.withBonds(modifiedBonds)

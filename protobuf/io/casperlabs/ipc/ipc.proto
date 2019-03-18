@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package io.casperlabs.ipc;
 
-import "google/protobuf/empty.proto";
-
 message Deploy {
     bytes address = 1; // length 20 bytes
     uint64 timestamp = 2;
@@ -47,7 +45,9 @@ message CommitResponse {
     oneof result {
         CommitResult success = 1;
         RootNotFound missing_prestate = 2;
-        PostEffectsError failed_transform = 3;
+        Key key_not_found = 3;
+        TypeMismatch type_mismatch = 4;
+        PostEffectsError failed_transform = 5;
     }
 }
 
@@ -94,6 +94,13 @@ message NamedKey {
     Key key = 2;
 }
 
+message RustBigInt {
+    // Represent the number as a string for
+    // easy portability between rust and scala.
+    string value = 1;
+    uint32 bit_width = 2;
+}
+
 // Things to store under the key in the global state.
 message Value {
     oneof value_instance {
@@ -105,6 +112,7 @@ message Value {
         Contract contract = 6;
         StringList string_list = 7;
         NamedKey named_key = 8;
+        RustBigInt big_int = 9;
     }
 }
  
@@ -142,19 +150,17 @@ message TransformWrite {
     Value value = 1;
 }
 message TransformFailure {
-    StorageTypeMismatch error = 1;
+    TypeMismatch error = 1;
 }
  
 //Errors which may occur while interacting with global state
 message StorageError {
     oneof error_instance {
-        Key key_not_found = 1;
-        StorageTypeMismatch type_mismatch = 2;
-        BytesReprError bytes_repr = 3;
-        RkvError rkv = 4;
+        BytesReprError bytes_repr = 1;
+        RkvError rkv = 2;
     }
 }
-message StorageTypeMismatch {
+message TypeMismatch {
     string expected = 1;
     string found = 2;
 }
@@ -233,8 +239,9 @@ message QueryResponse {
 
 
 message ValidateResponse {
+    message ValidateSuccess {};
     oneof result {
-        google.protobuf.Empty success = 1;
+        ValidateSuccess success = 1;
         string failure = 2;
     }
 }

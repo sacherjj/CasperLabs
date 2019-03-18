@@ -58,7 +58,7 @@ class ManyValidatorsTest
       initialLatestMessages = bonds.map { case Bond(validator, _) => validator -> b }.toMap
       _ <- Sync[Task].delay {
             BlockDagStorageTestFixture.writeInitialLatestMessages(
-              blockDagStorageDir.resolve("latest-messages-data"),
+              blockDagStorageDir.resolve("latest-messages-log"),
               blockDagStorageDir.resolve("latest-messages-crc"),
               initialLatestMessages
             )

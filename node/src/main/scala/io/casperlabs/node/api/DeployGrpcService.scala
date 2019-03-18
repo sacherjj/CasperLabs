@@ -141,11 +141,6 @@ private[api] object DeployGrpcService {
 
       override def findBlockWithDeploy(request: FindDeployInBlockQuery): Task[BlockQueryResponse] =
         defer(BlockAPI.findBlockWithDeploy[F](request.user, request.timestamp))
-
-      override def previewPrivateNames(
-          request: PrivateNamePreviewQuery
-      ): Task[PrivateNamePreviewResponse] =
-        defer(BlockAPI.previewPrivateNames[F](request.user, request.timestamp, request.nameQty))
     }
 
     BlockAPI.establishMetrics[F] *> Sync[F].delay(mkService)

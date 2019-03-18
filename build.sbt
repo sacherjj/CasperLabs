@@ -11,6 +11,8 @@ Global / dependencyOverrides := Dependencies.overrides
 
 // Keeping all the .proto definitions in a common place so we can use `include` to factor out common messages.
 val protobufDirectory = file("protobuf")
+// Protos can import any other using the full path within `protobuf`. This filter reduces the list
+// for which we actually generate .scala source, so we don't get duplicates between projects.
 def protobufSubDirectoryFilter(subdirs: String*) = {
   import java.nio.file.Paths // Handle backslash on Windows.
   (f: File) =>
@@ -140,14 +142,16 @@ lazy val comm = (project in file("comm"))
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
-        "io/casperlabs/comm/discovery")),
+        "io/casperlabs/comm/discovery",
+        "io/casperlabs/comm/gossiping",
+        "io/casperlabs/comm/protocol/routing" // TODO: Eventually remove.
+      )),
     PB.targets in Compile := Seq(
-      PB.gens.java                              -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value,
-      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared % "compile->compile;test->test", crypto, smartContracts)
+  .dependsOn(shared % "compile->compile;test->test", crypto, models)
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
@@ -182,13 +186,12 @@ lazy val models = (project in file("models"))
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
-        "io/casperlabs/casper/protocol",
-        "io/casperlabs/comm/protocol/routing",
-        "io/casperlabs/ipc")),
+        "io/casperlabs/casper/consensus",
+        "io/casperlabs/casper/protocol" // TODO: Eventually remove.
+      )),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
-      grpcmonix.generators
-        .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(crypto, shared % "compile->compile;test->test")
@@ -220,11 +223,12 @@ lazy val node = (project in file("node"))
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
-        "io/casperlabs/node/model")),
+        "io/casperlabs/node/api",
+      )),
+    // Generating into /protobuf because of https://github.com/thesamet/sbt-protoc/issues/8
     PB.targets in Compile := Seq(
-      PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf",
-      scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value / "protobuf",
-      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value / "protobuf"
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.node",
@@ -321,7 +325,7 @@ lazy val node = (project in file("node"))
     ),
     rpmAutoreq := "no"
   )
-  .dependsOn(casper, comm, crypto, smartContracts)
+  .dependsOn(casper, comm, crypto)
 
 lazy val blockStorage = (project in file("block-storage"))
   .settings(commonSettings: _*)
@@ -337,6 +341,7 @@ lazy val blockStorage = (project in file("block-storage"))
   )
   .dependsOn(shared, models % "compile->compile;test->test")
 
+// Smart contract execution.
 lazy val smartContracts = (project in file("smart-contracts"))
   .settings(commonSettings: _*)
   .settings(
@@ -347,6 +352,15 @@ lazy val smartContracts = (project in file("smart-contracts"))
       grpcNetty,
       nettyTransNativeEpoll,
       nettyTransNativeKqueue
+    ),
+    PB.protoSources in Compile := Seq(protobufDirectory),
+    includeFilter in PB.generate := new SimpleFileFilter(
+      protobufSubDirectoryFilter(
+        "io/casperlabs/ipc"
+      )),
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(shared, models)
@@ -443,7 +457,7 @@ lazy val client = (project in file("client"))
     ),
     rpmAutoreq := "no"
   )
-  .dependsOn(crypto, shared, models, smartContracts)
+  .dependsOn(crypto, shared, models)
 
 lazy val casperlabs = (project in file("."))
   .settings(commonSettings: _*)

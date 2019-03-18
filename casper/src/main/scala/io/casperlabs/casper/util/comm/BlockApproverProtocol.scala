@@ -1,15 +1,17 @@
 package io.casperlabs.casper.util.comm
 
 import cats.data.EitherT
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.ValidatorIdentity
+import io.casperlabs.casper.{protocol, ValidatorIdentity}
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.deploy2deploy
+import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil}
 import io.casperlabs.catscontrib.Capture
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
@@ -20,8 +22,11 @@ import io.casperlabs.comm.{transport, PeerNode}
 import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.ipc
+import io.casperlabs.ipc.{DeployResult, TransformEntry}
 import io.casperlabs.models.InternalProcessedDeploy
 import io.casperlabs.shared._
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -45,10 +50,9 @@ class BlockApproverProtocol(
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk: ExecutionEngineService](
       peer: PeerNode,
-      u: UnapprovedBlock,
-      runtimeManager: RuntimeManager[F]
+      u: UnapprovedBlock
   ): F[Unit] =
     if (u.candidate.isEmpty) {
       Log[F]
@@ -58,7 +62,6 @@ class BlockApproverProtocol(
       val candidate = u.candidate.get
       BlockApproverProtocol
         .validateCandidate(
-          runtimeManager,
           candidate,
           requiredSigs,
           deployTimestamp,
@@ -104,8 +107,7 @@ object BlockApproverProtocol {
   ): BlockApproval =
     getBlockApproval(candidate, validatorId)
 
-  def validateCandidate[F[_]: Concurrent: Log](
-      runtimeManager: RuntimeManager[F],
+  def validateCandidate[F[_]: Concurrent: Log: ExecutionEngineService](
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
       timestamp: Long,
@@ -149,19 +151,30 @@ object BlockApproverProtocol {
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
-      stateHash <- EitherT(
-                    runtimeManager
-                      .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
-                  ).leftMap { case (_, status) => s"Failed status during replay: $status." }
+      deploys                   = blockDeploys.map(_.deploy)
+      processedDeploys <- EitherT(
+                           ExecutionEngineService[F].exec(
+                             ExecutionEngineService[F].emptyStateHash,
+                             deploys.map(deploy2deploy)
+                           )
+                         ).leftMap(_.getMessage)
+      commutingEffects = ExecEngineUtil.findCommutingEffects(processedDeploys)
+      transforms       = commutingEffects.unzip._1.flatMap(_.transformMap)
+      postStateHash <- EitherT(
+                        ExecutionEngineService[F]
+                          .commit(ExecutionEngineService[F].emptyStateHash, transforms)
+                      ).leftMap(_.getMessage)
       _ <- EitherT(
-            (stateHash == postState.postStateHash)
+            (postStateHash == postState.postStateHash)
               .either(())
               .or("Tuplespace hash mismatch.")
               .pure[F]
           )
       tuplespaceBonds <- EitherT(
                           Concurrent[F]
-                            .attempt(runtimeManager.computeBonds(postState.postStateHash))
+                            .attempt(
+                              ExecutionEngineService[F].computeBonds(postState.postStateHash)
+                            )
                         ).leftMap(_.getMessage)
       tuplespaceBondsMap = tuplespaceBonds.map {
         case Bond(validator, stake) => validator -> stake

@@ -1,5 +1,6 @@
 use super::alloc::vec::Vec;
 use super::bytesrepr::{Error, FromBytes, ToBytes};
+use crate::contract_api::pointers::*;
 
 #[repr(C)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
@@ -10,6 +11,24 @@ pub enum Key {
 }
 
 use self::Key::*;
+
+impl Key {
+    pub fn to_u_ptr<T>(self) -> Option<UPointer<T>> {
+        if let URef(id) = self {
+            Some(UPointer::new(id))
+        } else {
+            None
+        }
+    }
+
+    pub fn to_c_ptr(self) -> Option<ContractPointer> {
+        match self {
+            URef(id) => Some(ContractPointer::URef(UPointer::new(id))),
+            Hash(id) => Some(ContractPointer::Hash(id)),
+            _ => None,
+        }
+    }
+}
 
 const ACCOUNT_ID: u8 = 0;
 const HASH_ID: u8 = 1;

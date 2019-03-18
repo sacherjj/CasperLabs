@@ -1,50 +1,26 @@
-use std::fmt;
-
 use common::bytesrepr;
-use common::key::Key;
-use rkv::error::StoreError;
-use shared::newtypes::Blake2bHash;
-use std::fmt::Debug;
-use transform::TypeMismatch;
-use wasmi::HostError;
+use rkv;
+use wasmi;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct RootNotFound(pub Blake2bHash);
+#[derive(Debug, Fail)]
+pub enum Error {
+    #[fail(display = "{}", _0)]
+    Rkv(#[fail(cause)] rkv::error::StoreError),
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Error<K: Debug> {
-    KeyNotFound(K),
-    TransformTypeMismatch(TypeMismatch),
-    // mateusz.gorski: I think that these errors should revert any changes made
-    // to Global State and most probably kill the node.
-    RkvError(String), //TODO: capture error better
-    BytesRepr(bytesrepr::Error),
+    #[fail(display = "{}", _0)]
+    BytesRepr(#[fail(cause)] bytesrepr::Error),
 }
 
-pub type GlobalStateError = Error<Key>;
+impl wasmi::HostError for Error {}
 
-impl<A: Debug> fmt::Display for Error<A> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+impl From<rkv::error::StoreError> for Error {
+    fn from(e: rkv::error::StoreError) -> Self {
+        Error::Rkv(e)
     }
 }
 
-impl HostError for GlobalStateError {}
-
-impl From<StoreError> for GlobalStateError {
-    fn from(e: StoreError) -> Self {
-        Error::RkvError(e.to_string())
-    }
-}
-
-impl From<bytesrepr::Error> for GlobalStateError {
+impl From<bytesrepr::Error> for Error {
     fn from(e: bytesrepr::Error) -> Self {
         Error::BytesRepr(e)
-    }
-}
-
-impl From<TypeMismatch> for GlobalStateError {
-    fn from(tm: TypeMismatch) -> Self {
-        Error::TransformTypeMismatch(tm)
     }
 }

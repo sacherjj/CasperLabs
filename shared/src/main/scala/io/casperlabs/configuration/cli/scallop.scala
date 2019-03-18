@@ -1,4 +1,4 @@
-package io.casperlabs.shared
+package io.casperlabs.configuration.cli
 
 import scala.annotation.{compileTimeOnly, StaticAnnotation}
 import scala.language.experimental.macros
@@ -8,7 +8,7 @@ import scala.reflect.macros.blackbox
   * Generates scallop options
   * ==Example==
   * {{{
-  * val defaults: Map[String, String] = Map("someOption" -> "10")
+  * val defaults: Map[CamelCase, String] = Map(CamelCase("someOption") -> "10")
   * var fields: Map[(ScallopConfBase, String), () => ScallopOption[String]]
   * def gen[A](descr: String, short: Char = '\u0000'): ScallopOption[A] =
   *   sys.error("Add @scallop macro annotation")
@@ -24,12 +24,12 @@ import scala.reflect.macros.blackbox
   * {{{
   * val run = new Subcommand {
   *   val someOption = {
-  *     fields += ((this, "someOption"), () => someOption.map(_.toString))
+  *     fields += ((this, CamelCase("someOption")), () => someOption.map(_.toString))
   *     opt[Int](descr = "Int. Some description. Default is 10.", short = 'c')
   *   }
   *
   *   val anotherOption = {
-  *     fields += ((this, "anotherOption"), () => anotherOption.map(_.toString))
+  *     fields += ((this, CamelCase("anotherOption")), () => anotherOption.map(_.toString))
   *     opt[Int](descr = "Int. Some description. Default is 10.", short = 'c')
   *   }
   * }
@@ -85,7 +85,7 @@ object scallopImpl {
 
   private def defaultDefinition(c: blackbox.Context)(termName: String) = {
     import c.universe._
-    q"""val default: String = defaults.get($termName).fold("")(s => " Default: " + s)"""
+    q"""val default: String = defaults.get(CamelCase($termName)).fold("")(s => " Default: " + s)"""
   }
 
   private def optionDefinition(
@@ -142,6 +142,6 @@ object scallopImpl {
   /*Value is lambda because of macroses limitation generating all code wrapped into {...}*/
   private def putIntoMap(c: blackbox.Context)(term: c.universe.TermName, termName: String) = {
     import c.universe._
-    q"fields += ((this, $termName), () => $term.map(_.toString));"
+    q"fields += ((this, CamelCase($termName)), () => $term.map(_.toString));"
   }
 }

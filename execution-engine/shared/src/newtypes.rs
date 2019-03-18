@@ -2,6 +2,7 @@
 
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
+use common::bytesrepr;
 use core::array::TryFromSliceError;
 use std::convert::TryFrom;
 
@@ -39,5 +40,17 @@ impl<'a> TryFrom<&'a [u8]> for Blake2bHash {
 
     fn try_from(slice: &[u8]) -> Result<Blake2bHash, Self::Error> {
         <[u8; BLAKE2B_DIGEST_LENGTH]>::try_from(slice).map(Blake2bHash)
+    }
+}
+
+impl bytesrepr::ToBytes for Blake2bHash {
+    fn to_bytes(&self) -> Vec<u8> {
+        bytesrepr::ToBytes::to_bytes(&self.0)
+    }
+}
+
+impl bytesrepr::FromBytes for Blake2bHash {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+        bytesrepr::FromBytes::from_bytes(bytes).map(|(arr, rem)| (Blake2bHash(arr), rem))
     }
 }

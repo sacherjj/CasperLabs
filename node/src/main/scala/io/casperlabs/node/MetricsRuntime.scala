@@ -40,10 +40,10 @@ class MetricsRuntime[F[_]: Sync: Log](conf: Configuration, id: NodeIdentifier) {
             )
           }
 
-      _ <- addReporter(conf.kamon.influx.isDefined, "InfluxDB", new influxdb.InfluxDBReporter())
-      _ <- addReporter(conf.kamon.prometheus, "Prometheus", prometheusReporter)
-      _ <- addReporter(conf.kamon.zipkin, "Zipkin", new ZipkinReporter())
-      _ <- addReporter(true, "JMX", new JmxReporter())
+      _ <- addReporter(conf.metrics.influx, "InfluxDB", new influxdb.InfluxDBReporter())
+      _ <- addReporter(conf.metrics.prometheus, "Prometheus", prometheusReporter)
+      _ <- addReporter(conf.metrics.zipkin, "Zipkin", new ZipkinReporter())
+      _ <- addReporter(enabled = true, "JMX", new JmxReporter())
 
       _ <- Sync[F].delay(SystemMetrics.startCollecting())
     } yield ()
@@ -68,22 +68,13 @@ class MetricsRuntime[F[_]: Sync: Log](conf: Configuration, id: NodeIdentifier) {
     Log[F].info(s"Following Influx configuration used: \n $props") *> conf.pure[F]
   }
 
-  private def buildInfluxAuth(influx: Influx) = {
-    val maybeAuth =
-      influx.authentication
-        .map { auth =>
-          s"""
+  private def buildInfluxAuth(user: String, password: String) =
+    s"""
              |    authentication {
-             |      user = "${auth.user}"
-             |      password = "${auth.password}"
+             |      user = "$user"
+             |      password = "$password"
              |    }
              |""".stripMargin
-        }
-
-    Log[F]
-      .info("No Influx credentials specified")
-      .whenA(maybeAuth.isEmpty) *> maybeAuth.getOrElse("").pure[F]
-  }
 
   private def buildCommonConfiguration(influxConf: String): String =
     s"""
@@ -97,7 +88,7 @@ class MetricsRuntime[F[_]: Sync: Log](conf: Configuration, id: NodeIdentifier) {
        |  }
        |  system-metrics {
        |    host {
-       |      enabled = ${conf.kamon.sigar}
+       |      enabled = ${conf.metrics.sigar}
        |      sigar-native-folder = ${conf.server.dataDir.resolve("native")}
        |    }
        |  }
@@ -107,9 +98,14 @@ class MetricsRuntime[F[_]: Sync: Log](conf: Configuration, id: NodeIdentifier) {
 
   private def buildKamonConf: F[String] = {
     val maybeInfluxConf: Option[F[String]] =
-      conf.kamon.influx.map { influx =>
+      conf.influx.map { influx =>
         for {
-          influxAuth <- buildInfluxAuth(influx)
+          influxAuth <- (influx.user, influx.password)
+                         .mapN(buildInfluxAuth)
+                         .fold(
+                           Log[F]
+                             .info("No Influx credentials specified") *> "".pure[F]
+                         )(_.pure[F])
           influxConf <- buildInfluxConf(influx, influxAuth)
         } yield influxConf
       }

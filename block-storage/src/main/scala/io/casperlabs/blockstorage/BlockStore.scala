@@ -5,6 +5,7 @@ import cats.{Applicative, Apply}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.implicits._
 
 import scala.language.higherKinds
 
@@ -43,13 +44,21 @@ object BlockStore {
     implicit val a: Apply[F]
 
     abstract override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
-      m.incrementCounter("get") *> super.get(blockHash)
+      m.incrementCounter("get") *> super.get(blockHash).timer("get-time")
 
     abstract override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
-      m.incrementCounter("find") *> super.find(p)
+      m.incrementCounter("find") *> super.find(p).timer("find-time")
 
     abstract override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
-      m.incrementCounter("put") *> super.put(f)
+      m.incrementCounter("put") *> super.put(f).timer("put-time")
+
+    abstract override def checkpoint(): F[Unit] =
+      super.checkpoint().timer("checkpoint-time")
+
+    abstract override def contains(
+        blockHash: BlockHash
+    )(implicit applicativeF: Applicative[F]): F[Boolean] =
+      super.contains(blockHash).timer("contains-time")
   }
 
   def apply[F[_]](implicit ev: BlockStore[F]): BlockStore[F] = ev

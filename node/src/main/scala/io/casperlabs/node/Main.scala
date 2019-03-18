@@ -2,7 +2,6 @@ package io.casperlabs.node
 
 import cats.effect.ExitCode
 import cats.implicits._
-import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm._
 import io.casperlabs.node.configuration.Configuration.Command.{Diagnostics, Run}
@@ -30,11 +29,11 @@ object Main extends TaskApp {
 
     val exec: Task[Unit] =
       for {
-        conf <- Task(Configuration.parse(args.toArray, sys.env))
-        _ <- conf
+        commandAndConf <- Task(Configuration.parse(args.toArray, sys.env))
+        _ <- commandAndConf
               .fold(
                 errors => log.error(errors.mkString_("", "\n", "")),
-                conf => updateLoggingProps(conf) >> mainProgram(conf)
+                { case (command, conf) => updateLoggingProps(conf) >> mainProgram(command, conf) }
               )
       } yield ()
 
@@ -45,17 +44,19 @@ object Main extends TaskApp {
     sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
   }
 
-  private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+  private def mainProgram(command: Configuration.Command, conf: Configuration)(
+      implicit scheduler: Scheduler
+  ): Task[Unit] = {
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
-        conf.grpcServer.host,
-        conf.grpcServer.portInternal,
+        conf.grpc.host,
+        conf.grpc.portInternal,
         conf.server.maxMessageSize
       )
 
     implicit val consoleIO: ConsoleIO[Task] = (str: String) => Task(println(str))
 
-    val program = conf.command match {
+    val program = command match {
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
       case Run         => nodeProgram(conf)
     }
