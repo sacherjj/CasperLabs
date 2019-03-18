@@ -127,7 +127,7 @@ where
         match preprocessor.preprocess(module_bytes, &self.wasm_costs) {
             Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
             Ok(module) => match self.tracking_copy(prestate_hash) {
-                Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
+                Err(error) => Ok(ExecutionResult::failure(error, 0)),
                 Ok(checkout_result) => match checkout_result {
                     None => Err(RootNotFound(prestate_hash)),
                     Some(mut tc) => {
