@@ -24,7 +24,7 @@ class GossipServiceServer[F[_]: Sync](
   def streamAncestorBlockSummaries(
       request: StreamAncestorBlockSummariesRequest
   ): Iterant[F, BlockSummary] = {
-    // Visit blocks in simple BFS order rather than try to establish topological sorting becuase BFS
+    // Visit blocks in simple BFS order rather than try to establish topological sorting because BFS
     // is invariant in maximum depth, while topological sorting could depend on whether we traversed
     // backwards enough to re-join forks with different lengths of sub-paths.
     implicit val ord = breadthFirstOrdering
