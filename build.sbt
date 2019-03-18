@@ -75,6 +75,7 @@ lazy val shared = (project in file("shared"))
       catsEffect,
       catsEffectLaws,
       catsMtl,
+      meowMtl,
       lz4,
       monix,
       scodecCore,
