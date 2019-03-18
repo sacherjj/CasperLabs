@@ -7,10 +7,12 @@ import cats.implicits._
 import cats.effect.ExitCase.Error
 import cats.effect.Resource
 import com.typesafe.scalalogging.Logger
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.exceptions.{TestCanceledException, TestPendingException}
+
 import scala.reflect.io.Directory
 
 /**
@@ -41,7 +43,7 @@ object Resources {
     mkTempDir[Task](prefix)
       .flatMap { tmpDir =>
         Resource.make[Task, ExecutionEngineService[Task]](Task.delay {
-          ExecutionEngineService.noOpApi()
+          ExecutionEngineServiceStub.noOpApi()
         })(_ => Task.unit)
       }
 }

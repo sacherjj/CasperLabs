@@ -1,12 +1,11 @@
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
-use execution_engine::engine::{Error as EngineError, ExecutionResult};
+use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
 use shared::newtypes::Blake2bHash;
-use storage::error::{Error::*, RootNotFound};
-use storage::{gs, history, op, transform};
+use storage::{gs, history, history::CommitResult, op, transform, transform::TypeMismatch};
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {
@@ -201,7 +200,7 @@ impl From<transform::Transform> for super::ipc::Transform {
             }
             transform::Transform::Failure(transform::TypeMismatch { expected, found }) => {
                 let mut fail = super::ipc::TransformFailure::new();
-                let mut typemismatch_err = super::ipc::StorageTypeMismatch::new();
+                let mut typemismatch_err = super::ipc::TypeMismatch::new();
                 typemismatch_err.set_expected(expected.to_owned());
                 typemismatch_err.set_found(found.to_owned());
                 fail.set_error(typemismatch_err);
@@ -365,6 +364,16 @@ impl From<RootNotFound> for ipc::RootNotFound {
     }
 }
 
+impl From<TypeMismatch> for ipc::TypeMismatch {
+    fn from(type_mismatch: TypeMismatch) -> ipc::TypeMismatch {
+        let TypeMismatch { expected, found } = type_mismatch;
+        let mut tm = ipc::TypeMismatch::new();
+        tm.set_expected(expected);
+        tm.set_found(found);
+        tm
+    }
+}
+
 impl From<ExecutionResult> for ipc::DeployResult {
     fn from(er: ExecutionResult) -> ipc::DeployResult {
         match er {
@@ -387,25 +396,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
                     EngineError::StorageError(storage_err) => {
-                        let mut err = match storage_err {
-                            KeyNotFound(key) => {
-                                let msg = format!("Key {:?} not found.", key);
-                                wasm_error(msg)
-                            }
-                            RkvError(error_msg) => wasm_error(error_msg),
-                            TransformTypeMismatch(transform::TypeMismatch { expected, found }) => {
-                                let msg = format!(
-                                    "Type mismatch. Expected {:?}, found {:?}",
-                                    expected, found
-                                );
-                                wasm_error(msg)
-                            }
-                            BytesRepr(bytesrepr_err) => {
-                                let msg =
-                                    format!("Error with byte representation: {:?}", bytesrepr_err);
-                                wasm_error(msg)
-                            }
-                        };
+                        let mut err = wasm_error(storage_err.to_string());
                         err.set_cost(cost);
                         err
                     }
@@ -423,6 +414,10 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             deploy_result.set_cost(cost);
                             deploy_result
                         }
+                        ExecutionError::KeyNotFound(key) => {
+                            let msg = format!("Key {:?} not found.", key);
+                            wasm_error(msg)
+                        }
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
                             let msg = format!("{:?}", other);
@@ -437,30 +432,39 @@ impl From<ExecutionResult> for ipc::DeployResult {
     }
 }
 
-pub fn grpc_response_from_commit_result<R, H>(
+pub fn grpc_response_from_commit_result<H>(
     prestate_hash: Blake2bHash,
-    input: Result<Option<Blake2bHash>, H::Error>,
+    input: Result<CommitResult, H::Error>,
 ) -> ipc::CommitResponse
 where
-    R: gs::DbReader,
-    H: history::History<R>,
+    H: history::History,
     H::Error: Into<EngineError> + std::fmt::Debug,
 {
     match input {
-        Ok(None) => {
+        Ok(CommitResult::RootNotFound) => {
             let mut root = ipc::RootNotFound::new();
             root.set_hash(prestate_hash.to_vec());
             let mut tmp_res = ipc::CommitResponse::new();
             tmp_res.set_missing_prestate(root);
             tmp_res
         }
-        Ok(Some(post_state_hash)) => {
+        Ok(CommitResult::Success(post_state_hash)) => {
             println!("Effects applied. New state hash is: {:?}", post_state_hash);
             let mut commit_result = ipc::CommitResult::new();
             let mut tmp_res = ipc::CommitResponse::new();
             commit_result.set_poststate_hash(post_state_hash.to_vec());
             tmp_res.set_success(commit_result);
             tmp_res
+        }
+        Ok(CommitResult::KeyNotFound(key)) => {
+            let mut commit_response = ipc::CommitResponse::new();
+            commit_response.set_key_not_found((&key).into());
+            commit_response
+        }
+        Ok(CommitResult::TypeMismatch(type_mismatch)) => {
+            let mut commit_response = ipc::CommitResponse::new();
+            commit_response.set_type_mismatch(type_mismatch.into());
+            commit_response
         }
         // TODO(mateusz.gorski): We should be more specific about errors here.
         Err(storage_error) => {
@@ -488,7 +492,7 @@ fn wasm_error(msg: String) -> ipc::DeployResult {
 mod tests {
     use super::wasm_error;
     use common::key::Key;
-    use execution_engine::engine::{Error as EngineError, ExecutionResult};
+    use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
     use shared::newtypes::Blake2bHash;
     use std::collections::HashMap;
     use std::convert::TryInto;
@@ -511,7 +515,7 @@ mod tests {
     #[test]
     fn deploy_result_to_ipc_missing_root() {
         let root_hash: Blake2bHash = [1u8; 32].into();
-        let mut result: super::ipc::RootNotFound = storage::error::RootNotFound(root_hash).into();
+        let mut result: super::ipc::RootNotFound = RootNotFound(root_hash).into();
         let ipc_missing_hash = result.take_hash();
         assert_eq!(root_hash.to_vec(), ipc_missing_hash);
     }
@@ -557,13 +561,8 @@ mod tests {
     fn storage_error_has_cost() {
         use storage::error::Error::*;
         let cost: u64 = 100;
-        assert_eq!(test_cost(cost, KeyNotFound(Key::Account([1u8; 20]))), cost);
-        assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
-        let type_mismatch = storage::transform::TypeMismatch {
-            expected: "expected".to_owned(),
-            found: "found".to_owned(),
-        };
-        assert_eq!(test_cost(cost, TransformTypeMismatch(type_mismatch)), cost);
+        // TODO: actually create an Rkv error
+        // assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
         let bytesrepr_err = common::bytesrepr::Error::EarlyEndOfStream;
         assert_eq!(test_cost(cost, BytesRepr(bytesrepr_err)), cost);
     }

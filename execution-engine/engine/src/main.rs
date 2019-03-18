@@ -11,10 +11,11 @@ use std::iter::Iterator;
 
 use clap::{App, Arg};
 
-use execution_engine::engine::{EngineState, ExecutionResult};
+use execution_engine::engine::{EngineState, ExecutionResult, RootNotFound};
 use execution_engine::execution::WasmiExecutor;
 use shared::newtypes::Blake2bHash;
 use storage::gs::inmem::InMemHist;
+use storage::history::CommitResult;
 use wasm_prep::WasmiPreprocessor;
 
 #[derive(Debug)]
@@ -114,7 +115,7 @@ fn main() {
             &wasmi_preprocessor,
         );
         match result {
-            Err(storage::error::RootNotFound(hash)) => println!(
+            Err(RootNotFound(hash)) => println!(
                 "Result for file {}: root {:?} not found.",
                 wasm_bytes.path, hash
             ),
@@ -124,11 +125,18 @@ fn main() {
             }) => {
                 println!("Cost of executing the contract was: {}", cost);
                 match engine_state.apply_effect(state_hash, effects.1) {
-                    Ok(None) => println!(
+                    Ok(CommitResult::RootNotFound) => println!(
                         "Result for file {}: root {:?} not found.",
                         wasm_bytes.path, state_hash
                     ),
-                    Ok(Some(new_root_hash)) => {
+                    Ok(CommitResult::KeyNotFound(key)) => println!(
+                        "Result for file {}: key {:?} not found.",
+                        wasm_bytes.path, key
+                    ),
+                    Ok(CommitResult::TypeMismatch(type_mismatch)) => {
+                        println!("Result for file {}: {:?}", wasm_bytes.path, type_mismatch)
+                    }
+                    Ok(CommitResult::Success(new_root_hash)) => {
                         println!(
                             "Result for file {}: Success! New post state hash: {:?}",
                             wasm_bytes.path, new_root_hash

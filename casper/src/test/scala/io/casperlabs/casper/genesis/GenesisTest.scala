@@ -8,10 +8,14 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.casper.helper.BlockDagStorageFixture
+import io.casperlabs.casper.helper.{
+  BlockDagStorageFixture,
+  BlockGenerator,
+  BlockUtil,
+  HashSetCasperTestNode
+}
 import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
@@ -21,6 +25,9 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import io.casperlabs.shared.StoreType
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import cats.effect.Sync
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.models.BlockMetadata
 import monix.eval.Task
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
@@ -161,18 +168,19 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             log: LogStub[Task],
             time: LogicalTime[Task]
         ) =>
-          implicit val logEff = log
+          implicit val logEff                    = log
+          implicit val executionEngineServiceEff = executionEngineService
           for {
             genesis <- fromBondsFile(genesisPath)(executionEngineService, log, time)
             _       <- BlockStore[Task].put(genesis.blockHash, genesis)
             dag     <- blockDagStorage.getRepresentation
-            maybePostGenesisStateHash <- InterpreterUtil
+            // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
+            maybePostGenesisStateHash <- BlockGenerator
                                           .validateBlockCheckpoint[Task](
                                             genesis,
                                             dag,
-                                            RuntimeManager.fromExecutionEngineService(
-                                              executionEngineService
-                                            )
+                                            (_: BlockMetadata) =>
+                                              Seq.empty[TransformEntry].pure[Task]
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }
@@ -220,14 +228,13 @@ object GenesisTest {
       time: LogicalTime[Task]
   ): Task[BlockMessage] =
     for {
-      bonds          <- Genesis.getBonds[Task](genesisPath, bondsPath, numValidators)
-      runtimeManager = RuntimeManager[Task](executionEngineService, bonds)
+      bonds <- Genesis.getBonds[Task](genesisPath, bondsPath, numValidators)
+      _     <- ExecutionEngineService[Task].setBonds(bonds)
       genesis <- Genesis[Task](
                   walletsPath = nonExistentPath,
                   minimumBond = 1L,
                   maximumBond = Long.MaxValue,
                   faucet = false,
-                  runtimeManager,
                   shardId = casperlabsShardId,
                   deployTimestamp = Some(System.currentTimeMillis)
                 )
@@ -238,7 +245,7 @@ object GenesisTest {
   ): Task[Unit] = {
     val storagePath             = mkStoragePath
     val genesisPath             = mkGenesisPath
-    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
+    val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
     val log                     = new LogStub[Task]
     val time                    = new LogicalTime[Task]
 

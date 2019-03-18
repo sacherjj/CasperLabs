@@ -13,6 +13,9 @@ extern crate alloc;
 extern crate uint;
 extern crate wee_alloc;
 
+#[macro_use]
+extern crate failure;
+
 #[cfg(not(feature = "std"))]
 #[global_allocator]
 pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;

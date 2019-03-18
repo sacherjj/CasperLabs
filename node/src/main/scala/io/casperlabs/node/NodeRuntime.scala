@@ -13,14 +13,13 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.comm.CasperPacketHandler
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
-import io.casperlabs.comm._
+import io.casperlabs.comm.{GrpcServer => _, _}
 import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import io.casperlabs.comm.rp._
@@ -78,7 +77,8 @@ class NodeRuntime private[node] (
 
   val main = GrpcExecutionEngineService[Effect](
     conf.grpc.socket,
-    conf.server.maxMessageSize
+    conf.server.maxMessageSize,
+    Map.empty
   ).use(runMain)
 
   def runMain(executionEngineService: ExecutionEngineService[Effect]) =
@@ -146,10 +146,6 @@ class NodeRuntime private[node] (
                         )
       _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
       oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
-      abs = new ToAbstractContext[Effect] {
-        def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
-      }
-
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](
                                 conf.casper,
@@ -172,6 +168,7 @@ class NodeRuntime private[node] (
                                 Log.eitherTLog(Monad[Task], log),
                                 multiParentCasperRef,
                                 blockDagStorage,
+                                executionEngineService,
                                 scheduler
                               )
       packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(

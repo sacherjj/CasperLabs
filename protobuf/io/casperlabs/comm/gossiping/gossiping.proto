@@ -9,7 +9,7 @@ service GossipService {
     rpc NewBlocks(NewBlocksRequest) returns (NewBlocksResponse);
     rpc StreamAncestorBlockSummaries(StreamAncestorBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
     rpc StreamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
-    rpc BatchGetBlockSummaries(BatchGetBlockSummariesRequest) returns (BatchGetBlockSummariesResponse);
+    rpc StreamBlockSummaries(StreamBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
     rpc GetBlockChunked(GetBlockChunkedRequest) returns (stream Chunk);
 }
 
@@ -22,12 +22,8 @@ message NewBlocksResponse {
     bool is_new = 1;
 }
 
-message BatchGetBlockSummariesRequest {
+message StreamBlockSummariesRequest {
     repeated bytes block_hashes = 1;
-}
-
-message BatchGetBlockSummariesResponse {
-    repeated io.casperlabs.casper.consensus.BlockSummary block_summaries = 1;
 }
 
 message StreamAncestorBlockSummariesRequest {
@@ -40,7 +36,7 @@ message StreamDagTipBlockSummariesRequest {
 }
 
 message GetBlockChunkedRequest {
-    bytes block_hashes = 1;
+    bytes block_hash = 1;
     uint32 chunk_size = 2;
     repeated string accepted_compression_algorithms = 3;
 }
@@ -54,9 +50,11 @@ message Chunk {
     }
 
     message Header {
-        // Use the content_length to sanity check the size of the data in the chunks that follow.
-        uint32 content_length = 1;
         // Indicate if compression was used on the data. e.g. lz4
-        string compression_algorithm = 2;
+        string compression_algorithm = 1;
+        // Use the `content_length` to sanity check the size of the data in the chunks that follow.
+        uint32 content_length = 2;
+        // The original content length before any compression was applied.
+        uint32 original_content_length = 3;
     }
 }
