@@ -94,6 +94,13 @@ message NamedKey {
     Key key = 2;
 }
 
+message RustBigInt {
+    // Represent the number as a string for
+    // easy portability between rust and scala.
+    string value = 1;
+    uint32 bit_width = 2;
+}
+
 // Things to store under the key in the global state.
 message Value {
     oneof value_instance {
@@ -105,6 +112,7 @@ message Value {
         Contract contract = 6;
         StringList string_list = 7;
         NamedKey named_key = 8;
+        RustBigInt big_int = 9;
     }
 }
  
