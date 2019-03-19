@@ -5,7 +5,6 @@ import java.nio.file.Path
 import cats.Applicative
 import cats.effect.Timer
 import cats.mtl._
-import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
@@ -16,7 +15,6 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval._
 import monix.execution._
-import monix.execution.atomic.AtomicAny
 
 import scala.concurrent.duration._
 import scala.io.Source
@@ -70,9 +68,6 @@ package object effects {
 
   def rpConnections: Task[ConnectionsCell[Task]] =
     Cell.mvarCell[Task, Connections](Connections.empty)
-
-  def rpConfState(conf: RPConf): MonadState[Task, RPConf] =
-    new AtomicMonadState[Task, RPConf](AtomicAny(conf))
 
   def rpConfAsk(implicit state: MonadState[Task, RPConf]): ApplicativeAsk[Task, RPConf] =
     new DefaultApplicativeAsk[Task, RPConf] {
