@@ -8,7 +8,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
 import io.casperlabs.comm.ServiceError.NotFound
 import monix.tail.Iterant
-import scala.collection.mutable.PriorityQueue
+import scala.collection.immutable.Queue
 import scala.math.Ordering
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
@@ -24,48 +24,53 @@ class GossipServiceServer[F[_]: Sync](
   def streamAncestorBlockSummaries(
       request: StreamAncestorBlockSummariesRequest
   ): Iterant[F, BlockSummary] = {
-    // Visit blocks in simple BFS order rather than try to establish topological sorting because BFS
-    // is invariant in maximum depth, while topological sorting could depend on whether we traversed
-    // backwards enough to re-join forks with different lengths of sub-paths.
-    implicit val ord = breadthFirstOrdering
     // We return known hashes but not their parents.
     val knownHashes = request.knownBlockHashes.toSet
 
+    // Depth restriction is to be able to periodically reassess targets,
+    // to pass back hashes that still have missing dependencies, but not
+    // the ones which have connected to the DAG of the caller.
     def canGoDeeper(depth: Int) =
       depth < request.maxDepth || request.maxDepth == -1
 
+    // Visit blocks in simple BFS order rather than try to establish topological sorting because BFS
+    // is invariant in maximum depth, while topological sorting could depend on whether we traversed
+    // backwards enough to re-join forks with different lengths of sub-paths.
     def loop(
-        queue: PriorityQueue[(Int, ByteString)],
+        queue: Queue[(Int, ByteString)],
         visited: Set[ByteString]
     ): Iterant[F, BlockSummary] =
       if (queue.isEmpty)
         Iterant.empty
       else {
-        queue.dequeue() match {
-          case (_, blockHash) if visited(blockHash) =>
+        queue.dequeue match {
+          case ((_, blockHash), queue) if visited(blockHash) =>
             loop(queue, visited)
 
-          case (depth, blockHash) =>
+          case ((depth, blockHash), queue) =>
             Iterant.liftF(getBlockSummary(blockHash)) flatMap {
               case None =>
                 loop(queue, visited + blockHash)
 
               case Some(summary) =>
-                if (canGoDeeper(depth) && !knownHashes(summary.blockHash)) {
-                  val ancestors =
-                    summary.getHeader.parentHashes ++
-                      summary.getHeader.justifications.map(_.latestBlockHash)
+                val ancestors =
+                  if (canGoDeeper(depth) && !knownHashes(summary.blockHash)) {
+                    val ancestors =
+                      summary.getHeader.parentHashes ++
+                        summary.getHeader.justifications.map(_.latestBlockHash)
 
-                  queue.enqueue(ancestors.map(depth + 1 -> _): _*)
-                }
+                    ancestors.map(depth + 1 -> _)
+                  } else {
+                    Seq.empty
+                  }
 
-                Iterant.pure(summary) ++ loop(queue, visited + blockHash)
+                Iterant.pure(summary) ++ loop(queue ++ ancestors, visited + blockHash)
             }
         }
       }
 
     Iterant.delay {
-      PriorityQueue(request.targetBlockHashes.map(0 -> _): _*) -> Set.empty[ByteString]
+      Queue(request.targetBlockHashes.map(0 -> _): _*) -> Set.empty[ByteString]
     } flatMap {
       case (queue, visited) => loop(queue, visited)
     }
@@ -137,14 +142,5 @@ object GossipServiceServer {
     }
 
     Iterator(Chunk().withHeader(header)) ++ chunks
-  }
-
-  // Return `true` for the item that is "less important" then the other.
-  val breadthFirstOrdering: Ordering[(Int, ByteString)] = Ordering.fromLessThan {
-    case ((depth1, hash1), (depth2, hash2)) if depth1 == depth2 =>
-      // Just want some stable order between blocks at the same depth.
-      hash1.hashCode > hash2.hashCode
-    case ((depth1, _), (depth2, _)) =>
-      depth1 > depth2
   }
 }
