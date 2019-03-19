@@ -364,7 +364,7 @@ class GrpcGossipServiceSpec
         }
       }
 
-      "called with a depth of 0" should {
+      "called with a (default) depth of 0" should {
         val genTestCase = for {
           dag     <- genDag
           targets <- Gen.someOf(dag)
@@ -422,7 +422,7 @@ class GrpcGossipServiceSpec
         }
       }
 
-      "called with a single target and maximum depth" should {
+      "called with a single target and a given maximum depth value" should {
         val genTestCase = for {
           dag    <- genDag
           target <- Gen.oneOf(dag)

@@ -141,9 +141,10 @@ object GossipServiceServer {
 
   // Return `true` for the item that is "less important" then the other.
   val breadthFirstOrdering: Ordering[(Int, ByteString)] = Ordering.fromLessThan {
-    case ((d1, h1), (d2, h2)) if d1 == d2 =>
-      h1.hashCode > h2.hashCode // Just want some stable order for hashes
-    case ((d1, _), (d2, _)) =>
-      d1 > d2
+    case ((depth1, hash1), (depth2, hash2)) if depth1 == depth2 =>
+      // Just want some stable order between blocks at the same depth.
+      hash1.hashCode > hash2.hashCode
+    case ((depth1, _), (depth2, _)) =>
+      depth1 > depth2
   }
 }
