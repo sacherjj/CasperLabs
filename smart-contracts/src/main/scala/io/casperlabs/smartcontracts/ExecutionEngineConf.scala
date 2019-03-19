@@ -17,7 +17,11 @@ import io.netty.channel.kqueue.{KQueueDomainSocketChannel, KQueueEventLoopGroup}
 import io.netty.channel.unix.DomainSocketAddress
 import monix.eval.TaskLift
 
-class ExecutionEngineConf[F[_]: Sync: Log: TaskLift](addr: Path, maxMessageSize: Int) {
+class ExecutionEngineConf[F[_]: Sync: Log: TaskLift](
+    addr: Path,
+    maxMessageSize: Int,
+    initBonds: Map[Array[Byte], Long]
+) {
   val channelType =
     if (Epoll.isAvailable) classOf[EpollDomainSocketChannel] else classOf[KQueueDomainSocketChannel]
   val eventLoopGroup =
@@ -55,7 +59,7 @@ class ExecutionEngineConf[F[_]: Sync: Log: TaskLift](addr: Path, maxMessageSize:
       stub    <- Sync[F].delay(IpcGrpcMonix.stub(channel))
     } yield
       Resource.make(
-        Sync[F].delay(new GrpcExecutionEngineService[F](addr, maxMessageSize, stub))
+        Sync[F].delay(new GrpcExecutionEngineService[F](addr, maxMessageSize, initBonds, stub))
       )(_ => stop(channel))
 
     Resource.suspend(res)

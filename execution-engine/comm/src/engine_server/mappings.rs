@@ -20,6 +20,18 @@ fn parse_error<T>(message: String) -> Result<T, ParsingError> {
     Err(ParsingError(message))
 }
 
+/// Map a result into the expected error for this module, while also
+/// converting the type into a Value. Use case: parsing U128, U256,
+/// U512 from a string.
+fn to_value<T, E>(r: Result<T, E>) -> Result<common::value::Value, ParsingError>
+where
+    common::value::Value: From<T>,
+    E: std::fmt::Debug,
+{
+    r.map(common::value::Value::from)
+        .map_err(|e| ParsingError(format!("{:?}", e)))
+}
+
 impl TryFrom<&super::ipc::Transform> for transform::Transform {
     type Error = ParsingError;
     fn try_from(tr: &super::ipc::Transform) -> Result<transform::Transform, ParsingError> {
@@ -42,6 +54,16 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             let v = tr.get_write().get_value();
             if v.has_integer() {
                 transform_write(common::value::Value::Int32(v.get_integer()))
+            } else if v.has_big_int() {
+                let b = v.get_big_int();
+                let n = b.get_value();
+                let v = match b.get_bit_width() {
+                    128 => to_value(common::value::U128::from_dec_str(n)),
+                    256 => to_value(common::value::U256::from_dec_str(n)),
+                    512 => to_value(common::value::U512::from_dec_str(n)),
+                    other => parse_error(format!("BigInt bit width of {} is invalid", other)),
+                }?;
+                transform_write(v)
             } else if v.has_byte_arr() {
                 let v: Vec<u8> = Vec::from(v.get_byte_arr());
                 transform_write(common::value::Value::ByteArray(v))
@@ -88,6 +110,24 @@ impl From<common::value::Value> for super::ipc::Value {
         match v {
             common::value::Value::Int32(i) => {
                 tv.set_integer(i);
+            }
+            common::value::Value::UInt128(u) => {
+                let mut b = super::ipc::RustBigInt::new();
+                b.set_value(format!("{}", u));
+                b.set_bit_width(128);
+                tv.set_big_int(b)
+            }
+            common::value::Value::UInt256(u) => {
+                let mut b = super::ipc::RustBigInt::new();
+                b.set_value(format!("{}", u));
+                b.set_bit_width(256);
+                tv.set_big_int(b)
+            }
+            common::value::Value::UInt512(u) => {
+                let mut b = super::ipc::RustBigInt::new();
+                b.set_value(format!("{}", u));
+                b.set_bit_width(512);
+                tv.set_big_int(b)
             }
             common::value::Value::ByteArray(arr) => {
                 tv.set_byte_arr(arr);

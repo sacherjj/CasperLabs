@@ -18,6 +18,11 @@ rand = "0.6.1"
 rand_chacha = "0.1.1"
 shared = { path = "../shared" }
 
+[dev-dependencies]
+matches = "0.1.8"
+gens = { path = "../gens" }
+proptest = "0.8.7"
+
 [[bin]]
 name = "engine-standalone"
 path = "src/main.rs"

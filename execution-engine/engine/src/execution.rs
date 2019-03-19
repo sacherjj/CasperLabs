@@ -5,9 +5,9 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
-use storage::gs::trackingcopy::AddResult;
-use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
+use storage::gs::{DbReader, ExecutionEffect};
 use storage::transform::TypeMismatch;
+use trackingcopy::{AddResult, TrackingCopy};
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,

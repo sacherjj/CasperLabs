@@ -26,28 +26,46 @@ trait ArbitraryConsensus {
 
   implicit val blockGen: Arbitrary[Block] = Arbitrary {
     for {
-      blockHash          <- genHash
+      summary <- arbitrary[BlockSummary]
+      deploys <- Gen.listOfN(summary.getHeader.deployCount, arbitrary[Block.ProcessedDeploy])
+    } yield {
+      Block()
+        .withBlockHash(summary.blockHash)
+        .withHeader(summary.getHeader)
+        .withBody(Block.Body(deploys))
+        .withSignature(summary.getSignature)
+    }
+  }
+
+  implicit val blockHeaderGen: Arbitrary[Block.Header] = Arbitrary {
+    for {
       parentCount        <- Gen.choose(1, 5)
       parentHashes       <- Gen.listOfN(parentCount, genHash)
       deployCount        <- Gen.choose(1, 10)
-      deploys            <- Gen.listOfN(deployCount, arbitrary[Block.ProcessedDeploy])
       bodyHash           <- genHash
       preStateHash       <- genHash
       postStateHash      <- genHash
       validatorPublicKey <- genKey
-      signature          <- arbitrary[Signature]
     } yield {
-      Block()
+      Block
+        .Header()
+        .withParentHashes(parentHashes)
+        .withState(Block.GlobalState(preStateHash, postStateHash, Seq.empty))
+        .withDeployCount(deployCount)
+        .withValidatorPublicKey(validatorPublicKey)
+        .withBodyHash(bodyHash)
+    }
+  }
+
+  implicit val blockSummaryGen: Arbitrary[BlockSummary] = Arbitrary {
+    for {
+      blockHash <- genHash
+      header    <- arbitrary[Block.Header]
+      signature <- arbitrary[Signature]
+    } yield {
+      BlockSummary()
         .withBlockHash(blockHash)
-        .withHeader(
-          Block
-            .Header()
-            .withParentHashes(parentHashes)
-            .withState(Block.GlobalState(preStateHash, postStateHash, Seq.empty))
-            .withDeployCount(deployCount)
-            .withValidatorPublicKey(validatorPublicKey)
-        )
-        .withBody(Block.Body(deploys))
+        .withHeader(header)
         .withSignature(signature)
     }
   }

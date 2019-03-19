@@ -3,9 +3,10 @@ use execution::{Error as ExecutionError, Executor};
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
-use storage::gs::{ExecutionEffect, TrackingCopy};
+use storage::gs::ExecutionEffect;
 use storage::history::*;
 use storage::transform::Transform;
+use trackingcopy::TrackingCopy;
 use vm::wasm_costs::WasmCosts;
 use wasm_prep::Preprocessor;
 

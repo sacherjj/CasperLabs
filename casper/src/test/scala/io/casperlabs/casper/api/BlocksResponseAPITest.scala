@@ -10,7 +10,6 @@ import io.casperlabs.casper.{genesis, _}
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}

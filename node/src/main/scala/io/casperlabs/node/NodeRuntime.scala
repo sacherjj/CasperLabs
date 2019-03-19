@@ -4,8 +4,10 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.mtl.MonadState
 import cats.syntax.applicative._
 import cats.syntax.apply._
+import cats.syntax.flatMap._
 import cats.syntax.functor._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{BlockStore, InMemBlockDagStorage, InMemBlockStore}
@@ -13,7 +15,6 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.comm.CasperPacketHandler
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
@@ -37,6 +38,7 @@ import kamon._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
+import com.olegpy.meow.effects._
 
 import scala.concurrent.duration._
 
@@ -50,6 +52,8 @@ class NodeRuntime private[node] (
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
   private[this] val grpcScheduler =
     Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
+
+  private val initPeer = if (conf.casper.standalone) None else Some(conf.server.bootstrap)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -78,28 +82,23 @@ class NodeRuntime private[node] (
 
   val main = GrpcExecutionEngineService[Effect](
     conf.grpc.socket,
-    conf.server.maxMessageSize
-  ).use(runMain)
+    conf.server.maxMessageSize,
+    initBonds = Map.empty
+  ) use { ee =>
+    val rpConfState = localPeerNode[Task].flatMap(rpConf[Task]).toEffect
+    rpConfState >>= (_.runState(runMain(ee, _)))
+  }
 
-  def runMain(executionEngineService: ExecutionEngineService[Effect]) =
+  def runMain(
+      implicit
+      executionEngineService: ExecutionEngineService[Effect],
+      rpConfState: MonadState[Task, RPConf]
+  ) =
     for {
-      local <- WhoAmI
-                .fetchLocalPeerNode[Task](
-                  conf.server.host,
-                  conf.server.port,
-                  conf.server.kademliaPort,
-                  conf.server.noUpnp,
-                  id
-                )
-                .toEffect
-
-      defaultTimeout = conf.server.defaultTimeout.millis
-
-      initPeer             = if (conf.casper.standalone) None else Some(conf.server.bootstrap)
-      rpConfState          = effects.rpConfState(rpConf(local, initPeer))
-      rpConfAsk            = effects.rpConfAsk(rpConfState)
-      peerNodeAsk          = effects.peerNodeAsk(rpConfState)
       rpConnections        <- effects.rpConnections.toEffect
+      defaultTimeout       = conf.server.defaultTimeout.millis
+      rpConfAsk            = effects.rpConfAsk
+      peerNodeAsk          = effects.peerNodeAsk
       metrics              = diagnostics.effects.metrics[Task]
       kademliaConnections  <- CachedConnections[Task, KademliaConnTag](Task.catsAsync, metrics).toEffect
       tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
@@ -146,10 +145,6 @@ class NodeRuntime private[node] (
                         )
       _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
       oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
-      abs = new ToAbstractContext[Effect] {
-        def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
-      }
-
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](
                                 conf.casper,
@@ -172,6 +167,7 @@ class NodeRuntime private[node] (
                                 Log.eitherTLog(Monad[Task], log),
                                 multiParentCasperRef,
                                 blockDagStorage,
+                                executionEngineService,
                                 scheduler
                               )
       packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
@@ -393,8 +389,18 @@ class NodeRuntime private[node] (
     numOfConnectionsPinged = 10
   ) // TODO read from conf
 
-  private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
-    RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
+  private def rpConf[F[_]: Sync](local: PeerNode) =
+    Ref.of(RPConf(local, initPeer, defaultTimeout, rpClearConnConf))
+
+  private def localPeerNode[F[_]: Sync: Log] =
+    WhoAmI
+      .fetchLocalPeerNode[F](
+        conf.server.host,
+        conf.server.port,
+        conf.server.kademliaPort,
+        conf.server.noUpnp,
+        id
+      )
 }
 
 object NodeRuntime {

@@ -38,7 +38,7 @@ pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {
     }
 }
 
-fn safe_split_at(bytes: &[u8], n: usize) -> Result<(&[u8], &[u8]), Error> {
+pub fn safe_split_at(bytes: &[u8], n: usize) -> Result<(&[u8], &[u8]), Error> {
     if n > bytes.len() {
         Err(Error::EarlyEndOfStream)
     } else {

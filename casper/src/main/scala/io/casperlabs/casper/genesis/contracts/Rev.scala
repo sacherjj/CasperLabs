@@ -1,7 +1,5 @@
 package io.casperlabs.casper.genesis.contracts
 
-import io.casperlabs.casper.util.rholang.InterpreterUtil
-
 class Rev[A](
     rhoCode: A => String,
     wallets: Seq[A],
