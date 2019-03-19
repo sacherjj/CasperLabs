@@ -2,10 +2,7 @@ package io.casperlabs.comm.gossiping
 
 import cats.effect._
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.catscontrib.Taskable
-import io.casperlabs.catscontrib.Catscontrib.ToTaskableOps
-import monix.eval.{Task, TaskLift}
-import monix.execution.Scheduler
+import monix.eval.{Task, TaskLift, TaskLike}
 import monix.reactive.Observable
 import monix.tail.Iterant
 
@@ -15,14 +12,14 @@ object GrpcGossipService {
 
   /** Create Monix specific instance from the internal interface,
 	  * to be used as the "server side", i.e. to return data to another peer. */
-  def fromGossipService[F[_]: Sync: Taskable: ObservableIterant](
+  def fromGossipService[F[_]: Sync: TaskLike: ObservableIterant](
       service: GossipService[F]
   ): GossipingGrpcMonix.GossipService =
     new GossipingGrpcMonix.GossipService {
 
       /** Handle notification about some new blocks on the caller. */
       def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
-        service.newBlocks(request).toTask
+        TaskLike[F].toTask(service.newBlocks(request))
 
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
