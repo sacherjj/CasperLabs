@@ -204,21 +204,21 @@ mod tests {
     use transform::Transform;
 
     struct CountingDb {
-        count: Cell<i32>,
+        count: Rc<Cell<i32>>,
         value: Option<Value>,
     }
 
     impl CountingDb {
-        fn new() -> CountingDb {
+        fn new(counter: Rc<Cell<i32>>) -> CountingDb {
             CountingDb {
-                count: Cell::new(0),
+                count: counter,
                 value: None,
             }
         }
 
         fn new_init(v: Value) -> CountingDb {
             CountingDb {
-                count: Cell::new(0),
+                count: Rc::new(Cell::new(0)),
                 value: Some(v),
             }
         }
@@ -236,15 +236,10 @@ mod tests {
         }
     }
 
-    impl DbReader for Rc<CountingDb> {
-        fn get(&self, k: &Key) -> Result<Option<Value>, Error> {
-            CountingDb::get(self, k)
-        }
-    }
-
     #[test]
     fn tracking_copy_new() {
-        let db = CountingDb::new();
+        let counter = Rc::new(Cell::new(0));
+        let db = CountingDb::new(counter);
         let tc = TrackingCopy::new(db);
 
         assert_eq!(tc.cache.is_empty(), true);
@@ -254,9 +249,9 @@ mod tests {
 
     #[test]
     fn tracking_copy_caching() {
-        let db = CountingDb::new();
-        let db_ref = Rc::new(db);
-        let mut tc = TrackingCopy::new(db_ref.clone());
+        let counter = Rc::new(Cell::new(0));
+        let db = CountingDb::new(Rc::clone(&counter));
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         let zero = Value::Int32(0);
@@ -267,14 +262,17 @@ mod tests {
         // second read; should use cache instead
         // of going back to the DB
         let value = tc.read(k).unwrap().unwrap();
-        let db_value = db_ref.count.get();
+        // we are calling unwrap_err() because Rc counter was cloned into CountingDb
+        // and Rc::try_unwrap returns Err if there's other strong reference to the value.
+        let db_value = (Rc::try_unwrap(Rc::clone(&counter)).unwrap_err()).get();
         assert_eq!(value, zero);
         assert_eq!(db_value, 1);
     }
 
     #[test]
     fn tracking_copy_read() {
-        let db = CountingDb::new();
+        let counter = Rc::new(Cell::new(0));
+        let db = CountingDb::new(Rc::clone(&counter));
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
@@ -291,9 +289,9 @@ mod tests {
 
     #[test]
     fn tracking_copy_write() {
-        let db = CountingDb::new();
-        let db_ref = Rc::new(db);
-        let mut tc = TrackingCopy::new(db_ref.clone());
+        let counter = Rc::new(Cell::new(0));
+        let db = CountingDb::new(Rc::clone(&counter));
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         let one = Value::Int32(1);
@@ -302,7 +300,7 @@ mod tests {
         // writing should work
         tc.write(k, one.clone());
         // write does not need to query the DB
-        let db_value = db_ref.count.get();
+        let db_value = (Rc::try_unwrap(Rc::clone(&counter)).unwrap_err()).get();
         assert_eq!(db_value, 0);
         // write creates a Transfrom
         assert_eq!(tc.fns.len(), 1);
@@ -313,7 +311,7 @@ mod tests {
 
         // writing again should update the values
         tc.write(k, two.clone());
-        let db_value = db_ref.count.get();
+        let db_value = (Rc::try_unwrap(Rc::clone(&counter)).unwrap_err()).get();
         assert_eq!(db_value, 0);
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::Write(two)));
@@ -323,7 +321,8 @@ mod tests {
 
     #[test]
     fn tracking_copy_add_i32() {
-        let db = CountingDb::new();
+        let counter = Rc::new(Cell::new(0));
+        let db = CountingDb::new(counter);
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
@@ -398,7 +397,8 @@ mod tests {
 
     #[test]
     fn tracking_copy_rw() {
-        let db = CountingDb::new();
+        let counter = Rc::new(Cell::new(0));
+        let db = CountingDb::new(counter);
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
@@ -414,7 +414,8 @@ mod tests {
 
     #[test]
     fn tracking_copy_ra() {
-        let db = CountingDb::new();
+        let counter = Rc::new(Cell::new(0));
+        let db = CountingDb::new(counter);
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
@@ -431,7 +432,8 @@ mod tests {
 
     #[test]
     fn tracking_copy_aw() {
-        let db = CountingDb::new();
+        let counter = Rc::new(Cell::new(0));
+        let db = CountingDb::new(counter);
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
