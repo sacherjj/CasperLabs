@@ -283,6 +283,7 @@ lazy val node = (project in file("node"))
       val daemon = (daemonUser in Docker).value
       Seq(
         Cmd("FROM", dockerBaseImage.value),
+        ExecCmd("RUN", "apt", "clean"),
         ExecCmd("RUN", "apt", "update"),
         ExecCmd("RUN", "apt", "install", "-yq", "openssl", "curl"),
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
