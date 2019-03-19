@@ -11,8 +11,7 @@ import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.deploy2deploy
-import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil}
-import io.casperlabs.catscontrib.Capture
+import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.protocol.routing.Packet
@@ -50,7 +49,8 @@ class BlockApproverProtocol(
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk: ExecutionEngineService](
+  def unapprovedBlockPacketHandler[
+      F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk: ExecutionEngineService](
       peer: PeerNode,
       u: UnapprovedBlock
   ): F[Unit] =
