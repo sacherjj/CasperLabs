@@ -69,13 +69,10 @@ impl History for InMemHist<Key, Value> {
     type Error = Error;
     type Reader = InMemGS<Key, Value>;
 
-    fn checkout(
-        &self,
-        prestate_hash: Blake2bHash,
-    ) -> Result<Option<TrackingCopy<Self::Reader>>, Self::Error> {
+    fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {
         match self.history.get(&prestate_hash) {
             None => Ok(None),
-            Some(gs) => Ok(Some(TrackingCopy::new(gs.clone()))),
+            Some(gs) => Ok(Some(gs.clone())),
         }
     }
 
@@ -139,7 +136,7 @@ mod tests {
         InMemHist { history }
     }
 
-    fn checkout<H>(hist: &H, hash: Blake2bHash) -> TrackingCopy<H::Reader>
+    fn checkout<H>(hist: &H, hash: Blake2bHash) -> H::Reader
     where
         H: History,
         H::Error: std::fmt::Debug,
@@ -174,7 +171,7 @@ mod tests {
         // its content is as expeced.
         let empty_root_hash = [0u8; 32].into();
         let hist = prepopulated_hist();
-        let mut tc = checkout(&hist, empty_root_hash);
+        let tc = checkout(&hist, empty_root_hash);
         assert_eq!(tc.get(&KEY1).unwrap().unwrap(), VALUE1);
         assert_eq!(tc.get(&KEY2).unwrap().unwrap(), VALUE2);
     }
@@ -195,19 +192,21 @@ mod tests {
         // and values that are living under new hash are as expected.
         let empty_root_hash = [0u8; 32].into();
         let mut hist = prepopulated_hist();
-        let mut tc = checkout(&hist, empty_root_hash);
-        let add_res = tc.add(KEY1, Value::Int32(1));
-        assert!(add_res.is_ok());
-        let new_v2 = Value::String("I am String now!".to_owned());
-        let write_res = tc.write(KEY2, new_v2.clone());
-        assert!(write_res.is_ok());
-        let effects = tc.effect();
+        let _reader = checkout(&hist, empty_root_hash);
+        let v1 = Value::Int32(2);
+        let v2 = Value::String("I am String now!".to_owned());
+        let effects: HashMap<Key, Transform> = {
+            let mut tmp = HashMap::new();
+            tmp.insert(KEY1, Transform::Write(v1.clone()));
+            tmp.insert(KEY2, Transform::Write(v2.clone()));
+            tmp
+        };
         // commit changes from the tracking copy
-        let hash_res = commit(&mut hist, empty_root_hash, effects.1);
+        let hash_res = commit(&mut hist, empty_root_hash, effects);
         // checkout to the new hash
-        let mut tc_2 = checkout(&hist, hash_res);
-        assert_eq!(tc_2.get(&KEY1).unwrap().unwrap(), Value::Int32(2));
-        assert_eq!(tc_2.get(&KEY2).unwrap().unwrap(), new_v2);
+        let tc_2 = checkout(&hist, hash_res);
+        assert_eq!(tc_2.get(&KEY1).unwrap().unwrap(), v1);
+        assert_eq!(tc_2.get(&KEY2).unwrap().unwrap(), v2);
     }
 
     #[test]
@@ -218,22 +217,22 @@ mod tests {
         // and validates that it doesn't contain commited changes
         let empty_root_hash = [0u8; 32].into();
         let mut gs = prepopulated_hist();
-        let mut tc = checkout(&gs, empty_root_hash);
-        let add_res = tc.add(KEY1, Value::Int32(1));
-        assert!(add_res.is_ok());
+        let _reader = checkout(&gs, empty_root_hash);
+        let v1 = Value::Int32(2);
         let new_v2 = Value::String("I am String now!".to_owned());
-        let write_res = tc.write(KEY2, new_v2.clone());
-        assert!(write_res.is_ok());
         let key3 = Key::Account([3u8; 20]);
         let value3 = Value::Int32(3);
-        let write_res = tc.write(key3, value3.clone());
-        assert!(write_res.is_ok());
-        assert_eq!(tc.get(&key3).unwrap().unwrap(), value3);
-        let effects = tc.effect();
+        let effects = {
+            let mut tmp = HashMap::new();
+            tmp.insert(KEY1, Transform::Write(v1));
+            tmp.insert(KEY2, Transform::Write(new_v2));
+            tmp.insert(key3, Transform::Write(value3));
+            tmp
+        };
         // commit changes from the tracking copy
-        let _ = commit(&mut gs, empty_root_hash, effects.1);
+        let _ = commit(&mut gs, empty_root_hash, effects);
         // checkout to the empty root hash
-        let mut tc_2 = checkout(&gs, empty_root_hash);
+        let tc_2 = checkout(&gs, empty_root_hash);
         assert_eq!(tc_2.get(&KEY1).unwrap().unwrap(), VALUE1);
         assert_eq!(tc_2.get(&KEY2).unwrap().unwrap(), VALUE2);
         // test that value inserted later are not visible in the past commits.

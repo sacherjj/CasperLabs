@@ -10,11 +10,12 @@ use common::bytesrepr::ToBytes;
 use common::key::{Key, UREF_SIZE};
 use common::value::{self, Value};
 use execution_engine::execution::{Runtime, RuntimeContext};
+use execution_engine::trackingcopy::TrackingCopy;
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
 use shared::newtypes::Blake2bHash;
 use std::collections::{BTreeMap, HashMap};
-use storage::gs::{inmem::*, DbReader, TrackingCopy};
+use storage::gs::{inmem::*, DbReader};
 use storage::history::*;
 use storage::transform::Transform;
 use wasm_prep::MAX_MEM_PAGES;
@@ -134,9 +135,12 @@ fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS
     hist.commit(root_hash, m)
         .expect("Creation of mocked account should be a success.");
 
-    hist.checkout(root_hash)
+    let reader = hist
+        .checkout(root_hash)
         .expect("Checkout should not throw errors.")
-        .expect("Root hash should exist.")
+        .expect("Root hash should exist.");
+
+    TrackingCopy::new(reader)
 }
 
 fn mock_context<'a>(

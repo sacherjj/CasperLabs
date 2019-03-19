@@ -3,9 +3,10 @@ use execution::{Error as ExecutionError, Executor};
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
-use storage::gs::{ExecutionEffect, TrackingCopy};
+use storage::gs::ExecutionEffect;
 use storage::history::*;
 use storage::transform::Transform;
+use trackingcopy::TrackingCopy;
 use vm::wasm_costs::WasmCosts;
 use wasm_prep::Preprocessor;
 
@@ -104,7 +105,10 @@ where
         &self,
         hash: Blake2bHash,
     ) -> Result<Option<TrackingCopy<H::Reader>>, Error> {
-        self.state.lock().checkout(hash).map_err(Into::into)
+        match self.state.lock().checkout(hash).map_err(Into::into)? {
+            Some(tc) => Ok(Some(TrackingCopy::new(tc))),
+            None => Ok(None),
+        }
     }
 
     // TODO run_deploy should perform preprocessing and validation of the deploy.
@@ -123,8 +127,8 @@ where
     ) -> Result<ExecutionResult, RootNotFound> {
         match preprocessor.preprocess(module_bytes, &self.wasm_costs) {
             Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
-            Ok(module) => match self.state.lock().checkout(prestate_hash) {
-                Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
+            Ok(module) => match self.tracking_copy(prestate_hash) {
+                Err(error) => Ok(ExecutionResult::failure(error, 0)),
                 Ok(checkout_result) => match checkout_result {
                     None => Err(RootNotFound(prestate_hash)),
                     Some(mut tc) => {

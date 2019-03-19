@@ -7,9 +7,6 @@ use std::collections::{BTreeMap, HashMap};
 
 pub mod inmem;
 pub mod lmdb;
-pub mod trackingcopy;
-
-pub use self::trackingcopy::TrackingCopy;
 
 #[derive(Debug)]
 pub struct ExecutionEffect(pub HashMap<Key, Op>, pub HashMap<Key, Transform>);

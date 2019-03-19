@@ -5,9 +5,9 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::Key;
 use common::value::{Account, Value};
-use storage::gs::trackingcopy::AddResult;
-use storage::gs::{DbReader, ExecutionEffect, TrackingCopy};
+use storage::gs::{DbReader, ExecutionEffect};
 use storage::transform::TypeMismatch;
+use trackingcopy::{AddResult, TrackingCopy};
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
@@ -426,8 +426,9 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         value_ptr: u32,
         value_size: u32,
     ) -> Result<(), Trap> {
-        let (key, value) = self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)?;
-        self.state.write(key, value).map_err(Into::into)
+        self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)
+            .map(|(key, value)| self.state.write(key, value))
+            .map_err(Into::into)
     }
 
     pub fn add(
