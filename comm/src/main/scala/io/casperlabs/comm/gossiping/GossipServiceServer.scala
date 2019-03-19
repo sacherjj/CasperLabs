@@ -31,6 +31,9 @@ class GossipServiceServer[F[_]: Sync](
     // We return known hashes but not their parents.
     val knownHashes = request.knownBlockHashes.toSet
 
+    def canGoDeeper(depth: Int) =
+      depth < request.maxDepth || request.maxDepth == -1
+
     def loop(
         queue: PriorityQueue[(Int, ByteString)],
         visited: Set[ByteString]
@@ -48,7 +51,7 @@ class GossipServiceServer[F[_]: Sync](
                 loop(queue, visited + blockHash)
 
               case Some(summary) =>
-                if (depth < request.maxDepth && !knownHashes(summary.blockHash)) {
+                if (canGoDeeper(depth) && !knownHashes(summary.blockHash)) {
                   val ancestors =
                     summary.getHeader.parentHashes ++
                       summary.getHeader.justifications.map(_.latestBlockHash)

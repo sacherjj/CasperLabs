@@ -404,6 +404,24 @@ class GrpcGossipServiceSpec
         }
       }
 
+      "called with a depth of -1" should {
+        val genTestCase = for {
+          dag     <- genDag
+          targets <- Gen.choose(1, dag.size).flatMap(Gen.pick(_, dag))
+          req = StreamAncestorBlockSummariesRequest(
+            targetBlockHashes = targets.map(_.blockHash),
+            maxDepth = -1
+          )
+        } yield TestCase(dag, req)
+
+        "return everything back to the genesis" in TestFixture(genTestCase) {
+          case TestCase(dag, req) =>
+            stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
+              ancestors should contain(dag.head)
+            }
+        }
+      }
+
       "called with a single target and maximum depth" should {
         val genTestCase = for {
           dag    <- genDag

@@ -52,6 +52,7 @@ message StreamAncestorBlockSummariesRequest {
     // any hashes that still couldn't be connected to its own version of the DAG. If the target block
     // summaries are known then the value can be based on the difference in block sequence numbers between
     // the target and the last known block from the validator that produced it.
+    // A value of -1 would mean no limit on the depth; 0 just returns the targets themselves.
     uint32 max_depth = 3;
 }
 
