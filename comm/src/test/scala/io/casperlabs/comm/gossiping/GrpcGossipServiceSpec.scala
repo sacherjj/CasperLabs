@@ -281,13 +281,11 @@ class GrpcGossipServiceSpec
       summary.getHeader.parentHashes ++
         summary.getHeader.justifications.map(_.latestBlockHash)
 
-    /** Collect the ancestors of a hash and return their minimum distance to the target.
-      * This is an alternative implementation to test against. */
+    /** Collect the ancestors of a hash and return their minimum distance to the target. */
     def collectAncestors(
         summaries: Map[ByteString, BlockSummary],
         target: ByteString,
-        maxDepth: Int,
-        known: Set[ByteString] = Set.empty
+        maxDepth: Int
     ): Map[ByteString, Int] = {
       def loop(visited: Map[ByteString, Int], hash: ByteString, depth: Int): Map[ByteString, Int] =
         if (depth > maxDepth)
@@ -295,14 +293,11 @@ class GrpcGossipServiceSpec
         else {
           val summary     = summaries(hash)
           val nextVisited = visited + (summary.blockHash -> depth)
-          if (known(summary.blockHash)) nextVisited
-          else {
-            elders(summary).foldLeft(nextVisited) {
-              case (visited, hash) if visited.contains(hash) && visited(hash) <= depth + 1 =>
-                visited
-              case (visited, hash) =>
-                loop(visited, hash, depth + 1)
-            }
+          elders(summary).foldLeft(nextVisited) {
+            case (visited, hash) if visited.contains(hash) && visited(hash) <= depth + 1 =>
+              visited
+            case (visited, hash) =>
+              loop(visited, hash, depth + 1)
           }
         }
       loop(Map.empty, target, 0)
@@ -312,11 +307,10 @@ class GrpcGossipServiceSpec
     def collectAncestorsForMany(
         summaries: Map[ByteString, BlockSummary],
         targets: Seq[ByteString],
-        maxDepth: Int,
-        known: Set[ByteString] = Set.empty
+        maxDepth: Int
     ): Map[ByteString, Int] =
       targets flatMap { target =>
-        collectAncestors(summaries, target, maxDepth, known).toSeq
+        collectAncestors(summaries, target, maxDepth).toSeq
       } groupBy {
         _._1
       } mapValues {
@@ -556,14 +550,17 @@ class GrpcGossipServiceSpec
         }
 
         "return the known blocks if they are within the maximum depth" in TestFixture(genTestCase) {
-          case tc @ TestCase(_, req) =>
+          case tc @ TestCase(_, req0) =>
+            // Just using 1 known so we know that we won't stop before reaching it due to
+            // other known ancestors on the path.
+            val req = req0.copy(knownBlockHashes = req0.knownBlockHashes.take(1))
+
             stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
               val ancestorHashes = ancestors.map(_.blockHash).toSet
               val isReachable = collectAncestorsForMany(
                 tc.summaries,
                 req.targetBlockHashes,
-                req.maxDepth,
-                req.knownBlockHashes.toSet
+                req.maxDepth
               ).keySet
 
               Inspectors.forAll(req.knownBlockHashes) { knownHash =>
