@@ -8,6 +8,8 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
 import io.casperlabs.comm.ServiceError.NotFound
 import monix.tail.Iterant
+import scala.collection.immutable.Queue
+import scala.math.Ordering
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
 class GossipServiceServer[F[_]: Sync](
@@ -15,13 +17,64 @@ class GossipServiceServer[F[_]: Sync](
     getBlock: ByteString => F[Option[Block]],
     maxChunkSize: Int
 ) extends GossipService[F] {
-  import GossipServiceServer.chunkIt
+  import GossipServiceServer._
 
   def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] = ???
 
   def streamAncestorBlockSummaries(
       request: StreamAncestorBlockSummariesRequest
-  ): Iterant[F, BlockSummary] = ???
+  ): Iterant[F, BlockSummary] = {
+    // We return known hashes but not their parents.
+    val knownHashes = request.knownBlockHashes.toSet
+
+    // Depth restriction is to be able to periodically reassess targets,
+    // to pass back hashes that still have missing dependencies, but not
+    // the ones which have connected to the DAG of the caller.
+    def canGoDeeper(depth: Int) =
+      depth < request.maxDepth || request.maxDepth == -1
+
+    // Visit blocks in simple BFS order rather than try to establish topological sorting because BFS
+    // is invariant in maximum depth, while topological sorting could depend on whether we traversed
+    // backwards enough to re-join forks with different lengths of sub-paths.
+    def loop(
+        queue: Queue[(Int, ByteString)],
+        visited: Set[ByteString]
+    ): Iterant[F, BlockSummary] =
+      if (queue.isEmpty)
+        Iterant.empty
+      else {
+        queue.dequeue match {
+          case ((_, blockHash), queue) if visited(blockHash) =>
+            loop(queue, visited)
+
+          case ((depth, blockHash), queue) =>
+            Iterant.liftF(getBlockSummary(blockHash)) flatMap {
+              case None =>
+                loop(queue, visited + blockHash)
+
+              case Some(summary) =>
+                val ancestors =
+                  if (canGoDeeper(depth) && !knownHashes(summary.blockHash)) {
+                    val ancestors =
+                      summary.getHeader.parentHashes ++
+                        summary.getHeader.justifications.map(_.latestBlockHash)
+
+                    ancestors.map(depth + 1 -> _)
+                  } else {
+                    Seq.empty
+                  }
+
+                Iterant.pure(summary) ++ loop(queue ++ ancestors, visited + blockHash)
+            }
+        }
+      }
+
+    Iterant.delay {
+      Queue(request.targetBlockHashes.map(0 -> _): _*) -> Set.empty[ByteString]
+    } flatMap {
+      case (queue, visited) => loop(queue, visited)
+    }
+  }
 
   def streamDagTipBlockSummaries(
       request: StreamDagTipBlockSummariesRequest

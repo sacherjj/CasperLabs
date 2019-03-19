@@ -6,19 +6,32 @@ import "io/casperlabs/casper/consensus/consensus.proto";
 import "io/casperlabs/comm/discovery/node.proto";
 
 service GossipService {
+    // Notify the callee about new blocks being available on the caller.
     rpc NewBlocks(NewBlocksRequest) returns (NewBlocksResponse);
+
+    // Retrieve the ancestors of certain blocks in the DAG; to be called repeatedly
+    // as necessary to synchronize DAGs between peers.
     rpc StreamAncestorBlockSummaries(StreamAncestorBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
+
+    // Retrieve the tips of the DAG as the callee knows them, to kick off synchronization between peers.
     rpc StreamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
+
+    // Retrieve arbitrary block summaries, if the callee knows about them.
     rpc StreamBlockSummaries(StreamBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
+
+    // Retrieve an arbitrarily sized block as a stream of chunks, with optionally compressed content.
     rpc GetBlockChunked(GetBlockChunkedRequest) returns (stream Chunk);
 }
 
 message NewBlocksRequest {
+    // Address of the caller from where the callee can download the blocks from.
     io.casperlabs.comm.discovery.Node sender = 1;
     repeated bytes block_hashes = 2;
 }
 
 message NewBlocksResponse {
+    // Indicate that some of the blocks in the notifications were new and the callee will attempt
+    // to gossip them to further nodes when it gets around to downloading them.
     bool is_new = 1;
 }
 
@@ -27,8 +40,19 @@ message StreamBlockSummariesRequest {
 }
 
 message StreamAncestorBlockSummariesRequest {
+    // The identifiers of the blocks the caller wants to get to, typically the ones the callee notified
+    // it about earlier, using `NewBlocks`.
     repeated bytes target_block_hashes = 1;
+
+    // Supply the callee with some block hashes already known to the caller so the traversal can stop early if it hits them.
+    // These can for example be the blocks last seen from each validator and the last finalized blocks.
     repeated bytes known_block_hashes = 2;
+
+    // Limit the traversal to a certain depth, as a checkpoint when the caller can reassess and ask for
+    // any hashes that still couldn't be connected to its own version of the DAG. If the target block
+    // summaries are known then the value can be based on the difference in block sequence numbers between
+    // the target and the last known block from the validator that produced it.
+    // A value of -1 would mean no limit on the depth; 0 just returns the targets themselves.
     uint32 max_depth = 3;
 }
 

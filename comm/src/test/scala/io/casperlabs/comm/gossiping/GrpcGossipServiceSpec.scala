@@ -47,14 +47,15 @@ class GrpcGossipServiceSpec
   override def afterAll() =
     shutdown.runSyncUnsafe(10.seconds)
 
-  def runTestUnsafe(testData: TestData)(test: Task[Unit]) = {
+  def runTestUnsafe(testData: TestData)(test: Task[Unit]): Unit = {
     testDataRef.set(testData)
     test.runSyncUnsafe(5.seconds)
   }
 
   override def nestedSuites = Vector(
     GetBlockChunkedSpec,
-    StreamBlockSummariesSpec
+    StreamBlockSummariesSpec,
+    StreamAncestorBlockSummariesSpec
   )
 
   object GetBlockChunkedSpec extends WordSpecLike {
@@ -242,8 +243,8 @@ class GrpcGossipServiceSpec
   }
 
   object StreamBlockSummariesSpec extends WordSpecLike {
-    implicit val config  = PropertyCheckConfiguration(minSuccessful = 5)
-    implicit val hashGen = Arbitrary(genHash)
+    implicit val config                         = PropertyCheckConfiguration(minSuccessful = 5)
+    implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
 
     "streamBlockSummaries" when {
       "called with a mix of known and unknown hashes" should {
@@ -267,6 +268,327 @@ class GrpcGossipServiceSpec
                 }
               }
           }
+        }
+      }
+    }
+  }
+
+  object StreamAncestorBlockSummariesSpec extends WordSpecLike {
+    implicit val config                         = PropertyCheckConfiguration(minSuccessful = 25)
+    implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
+
+    def elders(summary: BlockSummary): Seq[ByteString] =
+      summary.getHeader.parentHashes ++
+        summary.getHeader.justifications.map(_.latestBlockHash)
+
+    /** Collect the ancestors of a hash and return their minimum distance to the target. */
+    def collectAncestors(
+        summaries: Map[ByteString, BlockSummary],
+        target: ByteString,
+        maxDepth: Int
+    ): Map[ByteString, Int] = {
+      def loop(visited: Map[ByteString, Int], hash: ByteString, depth: Int): Map[ByteString, Int] =
+        if (depth > maxDepth)
+          visited
+        else {
+          val summary     = summaries(hash)
+          val nextVisited = visited + (summary.blockHash -> depth)
+          elders(summary).foldLeft(nextVisited) {
+            case (visited, hash) if visited.contains(hash) && visited(hash) <= depth + 1 =>
+              visited
+            case (visited, hash) =>
+              loop(visited, hash, depth + 1)
+          }
+        }
+      loop(Map.empty, target, 0)
+    }
+
+    /** Collect the ancestors of all targets and return the minimum distance to the nearest target. */
+    def collectAncestorsForMany(
+        summaries: Map[ByteString, BlockSummary],
+        targets: Seq[ByteString],
+        maxDepth: Int
+    ): Map[ByteString, Int] =
+      targets flatMap { target =>
+        collectAncestors(summaries, target, maxDepth).toSeq
+      } groupBy {
+        _._1
+      } mapValues {
+        _.map(_._2).min
+      }
+
+    /** Map of every parent to the children they have. */
+    def collectChildren(dag: Vector[BlockSummary]): Map[ByteString, Seq[ByteString]] = {
+      val ecs = for {
+        child <- dag
+        elder <- elders(child)
+      } yield (elder -> child.blockHash)
+
+      ecs
+        .groupBy(_._1)
+        .mapValues(_.map(_._2))
+    }
+
+    // Wrap the the dependant data into a case class, otherwise if we just use a tuple for example
+    // and there's an error, ScalaCheck can shrink down the input to where it becomes nonsensical.
+    // For example if we select N targets from the DAG it can narrow down the data to where the DAG
+    // has 0 items but there are non-zero targets.
+    case class TestCase[T](dag: Vector[BlockSummary], data: T) {
+      lazy val summaries = TestData(summaries = dag).summaries
+    }
+
+    class TestFixture[T](gen: Gen[TestCase[T]], test: TestCase[T] => Task[Unit]) {
+      forAll(gen) { tc =>
+        runTestUnsafe(TestData(summaries = tc.dag)) {
+          test(tc)
+        }
+      }
+    }
+    object TestFixture {
+      def apply[T](gen: Gen[TestCase[T]])(test: TestCase[T] => Task[Unit]) =
+        new TestFixture[T](gen, test)
+    }
+
+    "streamAncestorBlockSummaries" when {
+      "called with unknown target hashes" should {
+        "return an empty stream" in {
+          forAll(genDag, arbitrary[List[ByteString]]) { (dag, targets) =>
+            runTestUnsafe(TestData(summaries = dag)) {
+              val req = StreamAncestorBlockSummariesRequest(targetBlockHashes = targets)
+
+              stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
+                ancestors shouldBe empty
+              }
+            }
+          }
+        }
+      }
+
+      "called with a (default) depth of 0" should {
+        val genTestCase = for {
+          dag     <- genDag
+          targets <- Gen.someOf(dag)
+          req     = StreamAncestorBlockSummariesRequest(targetBlockHashes = targets.map(_.blockHash))
+        } yield TestCase(dag, req)
+
+        "return just the target summaries" in TestFixture(genTestCase) {
+          case TestCase(_, req) =>
+            stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
+              ancestors.map(_.blockHash) should contain theSameElementsAs req.targetBlockHashes
+            }
+        }
+      }
+
+      "called with a depth of 1" should {
+        val genTestCase = for {
+          dag     <- genDag
+          targets <- Gen.someOf(dag)
+          req = StreamAncestorBlockSummariesRequest(
+            targetBlockHashes = targets.map(_.blockHash),
+            maxDepth = 1
+          )
+        } yield TestCase(dag, req)
+
+        "return the targets and their parents + justifications" in TestFixture(genTestCase) {
+          case tc @ TestCase(_, req) =>
+            val expected = (
+              req.targetBlockHashes ++
+                req.targetBlockHashes.flatMap { t =>
+                  elders(tc.summaries(t))
+                }
+            ).toSet
+
+            stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
+              ancestors.map(_.blockHash) should contain theSameElementsAs expected
+            }
+        }
+      }
+
+      "called with a depth of -1" should {
+        val genTestCase = for {
+          dag     <- genDag
+          targets <- Gen.choose(1, dag.size).flatMap(Gen.pick(_, dag))
+          req = StreamAncestorBlockSummariesRequest(
+            targetBlockHashes = targets.map(_.blockHash),
+            maxDepth = -1
+          )
+        } yield TestCase(dag, req)
+
+        "return everything back to the genesis" in TestFixture(genTestCase) {
+          case TestCase(dag, req) =>
+            stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
+              ancestors should contain(dag.head)
+            }
+        }
+      }
+
+      "called with a single target and a given maximum depth value" should {
+        val genTestCase = for {
+          dag    <- genDag
+          target <- Gen.oneOf(dag)
+          depth  <- Gen.choose(0, dag.size)
+          req = StreamAncestorBlockSummariesRequest(
+            targetBlockHashes = Seq(target.blockHash),
+            maxDepth = depth
+          )
+        } yield TestCase(dag, req)
+
+        "return all ancestors of the target up to that depth in reverse breadth first order" in TestFixture(
+          genTestCase
+        ) {
+          case tc @ TestCase(_, req) =>
+            stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
+              val targetHash = req.targetBlockHashes.head
+              val depths =
+                collectAncestors(
+                  tc.summaries,
+                  targetHash,
+                  req.maxDepth
+                )
+
+              val ancestorHashes = ancestors.map(_.blockHash)
+              ancestorHashes.head shouldBe targetHash
+              ancestorHashes should contain theSameElementsAs depths.keySet
+              // The order of elements in the same rank is not specified,
+              // but we can check for partial ordering.
+              Inspectors.forAll(ancestorHashes.init zip ancestorHashes.tail) {
+                case (a, b) =>
+                  depths(a) should be <= depths(b)
+              }
+            }
+        }
+      }
+
+      "called with many targets and maximum depth" should {
+        val genTestCase = for {
+          dag      <- genDag
+          targets  <- Gen.someOf(dag)
+          maxDepth <- Gen.choose(0, dag.size)
+          req = StreamAncestorBlockSummariesRequest(
+            targetBlockHashes = targets.map(_.blockHash),
+            maxDepth = maxDepth
+          )
+        } yield TestCase(dag, req)
+
+        "start with the targets" in TestFixture(genTestCase) {
+          case TestCase(_, req) =>
+            stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
+              val targetHashes   = req.targetBlockHashes
+              val startingHashes = ancestors.map(_.blockHash).take(targetHashes.size)
+              startingHashes should contain theSameElementsAs targetHashes
+            }
+        }
+
+        "return results in the same order regardless of depth" in TestFixture(
+          for {
+            tc    <- genTestCase
+            depth <- Gen.choose(0, tc.data.maxDepth)
+          } yield TestCase(tc.dag, tc.data -> depth)
+        ) {
+          case TestCase(_, (req1, depth)) =>
+            val req2 = req1.copy(maxDepth = depth)
+            for {
+              a1 <- stub
+                     .streamAncestorBlockSummaries(req1)
+                     .map(_.blockHash)
+                     .toListL
+              a2 <- stub
+                     .streamAncestorBlockSummaries(req2)
+                     .map(_.blockHash)
+                     .toListL
+            } yield {
+              a1.take(depth) should contain theSameElementsInOrderAs a2.take(depth)
+            }
+        }
+
+        "return all ancestors up to that depth from any of the targets" in TestFixture(genTestCase) {
+          case tc @ TestCase(_, req) =>
+            stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
+              val ancestorHashes = ancestors.map(_.blockHash)
+              val depthsFromNearest =
+                collectAncestorsForMany(
+                  tc.summaries,
+                  req.targetBlockHashes,
+                  req.maxDepth
+                )
+
+              ancestorHashes should contain theSameElementsAs depthsFromNearest.keySet
+              // Check partial ordering
+              if (ancestorHashes.nonEmpty) {
+                Inspectors.forAll(ancestorHashes.init zip ancestorHashes.tail) {
+                  case (a, b) =>
+                    depthsFromNearest(a) should be <= depthsFromNearest(b)
+                }
+              }
+            }
+        }
+      }
+
+      "called with some known hashes" should {
+        val genTestCase = for {
+          dag      <- genDag
+          targets  <- Gen.someOf(dag)
+          knowns   <- Gen.someOf(dag)
+          maxDepth <- Gen.choose(0, dag.size)
+          req = StreamAncestorBlockSummariesRequest(
+            targetBlockHashes = targets.map(_.blockHash),
+            knownBlockHashes = knowns.map(_.blockHash),
+            maxDepth = maxDepth
+          )
+        } yield TestCase(dag, req)
+
+        "stop traversing ancestors beyond the known hashes" in TestFixture(genTestCase) {
+          case TestCase(dag, req) =>
+            stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
+              val targetHashes   = req.targetBlockHashes.toSet
+              val knownHashes    = req.knownBlockHashes.toSet
+              val ancestorHashes = ancestors.map(_.blockHash).toSet
+              val childHashes    = collectChildren(dag)
+
+              // Targets should be returned even if known.
+              Inspectors.forAll(req.targetBlockHashes) { targetHash =>
+                ancestorHashes should contain(targetHash)
+              }
+
+              // Check that if we see a parent of a known hash then we must have arrived
+              // at that parent through another, previously unknown child.
+              Inspectors.forAll(knownHashes) { knownHash =>
+                val eldersOfKnown =
+                  elders(testDataRef.get.summaries(knownHash)).filter(ancestorHashes)
+                Inspectors.forAll(eldersOfKnown) { elderHash =>
+                  assert {
+                    targetHashes(elderHash) ||
+                    childHashes(elderHash).exists { otherChild =>
+                      ancestorHashes(otherChild) && !knownHashes(otherChild)
+                    }
+                  }
+                }
+              }
+            }
+        }
+
+        "return the known blocks if they are within the maximum depth" in TestFixture(genTestCase) {
+          case tc @ TestCase(_, req0) =>
+            // Just using 1 known so we know that we won't stop before reaching it due to
+            // other known ancestors on the path.
+            val req = req0.copy(knownBlockHashes = req0.knownBlockHashes.take(1))
+
+            stub.streamAncestorBlockSummaries(req).toListL.map { ancestors =>
+              val ancestorHashes = ancestors.map(_.blockHash).toSet
+              val isReachable = collectAncestorsForMany(
+                tc.summaries,
+                req.targetBlockHashes,
+                req.maxDepth
+              ).keySet
+
+              Inspectors.forAll(req.knownBlockHashes) { knownHash =>
+                if (isReachable(knownHash)) {
+                  ancestorHashes should contain(knownHash)
+                } else {
+                  ancestorHashes should not contain (knownHash)
+                }
+              }
+            }
         }
       }
     }

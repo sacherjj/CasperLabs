@@ -3,6 +3,9 @@ package io.casperlabs.comm.gossiping
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import org.scalacheck.{Arbitrary, Gen}
+import scala.collection.JavaConverters._
+
+object ArbitraryConsensus extends ArbitraryConsensus
 
 trait ArbitraryConsensus {
   import Arbitrary.arbitrary
@@ -15,7 +18,7 @@ trait ArbitraryConsensus {
   val genHash = genBytes(20)
   val genKey  = genBytes(32)
 
-  implicit val signatureGen: Arbitrary[Signature] = Arbitrary {
+  implicit val arbSignature: Arbitrary[Signature] = Arbitrary {
     for {
       alg <- Gen.oneOf("ed25519", "secp256k1")
       sig <- genHash
@@ -24,7 +27,7 @@ trait ArbitraryConsensus {
     }
   }
 
-  implicit val blockGen: Arbitrary[Block] = Arbitrary {
+  implicit val arbBlock: Arbitrary[Block] = Arbitrary {
     for {
       summary <- arbitrary[BlockSummary]
       deploys <- Gen.listOfN(summary.getHeader.deployCount, arbitrary[Block.ProcessedDeploy])
@@ -37,7 +40,7 @@ trait ArbitraryConsensus {
     }
   }
 
-  implicit val blockHeaderGen: Arbitrary[Block.Header] = Arbitrary {
+  implicit val arbBlockHeader: Arbitrary[Block.Header] = Arbitrary {
     for {
       parentCount        <- Gen.choose(1, 5)
       parentHashes       <- Gen.listOfN(parentCount, genHash)
@@ -57,7 +60,7 @@ trait ArbitraryConsensus {
     }
   }
 
-  implicit val blockSummaryGen: Arbitrary[BlockSummary] = Arbitrary {
+  implicit val arbBlockSummary: Arbitrary[BlockSummary] = Arbitrary {
     for {
       blockHash <- genHash
       header    <- arbitrary[Block.Header]
@@ -70,7 +73,7 @@ trait ArbitraryConsensus {
     }
   }
 
-  implicit val deployGen: Arbitrary[Deploy] = Arbitrary {
+  implicit val arbDeploy: Arbitrary[Deploy] = Arbitrary {
     for {
       deployHash       <- genHash
       accountPublicKey <- genKey
@@ -104,7 +107,7 @@ trait ArbitraryConsensus {
     }
   }
 
-  implicit val processedDeployGen: Arbitrary[Block.ProcessedDeploy] = Arbitrary {
+  implicit val arbProcessedDeploy: Arbitrary[Block.ProcessedDeploy] = Arbitrary {
     for {
       deploy  <- arbitrary[Deploy]
       isError <- arbitrary[Boolean]
@@ -116,6 +119,56 @@ trait ArbitraryConsensus {
         .withCost(cost)
         .withIsError(isError)
         .withErrorMessage(if (isError) "Kaboom!" else "")
+    }
+  }
+
+  /** Grow a DAG by adding layers on top of the tips. */
+  val genDag: Gen[Vector[BlockSummary]] = {
+    def loop(
+        acc: Vector[BlockSummary],
+        tips: Set[BlockSummary]
+    ): Gen[Vector[BlockSummary]] = {
+      // Each child will choose some parents and some justifications from the tips.
+      val genChild =
+        for {
+          parents        <- Gen.choose(1, tips.size).flatMap(Gen.pick(_, tips))
+          justifications <- Gen.someOf(tips -- parents)
+          block          <- arbitrary[BlockSummary]
+        } yield {
+          val header = block.getHeader
+            .withParentHashes(parents.map(_.blockHash))
+            .withJustifications(justifications.toSeq.map { j =>
+              Block.Justification(
+                latestBlockHash = j.blockHash,
+                validatorPublicKey = j.getHeader.validatorPublicKey
+              )
+            })
+          block.withHeader(header)
+        }
+
+      val genChildren =
+        for {
+          growth   <- Gen.frequency((1, 0), (2, 1), (3, 2), (3, 3), (2, 4), (1, 5))
+          children <- Gen.listOfN(growth, genChild)
+        } yield children
+
+      // Continue until no children were generated or we reach maximum height.
+      genChildren.flatMap { children =>
+        val parentHashes = children.flatMap(_.getHeader.parentHashes).toSet
+        val stillTips    = tips.filterNot(tip => parentHashes(tip.blockHash))
+        if (children.isEmpty) Gen.const(acc)
+        else loop(acc ++ children, stillTips ++ children)
+      }
+    }
+    // Always start from the Genesis block.
+    arbitrary[BlockSummary] map { summary =>
+      summary.withHeader(
+        summary.getHeader
+          .withJustifications(Seq.empty)
+          .withParentHashes(Seq.empty)
+      )
+    } flatMap { genesis =>
+      loop(Vector(genesis), Set(genesis))
     }
   }
 }
