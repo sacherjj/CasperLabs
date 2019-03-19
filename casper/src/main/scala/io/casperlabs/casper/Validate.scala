@@ -184,8 +184,6 @@ object Validate {
 
   /*
    * TODO: Double check ordering of validity checks
-   * TODO: Add check for missing fields
-   * TODO: Check that justifications follow from bonds of creator justification
    */
   def blockSummary[F[_]: Monad: Log: Time: BlockStore: RaiseValidationError](
       block: BlockMessage,
@@ -452,7 +450,8 @@ object Validate {
               _ <- Log[F].warn(
                     ignore(
                       b,
-                      s"block parents did not match estimate based on justification. Expected parents are ${printHashes(computedParentHashes)}, got ${printHashes(parentHashes)}."
+                      s"block parents did not match estimate based on justification. Expected parents are ${printHashes(
+                        computedParentHashes)}, got ${printHashes(parentHashes)}."
                     )
                   )
               _ <- RaiseValidationError[F].raise[Unit](InvalidParents)
