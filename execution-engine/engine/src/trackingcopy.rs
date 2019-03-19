@@ -265,7 +265,7 @@ mod tests {
         let value = tc.read(k).unwrap().unwrap();
         // we are calling unwrap_err() because Rc counter was cloned into CountingDb
         // and Rc::try_unwrap returns Err if there's other strong reference to the value.
-        let db_value = (Rc::try_unwrap(Rc::clone(&counter)).unwrap_err()).get();
+        let db_value = counter.get();
         assert_eq!(value, zero);
         assert_eq!(db_value, 1);
     }
@@ -301,7 +301,7 @@ mod tests {
         // writing should work
         tc.write(k, one.clone());
         // write does not need to query the DB
-        let db_value = (Rc::try_unwrap(Rc::clone(&counter)).unwrap_err()).get();
+        let db_value = counter.get();
         assert_eq!(db_value, 0);
         // write creates a Transfrom
         assert_eq!(tc.fns.len(), 1);
@@ -312,7 +312,7 @@ mod tests {
 
         // writing again should update the values
         tc.write(k, two.clone());
-        let db_value = (Rc::try_unwrap(Rc::clone(&counter)).unwrap_err()).get();
+        let db_value = counter.get();
         assert_eq!(db_value, 0);
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::Write(two)));
