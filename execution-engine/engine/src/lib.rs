@@ -15,3 +15,15 @@ extern crate wasmi;
 pub mod argsparser;
 pub mod engine;
 pub mod execution;
+pub mod trackingcopy;
+
+mod utils;
+
+#[cfg(test)]
+#[macro_use]
+extern crate matches;
+#[cfg(test)]
+#[macro_use]
+extern crate proptest;
+#[cfg(test)]
+extern crate gens;

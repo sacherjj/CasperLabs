@@ -1,10 +1,10 @@
 use common::key::Key;
 use common::value::Value;
-use error::Error;
-use gs::{DbReader, ExecutionEffect};
-use op::Op;
 use std::collections::{BTreeMap, HashMap};
-use transform::{Transform, TypeMismatch};
+use storage::error::Error;
+use storage::gs::{DbReader, ExecutionEffect};
+use storage::op::Op;
+use storage::transform::{Transform, TypeMismatch};
 use utils::add;
 
 #[derive(Debug)]
@@ -188,20 +188,21 @@ impl<R: DbReader> TrackingCopy<R> {
 
 #[cfg(test)]
 mod tests {
+    use super::{AddResult, QueryResult, TrackingCopy};
     use common::key::Key;
     use common::value::{Account, Contract, Value};
-    use error::Error;
     use gens::gens::*;
-    use gs::inmem::InMemGS;
-    use gs::{trackingcopy::AddResult, trackingcopy::QueryResult, DbReader, TrackingCopy};
-    use op::Op;
     use proptest::collection::vec;
     use proptest::prelude::*;
     use std::cell::Cell;
     use std::collections::BTreeMap;
     use std::iter;
     use std::rc::Rc;
-    use transform::Transform;
+    use storage::error::Error;
+    use storage::gs::inmem::InMemGS;
+    use storage::gs::DbReader;
+    use storage::op::Op;
+    use storage::transform::Transform;
 
     struct CountingDb {
         count: Rc<Cell<i32>>,

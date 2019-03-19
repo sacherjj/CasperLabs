@@ -11,9 +11,3 @@ common = { path = "../common", features = ["std"], package = "casperlabs-contrac
 parking_lot = "0.7.1"
 shared = { path = "../shared" }
 
-[dev-dependencies]
-matches = "0.1.8"
-tempfile = "3.0.6"
-gens = { path = "../gens" }
-proptest = "0.8.7"
-
