@@ -263,8 +263,6 @@ mod tests {
         // second read; should use cache instead
         // of going back to the DB
         let value = tc.read(k).unwrap().unwrap();
-        // we are calling unwrap_err() because Rc counter was cloned into CountingDb
-        // and Rc::try_unwrap returns Err if there's other strong reference to the value.
         let db_value = counter.get();
         assert_eq!(value, zero);
         assert_eq!(db_value, 1);
