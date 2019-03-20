@@ -1,3 +1,4 @@
+#![feature(never_type)]
 #[macro_use]
 extern crate failure;
 
@@ -12,4 +13,3 @@ pub mod gs;
 pub mod history;
 pub mod op;
 pub mod transform;
-

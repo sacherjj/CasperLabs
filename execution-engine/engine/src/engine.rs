@@ -1,5 +1,5 @@
 use common::key::Key;
-use execution::{Error as ExecutionError, Executor};
+use execution::Executor;
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
@@ -47,8 +47,9 @@ impl ExecutionResult {
 #[derive(Debug)]
 pub enum Error {
     PreprocessingError(String),
-    ExecError(ExecutionError),
+    ExecError(::execution::Error),
     StorageError(storage::error::Error),
+    Unreachable,
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -83,16 +84,23 @@ impl From<storage::error::Error> for Error {
     }
 }
 
-impl From<ExecutionError> for Error {
-    fn from(error: ExecutionError) -> Self {
+impl From<::execution::Error> for Error {
+    fn from(error: ::execution::Error) -> Self {
         Error::ExecError(error)
+    }
+}
+
+impl From<!> for Error {
+    fn from(_error: !) -> Self {
+        Error::Unreachable
     }
 }
 
 impl<H> EngineState<H>
 where
     H: History,
-    H::Error: Into<Error>,
+    Error: From<H::Error>,
+    H::Error: Into<::execution::Error>,
 {
     pub fn new(state: H) -> EngineState<H> {
         EngineState {
@@ -105,7 +113,7 @@ where
         &self,
         hash: Blake2bHash,
     ) -> Result<Option<TrackingCopy<H::Reader>>, Error> {
-        match self.state.lock().checkout(hash).map_err(Into::into)? {
+        match self.state.lock().checkout(hash)? {
             Some(tc) => Ok(Some(TrackingCopy::new(tc))),
             None => Ok(None),
         }

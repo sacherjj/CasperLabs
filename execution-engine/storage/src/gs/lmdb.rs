@@ -41,7 +41,8 @@ impl LmdbGs {
 }
 
 impl DbReader for LmdbGs {
-    fn get(&self, k: &Key) -> Result<Option<Value>, Error> {
+    type Error = Error;
+    fn get(&self, k: &Key) -> Result<Option<Value>, Self::Error> {
         // TODO: The `Reader` should really be static for the DbReader instance,
         // i.e. just by creating a DbReader for LMDB it should create a `Reader`
         // to go with it. This would prevent the database from being modified while
