@@ -105,7 +105,6 @@ pipeline:
 
   run-rust-lints:
     <<: *buildenv
-    group: test
     commands:
       - cd execution-engine
       - ~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)
@@ -130,7 +129,6 @@ pipeline:
 
   docker-build-node-engine-and-client:
     <<: *sbtenv
-    group: docker-build
     commands:
       - sbt node/docker:publishLocal client/docker:publishLocal
       - make docker-build/execution-engine
