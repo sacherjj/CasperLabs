@@ -228,7 +228,7 @@ mod tests {
     }
 
     impl DbReader for CountingDb {
-        type Error = ();
+        type Error = !;
         fn get(&self, _k: &Key) -> Result<Option<Value>, Self::Error> {
             let count = self.count.get();
             let value = match self.value {
