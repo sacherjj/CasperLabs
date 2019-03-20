@@ -2,6 +2,7 @@ package io.casperlabs.comm.gossiping
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
+import io.casperlabs.comm.discovery.Node
 import org.scalacheck.{Arbitrary, Gen}
 import scala.collection.JavaConverters._
 
@@ -17,6 +18,15 @@ trait ArbitraryConsensus {
 
   val genHash = genBytes(20)
   val genKey  = genBytes(32)
+
+  implicit val arbNode: Arbitrary[Node] = Arbitrary {
+    for {
+      id   <- genHash
+      host <- Gen.listOfN(4, Gen.choose(0, 255)).map(xs => xs.mkString("."))
+    } yield {
+      Node(id, host, 40400, 40404)
+    }
+  }
 
   implicit val arbSignature: Arbitrary[Signature] = Arbitrary {
     for {

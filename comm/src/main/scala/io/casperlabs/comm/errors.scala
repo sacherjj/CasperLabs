@@ -123,5 +123,16 @@ sealed trait GossipError extends NoStackTrace
 object GossipError {
 
   /** Download from the other party failed due to invalid chunk sizes. */
-  final case class InvalidChunks(msg: String, source: Node) extends GossipError
+  final case class InvalidChunks(msg: String, source: Node) extends Exception(msg) with GossipError
+
+  /** Tried to schedule a download for which we don't have the dependencies. */
+  final case class MissingDependencies(msg: String) extends Exception(msg) with GossipError
+  object MissingDependencies {
+    def apply(blockHash: ByteString, missing: Seq[ByteString]): MissingDependencies =
+      MissingDependencies(
+        s"Block ${Base16.encode(blockHash.toByteArray)} has missing dependencies: [${missing
+          .map(x => Base16.encode(x.toByteArray))
+          .mkString(", ")}]"
+      )
+  }
 }
