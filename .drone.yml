@@ -26,6 +26,7 @@ __sbtenv: &sbtenv
 clone:
   git-clone:
     image: casperlabs/buildenv:latest
+    group: clone
     commands: |
       set -ex
       git clone -b ${DRONE_TAG:-$DRONE_BRANCH} $DRONE_REMOTE_URL .
@@ -34,14 +35,42 @@ clone:
           EMAIL=ci git merge --no-edit FETCH_HEAD
       fi
       git rev-parse HEAD
+
+  git-clone-mac:
+    image: appleboy/drone-ssh
+    group: clone
+    secrets: [ ssh_key, ssh_host, ssh_username ]
+    script: |
+      set -ex
+      mkdir DRONE_BUILD_${DRONE_BUILD_NUMBER}
+      cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
+      git clone -b ${DRONE_TAG:-${DRONE_BRANCH}} ${DRONE_REMOTE_URL} .
+      if [ x${DRONE_PULL_REQUEST} != x ]; then
+          git fetch origin refs/pull/${DRONE_PULL_REQUEST}/head
+          EMAIL=ci git merge --no-edit FETCH_HEAD
+      fi
+      git rev-parse HEAD
+
 pipeline:
 
   # pr
 
   sbt-update:
     <<: *sbtenv
+    group: sbt
     commands:
       - sbt update
+
+  sbt-update-mac:
+    image: appleboy/drone-ssh
+    group: sbt
+    secrets: [ ssh_key, ssh_host, ssh_username ]
+    command_timeout: 600s
+    script: |
+      cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
+      export _JAVA_OPTIONS='-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G'
+      export PATH=$PATH:/usr/local/bin
+      sbt update
 
   compile:
     <<: *sbtenv
@@ -58,10 +87,21 @@ pipeline:
 
   run-rust-tests:
     <<: *buildenv
-    group: test
+    group: test-rust
     commands:
       - cd execution-engine/
       - ~/.cargo/bin/cargo test
+
+  run-rust-tests-mac:
+    image: appleboy/drone-ssh
+    group: test-rust
+    secrets: [ ssh_key, ssh_host, ssh_username ]
+    command_timeout: 3600s
+    script: |
+      cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
+      export PATH=$PATH:/usr/local/bin
+      cd execution-engine/
+      ~/.cargo/bin/cargo test
 
   run-rust-lints:
     <<: *buildenv
@@ -74,12 +114,23 @@ pipeline:
 
   run-unit-tests:
     <<: *sbtenv
-    group: test
+    group: test-sbt
     commands:
       - sbt test
 
+  run-unit-tests-mac:
+    image: appleboy/drone-ssh
+    group: test-sbt
+    secrets: [ ssh_key, ssh_host, ssh_username ]
+    command_timeout: 3600s
+    script: |
+      cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
+      export PATH=$PATH:/usr/local/bin
+      sbt test
+
   docker-build-node-engine-and-client:
     <<: *sbtenv
+    group: docker-build
     commands:
       - sbt node/docker:publishLocal client/docker:publishLocal
       - make docker-build/execution-engine
@@ -150,6 +201,7 @@ pipeline:
 
   package-ee:
     <<: *buildenv
+    group: package-ee
     commands:
       - mkdir -p artifacts/${DRONE_BRANCH}
       - make cargo-package-all
@@ -165,6 +217,41 @@ pipeline:
         tar -xzf $SOURCE.tar.gz ;
         tar -czf $TARGET -C $SOURCE/usr/bin/ . &&
         cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}
+    when:
+      event: [ push, tag ]
+
+  package-ee-mac:
+    image: appleboy/drone-ssh
+    group: package-ee
+    secrets: [ ssh_key, ssh_host, ssh_username ]
+    command_timeout: 3600s
+    script: |
+      cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
+      mkdir -p artifacts/${DRONE_BRANCH}
+      export PATH=$PATH:/usr/local/bin:~/.cargo/bin
+      echo $PATH
+      mkdir -p artifacts/${DRONE_BRANCH}
+      make cargo-package-all
+      WORKING_DIR=$(pwd) ;
+      cd execution-engine/target/release/rpmbuild/SOURCES ;
+      OS=$(uname -s | tr '[:upper:]' '[:lower:]') ;
+      ARCH=$(uname -p) ;
+      SOURCE=$(ls casperlabs-engine-grpc-server-*.tar.gz | sed "s/.tar.gz//") ;
+      TARGET=$(ls $SOURCE*.tar.gz | sed "s/.tar.gz/_"$OS"_"$ARCH".tar.gz/") ;
+      tar -xzf $SOURCE.tar.gz ;
+      tar -czf $TARGET -C $SOURCE/usr/bin/ . &&
+      cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}
+    when:
+      event: [ push, tag ]
+
+  copy-mac-tar-drone-container:
+    <<: *buildenv
+    secrets: [ ssh_username, ssh_key, ssh_host ]
+    commands:
+      - mkdir -p ~/.ssh
+      - mkdir -p artifacts/
+      - umask 077 && echo "$SSH_KEY" > ~/.ssh/id_rsa
+      - rsync -avzhe "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" $SSH_USERNAME@$SSH_HOST:DRONE_BUILD_${DRONE_BUILD_NUMBER}/artifacts/${DRONE_BRANCH} artifacts/
     when:
       event: [ push, tag ]
 
@@ -194,10 +281,23 @@ pipeline:
 
   cleanup:
     <<: *sbtenv
+    group: cleanup
     commands:
       - docker images --filter "dangling=true" -q --no-trunc | xargs --no-run-if-empty docker rmi -f
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      status: [ failure, success ]
+
+# mac xargs doesn't have --no-run-if-empty
+  cleanup-mac:
+    image: appleboy/drone-ssh
+    group: cleanup
+    secrets: [ ssh_key, ssh_host, ssh_username ]
+    script: |
+      export PATH=$PATH:/usr/local/bin
+      docker images -a | grep "none" | awk '{print $3}' | xargs docker rmi -f || true
+      rm -rf DRONE_BUILD_${DRONE_BUILD_NUMBER}
     when:
       status: [ failure, success ]
 
