@@ -199,8 +199,8 @@ mod tests {
     use common::key::Key;
     use common::value::{Account, Contract, Value};
     use gens::gens::*;
-    use storage::gs::DbReader;
     use storage::gs::inmem::InMemGS;
+    use storage::gs::DbReader;
     use storage::op::Op;
     use storage::transform::Transform;
 

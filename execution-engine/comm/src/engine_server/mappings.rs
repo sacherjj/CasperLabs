@@ -426,7 +426,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             err
                         }
                     },
-                    EngineError::Unreachable => panic!("Reached unreachable.")
+                    EngineError::Unreachable => panic!("Reached unreachable."),
                 }
             }
         }
