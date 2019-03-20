@@ -98,7 +98,7 @@ impl PartialOrd for AccessRights {
             // Read + Add(2) = 12  | Read + Add(-2) = 8
             // Write(12)           | Write(8)
             // The problem is that we haven't yet figured out how to accomodate
-            // for "negative" operations. Especially how to encode entry removal 
+            // for "negative" operations. Especially how to encode entry removal
             // from a map using an Add.
             // For the safety and correctness reasons I've chosen to make these
             // operations uncomperable.
@@ -124,22 +124,41 @@ impl PartialEq for AccessRights {
     }
 }
 
-impl Eq for AccessRights { }
+impl Eq for AccessRights {}
 
 #[repr(C)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd)]
 pub enum Key {
     Account([u8; 20]),
     Hash([u8; 32]),
-    URef([u8; 32]), //TODO: more bytes?
+    URef([u8; 32], AccessRights), //TODO: more bytes?
 }
 
-use self::Key::*;
+use Key::*;
+// TODO: I had to remove Ord derived on the Key enum because
+// there is no total ordering of the AccessRights but Ord for the Key
+// is required by the collections (HashMap, BTreeMap) so I decided to
+// implement it by hand by just ignoring the access rights for the URef
+// and falling back to the default Ord for the enum variants (top to bottom).
+impl Ord for Key {
+    fn cmp(&self, other: &Key) -> Ordering {
+        match (self, other) {
+            (Account(id_1), Account(id_2)) => id_1.cmp(id_2),
+            (Account(_), _) => Ordering::Less,
+            (Hash(id_1), Hash(id_2)) => id_1.cmp(id_2),
+            (Hash(_), URef(_, _)) => Ordering::Less,
+            (Hash(_), Account(_)) => Ordering::Greater,
+            (URef(id_1, ..), URef(id_2, ..)) => id_1.cmp(id_2),
+            (URef(_, _), Account(_)) => Ordering::Greater,
+            (URef(_, _), Hash(_)) => Ordering::Greater,
+        }
+    }
+}
 
 impl Key {
     pub fn to_u_ptr<T>(self) -> Option<UPointer<T>> {
-        if let URef(id) = self {
-            Some(UPointer::new(id))
+        if let URef(id, access_right) = self {
+            Some(UPointer::new(id, access_right))
         } else {
             None
         }
@@ -147,7 +166,7 @@ impl Key {
 
     pub fn to_c_ptr(self) -> Option<ContractPointer> {
         match self {
-            URef(id) => Some(ContractPointer::URef(UPointer::new(id))),
+            URef(id, rights) => Some(ContractPointer::URef(UPointer::new(id, rights))),
             Hash(id) => Some(ContractPointer::Hash(id)),
             _ => None,
         }
@@ -175,7 +194,8 @@ impl ToBytes for Key {
                 result.append(&mut hash.to_bytes());
                 result
             }
-            URef(rf) => {
+            URef(rf, ..) => {
+                //TODO: serialize access rights
                 let mut result = Vec::with_capacity(37);
                 result.push(UREF_ID);
                 result.append(&mut rf.to_bytes());
@@ -204,7 +224,8 @@ impl FromBytes for Key {
             }
             UREF_ID => {
                 let (rf, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
-                Ok((URef(rf), rem))
+                // TODO: deserialize access rights
+                Ok((URef(rf, AccessRights::ReadWrite), rem))
             }
             _ => Err(Error::FormattingError),
         }
@@ -240,7 +261,7 @@ impl AsRef<[u8]> for Key {
             // TODO: need to distinguish between variants?
             Account(a) => a,
             Hash(h) => h,
-            URef(u) => u,
+            URef(u, ..) => u,
         }
     }
 }

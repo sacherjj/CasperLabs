@@ -7,7 +7,7 @@ extern crate wasm_prep;
 extern crate wasmi;
 
 use common::bytesrepr::ToBytes;
-use common::key::{Key, UREF_SIZE};
+use common::key::{Key, AccessRights, UREF_SIZE};
 use common::value::{self, Value};
 use execution_engine::execution::{Runtime, RuntimeContext};
 use execution_engine::trackingcopy::TrackingCopy;
@@ -212,7 +212,7 @@ fn forged_uref() {
 
     // create a forged uref
     let uref = memory
-        .write(Key::URef([231u8; 32]))
+        .write(Key::URef([231u8; 32], AccessRights::ReadWrite))
         .expect("writing key to wasm memory should succeed");
 
     // write arbitrary value to wasm memory to allow call to write

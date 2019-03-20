@@ -257,7 +257,10 @@ impl From<&common::key::Key> for super::ipc::Key {
                 key_hash.set_key(hash.to_vec());
                 k.set_hash(key_hash);
             }
-            common::key::Key::URef(uref) => {
+            // TODO should ipc representation of a key have an access rights as well?
+            // On one hand it doesn't need it and LMDB won't make any checks of it
+            // but OTOH maybe it should for symmetry?
+            common::key::Key::URef(uref, _) => { 
                 let mut key_uref = super::ipc::KeyURef::new();
                 key_uref.set_uref(uref.to_vec());
                 k.set_uref(key_uref);
@@ -282,9 +285,9 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
         } else if ipc_key.has_uref() {
             let mut arr = [0u8; 32];
             arr.clone_from_slice(&ipc_key.get_uref().uref);
-            Ok(common::key::Key::URef(arr))
+            // TODO: What to do about access rights here?
+            Ok(common::key::Key::URef(arr, common::key::AccessRights::ReadWrite))
         } else {
-            // TODO make this Result::Err instead of panic
             parse_error(format!(
                 "ipc Key couldn't be parsed to any Key: {:?}",
                 ipc_key

@@ -27,11 +27,25 @@ pub fn uref_map_arb(depth: usize) -> impl Strategy<Value = BTreeMap<String, Key>
     btree_map("\\PC*", key_arb(), depth)
 }
 
+/* TODO: make it work
+pub fn access_rights_arb() -> impl Strategy<Value = AccessRights> {
+    prop_oneof![
+        AccessRights::Eqv,
+        AccessRights::Read,
+        AccessRights::Add,
+        AccessRights::Write,
+        AccessRights::ReadAdd,
+        AccessRights::ReadWrite
+    ]
+}
+*/
 pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
         u8_slice_20().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
-        u8_slice_32().prop_map(Key::URef)
+  //      access_rights_arb().prop_flat_map(|right| {
+            u8_slice_32().prop_map(|addr| Key::URef(addr, AccessRights::ReadWrite)) //TODO
+    //    })
     ]
 }
 

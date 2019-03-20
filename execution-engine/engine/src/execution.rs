@@ -3,7 +3,7 @@ extern crate blake2;
 use self::blake2::digest::{Input, VariableOutput};
 use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
-use common::key::Key;
+use common::key::{Key, AccessRights};
 use common::value::{Account, Value};
 use storage::gs::{DbReader, ExecutionEffect};
 use storage::transform::TypeMismatch;
@@ -115,7 +115,7 @@ impl<'a> RuntimeContext<'a> {
 
     fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
-            uref @ Key::URef(_) => {
+            uref @ Key::URef(_, _) => { // TODO: validate access rights as well?
                 if self.known_urefs.contains(uref) {
                     Ok(())
                 } else {
@@ -480,7 +480,7 @@ where
     pub fn new_uref(&mut self, key_ptr: u32) -> Result<(), Trap> {
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
-        let key = Key::URef(key);
+        let key = Key::URef(key, AccessRights::ReadWrite);
         self.context.insert_uref(key);
         self.memory
             .set(key_ptr, &key.to_bytes())
