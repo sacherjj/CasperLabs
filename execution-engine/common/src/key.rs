@@ -23,27 +23,27 @@ use AccessRights::*;
 /// of them, some of them can be compared to each other.
 ///
 /// This ordering is created so that it is possible to do:
-/// 
+///
 /// ```
 /// use casperlabs_contract_ffi::key::AccessRights;
 ///
-/// // Imaginary definition of Key 
+/// // Imaginary definition of Key
 /// pub struct Key {
 ///   pub access_right: AccessRights,
 /// };
-/// 
+///
 /// impl Key {
 ///   fn new(access_right: AccessRights) -> Key {
 ///     Key { access_right }
 ///   }
 /// }
-/// 
+///
 /// // Imaginary definition of resources to which we want restrict access to.
 /// type Resource = u32;
-/// 
+///
 /// // Imaginary error
 /// type Error = String;
-/// 
+///
 /// fn read(resource: Resource, key: Key) -> Result<Resource, Error> {
 ///   // note that the test is "greater or equal".
 ///   // This will pass for Read, ReadWrite, ReadAdd access rights.
@@ -53,13 +53,13 @@ use AccessRights::*;
 ///     Err("Invalid access rights to the resource.".to_owned())
 ///   }
 /// }
-/// 
+///
 /// assert!(read(10u32, Key::new(AccessRights::Read)).is_ok());
 /// assert!(read(10u32, Key::new(AccessRights::ReadAdd)).is_ok());
 /// assert!(read(10u32, Key::new(AccessRights::ReadWrite)).is_ok());
 /// assert!(read(10u32, Key::new(AccessRights::Write)).is_err());
 /// ```
-/// 
+///
 ///
 /// and the tests passes for: Read, ReadAdd and ReadWrite.
 impl PartialOrd for AccessRights {

@@ -7,7 +7,7 @@ extern crate wasm_prep;
 extern crate wasmi;
 
 use common::bytesrepr::ToBytes;
-use common::key::{Key, AccessRights, UREF_SIZE};
+use common::key::{AccessRights, Key, UREF_SIZE};
 use common::value::{self, Value};
 use execution_engine::execution::{Runtime, RuntimeContext};
 use execution_engine::trackingcopy::TrackingCopy;

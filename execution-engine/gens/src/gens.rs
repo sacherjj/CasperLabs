@@ -43,9 +43,9 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
         u8_slice_20().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
-  //      access_rights_arb().prop_flat_map(|right| {
-            u8_slice_32().prop_map(|addr| Key::URef(addr, AccessRights::ReadWrite)) //TODO
-    //    })
+        //      access_rights_arb().prop_flat_map(|right| {
+        u8_slice_32().prop_map(|addr| Key::URef(addr, AccessRights::ReadWrite)) //TODO
+                                                                                //    })
     ]
 }
 
