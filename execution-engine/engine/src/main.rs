@@ -24,6 +24,7 @@ struct Task {
     bytes: Vec<u8>,
 }
 
+#[allow(unreachable_code)]
 fn main() {
     let default_address = "00000000000000000000";
     let default_gas_limit: &str = &std::u64::MAX.to_string();
