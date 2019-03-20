@@ -4,6 +4,7 @@ use crate::contract_api::pointers::*;
 use core::cmp::Ordering;
 use core::mem;
 
+#[allow(clippy::derive_hash_xor_eq)]
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Hash)]
 pub enum AccessRights {
