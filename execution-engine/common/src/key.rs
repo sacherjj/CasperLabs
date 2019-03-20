@@ -127,7 +127,7 @@ impl PartialEq for AccessRights {
 impl Eq for AccessRights { }
 
 #[repr(C)]
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd)]
 pub enum Key {
     Account([u8; 20]),
     Hash([u8; 32]),
