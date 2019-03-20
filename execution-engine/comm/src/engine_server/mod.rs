@@ -2,7 +2,7 @@ use std::marker::{Send, Sync};
 
 use common::key::Key;
 use execution_engine::engine::{EngineState, Error as EngineError};
-use execution_engine::execution::{Error as ExecutionError, Executor, WasmiExecutor};
+use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::trackingcopy::QueryResult;
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
@@ -28,9 +28,7 @@ impl<H> ipc_grpc::ExecutionEngineService for EngineState<H>
 where
     H: History,
     EngineError: From<H::Error>,
-    H::Error: Debug,
-    <<H as storage::history::History>::Reader as storage::gs::DbReader>::Error:
-        Into<ExecutionError>,
+    H::Error: Into<execution_engine::execution::Error> + Debug, 
 {
     fn query(
         &self,
@@ -183,8 +181,7 @@ where
     E: Executor<A>,
     P: Preprocessor<A>,
     EngineError: From<H::Error>,
-    <<H as storage::history::History>::Reader as storage::gs::DbReader>::Error:
-        Into<ExecutionError>,
+    H::Error: Into<execution_engine::execution::Error>,
 {
     // We want to treat RootNotFound error differently b/c it should short-circuit
     // the execution of ALL deploys within the block. This is because all of them share

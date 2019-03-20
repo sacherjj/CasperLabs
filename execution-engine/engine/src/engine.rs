@@ -1,5 +1,5 @@
 use common::key::Key;
-use execution::{Error as ExecutionError, Executor};
+use execution::Executor;
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
@@ -47,7 +47,7 @@ impl ExecutionResult {
 #[derive(Debug)]
 pub enum Error {
     PreprocessingError(String),
-    ExecError(ExecutionError),
+    ExecError(::execution::Error),
     StorageError(storage::error::Error),
     Unreachable,
 }
@@ -84,8 +84,8 @@ impl From<storage::error::Error> for Error {
     }
 }
 
-impl From<ExecutionError> for Error {
-    fn from(error: ExecutionError) -> Self {
+impl From<::execution::Error> for Error {
+    fn from(error: ::execution::Error) -> Self {
         Error::ExecError(error)
     }
 }
@@ -100,8 +100,7 @@ impl<H> EngineState<H>
 where
     H: History,
     Error: From<H::Error>,
-    <<H as storage::history::History>::Reader as storage::gs::DbReader>::Error:
-        Into<ExecutionError>,
+    H::Error: Into<::execution::Error>,
 {
     pub fn new(state: H) -> EngineState<H> {
         EngineState {
