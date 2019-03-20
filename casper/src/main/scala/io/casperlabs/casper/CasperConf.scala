@@ -3,9 +3,9 @@ package io.casperlabs.casper
 import java.nio.file.{Path, Paths}
 
 import cats.Monad
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.catscontrib.Capture
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
@@ -42,7 +42,7 @@ final case class CasperConf(
 object CasperConf {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def parseValidatorsFile[F[_]: Monad: Capture: Log](
+  def parseValidatorsFile[F[_]: Monad: Sync: Log](
       knownValidatorsFile: Option[Path]
   ): F[Set[ByteString]] =
     knownValidatorsFile match {
@@ -50,8 +50,8 @@ object CasperConf {
       case None => Set.empty[ByteString].pure[F]
 
       case Some(path) =>
-        Capture[F]
-          .capture {
+        Sync[F]
+          .delay {
             Try(
               Source
                 .fromFile(path.toFile)

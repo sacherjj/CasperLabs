@@ -161,7 +161,7 @@ class NodeRuntime private[node] (
                                 ErrorHandler[Effect],
                                 eitherTrpConfAsk(rpConfAsk),
                                 oracle,
-                                Capture[Effect],
+                                Sync[Effect],
                                 Concurrent[Effect],
                                 Time.eitherTTime(Monad[Task], time),
                                 Log.eitherTLog(Monad[Task], log),

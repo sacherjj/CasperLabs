@@ -15,15 +15,13 @@ import io.casperlabs.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import io.casperlabs.casper.protocol.{DeployData, DeployServiceResponse, _}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib.Taskable
 import io.casperlabs.graphz.{GraphSerializer, Graphz, StringSerializer}
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
-import monix.eval.Task
+import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 import monix.reactive.Observable
-
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -76,14 +74,15 @@ private[api] object DeployGrpcService {
   def splitPath(path: String): Seq[String] =
     path.split("/").filter(_.nonEmpty)
 
-  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable: ExecutionEngineService](
+  def instance[
+      F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: TaskLike: ExecutionEngineService](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
   ): F[CasperMessageGrpcMonix.DeployService] = {
     def mkService = new CasperMessageGrpcMonix.DeployService {
       private def defer[A](task: F[A]): Task[A] =
-        Task.defer(task.toTask).executeOn(worker).attemptAndLog
+        Task.defer(TaskLike[F].toTask(task)).executeOn(worker).attemptAndLog
 
       override def doDeploy(d: DeployData): Task[DeployServiceResponse] =
         defer(BlockAPI.deploy[F](d))

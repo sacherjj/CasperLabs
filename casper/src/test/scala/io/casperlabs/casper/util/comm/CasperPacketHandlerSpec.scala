@@ -14,7 +14,6 @@ import io.casperlabs.casper.helper.{
   NoOpsCasperEffect
 }
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
-import io.casperlabs.casper.util.TestTime
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
   BootstrapCasperHandler,
@@ -25,7 +24,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
 }
 import io.casperlabs.casper.util.comm.CasperPacketHandlerSpec._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib.{ApplicativeError_, Capture}
+import io.casperlabs.catscontrib.ApplicativeError_
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.{Connections, ConnectionsCell}
 import io.casperlabs.comm.rp.ProtocolHelper
@@ -37,13 +36,11 @@ import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Cell
-import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
+import monix.eval.instances._
 import monix.execution.Scheduler
-import org.scalatest.{Ignore, Matchers, WordSpec}
+import org.scalatest.{Matchers, WordSpec}
 import io.casperlabs.casper.util.TestTime
-import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.smartcontracts.ExecutionEngineService
 
 import scala.concurrent.duration._
 
@@ -51,7 +48,6 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
   private def setup() = new {
     val scheduler                  = Scheduler.io("test")
     val runtimeDir                 = BlockDagStorageTestFixture.blockStorageDir
-    implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = createBonds(Seq(validatorPk))

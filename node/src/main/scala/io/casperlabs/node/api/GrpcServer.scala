@@ -2,14 +2,13 @@ package io.casperlabs.node.api
 
 import java.util.concurrent.TimeUnit
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
-import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.discovery.NodeDiscovery
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
@@ -20,9 +19,8 @@ import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
 import io.casperlabs.shared._
 import io.grpc.Server
 import io.grpc.netty.NettyServerBuilder
-import monix.eval.Task
+import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
-
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 class GrpcServer(server: Server) {
@@ -69,7 +67,8 @@ object GrpcServer {
       )
     }
 
-  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: Taskable: ExecutionEngineService](
+  def acquireExternalServer[
+      F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: TaskLike: ExecutionEngineService](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,

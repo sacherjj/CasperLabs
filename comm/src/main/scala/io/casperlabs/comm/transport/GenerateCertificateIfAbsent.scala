@@ -4,30 +4,25 @@ import java.security.KeyPair
 
 import cats.effect.Resource.fromAutoCloseable
 import cats.effect.Sync
-
 import cats.syntax.applicative._
 import cats.syntax.applicativeError._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
-
 import io.casperlabs.crypto.util.{CertificateHelper => certHelp, CertificatePrinter => certPrint}
-import io.casperlabs.shared.{Iso, Log}
+import io.casperlabs.shared.Log
 
 import scala.language.higherKinds
 
 class GenerateCertificateIfAbsent[F[_]: Sync](implicit log: Log[F]) {
   import log.{error, info}
 
-  def apply[A: Iso[?, Tls]](a: A): F[Unit] = {
-    val tls = Iso[A, Tls].to(a)
-
+  def apply(tls: Tls): F[Unit] =
     // Generate certificate if not provided as option or in the data dir
     if (!tls.customCertificateLocation
         && !tls.certificate.toFile.exists()) {
 
       generateCertificate(tls)
     } else ().pure[F]
-  }
 
   def generateCertificate(tls: Tls): F[Unit] =
     for {
@@ -70,7 +65,7 @@ class GenerateCertificateIfAbsent[F[_]: Sync](implicit log: Log[F]) {
       pw =>
         Sync[F].delay(
           pw.write(certPrint.print(certHelp.generate(keyPair)))
-        )
+      )
     )
   }
 
@@ -81,7 +76,7 @@ class GenerateCertificateIfAbsent[F[_]: Sync](implicit log: Log[F]) {
       pw =>
         Sync[F].delay(
           pw.write(certPrint.printPrivateKey(keyPair.getPrivate))
-        )
+      )
     )
   }
 }
