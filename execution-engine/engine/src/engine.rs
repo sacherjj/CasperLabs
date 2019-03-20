@@ -49,6 +49,7 @@ pub enum Error {
     PreprocessingError(String),
     ExecError(ExecutionError),
     StorageError(storage::error::Error),
+    Unreachable,
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -91,7 +92,7 @@ impl From<ExecutionError> for Error {
 
 impl From<!> for Error {
     fn from(_error: !) -> Self {
-        Error::PreprocessingError("Should never happen.".to_owned())
+        Error::Unreachable
     }
 }
 

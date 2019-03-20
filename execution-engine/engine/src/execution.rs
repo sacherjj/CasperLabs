@@ -38,7 +38,7 @@ pub enum Error {
     ParityWasm(ParityWasmError),
     GasLimit,
     Ret(Vec<Key>),
-    UnknownError(String),
+    Unreachable,
 }
 
 impl fmt::Display for Error {
@@ -73,7 +73,7 @@ impl From<BytesReprError> for Error {
 
 impl From<!> for Error {
     fn from(_err: !) -> Error {
-        Error::UnknownError("Should never happen.".to_owned())
+        Error::Unreachable
     }
 }
 

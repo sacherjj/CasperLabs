@@ -22,9 +22,6 @@ use wasm_prep::MAX_MEM_PAGES;
 use wasmi::memory_units::Pages;
 use wasmi::{MemoryInstance, MemoryRef};
 
-// Doesn't compile because neither of types (), wasmi::HostError is defined in this crate.
-impl From<()> for wasmi::HostError { }
-
 struct MockEnv {
     key: Key,
     account: value::Account,
@@ -107,7 +104,7 @@ impl WasmMemoryManager {
     pub fn new_uref<'a, R: DbReader>(
         &mut self,
         runtime: &mut Runtime<'a, R>,
-    ) -> Result<(u32, usize), wasmi::Trap> {
+    ) -> Result<(u32, usize), wasmi::Trap> where R::Error: Into<execution_engine::execution::Error> {
         let ptr = self.offset as u32;
 
         match runtime.new_uref(ptr) {
@@ -166,7 +163,7 @@ fn gs_write<'a, R: DbReader>(
     runtime: &mut Runtime<'a, R>,
     key: (u32, usize),
     value: (u32, usize),
-) -> Result<(), wasmi::Trap> {
+) -> Result<(), wasmi::Trap> where R::Error: Into<execution_engine::execution::Error> {
     runtime.write(key.0, key.1 as u32, value.0, value.1 as u32)
 }
 
