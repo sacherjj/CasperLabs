@@ -106,10 +106,11 @@ object EffectsTestInstances {
 
   class LogStub[F[_]: Applicative] extends Log[F] {
 
-    var debugs: Vector[String] = Vector.empty[String]
-    var infos: Vector[String]  = Vector.empty[String]
-    var warns: Vector[String]  = Vector.empty[String]
-    var errors: Vector[String] = Vector.empty[String]
+    var debugs: Vector[String]    = Vector.empty[String]
+    var infos: Vector[String]     = Vector.empty[String]
+    var warns: Vector[String]     = Vector.empty[String]
+    var errors: Vector[String]    = Vector.empty[String]
+    var causes: Vector[Throwable] = Vector.empty[Throwable]
 
     // To be able to reconstruct the timeline.
     var all: Vector[String] = Vector.empty[String]
@@ -144,6 +145,7 @@ object EffectsTestInstances {
       ().pure[F]
     }
     def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = {
+      causes = causes :+ cause
       errors = errors :+ msg
       all = all :+ msg
       ().pure[F]

@@ -4,16 +4,33 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.GossipError
+import io.casperlabs.shared.Log
+import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.tail.Iterant
 import org.scalatest._
+import org.scalatest.concurrent._
 import org.scalacheck.{Arbitrary, Gen}, Arbitrary.arbitrary
 import scala.concurrent.duration._
 
-class DownloadManagerSpec extends WordSpecLike with Matchers with ArbitraryConsensus {
+class DownloadManagerSpec
+    extends WordSpecLike
+    with Matchers
+    with Eventually
+    with BeforeAndAfterEach
+    with ArbitraryConsensus {
 
   import DownloadManagerSpec._
   import Scheduler.Implicits.global
+
+  override implicit val patienceConfig = PatienceConfig(1.second, 100.millis)
+
+  // Collect log messages. Reset before each test.
+  implicit val log = new LogStub[Task]()
+
+  override def beforeEach() =
+    log.reset()
 
   "DownloadManager" when {
     "scheduled to download a section of the DAG" should {
@@ -26,7 +43,7 @@ class DownloadManagerSpec extends WordSpecLike with Matchers with ArbitraryConse
     "scheduled to download a block with missing dependencies" should {
       val block  = arbitrary[Block].suchThat(_.getHeader.parentHashes.nonEmpty).sample.get
       val source = arbitrary[Node].sample.get
-      val remote = MockGossipService.fromBlocks(Seq(block))
+      val remote = MockGossipService(Seq(block))
 
       "raise an error" in TestFixture(remote = _ => remote) { manager =>
         manager.scheduleDownload(summaryOf(block), source, false).attempt.map {
@@ -67,17 +84,57 @@ class DownloadManagerSpec extends WordSpecLike with Matchers with ArbitraryConse
       "try again if the same block from the same source is scheduled again" in (pending)
       "try again later with exponential backoff" in (pending)
     }
+
     "receiving chunks" should {
-      "check that they start with the header" in (pending)
-      "check that the total size doesn't exceed promises" in (pending)
-      "check that the expected compression algorithm is used" in (pending)
+      // For now just going to verify that exceptions are logged; there is no method
+      // to get out the current status with a history of what happened and nothing would use it.
+      val block  = arbitrary[Block].sample.map(withoutDependencies).get
+      val source = arbitrary[Node].sample.get
+
+      def check(manager: DownloadManager[Task], msg: String): Task[Unit] =
+        manager.scheduleDownload(summaryOf(block), source, false) map { _ =>
+          eventually {
+            Inspectors.forExactly(1, log.causes) { ex =>
+              ex shouldBe a[GossipError.InvalidChunks]
+              ex.getMessage should include(msg)
+            }
+          }
+        }
+
+      def withRechunking(f: Iterant[Task, Chunk] => Iterant[Task, Chunk]) = { (node: Node) =>
+        MockGossipService(Seq(block), rechunker = f)
+      }
+
+      def rewriteHeader(
+          f: Chunk.Header => Chunk.Header
+      ): Iterant[Task, Chunk] => Iterant[Task, Chunk] = { it =>
+        it.take(1).map { chunk =>
+          chunk.withHeader(f(chunk.getHeader))
+        } ++ it.tail
+      }
+
+      "check that they start with the header" in TestFixture(
+        remote = withRechunking(_.tail)
+      )(check(_, "did not start with a header"))
+
+      "check that the total size doesn't exceed promises" in TestFixture(
+        remote = withRechunking(rewriteHeader(_.copy(contentLength = 0)))
+      )(check(_, "exceeding the promised content length"))
+
+      "check that the expected compression algorithm is used" in TestFixture(
+        remote = withRechunking(rewriteHeader(_.copy(compressionAlgorithm = "gzip")))
+      )(check(_, "unexpected algorithm"))
+
+      "handle an empty stream" in TestFixture(
+        remote = withRechunking(_.take(0))
+      )(check(_, "not receive a header"))
     }
 
     "cannot query the backend" should {
       val block1 = arbitrary[Block].sample.get
       val block2 = arbitrary[Block].sample.map(withoutDependencies).get
       val source = arbitrary[Node].sample.get
-      val remote = MockGossipService.fromBlocks(Seq(block1, block2))
+      val remote = MockGossipService(Seq(block1, block2))
       val local = new MockBackend {
         override def hasBlock(blockHash: ByteString) =
           if (blockHash == block1.blockHash || dependenciesOf(block1).contains(blockHash))
@@ -126,7 +183,7 @@ object DownloadManagerSpec {
         maxParallelDownloads: Int = 1
     )(
         test: DownloadManager[Task] => Task[Unit]
-    )(implicit scheduler: Scheduler): Unit = {
+    )(implicit scheduler: Scheduler, log: Log[Task]): Unit = {
 
       val managerR = DownloadManagerImpl[Task](
         maxParallelDownloads = maxParallelDownloads,
@@ -161,13 +218,19 @@ object DownloadManagerSpec {
         maxChunkSize = 100 * 1024
       )
     }
-    def fromBlocks(blocks: Seq[Block]) = Task.now {
+    def apply(
+        blocks: Seq[Block],
+        rechunker: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity
+    ) = Task.now {
       val blockMap = blocks.groupBy(_.blockHash).mapValues(_.head)
       new GossipServiceServer[Task](
         getBlock = hash => Task.now(blockMap.get(hash)),
         getBlockSummary = hash => ???,
         maxChunkSize = 100 * 1024
-      )
+      ) {
+        override def getBlockChunked(request: GetBlockChunkedRequest) =
+          rechunker(super.getBlockChunked(request))
+      }
     }
   }
 }

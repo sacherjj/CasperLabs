@@ -10,7 +10,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.GossipError
-import io.casperlabs.shared.Compression
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.shared.{Compression, Log, LogSource}
 
 object DownloadManagerImpl {
 
@@ -40,7 +41,7 @@ object DownloadManagerImpl {
   }
 
   /** Start the download manager. */
-  def apply[F[_]: Sync: Concurrent](
+  def apply[F[_]: Sync: Concurrent: Log](
       maxParallelDownloads: Int,
       connectToGossip: Node => F[GossipService[F]],
       backend: Backend[F]
@@ -77,7 +78,7 @@ object DownloadManagerImpl {
     summary.getHeader.parentHashes ++ summary.getHeader.justifications.map(_.latestBlockHash)
 }
 
-class DownloadManagerImpl[F[_]: Sync: Concurrent](
+class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
     // Keep track of ongoing downloads so we can cancel them.
     workersRef: Ref[F, Map[ByteString, Fiber[F, Unit]]],
     // Limit parallel downloads.
@@ -93,6 +94,8 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent](
 ) extends DownloadManager[F] {
 
   import DownloadManagerImpl._
+
+  implicit val logSource: LogSource = LogSource(this.getClass)
 
   override def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean): F[Unit] =
     for {
@@ -153,18 +156,36 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent](
     backend.hasBlock(hash)
 
   // TODO: Just say which block hash to download, try all possible sources.
-  def download(summary: BlockSummary, source: Node, relay: Boolean): F[Unit] =
-    for {
-      block <- downloadAndRestore(source, summary.blockHash)
-      // TODO: Validate
-      // TODO: Store
-      // TODO: Gossip
-      // TODO: Signal failure.
-      _ <- signal.put(Signal.Downloaded(summary.blockHash))
-    } yield ()
+  def download(summary: BlockSummary, source: Node, relay: Boolean): F[Unit] = {
+    val id = Base16.encode(summary.blockHash.toByteArray)
+    // Try to download until we succeed.
+    def loop(): F[Unit] = {
+      val tryDownload =
+        for {
+          // TODO: Pick a source.
+          block <- downloadAndRestore(source, summary.blockHash)
+          // TODO: Validate
+          // TODO: Store
+          // TODO: Gossip
+        } yield ()
+
+      tryDownload.recoverWith {
+        case ex =>
+          // TODO: Exponential backoff, pick another node, try to store again, etc.
+          Log[F].error(s"Failed to download block $id", ex)
+      }
+    }
+    // Finally tell the manager that we're done.
+    Sync[F].guarantee(loop()) {
+      signal.put(Signal.Downloaded(summary.blockHash))
+    }
+  }
 
   /** Download a block from the source node and decompress it. */
   def downloadAndRestore(source: Node, blockHash: ByteString): F[Block] = {
+    def invalid(msg: String) =
+      GossipError.InvalidChunks(msg, source)
+
     // Keep track of how much we have downloaded so far and cancel the stream if it goes over the promised size.
     case class Acc(
         header: Option[Chunk.Header],
@@ -203,7 +224,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent](
                   Right(acc.invalid("Block chunks contained a second header."))
 
                 case (acc, _) if acc.header.isEmpty =>
-                  Right(acc.invalid("Block chunks didn't start with a header."))
+                  Right(acc.invalid("Block chunks did not start with a header."))
 
                 case (acc, chunk) if chunk.getData.isEmpty =>
                   Right(acc.invalid("Block chunks contained empty data frame."))
@@ -216,20 +237,20 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent](
                   Left(acc.append(chunk.getData))
               }
 
-        content <- acc.error map {
-                    Sync[F].raiseError(_)
-                  } getOrElse {
+        content <- if (acc.error.nonEmpty) {
+                    Sync[F].raiseError(acc.error.get)
+                  } else if (acc.header.isEmpty) {
+                    Sync[F].raiseError(invalid("Did not receive a header."))
+                  } else {
                     val header  = acc.header.get
                     val content = acc.chunks.toArray.reverse.flatMap(_.toByteArray)
-                    if (header.compressionAlgorithm.isEmpty)
+                    if (header.compressionAlgorithm.isEmpty) {
                       Sync[F].pure(content)
-                    else {
+                    } else {
                       Compression
                         .decompress(content, header.originalContentLength)
                         .fold(
-                          Sync[F].raiseError[Array[Byte]](
-                            GossipError.InvalidChunks("Could not decompress chunks.", source)
-                          )
+                          Sync[F].raiseError[Array[Byte]](invalid("Could not decompress chunks."))
                         )(Sync[F].pure(_))
                     }
                   }
