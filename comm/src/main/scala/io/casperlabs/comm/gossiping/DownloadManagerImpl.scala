@@ -48,6 +48,8 @@ object DownloadManagerImpl {
     } {
       case (workersRef, managerLoop, _) =>
         for {
+          // TODO: Perhaps it would be nice if after cancelation the `scheduleDownload`
+          // wouldn't just block further shcedule attempts but raise an error.
           _       <- managerLoop.cancel.attempt
           workers <- workersRef.get
           _       <- workers.values.toList.map(_.cancel.attempt).sequence.void
@@ -107,7 +109,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent](
     for {
       block <- downloadAndRestore(item.source, item.summary.blockHash)
       // TODO: Validate
-      // TODO: Storee
+      // TODO: Store
       // TODO: Gossip
       // TODO: Signal failure.
       _ <- signal.put(Signal.Downloaded(item.summary.blockHash))
