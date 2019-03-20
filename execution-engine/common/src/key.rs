@@ -6,7 +6,7 @@ use core::mem;
 
 #[allow(clippy::derive_hash_xor_eq)]
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub enum AccessRights {
     Eqv,
     Read,
@@ -118,14 +118,6 @@ impl PartialOrd for AccessRights {
         }
     }
 }
-
-impl PartialEq for AccessRights {
-    fn eq(&self, other: &AccessRights) -> bool {
-        mem::discriminant(self) == mem::discriminant(other)
-    }
-}
-
-impl Eq for AccessRights {}
 
 #[repr(C)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd)]
