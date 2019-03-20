@@ -1,6 +1,130 @@
 use super::alloc::vec::Vec;
 use super::bytesrepr::{Error, FromBytes, ToBytes};
 use crate::contract_api::pointers::*;
+use core::cmp::Ordering;
+use core::mem;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Hash)]
+pub enum AccessRights {
+    Eqv,
+    Read,
+    Write,
+    Add,
+    ReadAdd,
+    ReadWrite,
+}
+
+use AccessRights::*;
+
+/// Partial order of the access rights.
+/// Since there are three distinct types of access rights to a resource
+/// (Read, Write, Add; Eqv is implicit for each one), and various combinations
+/// of them, some of them can be compared to each other.
+///
+/// This ordering is created so that it is possible to do:
+/// 
+/// ```
+/// use casperlabs_contract_ffi::key::AccessRights;
+///
+/// // Imaginary definition of Key 
+/// pub struct Key {
+///   pub access_right: AccessRights,
+/// };
+/// 
+/// impl Key {
+///   fn new(access_right: AccessRights) -> Key {
+///     Key { access_right }
+///   }
+/// }
+/// 
+/// // Imaginary definition of resources to which we want restrict access to.
+/// type Resource = u32;
+/// 
+/// // Imaginary error
+/// type Error = String;
+/// 
+/// fn read(resource: Resource, key: Key) -> Result<Resource, Error> {
+///   // note that the test is "greater or equal".
+///   // This will pass for Read, ReadWrite, ReadAdd access rights.
+///   if key.access_right >= AccessRights::Read {
+///     Ok(resource)
+///   } else {
+///     Err("Invalid access rights to the resource.".to_owned())
+///   }
+/// }
+/// 
+/// assert!(read(10u32, Key::new(AccessRights::Read)).is_ok());
+/// assert!(read(10u32, Key::new(AccessRights::ReadAdd)).is_ok());
+/// assert!(read(10u32, Key::new(AccessRights::ReadWrite)).is_ok());
+/// assert!(read(10u32, Key::new(AccessRights::Write)).is_err());
+/// ```
+/// 
+///
+/// and the tests passes for: Read, ReadAdd and ReadWrite.
+impl PartialOrd for AccessRights {
+    //  !!! Caution !!! Do not reorder
+    fn partial_cmp(&self, other: &AccessRights) -> Option<Ordering> {
+        match (self, other) {
+            (Eqv, Eqv) => Some(Ordering::Equal),
+            (Eqv, _) => Some(Ordering::Less),
+            (_, Eqv) => Some(Ordering::Greater),
+            (Read, Write) => None,
+            (Write, Read) => None,
+            (Read, Add) => None,
+            (Add, Read) => None,
+            (Read, ReadAdd) => Some(Ordering::Less),
+            (ReadAdd, Read) => Some(Ordering::Greater),
+            (Read, ReadWrite) => Some(Ordering::Less),
+            (ReadWrite, Read) => Some(Ordering::Greater),
+            (Write, Add) => None,
+            (Add, Write) => None,
+            (Write, ReadWrite) => Some(Ordering::Less),
+            (ReadWrite, Write) => Some(Ordering::Greater),
+            (Add, ReadAdd) => Some(Ordering::Less),
+            (ReadAdd, Add) => Some(Ordering::Greater),
+            // Because Read + Write can simulate Add,
+            // and we want to promote the usage of Add,
+            // it is the case that ReadWrite >= Add.
+            (Add, ReadWrite) => Some(Ordering::Less),
+            (ReadWrite, Add) => Some(Ordering::Greater),
+            // In theory Write and ReadAdd should be comparable.
+            // Assuming that we allow for using Add on the selected set of types
+            // (for which there exists a Monoid instace) it shuold be the case
+            // that Read + Add == Write (reading and modifying should be a write).
+            // Examples:
+            // 1)                  | 2)
+            // init_value = 10     | init_value = 10
+            // Read + Add(2) = 12  | Read + Add(-2) = 8
+            // Write(12)           | Write(8)
+            // The problem is that we haven't yet figured out how to accomodate
+            // for "negative" operations. Especially how to encode entry removal 
+            // from a map using an Add.
+            // For the safety and correctness reasons I've chosen to make these
+            // operations uncomperable.
+            (Write, ReadAdd) => None,
+            (ReadAdd, Write) => None,
+            (ReadAdd, ReadWrite) => None,
+            (ReadWrite, ReadAdd) => None,
+            (_, _) => {
+                // Every enum variant is equal to itself.
+                if mem::discriminant(self) == mem::discriminant(other) {
+                    Some(Ordering::Equal)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+impl PartialEq for AccessRights {
+    fn eq(&self, other: &AccessRights) -> bool {
+        mem::discriminant(self) == mem::discriminant(other)
+    }
+}
+
+impl Eq for AccessRights { }
 
 #[repr(C)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
