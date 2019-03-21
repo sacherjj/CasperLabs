@@ -164,8 +164,11 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
         for {
           // TODO: Pick a source.
           block <- downloadAndRestore(source, summary.blockHash)
-          // TODO: Validate
-          // TODO: Store
+          _     <- backend.validateBlock(block)
+          _     <- backend.storeBlock(block)
+          // This could arguably be done by `storeBlock` but this way it's explicit,
+          // so we don't forget to talk to both kind of storages.
+          _ <- backend.storeBlockSummary(summary)
           // TODO: Gossip
         } yield ()
 

@@ -1,5 +1,6 @@
 package io.casperlabs.comm.gossiping
 
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.discovery.Node
@@ -32,6 +33,9 @@ class DownloadManagerSpec
   override def beforeEach() =
     log.reset()
 
+  // Create a random Node so I don't have to repeat this in all tests.
+  val source = arbitrary[Node].sample.get
+
   "DownloadManager" when {
     "scheduled to download a section of the DAG" should {
       "download blocks in topoligical order" in (pending)
@@ -41,16 +45,15 @@ class DownloadManagerSpec
     }
 
     "scheduled to download a block with missing dependencies" should {
-      val block  = arbitrary[Block].suchThat(_.getHeader.parentHashes.nonEmpty).sample.get
-      val source = arbitrary[Node].sample.get
-      val remote = MockGossipService(Seq(block))
+      val block = arbitrary[Block].suchThat(_.getHeader.parentHashes.nonEmpty).sample.get
 
-      "raise an error" in TestFixture(remote = _ => remote) { manager =>
-        manager.scheduleDownload(summaryOf(block), source, false).attempt.map {
-          case Left(GossipError.MissingDependencies(_)) =>
-          case other =>
-            fail(s"Expected scheduling to fail; got $other")
-        }
+      "raise an error" in TestFixture(MockBackend(), _ => MockGossipService(Seq(block))) {
+        case (manager, _) =>
+          manager.scheduleDownload(summaryOf(block), source, false).attempt.map {
+            case Left(GossipError.MissingDependencies(_)) =>
+            case other =>
+              fail(s"Expected scheduling to fail; got $other")
+          }
       }
 
       "accept it if the dependency has already been scheduled" in (pending)
@@ -70,29 +73,78 @@ class DownloadManagerSpec
       "carry on downloading other blocks from other nodes" in (pending)
       "try to download the block from a different source" in (pending)
     }
+
     "downloaded a valid block" should {
-      "validate the block" in (pending)
-      "store the block" in (pending)
-      "store the block summary" in (pending)
+      val block  = arbitrary[Block].sample.map(withoutDependencies).get
+      val remote = MockGossipService(Seq(block))
+
+      def check(test: MockBackend => Unit): TestArgs => Task[Unit] = {
+        case (manager, backend) =>
+          manager.scheduleDownload(summaryOf(block), source, relay = true).map { _ =>
+            eventually {
+              test(backend)
+            }
+          }
+      }
+
+      "validate the block" in TestFixture(MockBackend(), _ => remote) {
+        check {
+          _.validations should contain(block)
+        }
+      }
+
+      "store the block" in TestFixture(MockBackend(), _ => remote) {
+        check {
+          _.blocks should contain value block
+        }
+      }
+
+      "store the block summary" in TestFixture(MockBackend(), _ => remote) {
+        check {
+          _.summaries should contain value summaryOf(block)
+        }
+      }
+
       "gossip to other nodes" in (pending)
     }
+
     "cannot validate a block" should {
       "not download the dependant blocks" in (pending)
       "not store the block" in (pending)
     }
+
     "cannot connect to a node" should {
-      "try again if the same block from the same source is scheduled again" in (pending)
+      val block = arbitrary[Block].sample.map(withoutDependencies).get
+      val remote = MockGossipService(
+        Seq(block),
+        rechunker = _ => Iterant.raiseError(io.grpc.Status.UNAVAILABLE.asRuntimeException())
+      )
+
+      "try again if the same block from the same source is scheduled again" in TestFixture(
+        remote = _ => remote
+      ) {
+        case (manager, _) =>
+          def check(i: Int) = manager.scheduleDownload(summaryOf(block), source, false) map { _ =>
+            eventually {
+              log.causes should have size i.toLong
+              Inspectors.forAll(log.causes) { ex =>
+                ex shouldBe an[io.grpc.StatusRuntimeException]
+              }
+            }
+          }
+          List(1, 2).traverse(check(_)).void
+      }
+
       "try again later with exponential backoff" in (pending)
     }
 
     "receiving chunks" should {
       // For now just going to verify that exceptions are logged; there is no method
       // to get out the current status with a history of what happened and nothing would use it.
-      val block  = arbitrary[Block].sample.map(withoutDependencies).get
-      val source = arbitrary[Node].sample.get
+      val block = arbitrary[Block].sample.map(withoutDependencies).get
 
-      def check(manager: DownloadManager[Task], msg: String): Task[Unit] =
-        manager.scheduleDownload(summaryOf(block), source, false) map { _ =>
+      def check(args: TestArgs, msg: String): Task[Unit] =
+        args._1.scheduleDownload(summaryOf(block), source, false) map { _ =>
           eventually {
             Inspectors.forExactly(1, log.causes) { ex =>
               ex shouldBe a[GossipError.InvalidChunks]
@@ -133,9 +185,8 @@ class DownloadManagerSpec
     "cannot query the backend" should {
       val block1 = arbitrary[Block].sample.get
       val block2 = arbitrary[Block].sample.map(withoutDependencies).get
-      val source = arbitrary[Node].sample.get
       val remote = MockGossipService(Seq(block1, block2))
-      val local = new MockBackend {
+      val backend = new MockBackend {
         override def hasBlock(blockHash: ByteString) =
           if (blockHash == block1.blockHash || dependenciesOf(block1).contains(blockHash))
             Task.raiseError(new RuntimeException("Oh no!"))
@@ -143,8 +194,8 @@ class DownloadManagerSpec
             Task.pure(false)
       }
 
-      "raise a scheduling error, but keep processing schedules" in TestFixture(local, _ => remote) {
-        manager =>
+      "raise a scheduling error, but keep processing schedules" in TestFixture(backend, _ => remote) {
+        case (manager, _) =>
           for {
             attempt1 <- manager.scheduleDownload(summaryOf(block1), source, false).attempt
             attempt2 <- manager.scheduleDownload(summaryOf(block2), source, false).attempt
@@ -176,37 +227,54 @@ object DownloadManagerSpec {
   def withoutDependencies(block: Block): Block =
     block.withHeader(block.getHeader.copy(parentHashes = Seq.empty, justifications = Seq.empty))
 
+  type TestArgs = (DownloadManager[Task], MockBackend)
+
   object TestFixture {
     def apply(
-        local: MockBackend = MockBackend.default,
+        backend: MockBackend = MockBackend.default,
         remote: Node => Task[GossipService[Task]] = _ => MockGossipService.default,
         maxParallelDownloads: Int = 1
     )(
-        test: DownloadManager[Task] => Task[Unit]
+        test: TestArgs => Task[Unit]
     )(implicit scheduler: Scheduler, log: Log[Task]): Unit = {
 
       val managerR = DownloadManagerImpl[Task](
         maxParallelDownloads = maxParallelDownloads,
         connectToGossip = remote(_),
-        backend = local
+        backend = backend
       )
 
       val runTest = managerR.use { manager =>
-        test(manager)
+        test(manager, backend)
       }
 
       runTest.runSyncUnsafe(5.seconds)
     }
   }
 
-  trait MockBackend extends DownloadManagerImpl.Backend[Task] {
-    def hasBlock(blockHash: ByteString): Task[Boolean]       = Task.now(false)
-    def validateBlock(block: Block): Task[Unit]              = Task.unit
-    def storeBlock(block: Block): Task[Unit]                 = Task.unit
-    def storeBlockSummary(summary: BlockSummary): Task[Unit] = Task.unit
+  class MockBackend extends DownloadManagerImpl.Backend[Task] {
+    var validations = Vector.empty[Block]
+    var blocks      = Map.empty[ByteString, Block]
+    var summaries   = Map.empty[ByteString, BlockSummary]
+
+    def hasBlock(blockHash: ByteString): Task[Boolean] =
+      Task.now(blocks.contains(blockHash))
+
+    def validateBlock(block: Block): Task[Unit] = Task.delay {
+      validations = validations :+ block
+    }
+
+    def storeBlock(block: Block): Task[Unit] = Task.delay {
+      blocks = blocks + (block.blockHash -> block)
+    }
+
+    def storeBlockSummary(summary: BlockSummary): Task[Unit] = Task.delay {
+      summaries = summaries + (summary.blockHash -> summary)
+    }
   }
   object MockBackend {
-    val default = new MockBackend {}
+    def default = apply()
+    def apply() = new MockBackend()
   }
 
   /** Test implementation of the remote GossipService to download the blocks from. */
