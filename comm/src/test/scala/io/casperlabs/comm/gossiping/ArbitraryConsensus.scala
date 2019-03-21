@@ -40,14 +40,8 @@ trait ArbitraryConsensus {
   implicit val arbBlock: Arbitrary[Block] = Arbitrary {
     for {
       summary <- arbitrary[BlockSummary]
-      deploys <- Gen.listOfN(summary.getHeader.deployCount, arbitrary[Block.ProcessedDeploy])
-    } yield {
-      Block()
-        .withBlockHash(summary.blockHash)
-        .withHeader(summary.getHeader)
-        .withBody(Block.Body(deploys))
-        .withSignature(summary.getSignature)
-    }
+      block   <- genBlockFromSummary(summary)
+    } yield block
   }
 
   implicit val arbBlockHeader: Arbitrary[Block.Header] = Arbitrary {
@@ -132,6 +126,19 @@ trait ArbitraryConsensus {
     }
   }
 
+  // Used to generate a DAG of blocks if we need them.
+  // It's backwards but then the DAG of summaries doesn't need to spend time generating bodies.
+  private def genBlockFromSummary(summary: BlockSummary): Gen[Block] =
+    for {
+      deploys <- Gen.listOfN(summary.getHeader.deployCount, arbitrary[Block.ProcessedDeploy])
+    } yield {
+      Block()
+        .withBlockHash(summary.blockHash)
+        .withHeader(summary.getHeader)
+        .withBody(Block.Body(deploys))
+        .withSignature(summary.getSignature)
+    }
+
   /** Grow a DAG by adding layers on top of the tips. */
   val genDag: Gen[Vector[BlockSummary]] = {
     def loop(
@@ -180,5 +187,12 @@ trait ArbitraryConsensus {
     } flatMap { genesis =>
       loop(Vector(genesis), Set(genesis))
     }
+  }
+
+  val genBlockDag: Gen[Vector[Block]] = {
+    for {
+      summaries <- genDag
+      blocks    <- Gen.sequence(summaries.map(genBlockFromSummary))
+    } yield blocks.asScala.toVector
   }
 }
