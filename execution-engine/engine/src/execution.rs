@@ -116,15 +116,21 @@ impl<'a> RuntimeContext<'a> {
 
     fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
-            uref @ Key::URef(_, _) => {
-                // TODO: validate access rights as well?
-                if self.known_urefs.contains(uref) {
-                    Ok(())
-                } else {
-                    Err(Error::ForgedReference(*uref))
+            Key::URef(id, access_right) => {
+                // TODO: Use some more efficient encoding of this.
+                // Maybe replace known_urefs Set with Map<[u32; 32], AccessRights>.
+                // https://casperlabs.atlassian.net/browse/EE-210
+                let found = self.known_urefs.iter().find(|entry| match entry {
+                    Key::URef(entry_id, entry_rights) => {
+                        entry_id == id && entry_rights >= access_right
+                    }
+                    _ => false,
+                });
+                match found {
+                    None => Err(Error::ForgedReference(*key)),
+                    Some(_) => Ok(()),
                 }
             }
-
             _ => Ok(()),
         }
     }
