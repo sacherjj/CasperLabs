@@ -2,7 +2,6 @@ use super::alloc::vec::Vec;
 use super::bytesrepr::{Error, FromBytes, ToBytes};
 use crate::contract_api::pointers::*;
 use core::cmp::Ordering;
-use core::mem;
 
 #[allow(clippy::derive_hash_xor_eq)]
 #[repr(C)]
@@ -91,25 +90,25 @@ impl PartialOrd for AccessRights {
             (ReadWrite, Add) => Some(Ordering::Greater),
             // In theory Write and ReadAdd should be comparable.
             // Assuming that we allow for using Add on the selected set of types
-            // (for which there exists a Monoid instace) it shuold be the case
+            // (for which there exists a Monoid instace) it should be the case
             // that Read + Add == Write (reading and modifying should be a write).
             // Examples:
             // 1)                  | 2)
             // init_value = 10     | init_value = 10
             // Read + Add(2) = 12  | Read + Add(-2) = 8
             // Write(12)           | Write(8)
-            // The problem is that we haven't yet figured out how to accomodate
+            // The problem is that we haven't yet figured out how to accommodate
             // for "negative" operations. Especially how to encode entry removal
             // from a map using an Add.
             // For the safety and correctness reasons I've chosen to make these
-            // operations uncomperable.
+            // operations incomparable.
             (Write, ReadAdd) => None,
             (ReadAdd, Write) => None,
             (ReadAdd, ReadWrite) => None,
             (ReadWrite, ReadAdd) => None,
             (_, _) => {
                 // Every enum variant is equal to itself.
-                if mem::discriminant(self) == mem::discriminant(other) {
+                if self == other {
                     Some(Ordering::Equal)
                 } else {
                     None
