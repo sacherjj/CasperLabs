@@ -130,6 +130,8 @@ name = "casperlabs-contract-ffi"
 version = "0.2.0"
 dependencies = [
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gens 0.1.0",
+ "proptest 0.8.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wee_alloc 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
