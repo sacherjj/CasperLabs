@@ -78,7 +78,7 @@ object ProtoUtil {
   // TODO: instead of throwing Exception use MonadError.raiseError
   def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
-      maybeBlock <- BlockStore[F].get(hash)
+      maybeBlock <- BlockStore[F].getBlockMessage(hash)
       block = maybeBlock match {
         case Some(b) => b
         case None =>
@@ -118,7 +118,9 @@ object ProtoUtil {
     maybeCreatorJustificationHash match {
       case Some(creatorJustificationHash) =>
         for {
-          maybeCreatorJustification <- BlockStore[F].get(creatorJustificationHash.latestBlockHash)
+          maybeCreatorJustification <- BlockStore[F].getBlockMessage(
+                                        creatorJustificationHash.latestBlockHash
+                                      )
           maybeCreatorJustificationAsList = maybeCreatorJustification match {
             case Some(creatorJustification) =>
               if (goalFunc(creatorJustification)) {
@@ -195,7 +197,7 @@ object ProtoUtil {
       parentHash <- hdr.parentsHashList.headOption
     } yield parentHash
     maybeParentHash match {
-      case Some(parentHash) => BlockStore[F].get(parentHash)
+      case Some(parentHash) => BlockStore[F].getBlockMessage(parentHash)
       case None             => none[BlockMessage].pure[F]
     }
   }

@@ -8,7 +8,7 @@ import cats.effect.{ExitCase, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform}
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
@@ -64,23 +64,23 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
     withTxn(env.txnRead())(f)
 
-  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
+  def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
     withWriteTxn { txn =>
-      val (blockHash, blockMessage) = f
+      val (blockHash, blockMsgWithTransform) = f
       blocks.put(
         txn,
         blockHash.toDirectByteBuffer,
-        blockMessage.toByteString.toDirectByteBuffer
+        blockMsgWithTransform.toByteString.toDirectByteBuffer
       )
     }
 
-  def get(blockHash: BlockHash): F[Option[BlockMessage]] =
+  def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     withReadTxn { txn =>
       Option(blocks.get(txn, blockHash.toDirectByteBuffer))
-        .map(r => BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput()))
+        .map(r => BlockMsgWithTransform.parseFrom(ByteString.copyFrom(r).newCodedInput()))
     }
 
-  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
     withReadTxn { txn =>
       withResource(blocks.iterate(txn)) { iterator =>
         iterator.asScala
@@ -88,7 +88,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
           .withFilter { case (key, _) => p(key) }
           .map {
             case (key, value) =>
-              val msg = BlockMessage.parseFrom(ByteString.copyFrom(value).newCodedInput())
+              val msg = BlockMsgWithTransform.parseFrom(ByteString.copyFrom(value).newCodedInput())
               (key, msg)
           }
           .toList

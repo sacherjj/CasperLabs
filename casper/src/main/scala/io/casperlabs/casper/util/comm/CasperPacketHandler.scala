@@ -281,7 +281,11 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                  case Some(approvedBlock) =>
                    val blockMessage = approvedBlock.candidate.flatMap(_.block).get
                    for {
-                     _ <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
+                     _ <- BlockStore[F].put(
+                           blockMessage.blockHash,
+                           blockMessage,
+                           Seq.empty
+                         )
                      casper <- MultiParentCasper.hashSetCasper[F](
                                 validatorId,
                                 blockMessage,
@@ -581,8 +585,12 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                  for {
                    _            <- Log[F].info("Valid ApprovedBlock received!")
                    blockMessage = b.candidate.flatMap(_.block).get
-                   _            <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
-                   _            <- LastApprovedBlock[F].set(b)
+                   _ <- BlockStore[F].put(
+                         blockMessage.blockHash,
+                         blockMessage,
+                         Seq.empty
+                       )
+                   _ <- LastApprovedBlock[F].set(b)
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 validatorId,

@@ -3,7 +3,8 @@ package io.casperlabs.blockstorage
 import cats.implicits._
 import cats.{Applicative, Apply}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform}
+import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 
@@ -12,19 +13,33 @@ import scala.language.higherKinds
 trait BlockStore[F[_]] {
   import BlockStore.BlockHash
 
-  def put(blockMessage: BlockMessage): F[Unit] =
-    put((blockMessage.blockHash, blockMessage))
+  def put(blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
+    put((blockMsgWithTransform.getBlockMessage.blockHash, blockMsgWithTransform))
 
-  def put(blockHash: BlockHash, blockMessage: BlockMessage): F[Unit] =
-    put((blockHash, blockMessage))
+  def put(
+      blockHash: BlockHash,
+      blockMessage: BlockMessage,
+      transforms: Seq[TransformEntry]
+  ): F[Unit] =
+    put((blockHash, BlockMsgWithTransform(Some(blockMessage), transforms)))
 
-  def get(blockHash: BlockHash): F[Option[BlockMessage]]
+  def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]
 
-  def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]]
+  def getBlockMessage(
+      blockHash: BlockHash
+  )(implicit applicative: Applicative[F]): F[Option[BlockMessage]] =
+    get(blockHash).map(it => it.flatMap(_.blockMessage))
 
-  def put(f: => (BlockHash, BlockMessage)): F[Unit]
+  def getTransforms(
+      blockHash: BlockHash
+  )(implicit applicative: Applicative[F]): F[Seq[TransformEntry]] =
+    get(blockHash).map(it => it.fold(Seq.empty[TransformEntry])(_.transformEntry))
 
-  def apply(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[BlockMessage] =
+  def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]]
+
+  def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit]
+
+  def apply(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[BlockMsgWithTransform] =
     get(blockHash).map(_.get)
 
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
@@ -43,13 +58,15 @@ object BlockStore {
     implicit val ms: Metrics.Source
     implicit val a: Apply[F]
 
-    abstract override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
+    abstract override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
       m.incrementCounter("get") *> super.get(blockHash).timer("get-time")
 
-    abstract override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+    abstract override def find(
+        p: BlockHash => Boolean
+    ): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
       m.incrementCounter("find") *> super.find(p).timer("find-time")
 
-    abstract override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
+    abstract override def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
       m.incrementCounter("put") *> super.put(f).timer("put-time")
 
     abstract override def checkpoint(): F[Unit] =

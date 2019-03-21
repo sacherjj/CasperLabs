@@ -18,7 +18,7 @@ import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform}
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
@@ -86,23 +86,25 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
   private[this] def modifyCurrentIndex(f: Int => Int): F[Unit] =
     state.modify(s => s.copy(currentIndex = f(s.currentIndex)))
 
-  private def readBlockMessage(indexEntry: IndexEntry): F[BlockMessage] = {
-    def readBlockMessageFromFile(storageFile: RandomAccessIO[F]): F[BlockMessage] =
+  private def readBlockMsgWithTransform(indexEntry: IndexEntry): F[BlockMsgWithTransform] = {
+    def readBlockMsgWithTransformFromFile(
+        storageFile: RandomAccessIO[F]
+    ): F[BlockMsgWithTransform] =
       for {
-        _                      <- storageFile.seek(indexEntry.offset)
-        blockMessageSizeOpt    <- storageFile.readInt
-        blockMessagesByteArray = Array.ofDim[Byte](blockMessageSizeOpt.get)
-        _                      <- storageFile.readFully(blockMessagesByteArray)
-        blockMessage           = BlockMessage.parseFrom(blockMessagesByteArray)
-      } yield blockMessage
+        _                              <- storageFile.seek(indexEntry.offset)
+        blockMsgWithTransformSizeOpt   <- storageFile.readInt
+        blockMsgWithTransformByteArray = Array.ofDim[Byte](blockMsgWithTransformSizeOpt.get)
+        _                              <- storageFile.readFully(blockMsgWithTransformByteArray)
+        blockMsgWithTransform          = BlockMsgWithTransform.parseFrom(blockMsgWithTransformByteArray)
+      } yield blockMsgWithTransform
 
     for {
       currentIndex <- getCurrentIndex
       blockMessage <- if (currentIndex == indexEntry.checkpointIndex)
                        for {
-                         storageFile  <- getBlockMessageRandomAccessFile
-                         blockMessage <- readBlockMessageFromFile(storageFile)
-                       } yield blockMessage
+                         storageFile           <- getBlockMessageRandomAccessFile
+                         blockMsgWithTransform <- readBlockMsgWithTransformFromFile(storageFile)
+                       } yield blockMsgWithTransform
                      else
                        for {
                          checkpoints <- getCheckpoints
@@ -113,9 +115,9 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
                                           checkpoint.storagePath,
                                           RandomAccessIO.Read
                                         )
-                                      }(readBlockMessageFromFile)(_.close())
+                                      }(readBlockMsgWithTransformFromFile)(_.close())
                                     case None =>
-                                      RaiseIOError[F].raise[BlockMessage](
+                                      RaiseIOError[F].raise[BlockMsgWithTransform](
                                         UnavailableReferencedCheckpoint(
                                           indexEntry.checkpointIndex
                                         )
@@ -125,18 +127,18 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     } yield blockMessage
   }
 
-  override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
+  override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     lock.withPermit(
       for {
         indexEntryOpt <- withReadTxn { txn =>
                           Option(index.get(txn, blockHash.toDirectByteBuffer))
                             .map(IndexEntry.load)
                         }
-        result <- indexEntryOpt.traverse(readBlockMessage)
+        result <- indexEntryOpt.traverse(readBlockMsgWithTransform)
       } yield result
     )
 
-  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
     lock.withPermit(
       for {
         filteredIndex <- withReadTxn { txn =>
@@ -150,23 +152,23 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
                         }
         result <- filteredIndex.flatTraverse {
                    case (blockHash, indexEntry) =>
-                     readBlockMessage(indexEntry)
+                     readBlockMsgWithTransform(indexEntry)
                        .map(block => List(blockHash -> block))
                  }
       } yield result
     )
 
-  override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
+  override def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
     lock.withPermit(
       for {
-        randomAccessFile          <- getBlockMessageRandomAccessFile
-        currentIndex              <- getCurrentIndex
-        endOfFileOffset           <- randomAccessFile.length
-        _                         <- randomAccessFile.seek(endOfFileOffset)
-        (blockHash, blockMessage) = f
-        blockMessageByteArray     = blockMessage.toByteArray
-        _                         <- randomAccessFile.writeInt(blockMessageByteArray.length)
-        _                         <- randomAccessFile.write(blockMessageByteArray)
+        randomAccessFile                   <- getBlockMessageRandomAccessFile
+        currentIndex                       <- getCurrentIndex
+        endOfFileOffset                    <- randomAccessFile.length
+        _                                  <- randomAccessFile.seek(endOfFileOffset)
+        (blockHash, blockMsgWithTransform) = f
+        blockMsgWithTransformByteArray     = blockMsgWithTransform.toByteArray
+        _                                  <- randomAccessFile.writeInt(blockMsgWithTransformByteArray.length)
+        _                                  <- randomAccessFile.write(blockMsgWithTransformByteArray)
         _ <- withWriteTxn { txn =>
               index.put(
                 txn,

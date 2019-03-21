@@ -503,7 +503,7 @@ class ExecEngineUtilTest
               deploys
                 .map(d => DeployResult(10, DeployResult.Result.Effects(getExecutionEffect(d))))
                 .asRight[Throwable]
-          },
+            },
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
           (_, _, _) => new SmartContractEngineError("unimplemented").asLeft.pure[Task],
           _ => Seq.empty[Bond].pure[Task],

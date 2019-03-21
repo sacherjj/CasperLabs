@@ -578,7 +578,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       effects: Seq[ipc.TransformEntry]
   ): F[BlockDagRepresentation[F]] =
     for {
-      _          <- BlockStore[F].put(block.blockHash, block)
+      _          <- BlockStore[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
       updatedDag <- BlockDagStorage[F].insert(block)
       hash       = block.blockHash
       _ <- Cell[F, CasperState].modify { s =>
