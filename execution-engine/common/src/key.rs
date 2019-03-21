@@ -1,5 +1,5 @@
 use super::alloc::vec::Vec;
-use super::bytesrepr::{Error, FromBytes, ToBytes};
+use super::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
 use crate::contract_api::pointers::*;
 use core::cmp::Ordering;
 
@@ -168,7 +168,38 @@ impl Key {
 const ACCOUNT_ID: u8 = 0;
 const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
-pub const UREF_SIZE: usize = 37;
+const KEY_ID_SIZE: usize = 1; // u8 used to determine the ID
+const ACCESS_RIGHTS_SIZE: usize = 1; // u8 used to tag AccessRights
+pub const UREF_SIZE: usize = U32_SIZE + N32 + KEY_ID_SIZE + ACCESS_RIGHTS_SIZE;
+
+impl ToBytes for AccessRights {
+    fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            AccessRights::Eqv => 1u8.to_bytes(),
+            AccessRights::Read => 2u8.to_bytes(),
+            AccessRights::Add => 3u8.to_bytes(),
+            AccessRights::Write => 4u8.to_bytes(),
+            AccessRights::ReadAdd => 5u8.to_bytes(),
+            AccessRights::ReadWrite => 6u8.to_bytes(),
+        }
+    }
+}
+
+impl FromBytes for AccessRights {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let access_rights = match id {
+            1 => Ok(AccessRights::Eqv),
+            2 => Ok(AccessRights::Read),
+            3 => Ok(AccessRights::Add),
+            4 => Ok(AccessRights::Write),
+            5 => Ok(AccessRights::ReadAdd),
+            6 => Ok(AccessRights::ReadWrite),
+            _ => Err(Error::FormattingError),
+        };
+        access_rights.map(|rights| (rights, rest))
+    }
+}
 
 impl ToBytes for Key {
     fn to_bytes(&self) -> Vec<u8> {
@@ -186,11 +217,11 @@ impl ToBytes for Key {
                 result.append(&mut hash.to_bytes());
                 result
             }
-            URef(rf, ..) => {
-                //TODO: serialize access rights
-                let mut result = Vec::with_capacity(37);
+            URef(rf, access_rights) => {
+                let mut result = Vec::with_capacity(UREF_SIZE);
                 result.push(UREF_ID);
                 result.append(&mut rf.to_bytes());
+                result.append(&mut access_rights.to_bytes());
                 result
             }
         }
@@ -216,8 +247,8 @@ impl FromBytes for Key {
             }
             UREF_ID => {
                 let (rf, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
-                // TODO: deserialize access rights
-                Ok((URef(rf, AccessRights::ReadWrite), rem))
+                let (access_right, rem2): (AccessRights, &[u8]) = FromBytes::from_bytes(rem)?;
+                Ok((URef(rf, access_right), rem2))
             }
             _ => Err(Error::FormattingError),
         }
