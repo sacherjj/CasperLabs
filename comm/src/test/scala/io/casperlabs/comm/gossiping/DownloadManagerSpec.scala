@@ -65,10 +65,62 @@ class DownloadManagerSpec
     "scheduled to download a block which is already downloading" should {
       "skip the download" in (pending)
     }
+
     "released as a resource" should {
-      "cancel outstanding downloads" in (pending)
-      "reject further schedules" in (pending)
+      val block = arbitrary[Block].sample.map(withoutDependencies).get
+
+      "cancel outstanding downloads" in {
+        // Return the chunks slowly so we can shut down the manager before it could store the data.
+        var countIn  = 0
+        var countOut = 0
+        val remote =
+          MockGossipService(Seq(block), rechunker = _.mapEval { chunk =>
+            for {
+              _ <- Task.delay(countIn += 1)
+              _ <- Task.sleep(750.millis)
+              _ <- Task.delay(countOut += 1)
+            } yield chunk
+          })
+        val backend = MockBackend()
+
+        val test = for {
+          alloc <- DownloadManagerImpl[Task](
+                    maxParallelDownloads = 1,
+                    connectToGossip = _ => remote,
+                    backend = backend
+                  ).allocated
+          (manager, release) = alloc
+          _                  <- manager.scheduleDownload(summaryOf(block), source, relay = false)
+          _                  <- Task.sleep(500.millis)
+          _                  <- release
+          _                  <- Task.sleep(500.millis)
+        } yield {
+          backend.summaries should not contain key(block.blockHash)
+          countIn should be > countOut
+        }
+
+        test.runSyncUnsafe(2.seconds)
+      }
+
+      "reject further schedules" in {
+        val test = for {
+          alloc <- DownloadManagerImpl[Task](
+                    maxParallelDownloads = 1,
+                    connectToGossip = _ => MockGossipService(),
+                    backend = MockBackend()
+                  ).allocated
+          (manager, release) = alloc
+          _                  <- release
+          res                <- manager.scheduleDownload(summaryOf(block), source, relay = false).attempt
+        } yield {
+          res.isLeft shouldBe true
+          res.left.get shouldBe a[java.lang.IllegalStateException]
+        }
+
+        test.runSyncUnsafe(1.seconds)
+      }
     }
+
     "fails to download a block for any reason" should {
       "carry on downloading other blocks from other nodes" in (pending)
       "try to download the block from a different source" in (pending)
@@ -301,7 +353,7 @@ object DownloadManagerSpec {
       )
     }
     def apply(
-        blocks: Seq[Block],
+        blocks: Seq[Block] = Seq.empty,
         rechunker: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity
     ) = Task.now {
       val blockMap = blocks.groupBy(_.blockHash).mapValues(_.head)

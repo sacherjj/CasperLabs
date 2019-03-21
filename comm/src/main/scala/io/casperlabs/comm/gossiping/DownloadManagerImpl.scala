@@ -48,10 +48,12 @@ object DownloadManagerImpl {
   ): Resource[F, DownloadManager[F]] =
     Resource.make {
       for {
+        isShutdown <- Ref.of(false)
         workersRef <- Ref.of(Map.empty[ByteString, Fiber[F, Unit]])
         semaphore  <- Semaphore[F](maxParallelDownloads.toLong)
         signal     <- MVar[F].empty[Signal[F]]
         manager = new DownloadManagerImpl[F](
+          isShutdown,
           workersRef,
           semaphore,
           signal,
@@ -59,18 +61,17 @@ object DownloadManagerImpl {
           backend
         )
         managerLoop <- Concurrent[F].start(manager.run)
-      } yield (workersRef, managerLoop, manager)
+      } yield (isShutdown, workersRef, managerLoop, manager)
     } {
-      case (workersRef, managerLoop, _) =>
+      case (isShutdown, workersRef, managerLoop, _) =>
         for {
-          // TODO: Perhaps it would be nice if after cancelation the `scheduleDownload`
-          // wouldn't just block further shcedule attempts but raise an error.
+          _       <- isShutdown.set(true)
           _       <- managerLoop.cancel.attempt
           workers <- workersRef.get
           _       <- workers.values.toList.map(_.cancel.attempt).sequence.void
         } yield ()
     } map {
-      case (_, _, manager) => manager
+      case (_, _, _, manager) => manager
     }
 
   /** All dependencies that need to be downloaded before a block. */
@@ -79,6 +80,7 @@ object DownloadManagerImpl {
 }
 
 class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
+    isShutdown: Ref[F, Boolean],
     // Keep track of ongoing downloads so we can cancel them.
     workersRef: Ref[F, Map[ByteString, Fiber[F, Unit]]],
     // Limit parallel downloads.
@@ -97,8 +99,17 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
 
   implicit val logSource: LogSource = LogSource(this.getClass)
 
+  def ensureNotShutdown: F[Unit] =
+    isShutdown.get.ifM(
+      Sync[F]
+        .raiseError(new java.lang.IllegalStateException("Download manager already shut down.")),
+      Sync[F].unit
+    )
+
   override def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean): F[Unit] =
     for {
+      // Fail rather than block forever.
+      _ <- ensureNotShutdown
       // Feedback about whether we successfully scheduled the item.
       d <- Deferred[F, Either[Throwable, Unit]]
       _ <- signal.put(Signal.Download(summary, source, relay, d))
