@@ -179,13 +179,9 @@ class DownloadManagerSpec
 
     "cannot connect to a node" should {
       val block = arbitrary[Block].sample.map(withoutDependencies).get
-      val remote = MockGossipService(
-        Seq(block),
-        rechunker = _ => Iterant.raiseError(io.grpc.Status.UNAVAILABLE.asRuntimeException())
-      )
 
       "try again if the same block from the same source is scheduled again" in TestFixture(
-        remote = _ => remote
+        remote = _ => Task.raiseError(io.grpc.Status.UNAVAILABLE.asRuntimeException())
       ) {
         case (manager, _) =>
           def check(i: Int) = manager.scheduleDownload(summaryOf(block), source, false) map { _ =>
