@@ -75,8 +75,9 @@ class DownloadManagerSpec
     }
 
     "downloaded a valid block" should {
-      val block  = arbitrary[Block].sample.map(withoutDependencies).get
-      val remote = MockGossipService(Seq(block))
+      val block   = arbitrary[Block].sample.map(withoutDependencies).get
+      val remote  = MockGossipService(Seq(block))
+      def backend = MockBackend()
 
       def check(test: MockBackend => Unit): TestArgs => Task[Unit] = {
         case (manager, backend) =>
@@ -87,30 +88,41 @@ class DownloadManagerSpec
           }
       }
 
-      "validate the block" in TestFixture(MockBackend(), _ => remote) {
-        check {
-          _.validations should contain(block)
-        }
+      "validate the block" in TestFixture(backend, _ => remote) {
+        check(_.validations should contain(block))
       }
 
-      "store the block" in TestFixture(MockBackend(), _ => remote) {
-        check {
-          _.blocks should contain value block
-        }
+      "store the block" in TestFixture(backend, _ => remote) {
+        check(_.blocks should contain value block)
       }
 
-      "store the block summary" in TestFixture(MockBackend(), _ => remote) {
-        check {
-          _.summaries should contain value summaryOf(block)
-        }
+      "store the block summary" in TestFixture(backend, _ => remote) {
+        check(_.summaries should contain value summaryOf(block))
       }
 
       "gossip to other nodes" in (pending)
     }
 
     "cannot validate a block" should {
+      val block  = arbitrary[Block].sample.map(withoutDependencies).get
+      val remote = MockGossipService(Seq(block))
+      def backend =
+        MockBackend(_ => Task.raiseError(new java.lang.IllegalArgumentException("Nope.")))
+
+      "not store the block" in TestFixture(backend, _ => remote) {
+        case (manager, backend) =>
+          manager.scheduleDownload(summaryOf(block), source, relay = true) map { _ =>
+            eventually {
+              backend.validations should contain(block)
+              backend.blocks should not contain key(block.blockHash)
+              Inspectors.forExactly(1, log.causes) {
+                _.getMessage shouldBe "Nope."
+              }
+            }
+          }
+      }
+
       "not download the dependant blocks" in (pending)
-      "not store the block" in (pending)
     }
 
     "cannot connect to a node" should {
@@ -186,7 +198,7 @@ class DownloadManagerSpec
       val block1 = arbitrary[Block].sample.get
       val block2 = arbitrary[Block].sample.map(withoutDependencies).get
       val remote = MockGossipService(Seq(block1, block2))
-      val backend = new MockBackend {
+      val backend = new MockBackend() {
         override def hasBlock(blockHash: ByteString) =
           if (blockHash == block1.blockHash || dependenciesOf(block1).contains(blockHash))
             Task.raiseError(new RuntimeException("Oh no!"))
@@ -252,7 +264,8 @@ object DownloadManagerSpec {
     }
   }
 
-  class MockBackend extends DownloadManagerImpl.Backend[Task] {
+  class MockBackend(validate: Block => Task[Unit] = _ => Task.unit)
+      extends DownloadManagerImpl.Backend[Task] {
     var validations = Vector.empty[Block]
     var blocks      = Map.empty[ByteString, Block]
     var summaries   = Map.empty[ByteString, BlockSummary]
@@ -260,9 +273,10 @@ object DownloadManagerSpec {
     def hasBlock(blockHash: ByteString): Task[Boolean] =
       Task.now(blocks.contains(blockHash))
 
-    def validateBlock(block: Block): Task[Unit] = Task.delay {
-      validations = validations :+ block
-    }
+    def validateBlock(block: Block): Task[Unit] =
+      Task.delay {
+        validations = validations :+ block
+      } *> validate(block)
 
     def storeBlock(block: Block): Task[Unit] = Task.delay {
       blocks = blocks + (block.blockHash -> block)
@@ -273,8 +287,8 @@ object DownloadManagerSpec {
     }
   }
   object MockBackend {
-    def default = apply()
-    def apply() = new MockBackend()
+    def default                                               = apply()
+    def apply(validate: Block => Task[Unit] = _ => Task.unit) = new MockBackend(validate)
   }
 
   /** Test implementation of the remote GossipService to download the blocks from. */

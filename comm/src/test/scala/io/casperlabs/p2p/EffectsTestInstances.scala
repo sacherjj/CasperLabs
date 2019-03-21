@@ -120,6 +120,7 @@ object EffectsTestInstances {
       infos = Vector.empty[String]
       warns = Vector.empty[String]
       errors = Vector.empty[String]
+      causes = Vector.empty[Throwable]
       all = Vector.empty[String]
     }
     def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
