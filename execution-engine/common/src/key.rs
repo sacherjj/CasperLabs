@@ -145,8 +145,8 @@ impl Key {
         match self {
             Key::URef(.., access_right) => *access_right >= AccessRights::Add,
             // From within the body of a contract/account adding
-            // to its state should be possible (only allows for adding new URefs). 
-            _ => true,         
+            // to its state should be possible (only allows for adding new URefs).
+            _ => true,
         }
     }
 }
