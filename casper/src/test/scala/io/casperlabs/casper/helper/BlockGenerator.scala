@@ -58,9 +58,7 @@ object BlockGenerator {
       result <- computeBlockCheckpointFromDeploys[F](
                  b,
                  genesis,
-                 dag,
-                 //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
-                 (_: BlockMetadata) => Seq.empty[TransformEntry].pure[F]
+                 dag
                )
     } yield (result.postStateHash, result.deploysForBlock)
 
@@ -82,9 +80,7 @@ object BlockGenerator {
       F[_]: Sync: BlockStore: Log: ExecutionEngineService](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
-      transforms: BlockMetadata => F[Seq[TransformEntry]]
+      dag: BlockDagRepresentation[F]
   ): F[DeploysCheckpoint] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
@@ -99,8 +95,7 @@ object BlockGenerator {
       result <- computeDeploysCheckpoint[F](
                  parents,
                  deploys,
-                 dag,
-                 transforms
+                 dag
                )
     } yield result
 
@@ -108,9 +103,7 @@ object BlockGenerator {
   //does not match the computed hash based on the deploys
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
       b: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
-      transform: BlockMetadata => F[Seq[TransformEntry]]
+      dag: BlockDagRepresentation[F]
   ): F[Either[BlockException, Option[StateHash]]] = {
     val preStateHash = ProtoUtil.preStateHash(b)
     val tsHash       = ProtoUtil.tuplespace(b)
@@ -118,7 +111,7 @@ object BlockGenerator {
     val timestamp    = Some(b.header.get.timestamp) // TODO: Ensure header exists through type
     for {
       parents                              <- ProtoUtil.unsafeGetParents[F](b)
-      processedHash                        <- processDeploys(parents, dag, deploys, transform)
+      processedHash                        <- processDeploys(parents, dag, deploys)
       (computePreStateHash, deployResults) = processedHash
       _                                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
       result <- processPossiblePreStateHash[F](

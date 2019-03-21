@@ -322,11 +322,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     (for {
       now <- Time[F].currentMillis
       s   <- Cell[F, CasperState].read
-      //temporary function for getting transforms for blocks
-      f = (b: BlockMetadata) =>
-        s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
       stateResult <- ExecEngineUtil
-                      .computeDeploysCheckpoint(p, r, dag, f)
+                      .computeDeploysCheckpoint(p, r, dag)
       DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number) = stateResult
       //TODO: compute bonds properly
       newBonds = ProtoUtil.bonds(p.head)
@@ -382,14 +379,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       postValidationStatus <- Validate
                                .blockSummary[F](b, genesis, dag, shardId, lastFinalizedBlockHash)
       s <- Cell[F, CasperState].read
-      //temporary function for getting transforms for blocks
-      f = (b: BlockMetadata) =>
-        Sync[F].delay(
-          s.transforms
-            .getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry])
-        )
       processedHash <- ExecEngineUtil
-                        .effectsForBlock(b, dag, f)
+                        .effectsForBlock(b, dag)
                         .recoverWith {
                           case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                         }

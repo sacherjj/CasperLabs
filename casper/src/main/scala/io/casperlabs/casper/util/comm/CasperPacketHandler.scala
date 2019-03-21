@@ -593,8 +593,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    dag          <- BlockDagStorage[F].getRepresentation
                    effects <- ExecEngineUtil.effectsForBlock[F](
                                blockMessage,
-                               dag,
-                               (_: BlockMetadata) => Seq.empty[TransformEntry].pure[F]
+                               dag
                              )
                    (_, transforms) = effects
                    _ <- BlockStore[F].put(
