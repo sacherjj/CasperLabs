@@ -35,6 +35,16 @@ clone:
           EMAIL=ci git merge --no-edit FETCH_HEAD
       fi
       git rev-parse HEAD
+
+  # The following steps labeled as '*-mac' are used to check and compile
+  # portions of the pipeline. This method mimics what was suggested in the
+  # below articles:
+  #    https://discourse.drone.io/t/multiple-build-machines/630/2
+  #    https://www.fwd.cloud/commit/post/drone-ios-deployments/
+  #
+  # The mac server is configured following our Developer.md suggestions
+  # for mac users. Please see the Developer.md for specifics.
+
   git-clone-mac:
     image: appleboy/drone-ssh
     group: clone
@@ -244,7 +254,7 @@ pipeline:
       - mkdir -p ~/.ssh
       - mkdir -p artifacts/
       - umask 077 && echo "$SSH_KEY" > ~/.ssh/id_rsa
-      - rsync -avzhe "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" $SSH_USERNAME@$SSH_HOST:DRONE_BUILD_${DRONE_BUILD_NUMBER}/artifacts/${DRONE_BRANCH} artifacts/
+      - rsync -avzhe "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" $SSH_USERNAME@$SSH_HOST:DRONE_BUILD_${DRONE_BUILD_NUMBER}/artifacts/${DRONE_BRANCH}/casperlabs-engine-grpc-server-*darwin*.gz artifacts/${DRONE_BRANCH}/
     when:
       event: [ push, tag ]
 
@@ -289,7 +299,7 @@ pipeline:
     secrets: [ ssh_key, ssh_host, ssh_username ]
     script: |
       export PATH=$PATH:/usr/local/bin
-      docker images -a | grep "none" | awk '{print $3}' | xargs docker rmi -f || true
+      docker rmi -f $(docker images -f "dangling=true" -q) || true
       rm -rf DRONE_BUILD_${DRONE_BUILD_NUMBER}
     when:
       status: [ failure, success ]
