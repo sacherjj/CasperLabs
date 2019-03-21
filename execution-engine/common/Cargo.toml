@@ -14,17 +14,3 @@ std = []
 failure = { version = "0.1.5", default-features = false, features = ["failure_derive"] }
 wee_alloc = "0.4.3"
 uint = { version = "0.6.1", default-features = false, features = [] }
-
-[dev-dependencies]
-gens = { path = "../gens" }
-
-[dev-dependencies.proptest]
-version = "0.8.7"
-
-# Opt out of the `std` feature
-default-features = false
-
-# alloc: Use the `alloc` crate directly. Proptest has a hard requirement on
-# memory allocation, so either this or `std` is needed.
-# unstable: Enable use of nightly-only compiler features.
-features = ["alloc", "unstable"]
