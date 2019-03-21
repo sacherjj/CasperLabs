@@ -126,6 +126,31 @@ pub enum Key {
     URef([u8; 32], AccessRights), //TODO: more bytes?
 }
 
+impl Key {
+    pub fn is_readable(&self) -> bool {
+        match self {
+            Key::URef(.., access_right) => *access_right >= AccessRights::Read,
+            _ => true,
+        }
+    }
+
+    pub fn is_writable(&self) -> bool {
+        match self {
+            Key::URef(.., access_right) => *access_right >= AccessRights::Write,
+            _ => false,
+        }
+    }
+
+    pub fn is_addable(&self) -> bool {
+        match self {
+            Key::URef(.., access_right) => *access_right >= AccessRights::Add,
+            // From within the body of a contract/account adding
+            // to its state should be possible (only allows for adding new URefs). 
+            _ => true,         
+        }
+    }
+}
+
 use Key::*;
 // TODO: I had to remove Ord derived on the Key enum because
 // there is no total ordering of the AccessRights but Ord for the Key
