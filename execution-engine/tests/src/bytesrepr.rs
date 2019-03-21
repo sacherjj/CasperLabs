@@ -132,4 +132,9 @@ proptest! {
     fn test_trie(trie in trie_arb()) {
         assert!(test_serialization_roundtrip(&trie));
     }
+
+    #[test]
+    fn test_access_rights(access_right in access_rights_arb()) {
+        assert!(test_serialization_roundtrip(&access_right))
+    }
 }
