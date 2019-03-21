@@ -35,7 +35,6 @@ clone:
           EMAIL=ci git merge --no-edit FETCH_HEAD
       fi
       git rev-parse HEAD
-
   git-clone-mac:
     image: appleboy/drone-ssh
     group: clone
@@ -50,10 +49,15 @@ clone:
           EMAIL=ci git merge --no-edit FETCH_HEAD
       fi
       git rev-parse HEAD
-
 pipeline:
 
   # pr
+
+  sbt-update:
+    <<: *sbtenv
+    group: sbt
+    commands:
+      - sbt update
 
   sbt-update-mac:
     image: appleboy/drone-ssh
@@ -65,6 +69,25 @@ pipeline:
       export _JAVA_OPTIONS='-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G'
       export PATH=$PATH:/usr/local/bin
       sbt update
+  compile:
+    <<: *sbtenv
+    commands:
+      - sbt compile test:compile doc
+
+  compile-rust:
+    <<: *buildenv
+    group: rust
+    commands:
+      - cd execution-engine/
+      - ~/.cargo/bin/cargo update
+      - ~/.cargo/bin/cargo build
+
+  run-rust-tests:
+    <<: *buildenv
+    group: test-rust
+    commands:
+      - cd execution-engine/
+      - ~/.cargo/bin/cargo test
 
   run-rust-tests-mac:
     image: appleboy/drone-ssh
@@ -76,6 +99,19 @@ pipeline:
       export PATH=$PATH:/usr/local/bin
       cd execution-engine/
       ~/.cargo/bin/cargo test
+  run-rust-lints:
+    <<: *buildenv
+    commands:
+      - cd execution-engine
+      - ~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)
+      - ~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy
+      - ~/.cargo/bin/cargo clippy -- -D warnings -A renamed_and_removed_lints
+
+  run-unit-tests:
+    <<: *sbtenv
+    group: test-sbt
+    commands:
+      - sbt test
 
   run-unit-tests-mac:
     image: appleboy/drone-ssh
@@ -86,7 +122,96 @@ pipeline:
       cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
       export PATH=$PATH:/usr/local/bin
       sbt test
+  docker-build-node-engine-and-client:
+    <<: *sbtenv
+    commands:
+      - sbt node/docker:publishLocal client/docker:publishLocal
+      - make docker-build/execution-engine
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
+  ## run-integration-tests:
+  ##   <<: *sbtenv
+  ##   commands:
+  ##     - python3 -m pip install pipenv dataclasses typing_extensions
+  ##     - cd integration-testing
+  ##     - ./run_tests.sh
+  ##   volumes:
+  ##     - /var/run/docker.sock:/var/run/docker.sock
+  ##     - /tmp:/tmp
+
+  # push
+
+  package-client-deb-universal:
+    <<: *sbtenv
+    commands:
+      - sbt client/debian:packageBin client/universal:packageZipTarball
+      - mkdir -p artifacts/${DRONE_BRANCH}
+      - cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+      - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      event: [ push, tag ]
+
+  package-client-rpm:
+    <<: *sbtenv
+    commands:
+      - env JAVAC_VERSION=1.8 sbt clean compile doc client/rpm:packageBin
+      - mkdir -p artifacts/${DRONE_BRANCH}
+      - cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+    when:
+      event: [ push, tag ]
+
+  package-node-deb-universal:
+    <<: *sbtenv
+    commands:
+      - sbt node/debian:packageBin node/universal:packageZipTarball
+      - mkdir -p artifacts/${DRONE_BRANCH}
+      - cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+      - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      event: [ push, tag ]
+
+  package-node-rpm:
+    <<: *sbtenv
+    commands:
+      - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
+      - mkdir -p artifacts/${DRONE_BRANCH}
+      - cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm artifacts/${DRONE_BRANCH}
+    volumes:
+      - /var/cache/cl-build/.sbt:/root/.sbt
+      - /var/cache/cl-build/.ivy2:/root/.ivy2
+    when:
+      event: [ push, tag ]
+
+  package-ee:
+    <<: *buildenv
+    group: package-ee
+    commands:
+      - mkdir -p artifacts/${DRONE_BRANCH}
+      - make cargo-package-all
+      - cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}
+      - cp execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-*.rpm artifacts/${DRONE_BRANCH}
+      - >-
+        WORKING_DIR=$(pwd) ;
+        cd execution-engine/target/release/rpmbuild/SOURCES ;
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]') ;
+        ARCH=$(uname -p) ;
+        SOURCE=$(ls casperlabs-engine-grpc-server-*.tar.gz | sed "s/.tar.gz//") ;
+        TARGET=$(ls $SOURCE*.tar.gz | sed "s/.tar.gz/_"$OS"_"$ARCH".tar.gz/") ;
+        tar -xzf $SOURCE.tar.gz ;
+        tar -czf $TARGET -C $SOURCE/usr/bin/ . &&
+        cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}
+    when:
+      event: [ push, tag ]
 
   package-ee-mac:
     image: appleboy/drone-ssh
@@ -109,6 +234,8 @@ pipeline:
       tar -xzf $SOURCE.tar.gz ;
       tar -czf $TARGET -C $SOURCE/usr/bin/ . &&
       cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}
+    when:
+      event: [ push, tag ]
 
   copy-mac-tar-drone-container:
     <<: *buildenv
@@ -117,5 +244,59 @@ pipeline:
       - mkdir -p ~/.ssh
       - mkdir -p artifacts/
       - umask 077 && echo "$SSH_KEY" > ~/.ssh/id_rsa
-      - rsync -avzhe "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" $SSH_USERNAME@$SSH_HOST:DRONE_BUILD_${DRONE_BUILD_NUMBER}/artifacts/${DRONE_BRANCH}/casperlabs-engine-grpc-server-*darwin*.gz artifacts/${DRONE_BRANCH}/
-      - ls -alR artifacts/
+      - rsync -avzhe "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" $SSH_USERNAME@$SSH_HOST:DRONE_BUILD_${DRONE_BUILD_NUMBER}/artifacts/${DRONE_BRANCH} artifacts/
+    when:
+      event: [ push, tag ]
+
+  rsync-artifacts:
+    image: drillster/drone-rsync
+    hosts: [ $REPO_HOST ]
+    target: $REPO_PATH/
+    source: artifacts/${DRONE_BRANCH}
+    secrets: [ repo_host, rsync_user, rsync_key, repo_path ]
+    delete: true
+    recursive: true
+    when:
+      event: [ push, tag ]
+
+  github_publish_release_artifacts:
+    image: plugins/github-release
+    prerelease: true
+    files:
+      - artifacts/${DRONE_BRANCH}/*
+    checksum:
+     - sha256
+     - md5
+    secrets: [github_token]
+    when:
+      branch: master
+      event: tag
+
+  cleanup:
+    <<: *sbtenv
+    group: cleanup
+    commands:
+      - docker images --filter "dangling=true" -q --no-trunc | xargs --no-run-if-empty docker rmi -f
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      status: [ failure, success ]
+
+# mac xargs doesn't have --no-run-if-empty
+  cleanup-mac:
+    image: appleboy/drone-ssh
+    group: cleanup
+    secrets: [ ssh_key, ssh_host, ssh_username ]
+    script: |
+      export PATH=$PATH:/usr/local/bin
+      docker images -a | grep "none" | awk '{print $3}' | xargs docker rmi -f || true
+      rm -rf DRONE_BUILD_${DRONE_BUILD_NUMBER}
+    when:
+      status: [ failure, success ]
+
+  notify:
+    image: plugins/slack
+    channel: alerts
+    secrets: [ slack_webhook ]
+    when:
+      status: [ failure ]
