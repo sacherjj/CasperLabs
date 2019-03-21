@@ -591,8 +591,7 @@ class ValidateTest
         _ <- BlockGenerator
               .validateBlockCheckpoint[Task](
                 genesis,
-                dag,
-                (_: BlockMetadata) => Seq.empty[TransformEntry].pure[Task]
+                dag
               )
         _                 <- Validate.bondsCache[Task](genesis, genesisBonds) shouldBeF Unit
         modifiedBonds     = Seq.empty[Bond]

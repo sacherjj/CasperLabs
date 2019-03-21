@@ -43,10 +43,7 @@ final case class CasperState(
     deployHistory: Set[DeployData] = Set.empty[DeployData],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord],
-    //TODO: store this info in the BlockDagRepresentation instead
-    transforms: Map[BlockHash, Seq[ipc.TransformEntry]] =
-      Map.empty[BlockHash, Seq[ipc.TransformEntry]]
+    equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
 class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
@@ -572,9 +569,6 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       _          <- BlockStore[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
       updatedDag <- BlockDagStorage[F].insert(block)
       hash       = block.blockHash
-      _ <- Cell[F, CasperState].modify { s =>
-            s.copy(transforms = s.transforms + (hash -> effects))
-          }
     } yield updatedDag
 
   private def reAttemptBuffer(

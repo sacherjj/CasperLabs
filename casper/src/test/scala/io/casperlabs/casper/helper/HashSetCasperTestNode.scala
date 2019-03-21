@@ -120,9 +120,7 @@ class HashSetCasperTestNode[F[_]](
         BlockGenerator
           .validateBlockCheckpoint[F](
             genesis,
-            dag,
-            // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
-            (_: BlockMetadata) => Seq.empty[TransformEntry].pure[F]
+            dag
           )
           .void
       }

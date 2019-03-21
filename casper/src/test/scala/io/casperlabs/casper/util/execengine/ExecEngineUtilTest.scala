@@ -232,8 +232,7 @@ class ExecEngineUtilTest
         dag     <- blockDagStorage.getRepresentation
         postState <- validateBlockCheckpoint[Task](
                       b3,
-                      dag,
-                      (_: BlockMetadata) => Seq.empty[TransformEntry].pure[Task]
+                      dag
                     )
         result = postState shouldBe Right(None)
       } yield result
@@ -313,8 +312,7 @@ class ExecEngineUtilTest
         dag2 <- blockDagStorage.getRepresentation
         postState <- validateBlockCheckpoint[Task](
                       b5,
-                      dag2,
-                      (_: BlockMetadata) => Seq.empty[TransformEntry].pure[Task]
+                      dag2
                     )
 //        Result should be validated post - state - hash.
         result = postState shouldBe Right(None)
@@ -333,8 +331,7 @@ class ExecEngineUtilTest
                         .computeDeploysCheckpoint[Task](
                           Seq.empty,
                           deploy,
-                          dag,
-                          (_: BlockMetadata) => Seq.empty[TransformEntry].pure[Task]
+                          dag
                         )
       DeploysCheckpoint(_, _, result, _) = computeResult
     } yield result
@@ -383,8 +380,7 @@ class ExecEngineUtilTest
         dag   <- blockDagStorage.getRepresentation
         validateResult <- validateBlockCheckpoint[Task](
                            block,
-                           dag,
-                           (_: BlockMetadata) => Seq.empty[TransformEntry].pure[Task]
+                           dag
                          )
         Right(stateHash) = validateResult
       } yield stateHash should be(None)
@@ -402,8 +398,7 @@ class ExecEngineUtilTest
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               Seq.empty,
                               deploys,
-                              dag1,
-                              (_: BlockMetadata) => Seq.empty[TransformEntry].pure[Task]
+                              dag1
                             )
         DeploysCheckpoint(preStateHash, computedTsHash, processedDeploys, _) = deploysCheckpoint
         block <- createBlock[Task](
@@ -416,8 +411,7 @@ class ExecEngineUtilTest
 
         validateResult <- validateBlockCheckpoint[Task](
                            block,
-                           dag2,
-                           (_: BlockMetadata) => Seq.empty[TransformEntry].pure[Task]
+                           dag2
                          )
         Right(tsHash) = validateResult
       } yield tsHash should be(Some(computedTsHash))

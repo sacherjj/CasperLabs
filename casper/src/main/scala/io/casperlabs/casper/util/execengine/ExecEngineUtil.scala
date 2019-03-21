@@ -50,8 +50,7 @@ object ExecEngineUtil {
         )
     }
 
-  def computeDeploysCheckpoint[
-      F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
+  def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F]
@@ -138,8 +137,7 @@ object ExecEngineUtil {
       transformMap                 = findCommutingEffects(processedDeploys).unzip._1.flatMap(_.transformMap)
     } yield (prestate, transformMap)
 
-  private def computePrestate[
-      F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
+  private def computePrestate[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       parents: List[BlockMessage],
       dag: BlockDagRepresentation[F]
   ): F[StateHash] = parents match {

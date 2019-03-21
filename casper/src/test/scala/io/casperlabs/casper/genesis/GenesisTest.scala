@@ -181,9 +181,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             maybePostGenesisStateHash <- BlockGenerator
                                           .validateBlockCheckpoint[Task](
                                             genesis,
-                                            dag,
-                                            (_: BlockMetadata) =>
-                                              Seq.empty[TransformEntry].pure[Task]
+                                            dag
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }
