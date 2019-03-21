@@ -187,6 +187,7 @@ lazy val models = (project in file("models"))
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
         "io/casperlabs/casper/consensus",
+        "io/casperlabs/ipc",
         "io/casperlabs/casper/protocol" // TODO: Eventually remove.
       )),
     PB.targets in Compile := Seq(
@@ -352,15 +353,6 @@ lazy val smartContracts = (project in file("smart-contracts"))
       grpcNetty,
       nettyTransNativeEpoll,
       nettyTransNativeKqueue
-    ),
-    PB.protoSources in Compile := Seq(protobufDirectory),
-    includeFilter in PB.generate := new SimpleFileFilter(
-      protobufSubDirectoryFilter(
-        "io/casperlabs/ipc"
-      )),
-    PB.targets in Compile := Seq(
-      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
-      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(shared, models)
