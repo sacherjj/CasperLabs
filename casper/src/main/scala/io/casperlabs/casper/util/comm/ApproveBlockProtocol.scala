@@ -8,7 +8,7 @@ import cats.{FlatMap, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.{CasperMetricsSource, LastApprovedBlock, PrettyPrinter, Validate}
+import io.casperlabs.casper._
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.MonadTrans
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -16,6 +16,7 @@ import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 
@@ -51,6 +52,7 @@ object ApproveBlockProtocol {
   def unsafe[
       F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       block: BlockMessage,
+      transforms: Seq[TransformEntry],
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
@@ -60,6 +62,7 @@ object ApproveBlockProtocol {
   ): ApproveBlockProtocol[F] =
     new ApproveBlockProtocolImpl[F](
       block,
+      transforms,
       requiredSigs,
       trustedValidators,
       start,
@@ -71,6 +74,7 @@ object ApproveBlockProtocol {
   def of[
       F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       block: BlockMessage,
+      transforms: Seq[TransformEntry],
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
@@ -82,6 +86,7 @@ object ApproveBlockProtocol {
     } yield
       new ApproveBlockProtocolImpl[F](
         block,
+        transforms,
         requiredSigs,
         trustedValidators,
         now,
@@ -93,6 +98,7 @@ object ApproveBlockProtocol {
   private class ApproveBlockProtocolImpl[
       F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       val block: BlockMessage,
+      val transforms: Seq[TransformEntry],
       val requiredSigs: Int,
       val trustedValidators: Set[ByteString],
       val start: Long,
@@ -170,7 +176,12 @@ object ApproveBlockProtocol {
     private def completeIf(time: Long, signatures: Set[Signature]): F[Unit] =
       if ((time >= start + duration.toMillis && signatures.size >= requiredSigs) || requiredSigs == 0) {
         for {
-          _ <- LastApprovedBlock[F].set(ApprovedBlock(Some(candidate), signatures.toSeq))
+          _ <- LastApprovedBlock[F].set(
+                ApprovedBlockWithTransforms(
+                  ApprovedBlock(Some(candidate), signatures.toSeq),
+                  transforms
+                )
+              )
           _ <- sendApprovedBlock
         } yield ()
       } else Time[F].sleep(interval) >> internalRun()
@@ -182,7 +193,7 @@ object ApproveBlockProtocol {
               case None =>
                 Log[F].warn(s"APPROVAL: Expected ApprovedBlock but was None.")
               case Some(b) =>
-                val serializedApprovedBlock = b.toByteString
+                val serializedApprovedBlock = b.approvedBlock.toByteString
                 for {
                   _ <- Log[F].info(
                         s"APPROVAL: Beginning send of ApprovedBlock $candidateHash to peers..."

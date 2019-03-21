@@ -577,7 +577,7 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
       val bonds           = HashSetCasperTest.createBonds(validators)
-      val genesis         = HashSetCasperTest.createGenesis(bonds)
+      val (genesis, _)    = HashSetCasperTest.createGenesis(bonds)
       val genesisBonds    = ProtoUtil.bonds(genesis)
 
       val storageDirectory                 = Files.createTempDirectory(s"hash-set-casper-test-genesis")
@@ -609,7 +609,7 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       implicit val log = new LogStub[Task]()
       val (sk, pk)     = Ed25519.newKeyPair
-      val block        = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val (block, _)   = HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
@@ -632,8 +632,8 @@ class ValidateTest
 
   "Block hash format validation" should "fail on invalid hash" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val (sk, pk) = Ed25519.newKeyPair
-      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val (sk, pk)   = Ed25519.newKeyPair
+      val (block, _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
@@ -648,8 +648,8 @@ class ValidateTest
 
   "Block deploy count validation" should "fail on invalid number of deploys" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val (sk, pk) = Ed25519.newKeyPair
-      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val (sk, pk)   = Ed25519.newKeyPair
+      val (block, _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
@@ -663,8 +663,8 @@ class ValidateTest
   }
 
   "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
-    val (sk, pk) = Ed25519.newKeyPair
-    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val (sk, pk)   = Ed25519.newKeyPair
+    val (block, _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
     for {
       dag     <- blockDagStorage.getRepresentation
       genesis <- ProtoUtil.signBlock(block, dag, pk, sk, "ed25519", "casperlabs")

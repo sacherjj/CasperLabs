@@ -53,6 +53,7 @@ class HashSetCasperTestNode[F[_]](
     val local: PeerNode,
     tle: TransportLayerTestImpl[F],
     val genesis: BlockMessage,
+    val transforms: Seq[TransformEntry],
     sk: Array[Byte],
     logicalTime: LogicalTime[F],
     implicit val errorHandlerEff: ErrorHandler[F],
@@ -90,7 +91,8 @@ class HashSetCasperTestNode[F[_]](
 
   val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
 
-  implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
+  implicit val labF =
+    LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
   implicit val casperEff = new MultiParentCasperImpl[F](
@@ -145,6 +147,7 @@ object HashSetCasperTestNode {
 
   def standaloneF[F[_]](
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
@@ -177,6 +180,7 @@ object HashSetCasperTestNode {
         identity,
         tle,
         genesis,
+        transforms,
         sk,
         logicalTime,
         errorHandler,
@@ -198,13 +202,14 @@ object HashSetCasperTestNode {
 
   def standaloneEff(
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   )(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
-    standaloneF[Effect](genesis, sk, storageSize, faultToleranceThreshold)(
+    standaloneF[Effect](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect]
     ).value.unsafeRunSync.right.get
@@ -212,6 +217,7 @@ object HashSetCasperTestNode {
   def networkF[F[_]](
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   )(
@@ -256,6 +262,7 @@ object HashSetCasperTestNode {
                 p,
                 tle,
                 genesis,
+                transforms,
                 sk,
                 logicalTime,
                 errorHandler,
@@ -300,10 +307,11 @@ object HashSetCasperTestNode {
   def networkEff(
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   ): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
-    networkF[Effect](sks, genesis, storageSize, faultToleranceThreshold)(
+    networkF[Effect](sks, genesis, transforms, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect]
     )

@@ -33,7 +33,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                       = createBonds(validators)
-  private val genesis                     = createGenesis(bonds)
+  private val (genesis, transforms)       = createGenesis(bonds)
 
   "createBlock" should "not allow simultaneous calls" in {
     implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
@@ -43,7 +43,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-    val node   = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val node   = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
     val casper = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",

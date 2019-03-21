@@ -18,7 +18,7 @@ import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.ipc
-import io.casperlabs.ipc.DeployResult
+import io.casperlabs.ipc.{DeployResult, TransformEntry}
 import io.casperlabs.shared.{Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
@@ -45,7 +45,7 @@ object Genesis {
       faucetCode: String => String,
       startHash: StateHash,
       timestamp: Long
-  ): F[BlockMessage] =
+  ): F[(BlockMessage, Seq[TransformEntry])] =
     withContracts(
       defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
       initial,
@@ -56,7 +56,7 @@ object Genesis {
       blessedTerms: List[DeployData],
       initial: BlockMessage,
       startHash: StateHash
-  ): F[BlockMessage] =
+  ): F[(BlockMessage, Seq[TransformEntry])] =
     for {
       processedDeploys <- MonadError[F, Throwable].rethrow(
                            ExecutionEngineService[F]
@@ -97,7 +97,7 @@ object Genesis {
       body          = Body(state = stateWithContracts, deploys = deploysForBlock)
       header        = blockHeader(body, List.empty[ByteString], version, timestamp)
       unsignedBlock = unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
-    } yield unsignedBlock
+    } yield (unsignedBlock, transforms)
 
   def withoutContracts(
       bonds: Map[Array[Byte], Long],
@@ -131,7 +131,7 @@ object Genesis {
       faucet: Boolean,
       shardId: String,
       deployTimestamp: Option[Long]
-  ): F[BlockMessage] =
+  ): F[(BlockMessage, Seq[TransformEntry])] =
     for {
       wallets   <- getWallets[F](walletsPath)
       bonds     <- ExecutionEngineService[F].computeBonds(ExecutionEngineService[F].emptyStateHash)

@@ -53,9 +53,10 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     val bonds                      = createBonds(Seq(validatorPk))
     val requiredSigs               = 1
     val deployTimestamp            = 1L
-    val genesis                    = buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
-    val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
-    val storageSize: Long          = 1024L * 1024
+    val (genesis, transforms) =
+      buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
+    val validatorId       = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
+    val storageSize: Long = 1024L * 1024
 
     implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](bonds)
 
@@ -197,6 +198,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           sigs <- Ref.of[Task, Set[Signature]](Set.empty)
           abp = ApproveBlockProtocol.unsafe[Task](
             genesis,
+            transforms,
             Set(ByteString.copyFrom(validatorPk)),
             requiredSigns,
             duration,
@@ -318,7 +320,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
       val (_, validators)        = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
       val bonds                  = HashSetCasperTest.createBonds(validators)
-      val genesis                = HashSetCasperTest.createGenesis(bonds)
+      val (genesis, transforms)  = HashSetCasperTest.createGenesis(bonds)
       val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
       val approvedBlock: ApprovedBlock = ApprovedBlock(
         candidate = Some(approvedBlockCandidate),

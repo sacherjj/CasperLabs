@@ -13,6 +13,7 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.MonadTrans
 import io.casperlabs.comm.CommError.ErrorHandler
@@ -21,7 +22,9 @@ import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
 import io.casperlabs.comm.{transport, PeerNode}
+import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.{Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -92,13 +95,15 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                     conf.shardId,
                     conf.deployTimestamp
                   )
-        validatorId <- ValidatorIdentity.fromConfig[F](conf)
-        bondedValidators = genesis.body
+        (genesisBlock, genesisTransforms) = genesis
+        validatorId                       <- ValidatorIdentity.fromConfig[F](conf)
+        bondedValidators = genesisBlock.body
           .flatMap(_.state.map(_.bonds.map(_.validator).toSet))
           .getOrElse(Set.empty)
         abp <- ApproveBlockProtocol
                 .of[F](
-                  genesis,
+                  genesisBlock,
+                  genesisTransforms,
                   bondedValidators,
                   conf.requiredSigs,
                   conf.approveGenesisDuration,
@@ -278,13 +283,13 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      validatorId,
                      capserHandlerInternal
                    )
-                 case Some(approvedBlock) =>
+                 case Some(ApprovedBlockWithTransforms(approvedBlock, transforms)) =>
                    val blockMessage = approvedBlock.candidate.flatMap(_.block).get
                    for {
                      _ <- BlockStore[F].put(
                            blockMessage.blockHash,
                            blockMessage,
-                           Seq.empty
+                           transforms
                          )
                      casper <- MultiParentCasper.hashSetCasper[F](
                                 validatorId,
@@ -585,12 +590,19 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                  for {
                    _            <- Log[F].info("Valid ApprovedBlock received!")
                    blockMessage = b.candidate.flatMap(_.block).get
+                   dag          <- BlockDagStorage[F].getRepresentation
+                   effects <- ExecEngineUtil.effectsForBlock[F](
+                               blockMessage,
+                               dag,
+                               (_: BlockMetadata) => Seq.empty[TransformEntry].pure[F]
+                             )
+                   (_, transforms) = effects
                    _ <- BlockStore[F].put(
                          blockMessage.blockHash,
                          blockMessage,
-                         Seq.empty
+                         transforms
                        )
-                   _ <- LastApprovedBlock[F].set(b)
+                   _ <- LastApprovedBlock[F].set(ApprovedBlockWithTransforms(b, transforms))
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 validatorId,
