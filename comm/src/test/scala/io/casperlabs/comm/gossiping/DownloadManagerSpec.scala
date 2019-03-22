@@ -308,14 +308,15 @@ class DownloadManagerSpec
     }
 
     "cannot validate a block" should {
-      val block  = arbitrary[Block].sample.map(withoutDependencies).get
-      val remote = MockGossipService(Seq(block))
+      val dag    = genBlockDag.sample.get
+      val remote = MockGossipService(dag)
       def backend =
         MockBackend(_ => Task.raiseError(new java.lang.IllegalArgumentException("Nope.")))
 
       "not store the block" in TestFixture(backend, _ => remote) {
         case (manager, backend) =>
-          manager.scheduleDownload(summaryOf(block), source, relay = true) map { _ =>
+          val block = dag.head
+          manager.scheduleDownload(summaryOf(block), source, false) map { _ =>
             eventually {
               backend.validations should contain(block.blockHash)
               backend.blocks should not contain (block.blockHash)
@@ -326,7 +327,19 @@ class DownloadManagerSpec
           }
       }
 
-      "not download the dependant blocks" in (pending)
+      "not download the dependant blocks" in TestFixture(backend, _ => remote) {
+        case (manager, backend) =>
+          for {
+            _ <- manager.scheduleDownload(summaryOf(dag(0)), source, false)
+            _ <- manager.scheduleDownload(summaryOf(dag(1)), source, false)
+            _ <- Task.sleep(250.millis)
+          } yield {
+            eventually {
+              backend.validations should contain(dag(0).blockHash)
+              backend.validations should not contain (dag(1).blockHash)
+            }
+          }
+      }
     }
 
     "cannot connect to a node" should {
