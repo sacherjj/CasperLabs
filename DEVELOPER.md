@@ -285,13 +285,6 @@ Once the above prerequistes are installed for your environment, you are ready to
 
 ### How to build components
 
-#### Build proto definitions:
-
-This is required only when the `ipc.proto` file changes (but this is true when you run it for the first time).
-  1. Go to Execution Engine root directory. This is `execution-engine` directory in the node's root dir.
-  2. Go to comm project directory (`cd comm`).
-  3. Run: `cargo build --bin casperlabs-engine-grpc-server`
-
 #### Build Wasm contracts:
 Contracts are in a separate github repo: https://github.com/CasperLabs/contract-examples.
 Clone this locally.
@@ -318,7 +311,8 @@ If make fails, contract can be manually built:
 #### Building Execution Engine:
 
   1. Go to Execution Engine root directory. This is `execution-engine` directory in the node's root dir.
-  2. Run `cargo build`
+  2. Go to comm project directory (`cd comm`)
+  3. Run `cargo build`
 
 ### Running components
 
