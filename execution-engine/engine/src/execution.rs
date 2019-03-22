@@ -912,6 +912,8 @@ where
     };
 
     let result = instance.invoke_export("call", &[], &mut runtime);
+    // Update rng after running, so it is remembered in the main runtime (prevents repeating URefs)
+    current_runtime.rng = runtime.rng;
 
     match result {
         Ok(_) => Ok(runtime.result),
