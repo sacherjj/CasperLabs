@@ -171,3 +171,66 @@ impl fmt::Display for Transform {
         write!(f, "{:?}", self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::transform::{Error, Transform};
+    use common::value::{U128, U256, U512};
+
+    #[test]
+    fn i32_overflow() {
+        let max = std::i32::MAX;
+        let min = std::i32::MIN;
+
+        let apply_overflow = Transform::AddInt32(1).apply(max.into());
+        let apply_underflow = Transform::AddInt32(-1).apply(min.into());
+
+        let transform_overflow = Transform::AddInt32(max) + Transform::AddInt32(1);
+        let transform_underflow = Transform::AddInt32(min) + Transform::AddInt32(-1);
+
+        assert_eq!(apply_overflow, Err(Error::Overflow));
+        assert_eq!(apply_underflow, Err(Error::Overflow));
+
+        assert_eq!(transform_overflow, Transform::Failure(Error::Overflow));
+        assert_eq!(transform_underflow, Transform::Failure(Error::Overflow));
+    }
+
+    macro_rules! uint_overflow_test {
+        ($type:ident, $variant:ident) => {
+            let max = $type::MAX;
+            let min = $type::zero();
+            let one = $type::one();
+
+            let apply_overflow = Transform::AddInt32(1).apply(max.into());
+            let apply_overflow_uint = Transform::$variant(one).apply(max.into());
+            let apply_underflow = Transform::AddInt32(-1).apply(min.into());
+
+            let transform_overflow = Transform::$variant(max) + Transform::AddInt32(1);
+            let transform_overflow_uint = Transform::$variant(max) + Transform::$variant(one);
+            let transform_underflow = Transform::$variant(min) + Transform::AddInt32(-1);
+
+            assert_eq!(apply_overflow, Err(Error::Overflow));
+            assert_eq!(apply_overflow_uint, Err(Error::Overflow));
+            assert_eq!(apply_underflow, Err(Error::Overflow));
+
+            assert_eq!(transform_overflow, Transform::Failure(Error::Overflow));
+            assert_eq!(transform_overflow_uint, Transform::Failure(Error::Overflow));
+            assert_eq!(transform_underflow, Transform::Failure(Error::Overflow));
+        };
+    }
+
+    #[test]
+    fn u128_overflow() {
+        uint_overflow_test!(U128, AddUInt128);
+    }
+
+    #[test]
+    fn u256_overflow() {
+        uint_overflow_test!(U256, AddUInt256);
+    }
+
+    #[test]
+    fn u512_overflow() {
+        uint_overflow_test!(U512, AddUInt512);
+    }
+}
