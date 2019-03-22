@@ -13,8 +13,10 @@ import scala.language.higherKinds
 trait BlockStore[F[_]] {
   import BlockStore.BlockHash
 
-  def put(blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
-    put((blockMsgWithTransform.getBlockMessage.blockHash, blockMsgWithTransform))
+  def put(blockMsgWithTransform: BlockMsgWithTransform)(
+      implicit applicative: Applicative[F]): F[Unit] =
+    blockMsgWithTransform.blockMessage.fold(().pure[F])(b =>
+      put((b.blockHash, blockMsgWithTransform)))
 
   def put(
       blockHash: BlockHash,
