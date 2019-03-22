@@ -17,26 +17,27 @@ object KademliaNodeDiscovery {
       defaultTimeout: FiniteDuration
   )(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
     for {
-      knd <- new KademliaNodeDiscovery[F](id, defaultTimeout).pure[F]
-      _   <- init.fold(().pure[F])(p => knd.addNode(p))
+      table <- PeerTable(id)
+      knd   <- new KademliaNodeDiscovery[F](id, defaultTimeout, table).pure[F]
+      _     <- init.fold(().pure[F])(p => knd.addNode(p))
     } yield knd
 
 }
 
 private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Metrics: KademliaRPC](
     id: NodeIdentifier,
-    timeout: FiniteDuration
+    timeout: FiniteDuration,
+    table: PeerTable[F]
 ) extends NodeDiscovery[F] {
-
-  private val table = PeerTable(id)
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
   // TODO inline usage
   private[discovery] def addNode(peer: PeerNode): F[Unit] =
     for {
-      _ <- table.updateLastSeen[F](peer)
-      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
+      _     <- table.updateLastSeen(peer)
+      peers <- table.peers
+      _     <- Metrics[F].setGauge("peers", peers.length.toLong)
     } yield ()
 
   private def pingHandler(peer: PeerNode): F[Unit] =
@@ -44,7 +45,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Met
 
   private def lookupHandler(peer: PeerNode, id: NodeIdentifier): F[Seq[PeerNode]] =
     for {
-      peers <- Sync[F].delay(table.lookup(id))
+      peers <- table.lookup(id)
       _     <- Metrics[F].incrementCounter("handle.lookup")
       _     <- addNode(peer)
     } yield peers
@@ -73,9 +74,10 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Met
     * 10 to avoid making too many unproductive networking calls.
     */
   private def findMorePeers(limit: Int): F[Seq[PeerNode]] = {
-    val dists = table.sparseness().toArray
-
-    def find(peerSet: Set[PeerNode], potentials: Set[PeerNode], i: Int): F[Seq[PeerNode]] =
+    def find(dists: Array[Int],
+             peerSet: Set[PeerNode],
+             potentials: Set[PeerNode],
+             i: Int): F[Seq[PeerNode]] =
       if (peerSet.nonEmpty && potentials.size < limit && i < dists.length) {
         val dist = dists(i)
         /*
@@ -87,23 +89,32 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Met
         val byteIndex    = dist / 8
         val differentBit = 1 << (dist % 8)
         target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
-        KademliaRPC[F]
-          .lookup(NodeIdentifier(target), peerSet.head)
-          .map { results =>
-            potentials ++ results.filter(
-              r =>
-                !potentials.contains(r)
-                  && r.id.key != id.key
-                  && table.find(r.id).isEmpty
-            )
-          } >>= (find(peerSet.tail, _, i + 1))
+
+        for {
+          results <- KademliaRPC[F]
+                      .lookup(NodeIdentifier(target), peerSet.head)
+          newPotentials <- Traverse[List]
+                            .traverse(results.toList)(r => table.find(r.id))
+                            .map { maybeNodes =>
+                              val existing = maybeNodes.flatten.toSet
+                              potentials ++ results
+                                .filter(
+                                  r =>
+                                    !potentials.contains(r)
+                                      && r.id.key != id.key && !existing(r))
+                            }
+          res <- find(dists, peerSet.tail, newPotentials, i + 1)
+        } yield res
       } else {
         potentials.toSeq.pure[F]
       }
 
-    find(table.peers.toSet, Set(), 0)
+    for {
+      dists <- table.sparseness()
+      peers <- table.peers
+      res   <- find(dists.toArray, peers.toSet, Set.empty, 0)
+    } yield res
   }
 
-  def peers: F[Seq[PeerNode]] = Sync[F].delay(table.peers)
-
+  override def peers: F[Seq[PeerNode]] = table.peers
 }
