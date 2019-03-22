@@ -42,8 +42,9 @@ class DownloadManagerSpec
 
   "DownloadManager" when {
     "scheduled to download a section of the DAG" should {
-      val dag    = genBlockDag.sample.get
-      val remote = MockGossipService(dag)
+      val dag      = genBlockDag.sample.get
+      val blockMap = toBlockMap(dag)
+      val remote   = MockGossipService(dag)
 
       def scheduleAll(manager: DownloadManager[Task]): Task[Unit] =
         // Add them in the natural topological order they were generated with.
@@ -66,7 +67,32 @@ class DownloadManagerSpec
           }
       }
 
-      "download blocks in topological order" in (pending)
+      "download blocks in topological order" in TestFixture(
+        remote = _ =>
+          MockGossipService(
+            dag,
+            // Delay just the genesis block a little so we can schedule everything before the first download finishes.
+            regetter = _ flatMap {
+              case Some(block) if block == dag.head =>
+                Task.pure(Some(block)).delayResult(250.millis)
+              case other => Task.pure(other)
+            }
+          ),
+        maxParallelDownloads = consensusConfig.dagSize
+      ) {
+        case (manager, backend) =>
+          scheduleAll(manager) map { _ =>
+            backend.blocks shouldBe empty // So we know it hasn't done them immedately durign the scheduling.
+            awaitAll(backend)
+            // All parents should be stored before their children.
+            Inspectors.forAll(backend.blocks.zipWithIndex) {
+              case (blockHash, idx) =>
+                val followed = backend.blocks.drop(idx + 1).toSet
+                val deps     = dependenciesOf(blockMap(blockHash)).toSet
+                followed intersect deps shouldBe empty
+            }
+          }
+      }
 
       "download siblings in parallel" in (pending)
       "not exceed the limit on parallelism" in (pending)
@@ -315,6 +341,9 @@ object DownloadManagerSpec {
   def withoutDependencies(block: Block): Block =
     block.withHeader(block.getHeader.copy(parentHashes = Seq.empty, justifications = Seq.empty))
 
+  def toBlockMap(blocks: Seq[Block]) =
+    blocks.groupBy(_.blockHash).mapValues(_.head)
+
   type TestArgs = (DownloadManager[Task], MockBackend)
 
   object TestFixture {
@@ -383,7 +412,7 @@ object DownloadManagerSpec {
         rechunker: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity,
         regetter: Task[Option[Block]] => Task[Option[Block]] = identity
     ) = Task.now {
-      val blockMap = blocks.groupBy(_.blockHash).mapValues(_.head)
+      val blockMap = toBlockMap(blocks)
       new GossipServiceServer[Task](
         getBlock = hash => regetter(Task.delay(blockMap.get(hash))),
         getBlockSummary = hash => ???,
