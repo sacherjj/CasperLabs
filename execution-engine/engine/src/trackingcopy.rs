@@ -74,6 +74,9 @@ impl<R: DbReader> TrackingCopy<R> {
             Some(curr) => {
                 let t = match v {
                     Value::Int32(i) => Transform::AddInt32(i),
+                    Value::UInt128(i) => Transform::AddUInt128(i),
+                    Value::UInt256(i) => Transform::AddUInt256(i),
+                    Value::UInt512(i) => Transform::AddUInt512(i),
                     Value::NamedKey(n, k) => {
                         let mut map = BTreeMap::new();
                         map.insert(n, k);
@@ -81,7 +84,7 @@ impl<R: DbReader> TrackingCopy<R> {
                     }
                     other => {
                         return Ok(AddResult::TypeMismatch(TypeMismatch::new(
-                            "Int32 or NamedKey".to_string(),
+                            "Int32 or UInt* or NamedKey".to_string(),
                             other.type_string(),
                         )))
                     }
