@@ -245,9 +245,37 @@ class DownloadManagerSpec
       }
     }
 
-    "fails to download a block for any reason" should {
-      "carry on downloading other blocks from other nodes" in (pending)
-      "try to download the block from a different source" in (pending)
+    "fails to download a block from the first source" should {
+      val block = arbitrary[Block].map(withoutDependencies(_)).sample.get
+      val nodeA = arbitrary[Node].sample.get
+      val nodeB = arbitrary[Node].sample.get
+
+      val remote = (node: Node) =>
+        node match {
+          case `nodeA` =>
+            MockGossipService(
+              Seq(block),
+              regetter = _.delayResult(100.millis) *> Task.raiseError(
+                new Exception("Node A is dying!")
+              )
+            )
+          case _ => MockGossipService(Seq(block))
+        }
+
+      "try to download the block from a different source" in TestFixture(remote = remote) {
+        case (manager, backend) =>
+          for {
+            _ <- manager.scheduleDownload(summaryOf(block), nodeA, false)
+            _ <- manager.scheduleDownload(summaryOf(block), nodeB, false)
+          } yield {
+            eventually {
+              Inspectors.forExactly(1, log.causes) {
+                _.getMessage shouldBe "Node A is dying!"
+              }
+              backend.blocks should contain(block.blockHash)
+            }
+          }
+      }
     }
 
     "downloaded a valid block" should {
