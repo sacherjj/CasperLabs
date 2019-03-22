@@ -173,9 +173,15 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
       _ <- blockDagStorage.insert(genesisBlock)
       _ <- blockDagStorage.insert(secondBlock)
       casperEffect <- NoOpsCasperEffect[Task](
-                       HashMap[BlockHash, BlockMessage](
-                         (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-                         (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+                       HashMap[BlockHash, BlockMsgWithTransform](
+                         (
+                           ProtoUtil.stringToByteString(genesisHashString),
+                           BlockMsgWithTransform(Some(genesisBlock), Seq.empty)
+                         ),
+                         (
+                           ProtoUtil.stringToByteString(secondHashString),
+                           BlockMsgWithTransform(Some(secondBlock), Seq.empty)
+                         )
                        )
                      )(Sync[Task], blockStore, blockDagStorage)
       logEff             = new LogStub[Task]()
@@ -190,9 +196,15 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
     for {
       casperEffect <- NoOpsCasperEffect(
-                       HashMap[BlockHash, BlockMessage](
-                         (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-                         (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+                       HashMap[BlockHash, BlockMsgWithTransform](
+                         (
+                           ProtoUtil.stringToByteString(genesisHashString),
+                           BlockMsgWithTransform(Some(genesisBlock), Seq.empty)
+                         ),
+                         (
+                           ProtoUtil.stringToByteString(secondHashString),
+                           BlockMsgWithTransform(Some(secondBlock), Seq.empty)
+                         )
                        )
                      )(Sync[Task], blockStore, blockDagStorage)
       logEff             = new LogStub[Task]()

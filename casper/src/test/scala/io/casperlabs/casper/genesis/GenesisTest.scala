@@ -14,7 +14,7 @@ import io.casperlabs.casper.helper.{
   BlockUtil,
   HashSetCasperTestNode
 }
-import io.casperlabs.casper.protocol.{BlockMessage, Bond}
+import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform, Bond}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.codec.Base16
@@ -172,8 +172,9 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
           implicit val executionEngineServiceEff = executionEngineService
           for {
             genesis <- fromBondsFile(genesisPath)(executionEngineService, log, time)
-            _       <- BlockStore[Task].put(genesis.blockHash, genesis)
-            dag     <- blockDagStorage.getRepresentation
+            _ <- BlockStore[Task]
+                  .put(genesis.blockHash, genesis, Seq.empty)
+            dag <- blockDagStorage.getRepresentation
             // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
             maybePostGenesisStateHash <- BlockGenerator
                                           .validateBlockCheckpoint[Task](

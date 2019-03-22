@@ -2,6 +2,7 @@ package io.casperlabs.models
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
+import io.casperlabs.ipc._
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen.listOfN
 import org.scalacheck.{Arbitrary, Gen}
@@ -14,13 +15,20 @@ object blockImplicits {
 
   implicit val arbitraryHash: Arbitrary[ByteString] = Arbitrary(blockHashGen)
 
+  val transform: Gen[TransformEntry] = for {
+    bs        <- arbitrary[ByteString]
+    key       = Key(Key.KeyInstance.Hash(KeyHash(bs)))
+    transform = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
+  } yield TransformEntry(Some(key), Some(transform))
+  implicit val arbitraryTransformEntry: Arbitrary[TransformEntry] = Arbitrary(transform)
+
   val justificationGen: Gen[Justification] = for {
     latestBlockHash <- arbitrary[ByteString]
   } yield Justification().withLatestBlockHash(latestBlockHash)
 
   implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
 
-  val blockElementGen: Gen[BlockMessage] =
+  val blockElementGen: Gen[BlockMsgWithTransform] =
     for {
       hash            <- arbitrary[ByteString]
       validator       <- arbitrary[ByteString]
@@ -28,8 +36,8 @@ object blockImplicits {
       timestamp       <- arbitrary[Long]
       parentsHashList <- arbitrary[Seq[ByteString]]
       justifications  <- arbitrary[Seq[Justification]]
-    } yield
-      BlockMessage(blockHash = hash)
+      transform       <- arbitrary[Seq[TransformEntry]]
+      block = BlockMessage(blockHash = hash)
         .withHeader(
           Header()
             .withParentsHashList(parentsHashList)
@@ -37,24 +45,27 @@ object blockImplicits {
             .withTimestamp(timestamp)
         )
         .withSender(validator)
+    } yield BlockMsgWithTransform(Some(block), transform)
 
-  val blockElementsGen: Gen[List[BlockMessage]] =
+  val blockElementsGen: Gen[List[BlockMsgWithTransform]] =
     Gen.listOf(blockElementGen)
 
-  val blockBatchesGen: Gen[List[List[BlockMessage]]] =
+  val blockBatchesGen: Gen[List[List[BlockMsgWithTransform]]] =
     Gen.listOf(blockElementsGen)
 
-  def blockElementsWithParentsGen: Gen[List[BlockMessage]] =
+  def blockElementsWithParentsGen: Gen[List[BlockMsgWithTransform]] =
     Gen.sized { size =>
       (0 until size).foldLeft(Gen.listOfN(0, blockElementGen)) {
         case (gen, _) =>
           for {
-            blocks       <- gen
-            b            <- blockElementGen
-            parents      <- Gen.someOf(blocks)
-            parentHashes = parents.map(_.blockHash)
-            newBlock     = b.withHeader(b.header.get.withParentsHashList(parentHashes))
-          } yield newBlock :: blocks
+            blocks                                    <- gen
+            blockMsgWithTransform                     <- blockElementGen
+            BlockMsgWithTransform(Some(b), transform) = blockMsgWithTransform
+            parents                                   <- Gen.someOf(blocks)
+            parentHashes                              = parents.map(_.getBlockMessage.blockHash)
+            newBlock                                  = b.withHeader(b.header.get.withParentsHashList(parentHashes))
+            newBlockWithTransform                     = BlockMsgWithTransform(Some(newBlock), transform)
+          } yield newBlockWithTransform :: blocks
       }
     }
 

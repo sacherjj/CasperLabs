@@ -251,7 +251,7 @@ class ValidateTest
         val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
         val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
 
-        blockStore.put(hash, block) *> block.pure[Task]
+        blockStore.put(hash, block, Seq.empty) *> block.pure[Task]
       }
 
       for {

@@ -18,7 +18,7 @@ import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform}
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.catscontrib.ski._

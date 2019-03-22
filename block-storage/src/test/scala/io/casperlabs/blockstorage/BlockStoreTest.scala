@@ -6,7 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.InMemBlockStore.emptyMapRef
-import io.casperlabs.casper.protocol.{BlockMessage, Header}
+import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform, Header}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
@@ -46,7 +46,7 @@ trait BlockStoreTest
         for {
           _ <- items.traverse_(store.put)
           _ <- items.traverse[Task, Assertion] { block =>
-                store.get(block.blockHash).map(_ shouldBe Some(block))
+                store.get(block.getBlockMessage.blockHash).map(_ shouldBe Some(block))
               }
           result <- store.find(_ => true).map(_.size shouldEqual items.size)
         } yield result
@@ -61,10 +61,12 @@ trait BlockStoreTest
         for {
           _ <- items.traverse_(store.put)
           _ <- items.traverse[Task, Assertion] { block =>
-                store.find(_ == ByteString.copyFrom(block.blockHash.toByteArray)).map { w =>
-                  w should have size 1
-                  w.head._2 shouldBe block
-                }
+                store
+                  .find(_ == ByteString.copyFrom(block.getBlockMessage.blockHash.toByteArray))
+                  .map { w =>
+                    w should have size 1
+                    w.head._2 shouldBe block
+                  }
               }
           result <- store.find(_ => true).map(_.size shouldEqual items.size)
         } yield result
@@ -75,8 +77,14 @@ trait BlockStoreTest
   it should "overwrite existing value" in
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
       withStore { store =>
-        val items = blockStoreElements.map { block =>
-          (block.blockHash, block, toBlockMessage(block.blockHash, 200L, 20000L))
+        val items = blockStoreElements.map {
+          case BlockMsgWithTransform(Some(block), transform) =>
+            val newBlock = toBlockMessage(block.blockHash, 200L, 20000L)
+            (
+              block.blockHash,
+              BlockMsgWithTransform(Some(block), transform),
+              BlockMsgWithTransform(Some(newBlock), transform)
+            )
         }
         for {
           _ <- items.traverse_[Task, Unit] { case (k, v1, _) => store.put(k, v1) }
@@ -96,7 +104,7 @@ trait BlockStoreTest
     withStore { store =>
       val exception = new RuntimeException("msg")
 
-      def elem: (BlockHash, BlockMessage) =
+      def elem: (BlockHash, BlockMsgWithTransform) =
         throw exception
 
       for {
@@ -203,8 +211,9 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
           _           <- blockStoreElements.traverse_[Task, Unit](firstStore.put)
           _           <- firstStore.close()
           secondStore <- createBlockStore(blockStoreDataDir)
-          _ <- blockStoreElements.traverse[Task, Assertion] { block =>
-                secondStore.get(block.blockHash).map(_ shouldBe Some(block))
+          _ <- blockStoreElements.traverse[Task, Assertion] {
+                case b @ BlockMsgWithTransform(Some(block), _) =>
+                  secondStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
           result <- secondStore.find(_ => true).map(_.size shouldEqual blockStoreElements.size)
           _      <- secondStore.close()
@@ -222,14 +231,16 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
           _          <- firstHalf.traverse_[Task, Unit](firstStore.put)
           _          <- firstStore.checkpoint()
           _          <- secondHalf.traverse_[Task, Unit](firstStore.put)
-          _ <- blockStoreElements.traverse[Task, Assertion] { block =>
-                firstStore.get(block.blockHash).map(_ shouldBe Some(block))
+          _ <- blockStoreElements.traverse[Task, Assertion] {
+                case b @ BlockMsgWithTransform(Some(block), _) =>
+                  firstStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
           _           <- firstStore.find(_ => true).map(_.size shouldEqual blockStoreElements.size)
           _           <- firstStore.close()
           secondStore <- createBlockStore(blockStoreDataDir)
-          _ <- blockStoreElements.traverse[Task, Assertion] { block =>
-                secondStore.get(block.blockHash).map(_ shouldBe Some(block))
+          _ <- blockStoreElements.traverse[Task, Assertion] {
+                case b @ BlockMsgWithTransform(Some(block), _) =>
+                  secondStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
           result <- secondStore.find(_ => true).map(_.size shouldEqual blockStoreElements.size)
           _      <- secondStore.close()
@@ -249,14 +260,16 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                   blockStoreElements
                     .traverse_[Task, Unit](firstStore.put) *> firstStore.checkpoint()
               )
-          _ <- blocks.traverse[Task, Assertion] { block =>
-                firstStore.get(block.blockHash).map(_ shouldBe Some(block))
+          _ <- blocks.traverse[Task, Assertion] {
+                case b @ BlockMsgWithTransform(Some(block), _) =>
+                  firstStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
           _           <- firstStore.find(_ => true).map(_.size shouldEqual blocks.size)
           _           <- firstStore.close()
           secondStore <- createBlockStore(blockStoreDataDir)
-          _ <- blocks.traverse[Task, Assertion] { block =>
-                secondStore.get(block.blockHash).map(_ shouldBe Some(block))
+          _ <- blocks.traverse[Task, Assertion] {
+                case b @ BlockMsgWithTransform(Some(block), _) =>
+                  secondStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
           result <- secondStore.find(_ => true).map(_.size shouldEqual blocks.size)
           _      <- secondStore.close()

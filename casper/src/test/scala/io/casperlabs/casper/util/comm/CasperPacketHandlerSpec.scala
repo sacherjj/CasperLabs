@@ -91,7 +91,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val metrics = new MetricsNOP[Task]
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
+    implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMsgWithTransform]](Map.empty)
     implicit val blockStore = InMemBlockStore.create[Task]
     implicit val blockDagStorage = InMemBlockDagStorage
       .create[Task]
@@ -359,7 +359,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           BlockRequest(Base16.encode(genesis.blockHash.toByteArray), genesis.blockHash)
         val requestPacket = Packet(transport.BlockRequest.id, blockRequest.toByteString)
         val test = for {
-          _     <- blockStore.put(genesis.blockHash, genesis)
+          _     <- blockStore.put(genesis.blockHash, genesis, Seq.empty)
           _     <- casperPacketHandler.handle(local)(requestPacket)
           head  = transportLayer.requests.head
           block = packet(local, transport.BlockMessage, genesis.toByteString)

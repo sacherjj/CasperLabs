@@ -8,7 +8,7 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
-import io.casperlabs.casper.protocol.{BlockMessage, Bond}
+import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform, Bond}
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.{Log, Time}
@@ -72,7 +72,7 @@ class ManyValidatorsTest
       dag                       <- newIndexedBlockDagStorage.getRepresentation
       tips                      <- Estimator.tips[Task](dag, genesis.blockHash)(Monad[Task], blockStore)
       casperEffect <- NoOpsCasperEffect[Task](
-                       HashMap.empty[BlockHash, BlockMessage],
+                       HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips.toIndexedSeq
                      )(Sync[Task], blockStore, newIndexedBlockDagStorage)
       logEff             = new LogStub[Task]

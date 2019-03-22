@@ -32,7 +32,8 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: Log](
+  def updateChainWithBlockStateUpdate[
+      F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: Log](
       id: Int,
       genesis: BlockMessage
   ): F[BlockMessage] =
@@ -73,11 +74,12 @@ object BlockGenerator {
     val updatedBlockBody =
       b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
-    BlockStore[F].put(b.blockHash, updatedBlock) *>
+    BlockStore[F].put(b.blockHash, updatedBlock, Seq.empty) *>
       IndexedBlockDagStorage[F].inject(id, updatedBlock)
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Log: ExecutionEngineService](
+  private[casper] def computeBlockCheckpointFromDeploys[
+      F[_]: Sync: BlockStore: Log: ExecutionEngineService](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -227,6 +229,7 @@ trait BlockGenerator {
         shardId = shardId
       )
       modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(block)
-      _             <- BlockStore[F].put(serializedBlockHash, modifiedBlock)
+      _ <- BlockStore[F]
+            .put(serializedBlockHash, modifiedBlock, Seq.empty)
     } yield modifiedBlock
 }

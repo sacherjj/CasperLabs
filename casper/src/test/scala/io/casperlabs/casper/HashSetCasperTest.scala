@@ -208,7 +208,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _              = logEff.warns.count(_.contains("because block signature")) should be(1)
       _              <- node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>
-                 blockStore.get(block.blockHash) shouldBeF None
+                 blockStore.getBlockMessage(block.blockHash) shouldBeF None
                }
     } yield result
   }
@@ -261,7 +261,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                    = exactly(1, logEff.warns) should include("Ignoring block")
       _                    <- node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>
-                 blockStore.get(signedBlock.blockHash) shouldBeF None
+                 blockStore.getBlockMessage(signedBlock.blockHash) shouldBeF None
                }
     } yield result
   }
@@ -278,7 +278,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                    <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
-              blockStore.get(signedBlock.blockHash) shouldBeF Some(signedBlock)
+              blockStore.getBlockMessage(signedBlock.blockHash) shouldBeF Some(signedBlock)
             }(nodes(0).metricEff, nodes(0).logEff)
           }
     } yield result
@@ -297,7 +297,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                          <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
-              blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(signedBlock1Prime)
+              blockStore.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
+                signedBlock1Prime
+              )
             }(nodes(0).metricEff, nodes(0).logEff)
           }
     } yield result
@@ -558,9 +560,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ = nodes.toList.traverse_[Effect, Assertion] { node =>
         validateBlockStore(node) { blockStore =>
           for {
-            _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-            _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-            result <- blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
+            _ <- blockStore.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+            _ <- blockStore.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+            result <- blockStore.getBlockMessage(signedBlock3.blockHash) shouldBeF Some(
+                       signedBlock3
+                     )
           } yield result
         }(nodes(0).metricEff, nodes(0).logEff)
       }
@@ -609,8 +613,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
               for {
-                _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-                result <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+                _ <- blockStore.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+                result <- blockStore.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(
+                           signedBlock2
+                         )
               } yield result
             }(nodes(0).metricEff, nodes(0).logEff)
           }
@@ -736,8 +742,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes(1).tearDownNode()
       _ <- validateBlockStore(nodes(1)) { blockStore =>
             for {
-              _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-              result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF None
+              _      <- blockStore.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+              result <- blockStore.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF None
             } yield result
           }(nodes(0).metricEff, nodes(0).logEff)
     } yield result
@@ -811,22 +817,26 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
       _ <- validateBlockStore(nodes(0)) { blockStore =>
             for {
-              _ <- blockStore.get(signedBlock1.blockHash) shouldBeF None
-              result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
+              _ <- blockStore.getBlockMessage(signedBlock1.blockHash) shouldBeF None
+              result <- blockStore.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
                          signedBlock1Prime
                        )
             } yield result
           }(nodes(0).metricEff, nodes(0).logEff)
       _ <- validateBlockStore(nodes(1)) { blockStore =>
             for {
-              _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-              result <- blockStore.get(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
+              _ <- blockStore.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+              result <- blockStore.getBlockMessage(signedBlock4.blockHash) shouldBeF Some(
+                         signedBlock4
+                       )
             } yield result
           }(nodes(1).metricEff, nodes(1).logEff)
       result <- validateBlockStore(nodes(2)) { blockStore =>
                  for {
-                   _ <- blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
-                   result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
+                   _ <- blockStore.getBlockMessage(signedBlock3.blockHash) shouldBeF Some(
+                         signedBlock3
+                       )
+                   result <- blockStore.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
                               signedBlock1Prime
                             )
                  } yield result

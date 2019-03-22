@@ -113,7 +113,7 @@ class HashSetCasperTestNode[F[_]](
 
   def initialize(): F[Unit] =
     // pre-population removed from internals of Casper
-    blockStore.put(genesis.blockHash, genesis) *>
+    blockStore.put(genesis.blockHash, genesis, Seq.empty) *>
       blockDagStorage.getRepresentation.flatMap { dag =>
         BlockGenerator
           .validateBlockCheckpoint[F](
