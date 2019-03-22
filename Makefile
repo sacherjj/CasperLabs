@@ -111,7 +111,11 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/target/debian)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
-	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:latest $(RELEASE)
+	if [ ! -z "${DRONE_BUILD_NUMBER}" ]; then \
+                docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:DRONE-${DRONE_BUILD_NUMBER} $(RELEASE) ; \
+        else \
+                docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:latest $(RELEASE) ; \
+        fi
 	rm -rf $(RELEASE)/Dockerfile
 	mkdir -p $(dir $@) && touch $@
 
