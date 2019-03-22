@@ -16,6 +16,8 @@ import scala.util.control.NonFatal
 
 object DownloadManagerImpl {
 
+  implicit val logSource: LogSource = LogSource(this.getClass)
+
   /** Interface to the local backend dependencies. */
   trait Backend[F[_]] {
     def hasBlock(blockHash: ByteString): F[Boolean]
@@ -80,6 +82,7 @@ object DownloadManagerImpl {
     } {
       case (isShutdown, workersRef, managerLoop, _) =>
         for {
+          _       <- Log[F].info("Shutting down the DownloadManager...")
           _       <- isShutdown.set(true)
           _       <- managerLoop.cancel.attempt
           workers <- workersRef.get
@@ -92,6 +95,9 @@ object DownloadManagerImpl {
   /** All dependencies that need to be downloaded before a block. */
   def dependencies(summary: BlockSummary): Seq[ByteString] =
     summary.getHeader.parentHashes ++ summary.getHeader.justifications.map(_.latestBlockHash)
+
+  def base16(blockHash: ByteString) =
+    Base16.encode(blockHash.toByteArray)
 }
 
 class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
@@ -238,7 +244,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
 
   // Just say which block hash to download, try all possible sources.
   private def download(blockHash: ByteString): F[Unit] = {
-    val id      = Base16.encode(blockHash.toByteArray)
+    val id      = base16(blockHash)
     val failure = signal.put(Signal.DownloadFailure(blockHash))
     val success = signal.put(Signal.DownloadSuccess(blockHash))
 
@@ -270,8 +276,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
           case None =>
             Log[F].error(
               s"Could not download block $id from any of the sources; tried ${tried.size}."
-            ) *>
-              failure
+            ) *> failure
         }
       }
     }

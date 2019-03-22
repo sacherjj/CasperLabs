@@ -25,7 +25,7 @@ class DownloadManagerSpec
   import DownloadManagerSpec._
   import Scheduler.Implicits.global
 
-  override implicit val patienceConfig = PatienceConfig(1.second, 100.millis)
+  override implicit val patienceConfig = PatienceConfig(5.second, 100.millis)
 
   // Collect log messages. Reset before each test.
   implicit val log = new LogStub[Task]()
@@ -36,16 +36,44 @@ class DownloadManagerSpec
   // Create a random Node so I don't have to repeat this in all tests.
   val source = arbitrary[Node].sample.get
 
+  // Don't have to create big blocks because it takes ages.
+  implicit val consensusConfig =
+    ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 50, maxPaymentCodeBytes = 10)
+
   "DownloadManager" when {
     "scheduled to download a section of the DAG" should {
-      "download blocks in topoligical order" in (pending)
+      val dag    = genBlockDag.sample.get
+      val remote = MockGossipService(dag)
+
+      def scheduleAll(manager: DownloadManager[Task]): Task[Unit] =
+        // Add them in the natural topological order they were generated with.
+        dag.toList.traverse { block =>
+          manager.scheduleDownload(summaryOf(block), source, relay = false)
+        } void
+
+      def awaitAll(backend: MockBackend): Unit = {
+        val blockHashes = dag.map(_.blockHash)
+        eventually {
+          backend.blocks should have size blockHashes.size.toLong
+          backend.blocks should contain theSameElementsAs blockHashes
+        }
+      }
+
+      "eventually download the full DAG" in TestFixture(remote = _ => remote) {
+        case (manager, backend) =>
+          scheduleAll(manager) map { _ =>
+            awaitAll(backend)
+          }
+      }
+
+      "download blocks in topological order" in (pending)
+
       "download siblings in parallel" in (pending)
-      "eventually download the full DAG" in (pending)
       "not exceed the limit on parallelism" in (pending)
     }
 
     "scheduled to download a block with missing dependencies" should {
-      val block = arbitrary[Block].suchThat(_.getHeader.parentHashes.nonEmpty).sample.get
+      val block = arbitrary[Block].retryUntil(_.getHeader.parentHashes.nonEmpty).sample.get
 
       "raise an error" in TestFixture(MockBackend(), _ => MockGossipService(Seq(block))) {
         case (manager, _) =>
@@ -95,7 +123,7 @@ class DownloadManagerSpec
           _                  <- release
           _                  <- Task.sleep(500.millis)
         } yield {
-          backend.summaries should not contain key(block.blockHash)
+          backend.summaries should not contain (block.blockHash)
           countIn should be > countOut
         }
 
@@ -141,15 +169,15 @@ class DownloadManagerSpec
       }
 
       "validate the block" in TestFixture(backend, _ => remote) {
-        check(_.validations should contain(block))
+        check(_.validations should contain(block.blockHash))
       }
 
       "store the block" in TestFixture(backend, _ => remote) {
-        check(_.blocks should contain value block)
+        check(_.blocks should contain(block.blockHash))
       }
 
       "store the block summary" in TestFixture(backend, _ => remote) {
-        check(_.summaries should contain value summaryOf(block))
+        check(_.summaries should contain(block.blockHash))
       }
 
       "gossip to other nodes" in (pending)
@@ -165,8 +193,8 @@ class DownloadManagerSpec
         case (manager, backend) =>
           manager.scheduleDownload(summaryOf(block), source, relay = true) map { _ =>
             eventually {
-              backend.validations should contain(block)
-              backend.blocks should not contain key(block.blockHash)
+              backend.validations should contain(block.blockHash)
+              backend.blocks should not contain (block.blockHash)
               Inspectors.forExactly(1, log.causes) {
                 _.getMessage shouldBe "Nope."
               }
@@ -308,30 +336,31 @@ object DownloadManagerSpec {
         test(manager, backend)
       }
 
-      runTest.runSyncUnsafe(5.seconds)
+      runTest.runSyncUnsafe(10.seconds)
     }
   }
 
   class MockBackend(validate: Block => Task[Unit] = _ => Task.unit)
       extends DownloadManagerImpl.Backend[Task] {
-    var validations = Vector.empty[Block]
-    var blocks      = Map.empty[ByteString, Block]
-    var summaries   = Map.empty[ByteString, BlockSummary]
+    // Record what we have been called with.
+    @volatile var validations = Vector.empty[ByteString]
+    @volatile var blocks      = Vector.empty[ByteString]
+    @volatile var summaries   = Vector.empty[ByteString]
 
     def hasBlock(blockHash: ByteString): Task[Boolean] =
       Task.now(blocks.contains(blockHash))
 
     def validateBlock(block: Block): Task[Unit] =
       Task.delay {
-        validations = validations :+ block
+        synchronized { validations = validations :+ block.blockHash }
       } *> validate(block)
 
     def storeBlock(block: Block): Task[Unit] = Task.delay {
-      blocks = blocks + (block.blockHash -> block)
+      synchronized { blocks = blocks :+ block.blockHash }
     }
 
     def storeBlockSummary(summary: BlockSummary): Task[Unit] = Task.delay {
-      summaries = summaries + (summary.blockHash -> summary)
+      synchronized { summaries = summaries :+ summary.blockHash }
     }
   }
   object MockBackend {
@@ -348,13 +377,15 @@ object DownloadManagerSpec {
         maxChunkSize = 100 * 1024
       )
     }
+
     def apply(
         blocks: Seq[Block] = Seq.empty,
-        rechunker: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity
+        rechunker: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity,
+        regetter: Task[Option[Block]] => Task[Option[Block]] = identity
     ) = Task.now {
       val blockMap = blocks.groupBy(_.blockHash).mapValues(_.head)
       new GossipServiceServer[Task](
-        getBlock = hash => Task.now(blockMap.get(hash)),
+        getBlock = hash => regetter(Task.delay(blockMap.get(hash))),
         getBlockSummary = hash => ???,
         maxChunkSize = 100 * 1024
       ) {
