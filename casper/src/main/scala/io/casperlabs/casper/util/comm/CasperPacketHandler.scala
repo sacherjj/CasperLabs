@@ -397,7 +397,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
       for {
         local      <- RPConfAsk[F].reader(_.local)
-        block      <- BlockStore[F].get(br.hash) // TODO: Refactor
+        block      <- BlockStore[F].getBlockMessage(br.hash) // TODO: Refactor
         serialized = block.map(_.toByteString)
         maybeMsg = serialized.map(
           serializedMessage => Blob(local, Packet(transport.BlockMessage.id, serializedMessage))

@@ -229,7 +229,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           //wait until casper is defined, with 1 minute timeout (indicating failure)
           possiblyCasper  <- Task.racePair(Task.sleep(1.minute), waitUtilCasperIsDefined)
           _               = assert(possiblyCasper.isRight)
-          blockO          <- blockStore.get(genesis.blockHash)
+          blockO          <- blockStore.getBlockMessage(genesis.blockHash)
           _               = assert(blockO.isDefined)
           _               = assert(blockO.contains(genesis))
           handlerInternal <- refCasper.get
@@ -241,7 +241,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           head              = transportLayer.requests.head
           _ = assert(
             ApprovedBlock
-              .parseFrom(head.msg.message.packet.get.content.toByteArray) == lastApprovedBlock.get
+              .parseFrom(head.msg.message.packet.get.content.toByteArray) == lastApprovedBlock.get.approvedBlock
           )
         } yield ()
 
@@ -288,7 +288,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           _                   <- casperPacketHandler.handle(local).apply(approvedPacket)
           casperO             <- MultiParentCasperRef[Task].get
           _                   = assert(casperO.isDefined)
-          blockO              <- blockStore.get(genesis.blockHash)
+          blockO              <- blockStore.getBlockMessage(genesis.blockHash)
           _                   = assert(blockO.isDefined)
           _                   = assert(blockO.contains(genesis))
           handlerInternal     <- refCasper.get
@@ -361,7 +361,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           BlockRequest(Base16.encode(genesis.blockHash.toByteArray), genesis.blockHash)
         val requestPacket = Packet(transport.BlockRequest.id, blockRequest.toByteString)
         val test = for {
-          _     <- blockStore.put(genesis.blockHash, genesis, Seq.empty)
+          _     <- blockStore.put(genesis.blockHash, genesis, transforms)
           _     <- casperPacketHandler.handle(local)(requestPacket)
           head  = transportLayer.requests.head
           block = packet(local, transport.BlockMessage, genesis.toByteString)

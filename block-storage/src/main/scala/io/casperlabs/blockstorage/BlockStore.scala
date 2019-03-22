@@ -58,8 +58,10 @@ object BlockStore {
     implicit val ms: Metrics.Source
     implicit val a: Apply[F]
 
-    abstract override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
-      m.incrementCounter("get") *> super.get(blockHash).timer("get-time")
+    abstract override def getBlockMessage(
+        blockHash: BlockHash
+    )(implicit applicative: Applicative[F]): F[Option[BlockMessage]] =
+      m.incrementCounter("getBlockMessage") *> super.getBlockMessage(blockHash).timer("get-time")
 
     abstract override def find(
         p: BlockHash => Boolean
