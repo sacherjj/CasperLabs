@@ -192,7 +192,7 @@ pipeline:
       branch: master
       event: tag
 
-    docker-publish:
+  docker-publish:
     <<: *buildenv
     commands: |
       echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
