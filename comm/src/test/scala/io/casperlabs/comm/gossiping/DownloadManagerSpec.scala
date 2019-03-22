@@ -7,6 +7,7 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.GossipError
 import io.casperlabs.shared.Log
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import java.util.concurrent.atomic.AtomicInteger
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.tail.Iterant
@@ -42,7 +43,13 @@ class DownloadManagerSpec
 
   "DownloadManager" when {
     "scheduled to download a section of the DAG" should {
-      val dag      = genBlockDag.sample.get
+      // Make sure the genesis has more than 1 child so we can download them in parallel. This is easy to check.
+      val dag = genBlockDag
+        .suchThat { blocks =>
+          (blocks(1).getHeader.parentHashes.toSet & blocks(2).getHeader.parentHashes.toSet).nonEmpty
+        }
+        .sample
+        .get
       val blockMap = toBlockMap(dag)
       val remote   = MockGossipService(dag)
 
@@ -94,8 +101,44 @@ class DownloadManagerSpec
           }
       }
 
-      "download siblings in parallel" in (pending)
-      "not exceed the limit on parallelism" in (pending)
+      def checkParallel(maxParallelDownloads: Int)(test: Int => Unit): Unit = {
+        val parallelNow = new AtomicInteger(0)
+        val parallelMax = new AtomicInteger(0)
+        TestFixture(
+          remote = _ =>
+            MockGossipService(
+              dag,
+              regetter = task => {
+                // Draw it out a little bit so it can start multiple downloads.
+                Task.delay(parallelNow.incrementAndGet()) *> task.delayResult(100.millis)
+              },
+              rechunker = _.map { chunk =>
+                parallelMax.set(math.max(parallelNow.get, parallelMax.get))
+                chunk
+              }
+            ),
+          backend = MockBackend(validate = _ => Task.delay(parallelNow.decrementAndGet()).void),
+          maxParallelDownloads = maxParallelDownloads
+        ) {
+          case (manager, backend) =>
+            scheduleAll(manager) map { _ =>
+              awaitAll(backend)
+              test(parallelMax.get)
+            }
+        }
+      }
+
+      "download blocks in parallel if possible" in {
+        checkParallel(maxParallelDownloads = consensusConfig.dagSize) {
+          _ should be > 1
+        }
+      }
+
+      "not exceed the limit on parallelism" in {
+        checkParallel(maxParallelDownloads = 1) {
+          _ shouldBe 1
+        }
+      }
     }
 
     "scheduled to download a block with missing dependencies" should {
