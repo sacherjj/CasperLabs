@@ -142,7 +142,7 @@ class DownloadManagerSpec
     }
 
     "scheduled to download a block with missing dependencies" should {
-      val block = arbitrary[Block].retryUntil(_.getHeader.parentHashes.nonEmpty).sample.get
+      val block = arbitrary[Block].suchThat(_.getHeader.parentHashes.nonEmpty).sample.get
 
       "raise an error" in TestFixture(MockBackend(), _ => MockGossipService(Seq(block))) {
         case (manager, _) =>
@@ -152,13 +152,25 @@ class DownloadManagerSpec
               fail(s"Expected scheduling to fail; got $other")
           }
       }
-
-      "accept it if the dependency has already been scheduled" in (pending)
     }
 
     "scheduled to download a block which already exists" should {
-      "skip the download" in (pending)
+      val block = arbitrary[Block].sample.get
+
+      "skip the download" in TestFixture() {
+        case (manager, backend) =>
+          for {
+            _ <- backend.storeBlock(block)
+            _ <- manager.scheduleDownload(summaryOf(block), source, false)
+            // Give it some time. Since we don't have the block remotely it would fail to download if it tried.
+            _ <- Task.sleep(250.millis)
+          } yield {
+            backend.blocks should have size 1
+            log.errors shouldBe empty
+          }
+      }
     }
+
     "scheduled to download a block which is already downloading" should {
       "skip the download" in (pending)
     }

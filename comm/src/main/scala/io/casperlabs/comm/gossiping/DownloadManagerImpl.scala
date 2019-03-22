@@ -144,16 +144,15 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
     signal.take.flatMap {
       case Signal.Download(summary, source, relay, scheduleResult) =>
         // At this point we should have already synced and only scheduled things to which we know how to get.
-        val start = ensureNoMissingDependencies(summary) flatMap { _ =>
-          // Check that we haven't downloaded it before.
+        val start =
           isDownloaded(summary.blockHash).ifM(
             Sync[F].unit,
-            add(summary, source, relay) flatMap { item =>
+            ensureNoMissingDependencies(summary) *>
+              add(summary, source, relay) >>= { item =>
               if (item.canStart) startWorker(item)
               else Sync[F].unit
             }
           )
-        }
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.
         start.attempt.flatMap(scheduleResult.complete(_)) *> run
 
