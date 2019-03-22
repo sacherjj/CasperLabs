@@ -4,7 +4,7 @@ use common::key::Key;
 use common::value::Value;
 use storage::gs::{DbReader, ExecutionEffect};
 use storage::op::Op;
-use storage::transform::{Transform, TypeMismatch};
+use storage::transform::{self, Transform, TypeMismatch};
 use utils::add;
 
 #[derive(Debug)]
@@ -25,6 +25,7 @@ pub enum AddResult {
     Success,
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
+    Overflow,
 }
 
 impl<R: DbReader> TrackingCopy<R> {
@@ -92,7 +93,8 @@ impl<R: DbReader> TrackingCopy<R> {
                         add(&mut self.fns, k, t);
                         Ok(AddResult::Success)
                     }
-                    Err(type_mismatch) => Ok(AddResult::TypeMismatch(type_mismatch)),
+                    Err(transform::Error::TypeMismatch(type_mismatch)) => Ok(AddResult::TypeMismatch(type_mismatch)),
+                    Err(transform::Error::Overflow) => Ok(AddResult::Overflow),
                 }
             }
         }

@@ -1,4 +1,4 @@
-use crate::transform::Transform;
+use crate::transform::{self, Transform};
 use common::bytesrepr::*;
 use common::key::Key;
 use common::value::Value;
@@ -100,8 +100,11 @@ impl History for InMemHist<Key, Value> {
                             Ok(new_value) => {
                                 base.insert(k, new_value);
                             }
-                            Err(type_mismatch) => {
+                            Err(transform::Error::TypeMismatch(type_mismatch)) => {
                                 return Ok(CommitResult::TypeMismatch(type_mismatch))
+                            }
+                            Err(transform::Error::Overflow) => {
+                                return Ok(CommitResult::Overflow)
                             }
                         },
                     }

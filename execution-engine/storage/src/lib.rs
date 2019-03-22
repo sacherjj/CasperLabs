@@ -1,4 +1,4 @@
-#![feature(never_type)]
+#![feature(never_type, result_map_or_else)]
 #[macro_use]
 extern crate failure;
 

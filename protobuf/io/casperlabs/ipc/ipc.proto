@@ -48,6 +48,7 @@ message CommitResponse {
         Key key_not_found = 3;
         TypeMismatch type_mismatch = 4;
         PostEffectsError failed_transform = 5;
+        AdditionOverflow overflow = 6;
     }
 }
 
@@ -136,6 +137,7 @@ message Transform {
         TransformWrite write = 3;
         TransformAddKeys add_keys = 4;
         TransformFailure failure = 5;
+        TransformAddBigInt add_big_int = 6;
     }
 }
  
@@ -143,14 +145,21 @@ message TransformIdentity {}
 message TransformAddInt32 {
     int32 value = 1;
 }
+message TransformAddBigInt {
+    RustBigInt value = 1;
+}
 message TransformAddKeys {
     repeated NamedKey value = 1;
 }
 message TransformWrite {
     Value value = 1;
 }
+message AdditionOverflow {}
 message TransformFailure {
-    TypeMismatch error = 1;
+    oneof failure_instance {
+        TypeMismatch type_mismatch = 1;
+        AdditionOverflow overflow = 2;
+     }
 }
  
 //Errors which may occur while interacting with global state
