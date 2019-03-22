@@ -172,7 +172,22 @@ class DownloadManagerSpec
     }
 
     "scheduled to download a block which is already downloading" should {
-      "skip the download" in (pending)
+      val block  = arbitrary[Block].sample.map(withoutDependencies(_)).get
+      val remote = MockGossipService(Seq(block), regetter = _.delayResult(100.millis))
+
+      "not download twice" in TestFixture(remote = _ => remote) {
+        case (manager, backend) =>
+          for {
+            _ <- manager.scheduleDownload(summaryOf(block), source, false)
+            _ <- manager.scheduleDownload(summaryOf(block), source, false)
+            _ = eventually {
+              backend.blocks should have size 1
+            }
+            _ <- Task.sleep(250.millis)
+          } yield {
+            backend.blocks should have size 1
+          }
+      }
     }
 
     "released as a resource" should {
