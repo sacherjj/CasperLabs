@@ -192,10 +192,41 @@ pipeline:
       branch: master
       event: tag
 
+    docker-publish:
+    <<: *buildenv
+    commands: |
+      echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+      if [ ! -z ${DRONE_TAG} ]; then
+        REF=${DRONE_TAG}
+      else
+        REF=${DRONE_BRANCH}
+      fi
+      docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:"$REF"
+      docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:"$REF"
+      docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:"$REF"
+      docker push casperlabs/node:"$REF"
+      docker push casperlabs/client:"$REF"
+      docker push casperlabs/execution-engine:"$REF"
+      if [ "${DRONE_BRANCH}" = "master" ]; then
+        docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:latest
+        docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:latest
+        docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:latest
+        docker push casperlabs/node:latest
+        docker push casperlabs/client:latest
+        docker push casperlabs/execution-engine:latest
+      fi
+      echo "done"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    secrets: [ docker_username, docker_password ]
+    when:
+      event: [ push, tag ]
+
   cleanup:
     <<: *sbtenv
     commands:
       - docker images --filter "dangling=true" -q --no-trunc | xargs --no-run-if-empty docker rmi -f
+      - docker images | grep "DRONE-${DRONE_BUILD_NUMBER}" | awk '{print $3}' | xargs --no-run-if-empty docker rmi -f
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     when:
