@@ -45,7 +45,7 @@ class DownloadManagerSpec
     "scheduled to download a section of the DAG" should {
       // Make sure the genesis has more than 1 child so we can download them in parallel. This is easy to check.
       val dag = genBlockDag
-        .suchThat { blocks =>
+        .retryUntil { blocks =>
           (blocks(1).getHeader.parentHashes.toSet & blocks(2).getHeader.parentHashes.toSet).nonEmpty
         }
         .sample
@@ -160,10 +160,9 @@ class DownloadManagerSpec
       "skip the download" in TestFixture() {
         case (manager, backend) =>
           for {
-            _ <- backend.storeBlock(block)
-            _ <- manager.scheduleDownload(summaryOf(block), source, false)
-            // Give it some time. Since we don't have the block remotely it would fail to download if it tried.
-            _ <- Task.sleep(250.millis)
+            _     <- backend.storeBlock(block)
+            watch <- manager.scheduleDownload(summaryOf(block), source, false)
+            _     <- watch
           } yield {
             backend.blocks should have size 1
             log.errors shouldBe empty
@@ -172,18 +171,19 @@ class DownloadManagerSpec
     }
 
     "scheduled to download a block which is already downloading" should {
-      val block  = arbitrary[Block].sample.map(withoutDependencies(_)).get
+      val block = arbitrary[Block].sample.map(withoutDependencies(_)).get
+      // Delay a little so it can start two downloads if it's buggy.
       val remote = MockGossipService(Seq(block), regetter = _.delayResult(100.millis))
 
       "not download twice" in TestFixture(remote = _ => remote) {
         case (manager, backend) =>
           for {
-            _ <- manager.scheduleDownload(summaryOf(block), source, false)
-            _ <- manager.scheduleDownload(summaryOf(block), source, false)
-            _ = eventually {
-              backend.blocks should have size 1
-            }
-            _ <- Task.sleep(250.millis)
+            // Schedule twice in a row, rapidly.
+            watch1 <- manager.scheduleDownload(summaryOf(block), source, false)
+            watch2 <- manager.scheduleDownload(summaryOf(block), source, false)
+            // Wait until both report they are complete.
+            _ <- watch1
+            _ <- watch2
           } yield {
             backend.blocks should have size 1
           }
@@ -194,17 +194,20 @@ class DownloadManagerSpec
       val block = arbitrary[Block].sample.map(withoutDependencies).get
 
       "cancel outstanding downloads" in {
-        // Return the chunks slowly so we can shut down the manager before it could store the data.
         var countIn  = 0
         var countOut = 0
         val remote =
-          MockGossipService(Seq(block), rechunker = _.mapEval { chunk =>
-            for {
-              _ <- Task.delay(countIn += 1)
-              _ <- Task.sleep(750.millis)
-              _ <- Task.delay(countOut += 1)
-            } yield chunk
-          })
+          MockGossipService(
+            Seq(block),
+            rechunker = _.mapEval { chunk =>
+              // Return the chunks slowly so we can shut down the manager before it could store the data.
+              for {
+                _ <- Task.delay(countIn += 1)
+                _ <- Task.sleep(750.millis)
+                _ <- Task.delay(countOut += 1)
+              } yield chunk
+            }
+          )
         val backend = MockBackend()
 
         val test = for {
@@ -330,14 +333,12 @@ class DownloadManagerSpec
       "not download the dependant blocks" in TestFixture(backend, _ => remote) {
         case (manager, backend) =>
           for {
-            _ <- manager.scheduleDownload(summaryOf(dag(0)), source, false)
-            _ <- manager.scheduleDownload(summaryOf(dag(1)), source, false)
-            _ <- Task.sleep(250.millis)
+            watch <- manager.scheduleDownload(summaryOf(dag(0)), source, false)
+            _     <- manager.scheduleDownload(summaryOf(dag(1)), source, false)
+            _     <- watch.attempt // Will fail with "Nope."
           } yield {
-            eventually {
-              backend.validations should contain(dag(0).blockHash)
-              backend.validations should not contain (dag(1).blockHash)
-            }
+            backend.validations should contain(dag(0).blockHash)
+            backend.validations should not contain (dag(1).blockHash)
           }
       }
     }
@@ -431,7 +432,7 @@ class DownloadManagerSpec
               case other =>
                 fail(s"Expected scheduling to fail; got $other")
             }
-            attempt2 shouldBe Right(())
+            attempt2.isRight shouldBe true
           }
       }
     }
