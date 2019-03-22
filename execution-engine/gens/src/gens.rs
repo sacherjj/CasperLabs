@@ -34,7 +34,8 @@ pub fn access_rights_arb() -> impl Strategy<Value = AccessRights> {
         Just(AccessRights::Add),
         Just(AccessRights::Write),
         Just(AccessRights::ReadAdd),
-        Just(AccessRights::ReadWrite)
+        Just(AccessRights::ReadWrite),
+        Just(AccessRights::AddWrite),
     ]
 }
 

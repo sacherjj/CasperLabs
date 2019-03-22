@@ -16,6 +16,7 @@ mod tests {
         assert_eq!(read == AccessRights::Read, true);
         assert_eq!(read < AccessRights::ReadAdd, true);
         assert_eq!(read < AccessRights::ReadWrite, true);
+        assert_eq!(read != AccessRights::AddWrite, true);
         assert_eq!(read != AccessRights::Add, true);
         assert_eq!(read != AccessRights::Write, true);
     }
@@ -26,6 +27,7 @@ mod tests {
         assert_eq!(add == AccessRights::Add, true);
         assert_eq!(add < AccessRights::ReadAdd, true);
         assert_eq!(add < AccessRights::ReadWrite, true);
+        assert_eq!(add < AccessRights::AddWrite, true);
         assert_eq!(add != AccessRights::Read, true);
         assert_eq!(add != AccessRights::Write, true);
     }
@@ -35,6 +37,7 @@ mod tests {
         let write = AccessRights::Write;
         assert_eq!(write == AccessRights::Write, true);
         assert_eq!(write < AccessRights::ReadWrite, true);
+        assert_eq!(write < AccessRights::AddWrite, true);
         assert_eq!(write != AccessRights::Read, true);
         assert_eq!(write != AccessRights::Add, true);
         assert_eq!(write != AccessRights::ReadAdd, true);

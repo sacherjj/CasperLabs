@@ -13,6 +13,7 @@ pub enum AccessRights {
     Add,
     ReadAdd,
     ReadWrite,
+    AddWrite,
 }
 
 use AccessRights::*;
@@ -79,6 +80,16 @@ impl PartialOrd for AccessRights {
             (ReadWrite, Read) => Some(Ordering::Greater),
             (Write, Add) => None,
             (Add, Write) => None,
+            (Read, AddWrite) => None,
+            (Add, AddWrite) => Some(Ordering::Less),
+            (Write, AddWrite) => Some(Ordering::Less),
+            (ReadAdd, AddWrite) => None,
+            (ReadWrite, AddWrite) => None,
+            (AddWrite, Read) => None,
+            (AddWrite, Add) => Some(Ordering::Greater),
+            (AddWrite, Write) => Some(Ordering::Greater),
+            (AddWrite, ReadAdd) => None,
+            (AddWrite, ReadWrite) => None,
             (Write, ReadWrite) => Some(Ordering::Less),
             (ReadWrite, Write) => Some(Ordering::Greater),
             (Add, ReadAdd) => Some(Ordering::Less),
@@ -206,6 +217,7 @@ impl ToBytes for AccessRights {
             AccessRights::Write => 4u8.to_bytes(),
             AccessRights::ReadAdd => 5u8.to_bytes(),
             AccessRights::ReadWrite => 6u8.to_bytes(),
+            AccessRights::AddWrite => 7u8.to_bytes(),
         }
     }
 }
@@ -220,6 +232,7 @@ impl FromBytes for AccessRights {
             4 => Ok(AccessRights::Write),
             5 => Ok(AccessRights::ReadAdd),
             6 => Ok(AccessRights::ReadWrite),
+            7 => Ok(AccessRights::AddWrite),
             _ => Err(Error::FormattingError),
         };
         access_rights.map(|rights| (rights, rest))
