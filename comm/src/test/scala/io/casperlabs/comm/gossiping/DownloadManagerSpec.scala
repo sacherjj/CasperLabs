@@ -19,14 +19,11 @@ import scala.concurrent.duration._
 class DownloadManagerSpec
     extends WordSpecLike
     with Matchers
-    with Eventually
     with BeforeAndAfterEach
     with ArbitraryConsensus {
 
   import DownloadManagerSpec._
   import Scheduler.Implicits.global
-
-  override implicit val patienceConfig = PatienceConfig(5.second, 100.millis)
 
   // Collect log messages. Reset before each test.
   implicit val log = new LogStub[Task]()
@@ -53,24 +50,22 @@ class DownloadManagerSpec
       val blockMap = toBlockMap(dag)
       val remote   = MockGossipService(dag)
 
-      def scheduleAll(manager: DownloadManager[Task]): Task[Unit] =
+      def scheduleAll(manager: DownloadManager[Task]): Task[List[Task[Unit]]] =
         // Add them in the natural topological order they were generated with.
         dag.toList.traverse { block =>
           manager.scheduleDownload(summaryOf(block), source, relay = false)
-        } void
-
-      def awaitAll(backend: MockBackend): Unit = {
-        val blockHashes = dag.map(_.blockHash)
-        eventually {
-          backend.blocks should have size blockHashes.size.toLong
-          backend.blocks should contain theSameElementsAs blockHashes
         }
-      }
+
+      def awaitAll(watches: List[Task[Unit]]): Task[Unit] =
+        watches.traverse(identity).void
 
       "eventually download the full DAG" in TestFixture(remote = _ => remote) {
         case (manager, backend) =>
-          scheduleAll(manager) map { _ =>
-            awaitAll(backend)
+          for {
+            ws <- scheduleAll(manager)
+            _  <- awaitAll(ws)
+          } yield {
+            backend.blocks should contain theSameElementsAs dag.map(_.blockHash)
           }
       }
 
@@ -88,9 +83,11 @@ class DownloadManagerSpec
         maxParallelDownloads = consensusConfig.dagSize
       ) {
         case (manager, backend) =>
-          scheduleAll(manager) map { _ =>
-            backend.blocks shouldBe empty // So we know it hasn't done them immedately durign the scheduling.
-            awaitAll(backend)
+          for {
+            watches <- scheduleAll(manager)
+            _       = backend.blocks shouldBe empty // So we know it hasn't done them immedately during the scheduling.
+            _       <- awaitAll(watches)
+          } yield {
             // All parents should be stored before their children.
             Inspectors.forAll(backend.blocks.zipWithIndex) {
               case (blockHash, idx) =>
@@ -120,9 +117,11 @@ class DownloadManagerSpec
           backend = MockBackend(validate = _ => Task.delay(parallelNow.decrementAndGet()).void),
           maxParallelDownloads = maxParallelDownloads
         ) {
-          case (manager, backend) =>
-            scheduleAll(manager) map { _ =>
-              awaitAll(backend)
+          case (manager, _) =>
+            for {
+              ws <- scheduleAll(manager)
+              _  <- awaitAll(ws)
+            } yield {
               test(parallelMax.get)
             }
         }
@@ -268,15 +267,15 @@ class DownloadManagerSpec
       "try to download the block from a different source" in TestFixture(remote = remote) {
         case (manager, backend) =>
           for {
-            _ <- manager.scheduleDownload(summaryOf(block), nodeA, false)
-            _ <- manager.scheduleDownload(summaryOf(block), nodeB, false)
+            w1 <- manager.scheduleDownload(summaryOf(block), nodeA, false)
+            w2 <- manager.scheduleDownload(summaryOf(block), nodeB, false)
+            // Both should be successful eventually.
+            _ <- w1
+            _ <- w2
           } yield {
-            eventually {
-              Inspectors.forExactly(1, log.causes) {
-                _.getMessage shouldBe "Node A is dying!"
-              }
-              backend.blocks should contain(block.blockHash)
-            }
+            log.causes should have size 1
+            log.causes.head.getMessage shouldBe "Node A is dying!"
+            backend.blocks should contain(block.blockHash)
           }
       }
     }
@@ -288,10 +287,11 @@ class DownloadManagerSpec
 
       def check(test: MockBackend => Unit): TestArgs => Task[Unit] = {
         case (manager, backend) =>
-          manager.scheduleDownload(summaryOf(block), source, relay = true).map { _ =>
-            eventually {
-              test(backend)
-            }
+          for {
+            w <- manager.scheduleDownload(summaryOf(block), source, relay = true)
+            _ <- w
+          } yield {
+            test(backend)
           }
       }
 
@@ -319,13 +319,14 @@ class DownloadManagerSpec
       "not store the block" in TestFixture(backend, _ => remote) {
         case (manager, backend) =>
           val block = dag.head
-          manager.scheduleDownload(summaryOf(block), source, false) map { _ =>
-            eventually {
-              backend.validations should contain(block.blockHash)
-              backend.blocks should not contain (block.blockHash)
-              Inspectors.forExactly(1, log.causes) {
-                _.getMessage shouldBe "Nope."
-              }
+          for {
+            w <- manager.scheduleDownload(summaryOf(block), source, false)
+            _ <- w.attempt
+          } yield {
+            backend.validations should contain(block.blockHash)
+            backend.blocks should not contain (block.blockHash)
+            Inspectors.forExactly(1, log.causes) {
+              _.getMessage shouldBe "Nope."
             }
           }
       }
@@ -333,9 +334,10 @@ class DownloadManagerSpec
       "not download the dependant blocks" in TestFixture(backend, _ => remote) {
         case (manager, backend) =>
           for {
-            watch <- manager.scheduleDownload(summaryOf(dag(0)), source, false)
-            _     <- manager.scheduleDownload(summaryOf(dag(1)), source, false)
-            _     <- watch.attempt // Will fail with "Nope."
+            w <- manager.scheduleDownload(summaryOf(dag(0)), source, false)
+            _ <- manager.scheduleDownload(summaryOf(dag(1)), source, false)
+            _ <- w.attempt
+            _ <- Task.sleep(250.millis) // 2nd should never be attempted.
           } yield {
             backend.validations should contain(dag(0).blockHash)
             backend.validations should not contain (dag(1).blockHash)
@@ -350,14 +352,16 @@ class DownloadManagerSpec
         remote = _ => Task.raiseError(io.grpc.Status.UNAVAILABLE.asRuntimeException())
       ) {
         case (manager, _) =>
-          def check(i: Int) = manager.scheduleDownload(summaryOf(block), source, false) map { _ =>
-            eventually {
+          def check(i: Int) =
+            for {
+              w <- manager.scheduleDownload(summaryOf(block), source, false)
+              _ <- w.attempt
+            } yield {
               log.causes should have size i.toLong
               Inspectors.forAll(log.causes) { ex =>
                 ex shouldBe an[io.grpc.StatusRuntimeException]
               }
             }
-          }
           List(1, 2).traverse(check(_)).void
       }
 
@@ -365,17 +369,16 @@ class DownloadManagerSpec
     }
 
     "receiving chunks" should {
-      // For now just going to verify that exceptions are logged; there is no method
-      // to get out the current status with a history of what happened and nothing would use it.
       val block = arbitrary[Block].sample.map(withoutDependencies).get
 
       def check(args: TestArgs, msg: String): Task[Unit] =
-        args._1.scheduleDownload(summaryOf(block), source, false) map { _ =>
-          eventually {
-            Inspectors.forExactly(1, log.causes) { ex =>
-              ex shouldBe a[GossipError.InvalidChunks]
-              ex.getMessage should include(msg)
-            }
+        for {
+          w <- args._1.scheduleDownload(summaryOf(block), source, false)
+          _ <- w.attempt
+        } yield {
+          Inspectors.forExactly(1, log.causes) { ex =>
+            ex shouldBe a[GossipError.InvalidChunks]
+            ex.getMessage should include(msg)
           }
         }
 
@@ -477,7 +480,7 @@ object DownloadManagerSpec {
         test(manager, backend)
       }
 
-      runTest.runSyncUnsafe(10.seconds)
+      runTest.runSyncUnsafe(5.seconds)
     }
   }
 
