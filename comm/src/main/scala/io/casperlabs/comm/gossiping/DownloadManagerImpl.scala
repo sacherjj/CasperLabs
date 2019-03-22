@@ -36,9 +36,9 @@ object DownloadManagerImpl {
         source: Node,
         relay: Boolean,
         // Feedback about whether the scheduling itself succeeded.
-        scheduleResult: Feedback[F],
+        scheduleFeedback: Feedback[F],
         // Feedback about whether the download eventually succeeded.
-        downloadResult: Feedback[F]
+        downloadFeedback: Feedback[F]
     ) extends Signal[F]
     case class DownloadSuccess[F[_]](blockHash: ByteString)                extends Signal[F]
     case class DownloadFailure[F[_]](blockHash: ByteString, ex: Throwable) extends Signal[F]
@@ -145,19 +145,19 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
   /** Run the manager loop which listens to signals and starts workers when it can. */
   def run: F[Unit] =
     signal.take.flatMap {
-      case Signal.Download(summary, source, relay, scheduleResult, downloadResult) =>
+      case Signal.Download(summary, source, relay, scheduleFeedback, downloadFeedback) =>
         // At this point we should have already synced and only scheduled things to which we know how to get.
         val start =
           isDownloaded(summary.blockHash).ifM(
-            downloadResult.complete(Right(())),
+            downloadFeedback.complete(Right(())),
             ensureNoMissingDependencies(summary) *>
-              add(summary, source, relay, downloadResult) >>= { item =>
+              add(summary, source, relay, downloadFeedback) >>= { item =>
               if (item.canStart) startWorker(item)
               else Sync[F].unit
             }
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.
-        start.attempt.flatMap(scheduleResult.complete(_)) *> run
+        start.attempt.flatMap(scheduleFeedback.complete(_)) *> run
 
       case Signal.DownloadSuccess(blockHash) =>
         val finish = for {
@@ -205,7 +205,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
       summary: BlockSummary,
       source: Node,
       relay: Boolean,
-      downloadResult: Feedback[F]
+      downloadFeedback: Feedback[F]
   ): F[Item[F]] =
     for {
       items <- itemsRef.get
@@ -214,7 +214,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
                  existing.copy(
                    sources = existing.sources + source,
                    relay = existing.relay || relay,
-                   watchers = downloadResult :: existing.watchers
+                   watchers = downloadFeedback :: existing.watchers
                  )
                }
              } getOrElse {
@@ -229,7 +229,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
                    Set(source),
                    relay,
                    dependencies = pending,
-                   watchers = List(downloadResult)
+                   watchers = List(downloadFeedback)
                  )
                }
              }
@@ -273,20 +273,20 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
     val success                = signal.put(Signal.DownloadSuccess(blockHash))
     def failure(ex: Throwable) = signal.put(Signal.DownloadFailure(blockHash, ex))
 
-    // Try to download until we succeed or give up.
-    def loop(tried: Set[Node], errors: List[Throwable]): F[Unit] = {
-      def tryDownload(summary: BlockSummary, source: Node, relay: Boolean) =
-        for {
-          block <- fetchAndRestore(source, blockHash)
-          _     <- backend.validateBlock(block)
-          _     <- backend.storeBlock(block)
-          // This could arguably be done by `storeBlock` but this way it's explicit,
-          // so we don't forget to talk to both kind of storages.
-          _ <- backend.storeBlockSummary(summary)
-          // TODO: Gossip
-          _ <- success
-        } yield ()
+    def tryDownload(summary: BlockSummary, source: Node, relay: Boolean) =
+      for {
+        block <- fetchAndRestore(source, blockHash)
+        _     <- backend.validateBlock(block)
+        _     <- backend.storeBlock(block)
+        // This could arguably be done by `storeBlock` but this way it's explicit,
+        // so we don't forget to talk to both kind of storages.
+        _ <- backend.storeBlockSummary(summary)
+        // TODO: Gossip
+        _ <- success
+      } yield ()
 
+    // Try to download until we succeed or give up.
+    def loop(tried: Set[Node], errors: List[Throwable]): F[Unit] =
       // Get the latest sources.
       itemsRef.get.map(_(blockHash)).flatMap { item =>
         (item.sources -- tried).headOption match {
@@ -304,7 +304,6 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
             ) *> failure(errors.head)
         }
       }
-    }
 
     // Make sure the manager knows we're done, even if we fail unexpectedly.
     loop(Set.empty, List(new IllegalStateException("No source to download from."))) recoverWith {
