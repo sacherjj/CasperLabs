@@ -55,16 +55,20 @@ macro_rules! i32_checked_addition {
 macro_rules! checked_addition {
     ($i:expr, $v:expr, $variant:ident) => {
         match $v {
-            Value::$variant(j) => j.checked_add($i).ok_or(Error::Overflow).map(Value::$variant),
+            Value::$variant(j) => j
+                .checked_add($i)
+                .ok_or(Error::Overflow)
+                .map(Value::$variant),
             other => {
                 let expected = String::from("$variant");
                 Err(TypeMismatch {
                     expected,
                     found: other.type_string(),
-                }.into())
+                }
+                .into())
             }
         }
-    }
+    };
 }
 
 impl Transform {
@@ -82,7 +86,8 @@ impl Transform {
                     Err(TypeMismatch {
                         expected,
                         found: other.type_string(),
-                    }.into())
+                    }
+                    .into())
                 }
             },
             AddUInt128(i) => checked_addition!(i, v, UInt128),
@@ -102,7 +107,8 @@ impl Transform {
                     Err(TypeMismatch {
                         expected,
                         found: other.type_string(),
-                    }.into())
+                    }
+                    .into())
                 }
             },
             Failure(error) => Err(error),
@@ -115,12 +121,15 @@ macro_rules! checked_transform_addition {
         match $b {
             AddInt32(j) => i32_checked_addition!($i, j, $type).map_or_else(Failure, $variant),
             $variant(j) => $i.checked_add(j).map_or(Failure(Error::Overflow), $variant),
-            other => Failure(TypeMismatch {
-                expected: "$variant".to_owned(),
-                found: format!("{:?}", other),
-            }.into()),
+            other => Failure(
+                TypeMismatch {
+                    expected: "$variant".to_owned(),
+                    found: format!("{:?}", other),
+                }
+                .into(),
+            ),
         }
-    }
+    };
 }
 
 impl Add for Transform {
@@ -144,10 +153,13 @@ impl Add for Transform {
                 AddInt32(j) => i.checked_add(j).map_or(Failure(Error::Overflow), AddInt32),
                 AddUInt256(j) => i32_checked_addition!(j, i, U256).map_or_else(Failure, AddUInt256),
                 AddUInt512(j) => i32_checked_addition!(j, i, U512).map_or_else(Failure, AddUInt512),
-                other => Failure(TypeMismatch {
-                    expected: "AddInt32".to_owned(),
-                    found: format!("{:?}", other),
-                }.into()),
+                other => Failure(
+                    TypeMismatch {
+                        expected: "AddInt32".to_owned(),
+                        found: format!("{:?}", other),
+                    }
+                    .into(),
+                ),
             },
             (AddUInt128(i), b) => checked_transform_addition!(i, b, U128, AddUInt128),
             (AddUInt256(i), b) => checked_transform_addition!(i, b, U256, AddUInt256),
@@ -157,10 +169,13 @@ impl Add for Transform {
                     ks1.append(&mut ks2);
                     AddKeys(ks1)
                 }
-                other => Failure(TypeMismatch {
-                    expected: "AddKeys".to_owned(),
-                    found: format!("{:?}", other),
-                }.into()),
+                other => Failure(
+                    TypeMismatch {
+                        expected: "AddKeys".to_owned(),
+                        found: format!("{:?}", other),
+                    }
+                    .into(),
+                ),
             },
         }
     }

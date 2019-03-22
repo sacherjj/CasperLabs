@@ -96,7 +96,9 @@ impl<R: DbReader> TrackingCopy<R> {
                         add(&mut self.fns, k, t);
                         Ok(AddResult::Success)
                     }
-                    Err(transform::Error::TypeMismatch(type_mismatch)) => Ok(AddResult::TypeMismatch(type_mismatch)),
+                    Err(transform::Error::TypeMismatch(type_mismatch)) => {
+                        Ok(AddResult::TypeMismatch(type_mismatch))
+                    }
                     Err(transform::Error::Overflow) => Ok(AddResult::Overflow),
                 }
             }

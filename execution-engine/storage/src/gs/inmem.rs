@@ -103,9 +103,7 @@ impl History for InMemHist<Key, Value> {
                             Err(transform::Error::TypeMismatch(type_mismatch)) => {
                                 return Ok(CommitResult::TypeMismatch(type_mismatch))
                             }
-                            Err(transform::Error::Overflow) => {
-                                return Ok(CommitResult::Overflow)
-                            }
+                            Err(transform::Error::Overflow) => return Ok(CommitResult::Overflow),
                         },
                     }
                 }

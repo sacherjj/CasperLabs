@@ -117,7 +117,6 @@ macro_rules! from_uint_for_rust_big_int {
     };
 }
 
-
 from_uint_for_rust_big_int!(common::value::U128, 128);
 from_uint_for_rust_big_int!(common::value::U256, 256);
 from_uint_for_rust_big_int!(common::value::U512, 512);
@@ -226,7 +225,9 @@ impl From<transform::Transform> for super::ipc::Transform {
                 add.set_value(protobuf::RepeatedField::from_vec(keys));
                 t.set_add_keys(add);
             }
-            transform::Transform::Failure(transform::Error::TypeMismatch(transform::TypeMismatch { expected, found })) => {
+            transform::Transform::Failure(transform::Error::TypeMismatch(
+                transform::TypeMismatch { expected, found },
+            )) => {
                 let mut fail = super::ipc::TransformFailure::new();
                 let mut typemismatch_err = super::ipc::TypeMismatch::new();
                 typemismatch_err.set_expected(expected.to_owned());
