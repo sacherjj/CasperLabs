@@ -68,11 +68,10 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
       val never                    = CancelablePromise[Boolean]()
       implicit val K: KademliaMock = (_: PeerNode) => Task.fromCancelablePromise(never)
 
-      val initial    = Random.shuffle(allPotentialPeers).take(bucketSize)
-      val rest       = Random.shuffle(allPotentialPeers.diff(initial))
-      val peerTable  = PeerTable[Task](id, bucketSize).runSyncUnsafe()
-      val fillBucket = Task.sequence(initial.map(peerTable.updateLastSeen(_)))
-      val hangUp     = Task.gatherUnordered(rest.map(peerTable.updateLastSeen(_)))
+      val (initial, rest) = Random.shuffle(allPotentialPeers).splitAt(bucketSize)
+      val peerTable       = PeerTable[Task](id, bucketSize).runSyncUnsafe()
+      val fillBucket      = Task.sequence(initial.map(peerTable.updateLastSeen(_)))
+      val hangUp          = Task.gatherUnordered(rest.map(peerTable.updateLastSeen(_)))
 
       fillBucket.runSyncUnsafe()
       hangUp.runAsyncAndForget
@@ -96,8 +95,8 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
         Task.now(true)
       }
 
-      val initial        = Random.shuffle(allPotentialPeers).take(bucketSize)
-      val restReplicated = Random.shuffle(Seq.fill(10)(allPotentialPeers.diff(initial))).flatten
+      val (initial, rest) = Random.shuffle(allPotentialPeers).splitAt(bucketSize)
+      val restReplicated  = Random.shuffle(Seq.fill(10)(rest).flatten)
 
       val addNodesParallel = for {
         peerTable <- PeerTable[Task](id, bucketSize)
