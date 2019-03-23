@@ -76,6 +76,9 @@ object Dependencies {
   val shapeless              = "com.chuusai"                %% "shapeless"                      % "2.3.3"
   val magnolia               = "com.propensive"             %% "magnolia"                       % "0.10.0"
   val weupnp                 = "org.bitlet"                 % "weupnp"                          % "0.1.4"
+  val gatlingHighcharts      = "io.gatling.highcharts"      % "gatling-charts-highcharts"       % "3.0.3" % "test"
+  val gatlingFramework       = "io.gatling"                 % "gatling-test-framework"          % "3.0.3" % "test"
+  val gatlingGrpc            = "com.github.phisgr"          %% "gatling-grpc"                   % "0.3.0" % "test"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java          = "com.github.rchain"          % "secp256k1-java"                  % "0.1"
   val tomlScala              = "tech.sparse"                %% "toml-scala"                     % "0.1.1"
@@ -126,4 +129,29 @@ object Dependencies {
 
   val commonDependencies: Seq[ModuleID] =
     logging ++ testing :+ kindProjector :+ macroParadise
+
+  val gatlingDependencies: Seq[ModuleID] = Seq(
+      gatlingFramework,
+      gatlingGrpc,
+      gatlingHighcharts,
+      scalapbRuntime,
+      scalapbRuntimegGrpc,
+      grpcNetty
+    )
+
+  //needed because Gatling transitively bring binary incompatible dependencies
+  val gatlingOverrides: Seq[ModuleID] = Seq(
+    "com.thesamet.scalapb" %% "compilerplugin" % "0.8.2",
+    "com.thesamet.scalapb" %% "scalapb-runtime"                % "0.8.2",
+    "com.thesamet.scalapb" %% "scalapb-runtime-grpc"           % "0.8.2",
+    "io.grpc"              % "grpc-netty"                      % "1.15.1",
+    "io.netty" % "netty-buffer" % "4.1.33.Final",
+    "io.netty" % "netty-handler" % "4.1.33.Final",
+    "io.netty" % "netty-handler-proxy" % "4.1.33.Final",
+    "io.netty" % "netty-codec" % "4.1.33.Final",
+    "io.netty" % "netty-codec-http" % "4.1.33.Final",
+    "io.netty" % "netty-codec-http2" % "4.1.33.Final",
+    "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
+    "com.google.protobuf" % "protobuf-java" % "3.6.1"
+  )
 }
