@@ -39,14 +39,18 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
   private implicit val propCheckConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(
     minSuccessful = 500)
 
-  property("""
+  property(
+    """
       |updateLastSeen
-      |atomically adds new unique peer if bucket is not full
-      |and moves it if has seen previously""".stripMargin) {
+      |atomically adds new unique peer if bucket is not full and moves it if has seen previously;
+      |there shouldn't be any ping requests, since 'uniquePeersN' <= bucketSize""".stripMargin) {
     forAll(
       Gen
         .choose(1, bucketSize)) { uniquePeersN: Int =>
-      implicit val K: KademliaMock = (_: PeerNode) => Task.now(true)
+      var pingCounter = 0
+      implicit val K: KademliaMock = (_: PeerNode) => {
+        Task(pingCounter += 1).map(_ => true)
+      }
 
       val unique     = Random.shuffle(allPotentialPeers).take(uniquePeersN)
       val replicated = Seq.fill(10)(unique).flatten
@@ -57,12 +61,14 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
       } yield bucket
 
       addNodesParallel.runSyncUnsafe() should contain theSameElementsAs unique
+      pingCounter shouldBe 0
     }
   }
 
   property("""
-             |updateLastSeen
-             |doesn't block read operations
+             |updateLastSeen doesn't block read operations;
+             |'initial' peers added without 'ping' requests,
+             |after that, when the bucket is full, each addition cause a hanging ping request,
            """.stripMargin) {
     forAll { _: Int =>
       val never                    = CancelablePromise[Boolean]()
@@ -85,8 +91,8 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
   }
 
   property("""
-             |updateLastSeen
-             |atomically pings peers
+             |updateLastSeen atomically pings peers;
+             |after bucket fulfilling, each addition should produce a single ping request
            """.stripMargin) {
     forAll { _: Int =>
       val pingsCounter = new AtomicLong(0)
