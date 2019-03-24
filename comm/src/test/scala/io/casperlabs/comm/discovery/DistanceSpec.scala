@@ -1,6 +1,7 @@
 package io.casperlabs.comm.discovery
 
 import cats._
+import cats.syntax.either._
 import io.casperlabs.comm._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.catscontrib.effect.implicits._

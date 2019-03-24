@@ -21,7 +21,7 @@ object PeerTable {
   ): F[PeerTable[F]] =
     for {
       //160 buckets with at most 20 elements in each of them
-      buckets <- Ref.of(Vector.fill(8 * local.key.size + 1)(List.empty[Entry]))
+      buckets <- Ref.of(Vector.fill(8 * local.key.size)(List.empty[Entry]))
     } yield new PeerTable(local, k, buckets)
 
   // Maximum length of each row of the routing table.

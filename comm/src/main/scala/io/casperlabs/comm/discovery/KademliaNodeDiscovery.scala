@@ -115,16 +115,12 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
         for {
           results <- KademliaRPC[F]
                       .lookup(NodeIdentifier(target), peerSet.head)
+                      .map(_.filter(r => !potentials.contains(r) && r.id.key != id.key))
           newPotentials <- Traverse[List]
                             .traverse(results.toList)(r => table.find(r.id))
                             .map { maybeNodes =>
                               val existing = maybeNodes.flatten.toSet
-                              potentials ++ results
-                                .filter(
-                                  r =>
-                                    !potentials.contains(r)
-                                      && r.id.key != id.key && !existing(r)
-                                )
+                              potentials ++ results.filterNot(existing)
                             }
           res <- find(dists, peerSet.tail, newPotentials, i + 1)
         } yield res
