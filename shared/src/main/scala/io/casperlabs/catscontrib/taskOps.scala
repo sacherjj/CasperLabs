@@ -18,8 +18,10 @@ object TaskContrib {
         C.raiseError[A](new TimeoutException(s"Task timed-out after $after of inactivity"))
       )
 
-    def nonCancelingTimeoutTo[B >: A](after: FiniteDuration,
-                                      backup: F[B])(implicit C: Concurrent[F], T: Timer[F]): F[B] =
+    def nonCancelingTimeoutTo[B >: A](
+        after: FiniteDuration,
+        backup: F[B]
+    )(implicit C: Concurrent[F], T: Timer[F]): F[B] =
       C.racePair(fa, T.sleep(after)).flatMap {
         case Left((a, _)) =>
           Concurrent[F].pure(a)

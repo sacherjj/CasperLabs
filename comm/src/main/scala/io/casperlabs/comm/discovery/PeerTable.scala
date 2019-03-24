@@ -21,7 +21,7 @@ object PeerTable {
   ): F[PeerTable[F]] =
     for {
       //160 buckets with at most 20 elements in each of them
-      buckets <- Ref.of(Vector.fill(8 * local.key.size)(List.empty[Entry]))
+      buckets <- Ref.of(Vector.fill(8 * local.key.size + 1)(List.empty[Entry]))
     } yield new PeerTable(local, k, buckets)
 
   // Maximum length of each row of the routing table.
@@ -81,8 +81,10 @@ final class PeerTable[F[_]: Monad](
                          val (updatedBucket, maybeCandidate) =
                            bucket.find(_.node.key == peer.key) match {
                              case Some(previous) =>
-                               (Entry(peer) :: bucket.filter(_.node.key != previous.node.key),
-                                none[Entry])
+                               (
+                                 Entry(peer) :: bucket.filter(_.node.key != previous.node.key),
+                                 none[Entry]
+                               )
                              case None if bucket.size < k =>
                                (Entry(peer) :: bucket, none[Entry])
                              // Ping oldest element that isn't already being pinged.
@@ -92,33 +94,38 @@ final class PeerTable[F[_]: Monad](
                                val maybeCandidate =
                                  bucket.reverse.find(!_.pinging).map(_.copy(pinging = true))
                                val updatedBucket = maybeCandidate.fold(bucket) { candidate =>
-                                 bucket.map(p =>
-                                   if (p.node.key == candidate.node.key) candidate else p)
+                                 bucket.map(
+                                   p => if (p.node.key == candidate.node.key) candidate else p
+                                 )
                                }
                                (updatedBucket, maybeCandidate)
                            }
                          (table.updated(index, updatedBucket), maybeCandidate)
                        }
-      _ <- maybeCandidate.fold(().pure[F])(candidate =>
-            K.ping(candidate.node).flatMap { responded =>
-              tableRef.update { table =>
-                val bucket = table(index)
-                val winner = if (responded) candidate else Entry(peer)
-                val updated = winner.copy(pinging = false) :: bucket.filter(
-                  _.node.key != candidate.node.key)
-                table.updated(index, updated)
+      _ <- maybeCandidate.fold(().pure[F])(
+            candidate =>
+              K.ping(candidate.node).flatMap { responded =>
+                tableRef.update { table =>
+                  val bucket = table(index)
+                  val winner = if (responded) candidate else Entry(peer)
+                  val updated = winner.copy(pinging = false) :: bucket
+                    .filter(_.node.key != candidate.node.key)
+                  table.updated(index, updated)
+                }
               }
-          })
+          )
     } yield ()
   }
 
   def lookup(toLookup: NodeIdentifier): F[Seq[PeerNode]] =
     tableRef.get.map { table =>
       val flattenedArray = table.flatten.filterNot(_.node.key == toLookup.key).toArray
-      Sorting.quickSort(flattenedArray)((x: Entry, y: Entry) =>
-        (distance(toLookup, x.node.id), distance(toLookup, y.node.id)) match {
-          case (d0, d1) => Ordering[Int].compare(d0, d1)
-      })
+      Sorting.quickSort(flattenedArray)(
+        (x: Entry, y: Entry) =>
+          (distance(toLookup, x.node.id), distance(toLookup, y.node.id)) match {
+            case (d0, d1) => Ordering[Int].compare(d0, d1)
+          }
+      )
       flattenedArray.take(k).toList.map(_.node)
     }
 
@@ -132,5 +139,6 @@ final class PeerTable[F[_]: Monad](
       _.take(limit + 1).zipWithIndex
         .map { case (l, i) => (l.size, i) }
         .sortWith(_._1 < _._1)
-        .map(_._2))
+        .map(_._2)
+    )
 }

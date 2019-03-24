@@ -48,8 +48,7 @@ object ApproveBlockProtocol {
   def apply[F[_]](implicit instance: ApproveBlockProtocol[F]): ApproveBlockProtocol[F] = instance
 
   //For usage in tests only
-  def unsafe[
-      F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
+  def unsafe[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       block: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
@@ -68,8 +67,7 @@ object ApproveBlockProtocol {
       sigsF
     )
 
-  def of[
-      F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
+  def of[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       block: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
@@ -90,8 +88,7 @@ object ApproveBlockProtocol {
         sigsF
       )
 
-  private class ApproveBlockProtocolImpl[
-      F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
+  private class ApproveBlockProtocolImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       val block: BlockMessage,
       val requiredSigs: Int,
       val trustedValidators: Set[ByteString],

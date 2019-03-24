@@ -450,8 +450,7 @@ object Validate {
               _ <- Log[F].warn(
                     ignore(
                       b,
-                      s"block parents did not match estimate based on justification. Expected parents are ${printHashes(
-                        computedParentHashes)}, got ${printHashes(parentHashes)}."
+                      s"block parents did not match estimate based on justification. Expected parents are ${printHashes(computedParentHashes)}, got ${printHashes(parentHashes)}."
                     )
                   )
               _ <- RaiseValidationError[F].raise[Unit](InvalidParents)

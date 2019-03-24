@@ -39,7 +39,8 @@ package object effects {
         .map {
           case (nd, release) => (nd, release.toEffect)
         }
-        .toEffect)
+        .toEffect
+    )
 
   def time(implicit timer: Timer[Task]): Time[Task] =
     new Time[Task] {

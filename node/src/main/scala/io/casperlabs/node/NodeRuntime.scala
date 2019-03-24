@@ -94,7 +94,8 @@ class NodeRuntime private[node] (
                effects.peerNodeAsk,
                log,
                effects.time,
-               diagnostics.effects.metrics)
+               diagnostics.effects.metrics
+             )
       } yield (ee, nd)
 
       resources.use { case (ee, nd) => runMain(ee, nd, state) }

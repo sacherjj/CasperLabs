@@ -23,7 +23,8 @@ import scala.util.Try
 
 class GrpcKademliaRPC[G[_], F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNodeAsk: Metrics](
     port: Int,
-    timeout: FiniteDuration)(
+    timeout: FiniteDuration
+)(
     implicit
     scheduler: Scheduler,
     connectionsCache: ConnectionsCache[F, KademliaConnTag],
@@ -166,7 +167,8 @@ class GrpcKademliaRPC[G[_], F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: Pe
       val sender: PeerNode = toPeerNode(lookup.sender.get)
       TaskLike[F].toTask(
         lookupHandler(sender, id)
-          .map(peers => LookupResponse().withNodes(peers.map(node))))
+          .map(peers => LookupResponse().withNodes(peers.map(node)))
+      )
     }
 
     def sendPing(ping: Ping): Task[Pong] = {
