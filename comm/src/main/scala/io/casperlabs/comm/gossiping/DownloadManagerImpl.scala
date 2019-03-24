@@ -28,7 +28,7 @@ object DownloadManagerImpl {
     def storeBlockSummary(summary: BlockSummary): F[Unit]
   }
 
-  /** Messages the DM uses inside its scheduler "queue". */
+  /** Messages the Download Manager uses inside its scheduler "queue". */
   sealed trait Signal[F[_]]
   object Signal {
     case class Download[F[_]](
@@ -87,7 +87,7 @@ object DownloadManagerImpl {
     } {
       case (isShutdown, workersRef, managerLoop, _) =>
         for {
-          _       <- Log[F].info("Shutting down the DownloadManager...")
+          _       <- Log[F].info("Shutting down the Download Manager...")
           _       <- isShutdown.set(true)
           _       <- managerLoop.cancel.attempt
           workers <- workersRef.get
@@ -98,10 +98,10 @@ object DownloadManagerImpl {
     }
 
   /** All dependencies that need to be downloaded before a block. */
-  def dependencies(summary: BlockSummary): Seq[ByteString] =
+  private def dependencies(summary: BlockSummary): Seq[ByteString] =
     summary.getHeader.parentHashes ++ summary.getHeader.justifications.map(_.latestBlockHash)
 
-  def base16(blockHash: ByteString) =
+  private def base16(blockHash: ByteString) =
     Base16.encode(blockHash.toByteArray)
 }
 
@@ -127,7 +127,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
   private def ensureNotShutdown: F[Unit] =
     isShutdown.get.ifM(
       Sync[F]
-        .raiseError(new java.lang.IllegalStateException("Download manager already shut down.")),
+        .raiseError(new java.lang.IllegalStateException("Download Manager already shut down.")),
       Sync[F].unit
     )
 

@@ -31,8 +31,18 @@ class DownloadManagerSpec
   override def beforeEach() =
     log.reset()
 
+  // A generators .sample.get can sometimes return None, but these examples have no reason to not generate a result,
+  // so defend against that and retry if it does happen.
+  def sample[T](g: Gen[T]): T = {
+    def loop(i: Int): T = {
+      assert(i > 0, "Should be able to generate a sample.")
+      g.sample.fold(loop(i - 1))(identity)
+    }
+    loop(10)
+  }
+
   // Create a random Node so I don't have to repeat this in all tests.
-  val source = arbitrary[Node].sample.get
+  val source = sample(arbitrary[Node])
 
   // Don't have to create big blocks because it takes ages.
   implicit val consensusConfig =
@@ -41,12 +51,12 @@ class DownloadManagerSpec
   "DownloadManager" when {
     "scheduled to download a section of the DAG" should {
       // Make sure the genesis has more than 1 child so we can download them in parallel. This is easy to check.
-      val dag = genBlockDag
-        .retryUntil { blocks =>
-          (blocks(1).getHeader.parentHashes.toSet & blocks(2).getHeader.parentHashes.toSet).nonEmpty
-        }
-        .sample
-        .get
+      val dag = sample(
+        genBlockDag
+          .retryUntil { blocks =>
+            (blocks(1).getHeader.parentHashes.toSet & blocks(2).getHeader.parentHashes.toSet).nonEmpty
+          }
+      )
       val blockMap = toBlockMap(dag)
       val remote   = MockGossipService(dag)
 
@@ -141,20 +151,19 @@ class DownloadManagerSpec
     }
 
     "scheduled to download a block with missing dependencies" should {
-      val block = arbitrary[Block].suchThat(_.getHeader.parentHashes.nonEmpty).sample.get
+      val block = sample(arbitrary[Block].suchThat(_.getHeader.parentHashes.nonEmpty))
 
       "raise an error" in TestFixture(MockBackend(), _ => MockGossipService(Seq(block))) {
         case (manager, _) =>
-          manager.scheduleDownload(summaryOf(block), source, false).attempt.map {
-            case Left(GossipError.MissingDependencies(_)) =>
-            case other =>
-              fail(s"Expected scheduling to fail; got $other")
+          manager.scheduleDownload(summaryOf(block), source, false).attempt.map { result =>
+            result.isLeft shouldBe true
+            result.left.get shouldBe a[GossipError.MissingDependencies]
           }
       }
     }
 
     "scheduled to download a block which already exists" should {
-      val block = arbitrary[Block].sample.get
+      val block = sample(arbitrary[Block])
 
       "skip the download" in TestFixture() {
         case (manager, backend) =>
@@ -248,9 +257,9 @@ class DownloadManagerSpec
     }
 
     "fails to download a block from the first source" should {
-      val block = arbitrary[Block].map(withoutDependencies(_)).sample.get
-      val nodeA = arbitrary[Node].sample.get
-      val nodeB = arbitrary[Node].sample.get
+      val block = sample(arbitrary[Block].map(withoutDependencies(_)))
+      val nodeA = sample(arbitrary[Node])
+      val nodeB = sample(arbitrary[Node])
 
       val remote = (node: Node) =>
         node match {
@@ -311,7 +320,7 @@ class DownloadManagerSpec
     }
 
     "cannot validate a block" should {
-      val dag    = genBlockDag.sample.get
+      val dag    = sample(genBlockDag)
       val remote = MockGossipService(dag)
       def backend =
         MockBackend(_ => Task.raiseError(new java.lang.IllegalArgumentException("Nope.")))
@@ -412,8 +421,8 @@ class DownloadManagerSpec
     }
 
     "cannot query the backend" should {
-      val block1 = arbitrary[Block].sample.get
-      val block2 = arbitrary[Block].sample.map(withoutDependencies).get
+      val block1 = sample(arbitrary[Block])
+      val block2 = sample(arbitrary[Block].map(withoutDependencies))
       val remote = MockGossipService(Seq(block1, block2))
       val backend = new MockBackend() {
         override def hasBlock(blockHash: ByteString) =
@@ -514,10 +523,11 @@ object DownloadManagerSpec {
 
   /** Test implementation of the remote GossipService to download the blocks from. */
   object MockGossipService {
+    // Used only as a default argument for when we aren't touching the remote service in a test.
     val default = Task.now {
       new GossipServiceServer[Task](
-        getBlock = hash => Task.now(None),
-        getBlockSummary = hash => ???,
+        getBlock = _ => Task.now(None),
+        getBlockSummary = _ => ???,
         maxChunkSize = 100 * 1024
       )
     }
