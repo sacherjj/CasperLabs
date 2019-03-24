@@ -6,25 +6,45 @@ import cats._
 import cats.implicits._
 import io.casperlabs.catscontrib._
 import Catscontrib._
-import cats.effect.Sync
+import cats.effect._
 import io.casperlabs.comm._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
+import monix.eval.{TaskLift, TaskLike}
+import monix.execution.Scheduler
 
 object KademliaNodeDiscovery {
-  def create[F[_]: Monad: Sync: Log: Time: Metrics: KademliaRPC](
-      id: NodeIdentifier,
-      defaultTimeout: FiniteDuration
-  )(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
-    for {
-      table <- PeerTable(id)
-      knd   <- new KademliaNodeDiscovery[F](id, defaultTimeout, table).pure[F]
-      _     <- init.fold(().pure[F])(p => knd.addNode(p))
-    } yield knd
+  private implicit val logSource: LogSource = LogSource(getClass)
 
+  def create[G[_], F[_]: Concurrent: Log: Time: Metrics: TaskLike: TaskLift: PeerNodeAsk: Timer](
+      id: NodeIdentifier,
+      port: Int,
+      timeout: FiniteDuration
+  )(
+      init: Option[PeerNode]
+  )(implicit P: Parallel[F, G], scheduler: Scheduler): Resource[F, NodeDiscovery[F]] = {
+    val kademliaRpcResource = Resource.make(CachedConnections[F, KademliaConnTag].map {
+      implicit cache =>
+        new GrpcKademliaRPC(port, timeout)
+    })(
+      kRpc =>
+        Concurrent[F]
+          .attempt(kRpc.shutdown())
+          .flatMap(
+            _.fold(ex => Log[F].error("Failed to properly shutdown KademliaRPC", ex), _.pure[F])
+          )
+    )
+    kademliaRpcResource.flatMap { implicit kRpc =>
+      Resource.liftF(for {
+        table <- PeerTable[F](id)
+        knd   = new KademliaNodeDiscovery[F](id, timeout, table)
+        _     <- init.fold(().pure[F])(knd.addNode)
+      } yield knd)
+    }
+  }
 }
 
-private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Metrics: KademliaRPC](
+private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: KademliaRPC](
     id: NodeIdentifier,
     timeout: FiniteDuration,
     table: PeerTable[F]
@@ -74,10 +94,12 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Met
     * 10 to avoid making too many unproductive networking calls.
     */
   private def findMorePeers(limit: Int): F[Seq[PeerNode]] = {
-    def find(dists: Array[Int],
-             peerSet: Set[PeerNode],
-             potentials: Set[PeerNode],
-             i: Int): F[Seq[PeerNode]] =
+    def find(
+        dists: Array[Int],
+        peerSet: Set[PeerNode],
+        potentials: Set[PeerNode],
+        i: Int
+    ): F[Seq[PeerNode]] =
       if (peerSet.nonEmpty && potentials.size < limit && i < dists.length) {
         val dist = dists(i)
         /*
@@ -101,7 +123,8 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Met
                                 .filter(
                                   r =>
                                     !potentials.contains(r)
-                                      && r.id.key != id.key && !existing(r))
+                                      && r.id.key != id.key && !existing(r)
+                                )
                             }
           res <- find(dists, peerSet.tail, newPotentials, i + 1)
         } yield res
