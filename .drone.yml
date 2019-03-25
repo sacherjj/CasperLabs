@@ -65,20 +65,9 @@ pipeline:
 
   sbt-update:
     <<: *sbtenv
-    group: sbt
     commands:
       - sbt update
 
-  sbt-update-mac:
-    image: appleboy/drone-ssh
-    group: sbt
-    secrets: [ ssh_key, ssh_host, ssh_username ]
-    command_timeout: 600s
-    script: |
-      cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
-      export _JAVA_OPTIONS='-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G'
-      export PATH=$PATH:/usr/local/bin
-      sbt update
   compile:
     <<: *sbtenv
     commands:
@@ -86,7 +75,6 @@ pipeline:
 
   compile-rust:
     <<: *buildenv
-    group: rust
     commands:
       - cd execution-engine/
       - ~/.cargo/bin/cargo update
@@ -94,14 +82,14 @@ pipeline:
 
   run-rust-tests:
     <<: *buildenv
-    group: test-rust
+    group: test
     commands:
       - cd execution-engine/
       - ~/.cargo/bin/cargo test
 
   run-rust-tests-mac:
     image: appleboy/drone-ssh
-    group: test-rust
+    group: test
     secrets: [ ssh_key, ssh_host, ssh_username ]
     command_timeout: 3600s
     script: |
@@ -109,8 +97,10 @@ pipeline:
       export PATH=$PATH:/usr/local/bin
       cd execution-engine/
       ~/.cargo/bin/cargo test
+
   run-rust-lints:
     <<: *buildenv
+    group: test
     commands:
       - cd execution-engine
       - ~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)
@@ -119,26 +109,9 @@ pipeline:
 
   run-unit-tests:
     <<: *sbtenv
-    group: test-sbt
+    group: test
     commands:
       - sbt test
-
-  run-unit-tests-mac:
-    image: appleboy/drone-ssh
-    group: test-sbt
-    secrets: [ ssh_key, ssh_host, ssh_username ]
-    command_timeout: 3600s
-    script: |
-      cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
-      export PATH=$PATH:/usr/local/bin
-      sbt test
-  docker-build-node-engine-and-client:
-    <<: *sbtenv
-    commands:
-      - sbt node/docker:publishLocal client/docker:publishLocal
-      - make docker-build/execution-engine
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
 
   ## run-integration-tests:
   ##   <<: *sbtenv
