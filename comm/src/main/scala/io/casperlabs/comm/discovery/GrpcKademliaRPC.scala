@@ -81,10 +81,7 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
     for {
       channel <- cell.connection(peer, enforce)
       stub    <- Sync[F].delay(KademliaGrpcMonix.stub(channel))
-      result <- Sync[F].guaranteeCase(f(stub)) {
-                 case ExitCase.Error(_) => disconnect(peer)
-                 case _                 => ().pure[F]
-               }
+      result  <- f(stub).onError { case _ => disconnect(peer) }
     } yield result
 
   def receive(
