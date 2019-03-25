@@ -150,10 +150,13 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
         val start =
           isDownloaded(summary.blockHash).ifM(
             downloadFeedback.complete(Right(())),
-            ensureNoMissingDependencies(summary) *>
-              add(summary, source, relay, downloadFeedback) >>= { item =>
-              if (item.canStart) startWorker(item)
-              else Sync[F].unit
+            ensureNoMissingDependencies(summary) *> {
+              for {
+                items <- itemsRef.get
+                item  <- mergeItem(items, summary, source, relay, downloadFeedback)
+                _     <- itemsRef.update(_ + (summary.blockHash -> item))
+                _     <- if (item.canStart) startWorker(item) else Sync[F].unit
+              } yield ()
             }
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.
@@ -200,42 +203,38 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
         finish.attempt *> run
     }
 
-  /** Add a new item to the schedule. */
-  private def add(
+  /** Either create a new item or add the source to an existing one. */
+  private def mergeItem(
+      items: Map[ByteString, Item[F]],
       summary: BlockSummary,
       source: Node,
       relay: Boolean,
       downloadFeedback: Feedback[F]
   ): F[Item[F]] =
-    for {
-      items <- itemsRef.get
-      item <- items.get(summary.blockHash) map { existing =>
-               Sync[F].pure {
-                 existing.copy(
-                   sources = existing.sources + source,
-                   relay = existing.relay || relay,
-                   watchers = downloadFeedback :: existing.watchers
-                 )
-               }
-             } getOrElse {
-               // Collect which dependencies have already been downloaded.
-               dependencies(summary).toList.traverse { hash =>
-                 if (items.contains(hash)) Sync[F].pure(hash -> false)
-                 else isDownloaded(hash).map(hash            -> _)
-               } map { deps =>
-                 val pending = deps.filterNot(_._2).map(_._1).toSet
-                 Item(
-                   summary,
-                   Set(source),
-                   relay,
-                   dependencies = pending,
-                   watchers = List(downloadFeedback)
-                 )
-               }
-             }
-      // This is only called in `run` which is is synchronized so there is no race condition.
-      _ <- itemsRef.update(_ + (summary.blockHash -> item))
-    } yield item
+    items.get(summary.blockHash) map { existing =>
+      Sync[F].pure {
+        existing.copy(
+          sources = existing.sources + source,
+          relay = existing.relay || relay,
+          watchers = downloadFeedback :: existing.watchers
+        )
+      }
+    } getOrElse {
+      // Collect which dependencies have already been downloaded.
+      dependencies(summary).toList.traverse { hash =>
+        if (items.contains(hash)) Sync[F].pure(hash -> false)
+        else isDownloaded(hash).map(hash            -> _)
+      } map { deps =>
+        val pending = deps.filterNot(_._2).map(_._1).toSet
+        Item(
+          summary,
+          Set(source),
+          relay,
+          dependencies = pending,
+          watchers = List(downloadFeedback)
+        )
+      }
+    }
 
   /** Check that we either have all dependencies already downloaded or scheduled. */
   private def ensureNoMissingDependencies(summary: BlockSummary): F[Unit] =

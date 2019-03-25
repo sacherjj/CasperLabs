@@ -173,7 +173,6 @@ class DownloadManagerSpec
             _     <- watch
           } yield {
             backend.blocks should have size 1
-            log.errors shouldBe empty
           }
       }
     }
@@ -202,18 +201,18 @@ class DownloadManagerSpec
       val block = arbitrary[Block].sample.map(withoutDependencies).get
 
       "cancel outstanding downloads" in {
-        var countIn  = 0
-        var countOut = 0
+        @volatile var started  = false
+        @volatile var finished = false
         val remote =
           MockGossipService(
             Seq(block),
-            rechunker = _.mapEval { chunk =>
-              // Return the chunks slowly so we can shut down the manager before it could store the data.
+            regetter = { get =>
               for {
-                _ <- Task.delay(countIn += 1)
+                _ <- Task.delay({ started = true })
                 _ <- Task.sleep(750.millis)
-                _ <- Task.delay(countOut += 1)
-              } yield chunk
+                _ <- Task.delay({ finished = true })
+                r <- get
+              } yield r
             }
           )
         val backend = MockBackend()
@@ -231,7 +230,8 @@ class DownloadManagerSpec
           _                  <- Task.sleep(500.millis)
         } yield {
           backend.summaries should not contain (block.blockHash)
-          countIn should be > countOut
+          started shouldBe true
+          finished shouldBe false
         }
 
         test.runSyncUnsafe(2.seconds)
@@ -357,21 +357,24 @@ class DownloadManagerSpec
     "cannot connect to a node" should {
       val block = arbitrary[Block].sample.map(withoutDependencies).get
 
-      "try again if the same block from the same source is scheduled again" in TestFixture(
+      "try again if the same block from the same source is scheduled again after the previous attempt is finished" in TestFixture(
         remote = _ => Task.raiseError(io.grpc.Status.UNAVAILABLE.asRuntimeException())
       ) {
         case (manager, _) =>
-          def check(i: Int) =
-            for {
-              w <- manager.scheduleDownload(summaryOf(block), source, false)
-              _ <- w.attempt
-            } yield {
-              log.causes should have size i.toLong
-              Inspectors.forAll(log.causes) { ex =>
-                ex shouldBe an[io.grpc.StatusRuntimeException]
-              }
+          for {
+            w1 <- manager.scheduleDownload(summaryOf(block), source, false)
+            r1 <- w1.attempt
+            w2 <- manager.scheduleDownload(summaryOf(block), source, false)
+            r2 <- w2.attempt
+          } yield {
+            Inspectors.forAll(Seq(r1, r2)) { r =>
+              r.isLeft shouldBe true
+              r.left.get shouldBe an[io.grpc.StatusRuntimeException]
             }
-          List(1, 2).traverse(check(_)).void
+            log.causes should have size 2
+            log.causes.head shouldBe r1.left.get
+            log.causes.last shouldBe r2.left.get
+          }
       }
 
       "try again later with exponential backoff" in (pending)
@@ -399,6 +402,7 @@ class DownloadManagerSpec
           f: Chunk.Header => Chunk.Header
       ): Iterant[Task, Chunk] => Iterant[Task, Chunk] = { it =>
         it.take(1).map { chunk =>
+          assert(chunk.content.isHeader)
           chunk.withHeader(f(chunk.getHeader))
         } ++ it.tail
       }
@@ -418,6 +422,10 @@ class DownloadManagerSpec
       "handle an empty stream" in TestFixture(
         remote = withRechunking(_.take(0))
       )(check(_, "not receive a header"))
+
+      "handle a stream that ends prematurely" in TestFixture(
+        remote = withRechunking(_.take(1))
+      )(check(_, "not decompress"))
     }
 
     "cannot query the backend" should {
@@ -534,7 +542,9 @@ object DownloadManagerSpec {
 
     def apply(
         blocks: Seq[Block] = Seq.empty,
+        // Pass in a `rechunker` method to alter the stream of block chunks returned by `getBlockChunked`.
         rechunker: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity,
+        // Pass in a `regetter` method to alter the behaviour of the `getBlock`, for example to add delays.
         regetter: Task[Option[Block]] => Task[Option[Block]] = identity
     ) = Task.now {
       val blockMap = toBlockMap(blocks)

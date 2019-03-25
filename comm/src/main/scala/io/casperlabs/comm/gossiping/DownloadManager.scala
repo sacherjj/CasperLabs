@@ -1,5 +1,6 @@
 package io.casperlabs.comm.gossiping
 
+import cats._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
 
