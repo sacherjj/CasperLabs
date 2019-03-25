@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Generator
 
 import conftest
 from casperlabsnode_testing.casperlabsnode import (
+    contract_name as CONTRACT_NAME,
     create_peer_nodes,
     docker_network_with_started_bootstrap,
     extract_block_hash_from_propose_output,
@@ -71,16 +72,16 @@ def test_metrics_api_socket(command_line_options_fixture, docker_client_fixture)
                 assert exit_code == 0, "Could not get the metrics for node {node.name}"
 
 
-def deploy_block(node, contract_name):
-    local_contract_file_path = os.path.join('resources', contract_name)
-    shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{contract_name}")
+def deploy_block(node, _contract_name):
+    local_contract_file_path = os.path.join('resources', _contract_name)
+    shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{_contract_name}")
     deploy_output = node.deploy()
     assert deploy_output.strip() == "Success!"
     logging.info(f"The deployed output is : {deploy_output}")
     block_hash_output_string = node.propose()
     block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
     assert block_hash is not None
-    logging.info(f"The block hash: {block_hash} generated for {node.container.name} for {contract_name}")
+    logging.info(f"The block hash: {block_hash} generated for {node.container.name} for {_contract_name}")
     return block_hash
 
 
@@ -103,10 +104,9 @@ def casper_propose_and_deploy(network):
     TODO: checking blocks for strings functionality has been truncated from this test case.
     Need to add once the PR https://github.com/CasperLabs/CasperLabs/pull/142 has been merged.
     """
-    contract_name = 'helloname.wasm'
     for node in network.nodes:
         logging.info("Run test on node '{}'".format(node.name))
-        deploy_block(node, contract_name)
+        deploy_block(node, CONTRACT_NAME)
 
 
 def test_casper_propose_and_deploy(command_line_options_fixture, docker_client_fixture):

@@ -51,6 +51,7 @@ casperlabsnode_bootstrap_folder = "{}/bootstrap".format(casperlabsnode_directory
 
 grpc_socket_file = "{}/.casper-node.sock".format(casperlabsnode_sockets)
 execution_engine_command = ".casperlabs/sockets/.casper-node.sock"
+contract_name = "helloname.wasm"
 
 
 class InterruptedException(Exception):
@@ -252,8 +253,8 @@ class Node:
             "--gas-limit", str(gas_limit),
             "--gas-price", str(gas_price),
             "--nonce", str(nonce),
-            "--session=/data/helloname.wasm",
-            "--payment=/data/helloname.wasm"
+            "--session=/data/{}".format(contract_name),
+            "--payment=/data/{}".format(contract_name)
         ])
 
         volumes = {
