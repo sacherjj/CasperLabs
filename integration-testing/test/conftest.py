@@ -1,15 +1,13 @@
 import sys
 sys.path.insert(0, '.')
 
-import collections
+
 import contextlib
 import dataclasses
 import os
-import pathlib
 import random
 import shutil
-import tempfile
-from typing import TYPE_CHECKING, Generator, List, TextIO
+from typing import TYPE_CHECKING, Generator, List
 
 import docker as docker_py
 import pytest
@@ -72,6 +70,7 @@ def command_line_options_fixture(request):
 
     yield command_line_options
 
+
 @contextlib.contextmanager
 def temporary_resources_genesis_folder(validator_keys: List[KeyPair]) -> Generator[str, None, None]:
     genesis_folder_path = "/tmp/resources/genesis"
@@ -83,7 +82,7 @@ def temporary_resources_genesis_folder(validator_keys: List[KeyPair]) -> Generat
             for pair in validator_keys:
                 bond = random.randint(1, 100)
                 f.write("{} {}\n".format(pair.public_key, bond))
-                with open(os.path.join("/tmp/resources/genesis/", 
+                with open(os.path.join("/tmp/resources/genesis/",
                                        "{}.sk".format(pair.public_key)), 'w') as _file:
                     _file.write("{}\n".format(pair.private_key))
         yield genesis_folder_path
@@ -110,7 +109,7 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
 
     # Using pre-generated validator key pairs by casperlabsnode. We do this because warning below  with python generated keys
     # WARN  io.casperlabs.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
-    validator_keys = [kp for kp in [bootstrap_keypair] + peers_keypairs[0:command_line_options_fixture.peer_count+1]]
+    validator_keys = [kp for kp in [bootstrap_keypair] + peers_keypairs[0: command_line_options_fixture.peer_count + 1]]
     with temporary_resources_genesis_folder(validator_keys) as genesis_folder:
         bonds_file = os.path.join(genesis_folder, "bonds.txt")
         peers_keypairs = validator_keys
