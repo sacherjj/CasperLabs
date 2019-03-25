@@ -15,7 +15,6 @@ const ALLOWED_IMPORTS: &[&str] = &[
     "add",
     "new_uref",
     "serialize_function",
-    "function_address",
     "store_function",
     "get_function",
     "load_arg",

@@ -451,7 +451,7 @@ where
         self.function_address(new_hash, hash_ptr)
     }
 
-    pub fn new_function_address(&mut self) -> [u8; 32] {
+    fn new_function_address(&mut self) -> [u8; 32] {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
         pre_hash_bytes.extend_from_slice(self.context.account.pub_key());
         pre_hash_bytes.append(&mut self.context.account.nonce().to_bytes());
@@ -466,7 +466,7 @@ where
         hash_bytes
     }
 
-    pub fn function_address(&mut self, hash_bytes: [u8; 32], dest_ptr: u32) -> Result<(), Trap> {
+    fn function_address(&mut self, hash_bytes: [u8; 32], dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &hash_bytes)
             .map_err(|e| Error::Interpreter(e).into())
@@ -582,11 +582,10 @@ const RET_FUNC_INDEX: usize = 9;
 const GET_CALL_RESULT_FUNC_INDEX: usize = 10;
 const CALL_CONTRACT_FUNC_INDEX: usize = 11;
 const GET_UREF_FUNC_INDEX: usize = 12;
-const FUNCTION_ADDRESS_FUNC_INDEX: usize = 13;
-const GAS_FUNC_INDEX: usize = 14;
-const HAS_UREF_FUNC_INDEX: usize = 15;
-const ADD_UREF_FUNC_INDEX: usize = 16;
-const STORE_FN_INDEX: usize = 17;
+const GAS_FUNC_INDEX: usize = 13;
+const HAS_UREF_FUNC_INDEX: usize = 14;
+const ADD_UREF_FUNC_INDEX: usize = 15;
+const STORE_FN_INDEX: usize = 16;
 
 impl<'a, R: DbReader> Externals for Runtime<'a, R>
 where
@@ -738,13 +737,6 @@ where
                 Ok(None)
             }
 
-            FUNCTION_ADDRESS_FUNC_INDEX => {
-                let dest_ptr = Args::parse(args)?;
-                let hash = self.new_function_address();
-                self.function_address(hash, dest_ptr)?;
-                Ok(None)
-            }
-
             GAS_FUNC_INDEX => {
                 let gas: u32 = Args::parse(args)?;
                 self.gas(u64::from(gas))?;
@@ -863,10 +855,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "add_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
                 ADD_UREF_FUNC_INDEX,
-            ),
-            "function_address" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FUNCTION_ADDRESS_FUNC_INDEX,
             ),
             "gas" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
