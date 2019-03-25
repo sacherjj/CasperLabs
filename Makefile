@@ -181,7 +181,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	@# Going to ignore errors with the rpm build here so that we can get the .deb package for docker.
 	$(eval USERID = $(shell id -u))
 	docker pull $(DOCKER_USERNAME)/buildenv:latest
-	docker run -it --rm --entrypoint sh \
+	docker run --rm --entrypoint sh \
 		-v ${PWD}:/CasperLabs \
 		$(DOCKER_USERNAME)/buildenv:latest \
 		-c "\
