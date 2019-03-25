@@ -39,13 +39,13 @@ __Note__ Successfully building from source requires attending to all of the prer
   ```
 
   rust:
-  
+
   Install packages needed for installing and building Rust.
   ```console
   dev@dev:~$ sudo apt install build-essential cmake curl -y
   ```
 
-  Install Rust  
+  Install Rust
   ```console
   dev@dev:~$ curl https://sh.rustup.rs -sSf | sh
   ...
@@ -318,16 +318,6 @@ If make fails, contract can be manually built:
 
 For ease of use node assumes a default directory that is `~/.casperlabs/` First you have to create a hidden directory.
 
-#### Run the node
-
-In the root of the node (where build.sbt lives).
-
-If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/casperlabs-node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
-
-```
-./node/target/universal/stage/bin/casperlabs-node run --casper-validator-private-key <private key from <public_key>.sk file> --casper-validator-public-key <public_key> -s
-```
-
 #### Run the Execution Engine
 
 In the root of th EE (`execution-engine/comm/`), run:
@@ -337,6 +327,16 @@ cargo run --bin casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
 
 .caspernode.sock is default socket file used for IPC communication.
+
+#### Run the node
+
+In the root of the node (where build.sbt lives).
+
+If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/casperlabs-node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
+
+```
+./node/target/universal/stage/bin/casperlabs-node run --casper-validator-private-key <private key from <public_key>.sk file> --casper-validator-public-key <public_key> -s
+```
 
 ### Deploying data
 
@@ -374,7 +374,7 @@ It's also possible subscribing to DAG changes and view them in the realtime
 
 The outputs will be saved into the files `test_0.png`, `test_1.png`, etc.
 
-For more information and possible output image formats check the help message 
+For more information and possible output image formats check the help message
 
 ```
 ./client/target/universal/stage/bin/casperlabs-client vdag --help
