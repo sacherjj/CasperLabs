@@ -1,10 +1,9 @@
 package io.casperlabs.comm.discovery
 
-import cats.Parallel
 import cats.effect.{Async, Concurrent, Sync, Timer}
 import cats.implicits._
+import cats.temp.par._
 import com.google.protobuf.ByteString
-import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.TaskContrib.ConcurrentOps
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
@@ -21,14 +20,13 @@ import monix.execution._
 import scala.concurrent.duration._
 import scala.util.Try
 
-class GrpcKademliaRPC[G[_], F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNodeAsk: Metrics](
+class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNodeAsk: Metrics: Par](
     port: Int,
     timeout: FiniteDuration
 )(
     implicit
     scheduler: Scheduler,
-    connectionsCache: ConnectionsCache[F, KademliaConnTag],
-    P: Parallel[F, G]
+    connectionsCache: ConnectionsCache[F, KademliaConnTag]
 ) extends KademliaRPC[F] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -83,13 +81,10 @@ class GrpcKademliaRPC[G[_], F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: Pe
     for {
       channel <- cell.connection(peer, enforce)
       stub    <- Sync[F].delay(KademliaGrpcMonix.stub(channel))
-      result <- TaskLike[F]
-                 .toTask(f(stub))
-                 .doOnFinish {
-                   case Some(_) => TaskLike[F].toTask(disconnect(peer))
-                   case _       => Task.unit
-                 }
-                 .to[F]
+      result <- for {
+                 e   <- f(stub).attempt
+                 res <- e.fold(e => disconnect(peer) >> Sync[F].raiseError[A](e), Sync[F].pure)
+               } yield res
       _ <- Async.shift(scheduler) // return control to caller thread
     } yield result
 
@@ -126,7 +121,7 @@ class GrpcKademliaRPC[G[_], F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: Pe
       for {
         peers <- cell.read.map(_.connections.keys.toList)
         _     <- Log[F].info("Disconnecting from all peers")
-        _     <- Parallel.parTraverse(peers)(disconnect)
+        _     <- peers.parTraverse(disconnect)
       } yield ()
 
     cell.read.flatMap { s =>

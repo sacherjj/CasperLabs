@@ -4,6 +4,7 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import cats._
 import cats.implicits._
+import cats.temp.par._
 import io.casperlabs.catscontrib._
 import Catscontrib._
 import cats.effect._
@@ -14,15 +15,13 @@ import monix.eval.{TaskLift, TaskLike}
 import monix.execution.Scheduler
 
 object KademliaNodeDiscovery {
-  private implicit val logSource: LogSource = LogSource(getClass)
-
-  def create[G[_], F[_]: Concurrent: Log: Time: Metrics: TaskLike: TaskLift: PeerNodeAsk: Timer](
+  def create[F[_]: Concurrent: Log: Time: Metrics: TaskLike: TaskLift: PeerNodeAsk: Timer: Par](
       id: NodeIdentifier,
       port: Int,
       timeout: FiniteDuration
   )(
       init: Option[PeerNode]
-  )(implicit P: Parallel[F, G], scheduler: Scheduler): Resource[F, NodeDiscovery[F]] = {
+  )(implicit scheduler: Scheduler): Resource[F, NodeDiscovery[F]] = {
     val kademliaRpcResource = Resource.make(CachedConnections[F, KademliaConnTag].map {
       implicit cache =>
         new GrpcKademliaRPC(port, timeout)

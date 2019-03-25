@@ -34,7 +34,7 @@ package object effects {
   ): Resource[Effect, NodeDiscovery[Task]] =
     Resource(
       KademliaNodeDiscovery
-        .create[Task.Par, Task](id, port, timeout)(init)
+        .create[Task](id, port, timeout)(init)
         .allocated
         .map {
           case (nd, release) => (nd, release.toEffect)

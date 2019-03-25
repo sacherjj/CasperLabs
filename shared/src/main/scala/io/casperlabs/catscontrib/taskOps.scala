@@ -22,8 +22,8 @@ object TaskContrib {
         after: FiniteDuration,
         backup: F[B]
     )(implicit C: Concurrent[F], T: Timer[F]): F[B] =
-      C.racePair(fa, T.sleep(after)).flatMap {
-        case Left((a, _)) =>
+      C.race(fa, T.sleep(after)).flatMap {
+        case Left(a) =>
           Concurrent[F].pure(a)
         case Right(_) =>
           backup
