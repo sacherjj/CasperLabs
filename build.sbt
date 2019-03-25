@@ -337,9 +337,18 @@ lazy val blockStorage = (project in file("block-storage"))
       catsCore,
       catsEffect,
       catsMtl
-    )
-  )
-  .dependsOn(shared, models % "compile->compile;test->test")
+    ),
+	  PB.protoSources in Compile := Seq(protobufDirectory),
+    includeFilter in PB.generate := new SimpleFileFilter(
+      protobufSubDirectoryFilter(
+        "io/casperlabs/storage"
+      )),
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
+  	)
+	)
+  .dependsOn(shared,smartContracts,models % "compile->compile;test->test")
 
 // Smart contract execution.
 lazy val smartContracts = (project in file("smart-contracts"))

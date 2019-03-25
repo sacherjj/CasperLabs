@@ -11,6 +11,7 @@ import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -80,7 +81,7 @@ class BlocksResponseAPITest
         dag  <- blockDagStorage.getRepresentation
         tips <- Estimator.tips[Task](dag, genesis.blockHash)
         casperEffect <- NoOpsCasperEffect[Task](
-                         HashMap.empty[BlockHash, BlockMessage],
+                         HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
                        )
         logEff             = new LogStub[Task]
@@ -146,7 +147,7 @@ class BlocksResponseAPITest
         dag  <- blockDagStorage.getRepresentation
         tips <- Estimator.tips[Task](dag, genesis.blockHash)
         casperEffect <- NoOpsCasperEffect[Task](
-                         HashMap.empty[BlockHash, BlockMessage],
+                         HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
                        )
         logEff             = new LogStub[Task]
@@ -212,7 +213,7 @@ class BlocksResponseAPITest
       dag  <- blockDagStorage.getRepresentation
       tips <- Estimator.tips[Task](dag, genesis.blockHash)
       casperEffect <- NoOpsCasperEffect[Task](
-                       HashMap.empty[BlockHash, BlockMessage],
+                       HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips
                      )
       logEff             = new LogStub[Task]

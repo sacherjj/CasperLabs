@@ -13,7 +13,6 @@ import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{BlockStore, InMemBlockDagStorage, InMemBlockStore}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -39,6 +38,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
 import com.olegpy.meow.effects._
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.concurrent.duration._
 
@@ -132,7 +132,9 @@ class NodeRuntime private[node] (
                         )
                         .toEffect
       // TODO: This change is temporary until itegulov's BlockStore implementation is in
-      blockMap <- Ref.of[Effect, Map[BlockHash, BlockMessage]](Map.empty[BlockHash, BlockMessage])
+      blockMap <- Ref.of[Effect, Map[BlockHash, BlockMsgWithTransform]](
+                   Map.empty[BlockHash, BlockMsgWithTransform]
+                 )
       blockStore = InMemBlockStore.create[Effect](
         syncEffect,
         blockMap,

@@ -9,6 +9,7 @@ import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.transport
 import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -84,7 +85,7 @@ object BlockApproverProtocolTest {
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
 
-    val genesis = HashSetCasperTest.buildGenesis(
+    val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.buildGenesis(
       wallets,
       bonds,
       1L,
@@ -93,7 +94,7 @@ object BlockApproverProtocolTest {
       deployTimestamp
     )
     for {
-      nodes <- HashSetCasperTestNode.networkEff(Vector(sk), genesis)
+      nodes <- HashSetCasperTestNode.networkEff(Vector(sk), genesis, transforms)
       node  = nodes.head
     } yield
       new BlockApproverProtocol(

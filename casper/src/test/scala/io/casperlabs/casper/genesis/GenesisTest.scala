@@ -28,6 +28,7 @@ import cats.effect.Sync
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.BlockMetadata
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
@@ -142,13 +143,14 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       printBonds(bondsFile.toString)
 
       for {
-        genesis <- fromBondsFile(genesisPath, bondsFile)(
-                    executionEngineService,
-                    log,
-                    time
-                  )
-        bonds = ProtoUtil.bonds(genesis)
-        _     = log.infos.isEmpty should be(true)
+        genesisWithTransform <- fromBondsFile(genesisPath, bondsFile)(
+                                 executionEngineService,
+                                 log,
+                                 time
+                               )
+        BlockMsgWithTransform(Some(genesis), _) = genesisWithTransform
+        bonds                                   = ProtoUtil.bonds(genesis)
+        _                                       = log.infos.isEmpty should be(true)
         result = validators
           .map {
             case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
@@ -171,16 +173,16 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
           implicit val logEff                    = log
           implicit val executionEngineServiceEff = executionEngineService
           for {
-            genesis <- fromBondsFile(genesisPath)(executionEngineService, log, time)
-            _       <- BlockStore[Task].put(genesis.blockHash, genesis)
-            dag     <- blockDagStorage.getRepresentation
+            genesisWithTransform                             <- fromBondsFile(genesisPath)(executionEngineService, log, time)
+            BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
+            _ <- BlockStore[Task]
+                  .put(genesis.blockHash, genesis, transforms)
+            dag <- blockDagStorage.getRepresentation
             // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
             maybePostGenesisStateHash <- BlockGenerator
                                           .validateBlockCheckpoint[Task](
                                             genesis,
-                                            dag,
-                                            (_: BlockMetadata) =>
-                                              Seq.empty[TransformEntry].pure[Task]
+                                            dag
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }
@@ -197,9 +199,10 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       printBonds(bondsFile)
 
       for {
-        genesis <- fromBondsFile(genesisPath)(executionEngineService, log, time)
-        bonds   = ProtoUtil.bonds(genesis)
-        _       = log.infos.length should be(1)
+        genesisWithTransform                    <- fromBondsFile(genesisPath)(executionEngineService, log, time)
+        BlockMsgWithTransform(Some(genesis), _) = genesisWithTransform
+        bonds                                   = ProtoUtil.bonds(genesis)
+        _                                       = log.infos.length should be(1)
         result = validators
           .map {
             case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
@@ -226,7 +229,7 @@ object GenesisTest {
       implicit executionEngineService: ExecutionEngineService[Task],
       log: LogStub[Task],
       time: LogicalTime[Task]
-  ): Task[BlockMessage] =
+  ): Task[BlockMsgWithTransform] =
     for {
       bonds <- Genesis.getBonds[Task](genesisPath, bondsPath, numValidators)
       _     <- ExecutionEngineService[Task].setBonds(bonds)
