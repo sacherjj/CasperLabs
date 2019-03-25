@@ -27,6 +27,8 @@ class ExecutionEngineConf[F[_]: Sync: Log: TaskLift](
   val eventLoopGroup =
     if (Epoll.isAvailable) new EpollEventLoopGroup() else new KQueueEventLoopGroup()
 
+  // If we point the socket at a non-existing file, or one where the EE isn't listening,
+  // it's not going to fail here, only later when we try to make a call.
   val channelF = Sync[F].delay(
     NettyChannelBuilder
       .forAddress(new DomainSocketAddress(addr.toFile))
