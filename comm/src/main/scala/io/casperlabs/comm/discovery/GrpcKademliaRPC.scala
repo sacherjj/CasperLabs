@@ -1,6 +1,6 @@
 package io.casperlabs.comm.discovery
 
-import cats.effect.{Async, Concurrent, Sync, Timer}
+import cats.effect._
 import cats.implicits._
 import cats.temp.par._
 import com.google.protobuf.ByteString
@@ -81,10 +81,10 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
     for {
       channel <- cell.connection(peer, enforce)
       stub    <- Sync[F].delay(KademliaGrpcMonix.stub(channel))
-      result <- for {
-                 e   <- f(stub).attempt
-                 res <- e.fold(e => disconnect(peer) >> Sync[F].raiseError[A](e), Sync[F].pure)
-               } yield res
+      result <- Sync[F].guaranteeCase(f(stub)) {
+                 case ExitCase.Error(_) => disconnect(peer)
+                 case _                 => ().pure[F]
+               }
       _ <- Async.shift(scheduler) // return control to caller thread
     } yield result
 
