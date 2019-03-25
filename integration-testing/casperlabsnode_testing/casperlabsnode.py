@@ -46,9 +46,6 @@ casperlabsnode_binary = '/opt/docker/bin/bootstrap'
 casperlabsnode_directory = "/root/.casperlabs"
 casperlabsnode_deploy_dir = "{}/deploy".format(casperlabsnode_directory)
 casperlabsnode_genesis_folder = '{}/genesis/'.format(casperlabsnode_directory)
-casperlabsnode_bonds_file = '{}/genesis/bonds.txt'.format(casperlabsnode_directory)
-casperlabsnode_certificate = '{}/node.certificate.pem'.format(casperlabsnode_directory)
-casperlabsnode_key = '{}/node.key.pem'.format(casperlabsnode_directory)
 casperlabsnode_sockets = '{}/sockets'.format(casperlabsnode_directory)
 casperlabsnode_bootstrap_folder = "{}/bootstrap".format(casperlabsnode_directory)
 
