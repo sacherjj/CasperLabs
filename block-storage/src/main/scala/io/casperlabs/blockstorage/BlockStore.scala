@@ -32,11 +32,6 @@ trait BlockStore[F[_]] {
   )(implicit applicative: Applicative[F]): F[Option[BlockMessage]] =
     get(blockHash).map(it => it.flatMap(_.blockMessage))
 
-  def getTransforms(
-      blockHash: BlockHash
-  )(implicit applicative: Applicative[F]): F[Seq[TransformEntry]] =
-    get(blockHash).map(it => it.fold(Seq.empty[TransformEntry])(_.transformEntry))
-
   def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]]
 
   def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit]

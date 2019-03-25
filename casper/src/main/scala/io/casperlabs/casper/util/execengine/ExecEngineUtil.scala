@@ -146,8 +146,14 @@ object ExecEngineUtil {
       ProtoUtil.postStateHash(soleParent).pure[F] //single parent
     case initParent :: _ => //multiple parents
       for {
-        bs       <- blocksToApply[F](parents, dag)
-        diffs    <- bs.traverse(b => BlockStore[F].getTransforms(b.blockHash)).map(_.flatten)
+        bs <- blocksToApply[F](parents, dag)
+        diffs <- bs
+                  .traverse(
+                    b =>
+                      BlockStore[F]
+                        .get(b.blockHash)
+                        .map(_.fold(Seq.empty[TransformEntry])(_.transformEntry)))
+                  .map(_.flatten)
         prestate = ProtoUtil.postStateHash(initParent)
         result <- MonadError[F, Throwable].rethrow(
                    ExecutionEngineService[F].commit(prestate, diffs)
