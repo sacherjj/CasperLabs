@@ -240,7 +240,7 @@ class Node:
         try:
             logging.info("COMMAND {}".format(command))
             output = self.docker_client.containers.run(
-                image="casperlabs/client:latest",
+                image="casperlabs/client:{}".format(TAG),
                 auto_remove=True,
                 name="client-{}-latest".format(
                     ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(5)),
@@ -255,9 +255,8 @@ class Node:
             logging.warning("EXITED code={} command='{}' stderr='{}'".format(err.exit_status, err.command, err.stderr))
             raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
 
-    def deploy(self, session_code: str, payment_code: str,
-               from_address: str = "00000000000000000000", gas_limit: int = 1000000,
-               gas_price: int = 1, nonce: int = 0) -> str:
+    def deploy(self, from_address: str = "00000000000000000000",
+               gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
 
         command = " ".join([
             "--host",
@@ -349,13 +348,10 @@ def make_node(
     name: str,
     network: str,
     socket_volume: str,
-    bonds_file: str,
     container_command: str,
     container_command_options: Dict,
     command_timeout: int,
     extra_volumes: Dict[str, Dict[str, str]],
-    allowed_peers: Optional[List[str]],
-    allowed_engines: Optional[List[str]],
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
     is_bootstrap: bool = False
@@ -438,16 +434,11 @@ def make_bootstrap_node(
     docker_client: "DockerClient",
     network: str,
     socket_volume: str,
-    bonds_file: str,
     key_pair: "KeyPair",
     command_timeout: int,
-    allowed_peers: Optional[List[str]] = None,
-    allowed_engines: Optional[List[str]] = None,
-    image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
     cli_options: Optional[Dict] = None,
     container_name: Optional[str] = None,
-    mount_dir: Optional[str] = None,
 ) -> Node:
 
     genesis_folder = "/tmp/resources/genesis"
@@ -484,13 +475,10 @@ def make_bootstrap_node(
         name=name,
         network=network,
         socket_volume=socket_volume,
-        bonds_file=bonds_file,
         container_command='run',
         container_command_options=container_command_options,
         command_timeout=command_timeout,
         extra_volumes=volumes,
-        allowed_peers=allowed_peers,
-        allowed_engines=allowed_engines,
         mem_limit=mem_limit if mem_limit is not None else '4G',
         is_bootstrap=True
     )
@@ -502,13 +490,9 @@ def make_execution_engine(
     docker_client: "DockerClient",
     network: str,
     socket_volume: str,
-    command_timeout: int,
     name: str,
     command: str,
     image: str = DEFAULT_ENGINE_IMAGE,
-    container_name: Optional[str] = None,
-    allowed_peers: Optional[List[str]] = None,
-    allowed_engines: Optional[List[str]] = None
 ):
     name = make_engine_name(network, name)
     volumes = {
@@ -544,13 +528,9 @@ def make_peer(
     network: str,
     socket_volume: str,
     name: str,
-    bonds_file: str,
     command_timeout: int,
     bootstrap: Node,
     key_pair: "KeyPair",
-    allowed_peers: Optional[List[str]] = None,
-    allowed_engines: Optional[List[str]] = None,
-    image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
@@ -571,13 +551,10 @@ def make_peer(
         name=name,
         network=network,
         socket_volume=socket_volume,
-        bonds_file=bonds_file,
         container_command='run',
         container_command_options=container_command_options,
         command_timeout=command_timeout,
-        extra_volumes=[],
-        allowed_peers=allowed_peers,
-        allowed_engines=allowed_engines,
+        extra_volumes={},
         mem_limit=mem_limit if not None else '4G',
     )
     return container
@@ -598,7 +575,6 @@ def started_peer(
         network=network,
         socket_volume=socket_volume,
         name=name,
-        bonds_file=context.bonds_file,
         bootstrap=bootstrap,
         key_pair=key_pair,
         command_timeout=context.command_timeout,
@@ -615,12 +591,10 @@ def create_peer_nodes(
     docker_client: "DockerClient",
     bootstrap: Node,
     network: str,
-    bonds_file: str,
     key_pairs: List["KeyPair"],
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     allowed_engines: Optional[List[str]] = None,
-    image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
 ):
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
@@ -643,9 +617,6 @@ def create_peer_nodes(
                 command=execution_engine_command,
                 network=network,
                 socket_volume=volume_name,
-                allowed_engines=allowed_engines,
-                allowed_peers=allowed_peers,
-                command_timeout=command_timeout,
             )
             execution_engines.append(engine)
 
@@ -654,13 +625,9 @@ def create_peer_nodes(
                 network=network,
                 socket_volume=volume_name,
                 name=str(i),
-                bonds_file=bonds_file,
                 command_timeout=command_timeout,
                 bootstrap=bootstrap,
                 key_pair=key_pair,
-                allowed_peers=allowed_peers,
-                allowed_engines=allowed_engines,
-                image=image,
                 mem_limit=mem_limit if mem_limit is not None else '4G',
             )
             result.append(peer_node)
@@ -701,24 +668,21 @@ def docker_volume(docker_client: "DockerClient") -> Generator[str, None, None]:
 
 
 @contextlib.contextmanager
-def started_bootstrap_node(*, context: TestingContext, network: str, socket_volume: str, container_name: str = None, cli_options=None, mount_dir: str = None) -> Generator[Node, None, None]:
+def started_bootstrap_node(*, context: TestingContext, network: str, socket_volume: str, container_name: str = None) -> Generator[Node, None, None]:
     engine = make_execution_engine(
         docker_client=context.docker,
         name="bootstrap",
         command=execution_engine_command,
         network=network,
         socket_volume=socket_volume,
-        command_timeout=context.command_timeout,
     )
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
         network=network,
         socket_volume=socket_volume,
-        bonds_file=context.bonds_file,
         key_pair=context.bootstrap_keypair,
         command_timeout=context.command_timeout,
         container_name=container_name,
-        mount_dir=mount_dir,
     )
     try:
         wait_for_node_started(bootstrap_node, context.node_startup_timeout)
@@ -729,15 +693,13 @@ def started_bootstrap_node(*, context: TestingContext, network: str, socket_volu
 
 
 @contextlib.contextmanager
-def docker_network_with_started_bootstrap(context, *, container_name=None, cli_options=None):
+def docker_network_with_started_bootstrap(context, *, container_name=None):
     with docker_network(context.docker) as network:
         with docker_volume(context.docker) as volume:
             with started_bootstrap_node(context=context,
                                         network=network,
                                         socket_volume=volume,
-                                        container_name=container_name,
-                                        cli_options=cli_options,
-                                        mount_dir=context.mount_dir) as node:
+                                        container_name=container_name) as node:
                 yield node
 
 
