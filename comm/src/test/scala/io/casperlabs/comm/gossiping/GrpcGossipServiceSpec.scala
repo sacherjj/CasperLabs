@@ -31,6 +31,8 @@ class GrpcGossipServiceSpec
   import GrpcGossipServiceSpec._
   import Scheduler.Implicits.global
 
+  implicit val consensusConfig = ConsensusConfig()
+
   // Test data that we can set in each test.
   val testDataRef = new AtomicReference(TestData.empty)
   // Set up the server and client once, to be shared, to make tests faster.
