@@ -6,5 +6,5 @@ authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 [dependencies]
 common = { path = "../common", features = ["std"], package = "casperlabs-contract-ffi" }
 gens = { path = "../gens" }
-proptest = "0.8.7"
+proptest = "0.9.2"
 
