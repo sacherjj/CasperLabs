@@ -426,7 +426,32 @@ where
         Ok(self.host_buf.len())
     }
 
-    pub fn function_address(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+    pub fn store_function(
+        &mut self,
+        name_ptr: u32,
+        name_size: u32,
+        urefs_ptr: u32,
+        urefs_size: u32,
+        hash_ptr: u32,
+    ) -> Result<(), Trap> {
+        let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
+        let uref_bytes = self
+            .memory
+            .get(urefs_ptr, urefs_size as usize)
+            .map_err(Error::Interpreter)?;
+        let urefs: BTreeMap<String, Key> =
+            deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
+        urefs
+            .iter()
+            .try_for_each(|(_, v)| self.context.validate_key(&v))?;
+        let contract = common::value::Contract::new(fn_bytes, urefs);
+        let new_hash = self.new_function_address();
+        self.state
+            .write(Key::Hash(new_hash), Value::Contract(contract));
+        self.function_address(new_hash, hash_ptr)
+    }
+
+    pub fn new_function_address(&mut self) -> [u8; 32] {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
         pre_hash_bytes.extend_from_slice(self.context.account.pub_key());
         pre_hash_bytes.append(&mut self.context.account.nonce().to_bytes());
@@ -438,7 +463,10 @@ where
         hasher.input(&pre_hash_bytes);
         let mut hash_bytes = [0; 32];
         hasher.variable_result(|hash| hash_bytes.clone_from_slice(hash));
+        hash_bytes
+    }
 
+    pub fn function_address(&mut self, hash_bytes: [u8; 32], dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &hash_bytes)
             .map_err(|e| Error::Interpreter(e).into())
@@ -558,6 +586,7 @@ const FUNCTION_ADDRESS_FUNC_INDEX: usize = 13;
 const GAS_FUNC_INDEX: usize = 14;
 const HAS_UREF_FUNC_INDEX: usize = 15;
 const ADD_UREF_FUNC_INDEX: usize = 16;
+const STORE_FN_INDEX: usize = 17;
 
 impl<'a, R: DbReader> Externals for Runtime<'a, R>
 where
@@ -711,13 +740,27 @@ where
 
             FUNCTION_ADDRESS_FUNC_INDEX => {
                 let dest_ptr = Args::parse(args)?;
-                self.function_address(dest_ptr)?;
+                let hash = self.new_function_address();
+                self.function_address(hash, dest_ptr)?;
                 Ok(None)
             }
 
             GAS_FUNC_INDEX => {
                 let gas: u32 = Args::parse(args)?;
                 self.gas(u64::from(gas))?;
+                Ok(None)
+            }
+
+            STORE_FN_INDEX => {
+                // args(0) = pointer to function name in wasm memory
+                // args(1) = size of the name
+                // args(2) = pointer to additional unforgable names
+                //           to be save with the function body
+                // args(3) = size of the additional unforgable names
+                // args(4) = pointer to a wasm memory where we will save
+                //           hash of the new function
+                let (name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr) = Args::parse(args)?;
+                self.store_function(name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr)?;
                 Ok(None)
             }
 
@@ -828,6 +871,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "gas" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
                 GAS_FUNC_INDEX,
+            ),
+            "store_function" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 5][..], None),
+                STORE_FN_INDEX,
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(

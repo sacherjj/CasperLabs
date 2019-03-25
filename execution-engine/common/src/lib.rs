@@ -35,7 +35,13 @@ mod ext_ffi {
         pub fn new_uref(key_ptr: *mut u8);
         pub fn serialize_function(name_ptr: *const u8, name_size: usize) -> usize;
         pub fn get_function(dest_ptr: *mut u8); //can only be called after `serialize_function`
-        pub fn function_address(dest_ptr: *mut u8);
+        pub fn store_function(
+            value_ptr: *const u8,
+            value_size: usize,
+            extra_urefs_ptr: *const u8,
+            extra_urefs_size: usize,
+            hash_ptr: *const u8,
+        );
         pub fn load_arg(i: u32) -> usize;
         pub fn get_arg(dest: *mut u8); //can only be called after `load_arg`
         pub fn ret(
