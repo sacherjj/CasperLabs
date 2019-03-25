@@ -80,6 +80,11 @@ object BlockStore {
         blockHash: BlockHash
     )(implicit applicative: Applicative[F]): F[Option[BlockMessage]] =
       blockStore.get(blockHash).map(it => it.flatMap(_.blockMessage))
+
+    def getTransforms(
+        blockHash: BlockHash
+    )(implicit applicative: Applicative[F]): F[Option[Seq[TransformEntry]]] =
+      blockStore.get(blockHash).map(_.map(_.transformEntry))
   }
   def apply[F[_]](implicit ev: BlockStore[F]): BlockStore[F] = ev
 

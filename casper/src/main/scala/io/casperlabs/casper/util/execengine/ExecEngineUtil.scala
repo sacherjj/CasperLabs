@@ -151,8 +151,8 @@ object ExecEngineUtil {
                   .traverse(
                     b =>
                       BlockStore[F]
-                        .get(b.blockHash)
-                        .map(_.fold(Seq.empty[TransformEntry])(_.transformEntry))
+                        .getTransforms(b.blockHash)
+                        .map(_.getOrElse(Seq.empty[TransformEntry]))
                   )
                   .map(_.flatten)
         prestate = ProtoUtil.postStateHash(initParent)
