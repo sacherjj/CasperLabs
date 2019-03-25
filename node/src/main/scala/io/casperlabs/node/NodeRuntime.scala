@@ -13,7 +13,6 @@ import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{BlockStore, InMemBlockDagStorage, InMemBlockStore}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform}
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -39,6 +38,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
 import com.olegpy.meow.effects._
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.concurrent.duration._
 

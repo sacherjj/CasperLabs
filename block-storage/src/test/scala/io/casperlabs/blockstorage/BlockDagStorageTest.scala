@@ -7,13 +7,14 @@ import cats.implicits._
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
-import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform}
+import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.models.BlockMetadata
-import io.casperlabs.models.blockImplicits._
+import io.casperlabs.blockstorage.blockImplicits._
 import io.casperlabs.shared
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._

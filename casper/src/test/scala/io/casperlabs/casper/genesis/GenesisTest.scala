@@ -14,7 +14,7 @@ import io.casperlabs.casper.helper.{
   BlockUtil,
   HashSetCasperTestNode
 }
-import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform, Bond}
+import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib._
 import io.casperlabs.crypto.codec.Base16
@@ -28,6 +28,7 @@ import cats.effect.Sync
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.BlockMetadata
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {

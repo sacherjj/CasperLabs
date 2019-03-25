@@ -5,9 +5,9 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
-import io.casperlabs.casper.protocol.BlockMsgWithTransform
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.language.higherKinds
 

@@ -9,6 +9,7 @@ import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.transport
 import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 

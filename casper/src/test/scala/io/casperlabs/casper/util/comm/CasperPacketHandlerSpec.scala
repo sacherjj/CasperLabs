@@ -41,6 +41,7 @@ import monix.eval.instances._
 import monix.execution.Scheduler
 import org.scalatest.{Matchers, WordSpec}
 import io.casperlabs.casper.util.TestTime
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.concurrent.duration._
 

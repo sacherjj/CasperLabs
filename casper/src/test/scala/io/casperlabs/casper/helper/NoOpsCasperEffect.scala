@@ -5,9 +5,10 @@ import cats.effect.Sync
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform, DeployData}
+import io.casperlabs.casper.protocol.{BlockMessage, DeployData}
 import io.casperlabs.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
 import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.collection.mutable.{Map => MutableMap}
 

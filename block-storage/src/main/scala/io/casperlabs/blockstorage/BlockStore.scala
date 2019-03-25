@@ -3,10 +3,11 @@ package io.casperlabs.blockstorage
 import cats.implicits._
 import cats.{Applicative, Apply}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform}
+import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.language.higherKinds
 

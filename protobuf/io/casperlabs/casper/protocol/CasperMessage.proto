@@ -9,7 +9,6 @@ import "google/protobuf/empty.proto";
 // make a scalapb directory in this file's location and place it inside
 
 import "scalapb/scalapb.proto";
-import "io/casperlabs/ipc/ipc.proto";
 
 option (scalapb.options) = {
   package_name: "io.casperlabs.casper.protocol"
@@ -220,11 +219,6 @@ message BlockMessage {
     string sigAlgorithm = 8; // name of the algorithm used to sign
     string shardId = 9; // identifier of the shard where the block was created
     bytes extraBytes = 10;
-}
-
-message BlockMsgWithTransform {
-    io.casperlabs.casper.protocol.BlockMessage blockMessage = 1;
-    repeated io.casperlabs.ipc.TransformEntry transformEntry = 2;
 }
 
 message BlockMetadataInternal {

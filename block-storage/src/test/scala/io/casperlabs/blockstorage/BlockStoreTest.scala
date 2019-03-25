@@ -6,13 +6,14 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.InMemBlockStore.emptyMapRef
-import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform, Header}
+import io.casperlabs.casper.protocol.{BlockMessage, Header}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
-import io.casperlabs.models.blockImplicits.{blockBatchesGen, blockElementsGen}
+import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElementsGen}
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global

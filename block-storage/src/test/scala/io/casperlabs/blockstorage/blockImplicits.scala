@@ -1,8 +1,9 @@
-package io.casperlabs.models
+package io.casperlabs.blockstorage
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
 import io.casperlabs.ipc._
+import io.casperlabs.storage.BlockMsgWithTransform
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen.listOfN
 import org.scalacheck.{Arbitrary, Gen}

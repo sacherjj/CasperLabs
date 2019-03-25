@@ -16,6 +16,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, _}
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
 import org.scalatest.{Assertion, FlatSpec, Matchers}

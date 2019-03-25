@@ -20,6 +20,7 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.shared.Time
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}

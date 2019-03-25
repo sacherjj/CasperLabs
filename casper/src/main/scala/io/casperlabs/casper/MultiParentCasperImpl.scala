@@ -27,6 +27,7 @@ import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.BlockMsgWithTransform
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl

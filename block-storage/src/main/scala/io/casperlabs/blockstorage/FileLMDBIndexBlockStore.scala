@@ -18,10 +18,11 @@ import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.casper.protocol.{BlockMessage, BlockMsgWithTransform}
+import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
+import io.casperlabs.storage.BlockMsgWithTransform
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 

@@ -21,6 +21,7 @@ import io.casperlabs.ipc
 import io.casperlabs.ipc.{DeployResult, TransformEntry}
 import io.casperlabs.shared.{Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}

@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package io.casperlabs.storage;
+
+import "io/casperlabs/casper/protocol/CasperMessage.proto";
+import "io/casperlabs/ipc/ipc.proto";
+
+message BlockMsgWithTransform {
+    io.casperlabs.casper.protocol.BlockMessage block_message = 1;
+    repeated io.casperlabs.ipc.TransformEntry transform_entry = 2;
+}
