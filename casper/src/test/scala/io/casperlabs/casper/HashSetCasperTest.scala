@@ -47,7 +47,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   private val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
   private val bonds       = createBonds(validators)
   private val minimumBond = 100L
-  private val (genesis, transforms) =
+  private val BlockMsgWithTransform(Some(genesis), transforms) =
     buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
 
   //put a new casper instance at the start of each
@@ -438,7 +438,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   it should "not fail if the forkchoice changes after a bonding event" in {
     val localValidators = validatorKeys.take(3)
     val localBonds      = localValidators.map(Ed25519.toPublic).zip(List(10L, 30L, 5000L)).toMap
-    val (localGenesis, localTransforms) =
+    val BlockMsgWithTransform(Some(localGenesis), localTransforms) =
       buildGenesis(Nil, localBonds, 1L, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
     for {
       nodes <- HashSetCasperTestNode.networkEff(localValidators, localGenesis, localTransforms)
@@ -934,7 +934,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   it should "increment last finalized block as appropriate in round robin" in effectTest {
     val stake      = 10L
     val equalBonds = validators.map(_ -> stake).toMap
-    val (genesisWithEqualBonds, transformsWithEqualBonds) =
+    val BlockMsgWithTransform(Some(genesisWithEqualBonds), transformsWithEqualBonds) =
       buildGenesis(Seq.empty, equalBonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
 
     def checkLastFinalizedBlock(
@@ -1113,7 +1113,7 @@ object HashSetCasperTest {
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
-  def createGenesis(bonds: Map[Array[Byte], Long]): (BlockMessage, Seq[TransformEntry]) =
+  def createGenesis(bonds: Map[Array[Byte], Long]): BlockMsgWithTransform =
     buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
 
   def buildGenesis(
@@ -1123,7 +1123,7 @@ object HashSetCasperTest {
       maximumBond: Long,
       faucetCode: String => String,
       deployTimestamp: Long
-  ): (BlockMessage, Seq[TransformEntry]) = {
+  ): BlockMsgWithTransform = {
     implicit val logEff                  = new LogStub[Task]()
     val initial                          = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "casperlabs")
     implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)

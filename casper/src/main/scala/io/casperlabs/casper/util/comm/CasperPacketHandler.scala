@@ -95,8 +95,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                     conf.shardId,
                     conf.deployTimestamp
                   )
-        (genesisBlock, genesisTransforms) = genesis
-        validatorId                       <- ValidatorIdentity.fromConfig[F](conf)
+        BlockMsgWithTransform(Some(genesisBlock), genesisTransforms) = genesis
+        validatorId                                                  <- ValidatorIdentity.fromConfig[F](conf)
         bondedValidators = genesisBlock.body
           .flatMap(_.state.map(_.bonds.map(_.validator).toSet))
           .getOrElse(Set.empty)

@@ -53,7 +53,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     val bonds                      = createBonds(Seq(validatorPk))
     val requiredSigs               = 1
     val deployTimestamp            = 1L
-    val (genesis, transforms) =
+    val BlockMsgWithTransform(Some(genesis), transforms) =
       buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
     val validatorId       = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
     val storageSize: Long = 1024L * 1024
@@ -318,10 +318,10 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       val fixture = setup()
       import fixture._
 
-      val (_, validators)        = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-      val bonds                  = HashSetCasperTest.createBonds(validators)
-      val (genesis, transforms)  = HashSetCasperTest.createGenesis(bonds)
-      val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
+      val (_, validators)                                  = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+      val bonds                                            = HashSetCasperTest.createBonds(validators)
+      val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.createGenesis(bonds)
+      val approvedBlockCandidate                           = ApprovedBlockCandidate(block = Some(genesis))
       val approvedBlock: ApprovedBlock = ApprovedBlock(
         candidate = Some(approvedBlockCandidate),
         sigs = Seq(

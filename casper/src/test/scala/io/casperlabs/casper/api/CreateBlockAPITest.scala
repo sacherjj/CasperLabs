@@ -31,9 +31,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   private implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
   implicit val metrics                      = new Metrics.MetricsNOP[Task]
 
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val bonds                       = createBonds(validators)
-  private val (genesis, transforms)       = createGenesis(bonds)
+  private val (validatorKeys, validators)                      = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val bonds                                            = createBonds(validators)
+  private val BlockMsgWithTransform(Some(genesis), transforms) = createGenesis(bonds)
 
   "createBlock" should "not allow simultaneous calls" in {
     implicit val scheduler = Scheduler.fixedPool("three-threads", 3)

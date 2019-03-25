@@ -147,9 +147,9 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
                                  log,
                                  time
                                )
-        (genesis, _) = genesisWithTransform
-        bonds        = ProtoUtil.bonds(genesis)
-        _            = log.infos.isEmpty should be(true)
+        BlockMsgWithTransform(Some(genesis), _) = genesisWithTransform
+        bonds                                   = ProtoUtil.bonds(genesis)
+        _                                       = log.infos.isEmpty should be(true)
         result = validators
           .map {
             case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
@@ -172,8 +172,8 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
           implicit val logEff                    = log
           implicit val executionEngineServiceEff = executionEngineService
           for {
-            genesisWithTransform  <- fromBondsFile(genesisPath)(executionEngineService, log, time)
-            (genesis, transforms) = genesisWithTransform
+            genesisWithTransform                             <- fromBondsFile(genesisPath)(executionEngineService, log, time)
+            BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
             _ <- BlockStore[Task]
                   .put(genesis.blockHash, genesis, transforms)
             dag <- blockDagStorage.getRepresentation
@@ -198,10 +198,10 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       printBonds(bondsFile)
 
       for {
-        genesisWithTransform <- fromBondsFile(genesisPath)(executionEngineService, log, time)
-        (genesis, _)         = genesisWithTransform
-        bonds                = ProtoUtil.bonds(genesis)
-        _                    = log.infos.length should be(1)
+        genesisWithTransform                    <- fromBondsFile(genesisPath)(executionEngineService, log, time)
+        BlockMsgWithTransform(Some(genesis), _) = genesisWithTransform
+        bonds                                   = ProtoUtil.bonds(genesis)
+        _                                       = log.infos.length should be(1)
         result = validators
           .map {
             case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
@@ -228,7 +228,7 @@ object GenesisTest {
       implicit executionEngineService: ExecutionEngineService[Task],
       log: LogStub[Task],
       time: LogicalTime[Task]
-  ): Task[(BlockMessage, Seq[TransformEntry])] =
+  ): Task[BlockMsgWithTransform] =
     for {
       bonds <- Genesis.getBonds[Task](genesisPath, bondsPath, numValidators)
       _     <- ExecutionEngineService[Task].setBonds(bonds)

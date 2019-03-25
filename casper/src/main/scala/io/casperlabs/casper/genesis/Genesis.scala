@@ -45,7 +45,7 @@ object Genesis {
       faucetCode: String => String,
       startHash: StateHash,
       timestamp: Long
-  ): F[(BlockMessage, Seq[TransformEntry])] =
+  ): F[BlockMsgWithTransform] =
     withContracts(
       defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
       initial,
@@ -56,7 +56,7 @@ object Genesis {
       blessedTerms: List[DeployData],
       initial: BlockMessage,
       startHash: StateHash
-  ): F[(BlockMessage, Seq[TransformEntry])] =
+  ): F[BlockMsgWithTransform] =
     for {
       processedDeploys <- MonadError[F, Throwable].rethrow(
                            ExecutionEngineService[F]
@@ -97,7 +97,7 @@ object Genesis {
       body          = Body(state = stateWithContracts, deploys = deploysForBlock)
       header        = blockHeader(body, List.empty[ByteString], version, timestamp)
       unsignedBlock = unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
-    } yield (unsignedBlock, transforms)
+    } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
 
   def withoutContracts(
       bonds: Map[Array[Byte], Long],
@@ -131,7 +131,7 @@ object Genesis {
       faucet: Boolean,
       shardId: String,
       deployTimestamp: Option[Long]
-  ): F[(BlockMessage, Seq[TransformEntry])] =
+  ): F[BlockMsgWithTransform] =
     for {
       wallets   <- getWallets[F](walletsPath)
       bonds     <- ExecutionEngineService[F].computeBonds(ExecutionEngineService[F].emptyStateHash)

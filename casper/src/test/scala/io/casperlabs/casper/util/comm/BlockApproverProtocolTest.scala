@@ -84,7 +84,7 @@ object BlockApproverProtocolTest {
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
 
-    val (genesis, transforms) = HashSetCasperTest.buildGenesis(
+    val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.buildGenesis(
       wallets,
       bonds,
       1L,
