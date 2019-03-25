@@ -65,7 +65,7 @@ class GenerateCertificateIfAbsent[F[_]: Sync](implicit log: Log[F]) {
       pw =>
         Sync[F].delay(
           pw.write(certPrint.print(certHelp.generate(keyPair)))
-      )
+        )
     )
   }
 
@@ -76,7 +76,7 @@ class GenerateCertificateIfAbsent[F[_]: Sync](implicit log: Log[F]) {
       pw =>
         Sync[F].delay(
           pw.write(certPrint.printPrivateKey(keyPair.getPrivate))
-      )
+        )
     )
   }
 }

@@ -41,7 +41,7 @@ trait BlockDagStorageTest
               )
           dag <- dagStorage.getRepresentation
           blockElementLookups <- blockElements.traverse {
-                                  case BlockMsgWithTransform(Some(b), transform) =>
+                                  case BlockMsgWithTransform(Some(b), _) =>
                                     for {
                                       blockMetadata     <- dag.lookup(b.blockHash)
                                       latestMessageHash <- dag.latestMessageHash(b.sender)
@@ -54,7 +54,7 @@ trait BlockDagStorageTest
           _ = blockElementLookups.zip(blockElements).foreach {
             case (
                 (blockMetadata, latestMessageHash, latestMessage),
-                BlockMsgWithTransform(Some(b), transform)
+                BlockMsgWithTransform(Some(b), _)
                 ) =>
               blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
               latestMessageHash shouldBe Some(b.blockHash)
@@ -162,7 +162,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     for {
       dag <- storage.getRepresentation
       list <- blockElements.traverse {
-               case BlockMsgWithTransform(Some(b), transform) =>
+               case BlockMsgWithTransform(Some(b), _) =>
                  for {
                    blockMetadata     <- dag.lookup(b.blockHash)
                    latestMessageHash <- dag.latestMessageHash(b.sender)
@@ -357,7 +357,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
                 b =>
                   blockStore.put(b.getBlockMessage.blockHash, b) *> firstStorage.insert(
                     b.getBlockMessage
-                  )
+                )
               )
           _ <- firstStorage.close()
           _ <- Sync[Task].delay {

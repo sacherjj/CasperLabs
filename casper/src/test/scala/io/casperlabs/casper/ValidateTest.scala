@@ -576,13 +576,12 @@ class ValidateTest
 
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val (_, validators)                                  = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-      val bonds                                            = HashSetCasperTest.createBonds(validators)
-      val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.createGenesis(bonds)
-      val genesisBonds                                     = ProtoUtil.bonds(genesis)
+      val (_, validators)                         = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+      val bonds                                   = HashSetCasperTest.createBonds(validators)
+      val BlockMsgWithTransform(Some(genesis), _) = HashSetCasperTest.createGenesis(bonds)
+      val genesisBonds                            = ProtoUtil.bonds(genesis)
 
       val storageDirectory                 = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-      val storageSize: Long                = 1024L * 1024
       implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
       implicit val log                     = new LogStub[Task]
       for {
@@ -633,7 +632,7 @@ class ValidateTest
   "Block hash format validation" should "fail on invalid hash" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
-      val BlockMsgWithTransform(Some(block), transforms) =
+      val BlockMsgWithTransform(Some(block), _) =
         HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation

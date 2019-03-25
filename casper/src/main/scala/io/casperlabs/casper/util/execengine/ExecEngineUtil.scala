@@ -152,7 +152,8 @@ object ExecEngineUtil {
                     b =>
                       BlockStore[F]
                         .get(b.blockHash)
-                        .map(_.fold(Seq.empty[TransformEntry])(_.transformEntry)))
+                        .map(_.fold(Seq.empty[TransformEntry])(_.transformEntry))
+                  )
                   .map(_.flatten)
         prestate = ProtoUtil.postStateHash(initParent)
         result <- MonadError[F, Throwable].rethrow(
