@@ -134,6 +134,12 @@ pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Contrac
     ContractPointer::Hash(fn_hash)
 }
 
+/// Finds function by the name and stores it at the unforgable name.
+pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: UPointer<Contract>) {
+    let contract = fn_by_name(name, known_urefs);
+    write(uref, contract);
+}
+
 /// Return the i-th argument passed to the host for the current module
 /// invokation. Note that this is only relevent to contracts stored on-chain
 /// since a contract deployed directly is not invoked with any arguments.
