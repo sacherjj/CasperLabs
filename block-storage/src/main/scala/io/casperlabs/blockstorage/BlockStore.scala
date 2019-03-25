@@ -27,11 +27,6 @@ trait BlockStore[F[_]] {
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]
 
-  def getBlockMessage(
-      blockHash: BlockHash
-  )(implicit applicative: Applicative[F]): F[Option[BlockMessage]] =
-    get(blockHash).map(it => it.flatMap(_.blockMessage))
-
   def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]]
 
   def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit]
@@ -55,10 +50,10 @@ object BlockStore {
     implicit val ms: Metrics.Source
     implicit val a: Apply[F]
 
-    abstract override def getBlockMessage(
+    abstract override def get(
         blockHash: BlockHash
-    )(implicit applicative: Applicative[F]): F[Option[BlockMessage]] =
-      m.incrementCounter("getBlockMessage") *> super.getBlockMessage(blockHash).timer("get-time")
+    ): F[Option[BlockMsgWithTransform]] =
+      m.incrementCounter("get") *> super.get(blockHash).timer("get-time")
 
     abstract override def find(
         p: BlockHash => Boolean
@@ -77,6 +72,12 @@ object BlockStore {
       super.contains(blockHash).timer("contains-time")
   }
 
+  implicit class RichBlockStore[F[_]](blockStore: BlockStore[F]) {
+    def getBlockMessage(
+        blockHash: BlockHash
+    )(implicit applicative: Applicative[F]): F[Option[BlockMessage]] =
+      blockStore.get(blockHash).map(it => it.flatMap(_.blockMessage))
+  }
   def apply[F[_]](implicit ev: BlockStore[F]): BlockStore[F] = ev
 
   type BlockHash = ByteString
