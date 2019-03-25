@@ -85,7 +85,6 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
                  case ExitCase.Error(_) => disconnect(peer)
                  case _                 => ().pure[F]
                }
-      _ <- Async.shift(scheduler) // return control to caller thread
     } yield result
 
   def receive(
