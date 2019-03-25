@@ -167,17 +167,6 @@ class Node:
         self.terminate_background_logging_event.set()
         self.background_logging.join()
 
-    def deploy_contract(self, contract: str) -> Tuple[int, str]:
-        cmd = '{casperlabsnode_binary} deploy --from "00000000000000000000" --gas-limit 1000000 --gas-price 1 --nonce 0 {casperlabsnode_deploy_dir}/{contract}'.format(
-            casperlabsnode_binary=casperlabsnode_binary,
-            casperlabsnode_deploy_dir=casperlabsnode_deploy_dir,
-            contract=contract
-        )
-        return self.exec_run(cmd)
-
-    def propose_contract(self) -> Tuple[int, str]:
-        return self.exec_run('{} propose'.format(casperlabsnode_binary))
-
     def show_blocks(self) -> Tuple[int, str]:
         return self.exec_run('{} show-blocks'.format(casperlabsnode_binary))
 
