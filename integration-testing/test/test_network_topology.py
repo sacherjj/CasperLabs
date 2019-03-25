@@ -97,7 +97,7 @@ def mk_expected_string(node, random_token):
     return "<{name}:{random_token}>".format(name=node.container.name, random_token=random_token)
 
 
-def casper_propose_and_deploy(context, network):
+def casper_propose_and_deploy(network):
     """Deploy a contract and then checks for the block hash proposed.
 
     TODO: checking blocks for strings functionality has been truncated from this test case.
@@ -112,7 +112,7 @@ def casper_propose_and_deploy(context, network):
 def test_casper_propose_and_deploy(command_line_options_fixture, docker_client_fixture):
     with conftest.testing_context(command_line_options_fixture, docker_client_fixture) as context:
         with complete_network(context) as network:
-            casper_propose_and_deploy(context, network)
+            casper_propose_and_deploy(network)
 
 
 def test_convergence(command_line_options_fixture, docker_client_fixture):
