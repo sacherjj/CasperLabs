@@ -279,7 +279,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to restore data lookup on startup with appended garbage block metadata" in {
-    forAll(blockElementsWithParentsGen, blockElementGen, minSize(0), sizeRange(10)) {
+    forAll(blockElementsWithParentsGen, blockMsgWithTransformGen, minSize(0), sizeRange(10)) {
       (blockElements, garbageBlock) =>
         withDagStorageLocation { (dagDataDir, blockStore) =>
           for {

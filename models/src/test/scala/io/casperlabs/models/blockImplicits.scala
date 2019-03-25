@@ -28,7 +28,7 @@ object blockImplicits {
 
   implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
 
-  val blockElementGen: Gen[BlockMsgWithTransform] =
+  val blockMessageGen: Gen[BlockMessage] =
     for {
       hash            <- arbitrary[ByteString]
       validator       <- arbitrary[ByteString]
@@ -36,8 +36,8 @@ object blockImplicits {
       timestamp       <- arbitrary[Long]
       parentsHashList <- arbitrary[Seq[ByteString]]
       justifications  <- arbitrary[Seq[Justification]]
-      transform       <- arbitrary[Seq[TransformEntry]]
-      block = BlockMessage(blockHash = hash)
+    } yield
+      BlockMessage(blockHash = hash)
         .withHeader(
           Header()
             .withParentsHashList(parentsHashList)
@@ -45,21 +45,26 @@ object blockImplicits {
             .withTimestamp(timestamp)
         )
         .withSender(validator)
+
+  val blockMsgWithTransformGen: Gen[BlockMsgWithTransform] =
+    for {
+      transform <- arbitrary[Seq[TransformEntry]]
+      block     <- blockMessageGen
     } yield BlockMsgWithTransform(Some(block), transform)
 
   val blockElementsGen: Gen[List[BlockMsgWithTransform]] =
-    Gen.listOf(blockElementGen)
+    Gen.listOf(blockMsgWithTransformGen)
 
   val blockBatchesGen: Gen[List[List[BlockMsgWithTransform]]] =
     Gen.listOf(blockElementsGen)
 
   def blockElementsWithParentsGen: Gen[List[BlockMsgWithTransform]] =
     Gen.sized { size =>
-      (0 until size).foldLeft(Gen.listOfN(0, blockElementGen)) {
+      (0 until size).foldLeft(Gen.listOfN(0, blockMsgWithTransformGen)) {
         case (gen, _) =>
           for {
             blocks                                    <- gen
-            blockMsgWithTransform                     <- blockElementGen
+            blockMsgWithTransform                     <- blockMsgWithTransformGen
             BlockMsgWithTransform(Some(b), transform) = blockMsgWithTransform
             parents                                   <- Gen.someOf(blocks)
             parentHashes                              = parents.map(_.getBlockMessage.blockHash)
