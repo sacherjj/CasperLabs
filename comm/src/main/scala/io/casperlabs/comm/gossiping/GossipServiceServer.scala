@@ -6,7 +6,7 @@ import cats.effect._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
-import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound}
 import monix.tail.Iterant
 import scala.collection.immutable.Queue
 import scala.math.Ordering
@@ -19,7 +19,13 @@ class GossipServiceServer[F[_]: Sync](
 ) extends GossipService[F] {
   import GossipServiceServer._
 
-  def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] = ???
+  def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
+    request.sender match {
+      case None =>
+        Sync[F].raiseError(InvalidArgument("Sender cannot be empty."))
+      case _ =>
+        ???
+    }
 
   def streamAncestorBlockSummaries(
       request: StreamAncestorBlockSummariesRequest

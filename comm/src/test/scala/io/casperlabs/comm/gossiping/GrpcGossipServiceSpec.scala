@@ -6,7 +6,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound}
 import io.casperlabs.comm.grpc.GrpcServer
 import io.casperlabs.comm.TestRuntime
 import io.grpc.netty.NettyChannelBuilder
@@ -57,7 +57,8 @@ class GrpcGossipServiceSpec
   override def nestedSuites = Vector(
     GetBlockChunkedSpec,
     StreamBlockSummariesSpec,
-    StreamAncestorBlockSummariesSpec
+    StreamAncestorBlockSummariesSpec,
+    NewBlocksSpec
   )
 
   object GetBlockChunkedSpec extends WordSpecLike {
@@ -592,6 +593,40 @@ class GrpcGossipServiceSpec
               }
             }
         }
+      }
+    }
+  }
+
+  object NewBlocksSpec extends WordSpecLike {
+    implicit val config                         = PropertyCheckConfiguration(minSuccessful = 5)
+    implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
+
+    def checkInvalid(req: NewBlocksRequest, expectedMsg: String): Task[Unit] =
+      stub.newBlocks(req).attempt.map { res =>
+        res.isLeft shouldBe true
+        res.left.get match {
+          case InvalidArgument(msg) =>
+            msg shouldBe expectedMsg
+          case ex =>
+            fail(s"Unexpected error: $ex")
+        }
+      }
+
+    "newBlocks" when {
+      "called with no sender" should {
+        "return INVALID_ARGUMENT" in {
+          forAll(arbitrary[List[ByteString]]) { blockHashes =>
+            runTestUnsafe(TestData()) {
+              checkInvalid(
+                NewBlocksRequest(sender = None, blockHashes = blockHashes),
+                "Sender cannot be empty."
+              )
+            }
+          }
+        }
+      }
+      "called with a sender whose ID doesn't match its SSL public key" should {
+        "return INVALID_ARGUMENT" in (pending)
       }
     }
   }
