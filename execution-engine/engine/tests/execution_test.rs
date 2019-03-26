@@ -14,7 +14,9 @@ use execution_engine::trackingcopy::TrackingCopy;
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
 use shared::newtypes::Blake2bHash;
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
+use std::rc::Rc;
 use storage::gs::{inmem::*, DbReader};
 use storage::history::*;
 use storage::transform::Transform;
@@ -26,18 +28,12 @@ struct MockEnv {
     key: Key,
     account: value::Account,
     uref_lookup: BTreeMap<String, Key>,
-    tc: TrackingCopy<InMemGS<Key, Value>>,
     gas_limit: u64,
     memory: MemoryRef,
 }
 
 impl MockEnv {
-    pub fn new(
-        key: Key,
-        account: value::Account,
-        gas_limit: u64,
-        tc: TrackingCopy<InMemGS<Key, Value>>,
-    ) -> Self {
+    pub fn new(key: Key, account: value::Account, gas_limit: u64) -> Self {
         let uref_lookup = mock_uref_lookup();
         let memory = MemoryInstance::alloc(Pages(17), Some(Pages(MAX_MEM_PAGES as usize)))
             .expect("Mocked memory should be able to be created.");
@@ -46,7 +42,6 @@ impl MockEnv {
             key,
             account,
             uref_lookup,
-            tc,
             gas_limit,
             memory,
         }
@@ -54,15 +49,17 @@ impl MockEnv {
 
     pub fn runtime<'a>(
         &'a mut self,
+        tc: &'a mut TrackingCopy<InMemGS<Key, Value>>,
         address: [u8; 20],
         timestamp: u64,
         nonce: u64,
+        module: Module,
     ) -> Runtime<'a, InMemGS<Key, Value>> {
         let context = mock_context(&mut self.uref_lookup, &self.account, self.key);
         Runtime::new(
             self.memory.clone(),
-            &mut self.tc,
-            mock_module(),
+            tc,
+            module,
             self.gas_limit,
             address,
             nonce,
@@ -186,10 +183,11 @@ fn valid_uref() {
     let timestamp: u64 = 1000;
     let nonce: u64 = 1;
     let (key, account) = mock_account(addr);
-    let tc = mock_tc(key, &account);
-    let mut env = MockEnv::new(key, account, 0, tc);
+    let tc = Rc::new(RefCell::new(mock_tc(key, &account)));
+    let mut env = MockEnv::new(key, account, 0);
     let mut memory = env.memory_manager();
-    let mut runtime = env.runtime(addr, timestamp, nonce);
+    let mut tc_borrowed = tc.borrow_mut();
+    let mut runtime = env.runtime(&mut tc_borrowed, addr, timestamp, nonce, mock_module());
 
     // create a valid uref in wasm memory via new_uref
     let uref = memory
@@ -212,10 +210,11 @@ fn forged_uref() {
     let timestamp: u64 = 1000;
     let nonce: u64 = 1;
     let (key, account) = mock_account(addr);
-    let tc = mock_tc(key, &account);
-    let mut env = MockEnv::new(key, account, 0, tc);
+    let tc = Rc::new(RefCell::new(mock_tc(key, &account)));
+    let mut env = MockEnv::new(key, account, 0);
     let mut memory = env.memory_manager();
-    let mut runtime = env.runtime(addr, timestamp, nonce);
+    let mut tc_borrowed = tc.borrow_mut();
+    let mut runtime = env.runtime(&mut tc_borrowed, addr, timestamp, nonce, mock_module());
 
     // create a forged uref
     let uref = memory
