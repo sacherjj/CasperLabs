@@ -2,6 +2,9 @@ package io.casperlabs.comm.gossiping
 
 import cats.effect._
 import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.comm.auth.Principal
+import io.casperlabs.comm.grpc.ContextKeys
+import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
 import monix.eval.{Task, TaskLift, TaskLike}
 import monix.reactive.Observable
 import monix.tail.Iterant
@@ -19,7 +22,23 @@ object GrpcGossipService {
 
       /** Handle notification about some new blocks on the caller. */
       def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
-        TaskLike[F].toTask(service.newBlocks(request))
+        // Verify that the sender holds the same node identity as the public key
+        // in the client SSL certificate. Alternatively we could drop the sender
+        // altogether and use Kademlia to lookup the Node with that ID the first
+        // time we see it.
+        (request.sender, Option(ContextKeys.Principal.get)) match {
+          case (None, _) =>
+            Task.raiseError(Unauthenticated("Sender cannot be empty."))
+
+          case (_, None) =>
+            Task.raiseError(Unauthenticated("Cannot verify sender identity."))
+
+          case (Some(sender), Some(Principal.Peer(id))) if sender.id != id =>
+            Task.raiseError(Unauthenticated("Sender doesn't match public key."))
+
+          case (Some(_), Some(Principal.Peer(_))) =>
+            TaskLike[F].toTask(service.newBlocks(request))
+        }
 
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest

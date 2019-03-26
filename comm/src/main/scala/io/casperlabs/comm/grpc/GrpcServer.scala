@@ -26,7 +26,6 @@ object GrpcServer {
           .executor(scheduler)
 
         sslContext.foreach(builder.sslContext(_))
-
         boundService.foreach(builder.addService(_))
         interceptors.foreach(builder.intercept(_))
 
