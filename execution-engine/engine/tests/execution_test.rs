@@ -3,6 +3,7 @@ extern crate execution_engine;
 extern crate parity_wasm;
 extern crate shared;
 extern crate storage;
+extern crate wabt;
 extern crate wasm_prep;
 extern crate wasmi;
 
@@ -231,4 +232,75 @@ fn forged_uref() {
     let trap = gs_write(&mut runtime, uref, value).expect_err("use of forged key should fail");
 
     assert_eq!(format!("{:?}", trap).contains("ForgedReference"), true);
+}
+
+#[test]
+fn store_contract_hash() {
+    let addr = [0u8; 20];
+    let timestamp: u64 = 1000;
+    let nonce: u64 = 1;
+    let (key, account) = mock_account(addr);
+    let tc = Rc::new(RefCell::new(mock_tc(key, &account)));
+    let mut env = MockEnv::new(key, account, 0);
+    let mut memory = env.memory_manager();
+    let wasm_binary: Vec<u8> = wabt::wat2wasm(
+        r#"
+    (module
+        (func (export "call") (param i32 i32) (result i32)
+            get_local 0
+            get_local 1
+            i32.add
+        )
+    )
+    "#,
+    )
+    .expect("failed to parse wat");
+    let module: Module = parity_wasm::deserialize_buffer(&wasm_binary).unwrap();
+
+    let urefs: BTreeMap<String, Key> = std::iter::once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))).collect();
+    let contract = Value::Contract(common::value::Contract::new(wasm_binary, urefs.clone()));
+    // We need this braces so that the `tc_borrowed` gets dropped
+    // and we can borrow it again when we call `effect()`.
+    let hash = {
+        let mut tc_borrowed = tc.borrow_mut();
+        let mut runtime = env.runtime(&mut tc_borrowed, addr, timestamp, nonce, module);
+
+        let (urefs_ptr, urefs_len) = memory
+            .write(urefs)
+            .expect("Writing urefs to wasm memory should work.");
+
+        let (contract_ptr, contract_len) = memory
+            .write("call".to_owned())
+            .expect("Writing contract to wasm memory should work");
+
+        let (hash_ptr, _) = memory
+            .write_raw([0u8; 32].to_vec())
+            .expect("Allocating place for hash should work");
+
+        runtime
+            .store_function(
+                contract_ptr,
+                contract_len as u32,
+                urefs_ptr,
+                urefs_len as u32, // No urefs this time
+                hash_ptr,
+            )
+            .expect("store_function should succeed");
+
+        let hash = {
+            let mut target = [0u8; 32];
+            memory
+                .read_raw(hash_ptr, &mut target)
+                .expect("Reading hash from raw memory should succed");
+            Key::Hash(target)
+        };
+
+        hash
+    };
+
+    let transforms = tc.borrow().effect().1;
+
+    let effect = transforms.get(&hash).unwrap();
+
+    assert_eq!(effect, &Transform::Write(contract));
 }
