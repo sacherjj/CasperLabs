@@ -7,7 +7,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.comm.ServiceError.NotFound
-import io.casperlabs.comm.GrpcServer
+import io.casperlabs.comm.grpc.GrpcServer
 import io.casperlabs.comm.TestRuntime
 import io.grpc.netty.NettyChannelBuilder
 import java.util.concurrent.atomic.AtomicReference

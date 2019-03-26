@@ -1,4 +1,4 @@
-package io.casperlabs.comm
+package io.casperlabs.comm.grpc
 
 import cats.implicits._
 import cats.effect._
