@@ -230,7 +230,7 @@ class ExecEngineUtilTest
         _       <- step(1, genesis)
         _       <- step(2, genesis)
         dag     <- blockDagStorage.getRepresentation
-        postState <- validateBlockCheckpoint[Task](
+        postState <- ExecEngineUtil.validateBlockCheckpoint[Task](
                       b3,
                       dag
                     )
@@ -310,7 +310,7 @@ class ExecEngineUtilTest
         _                                           <- step(4, genesis)
 
         dag2 <- blockDagStorage.getRepresentation
-        postState <- validateBlockCheckpoint[Task](
+        postState <- ExecEngineUtil.validateBlockCheckpoint[Task](
                       b5,
                       dag2
                     )
@@ -378,7 +378,7 @@ class ExecEngineUtilTest
       for {
         block <- createBlock[Task](Seq.empty, deploys = processedDeploys, tsHash = invalidHash)
         dag   <- blockDagStorage.getRepresentation
-        validateResult <- validateBlockCheckpoint[Task](
+        validateResult <- ExecEngineUtil.validateBlockCheckpoint[Task](
                            block,
                            dag
                          )
@@ -409,7 +409,7 @@ class ExecEngineUtilTest
                 )
         dag2 <- blockDagStorage.getRepresentation
 
-        validateResult <- validateBlockCheckpoint[Task](
+        validateResult <- ExecEngineUtil.validateBlockCheckpoint[Task](
                            block,
                            dag2
                          )

@@ -9,6 +9,7 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, Bloc
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util._
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.rholang._
 import io.casperlabs.catscontrib._
@@ -70,15 +71,11 @@ sealed abstract class MultiParentCasperInstances {
       // Initialize DAG storage with genesis block in case it is empty
       _   <- BlockDagStorage[F].insert(genesis)
       dag <- BlockDagStorage[F].getRepresentation
-      // TODO: bring back when validation is working again
-      // maybePostGenesisStateHash <- InterpreterUtil
-      //                               .validateBlockCheckpoint[F](
-      //                                 genesis,
-      //                                 dag,
-      //                                 runtimeManager
-      //                               )
-      maybePostGenesisStateHash <- Sync[F]
-                                    .pure[Either[BlockException, Option[StateHash]]](Right(None))
+      maybePostGenesisStateHash <- ExecEngineUtil
+                                    .validateBlockCheckpoint[F](
+                                      genesis,
+                                      dag
+                                    )
       postGenesisStateHash <- maybePostGenesisStateHash match {
                                case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
                                case Right(None)              =>
