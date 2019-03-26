@@ -87,7 +87,10 @@ impl WasmMemoryManager {
     }
 
     pub fn write<T: ToBytes>(&mut self, t: T) -> Result<(u32, usize), wasmi::Error> {
-        let bytes = t.to_bytes();
+        self.write_raw(t.to_bytes())
+    }
+
+    pub fn write_raw(&mut self, bytes: Vec<u8>) -> Result<(u32, usize), wasmi::Error> {
         let ptr = self.offset as u32;
 
         match self.memory.set(ptr, &bytes) {
@@ -99,6 +102,10 @@ impl WasmMemoryManager {
 
             Err(e) => Err(e),
         }
+    }
+
+    pub fn read_raw(&self, offset: u32, target: &mut [u8]) -> Result<(), wasmi::Error> {
+        self.memory.get_into(offset, target)
     }
 
     pub fn new_uref<'a, R: DbReader>(
