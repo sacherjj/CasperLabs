@@ -2,7 +2,6 @@ package io.casperlabs.comm.discovery
 
 import scala.collection.mutable
 import scala.concurrent.duration._
-import cats._
 import cats.implicits._
 import cats.temp.par._
 import io.casperlabs.catscontrib._
@@ -111,18 +110,14 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
         val differentBit = 1 << (dist % 8)
         target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
 
-        for {
-          results <- KademliaRPC[F]
-                      .lookup(NodeIdentifier(target), peerSet.head)
-                      .map(_.filter(r => !potentials.contains(r) && r.id.key != id.key))
-          newPotentials <- Traverse[List]
-                            .traverse(results.toList)(r => table.find(r.id))
-                            .map { maybeNodes =>
-                              val existing = maybeNodes.flatten.toSet
-                              potentials ++ results.filterNot(existing)
-                            }
-          res <- find(dists, peerSet.tail, newPotentials, i + 1)
-        } yield res
+        KademliaRPC[F]
+          .lookup(NodeIdentifier(target), peerSet.head) >>= (
+          _.fold(table.remove(peerSet.head.id) >> find(dists, peerSet.tail, potentials, i + 1))(
+            _.filter(r => !potentials.contains(r) && r.id.key != id.key).toList
+              .filterA(r => table.find(r.id).map(_.fold(true)(_ => false)))
+              .map(_.toSet) >>= (find(dists, peerSet.tail, _, i + 1))
+          )
+        )
       } else {
         potentials.toSeq.pure[F]
       }

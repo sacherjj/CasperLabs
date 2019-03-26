@@ -159,7 +159,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       pingedPeers += peer
       returns
     }
-    def lookup(id: NodeIdentifier, peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
+    def lookup(id: NodeIdentifier, peer: PeerNode): Option[Seq[PeerNode]] = None
     def receive(
         pingHandler: PeerNode => Id[Unit],
         lookupHandler: (PeerNode, NodeIdentifier) => Id[Seq[PeerNode]]

@@ -18,7 +18,6 @@ import monix.eval._
 import monix.execution._
 
 import scala.concurrent.duration._
-import scala.util.Try
 
 class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNodeAsk: Metrics: Par](
     port: Int,
@@ -48,7 +47,7 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
                 ).attempt
     } yield pongErr.fold(kp(false), kp(true))
 
-  def lookup(id: NodeIdentifier, peer: PeerNode): F[Seq[PeerNode]] =
+  def lookup(id: NodeIdentifier, peer: PeerNode): F[Option[Seq[PeerNode]]] =
     for {
       _      <- Metrics[F].incrementCounter("protocol-lookup-send")
       local  <- PeerNodeAsk[F].ask
@@ -59,20 +58,16 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
                         .timer("lookup-time")
                         .nonCancelingTimeout(timeout)
                     ).attempt
-    } yield responseErr.fold(kp(Seq.empty[PeerNode]), _.nodes.map(toPeerNode))
+    } yield responseErr.toOption.map(_.nodes.map(toPeerNode))
 
   private def disconnect(peer: PeerNode): F[Unit] =
     cell.modify { s =>
-      for {
-        _ <- s.connections.get(peer) match {
-              case Some(c) =>
-                Log[F]
-                  .info(s"Disconnecting from peer ${peer.toAddress}")
-                  .map(kp(Try(c.shutdown())))
-                  .void
-              case _ => ().pure[F] // ignore if connection does not exists already
-            }
-      } yield s.copy(connections = s.connections - peer)
+      s.connections.get(peer).fold(s.pure[F]) { connection =>
+        for {
+          _ <- Log[F].info(s"Disconnecting from peer ${peer.toAddress}")
+          _ <- Sync[F].delay(connection.shutdownNow()).attempt
+        } yield s.copy(connections = s.connections - peer)
+      }
     }
 
   private def withClient[A](peer: PeerNode, enforce: Boolean = false)(

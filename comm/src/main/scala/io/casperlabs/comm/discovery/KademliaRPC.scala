@@ -4,7 +4,7 @@ import io.casperlabs.comm.{NodeIdentifier, PeerNode}
 
 trait KademliaRPC[F[_]] {
   def ping(node: PeerNode): F[Boolean]
-  def lookup(id: NodeIdentifier, peer: PeerNode): F[Seq[PeerNode]]
+  def lookup(id: NodeIdentifier, peer: PeerNode): F[Option[Seq[PeerNode]]]
   def receive(
       pingHandler: PeerNode => F[Unit],
       lookupHandler: (PeerNode, NodeIdentifier) => F[Seq[PeerNode]]

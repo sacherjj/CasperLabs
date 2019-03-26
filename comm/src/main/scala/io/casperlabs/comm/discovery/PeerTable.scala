@@ -141,4 +141,10 @@ final class PeerTable[F[_]: Monad](
         .sortWith(_._1 < _._1)
         .map(_._2)
     )
+
+  def remove(toRemove: NodeIdentifier): F[Unit] =
+    tableRef.update { table =>
+      val index = distance(toRemove)
+      table.updated(index, table(index).filterNot(_.node.key == toRemove.key))
+    }
 }

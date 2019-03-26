@@ -110,18 +110,18 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
 
       "everything is fine" should {
         "send and receive a list of peers" in
-          new TwoNodesRuntime[Seq[PeerNode]](
+          new TwoNodesRuntime[Option[Seq[PeerNode]]](
             lookupHandler = Handler.lookupHandler(Seq(otherPeer))
           ) {
             def execute(
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(id, remote)
+            ): F[Option[Seq[PeerNode]]] = kademliaRPC.lookup(id, remote)
 
             val result: TwoNodesResult = run()
 
-            result() shouldEqual Seq(otherPeer)
+            result() shouldEqual Some(Seq(otherPeer))
             lookupHandler.received should have length 1
             val (receiver, (sender, k)) = lookupHandler.received.head
             receiver shouldEqual result.remoteNode
@@ -131,19 +131,20 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
       }
 
       "response takes to long" should {
-        "get an empty list result" in
-          new TwoNodesRuntime[Seq[PeerNode]](
-            lookupHandler = Handler.lookupHandlerWithDelay(1.second)
+        "get an None" in
+          new TwoNodesRuntime[Option[Seq[PeerNode]]](
+            lookupHandler = Handler.lookupHandlerWithDelay(1.second),
+            timeout = 500.millis
           ) {
             def execute(
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(id, remote)
+            ): F[Option[Seq[PeerNode]]] = kademliaRPC.lookup(id, remote)
 
             val result: TwoNodesResult = run()
 
-            result() shouldEqual Seq.empty[PeerNode]
+            result() shouldEqual None
             lookupHandler.received should have length 1
             val (receiver, (sender, k)) = lookupHandler.received.head
             receiver shouldEqual result.remoteNode
@@ -153,17 +154,17 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
       }
 
       "peer is not listening" should {
-        "get an empty list result" in
-          new TwoNodesRemoteDeadRuntime[Seq[PeerNode]]() {
+        "get an None" in
+          new TwoNodesRemoteDeadRuntime[Option[Seq[PeerNode]]]() {
             def execute(
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(id, remote)
+            ): F[Option[Seq[PeerNode]]] = kademliaRPC.lookup(id, remote)
 
             val result: TwoNodesResult = run()
 
-            result() shouldEqual Seq.empty[PeerNode]
+            result() shouldEqual None
           }
       }
     }

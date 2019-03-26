@@ -22,8 +22,8 @@ class DistanceSpec extends FlatSpec with Matchers {
 
   val endpoint = Endpoint("", 0, 0)
   implicit val ping: KademliaRPC[Id] = new KademliaRPC[Id] {
-    def ping(node: PeerNode): Boolean                             = true
-    def lookup(id: NodeIdentifier, peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
+    def ping(node: PeerNode): Boolean                                     = true
+    def lookup(id: NodeIdentifier, peer: PeerNode): Option[Seq[PeerNode]] = None
     def receive(
         pingHandler: PeerNode => Id[Unit],
         lookupHandler: (PeerNode, NodeIdentifier) => Id[Seq[PeerNode]]
@@ -146,6 +146,17 @@ class DistanceSpec extends FlatSpec with Matchers {
       for (k <- oneOffs(kr)) {
         table.find(k) should be(Some(PeerNode(k, endpoint)))
       }
+    }
+
+    it should "remove a peer" in {
+      val table = PeerTable(kr)
+      for (k <- oneOffs(kr)) {
+        table.updateLastSeen(PeerNode(k, endpoint))
+      }
+      for (k <- oneOffs(kr)) {
+        table.remove(k)
+      }
+      table.peers.size should be(0)
     }
   }
 }
