@@ -439,8 +439,7 @@ where
             .memory
             .get(urefs_ptr, urefs_size as usize)
             .map_err(Error::Interpreter)?;
-        let urefs: BTreeMap<String, Key> =
-            deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
+        let urefs: BTreeMap<String, Key> = deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
         urefs
             .iter()
             .try_for_each(|(_, v)| self.context.validate_key(&v))?;
@@ -1032,25 +1031,22 @@ impl Executor<Module> for WasmiExecutor {
         let account = value.as_account();
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashSet<Key> = uref_lookup_local.values().cloned().collect();
-        let rng = create_rng(&account_addr, timestamp, nonce);
-        let mut runtime = Runtime {
-            args: Vec::new(),
-            memory,
-            state: tc,
-            module: parity_module,
-            result: Vec::new(),
-            host_buf: Vec::new(),
-            fn_store_id: 0,
-            gas_counter: 0,
-            gas_limit,
-            context: RuntimeContext {
-                uref_lookup: &mut uref_lookup_local,
-                known_urefs,
-                account: &account,
-                base_key: acct_key,
-            },
-            rng,
+        let context = RuntimeContext {
+            uref_lookup: &mut uref_lookup_local,
+            known_urefs,
+            account: &account,
+            base_key: acct_key,
         };
+        let mut runtime = Runtime::new(
+            memory,
+            tc,
+            parity_module,
+            gas_limit,
+            account_addr,
+            nonce,
+            timestamp,
+            context,
+        );
         let _ = on_fail_charge!(
             instance.invoke_export("call", &[], &mut runtime),
             runtime.gas_counter
