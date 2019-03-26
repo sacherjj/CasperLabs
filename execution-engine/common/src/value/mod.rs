@@ -202,13 +202,13 @@ macro_rules! from_try_from_impl {
         }
 
         impl TryFrom<Value> for $type {
-            type Error = ();
+            type Error = String;
 
-            fn try_from(v: Value) -> Result<$type, ()> {
+            fn try_from(v: Value) -> Result<$type, String> {
                 if let Value::$variant(x) = v {
                     Ok(x)
                 } else {
-                    Err(())
+                    Err(v.type_string())
                 }
             }
         }

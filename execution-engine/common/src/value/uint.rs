@@ -1,5 +1,6 @@
 use crate::bytesrepr::{self, Error, FromBytes, ToBytes};
 use alloc::vec::Vec;
+use num::{Bounded, FromPrimitive, Num, One, Unsigned, Zero};
 
 // Clippy generates a ton of warnings/errors for the code the macro generates.
 #[allow(clippy::all)]
@@ -17,7 +18,23 @@ mod macro_code {
 
 pub use self::macro_code::{U128, U256, U512};
 
-macro_rules! to_from_bytes_impl {
+#[derive(Debug)]
+pub enum FromStrErr {
+    FromDecStr(uint::FromDecStrErr),
+    InvalidRadix,
+}
+
+// Can't use num::CheckedAdd because it is defined using references
+// (e.g. &self) which does not work with the definitions in uint
+pub trait CheckedAdd: core::ops::Add<Self, Output = Self> + Sized {
+    fn checked_add(self, v: Self) -> Option<Self>;
+}
+
+pub trait CheckedSub: core::ops::Sub<Self, Output = Self> + Sized {
+    fn checked_sub(self, v: Self) -> Option<Self>;
+}
+
+macro_rules! ser_and_num_impls {
     ($type:ident, $total_bytes:expr) => {
         impl ToBytes for $type {
             fn to_bytes(&self) -> Vec<u8> {
@@ -45,9 +62,75 @@ macro_rules! to_from_bytes_impl {
                 }
             }
         }
+
+        impl Zero for $type {
+            fn zero() -> Self {
+                $type::zero()
+            }
+
+            fn is_zero(&self) -> bool {
+                self.is_zero()
+            }
+        }
+
+        impl One for $type {
+            fn one() -> Self {
+                $type::one()
+            }
+        }
+
+        impl Num for $type {
+            type FromStrRadixErr = FromStrErr;
+            fn from_str_radix(str: &str, radix: u32) -> Result<Self, Self::FromStrRadixErr> {
+                if radix == 10 {
+                    $type::from_dec_str(str).map_err(FromStrErr::FromDecStr)
+                } else {
+                    // TODO: other radix parsing
+                    Err(FromStrErr::InvalidRadix)
+                }
+            }
+        }
+
+        impl Unsigned for $type {}
+
+        impl FromPrimitive for $type {
+            fn from_i64(n: i64) -> Option<Self> {
+                if n < 0 {
+                    None
+                } else {
+                    Some($type::from(n))
+                }
+            }
+
+            fn from_u64(n: u64) -> Option<Self> {
+                Some($type::from(n))
+            }
+        }
+
+        impl CheckedAdd for $type {
+            fn checked_add(self, v: Self) -> Option<Self> {
+                $type::checked_add(self, v)
+            }
+        }
+
+        impl CheckedSub for $type {
+            fn checked_sub(self, v: Self) -> Option<Self> {
+                $type::checked_sub(self, v)
+            }
+        }
+
+        impl Bounded for $type {
+            fn min_value() -> Self {
+                $type::zero()
+            }
+
+            fn max_value() -> Self {
+                $type::MAX
+            }
+        }
     };
 }
 
-to_from_bytes_impl!(U128, 16);
-to_from_bytes_impl!(U256, 32);
-to_from_bytes_impl!(U512, 64);
+ser_and_num_impls!(U128, 16);
+ser_and_num_impls!(U256, 32);
+ser_and_num_impls!(U512, 64);

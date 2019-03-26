@@ -3,6 +3,7 @@
 extern crate failure;
 
 extern crate common;
+extern crate num;
 extern crate parking_lot;
 extern crate rkv;
 extern crate shared;

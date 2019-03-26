@@ -6,6 +6,7 @@ authors = ["Michael Birch <birchmd@casperlabs.io>"]
 [dependencies]
 failure = "0.1.5"
 rkv = "0.9.1"
+num = { version = "0.2.0", default-features = false }
 wasmi = "0.4.2"
 common = { path = "../common", features = ["std"], package = "casperlabs-contract-ffi" }
 parking_lot = "0.7.1"
