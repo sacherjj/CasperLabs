@@ -82,6 +82,7 @@ pipeline:
     <<: *sbtenv
     commands:
       - sbt node/docker:publishLocal client/docker:publishLocal
+      - export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}
       - make docker-build/execution-engine
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
