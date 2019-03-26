@@ -141,18 +141,9 @@ impl From<common::value::Value> for super::ipc::Value {
             common::value::Value::Int32(i) => {
                 tv.set_integer(i);
             }
-            common::value::Value::UInt128(u) => {
-                let b: super::ipc::RustBigInt = u.into();
-                tv.set_big_int(b)
-            }
-            common::value::Value::UInt256(u) => {
-                let b: super::ipc::RustBigInt = u.into();
-                tv.set_big_int(b)
-            }
-            common::value::Value::UInt512(u) => {
-                let b: super::ipc::RustBigInt = u.into();
-                tv.set_big_int(b)
-            }
+            common::value::Value::UInt128(u) => tv.set_big_int(u.into()),
+            common::value::Value::UInt256(u) => tv.set_big_int(u.into()),
+            common::value::Value::UInt512(u) => tv.set_big_int(u.into()),
             common::value::Value::ByteArray(arr) => {
                 tv.set_byte_arr(arr);
             }
@@ -201,8 +192,7 @@ impl From<common::value::Value> for super::ipc::Value {
 
 fn add_big_int_transform<U: Into<super::ipc::RustBigInt>>(t: &mut super::ipc::Transform, u: U) {
     let mut add = super::ipc::TransformAddBigInt::new();
-    let b: super::ipc::RustBigInt = u.into();
-    add.set_value(b);
+    add.set_value(u.into());
     t.set_add_big_int(add);
 }
 
