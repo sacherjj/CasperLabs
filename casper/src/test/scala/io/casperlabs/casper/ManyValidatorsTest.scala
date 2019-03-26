@@ -12,6 +12,7 @@ import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.{Log, Time}
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.schedulers.CanBlock
 import org.scalatest.{FlatSpec, Matchers}
@@ -72,7 +73,7 @@ class ManyValidatorsTest
       dag                       <- newIndexedBlockDagStorage.getRepresentation
       tips                      <- Estimator.tips[Task](dag, genesis.blockHash)(Monad[Task], blockStore)
       casperEffect <- NoOpsCasperEffect[Task](
-                       HashMap.empty[BlockHash, BlockMessage],
+                       HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips.toIndexedSeq
                      )(Sync[Task], blockStore, newIndexedBlockDagStorage)
       logEff             = new LogStub[Task]

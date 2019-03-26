@@ -5,6 +5,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib._, Catscontrib._, ski._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.comm.protocol.routing._
+import io.casperlabs.comm.discovery.Node
 import io.grpc.{Status, StatusRuntimeException}
 import java.nio.file._
 import scala.util.control.NoStackTrace
@@ -115,5 +116,23 @@ object ServiceError {
   object NotFound extends StatusError(Status.NOT_FOUND) {
     def block(blockHash: ByteString): ServiceException =
       apply(s"Block ${Base16.encode(blockHash.toByteArray)} could not be found.")
+  }
+}
+
+sealed trait GossipError extends NoStackTrace
+object GossipError {
+
+  /** Download from the other party failed due to invalid chunk sizes. */
+  final case class InvalidChunks(msg: String, source: Node) extends Exception(msg) with GossipError
+
+  /** Tried to schedule a download for which we don't have the dependencies. */
+  final case class MissingDependencies(msg: String) extends Exception(msg) with GossipError
+  object MissingDependencies {
+    def apply(blockHash: ByteString, missing: Seq[ByteString]): MissingDependencies =
+      MissingDependencies(
+        s"Block ${Base16.encode(blockHash.toByteArray)} has missing dependencies: [${missing
+          .map(x => Base16.encode(x.toByteArray))
+          .mkString(", ")}]"
+      )
   }
 }

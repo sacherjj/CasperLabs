@@ -27,7 +27,8 @@ use mappings::*;
 impl<H> ipc_grpc::ExecutionEngineService for EngineState<H>
 where
     H: History,
-    H::Error: Into<EngineError> + Debug,
+    EngineError: From<H::Error>,
+    H::Error: Into<execution_engine::execution::Error> + Debug,
 {
     fn query(
         &self,
@@ -90,10 +91,7 @@ where
         &self,
         _o: ::grpc::RequestOptions,
         p: ipc::ExecRequest,
-    ) -> grpc::SingleResponse<ipc::ExecResponse>
-    where
-        H::Error: Into<EngineError>,
-    {
+    ) -> grpc::SingleResponse<ipc::ExecResponse> {
         let executor = WasmiExecutor;
         let preprocessor = WasmiPreprocessor;
         // TODO: don't unwrap
@@ -182,7 +180,8 @@ where
     H: History,
     E: Executor<A>,
     P: Preprocessor<A>,
-    H::Error: Into<EngineError>,
+    EngineError: From<H::Error>,
+    H::Error: Into<execution_engine::execution::Error>,
 {
     // We want to treat RootNotFound error differently b/c it should short-circuit
     // the execution of ALL deploys within the block. This is because all of them share

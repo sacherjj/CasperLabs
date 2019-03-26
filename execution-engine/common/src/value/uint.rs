@@ -23,12 +23,8 @@ macro_rules! to_from_bytes_impl {
             fn to_bytes(&self) -> Vec<u8> {
                 let mut buf = [0u8; $total_bytes];
                 self.to_little_endian(&mut buf);
-                let mut non_zero_bytes: Vec<u8> = buf
-                    .iter()
-                    .rev()
-                    .skip_while(|b| **b == 0)
-                    .cloned()
-                    .collect();
+                let mut non_zero_bytes: Vec<u8> =
+                    buf.iter().rev().skip_while(|b| **b == 0).cloned().collect();
                 let num_bytes = non_zero_bytes.len() as u8;
                 non_zero_bytes.push(num_bytes);
                 non_zero_bytes.reverse();

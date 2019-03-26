@@ -1,4 +1,5 @@
 #![feature(result_map_or_else)]
+#![feature(never_type)]
 extern crate common;
 extern crate core;
 extern crate parity_wasm;
@@ -23,7 +24,6 @@ mod utils;
 #[macro_use]
 extern crate matches;
 #[cfg(test)]
-#[macro_use]
 extern crate proptest;
 #[cfg(test)]
 extern crate gens;

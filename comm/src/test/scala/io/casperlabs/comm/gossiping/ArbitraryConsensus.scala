@@ -2,6 +2,7 @@ package io.casperlabs.comm.gossiping
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
+import io.casperlabs.comm.discovery.Node
 import org.scalacheck.{Arbitrary, Gen}
 import scala.collection.JavaConverters._
 
@@ -10,6 +11,14 @@ object ArbitraryConsensus extends ArbitraryConsensus
 trait ArbitraryConsensus {
   import Arbitrary.arbitrary
 
+  case class ConsensusConfig(
+      // Number of blocks in the DAG. 0 means no limit.
+      dagSize: Int = 0,
+      // Maximum size of code in blocks. Slow to generate.
+      maxSessionCodeBytes: Int = 500 * 1024,
+      maxPaymentCodeBytes: Int = 100 * 1024
+  )
+
   def genBytes(length: Int): Gen[ByteString] =
     Gen.listOfN(length, arbitrary[Byte]).map { bytes =>
       ByteString.copyFrom(bytes.toArray)
@@ -17,6 +26,15 @@ trait ArbitraryConsensus {
 
   val genHash = genBytes(20)
   val genKey  = genBytes(32)
+
+  implicit val arbNode: Arbitrary[Node] = Arbitrary {
+    for {
+      id   <- genHash
+      host <- Gen.listOfN(4, Gen.choose(0, 255)).map(xs => xs.mkString("."))
+    } yield {
+      Node(id, host, 40400, 40404)
+    }
+  }
 
   implicit val arbSignature: Arbitrary[Signature] = Arbitrary {
     for {
@@ -27,17 +45,11 @@ trait ArbitraryConsensus {
     }
   }
 
-  implicit val arbBlock: Arbitrary[Block] = Arbitrary {
+  implicit def arbBlock(implicit c: ConsensusConfig): Arbitrary[Block] = Arbitrary {
     for {
       summary <- arbitrary[BlockSummary]
-      deploys <- Gen.listOfN(summary.getHeader.deployCount, arbitrary[Block.ProcessedDeploy])
-    } yield {
-      Block()
-        .withBlockHash(summary.blockHash)
-        .withHeader(summary.getHeader)
-        .withBody(Block.Body(deploys))
-        .withSignature(summary.getSignature)
-    }
+      block   <- genBlockFromSummary(summary)
+    } yield block
   }
 
   implicit val arbBlockHeader: Arbitrary[Block.Header] = Arbitrary {
@@ -73,7 +85,7 @@ trait ArbitraryConsensus {
     }
   }
 
-  implicit val arbDeploy: Arbitrary[Deploy] = Arbitrary {
+  implicit def arbDeploy(implicit c: ConsensusConfig): Arbitrary[Deploy] = Arbitrary {
     for {
       deployHash       <- genHash
       accountPublicKey <- genKey
@@ -82,8 +94,8 @@ trait ArbitraryConsensus {
       gasPrice         <- arbitrary[Long]
       bodyHash         <- genHash
       deployHash       <- genHash
-      sessionCode      <- Gen.choose(0, 1024 * 500).flatMap(genBytes(_))
-      paymentCode      <- Gen.choose(0, 1024 * 100).flatMap(genBytes(_))
+      sessionCode      <- Gen.choose(0, c.maxSessionCodeBytes).flatMap(genBytes(_))
+      paymentCode      <- Gen.choose(0, c.maxPaymentCodeBytes).flatMap(genBytes(_))
       signature        <- arbitrary[Signature]
     } yield {
       Deploy()
@@ -107,23 +119,37 @@ trait ArbitraryConsensus {
     }
   }
 
-  implicit val arbProcessedDeploy: Arbitrary[Block.ProcessedDeploy] = Arbitrary {
-    for {
-      deploy  <- arbitrary[Deploy]
-      isError <- arbitrary[Boolean]
-      cost    <- arbitrary[Long]
-    } yield {
-      Block
-        .ProcessedDeploy()
-        .withDeploy(deploy)
-        .withCost(cost)
-        .withIsError(isError)
-        .withErrorMessage(if (isError) "Kaboom!" else "")
+  implicit def arbProcessedDeploy(implicit c: ConsensusConfig): Arbitrary[Block.ProcessedDeploy] =
+    Arbitrary {
+      for {
+        deploy  <- arbitrary[Deploy]
+        isError <- arbitrary[Boolean]
+        cost    <- arbitrary[Long]
+      } yield {
+        Block
+          .ProcessedDeploy()
+          .withDeploy(deploy)
+          .withCost(cost)
+          .withIsError(isError)
+          .withErrorMessage(if (isError) "Kaboom!" else "")
+      }
     }
-  }
+
+  // Used to generate a DAG of blocks if we need them.
+  // It's backwards but then the DAG of summaries doesn't need to spend time generating bodies.
+  private def genBlockFromSummary(summary: BlockSummary)(implicit c: ConsensusConfig): Gen[Block] =
+    for {
+      deploys <- Gen.listOfN(summary.getHeader.deployCount, arbitrary[Block.ProcessedDeploy])
+    } yield {
+      Block()
+        .withBlockHash(summary.blockHash)
+        .withHeader(summary.getHeader)
+        .withBody(Block.Body(deploys))
+        .withSignature(summary.getSignature)
+    }
 
   /** Grow a DAG by adding layers on top of the tips. */
-  val genDag: Gen[Vector[BlockSummary]] = {
+  def genDag(implicit c: ConsensusConfig): Gen[Vector[BlockSummary]] = {
     def loop(
         acc: Vector[BlockSummary],
         tips: Set[BlockSummary]
@@ -156,8 +182,13 @@ trait ArbitraryConsensus {
       genChildren.flatMap { children =>
         val parentHashes = children.flatMap(_.getHeader.parentHashes).toSet
         val stillTips    = tips.filterNot(tip => parentHashes(tip.blockHash))
-        if (children.isEmpty) Gen.const(acc)
-        else loop(acc ++ children, stillTips ++ children)
+        val nextTips     = stillTips ++ children
+        val nextAcc      = acc ++ children
+        c.dagSize match {
+          case 0 if children.isEmpty           => Gen.const(nextAcc)
+          case n if 0 < n && n <= nextAcc.size => Gen.const(nextAcc.take(n))
+          case _                               => loop(nextAcc, nextTips)
+        }
       }
     }
     // Always start from the Genesis block.
@@ -171,4 +202,11 @@ trait ArbitraryConsensus {
       loop(Vector(genesis), Set(genesis))
     }
   }
+
+  def genBlockDag(implicit c: ConsensusConfig): Gen[Vector[Block]] =
+    for {
+      summaries <- genDag
+      blocks    <- Gen.sequence(summaries.map(genBlockFromSummary))
+    } yield blocks.asScala.toVector
+
 }

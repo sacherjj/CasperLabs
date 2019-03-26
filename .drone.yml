@@ -26,11 +26,36 @@ __sbtenv: &sbtenv
 clone:
   git-clone:
     image: casperlabs/buildenv:latest
+    group: clone
     commands: |
       set -ex
       git clone -b ${DRONE_TAG:-$DRONE_BRANCH} $DRONE_REMOTE_URL .
       if [ x$DRONE_PULL_REQUEST != x ]; then
           git fetch origin refs/pull/$DRONE_PULL_REQUEST/head
+          EMAIL=ci git merge --no-edit FETCH_HEAD
+      fi
+      git rev-parse HEAD
+
+  # The following steps labeled as '*-mac' are used to check and compile
+  # portions of the pipeline. This method mimics what was suggested in the
+  # below articles:
+  #    https://discourse.drone.io/t/multiple-build-machines/630/2
+  #    https://www.fwd.cloud/commit/post/drone-ios-deployments/
+  #
+  # The mac server is configured following our Developer.md suggestions
+  # for mac users. Please see the Developer.md for specifics.
+
+  git-clone-mac:
+    image: appleboy/drone-ssh
+    group: clone
+    secrets: [ ssh_key, ssh_host, ssh_username ]
+    script: |
+      set -ex
+      mkdir DRONE_BUILD_${DRONE_BUILD_NUMBER}
+      cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
+      git clone -b ${DRONE_TAG:-${DRONE_BRANCH}} ${DRONE_REMOTE_URL} .
+      if [ x${DRONE_PULL_REQUEST} != x ]; then
+          git fetch origin refs/pull/${DRONE_PULL_REQUEST}/head
           EMAIL=ci git merge --no-edit FETCH_HEAD
       fi
       git rev-parse HEAD
@@ -50,7 +75,6 @@ pipeline:
 
   compile-rust:
     <<: *buildenv
-    group: rust
     commands:
       - cd execution-engine/
       - ~/.cargo/bin/cargo update
@@ -62,6 +86,17 @@ pipeline:
     commands:
       - cd execution-engine/
       - ~/.cargo/bin/cargo test
+
+  run-rust-tests-mac:
+    image: appleboy/drone-ssh
+    group: test
+    secrets: [ ssh_key, ssh_host, ssh_username ]
+    command_timeout: 3600s
+    script: |
+      cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
+      export PATH=$PATH:/usr/local/bin
+      cd execution-engine/
+      ~/.cargo/bin/cargo test
 
   run-rust-lints:
     <<: *buildenv
@@ -78,24 +113,24 @@ pipeline:
     commands:
       - sbt test
 
-  docker-build-node-engine-and-client:
-    <<: *sbtenv
-    commands:
+  docker-build-node-engine-and-client:	
+    <<: *sbtenv	
+    commands:	
       - sbt node/docker:publishLocal client/docker:publishLocal
       - export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}
       - make docker-build/execution-engine
-    volumes:
+    volumes:	
       - /var/run/docker.sock:/var/run/docker.sock
 
-  ## run-integration-tests:
-  ##   <<: *sbtenv
-  ##   commands:
-  ##     - python3 -m pip install pipenv dataclasses typing_extensions
-  ##     - cd integration-testing
-  ##     - ./run_tests.sh
-  ##   volumes:
-  ##     - /var/run/docker.sock:/var/run/docker.sock
-  ##     - /tmp:/tmp
+  run-integration-tests:
+    <<: *sbtenv
+    commands:
+      - python3 -m pip install pipenv dataclasses typing_extensions
+      - cd integration-testing
+      - ./run_tests.sh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp:/tmp
 
   # push
 
@@ -151,6 +186,7 @@ pipeline:
 
   package-ee:
     <<: *buildenv
+    group: package-ee
     commands:
       - mkdir -p artifacts/${DRONE_BRANCH}
       - make cargo-package-all
@@ -166,6 +202,41 @@ pipeline:
         tar -xzf $SOURCE.tar.gz ;
         tar -czf $TARGET -C $SOURCE/usr/bin/ . &&
         cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}
+    when:
+      event: [ push, tag ]
+
+  package-ee-mac:
+    image: appleboy/drone-ssh
+    group: package-ee
+    secrets: [ ssh_key, ssh_host, ssh_username ]
+    command_timeout: 3600s
+    script: |
+      cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
+      mkdir -p artifacts/${DRONE_BRANCH}
+      export PATH=$PATH:/usr/local/bin:~/.cargo/bin
+      echo $PATH
+      mkdir -p artifacts/${DRONE_BRANCH}
+      make cargo-package-all
+      WORKING_DIR=$(pwd) ;
+      cd execution-engine/target/release/rpmbuild/SOURCES ;
+      OS=$(uname -s | tr '[:upper:]' '[:lower:]') ;
+      ARCH=$(uname -p) ;
+      SOURCE=$(ls casperlabs-engine-grpc-server-*.tar.gz | sed "s/.tar.gz//") ;
+      TARGET=$(ls $SOURCE*.tar.gz | sed "s/.tar.gz/_"$OS"_"$ARCH".tar.gz/") ;
+      tar -xzf $SOURCE.tar.gz ;
+      tar -czf $TARGET -C $SOURCE/usr/bin/ . &&
+      cp $TARGET $WORKING_DIR/artifacts/${DRONE_BRANCH}
+    when:
+      event: [ push, tag ]
+
+  copy-mac-tar-drone-container:
+    <<: *buildenv
+    secrets: [ ssh_username, ssh_key, ssh_host ]
+    commands:
+      - mkdir -p ~/.ssh
+      - mkdir -p artifacts/
+      - umask 077 && echo "$SSH_KEY" > ~/.ssh/id_rsa
+      - rsync -avzhe "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" $SSH_USERNAME@$SSH_HOST:DRONE_BUILD_${DRONE_BUILD_NUMBER}/artifacts/${DRONE_BRANCH}/casperlabs-engine-grpc-server-*darwin*.gz artifacts/${DRONE_BRANCH}/
     when:
       event: [ push, tag ]
 
@@ -225,11 +296,24 @@ pipeline:
 
   cleanup:
     <<: *sbtenv
+    group: cleanup
     commands:
       - docker images --filter "dangling=true" -q --no-trunc | xargs --no-run-if-empty docker rmi -f
       - docker images | grep "DRONE-${DRONE_BUILD_NUMBER}" | awk '{print $3}' | xargs --no-run-if-empty docker rmi -f
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      status: [ failure, success ]
+
+# mac xargs doesn't have --no-run-if-empty
+  cleanup-mac:
+    image: appleboy/drone-ssh
+    group: cleanup
+    secrets: [ ssh_key, ssh_host, ssh_username ]
+    script: |
+      export PATH=$PATH:/usr/local/bin
+      docker rmi -f $(docker images -f "dangling=true" -q) || true
+      rm -rf DRONE_BUILD_${DRONE_BUILD_NUMBER}
     when:
       status: [ failure, success ]
 

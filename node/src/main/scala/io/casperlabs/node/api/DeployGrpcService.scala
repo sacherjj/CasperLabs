@@ -74,8 +74,7 @@ private[api] object DeployGrpcService {
   def splitPath(path: String): Seq[String] =
     path.split("/").filter(_.nonEmpty)
 
-  def instance[
-      F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: TaskLike: ExecutionEngineService](
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: TaskLike: ExecutionEngineService](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler

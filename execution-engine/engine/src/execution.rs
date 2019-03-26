@@ -3,7 +3,7 @@ extern crate blake2;
 use self::blake2::digest::{Input, VariableOutput};
 use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
-use common::key::Key;
+use common::key::{AccessRights, Key};
 use common::value::{Account, Value};
 use storage::gs::{DbReader, ExecutionEffect};
 use storage::transform::TypeMismatch;
@@ -30,6 +30,7 @@ pub enum Error {
     BytesRepr(BytesReprError),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
+    InvalidAccess { required: AccessRights },
     ForgedReference(Key),
     NoImportedMemory,
     ArgIndexOutOfBounds(usize),
@@ -38,6 +39,8 @@ pub enum Error {
     ParityWasm(ParityWasmError),
     GasLimit,
     Ret(Vec<Key>),
+    Rng(rand::Error),
+    Unreachable,
 }
 
 impl fmt::Display for Error {
@@ -67,6 +70,12 @@ impl From<storage::error::Error> for Error {
 impl From<BytesReprError> for Error {
     fn from(e: BytesReprError) -> Self {
         Error::BytesRepr(e)
+    }
+}
+
+impl From<!> for Error {
+    fn from(_err: !) -> Error {
+        Error::Unreachable
     }
 }
 
@@ -108,14 +117,21 @@ impl<'a> RuntimeContext<'a> {
 
     fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
-            uref @ Key::URef(_) => {
-                if self.known_urefs.contains(uref) {
-                    Ok(())
-                } else {
-                    Err(Error::ForgedReference(*uref))
+            Key::URef(id, access_right) => {
+                // TODO: Use some more efficient encoding of this.
+                // Maybe replace known_urefs Set with Map<[u32; 32], AccessRights>.
+                // https://casperlabs.atlassian.net/browse/EE-210
+                let found = self.known_urefs.iter().find(|entry| match entry {
+                    Key::URef(entry_id, entry_rights) => {
+                        entry_id == id && entry_rights >= access_right
+                    }
+                    _ => false,
+                });
+                match found {
+                    None => Err(Error::ForgedReference(*key)),
+                    Some(_) => Ok(()),
                 }
             }
-
             _ => Ok(()),
         }
     }
@@ -146,7 +162,10 @@ pub struct Runtime<'a, R: DbReader> {
     rng: ChaChaRng,
 }
 
-impl<'a, R: DbReader> Runtime<'a, R> {
+impl<'a, R: DbReader> Runtime<'a, R>
+where
+    R::Error: Into<Error>,
+{
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         memory: MemoryRef,
@@ -370,29 +389,35 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
 
         let key = self.context.deserialize_key(&key_bytes)?;
-        let (args, module, mut refs) = {
-            match self.state.read(key)? {
-                None => Err(Error::KeyNotFound(key)),
-                Some(value) => {
-                    if let Value::Contract(contract) = value {
-                        let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
-                        let module = parity_wasm::deserialize_buffer(contract.bytes())?;
+        if key.is_readable() {
+            let (args, module, mut refs) = {
+                match self.state.read(key).map_err(Into::into)? {
+                    None => Err(Error::KeyNotFound(key)),
+                    Some(value) => {
+                        if let Value::Contract(contract) = value {
+                            let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
+                            let module = parity_wasm::deserialize_buffer(contract.bytes())?;
 
-                        Ok((args, module, contract.urefs_lookup().clone()))
-                    } else {
-                        Err(Error::FunctionNotFound(format!(
-                            "Value at {:?} is not a contract",
-                            key
-                        )))
+                            Ok((args, module, contract.urefs_lookup().clone()))
+                        } else {
+                            Err(Error::FunctionNotFound(format!(
+                                "Value at {:?} is not a contract",
+                                key
+                            )))
+                        }
                     }
                 }
-            }
-        }?;
+            }?;
 
-        let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
-        let result = sub_call(module, args, &mut refs, key, self, extra_urefs)?;
-        self.host_buf = result;
-        Ok(self.host_buf.len())
+            let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
+            let result = sub_call(module, args, &mut refs, key, self, extra_urefs)?;
+            self.host_buf = result;
+            Ok(self.host_buf.len())
+        } else {
+            Err(Error::InvalidAccess {
+                required: AccessRights::Read,
+            })
+        }
     }
 
     pub fn serialize_function(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
@@ -427,7 +452,16 @@ impl<'a, R: DbReader> Runtime<'a, R> {
         value_size: u32,
     ) -> Result<(), Trap> {
         self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)
-            .map(|(key, value)| self.state.write(key, value))
+            .and_then(|(key, value)| {
+                if key.is_writable() {
+                    self.state.write(key, value);
+                    Ok(())
+                } else {
+                    Err(Error::InvalidAccess {
+                        required: AccessRights::Write,
+                    })
+                }
+            })
             .map_err(Into::into)
     }
 
@@ -444,17 +478,31 @@ impl<'a, R: DbReader> Runtime<'a, R> {
 
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
+        if key.is_readable() {
+            err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
+        } else {
+            Err(Error::InvalidAccess {
+                required: AccessRights::Read,
+            }
+            .into())
+        }
     }
 
     fn add_transforms(&mut self, key: Key, value: Value) -> Result<(), Trap> {
-        match self.state.add(key, value) {
-            Err(storage_error) => Err(storage_error.into()),
-            Ok(AddResult::Success) => Ok(()),
-            Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key).into()),
-            Ok(AddResult::TypeMismatch(type_mismatch)) => {
-                Err(Error::TypeMismatch(type_mismatch).into())
+        if key.is_addable() {
+            match self.state.add(key, value) {
+                Err(storage_error) => Err(storage_error.into().into()),
+                Ok(AddResult::Success) => Ok(()),
+                Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key).into()),
+                Ok(AddResult::TypeMismatch(type_mismatch)) => {
+                    Err(Error::TypeMismatch(type_mismatch).into())
+                }
             }
+        } else {
+            Err(Error::InvalidAccess {
+                required: AccessRights::Add,
+            }
+            .into())
         }
     }
 
@@ -470,7 +518,7 @@ impl<'a, R: DbReader> Runtime<'a, R> {
     pub fn new_uref(&mut self, key_ptr: u32) -> Result<(), Trap> {
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
-        let key = Key::URef(key);
+        let key = Key::URef(key, AccessRights::ReadWrite);
         self.context.insert_uref(key);
         self.memory
             .set(key_ptr, &key.to_bytes())
@@ -478,9 +526,9 @@ impl<'a, R: DbReader> Runtime<'a, R> {
     }
 }
 
-fn err_on_missing_key<A>(key: Key, r: Result<Option<A>, storage::error::Error>) -> Result<A, Error>
+fn err_on_missing_key<A, E>(key: Key, r: Result<Option<A>, E>) -> Result<A, Error>
 where
-    Error: Into<Error>,
+    E: Into<Error>,
 {
     match r {
         Ok(None) => Err(Error::KeyNotFound(key)),
@@ -511,7 +559,10 @@ const GAS_FUNC_INDEX: usize = 14;
 const HAS_UREF_FUNC_INDEX: usize = 15;
 const ADD_UREF_FUNC_INDEX: usize = 16;
 
-impl<'a, R: DbReader> Externals for Runtime<'a, R> {
+impl<'a, R: DbReader> Externals for Runtime<'a, R>
+where
+    R::Error: Into<Error>,
+{
     fn invoke_index(
         &mut self,
         index: usize,
@@ -836,9 +887,13 @@ fn sub_call<R: DbReader>(
     // Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>, Error>
+where
+    R::Error: Into<Error>,
+{
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let known_urefs = refs.values().cloned().chain(extra_urefs).collect();
+    let rng = ChaChaRng::from_rng(&mut current_runtime.rng).map_err(Error::Rng)?;
     let mut runtime = Runtime {
         args,
         memory,
@@ -855,7 +910,7 @@ fn sub_call<R: DbReader>(
             account: current_runtime.context.account,
             base_key: key,
         },
-        rng: current_runtime.rng.clone(),
+        rng,
     };
 
     let result = instance.invoke_export("call", &[], &mut runtime);
@@ -911,7 +966,9 @@ pub trait Executor<A> {
         nonce: u64,
         gas_limit: u64,
         tc: &mut TrackingCopy<R>,
-    ) -> (Result<ExecutionEffect, Error>, u64);
+    ) -> (Result<ExecutionEffect, Error>, u64)
+    where
+        R::Error: Into<Error>;
 }
 
 pub struct WasmiExecutor;
@@ -925,7 +982,10 @@ impl Executor<Module> for WasmiExecutor {
         nonce: u64,
         gas_limit: u64,
         tc: &mut TrackingCopy<R>,
-    ) -> (Result<ExecutionEffect, Error>, u64) {
+    ) -> (Result<ExecutionEffect, Error>, u64)
+    where
+        R::Error: Into<Error>,
+    {
         let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
         let acct_key = Key::Account(account_addr);
         let value = on_fail_charge! {

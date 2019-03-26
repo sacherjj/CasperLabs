@@ -19,10 +19,12 @@ import io.casperlabs.comm.transport
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.{Blake2b256, Keccak256}
 import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
+import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps.RichPath
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -46,13 +48,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   private val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
   private val bonds       = createBonds(validators)
   private val minimumBond = 100L
-  private val genesis =
+  private val BlockMsgWithTransform(Some(genesis), transforms) =
     buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "HashSetCasper" should "accept deploys" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
 
@@ -68,8 +70,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   it should "not allow multiple threads to process the same block" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
-    val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)(scheduler)
-    val casper    = node.casperEff
+    val node =
+      HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)(scheduler)
+    val casper = node.casperEff
 
     val testProgram = for {
       deploy <- ProtoUtil.basicDeployData[Effect](0)
@@ -98,7 +101,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "create blocks based on deploys" in effectTest {
-    val node            = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val node            = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
     implicit val casper = node.casperEff
 
     for {
@@ -123,7 +126,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "accept signed blocks" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
 
@@ -141,7 +144,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "be able to create a chain of blocks from different deploys" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
     import node._
 
     val start = System.currentTimeMillis()
@@ -175,7 +178,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "allow multiple deploys in a single block" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
     import node._
 
     val startTime = System.currentTimeMillis()
@@ -193,7 +196,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "reject unsigned blocks" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
 
@@ -208,7 +211,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _              = logEff.warns.count(_.contains("because block signature")) should be(1)
       _              <- node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>
-                 blockStore.get(block.blockHash) shouldBeF None
+                 blockStore.getBlockMessage(block.blockHash) shouldBeF None
                }
     } yield result
   }
@@ -222,7 +225,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         yield ProtoUtil.sourceDeploy(dummyContract, i.toLong, Long.MaxValue)).toList
 
     for {
-      nodes              <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      nodes              <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis, transforms)
       List(node0, node1) = nodes.toList
 
       unsignedBlock <- (node0.casperEff.deploy(data0) *> node0.casperEff.createBlock)
@@ -247,7 +250,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "reject blocks not from bonded validators" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, otherSk)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, transforms, otherSk)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
 
@@ -261,14 +264,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                    = exactly(1, logEff.warns) should include("Ignoring block")
       _                    <- node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>
-                 blockStore.get(signedBlock.blockHash) shouldBeF None
+                 blockStore.getBlockMessage(signedBlock.blockHash) shouldBeF None
                }
     } yield result
   }
 
   it should "propose blocks it adds to peers" in effectTest {
     for {
-      nodes                <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      nodes                <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis, transforms)
       deployData           <- ProtoUtil.basicDeployData[Effect](0)
       createBlockResult    <- nodes(0).casperEff.deploy(deployData) *> nodes(0).casperEff.createBlock
       Created(signedBlock) = createBlockResult
@@ -278,7 +281,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                    <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
-              blockStore.get(signedBlock.blockHash) shouldBeF Some(signedBlock)
+              blockStore.getBlockMessage(signedBlock.blockHash) shouldBeF Some(signedBlock)
             }(nodes(0).metricEff, nodes(0).logEff)
           }
     } yield result
@@ -286,7 +289,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   it should "add a valid block from peer" in effectTest {
     for {
-      nodes                      <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      nodes                      <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis, transforms)
       deployData                 <- ProtoUtil.basicDeployData[Effect](1)
       createBlockResult          <- nodes(0).casperEff.deploy(deployData) *> nodes(0).casperEff.createBlock
       Created(signedBlock1Prime) = createBlockResult
@@ -297,7 +300,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                          <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
-              blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(signedBlock1Prime)
+              blockStore.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
+                signedBlock1Prime
+              )
             }(nodes(0).metricEff, nodes(0).logEff)
           }
     } yield result
@@ -305,7 +310,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   it should "handle multi-parent blocks correctly" in effectTest {
     for {
-      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis, transforms)
       deployData0 <- ProtoUtil.basicDeployData[Effect](0)
       deployData2 <- ProtoUtil.basicDeployData[Effect](2)
       deploys = Vector(
@@ -391,7 +396,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 //    nodes.foreach(_.receive) //send to all peers
 
   it should "allow bonding via the faucet" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
     import node.{casperEff, logEff}
 
     val (sk, pk)    = Ed25519.newKeyPair
@@ -434,10 +439,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   it should "not fail if the forkchoice changes after a bonding event" in {
     val localValidators = validatorKeys.take(3)
     val localBonds      = localValidators.map(Ed25519.toPublic).zip(List(10L, 30L, 5000L)).toMap
-    val localGenesis =
+    val BlockMsgWithTransform(Some(localGenesis), localTransforms) =
       buildGenesis(Nil, localBonds, 1L, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
     for {
-      nodes <- HashSetCasperTestNode.networkEff(localValidators, localGenesis)
+      nodes <- HashSetCasperTestNode.networkEff(localValidators, localGenesis, localTransforms)
 
       (sk, pk)    = Ed25519.newKeyPair
       pkStr       = Base16.encode(pk)
@@ -511,7 +516,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
     for {
-      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis, transforms)
       deployDatas <- (0 to 2).toList
                       .traverse[Effect, DeployData](i => ProtoUtil.basicDeployData[Effect](i))
       deployPrim0 = deployDatas(1)
@@ -558,9 +563,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ = nodes.toList.traverse_[Effect, Assertion] { node =>
         validateBlockStore(node) { blockStore =>
           for {
-            _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-            _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-            result <- blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
+            _ <- blockStore.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+            _ <- blockStore.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+            result <- blockStore.getBlockMessage(signedBlock3.blockHash) shouldBeF Some(
+                       signedBlock3
+                     )
           } yield result
         }(nodes(0).metricEff, nodes(0).logEff)
       }
@@ -569,7 +576,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   it should "ask peers for blocks it is missing" in effectTest {
     for {
-      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis, transforms)
       deployDatas = Vector(
         "for(_ <- @1){ Nil } | @1!(1)",
         "@2!(2)"
@@ -609,8 +616,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
               for {
-                _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-                result <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+                _ <- blockStore.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+                result <- blockStore.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(
+                           signedBlock2
+                         )
               } yield result
             }(nodes(0).metricEff, nodes(0).logEff)
           }
@@ -683,7 +692,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       } yield ()
 
     for {
-      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis, transforms)
 
       _ <- stepSplit(nodes) // blocks a1 a2
       _ <- stepSplit(nodes) // blocks b1 b2
@@ -711,7 +720,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   it should "ignore adding equivocation blocks" in effectTest {
     for {
-      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis, transforms)
 
       // Creates a pair that constitutes equivocation blocks
       basicDeployData0 <- ProtoUtil.basicDeployData[Effect](0)
@@ -736,8 +745,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes(1).tearDownNode()
       _ <- validateBlockStore(nodes(1)) { blockStore =>
             for {
-              _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-              result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF None
+              _      <- blockStore.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+              result <- blockStore.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF None
             } yield result
           }(nodes(0).metricEff, nodes(0).logEff)
     } yield result
@@ -746,7 +755,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
   it should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
     for {
-      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
+      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis, transforms)
       deployDatas <- (0 to 5).toList.traverse[Effect, DeployData](ProtoUtil.basicDeployData[Effect])
 
       // Creates a pair that constitutes equivocation blocks
@@ -811,22 +820,26 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
       _ <- validateBlockStore(nodes(0)) { blockStore =>
             for {
-              _ <- blockStore.get(signedBlock1.blockHash) shouldBeF None
-              result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
+              _ <- blockStore.getBlockMessage(signedBlock1.blockHash) shouldBeF None
+              result <- blockStore.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
                          signedBlock1Prime
                        )
             } yield result
           }(nodes(0).metricEff, nodes(0).logEff)
       _ <- validateBlockStore(nodes(1)) { blockStore =>
             for {
-              _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-              result <- blockStore.get(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
+              _ <- blockStore.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+              result <- blockStore.getBlockMessage(signedBlock4.blockHash) shouldBeF Some(
+                         signedBlock4
+                       )
             } yield result
           }(nodes(1).metricEff, nodes(1).logEff)
       result <- validateBlockStore(nodes(2)) { blockStore =>
                  for {
-                   _ <- blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
-                   result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
+                   _ <- blockStore.getBlockMessage(signedBlock3.blockHash) shouldBeF Some(
+                         signedBlock3
+                       )
+                   result <- blockStore.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
                               signedBlock1Prime
                             )
                  } yield result
@@ -836,7 +849,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   it should "prepare to slash an block that includes a invalid block pointer" in effectTest {
     for {
-      nodes           <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
+      nodes           <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis, transforms)
       deploys         <- (0 to 5).toList.traverse(i => ProtoUtil.basicDeploy[Effect](i))
       deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d))).toIndexedSeq
 
@@ -877,6 +890,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       nodes <- HashSetCasperTestNode.networkEff(
                 validatorKeys.take(2),
                 genesis,
+                transforms,
                 storageSize = 1024L * 1024 * 10
               )
 
@@ -921,7 +935,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   it should "increment last finalized block as appropriate in round robin" in effectTest {
     val stake      = 10L
     val equalBonds = validators.map(_ -> stake).toMap
-    val genesisWithEqualBonds =
+    val BlockMsgWithTransform(Some(genesisWithEqualBonds), transformsWithEqualBonds) =
       buildGenesis(Seq.empty, equalBonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
 
     def checkLastFinalizedBlock(
@@ -937,6 +951,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       nodes <- HashSetCasperTestNode.networkEff(
                 validatorKeys.take(3),
                 genesisWithEqualBonds,
+                transformsWithEqualBonds,
                 faultToleranceThreshold = 0f // With equal bonds this should allow the final block to move as expected.
               )
       deployDatas <- (0 to 7).toList.traverse(i => ProtoUtil.basicDeployData[Effect](i))
@@ -1017,7 +1032,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "fail when deploying with insufficient gas" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
 
@@ -1033,7 +1048,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "succeed if given enough gas for deploy" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
 
@@ -1051,7 +1066,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: BlockMessage
   ): Effect[BlockMessage] = {
-    val postState     = RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(1)
+    val postState =
+      RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(1)
     val postStateHash = Blake2b256.hash(postState.toByteArray)
     val header = Header()
       .withPostStateHash(ByteString.copyFrom(postStateHash))
@@ -1098,7 +1114,7 @@ object HashSetCasperTest {
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
-  def createGenesis(bonds: Map[Array[Byte], Long]): BlockMessage =
+  def createGenesis(bonds: Map[Array[Byte], Long]): BlockMsgWithTransform =
     buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
 
   def buildGenesis(
@@ -1108,7 +1124,7 @@ object HashSetCasperTest {
       maximumBond: Long,
       faucetCode: String => String,
       deployTimestamp: Long
-  ): BlockMessage = {
+  ): BlockMsgWithTransform = {
     implicit val logEff                  = new LogStub[Task]()
     val initial                          = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "casperlabs")
     implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)

@@ -8,3 +8,6 @@ extern crate gens;
 
 #[cfg(test)]
 mod bytesrepr;
+
+#[cfg(test)]
+mod partialord;

@@ -387,11 +387,8 @@ object BlockAPI {
                      Base16.encode(h.toByteArray).startsWith(q.hash)
                    })
     } yield
-      findResult.headOption match {
-        case Some((_, block)) =>
-          Some(block)
-        case None =>
-          none[BlockMessage]
+      findResult.headOption.flatMap {
+        case (_, blockWithTransform) => blockWithTransform.blockMessage
       }
 
   private def addResponse(status: BlockStatus, block: BlockMessage): DeployServiceResponse =

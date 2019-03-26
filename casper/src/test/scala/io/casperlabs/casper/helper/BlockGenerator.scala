@@ -32,7 +32,8 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: Log](
+  def updateChainWithBlockStateUpdate[
+      F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: Log](
       id: Int,
       genesis: BlockMessage
   ): F[BlockMessage] =
@@ -57,9 +58,7 @@ object BlockGenerator {
       result <- computeBlockCheckpointFromDeploys[F](
                  b,
                  genesis,
-                 dag,
-                 //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
-                 (_: BlockMetadata) => Seq.empty[TransformEntry].pure[F]
+                 dag
                )
     } yield (result.postStateHash, result.deploysForBlock)
 
@@ -73,16 +72,15 @@ object BlockGenerator {
     val updatedBlockBody =
       b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
-    BlockStore[F].put(b.blockHash, updatedBlock) *>
+    BlockStore[F].put(b.blockHash, updatedBlock, Seq.empty) *>
       IndexedBlockDagStorage[F].inject(id, updatedBlock)
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Log: ExecutionEngineService](
+  private[casper] def computeBlockCheckpointFromDeploys[
+      F[_]: Sync: BlockStore: Log: ExecutionEngineService](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
-      transforms: BlockMetadata => F[Seq[TransformEntry]]
+      dag: BlockDagRepresentation[F]
   ): F[DeploysCheckpoint] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
@@ -97,8 +95,7 @@ object BlockGenerator {
       result <- computeDeploysCheckpoint[F](
                  parents,
                  deploys,
-                 dag,
-                 transforms
+                 dag
                )
     } yield result
 
@@ -106,9 +103,7 @@ object BlockGenerator {
   //does not match the computed hash based on the deploys
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
       b: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
-      transform: BlockMetadata => F[Seq[TransformEntry]]
+      dag: BlockDagRepresentation[F]
   ): F[Either[BlockException, Option[StateHash]]] = {
     val preStateHash = ProtoUtil.preStateHash(b)
     val tsHash       = ProtoUtil.tuplespace(b)
@@ -116,7 +111,7 @@ object BlockGenerator {
     val timestamp    = Some(b.header.get.timestamp) // TODO: Ensure header exists through type
     for {
       parents                              <- ProtoUtil.unsafeGetParents[F](b)
-      processedHash                        <- processDeploys(parents, dag, deploys, transform)
+      processedHash                        <- processDeploys(parents, dag, deploys)
       (computePreStateHash, deployResults) = processedHash
       _                                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
       result <- processPossiblePreStateHash[F](
@@ -162,7 +157,6 @@ object BlockGenerator {
       time: Option[Long],
       deploys: Seq[DeployData]
   ): F[Either[BlockException, Option[StateHash]]] = {
-    val deployLookup     = processedDeploys.zip(deploys).toMap
     val commutingEffects = findCommutingEffects(processedDeploys)
     val transforms       = commutingEffects.unzip._1.flatMap(_.transformMap)
     ExecutionEngineService[F].commit(preStateHash, transforms).flatMap {
@@ -227,6 +221,7 @@ trait BlockGenerator {
         shardId = shardId
       )
       modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(block)
-      _             <- BlockStore[F].put(serializedBlockHash, modifiedBlock)
+      _ <- BlockStore[F]
+            .put(serializedBlockHash, modifiedBlock, Seq.empty)
     } yield modifiedBlock
 }

@@ -1,18 +1,11 @@
 #!/bin/bash -e
 
-tag=latest
+tag=test
 if [[ -n $DRONE_BUILD_NUMBER ]]; then
 	# Mind our own business on Drone CI with concurrent jobs
 	tag=DRONE-$DRONE_BUILD_NUMBER
 fi
 
-export DEFAULT_IMAGE=casperlabs-integration-testing:$tag
-
-cp Dockerfile ..
-cp .dockerignore ..
-sed "s/io.casperlabs\/node:latest/io.casperlabs\/node:$tag/" Dockerfile |\
-    docker build -t $DEFAULT_IMAGE -f - ..
-rm ../Dockerfile
-rm ../.dockerignore
+export DEFAULT_IMAGE=casperlabs\/node:$tag
 cp -r resources /tmp
 pipenv run py.test -v "$@"

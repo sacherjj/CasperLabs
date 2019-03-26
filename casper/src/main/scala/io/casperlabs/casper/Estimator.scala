@@ -83,7 +83,7 @@ object Estimator {
                              blockDag,
                              scoresMap
                            )
-      maybeSortedChildren <- sortedChildrenHash.traverse(BlockStore[F].get)
+      maybeSortedChildren <- sortedChildrenHash.traverse(BlockStore[F].getBlockMessage)
       sortedChildren      = maybeSortedChildren.flatten.toVector
     } yield sortedChildren
   }

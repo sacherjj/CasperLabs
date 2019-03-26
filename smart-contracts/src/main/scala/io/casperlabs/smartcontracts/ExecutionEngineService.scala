@@ -3,10 +3,8 @@ package io.casperlabs.smartcontracts
 import java.nio.file.Path
 
 import cats.effect.{Resource, Sync}
-import cats.syntax.applicative._
-import cats.syntax.either._
-import cats.syntax.functor._
-import cats.syntax.flatMap._
+import cats.syntax._
+import cats.implicits._
 import cats.{Applicative, Defer}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.Bond
@@ -46,9 +44,17 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
   override def emptyStateHash: ByteString = ByteString.copyFrom(Array.fill(32)(0.toByte))
 
   def sendMessage[A, B, R](msg: A, rpc: Stub => A => Task[B])(f: B => R): F[R] =
-    for {
-      response <- rpc(stub)(msg).to[F]
-    } yield f(response)
+    rpc(stub)(msg).to[F].map(f(_)).recoverWith {
+      case ex: io.grpc.StatusRuntimeException
+          if ex.getStatus.getCode == io.grpc.Status.Code.UNAVAILABLE &&
+            ex.getCause != null &&
+            ex.getCause.isInstanceOf[java.io.FileNotFoundException] =>
+        Sync[F].raiseError(
+          new java.io.FileNotFoundException(
+            s"It looks like the Execution Engine is not listening at the socket file ${addr}"
+          )
+        )
+    }
 
   override def exec(
       prestate: ByteString,

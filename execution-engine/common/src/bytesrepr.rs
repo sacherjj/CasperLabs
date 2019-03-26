@@ -4,9 +4,9 @@ use super::alloc::vec::Vec;
 use core::mem::{size_of, MaybeUninit};
 
 const I32_SIZE: usize = size_of::<i32>();
-const U32_SIZE: usize = size_of::<u32>();
+pub const U32_SIZE: usize = size_of::<u32>();
 
-const N32: usize = 32;
+pub const N32: usize = 32;
 const N256: usize = 256;
 
 pub trait ToBytes {

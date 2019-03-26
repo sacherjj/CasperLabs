@@ -16,6 +16,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, _}
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
 import org.scalatest.{Assertion, FlatSpec, Matchers}
@@ -337,17 +338,26 @@ object ApproveBlockProtocolTest {
     implicit val connectionsCell = Cell.mvarCell[Task, Connections](List(src)).unsafeRunSync
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
 
-    val (sk, pk)   = Ed25519.newKeyPair
-    val bonds      = HashSetCasperTest.createBonds(Seq(pk))
-    val genesis    = HashSetCasperTest.createGenesis(bonds)
-    val validators = validatorsPk.map(ByteString.copyFrom)
-    val candidate  = ApprovedBlockCandidate(Some(genesis), requiredSigs)
-    val sigs       = Ref.unsafe[Task, Set[Signature]](Set.empty)
-    val startTime  = System.currentTimeMillis()
+    val (sk, pk)                                         = Ed25519.newKeyPair
+    val bonds                                            = HashSetCasperTest.createBonds(Seq(pk))
+    val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.createGenesis(bonds)
+    val validators                                       = validatorsPk.map(ByteString.copyFrom)
+    val candidate                                        = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+    val sigs                                             = Ref.unsafe[Task, Set[Signature]](Set.empty)
+    val startTime                                        = System.currentTimeMillis()
 
-    val node = HashSetCasperTestNode.standaloneEff(genesis, sk)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, transforms, sk)
     val protocol = ApproveBlockProtocol
-      .unsafe[Task](genesis, validators, requiredSigs, duration, interval, sigs, startTime)
+      .unsafe[Task](
+        genesis,
+        transforms,
+        validators,
+        requiredSigs,
+        duration,
+        interval,
+        sigs,
+        startTime
+      )
 
     TestFixture(lab, protocol, candidate, startTime, sigs)
   }
