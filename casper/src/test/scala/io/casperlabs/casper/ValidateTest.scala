@@ -587,7 +587,6 @@ class ValidateTest
       for {
         _   <- casperSmartContractsApi.setBonds(bonds)
         dag <- blockDagStorage.getRepresentation
-        // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
         _ <- ExecEngineUtil
               .validateBlockCheckpoint[Task](
                 genesis,
