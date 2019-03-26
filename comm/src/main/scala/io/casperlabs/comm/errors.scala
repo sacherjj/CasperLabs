@@ -119,6 +119,7 @@ object ServiceError {
   }
 
   object InvalidArgument extends StatusError(Status.INVALID_ARGUMENT)
+  object Unauthenticated extends StatusError(Status.UNAUTHENTICATED)
 }
 
 sealed trait GossipError extends NoStackTrace

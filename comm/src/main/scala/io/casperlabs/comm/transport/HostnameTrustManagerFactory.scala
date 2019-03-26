@@ -25,12 +25,15 @@ object HostnameTrustManagerFactory {
 
 private class HostnameTrustManager extends X509ExtendedTrustManager {
 
+  private def reject[T](msg: String): T =
+    throw new CertificateException(msg)
+
   def checkClientTrusted(
       x509Certificates: Array[X509Certificate],
       authType: String,
       socket: Socket
   ): Unit =
-    throw new CertificateException("Not allowed validation method")
+    reject("Not allowed validation method")
 
   def checkClientTrusted(
       x509Certificates: Array[X509Certificate],
@@ -38,27 +41,25 @@ private class HostnameTrustManager extends X509ExtendedTrustManager {
       sslEngine: SSLEngine
   ): Unit = {
     Option(sslEngine.getHandshakeSession)
-      .getOrElse(throw new CertificateException("No handshake session"))
+      .getOrElse(reject("No handshake session"))
 
     val cert = x509Certificates.head
     val peerHost = CertificateHelper
       .publicAddress(cert.getPublicKey)
       .map(Base16.encode)
-      .getOrElse(
-        throw new CertificateException(s"Certificate's public key has the wrong algorithm")
-      )
+      .getOrElse(reject(s"Certificate's public key has the wrong algorithm"))
     checkIdentity(Some(peerHost), cert, "https")
   }
 
   def checkClientTrusted(x509Certificates: Array[X509Certificate], authType: String): Unit =
-    throw new CertificateException("Not allowed validation method")
+    reject("Not allowed validation method")
 
   def checkServerTrusted(
       x509Certificates: Array[X509Certificate],
       authType: String,
       socket: Socket
   ): Unit =
-    throw new CertificateException("Not allowed validation method")
+    reject("Not allowed validation method")
 
   def checkServerTrusted(
       x509Certificates: Array[X509Certificate],
@@ -66,31 +67,29 @@ private class HostnameTrustManager extends X509ExtendedTrustManager {
       sslEngine: SSLEngine
   ): Unit = {
     val sslSession = Option(sslEngine.getHandshakeSession)
-      .getOrElse(throw new CertificateException("No handshake session"))
+      .getOrElse(reject("No handshake session"))
 
     // check endpoint identity
     Option(sslEngine.getSSLParameters.getEndpointIdentificationAlgorithm) match {
       case Some(identityAlg) if identityAlg.nonEmpty =>
         val cert     = x509Certificates.head
         val peerHost = Option(sslSession.getPeerHost)
+
         checkIdentity(peerHost, cert, identityAlg)
+
         CertificateHelper
           .publicAddress(cert.getPublicKey)
           .map(Base16.encode)
           .filter(_ == peerHost.getOrElse(""))
-          .getOrElse(
-            throw new CertificateException(
-              s"Certificate's public address doesn't match the hostname"
-            )
-          )
+          .getOrElse(reject(s"Certificate's public address doesn't match the hostname"))
 
       case _ =>
-        throw new CertificateException("No endpoint identification algorithm")
+        reject("No endpoint identification algorithm")
     }
   }
 
   def checkServerTrusted(x509Certificates: Array[X509Certificate], authType: String): Unit =
-    throw new CertificateException("Not allowed validation method")
+    reject("Not allowed validation method")
 
   def getAcceptedIssuers: Array[X509Certificate] = EmptyArrays.EMPTY_X509_CERTIFICATES
 
@@ -110,7 +109,7 @@ private class HostnameTrustManager extends X509ExtendedTrustManager {
           .getOrElse("")
         HostnameChecker.getInstance(HostnameChecker.TYPE_TLS).`match`(host, cert)
       case _ =>
-        throw new CertificateException(s"Unknown identification algorithm: $algorithm")
+        reject(s"Unknown identification algorithm: $algorithm")
     }
   }
 }

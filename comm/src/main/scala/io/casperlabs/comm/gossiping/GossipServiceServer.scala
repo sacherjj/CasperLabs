@@ -6,7 +6,9 @@ import cats.effect._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
-import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound}
+import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
+import io.casperlabs.comm.grpc.ContextKeys
+import io.casperlabs.comm.auth.Principal
 import monix.tail.Iterant
 import scala.collection.immutable.Queue
 import scala.math.Ordering
@@ -19,11 +21,24 @@ class GossipServiceServer[F[_]: Sync](
 ) extends GossipService[F] {
   import GossipServiceServer._
 
+  def currentPrincipal = Option(ContextKeys.Principal.get)
+
   def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
-    request.sender match {
-      case None =>
-        Sync[F].raiseError(InvalidArgument("Sender cannot be empty."))
-      case _ =>
+    // Verify that the sender holds the same node identity as the public key
+    // in the client SSL certificate. Alternatively we could drop the sender
+    // altogether and use Kademlia to lookup the Node with that ID the first
+    // time we see it.
+    (request.sender, currentPrincipal) match {
+      case (None, _) =>
+        Sync[F].raiseError(Unauthenticated("Sender cannot be empty."))
+
+      case (_, None) =>
+        Sync[F].raiseError(Unauthenticated("Cannot verify sender identity."))
+
+      case (Some(sender), Some(Principal.Peer(id))) if sender.id != id =>
+        Sync[F].raiseError(Unauthenticated("Sender doesn't match public key."))
+
+      case (Some(sender), _) =>
         ???
     }
 

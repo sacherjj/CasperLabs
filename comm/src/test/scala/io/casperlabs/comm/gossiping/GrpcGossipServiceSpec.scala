@@ -6,10 +6,13 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound}
-import io.casperlabs.comm.grpc.GrpcServer
+import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
+import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
 import io.casperlabs.comm.TestRuntime
-import io.grpc.netty.NettyChannelBuilder
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.grpc.{AuthInterceptor, GrpcServer, SslContexts}
+import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
+import io.netty.handler.ssl.{ClientAuth, SslContext}
 import java.util.concurrent.atomic.AtomicReference
 import monix.eval.Task
 import monix.execution.{ExecutionModel, Scheduler}
@@ -36,13 +39,15 @@ class GrpcGossipServiceSpec
   // Test data that we can set in each test.
   val testDataRef = new AtomicReference(TestData.empty)
   // Set up the server and client once, to be shared, to make tests faster.
-  var stub: GossipingGrpcMonix.GossipServiceStub = _
-  var shutdown: Task[Unit]                       = _
+  var stub: GossipingGrpcMonix.GossipServiceStub          = _
+  var anonymousStub: GossipingGrpcMonix.GossipServiceStub = _
+  var shutdown: Task[Unit]                                = _
 
   override def beforeAll() =
     TestEnvironment(testDataRef).allocated.foreach {
-      case (stub, shutdown) =>
-        this.stub = stub
+      case ((anonymousStub, secureStub), shutdown) =>
+        this.stub = secureStub
+        this.anonymousStub = anonymousStub
         this.shutdown = shutdown
     }
 
@@ -205,7 +210,7 @@ class GrpcGossipServiceSpec
               // Restrict the client to request 1 item at a time.
               val scheduler = Scheduler(ExecutionModel.BatchedExecution(1))
 
-              TestEnvironment(testDataRef)(oi, scheduler).use { stub =>
+              TestEnvironment(testDataRef)(oi, scheduler).map(_._2).use { stub =>
                 // Turn the stub (using Observables) back to the internal interface (using Iterant).
                 val svc = GrpcGossipService.toGossipService[Task](stub)
                 val req = GetBlockChunkedRequest(blockHash = block.blockHash)
@@ -601,32 +606,59 @@ class GrpcGossipServiceSpec
     implicit val config                         = PropertyCheckConfiguration(minSuccessful = 5)
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
 
-    def checkInvalid(req: NewBlocksRequest, expectedMsg: String): Task[Unit] =
-      stub.newBlocks(req).attempt.map { res =>
+    def expectError(
+        req: NewBlocksRequest,
+        client: GossipingGrpcMonix.GossipServiceStub = stub
+    )(pf: PartialFunction[Throwable, Unit]): Task[Unit] =
+      client.newBlocks(req).attempt.map { res =>
         res.isLeft shouldBe true
-        res.left.get match {
-          case InvalidArgument(msg) =>
-            msg shouldBe expectedMsg
-          case ex =>
-            fail(s"Unexpected error: $ex")
+        pf.lift(res.left.get) getOrElse {
+          fail(s"Unexpected error: ${res.left.get}")
         }
       }
 
     "newBlocks" when {
-      "called with no sender" should {
-        "return INVALID_ARGUMENT" in {
+      "return UNAUTHENTICATED" when {
+        "called without a sender" in {
           forAll(arbitrary[List[ByteString]]) { blockHashes =>
             runTestUnsafe(TestData()) {
-              checkInvalid(
-                NewBlocksRequest(sender = None, blockHashes = blockHashes),
-                "Sender cannot be empty."
-              )
+              expectError(
+                NewBlocksRequest(sender = None, blockHashes = blockHashes)
+              ) {
+                case Unauthenticated(msg) =>
+                  msg shouldBe "Sender cannot be empty."
+              }
+            }
+          }
+        }
+        "called with a sender whose ID doesn't match its SSL public key" in {
+          forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
+            runTestUnsafe(TestData()) {
+              expectError(
+                NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes)
+              ) {
+                case Unauthenticated(msg) =>
+                  msg shouldBe "Sender doesn't match public key."
+              }
             }
           }
         }
       }
-      "called with a sender whose ID doesn't match its SSL public key" should {
-        "return INVALID_ARGUMENT" in (pending)
+      "return UNAVAILABLE" when {
+        "called without an SSL certificate" in {
+          forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
+            runTestUnsafe(TestData()) {
+              expectError(
+                NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes),
+                client = anonymousStub
+              ) {
+                case ex: io.grpc.StatusRuntimeException =>
+                  // Becuase the server requires client auth this will be rejected straight away.
+                  ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNAVAILABLE
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -669,8 +701,14 @@ object GrpcGossipServiceSpec extends TestRuntime {
         implicit
         oi: ObservableIterant[Task],
         scheduler: Scheduler
-    ): Resource[Task, GossipingGrpcMonix.GossipServiceStub] = {
+    ): Resource[
+      Task,
+      (GossipingGrpcMonix.GossipServiceStub, GossipingGrpcMonix.GossipServiceStub)
+    ] = {
       val port = getFreePort
+
+      val serverCert = TestCert.generate
+      val clientCert = TestCert.generate
 
       val serverR = GrpcServer[Task](
         port,
@@ -686,29 +724,58 @@ object GrpcGossipServiceSpec extends TestRuntime {
               }
               GossipingGrpcMonix.bindService(svc, scheduler)
             }
+        ),
+        interceptors = List(new AuthInterceptor()),
+        // If the server is using SSL then we can't connect to it using `.usePlaintext`
+        // on the client channel, it would get UNAVAILABLE.
+        // Conversely, if the server isn't using SSL, the client can't do so either.
+        sslContext = Some(
+          SslContexts.forServer(
+            serverCert.cert,
+            serverCert.key,
+            ClientAuth.REQUIRE
+          )
         )
       )
 
-      val channelR = Resource.make(
-        Task.delay {
-          NettyChannelBuilder
-            .forAddress("localhost", port)
-            .executor(scheduler)
-            .usePlaintext
-            .build
-        }
-      )(
-        channel =>
+      def channelR(sslContext: SslContext) =
+        Resource.make(
           Task.delay {
-            channel.shutdown()
+            NettyChannelBuilder
+              .forAddress("localhost", port)
+              .executor(scheduler)
+              .negotiationType(NegotiationType.TLS)
+              .sslContext(sslContext)
+              .overrideAuthority(serverCert.id) // So that "localhost" isn't rejected, as it's not what the certificate is for.
+              .build
           }
-      )
+        )(
+          channel =>
+            Task.delay {
+              channel.shutdown()
+            }
+        )
 
       for {
-        _       <- serverR
-        channel <- channelR
-      } yield {
-        new GossipingGrpcMonix.GossipServiceStub(channel)
+        _                <- serverR
+        anonymousChannel <- channelR(SslContexts.forClientUnauthenticated)
+        secureChannel    <- channelR(SslContexts.forClient(clientCert.cert, clientCert.key))
+        anonymousStub    = new GossipingGrpcMonix.GossipServiceStub(anonymousChannel)
+        secureStub       = new GossipingGrpcMonix.GossipServiceStub(secureChannel)
+      } yield (anonymousStub, secureStub)
+    }
+
+    case class TestCert(cert: String, key: String, id: String)
+
+    object TestCert {
+      def generate = {
+        val pair  = CertificateHelper.generateKeyPair(useNonBlockingRandom = true)
+        val cert  = CertificateHelper.generate(pair)
+        val certS = CertificatePrinter.print(cert)
+        val keyS  = CertificatePrinter.printPrivateKey(pair.getPrivate)
+        val idS =
+          CertificateHelper.publicAddress(pair.getPublic).map(Base16.encode(_)).getOrElse("local")
+        TestCert(certS, keyS, idS)
       }
     }
   }
