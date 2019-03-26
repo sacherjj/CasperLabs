@@ -8,7 +8,7 @@ import typing_extensions
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from casperlabsnode_testing.common import Network
+    from casperlabsnode_testing.common import Network, WaitTimeoutError
     from casperlabsnode_testing.casperlabsnode import Node
 
 
@@ -94,6 +94,7 @@ class BlocksCountAtLeast:
 
     def is_satisfied(self) -> bool:
         actual_blocks_count = self.node.get_blocks_count(self.max_retrieved_blocks)
+        logging.info("THE ACTUAL BLOCKS COUNT: {}".format(actual_blocks_count))
         return actual_blocks_count >= self.blocks_count
 
 
@@ -142,6 +143,40 @@ def wait_for_approved_block_received_handler_state(node: 'Node', timeout: int):
     predicate = ApprovedBlockReceivedHandlerStateEntered(node)
     wait_on_using_wall_clock_time(predicate, timeout)
 
+def wait_for_peers_count_at_least(node: 'Node', npeers: int, timeout: int) -> None:
+    predicate = HasAtLeastPeers(node, npeers)
+    wait_using_wall_clock_time_or_fail(predicate, timeout)
+
+def wait_using_wall_clock_time_or_fail(predicate: PredicateProtocol, timeout: int) ->None:
+    try:
+        wait_using_wall_clock_time(predicate, timeout)
+    except WaitTimeoutError:
+        pytest.fail('Failed to satisfy {} after {}s'.format(predicate, timeout))
+
+def wait_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> None:
+    logging.info("AWAITING {}".format(predicate))
+
+    elapsed = 0
+    while elapsed < timeout:
+        start_time = time.time()
+
+        is_satisfied = predicate.is_satisfied()
+        if is_satisfied:
+            logging.info("SATISFIED {}".format(predicate))
+            return
+
+        condition_evaluation_duration = time.time() - start_time
+        elapsed = int(elapsed + condition_evaluation_duration)
+        time_left = timeout - elapsed
+
+        # iteration duration is 15% of remaining timeout
+        # but no more than 10s and no less than 1s
+        iteration_duration = int(min(10, max(1, int(0.15 * time_left))))
+
+        time.sleep(iteration_duration)
+        elapsed = elapsed + iteration_duration
+    logging.info("TIMEOUT %s", predicate)
+    raise WaitTimeoutError(predicate, timeout)
 
 def wait_for_approved_block_received(network: 'Network', timeout: int):
     for peer in network.peers:

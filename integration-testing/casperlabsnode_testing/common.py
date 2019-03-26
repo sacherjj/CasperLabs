@@ -52,3 +52,9 @@ class Network:
         self.bootstrap = bootstrap
         self.peers = peers
         self.nodes = [bootstrap] + peers
+
+class WaitTimeoutError(Exception):
+    def __init__(self, predicate: 'PredicateProtocol', timeout: int) -> None:
+        super().__init__()
+        self.predicate = predicate
+        self.timeout = timeout
