@@ -278,6 +278,39 @@ class GrpcGossipServiceSpec
           }
         }
       }
+
+      "a download is not consumed" should {
+        "cancel the idle stream" in {
+          // Tried to test this with short timeouts and delays but it looks like underlying gRPC
+          // reactive subscriber machinery will eagerly pull all the data from the server regardless
+          // of the backpressure applied in the subsequent processing. Nevertheless the timeout is
+          // applied so if someone tries to go deeper we should be covered.
+          forAll { (block: Block) =>
+            runTestUnsafe(TestData.fromBlock(block)) {
+              TestEnvironment(
+                testDataRef,
+                maxParallelBlockDownloads = 1,
+                blockChunkConsumerTimeout = Duration.Zero
+              ).use { stub =>
+                val req = GetBlockChunkedRequest(blockHash = block.blockHash)
+
+                for {
+                  r <- stub.getBlockChunked(req).toListL.attempt
+                  _ = {
+                    r.isLeft shouldBe true
+                    val ex = r.left.get.asInstanceOf[io.grpc.StatusRuntimeException]
+                    // TODO: When we add the ErrorInterceptor we can turn this into a proper status,
+                    // for example CANCELED or DEADLINE_EXCEEDED.
+                    ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNKNOWN
+                  }
+                  // The semaphore should be free for the next query. Otherwise the test will time out.
+                  _ <- stub.getBlockChunked(req).headL
+                } yield ()
+              }
+            }
+          }
+        }
+      }
     }
   }
 
@@ -752,7 +785,8 @@ object GrpcGossipServiceSpec extends TestRuntime {
         testData: AtomicReference[TestData],
         anonymous: Boolean = false,
         clientAuth: ClientAuth = ClientAuth.REQUIRE,
-        maxParallelBlockDownloads: Int = 100
+        maxParallelBlockDownloads: Int = 100,
+        blockChunkConsumerTimeout: FiniteDuration = 10.seconds
     )(
         implicit
         oi: ObservableIterant[Task],
@@ -772,7 +806,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
               maxChunkSize = DefaultMaxChunkSize,
               maxParallelBlockDownloads = maxParallelBlockDownloads
             ) map { gss =>
-              val svc = GrpcGossipService.fromGossipService(gss)
+              val svc = GrpcGossipService.fromGossipService(gss, blockChunkConsumerTimeout)
               GossipingGrpcMonix.bindService(svc, scheduler)
             }
         ),

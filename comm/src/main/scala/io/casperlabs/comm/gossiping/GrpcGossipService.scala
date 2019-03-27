@@ -5,9 +5,11 @@ import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.auth.Principal
 import io.casperlabs.comm.grpc.ContextKeys
 import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
+import io.casperlabs.shared.ObservableOps._
 import monix.eval.{Task, TaskLift, TaskLike}
 import monix.reactive.Observable
 import monix.tail.Iterant
+import scala.concurrent.duration.FiniteDuration
 
 /** Adapt the GossipService to Monix generated interfaces. */
 object GrpcGossipService {
@@ -16,7 +18,8 @@ object GrpcGossipService {
   /** Create Monix specific instance from the internal interface,
 	  * to be used as the "server side", i.e. to return data to another peer. */
   def fromGossipService[F[_]: Sync: TaskLike: ObservableIterant](
-      service: GossipService[F]
+      service: GossipService[F],
+      blockChunkConsumerTimeout: FiniteDuration
   ): GossipingGrpcMonix.GossipService =
     new GossipingGrpcMonix.GossipService {
 
@@ -56,7 +59,7 @@ object GrpcGossipService {
         service.streamBlockSummaries(request).toObservable
 
       def getBlockChunked(request: GetBlockChunkedRequest): Observable[Chunk] =
-        service.getBlockChunked(request).toObservable
+        service.getBlockChunked(request).toObservable.withConsumerTimeout(blockChunkConsumerTimeout)
     }
 
   /** Create the internal interface from the Monix specific instance,
