@@ -1,11 +1,8 @@
 use common::key::*;
 use common::value::*;
 use proptest::collection::{btree_map, vec};
-use proptest::option;
 use proptest::prelude::*;
-use shared::newtypes::Blake2bHash;
 use std::collections::BTreeMap;
-use storage::history::trie;
 
 pub fn u8_slice_20() -> impl Strategy<Value = [u8; 20]> {
     vec(any::<u8>(), 20).prop_map(|b| {
@@ -88,35 +85,5 @@ pub fn value_arb() -> impl Strategy<Value = common::value::Value> {
         u128_arb().prop_map(Value::UInt128),
         u256_arb().prop_map(Value::UInt256),
         u512_arb().prop_map(Value::UInt512)
-    ]
-}
-
-pub fn blake2b_hash_arb() -> impl Strategy<Value = Blake2bHash> {
-    vec(any::<u8>(), 0..1000).prop_map(|b| Blake2bHash::new(&b))
-}
-
-pub fn trie_pointer_arb() -> impl Strategy<Value = trie::Pointer> {
-    prop_oneof![
-        blake2b_hash_arb().prop_map(trie::Pointer::LeafPointer),
-        blake2b_hash_arb().prop_map(trie::Pointer::NodePointer)
-    ]
-}
-
-pub fn trie_pointer_block_arb() -> impl Strategy<Value = trie::PointerBlock> {
-    (vec(option::of(trie_pointer_arb()), 256).prop_map(|vec| {
-        let mut ret: [Option<trie::Pointer>; 256] = [Default::default(); 256];
-        ret.clone_from_slice(vec.as_slice());
-        ret.into()
-    }))
-}
-
-pub fn trie_arb() -> impl Strategy<Value = trie::Trie<Key, Value>> {
-    prop_oneof![
-        (key_arb(), value_arb()).prop_map(|(key, value)| trie::Trie::Leaf { key, value }),
-        trie_pointer_block_arb().prop_map(|pointer_block| trie::Trie::Node {
-            pointer_block: Box::new(pointer_block)
-        }),
-        (vec(any::<u8>(), 0..32), trie_pointer_arb())
-            .prop_map(|(affix, pointer)| trie::Trie::Extension { affix, pointer })
     ]
 }
