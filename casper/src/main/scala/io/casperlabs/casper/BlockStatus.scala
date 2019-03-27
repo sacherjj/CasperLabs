@@ -42,6 +42,8 @@ final case object JustificationRegression extends InvalidBlock with Slashable
 final case object NeglectedInvalidBlock   extends InvalidBlock with Slashable
 final case object NeglectedEquivocation   extends InvalidBlock with Slashable
 final case object InvalidTransaction      extends InvalidBlock with Slashable
+final case object InvalidPreStateHash     extends InvalidBlock with Slashable
+final case object InvalidPostStateHash    extends InvalidBlock with Slashable
 final case object InvalidBondsCache       extends InvalidBlock with Slashable
 final case object InvalidBlockHash        extends InvalidBlock with Slashable
 final case object InvalidDeployCount      extends InvalidBlock with Slashable

@@ -600,13 +600,12 @@ object Validate {
                 if (postStateHash == blockPostState) {
                   Applicative[F].unit
                 } else {
-                  RaiseValidationError[F].raise[Unit](InvalidTransaction)
+                  RaiseValidationError[F].raise[Unit](InvalidPostStateHash)
                 }
             }
       } yield ()
     } else {
-      //TODO: InvalidPrestate variant?
-      RaiseValidationError[F].raise[Unit](InvalidTransaction)
+      RaiseValidationError[F].raise[Unit](InvalidPreStateHash)
     }
   }
 

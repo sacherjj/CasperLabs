@@ -183,7 +183,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
                                             genesis,
                                             dag
                                           )
-          } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
+          } yield maybePostGenesisStateHash should matchPattern { case Right(_) => }
       }
   }
 

@@ -5,11 +5,11 @@ import cats.implicits._
 import cats.{Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
-import io.casperlabs.casper.{protocol, BlockException, PrettyPrinter}
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.{DeployResult => _, _}
@@ -51,89 +51,20 @@ object ExecEngineUtil {
         )
     }
 
-  //Returns (None, checkpoints) if the block's tuplespace hash
-  //does not match the computed hash based on the deploys
+  implicit def functorRaiseInvalidBlock[F[_]: Sync] = Validate.raiseValidateErrorThroughSync[F]
+
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[Either[BlockException, Option[StateHash]]] = {
-    val preStateHash = ProtoUtil.preStateHash(b)
-    val tsHash       = ProtoUtil.tuplespace(b)
-    val deploys      = ProtoUtil.deploys(b).flatMap(_.deploy)
-    val timestamp    = Some(b.header.get.timestamp) // TODO: Ensure header exists through type
-    for {
-      parents                              <- ProtoUtil.unsafeGetParents[F](b)
-      processedHash                        <- processDeploys(parents, dag, deploys)
-      (computePreStateHash, deployResults) = processedHash
-      _                                    <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
-      result <- processPossiblePreStateHash[F](
-                 preStateHash,
-                 tsHash,
-                 deployResults,
-                 computePreStateHash,
-                 timestamp,
-                 deploys
-               )
-    } yield result
-  }
+  ): F[Either[Throwable, StateHash]] =
+    (for {
+      processedHash           <- ExecEngineUtil.effectsForBlock(b, dag)
+      (preStateHash, effects) = processedHash
+      _                       <- Validate.transactions[F](b, dag, preStateHash, effects)
+    } yield ProtoUtil.postStateHash(b)).attempt
 
-  private def processPossiblePreStateHash[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
-      preStateHash: StateHash,
-      tsHash: Option[StateHash],
-      deployResults: Seq[DeployResult],
-      computedPreStateHash: StateHash,
-      time: Option[Long],
-      deploys: Seq[DeployData]
-  ): F[Either[BlockException, Option[StateHash]]] =
-    if (preStateHash == computedPreStateHash) {
-      processPreStateHash[F](
-        preStateHash,
-        tsHash,
-        deployResults,
-        computedPreStateHash,
-        time,
-        deploys
-      )
-    } else {
-      Log[F].warn(
-        s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
-          .buildString(preStateHash)}"
-      ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
-    }
-
-  private def processPreStateHash[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
-      preStateHash: StateHash,
-      tsHash: Option[StateHash],
-      processedDeploys: Seq[DeployResult],
-      possiblePreStateHash: StateHash,
-      time: Option[Long],
-      deploys: Seq[DeployData]
-  ): F[Either[BlockException, Option[StateHash]]] = {
-    val commutingEffects = findCommutingEffects(processedDeploys)
-    val transforms       = commutingEffects.unzip._1.flatMap(_.transformMap)
-    ExecutionEngineService[F].commit(preStateHash, transforms).flatMap {
-      case Left(ex) =>
-        Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
-          .leftCast[BlockException]
-          .pure[F]
-      case Right(computedStateHash) =>
-        if (tsHash.contains(computedStateHash)) {
-          //state hash in block matches computed hash!
-          Right(Option(computedStateHash))
-            .leftCast[BlockException]
-            .pure[F]
-        } else {
-          // state hash in block does not match computed hash -- invalid!
-          // return no state hash, do not update the state hash set
-          Log[F].warn(
-            s"Tuplespace hash ${PrettyPrinter.buildString(tsHash.getOrElse(ByteString.EMPTY))} does not match computed hash ${PrettyPrinter
-              .buildString(computedStateHash)}."
-          ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
-        }
-    }
-  }
-
-  def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
+  def computeDeploysCheckpoint[
+      F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F]
@@ -220,7 +151,8 @@ object ExecEngineUtil {
       transformMap                 = findCommutingEffects(processedDeploys).unzip._1.flatMap(_.transformMap)
     } yield (prestate, transformMap)
 
-  private def computePrestate[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
+  private def computePrestate[
+      F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       parents: List[BlockMessage],
       dag: BlockDagRepresentation[F]
   ): F[StateHash] = parents match {
