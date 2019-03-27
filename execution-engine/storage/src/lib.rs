@@ -8,6 +8,12 @@ extern crate rkv;
 extern crate shared;
 extern crate wasmi;
 
+#[cfg(test)]
+extern crate gens;
+
+#[cfg(test)]
+extern crate proptest;
+
 pub mod error;
 pub mod gs;
 pub mod history;

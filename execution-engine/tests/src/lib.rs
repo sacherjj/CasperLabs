@@ -5,6 +5,8 @@ extern crate proptest;
 extern crate common;
 #[cfg(test)]
 extern crate gens;
+#[cfg(test)]
+extern crate shared;
 
 #[cfg(test)]
 mod bytesrepr;
