@@ -3,6 +3,7 @@ package io.casperlabs.comm.gossiping
 import cats._
 import cats.implicits._
 import cats.effect._
+import cats.effect.concurrent._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
@@ -15,7 +16,8 @@ import scala.math.Ordering
 class GossipServiceServer[F[_]: Sync](
     getBlockSummary: ByteString => F[Option[BlockSummary]],
     getBlock: ByteString => F[Option[Block]],
-    maxChunkSize: Int
+    maxChunkSize: Int,
+    blockDownloadSemaphore: Semaphore[F]
 ) extends GossipService[F] {
   import GossipServiceServer._
 
@@ -143,4 +145,14 @@ object GossipServiceServer {
 
     Iterator(Chunk().withHeader(header)) ++ chunks
   }
+
+  def apply[F[_]: Concurrent](
+      getBlockSummary: ByteString => F[Option[BlockSummary]],
+      getBlock: ByteString => F[Option[Block]],
+      maxChunkSize: Int,
+      maxParallelBlockDownloads: Int
+  ): F[GossipServiceServer[F]] =
+    Semaphore[F](maxParallelBlockDownloads.toLong) map { blockDownloadSemaphore =>
+      new GossipServiceServer(getBlockSummary, getBlock, maxChunkSize, blockDownloadSemaphore)
+    }
 }

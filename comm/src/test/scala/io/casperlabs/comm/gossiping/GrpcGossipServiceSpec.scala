@@ -684,7 +684,8 @@ class GrpcGossipServiceSpec
 
 object GrpcGossipServiceSpec extends TestRuntime {
   // Specify small enough chunks so we see lots of messages and can tell that it terminated early.
-  val DefaultMaxChunkSize = 10 * 1024
+  val DefaultMaxChunkSize              = 10 * 1024
+  val DefaultMaxParallelBlockDownloads = 100
 
   def md5(data: Array[Byte]): String = {
     val md = java.security.MessageDigest.getInstance("MD5")
@@ -732,14 +733,13 @@ object GrpcGossipServiceSpec extends TestRuntime {
         port,
         services = List(
           (scheduler: Scheduler) =>
-            Task.delay {
-              val svc = GrpcGossipService.fromGossipService {
-                new GossipServiceServer[Task](
-                  getBlockSummary = hash => Task.now(testData.get.summaries.get(hash)),
-                  getBlock = hash => Task.now(testData.get.blocks.get(hash)),
-                  maxChunkSize = DefaultMaxChunkSize
-                )
-              }
+            GossipServiceServer[Task](
+              getBlockSummary = hash => Task.now(testData.get.summaries.get(hash)),
+              getBlock = hash => Task.now(testData.get.blocks.get(hash)),
+              maxChunkSize = DefaultMaxChunkSize,
+              maxParallelBlockDownloads = DefaultMaxParallelBlockDownloads
+            ) map { gss =>
+              val svc = GrpcGossipService.fromGossipService(gss)
               GossipingGrpcMonix.bindService(svc, scheduler)
             }
         ),
