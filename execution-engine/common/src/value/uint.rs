@@ -1,6 +1,6 @@
 use crate::bytesrepr::{self, Error, FromBytes, ToBytes};
 use alloc::vec::Vec;
-use num::{Bounded, FromPrimitive, Num, One, Unsigned, Zero};
+use num::{Bounded, Num, One, Unsigned, Zero};
 
 // Clippy generates a ton of warnings/errors for the code the macro generates.
 #[allow(clippy::all)]
@@ -24,12 +24,18 @@ pub enum FromStrErr {
     InvalidRadix,
 }
 
-// Can't use num::CheckedAdd because it is defined using references
-// (e.g. &self) which does not work with the definitions in uint
+/// Trait to allow writing generic functions which use the
+/// `checked_add` function. Can't use num::CheckedAdd because it is
+/// defined using references (e.g. &self) which does not work with the
+/// definitions in uint crate (where U128, etc. come from)
 pub trait CheckedAdd: core::ops::Add<Self, Output = Self> + Sized {
     fn checked_add(self, v: Self) -> Option<Self>;
 }
 
+/// Trait to allow writing generic functions which use the
+/// `checked_sub` function. Can't use num::CheckedSub because it is
+/// defined using references (e.g. &self) which does not work with the
+/// definitions in uint crate (where U128, etc. come from)
 pub trait CheckedSub: core::ops::Sub<Self, Output = Self> + Sized {
     fn checked_sub(self, v: Self) -> Option<Self>;
 }
@@ -63,6 +69,7 @@ macro_rules! ser_and_num_impls {
             }
         }
 
+        // Trait implementations for uinifying U* as numeric types
         impl Zero for $type {
             fn zero() -> Self {
                 $type::zero()
@@ -79,6 +86,7 @@ macro_rules! ser_and_num_impls {
             }
         }
 
+        // Requires Zero and One to be implemented
         impl Num for $type {
             type FromStrRadixErr = FromStrErr;
             fn from_str_radix(str: &str, radix: u32) -> Result<Self, Self::FromStrRadixErr> {
@@ -91,21 +99,8 @@ macro_rules! ser_and_num_impls {
             }
         }
 
+        // Requires Num to be implemented
         impl Unsigned for $type {}
-
-        impl FromPrimitive for $type {
-            fn from_i64(n: i64) -> Option<Self> {
-                if n < 0 {
-                    None
-                } else {
-                    Some($type::from(n))
-                }
-            }
-
-            fn from_u64(n: u64) -> Option<Self> {
-                Some($type::from(n))
-            }
-        }
 
         impl CheckedAdd for $type {
             fn checked_add(self, v: Self) -> Option<Self> {
@@ -119,6 +114,7 @@ macro_rules! ser_and_num_impls {
             }
         }
 
+        // Additional numeric trait, which also holds for these types
         impl Bounded for $type {
             fn min_value() -> Self {
                 $type::zero()

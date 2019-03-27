@@ -72,7 +72,7 @@ from_try_from_impl!(U512, AddUInt512);
 from_try_from_impl!(BTreeMap<String, Key>, AddKeys);
 from_try_from_impl!(Error, Failure);
 
-/// Attempt to add `j` to `i`
+/// Attempts to add `j` to `i`
 fn i32_checked_addition<T>(i: T, j: i32) -> Result<T, Error>
 where
     T: CheckedAdd + CheckedSub + From<i32>,
@@ -85,7 +85,7 @@ where
     }
 }
 
-/// Attempt to add `i` to `v`, assuming `v` is of type `expected`
+/// Attempts to add `i` to `v`, assuming `v` is of type `expected`
 fn checked_addition<T>(i: T, v: Value, expected: &str) -> Result<Value, Error>
 where
     T: Into<Value> + TryFrom<Value, Error = String> + CheckedAdd,
@@ -146,6 +146,10 @@ impl Transform {
     }
 }
 
+/// Combines numeric `Transform`s into a single `Transform`. This is
+/// done by unwrapping the `Transform` to obtain the underlying value,
+/// performing the checked addition then wrapping up as a `Transform`
+/// again.
 fn checked_transform_addition<T>(i: T, b: Transform, expected: &str) -> Transform
 where
     T: CheckedAdd + CheckedSub + From<i32> + Into<Transform> + TryFrom<Transform, Error = String>,
