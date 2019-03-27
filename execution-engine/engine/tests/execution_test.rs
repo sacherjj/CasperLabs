@@ -79,9 +79,41 @@ struct WasmMemoryManager {
     offset: usize,
 }
 
+struct StoreContractResult {
+    contract_ptr: u32,
+    contract_len: usize,
+    urefs_ptr: u32,
+    urefs_len: usize,
+    hash_ptr: u32,
+}
+
 impl WasmMemoryManager {
     pub fn new(memory: MemoryRef) -> Self {
         WasmMemoryManager { memory, offset: 0 }
+    }
+
+    /// Writes necessary data to Wasm memory so that host can read it.
+    /// Returns pointers and lengths of respective pieces of data to pass to ffi call.
+    pub fn store_contract(&mut self, known_urefs: BTreeMap<String, Key>) -> StoreContractResult {
+        let (contract_ptr, contract_len) = self
+            .write("call".to_owned())
+            .expect("Writing contract to wasm memory should work");
+
+        let (urefs_ptr, urefs_len) = self
+            .write(known_urefs)
+            .expect("Writing urefs to wasm memory should work.");
+
+        let (hash_ptr, _) = self
+            .write_raw([0u8; 32].to_vec())
+            .expect("Allocating place for hash should work");
+
+        StoreContractResult {
+            contract_ptr,
+            contract_len,
+            urefs_ptr,
+            urefs_len,
+            hash_ptr,
+        }
     }
 
     pub fn write<T: ToBytes>(&mut self, t: T) -> Result<(u32, usize), wasmi::Error> {
@@ -257,7 +289,8 @@ fn store_contract_hash() {
     .expect("failed to parse wat");
     let module: Module = parity_wasm::deserialize_buffer(&wasm_binary).unwrap();
 
-    let urefs: BTreeMap<String, Key> = std::iter::once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))).collect();
+    let urefs: BTreeMap<String, Key> =
+        std::iter::once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))).collect();
     let contract = Value::Contract(common::value::Contract::new(wasm_binary, urefs.clone()));
     // We need this braces so that the `tc_borrowed` gets dropped
     // and we can borrow it again when we call `effect()`.
@@ -265,32 +298,22 @@ fn store_contract_hash() {
         let mut tc_borrowed = tc.borrow_mut();
         let mut runtime = env.runtime(&mut tc_borrowed, addr, timestamp, nonce, module);
 
-        let (urefs_ptr, urefs_len) = memory
-            .write(urefs)
-            .expect("Writing urefs to wasm memory should work.");
-
-        let (contract_ptr, contract_len) = memory
-            .write("call".to_owned())
-            .expect("Writing contract to wasm memory should work");
-
-        let (hash_ptr, _) = memory
-            .write_raw([0u8; 32].to_vec())
-            .expect("Allocating place for hash should work");
+        let store_result = memory.store_contract(urefs);
 
         runtime
             .store_function(
-                contract_ptr,
-                contract_len as u32,
-                urefs_ptr,
-                urefs_len as u32, // No urefs this time
-                hash_ptr,
+                store_result.contract_ptr,
+                store_result.contract_len as u32,
+                store_result.urefs_ptr,
+                store_result.urefs_len as u32,
+                store_result.hash_ptr,
             )
             .expect("store_function should succeed");
 
         let hash = {
             let mut target = [0u8; 32];
             memory
-                .read_raw(hash_ptr, &mut target)
+                .read_raw(store_result.hash_ptr, &mut target)
                 .expect("Reading hash from raw memory should succed");
             Key::Hash(target)
         };
