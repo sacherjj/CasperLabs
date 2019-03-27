@@ -330,6 +330,7 @@ lazy val node = (project in file("node"))
   .dependsOn(casper, comm, crypto)
 
 lazy val blockStorage = (project in file("block-storage"))
+  .enablePlugins(JmhPlugin)
   .settings(commonSettings: _*)
   .settings(
     name := "block-storage",
