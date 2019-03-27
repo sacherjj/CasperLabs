@@ -1,3 +1,5 @@
+mod uint;
+
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
@@ -20,28 +22,6 @@ fn parse_error<T>(message: String) -> Result<T, ParsingError> {
     Err(ParsingError(message))
 }
 
-/// Map a result into the expected error for this module, while also
-/// converting the type into a Value. Use case: parsing U128, U256,
-/// U512 from a string.
-fn result_to_value<T, E>(r: Result<T, E>) -> Result<common::value::Value, ParsingError>
-where
-    common::value::Value: From<T>,
-    E: std::fmt::Debug,
-{
-    r.map(common::value::Value::from)
-        .map_err(|e| ParsingError(format!("{:?}", e)))
-}
-
-fn to_value(b: &ipc::RustBigInt) -> Result<common::value::Value, ParsingError> {
-    let n = b.get_value();
-    match b.get_bit_width() {
-        128 => result_to_value(common::value::U128::from_dec_str(n)),
-        256 => result_to_value(common::value::U256::from_dec_str(n)),
-        512 => result_to_value(common::value::U512::from_dec_str(n)),
-        other => parse_error(format!("BigInt bit width of {} is invalid", other)),
-    }
-}
-
 impl TryFrom<&super::ipc::Transform> for transform::Transform {
     type Error = ParsingError;
     fn try_from(tr: &super::ipc::Transform) -> Result<transform::Transform, ParsingError> {
@@ -62,12 +42,12 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             Ok(transform::Transform::AddInt32(tr.get_add_i32().value))
         } else if tr.has_add_big_int() {
             let b = tr.get_add_big_int().get_value();
-            let v = to_value(b)?;
+            let v = b.try_into()?;
             match v {
-                common::value::Value::UInt128(u) => Ok(transform::Transform::AddUInt128(u)),
-                common::value::Value::UInt256(u) => Ok(transform::Transform::AddUInt256(u)),
-                common::value::Value::UInt512(u) => Ok(transform::Transform::AddUInt512(u)),
-                _ => parse_error("Through some impossibility a RustBigInt was turned into a non-uint value type.".to_string())
+                common::value::Value::UInt128(u) => Ok(u.into()),
+                common::value::Value::UInt256(u) => Ok(u.into()),
+                common::value::Value::UInt512(u) => Ok(u.into()),
+                other => parse_error(format!("Through some impossibility a RustBigInt was turned into a non-uint value type: ${:?}", other))
             }
         } else if tr.has_write() {
             let v = tr.get_write().get_value();
@@ -75,7 +55,7 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                 transform_write(common::value::Value::Int32(v.get_integer()))
             } else if v.has_big_int() {
                 let b = v.get_big_int();
-                let v = to_value(b)?;
+                let v = b.try_into()?;
                 transform_write(v)
             } else if v.has_byte_arr() {
                 let v: Vec<u8> = Vec::from(v.get_byte_arr());
@@ -116,23 +96,6 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
         }
     }
 }
-
-macro_rules! from_uint_for_rust_big_int {
-    ($type:ty, $bit_width:expr) => {
-        impl From<$type> for super::ipc::RustBigInt {
-            fn from(u: $type) -> Self {
-                let mut b = super::ipc::RustBigInt::new();
-                b.set_value(format!("{}", u));
-                b.set_bit_width($bit_width);
-                b
-            }
-        }
-    };
-}
-
-from_uint_for_rust_big_int!(common::value::U128, 128);
-from_uint_for_rust_big_int!(common::value::U256, 256);
-from_uint_for_rust_big_int!(common::value::U512, 512);
 
 impl From<common::value::Value> for super::ipc::Value {
     fn from(v: common::value::Value) -> Self {
