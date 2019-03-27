@@ -91,20 +91,23 @@ class GossipServiceServer[F[_]: Sync](
       .flatMap(Iterant.fromIterable(_))
 
   def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
-    Iterant.liftF {
-      getBlock(request.blockHash)
-    } flatMap {
-      case Some(block) =>
-        val it = chunkIt(
-          block.toByteArray,
-          effectiveChunkSize(request.chunkSize),
-          request.acceptedCompressionAlgorithms
-        )
+    Iterant.resource(blockDownloadSemaphore.acquireN(1))(_ => blockDownloadSemaphore.releaseN(1)) flatMap {
+      _ =>
+        Iterant.liftF {
+          getBlock(request.blockHash)
+        } flatMap {
+          case Some(block) =>
+            val it = chunkIt(
+              block.toByteArray,
+              effectiveChunkSize(request.chunkSize),
+              request.acceptedCompressionAlgorithms
+            )
 
-        Iterant.fromIterator(it)
+            Iterant.fromIterator(it)
 
-      case None =>
-        Iterant.raiseError(NotFound.block(request.blockHash))
+          case None =>
+            Iterant.raiseError(NotFound.block(request.blockHash))
+        }
     }
 
   def effectiveChunkSize(chunkSize: Int): Int =

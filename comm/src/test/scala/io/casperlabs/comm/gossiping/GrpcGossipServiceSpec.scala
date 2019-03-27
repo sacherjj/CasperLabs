@@ -13,7 +13,7 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.grpc.{AuthInterceptor, GrpcServer, SslContexts}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import monix.eval.Task
 import monix.execution.{ExecutionModel, Scheduler}
 import monix.reactive.Observable
@@ -241,6 +241,39 @@ class GrpcGossipServiceSpec
                   //stopCount shouldBe 1
                 }
               }
+            }
+          }
+        }
+      }
+
+      "many downloads are attempted at once" should {
+        "only allow them up to the limit" in {
+          val maxParallelBlockDownloads = 2
+          forAll { (block: Block) =>
+            runTestUnsafe(TestData.fromBlock(block)) {
+              TestEnvironment(testDataRef, maxParallelBlockDownloads = maxParallelBlockDownloads)
+                .use { stub =>
+                  val parallelNow = new AtomicInteger(0)
+                  val parallelMax = new AtomicInteger(0)
+
+                  val req = GetBlockChunkedRequest(blockHash = block.blockHash)
+                  val fetchers = List.fill(2 * maxParallelBlockDownloads) {
+                    stub
+                      .getBlockChunked(req)
+                      .doOnStart(_ => Task.delay { parallelNow.incrementAndGet() })
+                      .doOnNext(
+                        _ =>
+                          Task.delay { parallelMax.set(math.max(parallelMax.get, parallelNow.get)) }
+                      )
+                      .doOnComplete(Task.delay { parallelNow.decrementAndGet() })
+                      .toListL
+                  }
+
+                  Task.gatherUnordered(fetchers) map { res =>
+                    res.size shouldBe fetchers.size
+                    parallelMax.get shouldBe maxParallelBlockDownloads
+                  }
+                }
             }
           }
         }
@@ -684,8 +717,7 @@ class GrpcGossipServiceSpec
 
 object GrpcGossipServiceSpec extends TestRuntime {
   // Specify small enough chunks so we see lots of messages and can tell that it terminated early.
-  val DefaultMaxChunkSize              = 10 * 1024
-  val DefaultMaxParallelBlockDownloads = 100
+  val DefaultMaxChunkSize = 10 * 1024
 
   def md5(data: Array[Byte]): String = {
     val md = java.security.MessageDigest.getInstance("MD5")
@@ -719,7 +751,8 @@ object GrpcGossipServiceSpec extends TestRuntime {
     def apply(
         testData: AtomicReference[TestData],
         anonymous: Boolean = false,
-        clientAuth: ClientAuth = ClientAuth.REQUIRE
+        clientAuth: ClientAuth = ClientAuth.REQUIRE,
+        maxParallelBlockDownloads: Int = 100
     )(
         implicit
         oi: ObservableIterant[Task],
@@ -737,7 +770,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
               getBlockSummary = hash => Task.now(testData.get.summaries.get(hash)),
               getBlock = hash => Task.now(testData.get.blocks.get(hash)),
               maxChunkSize = DefaultMaxChunkSize,
-              maxParallelBlockDownloads = DefaultMaxParallelBlockDownloads
+              maxParallelBlockDownloads = maxParallelBlockDownloads
             ) map { gss =>
               val svc = GrpcGossipService.fromGossipService(gss)
               GossipingGrpcMonix.bindService(svc, scheduler)
