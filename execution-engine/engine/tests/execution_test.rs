@@ -425,3 +425,39 @@ fn store_contract_hash() {
         assert_eq!(effect, &Transform::Write(contract));
     }))
 }
+
+#[test]
+fn store_contract_hash_illegal_urefs() {
+    store_contract_fixture(Box::new(move |mut test_fixture, wasm_module| {
+        // Create URef we don't own
+        let uref = Key::URef([1u8; 32], AccessRights::Read);
+        let urefs: BTreeMap<String, Key> = std::iter::once(("ForgedURef".to_owned(), uref)).collect();
+
+        let mut tc_borrowed = test_fixture.tc.borrow_mut();
+        let mut runtime = test_fixture.env.runtime(
+            &mut tc_borrowed,
+            test_fixture.addr,
+            test_fixture.timestamp,
+            test_fixture.nonce,
+            wasm_module,
+        );
+
+        let store_result = test_fixture.memory.store_contract("add", urefs);
+
+        // This is the FFI call that Wasm triggers when it stores a contract in GS.
+        let result = runtime.store_function(
+            store_result.contract_ptr,
+            store_result.contract_len as u32,
+            store_result.urefs_ptr,
+            store_result.urefs_len as u32,
+            store_result.hash_ptr,
+        );
+
+        // Since we don't know the urefs we wanted to store together with the contract
+        // Runtime will panic with ForgedReference exception.
+        match result {
+            Err(error) => assert!(format!("{:?}", error).contains("ForgedReference")),
+            Ok(_) => panic!("Error. Test should fail."),
+        }
+    }))
+}
