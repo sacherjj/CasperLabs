@@ -353,11 +353,10 @@ fn read_contract_hash(wasm_memory: &WasmMemoryManager, hash_ptr: u32) -> Key {
     Key::Hash(target)
 }
 
-#[test]
-fn store_contract_hash() {
+fn store_contract_fixture(test: Box<Fn(TestFixture, Module)>) {
     with_fixture(
         Default::default(),
-        Box::new(move |mut test_fixture| {
+        Box::new(move |test_fixture| {
             let wat = r#"
             (module
                 (func (export "add") (param i32 i32) (result i32)
@@ -374,48 +373,55 @@ fn store_contract_hash() {
                     .expect("Failed to deserialize bytes to Wasm module.")
             };
 
-            let urefs: BTreeMap<String, Key> =
-                std::iter::once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))).collect();
-
-            let contract = Value::Contract(contract_bytes_from_wat(
-                wasm_module.clone(),
-                "add".to_owned(),
-                urefs.clone(),
-            ));
-
-            // We need this braces so that the `tc_borrowed` gets dropped
-            // and we can borrow it again when we call `effect()`.
-            let hash = {
-                let mut tc_borrowed = test_fixture.tc.borrow_mut();
-                let mut runtime = test_fixture.env.runtime(
-                    &mut tc_borrowed,
-                    test_fixture.addr,
-                    test_fixture.timestamp,
-                    test_fixture.nonce,
-                    wasm_module,
-                );
-
-                let store_result = test_fixture.memory.store_contract("add", urefs);
-
-                // This is the FFI call that Wasm triggers when it stores a contract in GS.
-                runtime
-                    .store_function(
-                        store_result.contract_ptr,
-                        store_result.contract_len as u32,
-                        store_result.urefs_ptr,
-                        store_result.urefs_len as u32,
-                        store_result.hash_ptr,
-                    )
-                    .expect("store_function should succeed");
-
-                read_contract_hash(&test_fixture.memory, store_result.hash_ptr)
-            };
-
-            // Test that Runtime stored contract under expected hash
-            let transforms = test_fixture.tc.borrow().effect().1;
-            let effect = transforms.get(&hash).unwrap();
-            // Assert contract in the GlobalState is the one we wanted to store.
-            assert_eq!(effect, &Transform::Write(contract));
+            test(test_fixture, wasm_module)
         }),
     )
+}
+
+#[test]
+fn store_contract_hash() {
+    store_contract_fixture(Box::new(move |mut test_fixture, wasm_module| {
+        let urefs: BTreeMap<String, Key> =
+            std::iter::once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))).collect();
+
+        let contract = Value::Contract(contract_bytes_from_wat(
+            wasm_module.clone(),
+            "add".to_owned(),
+            urefs.clone(),
+        ));
+
+        // We need this braces so that the `tc_borrowed` gets dropped
+        // and we can borrow it again when we call `effect()`.
+        let hash = {
+            let mut tc_borrowed = test_fixture.tc.borrow_mut();
+            let mut runtime = test_fixture.env.runtime(
+                &mut tc_borrowed,
+                test_fixture.addr,
+                test_fixture.timestamp,
+                test_fixture.nonce,
+                wasm_module,
+            );
+
+            let store_result = test_fixture.memory.store_contract("add", urefs);
+
+            // This is the FFI call that Wasm triggers when it stores a contract in GS.
+            runtime
+                .store_function(
+                    store_result.contract_ptr,
+                    store_result.contract_len as u32,
+                    store_result.urefs_ptr,
+                    store_result.urefs_len as u32,
+                    store_result.hash_ptr,
+                )
+                .expect("store_function should succeed");
+
+            read_contract_hash(&test_fixture.memory, store_result.hash_ptr)
+        };
+
+        // Test that Runtime stored contract under expected hash
+        let transforms = test_fixture.tc.borrow().effect().1;
+        let effect = transforms.get(&hash).unwrap();
+        // Assert contract in the GlobalState is the one we wanted to store.
+        assert_eq!(effect, &Transform::Write(contract));
+    }))
 }
