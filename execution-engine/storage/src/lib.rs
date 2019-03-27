@@ -1,10 +1,11 @@
 #![feature(never_type)]
+
 #[macro_use]
 extern crate failure;
 
 extern crate common;
 extern crate parking_lot;
-extern crate rkv;
+extern crate lmdb;
 extern crate shared;
 extern crate wasmi;
 
@@ -13,6 +14,9 @@ extern crate gens;
 
 #[cfg(test)]
 extern crate proptest;
+
+#[cfg(test)]
+extern crate tempfile;
 
 pub mod error;
 pub mod gs;

@@ -6,6 +6,7 @@ use transform::{Transform, TypeMismatch};
 
 // needs to be public for use in the gens crate
 pub mod trie;
+pub mod trie_store;
 
 pub enum CommitResult {
     RootNotFound,
