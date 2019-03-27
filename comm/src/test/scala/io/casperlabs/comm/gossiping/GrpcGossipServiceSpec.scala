@@ -39,15 +39,13 @@ class GrpcGossipServiceSpec
   // Test data that we can set in each test.
   val testDataRef = new AtomicReference(TestData.empty)
   // Set up the server and client once, to be shared, to make tests faster.
-  var stub: GossipingGrpcMonix.GossipServiceStub          = _
-  var anonymousStub: GossipingGrpcMonix.GossipServiceStub = _
-  var shutdown: Task[Unit]                                = _
+  var stub: GossipingGrpcMonix.GossipServiceStub = _
+  var shutdown: Task[Unit]                       = _
 
   override def beforeAll() =
     TestEnvironment(testDataRef).allocated.foreach {
-      case ((anonymousStub, secureStub), shutdown) =>
-        this.stub = secureStub
-        this.anonymousStub = anonymousStub
+      case (stub, shutdown) =>
+        this.stub = stub
         this.shutdown = shutdown
     }
 
@@ -210,7 +208,7 @@ class GrpcGossipServiceSpec
               // Restrict the client to request 1 item at a time.
               val scheduler = Scheduler(ExecutionModel.BatchedExecution(1))
 
-              TestEnvironment(testDataRef)(oi, scheduler).map(_._2).use { stub =>
+              TestEnvironment(testDataRef)(oi, scheduler).use { stub =>
                 // Turn the stub (using Observables) back to the internal interface (using Iterant).
                 val svc = GrpcGossipService.toGossipService[Task](stub)
                 val req = GetBlockChunkedRequest(blockHash = block.blockHash)
@@ -603,7 +601,7 @@ class GrpcGossipServiceSpec
   }
 
   object NewBlocksSpec extends WordSpecLike {
-    implicit val config                         = PropertyCheckConfiguration(minSuccessful = 5)
+    implicit val config                         = PropertyCheckConfiguration(minSuccessful = 1)
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
 
     def expectError(
@@ -618,8 +616,8 @@ class GrpcGossipServiceSpec
       }
 
     "newBlocks" when {
-      "return UNAUTHENTICATED" when {
-        "called without a sender" in {
+      "called without a sender" should {
+        "return UNAUTHENTICATED" in {
           forAll(arbitrary[List[ByteString]]) { blockHashes =>
             runTestUnsafe(TestData()) {
               expectError(
@@ -631,7 +629,9 @@ class GrpcGossipServiceSpec
             }
           }
         }
-        "called with a sender whose ID doesn't match its SSL public key" in {
+      }
+      "called with a sender whose ID doesn't match its SSL public key" should {
+        "return UNAUTHENTICATED" in {
           forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
             runTestUnsafe(TestData()) {
               expectError(
@@ -644,18 +644,36 @@ class GrpcGossipServiceSpec
           }
         }
       }
-      "return UNAVAILABLE" when {
-        "called without an SSL certificate" in {
+      "called without an SSL certificate" when {
+
+        def expectErrorWithAnonymous(clientAuth: ClientAuth)(pf: PartialFunction[Throwable, Unit]) =
           forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
             runTestUnsafe(TestData()) {
-              expectError(
-                NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes),
-                client = anonymousStub
-              ) {
-                case ex: io.grpc.StatusRuntimeException =>
-                  // Becuase the server requires client auth this will be rejected straight away.
-                  ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNAVAILABLE
+              TestEnvironment(testDataRef, anonymous = true, clientAuth = clientAuth).use {
+                anonymousStub =>
+                  expectError(
+                    NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes),
+                    client = anonymousStub
+                  )(pf)
               }
+            }
+          }
+
+        "client auth is required" should {
+          "return UNAVAILABLE" in {
+            expectErrorWithAnonymous(ClientAuth.REQUIRE) {
+              case ex: io.grpc.StatusRuntimeException =>
+                // Becuase the server requires client auth this will be rejected straight away.
+                ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNAVAILABLE
+            }
+          }
+        }
+
+        "client auth is not required (due to misconfiguration)" should {
+          "return UNAUTHENTICATED" in {
+            expectErrorWithAnonymous(ClientAuth.NONE) {
+              case Unauthenticated(msg) =>
+                msg shouldBe "Cannot verify sender identity."
             }
           }
         }
@@ -697,18 +715,18 @@ object GrpcGossipServiceSpec extends TestRuntime {
   }
 
   object TestEnvironment {
-    def apply(testData: AtomicReference[TestData])(
+    def apply(
+        testData: AtomicReference[TestData],
+        anonymous: Boolean = false,
+        clientAuth: ClientAuth = ClientAuth.REQUIRE
+    )(
         implicit
         oi: ObservableIterant[Task],
         scheduler: Scheduler
-    ): Resource[
-      Task,
-      (GossipingGrpcMonix.GossipServiceStub, GossipingGrpcMonix.GossipServiceStub)
-    ] = {
+    ): Resource[Task, GossipingGrpcMonix.GossipServiceStub] = {
       val port = getFreePort
 
       val serverCert = TestCert.generate
-      val clientCert = TestCert.generate
 
       val serverR = GrpcServer[Task](
         port,
@@ -725,7 +743,10 @@ object GrpcGossipServiceSpec extends TestRuntime {
               GossipingGrpcMonix.bindService(svc, scheduler)
             }
         ),
-        interceptors = List(new AuthInterceptor()),
+        interceptors = List(
+          // For now the AuthInterceptor rejects calls without a certificate.
+          Option(new AuthInterceptor()).filter(_ => clientAuth == ClientAuth.REQUIRE)
+        ).flatten,
         // If the server is using SSL then we can't connect to it using `.usePlaintext`
         // on the client channel, it would get UNAVAILABLE.
         // Conversely, if the server isn't using SSL, the client can't do so either.
@@ -733,12 +754,20 @@ object GrpcGossipServiceSpec extends TestRuntime {
           SslContexts.forServer(
             serverCert.cert,
             serverCert.key,
-            ClientAuth.REQUIRE
+            clientAuth
           )
         )
       )
 
-      def channelR(sslContext: SslContext) =
+      def sslContext =
+        if (anonymous) {
+          SslContexts.forClientUnauthenticated
+        } else {
+          val clientCert = TestCert.generate
+          SslContexts.forClient(clientCert.cert, clientCert.key)
+        }
+
+      val channelR =
         Resource.make(
           Task.delay {
             NettyChannelBuilder
@@ -757,12 +786,10 @@ object GrpcGossipServiceSpec extends TestRuntime {
         )
 
       for {
-        _                <- serverR
-        anonymousChannel <- channelR(SslContexts.forClientUnauthenticated)
-        secureChannel    <- channelR(SslContexts.forClient(clientCert.cert, clientCert.key))
-        anonymousStub    = new GossipingGrpcMonix.GossipServiceStub(anonymousChannel)
-        secureStub       = new GossipingGrpcMonix.GossipServiceStub(secureChannel)
-      } yield (anonymousStub, secureStub)
+        _       <- serverR
+        channel <- channelR
+        stub    = new GossipingGrpcMonix.GossipServiceStub(channel)
+      } yield stub
     }
 
     case class TestCert(cert: String, key: String, id: String)
