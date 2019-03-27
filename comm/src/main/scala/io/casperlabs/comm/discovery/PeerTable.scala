@@ -36,18 +36,6 @@ object PeerTable {
     Seq.fill(32)(2) ++
     Seq.fill(64)(1) ++
     Seq.fill(128)(0)).toArray
-}
-
-/** `PeerTable` implements the routing table used in the Kademlia
-  * network discovery and routing protocol.
-  *
-  */
-final class PeerTable[F[_]: Monad](
-    local: NodeIdentifier,
-    private[discovery] val k: Int,
-    private[discovery] val tableRef: Ref[F, Vector[List[Entry]]]
-) {
-  private[discovery] val width = local.key.size // in bytes
 
   /** Computes Kademlia XOR distance.
     *
@@ -61,7 +49,7 @@ final class PeerTable[F[_]: Monad](
   private[discovery] def distance(a: NodeIdentifier, b: NodeIdentifier): Int = {
     @tailrec
     def highBit(idx: Int): Int =
-      if (idx == width) 8 * width
+      if (idx == a.key.size) 8 * a.key.size
       else
         a.key(idx) ^ b.key(idx) match {
           case 0 => highBit(idx + 1)
@@ -69,9 +57,21 @@ final class PeerTable[F[_]: Monad](
         }
     highBit(0)
   }
+}
 
-  private[discovery] def distance(other: PeerNode): Int       = distance(local, other.id)
-  private[discovery] def distance(other: NodeIdentifier): Int = distance(local, other)
+/** `PeerTable` implements the routing table used in the Kademlia
+  * network discovery and routing protocol.
+  *
+  */
+final class PeerTable[F[_]: Monad](
+    local: NodeIdentifier,
+    private[discovery] val k: Int,
+    private[discovery] val tableRef: Ref[F, Vector[List[Entry]]]
+) {
+  private[discovery] val width = local.key.size // in bytes
+
+  private[discovery] def distance(other: PeerNode): Int       = PeerTable.distance(local, other.id)
+  private[discovery] def distance(other: NodeIdentifier): Int = PeerTable.distance(local, other)
 
   def updateLastSeen(peer: PeerNode)(implicit K: KademliaRPC[F]): F[Unit] = {
     val index = distance(peer)
@@ -122,7 +122,7 @@ final class PeerTable[F[_]: Monad](
       val flattenedArray = table.flatten.filterNot(_.node.key == toLookup.key).toArray
       Sorting.quickSort(flattenedArray)(
         (x: Entry, y: Entry) =>
-          (distance(toLookup, x.node.id), distance(toLookup, y.node.id)) match {
+          (PeerTable.distance(toLookup, x.node.id), PeerTable.distance(toLookup, y.node.id)) match {
             case (d0, d1) => Ordering[Int].compare(d0, d1)
           }
       )
@@ -134,17 +134,12 @@ final class PeerTable[F[_]: Monad](
 
   def peers: F[Seq[PeerNode]] = tableRef.get.map(_.flatMap(_.map(_.node)))
 
-  def sparseness(limit: Int = 255): F[Seq[Int]] =
+  def sparseness: F[Seq[Int]] =
     tableRef.get.map(
-      _.take(limit + 1).zipWithIndex
-        .map { case (l, i) => (l.size, i) }
-        .sortWith(_._1 < _._1)
+      _.zipWithIndex
+        .sortWith {
+          case ((bucketA, _), (bucketB, _)) => bucketA.size < bucketB.size
+        }
         .map(_._2)
     )
-
-  def remove(toRemove: NodeIdentifier): F[Unit] =
-    tableRef.update { table =>
-      val index = distance(toRemove)
-      table.updated(index, table(index).filterNot(_.node.key == toRemove.key))
-    }
 }

@@ -147,16 +147,5 @@ class DistanceSpec extends FlatSpec with Matchers {
         table.find(k) should be(Some(PeerNode(k, endpoint)))
       }
     }
-
-    it should "remove a peer" in {
-      val table = PeerTable(kr)
-      for (k <- oneOffs(kr)) {
-        table.updateLastSeen(PeerNode(k, endpoint))
-      }
-      for (k <- oneOffs(kr)) {
-        table.remove(k)
-      }
-      table.peers.size should be(0)
-    }
   }
 }
