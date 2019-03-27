@@ -162,6 +162,19 @@ pub struct Runtime<'a, R: DbReader> {
     rng: ChaChaRng,
 }
 
+pub fn rename_export_to_call(module: &mut Module, name: String) {
+    let main_export = module
+        .export_section_mut()
+        .unwrap()
+        .entries_mut()
+        .iter_mut()
+        .find(|e| e.field() == name)
+        .unwrap()
+        .field_mut();
+    main_export.clear();
+    main_export.push_str("call");
+}
+
 impl<'a, R: DbReader> Runtime<'a, R>
 where
     R::Error: Into<Error>,
@@ -240,19 +253,6 @@ where
         deserialize(&bytes).map_err(|e| Error::BytesRepr(e).into())
     }
 
-    fn rename_export_to_call(module: &mut Module, name: String) {
-        let main_export = module
-            .export_section_mut()
-            .unwrap()
-            .entries_mut()
-            .iter_mut()
-            .find(|e| e.field() == name)
-            .unwrap()
-            .field_mut();
-        main_export.clear();
-        main_export.push_str("call");
-    }
-
     fn get_function_by_name(&mut self, name_ptr: u32, name_size: u32) -> Result<Vec<u8>, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
 
@@ -268,7 +268,7 @@ where
             //`optimize` removes all code that is not reachable from the exports
             // listed in the second argument.
             pwasm_utils::optimize(&mut module, vec![&name]).unwrap();
-            Self::rename_export_to_call(&mut module, name);
+            rename_export_to_call(&mut module, name);
 
             parity_wasm::serialize(module).map_err(|e| Error::ParityWasm(e).into())
         } else {
