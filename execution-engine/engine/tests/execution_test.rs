@@ -94,9 +94,13 @@ impl WasmMemoryManager {
 
     /// Writes necessary data to Wasm memory so that host can read it.
     /// Returns pointers and lengths of respective pieces of data to pass to ffi call.
-    pub fn store_contract(&mut self, known_urefs: BTreeMap<String, Key>) -> StoreContractResult {
+    pub fn store_contract(
+        &mut self,
+        name: &str,
+        known_urefs: BTreeMap<String, Key>,
+    ) -> StoreContractResult {
         let (contract_ptr, contract_len) = self
-            .write("call".to_owned())
+            .write(name.to_owned())
             .expect("Writing contract to wasm memory should work");
 
         let (urefs_ptr, urefs_len) = self
@@ -266,6 +270,30 @@ fn forged_uref() {
     assert_eq!(format!("{:?}", trap).contains("ForgedReference"), true);
 }
 
+use execution_engine::execution::rename_export_to_call;
+
+// Transforms Wasm module and URef map into Contract.
+//
+// Renames "name" function to "call" in the passed Wasm module.
+// This is necessary because host runtime will do the same thing prior to saving it.
+fn contract_bytes_from_wat(
+    mut module: Module,
+    name: String,
+    urefs: BTreeMap<String, Key>,
+) -> common::value::Contract {
+    rename_export_to_call(&mut module, name);
+    let contract_bytes = parity_wasm::serialize(module).expect("Failed to serialize Wasm module.");
+    common::value::Contract::new(contract_bytes, urefs)
+}
+
+fn read_contract_hash(wasm_memory: &WasmMemoryManager, hash_ptr: u32) -> Key {
+    let mut target = [0u8; 32];
+    wasm_memory
+        .read_raw(hash_ptr, &mut target)
+        .expect("Reading hash from raw memory should succed");
+    Key::Hash(target)
+}
+
 #[test]
 fn store_contract_hash() {
     let addr = [0u8; 20];
@@ -275,31 +303,40 @@ fn store_contract_hash() {
     let tc = Rc::new(RefCell::new(mock_tc(key, &account)));
     let mut env = MockEnv::new(key, account, 0);
     let mut memory = env.memory_manager();
-    let wasm_binary: Vec<u8> = wabt::wat2wasm(
-        r#"
+    let wat = r#"
     (module
-        (func (export "call") (param i32 i32) (result i32)
+        (func (export "add") (param i32 i32) (result i32)
             get_local 0
             get_local 1
             i32.add
         )
     )
-    "#,
-    )
-    .expect("failed to parse wat");
-    let module: Module = parity_wasm::deserialize_buffer(&wasm_binary).unwrap();
+    "#;
+
+    let wasm_module: Module = {
+        let wasm_binary = wabt::wat2wasm(wat).expect("failed to parse wat");
+        parity_wasm::deserialize_buffer(&wasm_binary)
+            .expect("Failed to deserialize bytes to Wasm module.")
+    };
 
     let urefs: BTreeMap<String, Key> =
         std::iter::once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))).collect();
-    let contract = Value::Contract(common::value::Contract::new(wasm_binary, urefs.clone()));
+
+    let contract = Value::Contract(contract_bytes_from_wat(
+        wasm_module.clone(),
+        "add".to_owned(),
+        urefs.clone(),
+    ));
+
     // We need this braces so that the `tc_borrowed` gets dropped
     // and we can borrow it again when we call `effect()`.
     let hash = {
         let mut tc_borrowed = tc.borrow_mut();
-        let mut runtime = env.runtime(&mut tc_borrowed, addr, timestamp, nonce, module);
+        let mut runtime = env.runtime(&mut tc_borrowed, addr, timestamp, nonce, wasm_module);
 
-        let store_result = memory.store_contract(urefs);
+        let store_result = memory.store_contract("add", urefs);
 
+        // This is the FFI call that Wasm triggers when it stores a contract in GS.
         runtime
             .store_function(
                 store_result.contract_ptr,
@@ -310,20 +347,12 @@ fn store_contract_hash() {
             )
             .expect("store_function should succeed");
 
-        let hash = {
-            let mut target = [0u8; 32];
-            memory
-                .read_raw(store_result.hash_ptr, &mut target)
-                .expect("Reading hash from raw memory should succed");
-            Key::Hash(target)
-        };
-
-        hash
+        read_contract_hash(&memory, store_result.hash_ptr)
     };
 
+    // Test that Runtime stored contract under expected hash
     let transforms = tc.borrow().effect().1;
-
     let effect = transforms.get(&hash).unwrap();
-
+    // Assert contract in the GlobalState is the one we wanted to store.
     assert_eq!(effect, &Transform::Write(contract));
 }
