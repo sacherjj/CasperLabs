@@ -315,6 +315,47 @@ class GrpcGossipServiceSpec
           }
         }
       }
+
+      "an error is thrown" should {
+        "release the download semaphore" in {
+          forAll(genHash) { (hash: ByteString) =>
+            @volatile var exploded = false
+            val bomb = new TestData {
+              val summaries = Map.empty
+              def blocks =
+                if (exploded) Map.empty
+                else {
+                  exploded = true; sys.error("Boom!")
+                }
+            }
+            runTestUnsafe(bomb) {
+              TestEnvironment(testDataRef, maxParallelBlockDownloads = 1).use { stub =>
+                val req = GetBlockChunkedRequest(blockHash = hash)
+                for {
+                  r1 <- stub.getBlockChunked(req).toListL.attempt
+                  r2 <- stub.getBlockChunked(req).toListL.attempt
+                } yield {
+                  r1.isLeft shouldBe true
+                  r1.left.get match {
+                    case ex: io.grpc.StatusRuntimeException =>
+                      ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNKNOWN
+                    case ex =>
+                      fail(s"Unexpected error: $ex")
+                  }
+                  // If the semaphore wasn't freed this would time out.
+                  r2.isLeft shouldBe true
+                  r2.left.get match {
+                    case NotFound(msg) =>
+                      msg shouldBe s"Block ${Base16.encode(hash.toByteArray)} could not be found."
+                    case ex =>
+                      fail(s"Unexpected error: $ex")
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 
@@ -762,8 +803,8 @@ object GrpcGossipServiceSpec extends TestRuntime {
   }
 
   trait TestData {
-    val summaries: Map[ByteString, BlockSummary]
-    val blocks: Map[ByteString, Block]
+    def summaries: Map[ByteString, BlockSummary]
+    def blocks: Map[ByteString, Block]
   }
 
   object TestData {
