@@ -804,7 +804,7 @@ class GrpcGossipServiceSpec
       }
 
       "called with a valid sender" when {
-        implicit val config = PropertyCheckConfiguration(minSuccessful = 10)
+        implicit val config = PropertyCheckConfiguration(minSuccessful = 5)
 
         "receives no previously unknown blocks" should {
           "return false and not download anything" in {
@@ -829,6 +829,90 @@ class GrpcGossipServiceSpec
             }
           }
         }
+
+        "receives new blocks" should {
+          "download the new ones" in {
+            val gen = for {
+              dag  <- genBlockDag
+              node <- arbitrary[Node].map(_.withId(stubCert.keyHash))
+              k    <- Gen.choose(1, dag.size - 1)
+              n    <- Gen.choose(1, k)
+            } yield (dag, node, k, n)
+
+            forAll(gen) {
+              case (dag, node, k, n) =>
+                val knownBlocks   = dag.take(k)
+                val unknownBlocks = dag.drop(k)
+                val newBlocks     = unknownBlocks.takeRight(n)
+
+                // Only pass the known part to the backend of the service.
+                runTestUnsafe(TestData(blocks = knownBlocks)) {
+
+                  val req = NewBlocksRequest()
+                    .withSender(node)
+                    .withBlockHashes(newBlocks.map(_.blockHash))
+
+                  // Pretend to sync the DAG and return the unknown part in topological order.
+                  val synchronizer = new Synchronizer[Task] {
+                    def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = {
+                      source shouldBe node
+                      targetBlockHashes should contain theSameElementsAs newBlocks.map(_.blockHash)
+                      val dag = unknownBlocks.map(summaryOf(_))
+                      Task.now(dag)
+                    }
+                  }
+
+                  val downloadManager = new DownloadManager[Task] {
+                    var scheduled = Vector.empty[ByteString]
+                    def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = {
+                      source shouldBe node
+                      unknownBlocks.map(_.blockHash) should contain(summary.blockHash)
+                      if (relay) {
+                        newBlocks.map(_.blockHash) should contain(summary.blockHash)
+                      } else {
+                        newBlocks.map(_.blockHash) should not contain (summary.blockHash)
+                      }
+                      synchronized {
+                        scheduled = scheduled :+ summary.blockHash
+                      }
+                      Task.now(Task.unit)
+                    }
+                  }
+
+                  val consensus = new GossipServiceServer.Consensus[Task] {
+                    var downloaded = Vector.empty[ByteString]
+                    def onPending(dag: Vector[BlockSummary]) = Task.now {
+                      dag.map(_.blockHash) shouldBe unknownBlocks.map(_.blockHash)
+                    }
+                    def onDownloaded(blockHash: ByteString) = Task.now {
+                      synchronized {
+                        downloaded = downloaded :+ blockHash
+                      }
+                    }
+                  }
+
+                  TestEnvironment(
+                    testDataRef,
+                    clientCert = Some(stubCert),
+                    synchronizer = synchronizer,
+                    downloadManager = downloadManager,
+                    consensus = consensus
+                  ).use { stub =>
+                    stub.newBlocks(req) map { res =>
+                      res.isNew shouldBe true
+                      val unknownHashes = unknownBlocks.map(_.blockHash)
+                      eventually {
+                        downloadManager.scheduled should contain theSameElementsInOrderAs unknownHashes
+                      }
+                      eventually {
+                        consensus.downloaded should contain theSameElementsAs unknownHashes
+                      }
+                    }
+                  }
+                }
+            }
+          }
+        }
       }
     }
   }
@@ -842,6 +926,12 @@ object GrpcGossipServiceSpec extends TestRuntime {
     val md = java.security.MessageDigest.getInstance("MD5")
     new String(md.digest(data))
   }
+
+  def summaryOf(block: Block): BlockSummary =
+    BlockSummary()
+      .withBlockHash(block.blockHash)
+      .withHeader(block.getHeader)
+      .withSignature(block.getSignature)
 
   trait TestData {
     def summaries: Map[ByteString, BlockSummary]
