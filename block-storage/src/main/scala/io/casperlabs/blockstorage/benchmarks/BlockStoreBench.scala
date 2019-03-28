@@ -3,6 +3,8 @@ package io.casperlabs.blockstorage.benchmarks
 import java.nio.file.Paths
 
 import cats.Monad
+import cats.syntax.traverse._
+import cats.instances.list._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{
@@ -27,37 +29,42 @@ import io.casperlabs.shared.Log
 @State(Scope.Benchmark)
 @BenchmarkMode(Array(Mode.Throughput))
 abstract class BlockStoreBench {
-  val preFilledCount = 10000
-
   val blockStore: BlockStore[Task]
 
   @Setup(Level.Iteration)
-  def setupWithRandomData: Unit =
-    for (_ <- 0 to preFilledCount)
-      blockStore.put(randomBlock).runSyncUnsafe()
+  def setupWithRandomData(): Unit =
+    preFilling.toList.traverse(b => blockStore.put(b)).runSyncUnsafe()
 
   @TearDown(Level.Iteration)
-  def clearStore: Unit =
+  def clearStore(): Unit =
     blockStore.clear().runSyncUnsafe()
 
   @Benchmark
-  def put: Unit =
+  def put(): Unit =
     blockStore.put(blocksIter.next()).runSyncUnsafe()
 
   @Benchmark
-  def get: Unit =
-    blockStore.get(randomBlockHash).runSyncUnsafe()
+  def getRandom(): Unit =
+    blockStore.get(randomHash).runSyncUnsafe()
 
   @Benchmark
-  def find: Unit =
-    blockStore.find(_ == randomBlockHash).runSyncUnsafe()
+  def getExistent(): Unit =
+    blockStore.get(randomInserted._1).runSyncUnsafe()
 
   @Benchmark
-  def checkpoint: Unit =
+  def findRandom(): Unit =
+    blockStore.find(_ == randomHash).runSyncUnsafe()
+
+  @Benchmark
+  def findExistent(): Unit =
+    blockStore.find(_ == randomInserted._1).runSyncUnsafe()
+
+  @Benchmark
+  def checkpoint(): Unit =
     blockStore.checkpoint().runSyncUnsafe()
 }
 
-class InMemState extends BlockStoreBench {
+class InMemBench extends BlockStoreBench {
   override val blockStore: BlockStore[Task] = InMemBlockStore.create[Task](
     Monad[Task],
     InMemBlockStore.emptyMapRef[Task].runSyncUnsafe(),
@@ -65,10 +72,10 @@ class InMemState extends BlockStoreBench {
   )
 }
 
-class LMDBState extends BlockStoreBench {
+class LMDBBench extends BlockStoreBench {
   override val blockStore: BlockStore[Task] = LMDBBlockStore.create(
     LMDBBlockStore.Config(
-      dir = Paths.get("/home/base"),
+      dir = Paths.get("/tmp/lmdb_block_store"),
       blockStoreSize = 1073741824,
       maxDbs = 1,
       maxReaders = 126,
@@ -105,6 +112,10 @@ object BlockStoreBenchSuite {
   private val preCreatedBlocks = (0 to 50000).map(_ => randomBlock)
 
   val blocksIter = repeatedIteratorFrom(preCreatedBlocks)
+  val preFilling = (0 to 10000).map(_ => randomBlock)
+
+  def randomInserted =
+    preFilling(Random.nextInt(preFilling.size))
 
   def randomHexString(numchars: Int): String = {
     val sb = new StringBuffer
@@ -114,19 +125,19 @@ object BlockStoreBenchSuite {
   }
 
   def randomBlock: (BlockHash, BlockMsgWithTransform) =
-    (randomBlockHash, BlockStoreBenchSuite.randomBlockMessage)
+    (randomHash, randomBlockMessage)
 
-  def randomBlockHash: BlockHash =
-    BlockStoreBenchSuite.strToByteStr(BlockStoreBenchSuite.randomHexString(20))
+  def randomHash: BlockHash =
+    strToByteStr(randomHexString(32))
 
   def randomBlockMessage: BlockMsgWithTransform = {
-    val hash      = randomHexString(20)
-    val validator = randomHexString(20)
+    val hash      = randomHash
+    val validator = randomHexString(32)
     val version   = Random.nextLong()
     val timestamp = Random.nextLong()
-    val parents   = (0 to Random.nextInt(3)) map (_ => randomHexString(20): ByteString)
-    val justifications = (0 to Random.nextInt(3)) map (
-        _ => Justification(randomHexString(20), randomHexString(20))
+    val parents   = (0 to Random.nextInt(3)) map (_ => randomHash)
+    val justifications = (0 to Random.nextInt(10)) map (
+        _ => Justification(randomHash, randomHash)
     )
 
     val blockMsg = BlockMessage(blockHash = hash)
