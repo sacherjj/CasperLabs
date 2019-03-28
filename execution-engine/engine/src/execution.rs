@@ -162,6 +162,9 @@ pub struct Runtime<'a, R: DbReader> {
     rng: ChaChaRng,
 }
 
+/// Rename function called `name` in the `module` to `call`.
+/// wasmi's entrypoint for a contracts is a function called `call`,
+/// so we have to rename function before storing it in the GlobalState.
 pub fn rename_export_to_call(module: &mut Module, name: String) {
     let main_export = module
         .export_section_mut()
@@ -426,6 +429,13 @@ where
         Ok(self.host_buf.len())
     }
 
+    /// Tries to store a function, located in the Wasm memory, into the GlobalState
+    /// and writes back a function's hash at `hash_ptr` in the Wasm memory.
+    /// 
+    /// `name_ptr` and `name_size` tell the host where to look for a function's name.
+    /// Once it knows the name it can search for this exported function in the Wasm module.
+    /// Note that functions that contract wants to store have to be marked with `export` keyword.
+    /// `urefs_ptr` and `urefs_size` describe when the additional unforgable references can be found.
     pub fn store_function(
         &mut self,
         name_ptr: u32,
