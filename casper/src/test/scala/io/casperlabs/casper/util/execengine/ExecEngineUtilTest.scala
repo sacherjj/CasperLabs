@@ -234,10 +234,7 @@ class ExecEngineUtilTest
                       b3,
                       dag
                     )
-      } yield
-        pendingUntilFixed(postState shouldBe matchPattern {
-          case Right(_) =>
-        })
+      } yield pendingUntilFixed(postState shouldBe 'right)
   }
 
   it should "merge histories in case of multiple parents (uneven histories)" in withStorage {
@@ -316,10 +313,7 @@ class ExecEngineUtilTest
                       b5,
                       dag2
                     )
-      } yield
-        pendingUntilFixed(postState shouldBe matchPattern {
-          case Right(_) =>
-        })
+      } yield pendingUntilFixed(postState shouldBe 'right)
   }
 
   def computeSingleProcessedDeploy(
