@@ -185,13 +185,6 @@ class ExecEngineUtilTest
     genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
   }
 
-  def assertInvalidPostState(error: Either[Throwable, ExecEngineUtil.StateHash]): Assertion =
-    error match {
-      case Right(_)                                    => fail("Expected InvalidPostState error but we got state hash.")
-      case Left(Validate.ValidateErrorWrapper(status)) => status shouldBe InvalidPostStateHash
-      case Left(err)                                   => fail(s"Expected InvalidPostState error but got different error: ${err}")
-    }
-
   it should "merge histories in case of multiple parents with complex contract" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val contract = ByteString.copyFromUtf8(registry)
@@ -389,14 +382,16 @@ class ExecEngineUtilTest
         genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
         b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
         b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-        b3      <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
-        dag     <- blockDagStorage.getRepresentation
+        // set wrong preStateHash to b3
+        b3 <- createBlock[Task](Seq(b1.blockHash, b2.blockHash),
+                                deploys = b3DeploysWithCost,
+                                preStateHash = ByteString.EMPTY)
+        dag <- blockDagStorage.getRepresentation
         postState <- ExecEngineUtil.validateBlockCheckpoint[Task](
                       b3,
                       dag
                     )
-        result = postState shouldBe Left(Validate.ValidateErrorWrapper(InvalidPreStateHash))
-      } yield result
+      } yield postState shouldBe Left(Validate.ValidateErrorWrapper(InvalidPreStateHash))
   }
 
   "validateBlockCheckpoint" should "return InvalidPostStateHash when postStateHash of block is not correct" in withStorage {
@@ -412,8 +407,7 @@ class ExecEngineUtilTest
                            block,
                            dag
                          )
-        result = validateResult shouldBe Left(Validate.ValidateErrorWrapper(InvalidPostStateHash))
-      } yield result
+      } yield validateResult shouldBe Left(Validate.ValidateErrorWrapper(InvalidPostStateHash))
   }
 
   it should "return a checkpoint with the right hash for a valid block" in withStorage {
