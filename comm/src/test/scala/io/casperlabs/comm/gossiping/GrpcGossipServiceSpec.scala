@@ -719,6 +719,7 @@ class GrpcGossipServiceSpec
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
     implicit val consensusConfig =
       ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 50, maxPaymentCodeBytes = 10)
+    implicit val patienceConfig = PatienceConfig(3.second, 100.millis)
 
     def expectError(
         req: NewBlocksRequest,
@@ -832,15 +833,22 @@ class GrpcGossipServiceSpec
 
         "receives new blocks" should {
           "download the new ones" in {
+            case class TestCase(
+                dag: Vector[Block],
+                node: Node,
+                knownCount: Int,
+                newCount: Int
+            )
+
             val gen = for {
               dag  <- genBlockDag
               node <- arbitrary[Node].map(_.withId(stubCert.keyHash))
-              k    <- Gen.choose(1, dag.size - 1)
+              k    <- Gen.choose(1, dag.size / 2)
               n    <- Gen.choose(1, k)
-            } yield (dag, node, k, n)
+            } yield TestCase(dag, node, k, n)
 
             forAll(gen) {
-              case (dag, node, k, n) =>
+              case TestCase(dag, node, k, n) =>
                 val knownBlocks   = dag.take(k)
                 val unknownBlocks = dag.drop(k)
                 val newBlocks     = unknownBlocks.takeRight(n)
@@ -858,7 +866,8 @@ class GrpcGossipServiceSpec
                       source shouldBe node
                       targetBlockHashes should contain theSameElementsAs newBlocks.map(_.blockHash)
                       val dag = unknownBlocks.map(summaryOf(_))
-                      Task.now(dag)
+                      // Delay the DAG a little bit to be able to test that the response is immediate.
+                      Task.now(dag).delayResult(250.millis)
                     }
                   }
 
@@ -899,8 +908,10 @@ class GrpcGossipServiceSpec
                     consensus = consensus
                   ).use { stub =>
                     stub.newBlocks(req) map { res =>
-                      res.isNew shouldBe true
                       val unknownHashes = unknownBlocks.map(_.blockHash)
+                      res.isNew shouldBe true
+                      // Downloading should happen asynchronously.
+                      consensus.downloaded.size should be < unknownHashes.size
                       eventually {
                         downloadManager.scheduled should contain theSameElementsInOrderAs unknownHashes
                       }

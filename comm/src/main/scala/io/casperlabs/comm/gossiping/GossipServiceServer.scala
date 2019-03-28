@@ -6,6 +6,7 @@ import cats.effect._
 import cats.effect.concurrent._
 import cats.temp.par._
 import com.google.protobuf.ByteString
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.{Compression, Log, LogSource}
 import io.casperlabs.comm.ServiceError.NotFound
@@ -41,7 +42,8 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
         if (newBlockHashes.isEmpty) {
           Applicative[F].pure(NewBlocksResponse(isNew = false))
         } else {
-          val sender = request.getSender
+          val sender =
+            s"${Base16.encode(request.getSender.id.toByteArray)}@${request.getSender.host}"
 
           val sync: F[Unit] = Sync[F].guaranteeCase {
             for {
