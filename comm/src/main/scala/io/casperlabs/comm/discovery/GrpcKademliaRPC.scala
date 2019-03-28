@@ -64,7 +64,7 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
     cell.modify { s =>
       s.connections.get(peer).fold(s.pure[F]) { connection =>
         for {
-          _ <- Log[F].info(s"Disconnecting from peer ${peer.toAddress}")
+          _ <- Log[F].debug(s"Disconnecting from peer ${peer.toAddress}")
           _ <- Sync[F].delay(connection.shutdownNow()).attempt
         } yield s.copy(connections = s.connections - peer)
       }
@@ -123,7 +123,7 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
 
   private def clientChannel(peer: PeerNode): F[ManagedChannel] =
     for {
-      _ <- Log[F].info(s"Creating new channel to peer ${peer.toAddress}")
+      _ <- Log[F].debug(s"Creating new channel to peer ${peer.toAddress}")
       c <- Sync[F].delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.udpPort)
