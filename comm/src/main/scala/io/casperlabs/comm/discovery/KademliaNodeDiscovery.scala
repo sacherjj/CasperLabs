@@ -35,7 +35,7 @@ object KademliaNodeDiscovery {
     kademliaRpcResource.flatMap { implicit kRpc =>
       Resource.liftF(for {
         table <- PeerTable[F](id)
-        knd   = new KademliaNodeDiscovery[F](id, timeout, table)
+        knd   = new KademliaNodeDiscovery[F](id, table)
         _     <- init.fold(().pure[F])(knd.addNode)
       } yield knd)
     }
@@ -44,7 +44,6 @@ object KademliaNodeDiscovery {
 
 private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: KademliaRPC: Par](
     id: NodeIdentifier,
-    timeout: FiniteDuration,
     table: PeerTable[F],
     alpha: Int = 3,
     k: Int = PeerTable.Redundancy
@@ -120,7 +119,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
           newAlreadyQueried = alreadyQueried ++ responses.collect {
             case (callee, Some(_)) => callee.id
           }.toSet
-          returnedPeers = responses.flatMap(_._2.toList.flatten)
+          returnedPeers = responses.flatMap(_._2.toList.flatten).distinct
           recursion = loop(
             successQueriesN + responses.count(_._2.nonEmpty),
             newAlreadyQueried,
@@ -131,10 +130,10 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
           else None
           res <- (maybeNewClosestPeerNode, maybeClosestPeerNode) match {
                   case (x @ Some(_), None) => recursion(x)
-                  case (Some(newClosestPeerNode), Some(closestPeerNode))
+                  case (x @ Some(newClosestPeerNode), Some(closestPeerNode))
                       if PeerTable.xorDistance(toLookup, newClosestPeerNode.id) <
                         PeerTable.xorDistance(toLookup, closestPeerNode.id) =>
-                    recursion(maybeNewClosestPeerNode)
+                    recursion(x)
                   case _ => maybeClosestPeerNode.pure[F]
                 }
         } yield res
