@@ -58,7 +58,7 @@ object PeerTable {
   }
 
   private[discovery] def xorDistance(a: NodeIdentifier, b: NodeIdentifier): BigInt =
-    BigInt(a.key.zip(b.key).map { case (l, r) => (l ^ r).toByte }.toArray)
+    BigInt(a.key.zip(b.key).map { case (l, r) => (l ^ r).toByte }.toArray).abs
 }
 
 /** `PeerTable` implements the routing table used in the Kademlia
