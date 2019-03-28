@@ -4,13 +4,13 @@ import cats.implicits._
 import cats.effect._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.shared.Compression
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
 import io.casperlabs.comm.TestRuntime
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.grpc.{AuthInterceptor, GrpcServer, SslContexts}
+import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
@@ -982,9 +982,9 @@ object GrpcGossipServiceSpec extends TestRuntime {
         oi: ObservableIterant[Task],
         scheduler: Scheduler
     ): Resource[Task, GossipingGrpcMonix.GossipServiceStub] = {
-      val port = getFreePort
-
-      val serverCert = TestCert.generate
+      val port         = getFreePort
+      val serverCert   = TestCert.generate
+      implicit val log = new Log.NOPLog[Task]
 
       val serverR = GrpcServer[Task](
         port,

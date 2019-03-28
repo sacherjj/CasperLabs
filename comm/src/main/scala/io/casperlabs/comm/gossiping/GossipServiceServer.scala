@@ -7,14 +7,14 @@ import cats.effect.concurrent._
 import cats.temp.par._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.shared.Compression
+import io.casperlabs.shared.{Compression, Log, LogSource}
 import io.casperlabs.comm.ServiceError.NotFound
 import monix.tail.Iterant
 import scala.collection.immutable.Queue
 import scala.math.Ordering
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
-class GossipServiceServer[F[_]: Concurrent: Par](
+class GossipServiceServer[F[_]: Concurrent: Par: Log](
     backend: GossipServiceServer.Backend[F],
     synchronizer: Synchronizer[F],
     downloadManager: DownloadManager[F],
@@ -23,6 +23,8 @@ class GossipServiceServer[F[_]: Concurrent: Par](
     blockDownloadSemaphore: Semaphore[F]
 ) extends GossipService[F] {
   import GossipServiceServer._
+
+  implicit val log = LogSource(this.getClass)
 
   def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
     // Collect the blocks which we don't have yet;
@@ -39,24 +41,35 @@ class GossipServiceServer[F[_]: Concurrent: Par](
         if (newBlockHashes.isEmpty) {
           Applicative[F].pure(NewBlocksResponse(isNew = false))
         } else {
-          val sync: F[Unit] = for {
-            dag <- synchronizer.syncDag(
-                    source = request.getSender,
-                    targetBlockHashes = newBlockHashes
-                  )
-            _ <- consensus.onPending(dag)
-            watches <- dag.traverse { summary =>
-                        downloadManager.scheduleDownload(
-                          summary,
-                          source = request.getSender,
-                          relay = newBlockHashes(summary.blockHash)
-                        )
-                      }
-            _ <- (dag zip watches).parTraverse {
-                  case (summary, watch) =>
-                    watch *> consensus.onDownloaded(summary.blockHash)
-                }
-          } yield ()
+          val sender = request.getSender
+
+          val sync: F[Unit] = Sync[F].guaranteeCase {
+            for {
+              _ <- Log[F].info(s"Notified about ${newBlockHashes.size} new blocks by ${sender}.")
+              dag <- synchronizer.syncDag(
+                      source = request.getSender,
+                      targetBlockHashes = newBlockHashes
+                    )
+              _ <- consensus.onPending(dag)
+              watches <- dag.traverse { summary =>
+                          downloadManager.scheduleDownload(
+                            summary,
+                            source = request.getSender,
+                            relay = newBlockHashes(summary.blockHash)
+                          )
+                        }
+              _ <- (dag zip watches).parTraverse {
+                    case (summary, watch) =>
+                      watch *> consensus.onDownloaded(summary.blockHash)
+                  }
+              _ <- Log[F].info(s"Synced ${dag.size} blocks with ${sender}.")
+            } yield ()
+          } {
+            case ExitCase.Error(ex) =>
+              Log[F].error(s"Could not sync new blocks with ${sender}.", ex)
+            case _ =>
+              Sync[F].unit
+          }
 
           Concurrent[F].start(sync).map { _ =>
             NewBlocksResponse(isNew = true)
@@ -208,7 +221,7 @@ object GossipServiceServer {
     def onDownloaded(blockHash: ByteString): F[Unit]
   }
 
-  def apply[F[_]: Concurrent: Par](
+  def apply[F[_]: Concurrent: Par: Log](
       backend: GossipServiceServer.Backend[F],
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],

@@ -544,7 +544,8 @@ object DownloadManagerSpec {
     }
 
     // Used only as a default argument for when we aren't touching the remote service in a test.
-    val default =
+    val default = {
+      implicit val log = new Log.NOPLog[Task]
       GossipServiceServer[Task](
         backend = new GossipServiceServer.Backend[Task] {
           def hasBlock(blockHash: ByteString)        = ???
@@ -557,6 +558,7 @@ object DownloadManagerSpec {
         maxChunkSize = 100 * 1024,
         maxParallelBlockDownloads = 100
       )
+    }
 
     def apply(
         blocks: Seq[Block] = Seq.empty,
@@ -564,7 +566,7 @@ object DownloadManagerSpec {
         rechunker: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity,
         // Pass in a `regetter` method to alter the behaviour of the `getBlock`, for example to add delays.
         regetter: Task[Option[Block]] => Task[Option[Block]] = identity
-    ) =
+    )(implicit log: Log[Task]) =
       for {
         blockMap  <- Task.now(toBlockMap(blocks))
         semaphore <- Semaphore[Task](100)
