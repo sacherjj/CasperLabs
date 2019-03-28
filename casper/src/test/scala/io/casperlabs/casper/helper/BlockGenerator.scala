@@ -6,25 +6,15 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.{protocol, BlockException, PrettyPrinter}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.{
-  computeDeploysCheckpoint,
-  findCommutingEffects,
-  processDeploys,
-  StateHash
-}
-import io.casperlabs.catscontrib._
+import io.casperlabs.casper.util.execengine.DeploysCheckpoint
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.ipc.{DeployResult, TransformEntry}
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
@@ -32,8 +22,7 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
 
-  def updateChainWithBlockStateUpdate[
-      F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: Log](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: Log](
       id: Int,
       genesis: BlockMessage
   ): F[BlockMessage] =
@@ -76,8 +65,7 @@ object BlockGenerator {
       IndexedBlockDagStorage[F].inject(id, updatedBlock)
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[
-      F[_]: Sync: BlockStore: Log: ExecutionEngineService](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Log: ExecutionEngineService](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -108,7 +96,7 @@ trait BlockGenerator {
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
-      tsHash: ByteString = ByteString.EMPTY,
+      postStateHash: ByteString = ByteString.EMPTY,
       shardId: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY
   ): F[BlockMessage] =
@@ -116,11 +104,11 @@ trait BlockGenerator {
       now <- Time[F].currentMillis
       postState = RChainState()
         .withPreStateHash(preStateHash)
-        .withPostStateHash(tsHash)
+        .withPostStateHash(postStateHash)
         .withBonds(bonds)
-      postStateHash = Blake2b256.hash(postState.toByteArray)
+      computedHash = Blake2b256.hash(postState.toByteArray)
       header = Header()
-        .withPostStateHash(ByteString.copyFrom(postStateHash))
+        .withPostStateHash(ByteString.copyFrom(computedHash))
         .withParentsHashList(parentsHashList)
         .withDeploysHash(ProtoUtil.protoSeqHash(deploys))
         .withTimestamp(now)

@@ -1107,8 +1107,8 @@ object HashSetCasperTest {
   def blockTuplespaceContents(
       block: BlockMessage
   )(implicit casper: MultiParentCasper[Effect]): Effect[String] = {
-    val tsHash = ProtoUtil.postStateHash(block)
-    MultiParentCasper[Effect].storageContents(tsHash)
+    val postStateHash = ProtoUtil.postStateHash(block)
+    MultiParentCasper[Effect].storageContents(postStateHash)
   }
 
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =

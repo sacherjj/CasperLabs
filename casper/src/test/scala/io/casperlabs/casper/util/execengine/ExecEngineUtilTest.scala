@@ -401,8 +401,12 @@ class ExecEngineUtilTest
       val processedDeploys = deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
       val invalidHash      = ByteString.copyFromUtf8("invalid")
       for {
-        genesis <- createBlock[Task](Seq.empty, deploys = processedDeploys, tsHash = invalidHash)
-        dag     <- blockDagStorage.getRepresentation
+        genesis <- createBlock[Task](
+                    Seq.empty,
+                    deploys = processedDeploys,
+                    postStateHash = invalidHash
+                  )
+        dag <- blockDagStorage.getRepresentation
         validateResult <- ExecEngineUtil.validateBlockCheckpoint[Task](
                            genesis,
                            dag
@@ -424,11 +428,11 @@ class ExecEngineUtilTest
                               deploys,
                               dag1
                             )
-        DeploysCheckpoint(preStateHash, computedTsHash, processedDeploys, _) = deploysCheckpoint
+        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq.empty,
                   deploys = processedDeploys,
-                  tsHash = computedTsHash,
+                  postStateHash = computedPostStateHash,
                   preStateHash = preStateHash
                 )
         dag2 <- blockDagStorage.getRepresentation
@@ -437,8 +441,8 @@ class ExecEngineUtilTest
                            block,
                            dag2
                          )
-        Right(tsHash) = validateResult
-      } yield tsHash should be(computedTsHash)
+        Right(postStateHash) = validateResult
+      } yield postStateHash should be(computedPostStateHash)
   }
 
   "findMultiParentsBlockHashesForReplay" should "filter out duplicate ancestors of main parent block" in withStorage {
