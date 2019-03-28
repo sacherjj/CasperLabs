@@ -61,7 +61,7 @@ object DownloadManagerImpl {
   }
 
   /** Start the download manager. */
-  def apply[F[_]: Sync: Concurrent: Log](
+  def apply[F[_]: Concurrent: Log](
       maxParallelDownloads: Int,
       connectToGossip: Node => F[GossipService[F]],
       backend: Backend[F]

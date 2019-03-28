@@ -4,6 +4,7 @@ import cats._
 import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
+import cats.temp.par._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
@@ -13,15 +14,55 @@ import scala.collection.immutable.Queue
 import scala.math.Ordering
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
-class GossipServiceServer[F[_]: Sync](
-    getBlockSummary: ByteString => F[Option[BlockSummary]],
-    getBlock: ByteString => F[Option[Block]],
+class GossipServiceServer[F[_]: Concurrent: Par](
+    backend: GossipServiceServer.Backend[F],
+    synchronizer: Synchronizer[F],
+    downloadManager: DownloadManager[F],
+    consensus: GossipServiceServer.Consensus[F],
     maxChunkSize: Int,
     blockDownloadSemaphore: Semaphore[F]
 ) extends GossipService[F] {
   import GossipServiceServer._
 
-  def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] = ???
+  def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
+    // Collect the blocks which we don't have yet;
+    // reply about those that we are going to download and relay them,
+    // then asynchronously sync the DAG to get to them,
+    // schedule the downloads for each,
+    // and finally notify the consensus engine.
+    request.blockHashes.distinct.toList
+      .traverse { blockHash =>
+        backend.hasBlock(blockHash).map(blockHash -> _)
+      }
+      .map(_.filterNot(_._2).map(_._1).toSet)
+      .flatMap { newBlockHashes =>
+        if (newBlockHashes.isEmpty) {
+          Applicative[F].pure(NewBlocksResponse(isNew = false))
+        } else {
+          val sync: F[Unit] = for {
+            dag <- synchronizer.syncDag(
+                    source = request.getSender,
+                    targetBlockHashes = newBlockHashes
+                  )
+            _ <- consensus.onPending(dag)
+            watches <- dag.traverse { summary =>
+                        downloadManager.scheduleDownload(
+                          summary,
+                          source = request.getSender,
+                          relay = newBlockHashes(summary.blockHash)
+                        )
+                      }
+            _ <- (dag zip watches).parTraverse {
+                  case (summary, watch) =>
+                    watch *> consensus.onDownloaded(summary.blockHash)
+                }
+          } yield ()
+
+          Concurrent[F].start(sync).map { _ =>
+            NewBlocksResponse(isNew = true)
+          }
+        }
+      }
 
   def streamAncestorBlockSummaries(
       request: StreamAncestorBlockSummariesRequest
@@ -50,7 +91,7 @@ class GossipServiceServer[F[_]: Sync](
             loop(queue, visited)
 
           case ((depth, blockHash), queue) =>
-            Iterant.liftF(getBlockSummary(blockHash)) flatMap {
+            Iterant.liftF(backend.getBlockSummary(blockHash)) flatMap {
               case None =>
                 loop(queue, visited + blockHash)
 
@@ -87,14 +128,14 @@ class GossipServiceServer[F[_]: Sync](
   ): Iterant[F, BlockSummary] =
     Iterant[F]
       .fromSeq(request.blockHashes)
-      .mapEval(getBlockSummary)
+      .mapEval(backend.getBlockSummary(_))
       .flatMap(Iterant.fromIterable(_))
 
   def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
     Iterant.resource(blockDownloadSemaphore.acquire)(_ => blockDownloadSemaphore.release) flatMap {
       _ =>
         Iterant.liftF {
-          getBlock(request.blockHash)
+          backend.getBlock(request.blockHash)
         } flatMap {
           case Some(block) =>
             val it = chunkIt(
@@ -149,13 +190,40 @@ object GossipServiceServer {
     Iterator(Chunk().withHeader(header)) ++ chunks
   }
 
-  def apply[F[_]: Concurrent](
-      getBlockSummary: ByteString => F[Option[BlockSummary]],
-      getBlock: ByteString => F[Option[Block]],
+  /** Interface to local storage. */
+  trait Backend[F[_]] {
+    def hasBlock(blockHash: ByteString): F[Boolean]
+    def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]
+    def getBlock(blockHash: ByteString): F[Option[Block]]
+  }
+
+  /** Interface to the consensus engine. These could be exposed as Observables. */
+  trait Consensus[F[_]] {
+
+    /** Notify about new blocks we were told about but haven't acquired yet.
+      * Pass them in topological order. */
+    def onPending(dag: Vector[BlockSummary]): F[Unit]
+
+    /** Notify about a new block we downloaded, verified and stored. */
+    def onDownloaded(blockHash: ByteString): F[Unit]
+  }
+
+  def apply[F[_]: Concurrent: Par](
+      backend: GossipServiceServer.Backend[F],
+      synchronizer: Synchronizer[F],
+      downloadManager: DownloadManager[F],
+      consensus: Consensus[F],
       maxChunkSize: Int,
       maxParallelBlockDownloads: Int
   ): F[GossipServiceServer[F]] =
     Semaphore[F](maxParallelBlockDownloads.toLong) map { blockDownloadSemaphore =>
-      new GossipServiceServer(getBlockSummary, getBlock, maxChunkSize, blockDownloadSemaphore)
+      new GossipServiceServer(
+        backend,
+        synchronizer,
+        downloadManager,
+        consensus,
+        maxChunkSize,
+        blockDownloadSemaphore
+      )
     }
 }

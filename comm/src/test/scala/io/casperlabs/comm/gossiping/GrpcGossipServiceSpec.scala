@@ -848,8 +848,23 @@ object GrpcGossipServiceSpec extends TestRuntime {
         services = List(
           (scheduler: Scheduler) =>
             GossipServiceServer[Task](
-              getBlockSummary = hash => Task.now(testData.get.summaries.get(hash)),
-              getBlock = hash => Task.now(testData.get.blocks.get(hash)),
+              backend = new GossipServiceServer.Backend[Task] {
+                def hasBlock(blockHash: ByteString) =
+                  Task.now(testData.get.blocks.contains(blockHash))
+                def getBlock(blockHash: ByteString) = Task.now(testData.get.blocks.get(blockHash))
+                def getBlockSummary(blockHash: ByteString) =
+                  Task.now(testData.get.summaries.get(blockHash))
+              },
+              synchronizer = new Synchronizer[Task] {
+                def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
+              },
+              downloadManager = new DownloadManager[Task] {
+                def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
+              },
+              consensus = new GossipServiceServer.Consensus[Task] {
+                def onPending(dag: Vector[BlockSummary]) = ???
+                def onDownloaded(blockHash: ByteString)  = ???
+              },
               maxChunkSize = DefaultMaxChunkSize,
               maxParallelBlockDownloads = maxParallelBlockDownloads
             ) map { gss =>
