@@ -19,7 +19,7 @@ class ObservableOpsSpec extends WordSpec with Matchers {
         @volatile var cnt = 0
         val list = Observable
           .range(0, 100, 1)
-          .doOnNext(i => Task.delay(cnt += 1))
+          .doOnNext(_ => Task.delay(cnt += 1))
           .withConsumerTimeout(100.millis)
           .mapEval(x => Task.pure(x).delayResult(250.millis))
           .toListL

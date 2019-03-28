@@ -91,7 +91,7 @@ class GossipServiceServer[F[_]: Sync](
       .flatMap(Iterant.fromIterable(_))
 
   def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
-    Iterant.resource(blockDownloadSemaphore.acquireN(1))(_ => blockDownloadSemaphore.releaseN(1)) flatMap {
+    Iterant.resource(blockDownloadSemaphore.acquire)(_ => blockDownloadSemaphore.release) flatMap {
       _ =>
         Iterant.liftF {
           getBlock(request.blockHash)

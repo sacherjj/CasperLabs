@@ -298,10 +298,14 @@ class GrpcGossipServiceSpec
                   r <- stub.getBlockChunked(req).toListL.attempt
                   _ = {
                     r.isLeft shouldBe true
-                    val ex = r.left.get.asInstanceOf[io.grpc.StatusRuntimeException]
-                    // TODO: When we add the ErrorInterceptor we can turn this into a proper status,
-                    // for example CANCELED or DEADLINE_EXCEEDED.
-                    ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNKNOWN
+                    r.left.get match {
+                      case ex: io.grpc.StatusRuntimeException =>
+                        // TODO: When we add the ErrorInterceptor we can turn this into a proper status,
+                        // for example CANCELED or DEADLINE_EXCEEDED.
+                        ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNKNOWN
+                      case other =>
+                        fail(s"Unexpected error: $other")
+                    }
                   }
                   // The semaphore should be free for the next query. Otherwise the test will time out.
                   _ <- stub.getBlockChunked(req).headL
