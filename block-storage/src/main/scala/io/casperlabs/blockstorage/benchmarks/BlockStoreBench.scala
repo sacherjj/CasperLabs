@@ -5,9 +5,14 @@ import java.nio.file.Paths
 import cats.Monad
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.{BlockStore, InMemBlockStore, LMDBBlockStore}
+import io.casperlabs.blockstorage.{
+  BlockStore,
+  FileLMDBIndexBlockStore,
+  InMemBlockStore,
+  LMDBBlockStore
+}
 import io.casperlabs.casper.protocol.{BlockMessage, Header, Justification}
-import io.casperlabs.metrics
+import io.casperlabs.{metrics, shared}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
@@ -16,8 +21,8 @@ import org.openjdk.jmh.annotations._
 
 import scala.collection.immutable.IndexedSeq
 import scala.util.Random
-
 import io.casperlabs.blockstorage.benchmarks.BlockStoreBenchSuite._
+import io.casperlabs.shared.Log
 
 @State(Scope.Benchmark)
 @BenchmarkMode(Array(Mode.Throughput))
@@ -72,6 +77,22 @@ class LMDBState extends BlockStoreBench {
   )
 }
 
+class FileLMDBIndexBench extends BlockStoreBench {
+  override val blockStore: BlockStore[Task] =
+    FileLMDBIndexBlockStore
+      .create[Task](
+        FileLMDBIndexBlockStore.Config(
+          storagePath = Paths.get("/tmp/file_lmdb_storage"),
+          indexPath = Paths.get("/tmp/file_lmdb_index"),
+          checkpointsDirPath = Paths.get("/tmp/file_lmdb_checkpoints"),
+          mapSize = 1073741824
+        )
+      )
+      .runSyncUnsafe()
+      .right
+      .get
+}
+
 object BlockStoreBenchSuite {
   import scala.language.implicitConversions
 
@@ -79,6 +100,7 @@ object BlockStoreBenchSuite {
     ByteString.copyFromUtf8(str)
 
   implicit val metricsNop: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  implicit val logNop: Log[Task]         = new shared.Log.NOPLog[Task]
 
   private val preCreatedBlocks = (0 to 50000).map(_ => randomBlock)
 
