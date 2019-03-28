@@ -18,8 +18,14 @@ mod macro_code {
 
 pub use self::macro_code::{U128, U256, U512};
 
+/// Error type for parsing U128, U256, U512 from a string.
+/// `FromDecStr` is the parsing error from the `uint` crate, which
+/// only supports base-10 parsing. `InvalidRadix` is raised when
+/// parsing is attempted on any string representing the number in some
+/// base other than 10 presently, however a general radix may be
+/// supported in the future.
 #[derive(Debug)]
-pub enum FromStrErr {
+pub enum UIntParseError {
     FromDecStr(uint::FromDecStrErr),
     InvalidRadix,
 }
@@ -88,13 +94,13 @@ macro_rules! ser_and_num_impls {
 
         // Requires Zero and One to be implemented
         impl Num for $type {
-            type FromStrRadixErr = FromStrErr;
+            type FromStrRadixErr = UIntParseError;
             fn from_str_radix(str: &str, radix: u32) -> Result<Self, Self::FromStrRadixErr> {
                 if radix == 10 {
-                    $type::from_dec_str(str).map_err(FromStrErr::FromDecStr)
+                    $type::from_dec_str(str).map_err(UIntParseError::FromDecStr)
                 } else {
                     // TODO: other radix parsing
-                    Err(FromStrErr::InvalidRadix)
+                    Err(UIntParseError::InvalidRadix)
                 }
             }
         }

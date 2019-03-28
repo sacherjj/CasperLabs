@@ -17,6 +17,13 @@ impl TypeMismatch {
     }
 }
 
+/// Error type for applying and combining transforms. A `TypeMismatch`
+/// occurs when a transform cannot be applied because the types are
+/// not compatible (e.g. trying to add a number to a string). An
+/// `Overflow` occurs if addition between numbers would result in the
+/// value overflowing its size in memory (e.g. if a, b are i32 and a +
+/// b > i32::MAX then a `AddInt32(a).apply(Value::Int32(b))` would
+/// cause an overflow).
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Error {
     TypeMismatch(TypeMismatch),
