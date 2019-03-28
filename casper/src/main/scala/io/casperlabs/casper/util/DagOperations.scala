@@ -57,10 +57,21 @@ object DagOperations {
       b.parents.traverse(b => dag.lookup(b).map(_.get))
     def isCommon(set: BitSet): Boolean = set == commonSet
 
+    // Initialize the algorithm with each starting block being an ancestor of only itself
+    // (as indicated by each block be assiciated with a BitSet containing only its own index)
+    // and each starting block in the priority queue. Note that the priority queue is
+    // using the provided topological sort for the blocks, this guarantees we will be traversing
+    // the DAG in a way which respects the causal (parent/child) ordering of blocks.
     val initMap = blocks.zipWithIndex.map { case (b, i) => b -> BitSet(i) }.toMap
     val q       = new mutable.PriorityQueue[BlockMetadata]()
     q.enqueue(blocks: _*)
 
+    // Main loop for the algorithm. The loop terminates when
+    // `uncommonEnqueued` is empty because it means there are no
+    // more uncommon ancestors to encounter (all blocks further down the
+    // DAG would be ancestors of all starting blocks). We cannot terminate simply
+    // when the queue itself is empty because blocks that are common ancestors can
+    // still exist in the queue.
     def loop(
         currMap: Map[BlockMetadata, BitSet],
         enqueued: HashSet[BlockMetadata],
@@ -68,29 +79,66 @@ object DagOperations {
     ): F[Map[BlockMetadata, BitSet]] =
       if (uncommonEnqueued.isEmpty) currMap.pure[F]
       else {
+        // Pull the next block from the queue
         val currBlock = q.dequeue()
-        //Note: The orElse case should never occur because we traverse in
-        //      reverse topological order (i.e. down parent links)
+        // Look up the ancestors of this block (recall that ancestry
+        // is represented by having the index of that block present
+        // in the bit set) Note: The orElse case should never occur
+        // because we traverse in reverse topological order (i.e. down parent links),
+        // so either the block should be one of the starting ones or we will have
+        // already encountered the block's parent.
         val currSet = currMap.getOrElse(currBlock, BitSet.empty)
         for {
+          // Look up the parents of the block
           currParents <- parents(currBlock)
+
+          // Update the ancestry-map, set of enqueued block and set of
+          // enqueued blocks which are not common to all starting blocks.
           (newMap, newEnqueued, newUncommon) = currParents.foldLeft(
+            // Naturally, the starting point is the current map, and the
+            // enqueued sets minus the block we just dequeued.
             (currMap, enqueued - currBlock, uncommonEnqueued - currBlock)
           ) {
+            // for each parent, p, of the current block:
             case ((map, enq, unc), p) =>
+              // if we have not enqueued it before, then enqueue it
               if (!enq(p)) q.enqueue(p)
+
+              // the ancestry set for the parent is the union between its current
+              // ancestry set and the one for the current block (because if the
+              // current block is an ancestor of B then all ancestors of the current
+              // block are also ancestors of B, i.e. ancestry is a transitive property)
               val pSet = map.getOrElse(p, BitSet.empty) | currSet
+
+              // if the parent has been seen to be a common ancestor
+              // then remove it from the uncommon set, otherwise ensure
+              // it is included in the uncommon set
               val newUnc =
                 if (isCommon(pSet)) unc - p
                 else unc + p
+
+              // Return the ancestry-map with entry for the parent updated,
+              // ensure the parent is included in the enqueued set (because it
+              // was either already there or we just enqueued it), and the
+              // new set of uncommon ancestors
               (map.updated(p, pSet), enq + p, newUnc)
           }
+
+          // Recursively call the function again (continuing the main loop), with the
+          // updated inputs. The current block is taken out of the ancestry map if it
+          // is a common ancestor because we are only interested in the common ancestors.
           result <- if (isCommon(currSet)) loop(newMap - currBlock, newEnqueued, newUncommon)
                    else loop(newMap, newEnqueued, newUncommon)
         } yield result
       }
 
-    loop(initMap, HashSet.empty[BlockMetadata], blocks.toSet).map(_.filter {
+    val startingSet = HashSet(blocks: _*)
+    // Kick off the main loop with the initial map, noting
+    // that all starting blocks are enqueued and all starting
+    // blocks are presently uncommon (they are only known to
+    // be ancestors of themselves), then filter all common ancestors
+    // out of the final result
+    loop(initMap, startingSet, startingSet).map(_.filter {
       case (_, set) => !isCommon(set)
     })
   }
