@@ -117,6 +117,9 @@ object ServiceError {
     def block(blockHash: ByteString): ServiceException =
       apply(s"Block ${Base16.encode(blockHash.toByteArray)} could not be found.")
   }
+
+  object InvalidArgument extends StatusError(Status.INVALID_ARGUMENT)
+  object Unauthenticated extends StatusError(Status.UNAUTHENTICATED)
 }
 
 sealed trait GossipError extends NoStackTrace

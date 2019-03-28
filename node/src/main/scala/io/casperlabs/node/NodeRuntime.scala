@@ -20,7 +20,7 @@ import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, task
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
-import io.casperlabs.comm.{GrpcServer => _, _}
+import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import io.casperlabs.comm.rp._
