@@ -62,18 +62,9 @@ sealed abstract class MultiParentCasperInstances {
   ): F[MultiParentCasper[F]] =
     for {
       // Initialize DAG storage with genesis block in case it is empty
-      _   <- BlockDagStorage[F].insert(genesis)
-      dag <- BlockDagStorage[F].getRepresentation
-      maybePostGenesisStateHash <- ExecEngineUtil
-                                    .validateBlockCheckpoint[F](
-                                      genesis,
-                                      dag
-                                    )
-      postGenesisStateHash <- maybePostGenesisStateHash match {
-                               case Left(ex) =>
-                                 Sync[F].raiseError[StateHash](ex)
-                               case Right(hash) => hash.pure[F]
-                             }
+      _                   <- BlockDagStorage[F].insert(genesis)
+      dag                 <- BlockDagStorage[F].getRepresentation
+      _                   <- Sync[F].rethrow(ExecEngineUtil.validateBlockCheckpoint[F](genesis, dag))
       blockProcessingLock <- Semaphore[F](1)
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()

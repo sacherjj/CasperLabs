@@ -14,7 +14,7 @@ import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.{FlatSpec, Matchers}
 
 class ExecEngineUtilTest
     extends FlatSpec
@@ -234,8 +234,10 @@ class ExecEngineUtilTest
                       b3,
                       dag
                     )
-        result = postState shouldBe Left(Validate.ValidateErrorWrapper(InvalidPreStateHash))
-      } yield result
+      } yield
+        pendingUntilFixed(postState shouldBe matchPattern {
+          case Right(_) =>
+        })
   }
 
   it should "merge histories in case of multiple parents (uneven histories)" in withStorage {
@@ -314,9 +316,10 @@ class ExecEngineUtilTest
                       b5,
                       dag2
                     )
-//        Result should be validated post - state - hash.
-        result = postState shouldBe Left(Validate.ValidateErrorWrapper(InvalidPreStateHash))
-      } yield result
+      } yield
+        pendingUntilFixed(postState shouldBe matchPattern {
+          case Right(_) =>
+        })
   }
 
   def computeSingleProcessedDeploy(
