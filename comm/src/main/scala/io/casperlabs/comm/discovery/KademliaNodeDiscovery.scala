@@ -45,7 +45,9 @@ object KademliaNodeDiscovery {
 private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: KademliaRPC: Par](
     id: NodeIdentifier,
     timeout: FiniteDuration,
-    table: PeerTable[F]
+    table: PeerTable[F],
+    alpha: Int = 3,
+    k: Int = PeerTable.Redundancy
 ) extends NodeDiscovery[F] {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
@@ -94,14 +96,21 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
       NodeIdentifier(target)
     }
 
-    def iterativeLookup(id: NodeIdentifier, alpha: Int, k: Int)(
+    for {
+      targetIds <- table.sparseness.map(_.take(bucketsToFill).map(generateId).toList)
+      _         <- targetIds.traverse(lookup)
+    } yield ()
+  }
+
+  def lookup(id: NodeIdentifier): F[Option[PeerNode]] = {
+    def loop(
         successQueriesN: Int,
         alreadyQueried: Set[PeerNode],
         shortlist: Seq[PeerNode],
-        maybeClosestId: Option[NodeIdentifier]
-    ): F[Unit] =
+        maybeClosestPeerNode: Option[PeerNode]
+    ): F[Option[PeerNode]] =
       if (shortlist.isEmpty || successQueriesN >= k) {
-        ().pure[F]
+        maybeClosestPeerNode.pure[F]
       } else {
         val (callees, rest) = shortlist.toList.splitAt(alpha)
         for {
@@ -116,39 +125,36 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
           }.toSet
           returnedPeers      = responses.flatMap(_._2.toList.flatten)
           newShortlist       = rest ::: returnedPeers.filterNot(newAlreadyQueried)
-          newClosestId       = returnedPeers.map(_.id).minBy(PeerTable.distance(id, _))
+          newClosestPeerNode = returnedPeers.minBy(p => PeerTable.longestCommonBitPrefix(id, p.id))
           newSuccessQueriesN = successQueriesN + responses.count(_._2.nonEmpty)
-        } yield
-          maybeClosestId.fold(
-            iterativeLookup(id, alpha, k)(
-              newSuccessQueriesN,
-              newAlreadyQueried,
-              newShortlist,
-              newClosestId.some
-            )
-          ) { closestId =>
-            if (PeerTable.distance(id, newClosestId) < PeerTable.distance(id, closestId)) {
-              iterativeLookup(id, alpha, k)(
-                newSuccessQueriesN,
-                newAlreadyQueried,
-                newShortlist,
-                newClosestId.some
-              )
-            } else {
-              ().pure[F]
-            }
-          }
+          res <- maybeClosestPeerNode.fold(
+                  loop(
+                    newSuccessQueriesN,
+                    newAlreadyQueried,
+                    newShortlist,
+                    newClosestPeerNode.some
+                  )
+                ) { closestId =>
+                  if (PeerTable.xorDistance(id, newClosestPeerNode.id) <
+                        PeerTable.xorDistance(id, closestId.id)) {
+                    loop(
+                      newSuccessQueriesN,
+                      newAlreadyQueried,
+                      newShortlist,
+                      newClosestPeerNode.some
+                    )
+                  } else {
+                    closestId.some.pure[F]
+                  }
+                }
+        } yield res
+
       }
 
     for {
-      targetIds <- table.sparseness.map(_.take(bucketsToFill).map(generateId).toList)
-      _ <- targetIds.traverse { targetId =>
-            table.lookup(targetId).flatMap { closestPeers =>
-              val callees = closestPeers.take(alpha)
-              iterativeLookup(targetId, alpha, k)(0, Set.empty[PeerNode], callees, None)
-            }
-          }
-    } yield ()
+      shortlist   <- table.lookup(id).map(_.take(alpha))
+      closestNode <- loop(0, Set.empty[PeerNode], shortlist, None)
+    } yield closestNode
   }
 
   override def peers: F[Seq[PeerNode]] = table.peers

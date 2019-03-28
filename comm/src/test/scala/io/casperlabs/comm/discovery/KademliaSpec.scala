@@ -25,10 +25,10 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     table = PeerTable(local.id, 3)
     pingedPeers = mutable.MutableList.empty[PeerNode]
     // peer1-4 distance is 4
-    table.distance(peer1) shouldBe DISTANCE_4
-    table.distance(peer2) shouldBe DISTANCE_4
-    table.distance(peer3) shouldBe DISTANCE_4
-    table.distance(peer4) shouldBe DISTANCE_4
+    table.longestCommonBitPrefix(peer1) shouldBe DISTANCE_4
+    table.longestCommonBitPrefix(peer2) shouldBe DISTANCE_4
+    table.longestCommonBitPrefix(peer3) shouldBe DISTANCE_4
+    table.longestCommonBitPrefix(peer4) shouldBe DISTANCE_4
   }
 
   describe("A PeertTable with 1 byte addresses and k = 3") {
@@ -36,7 +36,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       it("should add it to a bucket according to its distance") {
         // given
         implicit val ping: KademliaRPC[Id] = pingOk
-        table.distance(peer0) shouldBe DISTANCE_6
+        table.longestCommonBitPrefix(peer0) shouldBe DISTANCE_6
         // when
         table.updateLastSeen(peer0)
         // then

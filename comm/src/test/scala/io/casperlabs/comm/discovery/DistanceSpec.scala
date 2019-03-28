@@ -35,7 +35,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     for (i <- 1 to 64) {
       val home = PeerNode(NodeIdentifier(b.rand(i)), endpoint)
       val nt   = PeerTable(home.id)
-      nt.distance(home) should be(8 * nt.width)
+      nt.longestCommonBitPrefix(home) should be(8 * nt.width)
     }
   }
 
@@ -58,7 +58,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     def testKey(key: Seq[Byte]): Boolean = {
       val id    = NodeIdentifier(key)
       val table = PeerTable(id)
-      oneOffs(id).map(table.distance) == (0 until 8 * width)
+      oneOffs(id).map(table.longestCommonBitPrefix) == (0 until 8 * width)
     }
 
     def keyString(key: Seq[Byte]): String =
@@ -97,7 +97,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     s"A table of width $width" should "add a key at most once" in {
       val table = PeerTable(kr)
       val toAdd = oneOffs(kr).head
-      val dist  = table.distance(toAdd)
+      val dist  = table.longestCommonBitPrefix(toAdd)
       for (_ <- 1 to 10) {
         table.updateLastSeen(PeerNode(toAdd, endpoint))
         table.tableRef.get(dist).size should be(1)
