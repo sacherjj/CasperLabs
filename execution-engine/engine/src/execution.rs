@@ -431,7 +431,7 @@ where
 
     /// Tries to store a function, located in the Wasm memory, into the GlobalState
     /// and writes back a function's hash at `hash_ptr` in the Wasm memory.
-    /// 
+    ///
     /// `name_ptr` and `name_size` tell the host where to look for a function's name.
     /// Once it knows the name it can search for this exported function in the Wasm module.
     /// Note that functions that contract wants to store have to be marked with `export` keyword.

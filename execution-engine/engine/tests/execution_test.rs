@@ -256,77 +256,66 @@ impl Default for TestFixture {
     }
 }
 
-fn with_fixture(fixture: TestFixture, test: Box<Fn(TestFixture)>) {
-    test(fixture)
-}
-
 #[test]
 fn valid_uref() {
-    with_fixture(
-        Default::default(),
-        Box::new(move |mut test_fixture| {
-            let mut tc_borrowed = test_fixture.tc.borrow_mut();
-            let mut runtime = test_fixture.env.runtime(
-                &mut tc_borrowed,
-                test_fixture.addr,
-                test_fixture.timestamp,
-                test_fixture.nonce,
-                mock_module(),
-            );
+    // Test fixture
+    let mut test_fixture: TestFixture = Default::default();
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        mock_module(),
+    );
 
-            // create a valid uref in wasm memory via new_uref
-            let uref = test_fixture
-                .memory
-                .new_uref(&mut runtime)
-                .expect("call to new_uref should succeed");
+    // create a valid uref in wasm memory via new_uref
+    let uref = test_fixture
+        .memory
+        .new_uref(&mut runtime)
+        .expect("call to new_uref should succeed");
 
-            // write arbitrary value to wasm memory to allow call to write
-            let value = test_fixture
-                .memory
-                .write(value::Value::Int32(42))
-                .expect("writing value to wasm memory should succeed");
+    // write arbitrary value to wasm memory to allow call to write
+    let value = test_fixture
+        .memory
+        .write(value::Value::Int32(42))
+        .expect("writing value to wasm memory should succeed");
 
-            // Use uref as the key to perform an action on the global state.
-            // This should succeed because the uref is valid.
-            gs_write(&mut runtime, uref, value).expect("writing using valid uref should succeed");
-        }),
-    )
+    // Use uref as the key to perform an action on the global state.
+    // This should succeed because the uref is valid.
+    gs_write(&mut runtime, uref, value).expect("writing using valid uref should succeed");
 }
 
 #[test]
 fn forged_uref() {
-    with_fixture(
-        Default::default(),
-        Box::new(move |mut test_fixture| {
-            let mut tc_borrowed = test_fixture.tc.borrow_mut();
-            let mut runtime = test_fixture.env.runtime(
-                &mut tc_borrowed,
-                test_fixture.addr,
-                test_fixture.timestamp,
-                test_fixture.nonce,
-                mock_module(),
-            );
+    // Test fixture
+    let mut test_fixture: TestFixture = Default::default();
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        mock_module(),
+    );
 
-            // create a forged uref
-            let uref = test_fixture
-                .memory
-                .write(Key::URef([231u8; 32], AccessRights::ReadWrite))
-                .expect("writing key to wasm memory should succeed");
+    // create a forged uref
+    let uref = test_fixture
+        .memory
+        .write(Key::URef([231u8; 32], AccessRights::ReadWrite))
+        .expect("writing key to wasm memory should succeed");
 
-            // write arbitrary value to wasm memory to allow call to write
-            let value = test_fixture
-                .memory
-                .write(value::Value::Int32(42))
-                .expect("writing value to wasm memory should succeed");
+    // write arbitrary value to wasm memory to allow call to write
+    let value = test_fixture
+        .memory
+        .write(value::Value::Int32(42))
+        .expect("writing value to wasm memory should succeed");
 
-            // Use uref as the key to perform an action on the global state.
-            // This should fail because the uref was forged
-            let trap =
-                gs_write(&mut runtime, uref, value).expect_err("use of forged key should fail");
+    // Use uref as the key to perform an action on the global state.
+    // This should fail because the uref was forged
+    let trap = gs_write(&mut runtime, uref, value).expect_err("use of forged key should fail");
 
-            assert_eq!(format!("{:?}", trap).contains("ForgedReference"), true);
-        }),
-    )
+    assert_eq!(format!("{:?}", trap).contains("ForgedReference"), true);
 }
 
 use execution_engine::execution::rename_export_to_call;
@@ -353,11 +342,14 @@ fn read_contract_hash(wasm_memory: &WasmMemoryManager, hash_ptr: u32) -> Key {
     Key::Hash(target)
 }
 
-fn store_contract_fixture(test: Box<Fn(TestFixture, Module)>) {
-    with_fixture(
-        Default::default(),
-        Box::new(move |test_fixture| {
-            let wat = r#"
+struct TestModule {
+    module: Module,
+    func_name: String,
+}
+
+// Creates a test Wasm module with sample `add` function.
+fn create_wasm_module() -> TestModule {
+    let wat = r#"
             (module
                 (func (export "add") (param i32 i32) (result i32)
                     get_local 0
@@ -367,172 +359,181 @@ fn store_contract_fixture(test: Box<Fn(TestFixture, Module)>) {
             )
             "#;
 
-            let wasm_module: Module = {
-                let wasm_binary = wabt::wat2wasm(wat).expect("failed to parse wat");
-                parity_wasm::deserialize_buffer(&wasm_binary)
-                    .expect("Failed to deserialize bytes to Wasm module.")
-            };
-
-            test(test_fixture, wasm_module)
-        }),
-    )
+    let wasm_module: Module = {
+        let wasm_binary = wabt::wat2wasm(wat).expect("failed to parse wat");
+        parity_wasm::deserialize_buffer(&wasm_binary)
+            .expect("Failed to deserialize bytes to Wasm module.")
+    };
+    TestModule {
+        module: wasm_module,
+        func_name: "add".to_owned(),
+    }
 }
 
 #[test]
 fn store_contract_hash() {
-    store_contract_fixture(Box::new(move |mut test_fixture, wasm_module| {
-        let urefs: BTreeMap<String, Key> =
-            std::iter::once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))).collect();
+    // Test fixtures
+    let mut test_fixture: TestFixture = Default::default();
+    let wasm_module = create_wasm_module();
+    let urefs: BTreeMap<String, Key> =
+        std::iter::once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))).collect();
 
-        let contract = Value::Contract(contract_bytes_from_wat(
-            wasm_module.clone(),
-            "add".to_owned(),
-            urefs.clone(),
-        ));
+    let contract = Value::Contract(contract_bytes_from_wat(
+        wasm_module.module.clone(),
+        "add".to_owned(),
+        urefs.clone(),
+    ));
 
-        // We need this braces so that the `tc_borrowed` gets dropped
-        // and we can borrow it again when we call `effect()`.
-        let hash = {
-            let mut tc_borrowed = test_fixture.tc.borrow_mut();
-            let mut runtime = test_fixture.env.runtime(
-                &mut tc_borrowed,
-                test_fixture.addr,
-                test_fixture.timestamp,
-                test_fixture.nonce,
-                wasm_module,
-            );
-
-            let store_result = test_fixture.memory.store_contract("add", urefs);
-
-            // This is the FFI call that Wasm triggers when it stores a contract in GS.
-            runtime
-                .store_function(
-                    store_result.contract_ptr,
-                    store_result.contract_len as u32,
-                    store_result.urefs_ptr,
-                    store_result.urefs_len as u32,
-                    store_result.hash_ptr,
-                )
-                .expect("store_function should succeed");
-
-            read_contract_hash(&test_fixture.memory, store_result.hash_ptr)
-        };
-
-        // Test that Runtime stored contract under expected hash
-        let transforms = test_fixture.tc.borrow().effect().1;
-        let effect = transforms.get(&hash).unwrap();
-        // Assert contract in the GlobalState is the one we wanted to store.
-        assert_eq!(effect, &Transform::Write(contract));
-    }))
-}
-
-#[test]
-fn store_contract_hash_illegal_urefs() {
-    store_contract_fixture(Box::new(move |mut test_fixture, wasm_module| {
-        // Create URef we don't own
-        let uref = Key::URef([1u8; 32], AccessRights::Read);
-        let urefs: BTreeMap<String, Key> = std::iter::once(("ForgedURef".to_owned(), uref)).collect();
-
+    // We need this braces so that the `tc_borrowed` gets dropped
+    // and we can borrow it again when we call `effect()`.
+    let hash = {
         let mut tc_borrowed = test_fixture.tc.borrow_mut();
         let mut runtime = test_fixture.env.runtime(
             &mut tc_borrowed,
             test_fixture.addr,
             test_fixture.timestamp,
             test_fixture.nonce,
-            wasm_module,
+            wasm_module.module,
         );
 
-        let store_result = test_fixture.memory.store_contract("add", urefs);
+        let store_result = test_fixture
+            .memory
+            .store_contract(&wasm_module.func_name, urefs);
 
         // This is the FFI call that Wasm triggers when it stores a contract in GS.
-        let result = runtime.store_function(
-            store_result.contract_ptr,
-            store_result.contract_len as u32,
-            store_result.urefs_ptr,
-            store_result.urefs_len as u32,
-            store_result.hash_ptr,
-        );
+        runtime
+            .store_function(
+                store_result.contract_ptr,
+                store_result.contract_len as u32,
+                store_result.urefs_ptr,
+                store_result.urefs_len as u32,
+                store_result.hash_ptr,
+            )
+            .expect("store_function should succeed");
 
-        // Since we don't know the urefs we wanted to store together with the contract
-        // Runtime will panic with ForgedReference exception.
-        match result {
-            Err(error) => assert!(format!("{:?}", error).contains("ForgedReference")),
-            Ok(_) => panic!("Error. Test should fail."),
-        }
-    }))
+        read_contract_hash(&test_fixture.memory, store_result.hash_ptr)
+    };
+
+    // Test that Runtime stored contract under expected hash
+    let transforms = test_fixture.tc.borrow().effect().1;
+    let effect = transforms.get(&hash).unwrap();
+    // Assert contract in the GlobalState is the one we wanted to store.
+    assert_eq!(effect, &Transform::Write(contract));
+}
+
+#[test]
+fn store_contract_hash_illegal_urefs() {
+    // Test fixtures
+    let mut test_fixture: TestFixture = Default::default();
+    let wasm_module = create_wasm_module();
+    // Create URef we don't own
+    let uref = Key::URef([1u8; 32], AccessRights::Read);
+    let urefs: BTreeMap<String, Key> = std::iter::once(("ForgedURef".to_owned(), uref)).collect();
+
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        wasm_module.module,
+    );
+
+    let store_result = test_fixture
+        .memory
+        .store_contract(&wasm_module.func_name, urefs);
+
+    // This is the FFI call that Wasm triggers when it stores a contract in GS.
+    let result = runtime.store_function(
+        store_result.contract_ptr,
+        store_result.contract_len as u32,
+        store_result.urefs_ptr,
+        store_result.urefs_len as u32,
+        store_result.hash_ptr,
+    );
+
+    // Since we don't know the urefs we wanted to store together with the contract
+    // Runtime will panic with ForgedReference exception.
+    match result {
+        Err(error) => assert!(format!("{:?}", error).contains("ForgedReference")),
+        Ok(_) => panic!("Error. Test should fail."),
+    }
 }
 
 #[test]
 fn store_contract_hash_legal_urefs() {
-    store_contract_fixture(Box::new(move |mut test_fixture, wasm_module| {
-        // We need this braces so that the `tc_borrowed` gets dropped
-        // and we can borrow it again when we call `effect()`.
-        let (hash, contract) = {
-            let mut tc_borrowed = test_fixture.tc.borrow_mut();
-            let mut runtime = test_fixture.env.runtime(
-                &mut tc_borrowed,
-                test_fixture.addr,
-                test_fixture.timestamp,
-                test_fixture.nonce,
-                wasm_module.clone(),
-            );
+    // Test fixtures
+    let mut test_fixture: TestFixture = Default::default();
+    let wasm_module = create_wasm_module();
+    // We need this braces so that the `tc_borrowed` gets dropped
+    // and we can borrow it again when we call `effect()`.
+    let (hash, contract) = {
+        let mut tc_borrowed = test_fixture.tc.borrow_mut();
+        let mut runtime = test_fixture.env.runtime(
+            &mut tc_borrowed,
+            test_fixture.addr,
+            test_fixture.timestamp,
+            test_fixture.nonce,
+            wasm_module.module.clone(),
+        );
 
-            let uref = {
-                // We are generating new URef the "correct" way.
-                // It asks a host to generate a URef which puts it into
-                // `known_urefs` map of the current runtime context.
-                // Thanks to that, subsequent uses of this URef are valid
-                // because they "belong" to the context that uses them.
-                let (uref_ptr, _) = test_fixture
-                    .memory
-                    .new_uref(&mut runtime)
-                    .expect("URef generation failed");
-                let mut tmp = [1u8; UREF_SIZE];
-                test_fixture
-                    .memory
-                    .read_raw(uref_ptr, &mut tmp)
-                    .expect("Reading URef from wasm memory should work.");
-                let key: Key = common::bytesrepr::deserialize(&tmp)
-                    .expect("URef deserialization should work.");
-                key
-            };
-
-            let urefs: BTreeMap<String, Key> = {
-                let mut tmp = BTreeMap::new();
-                tmp.insert("KnownURef".to_owned(), uref);
-                tmp.insert("PublicHash".to_owned(), Key::Hash([1u8; 32]));
-                tmp
-            };
-
-            let contract = Value::Contract(contract_bytes_from_wat(
-                wasm_module.clone(),
-                "add".to_owned(),
-                urefs.clone(),
-            ));
-
-            let store_result = test_fixture.memory.store_contract("add", urefs);
-
-            // This is the FFI call that Wasm triggers when it stores a contract in GS.
-            runtime
-                .store_function(
-                    store_result.contract_ptr,
-                    store_result.contract_len as u32,
-                    store_result.urefs_ptr,
-                    store_result.urefs_len as u32,
-                    store_result.hash_ptr,
-                )
-                .expect("store_function should succeed");
-
-            (
-                read_contract_hash(&test_fixture.memory, store_result.hash_ptr),
-                contract,
-            )
+        let uref = {
+            // We are generating new URef the "correct" way.
+            // It asks a host to generate a URef which puts it into
+            // `known_urefs` map of the current runtime context.
+            // Thanks to that, subsequent uses of this URef are valid
+            // because they "belong" to the context that uses them.
+            let (uref_ptr, _) = test_fixture
+                .memory
+                .new_uref(&mut runtime)
+                .expect("URef generation failed");
+            let mut tmp = [1u8; UREF_SIZE];
+            test_fixture
+                .memory
+                .read_raw(uref_ptr, &mut tmp)
+                .expect("Reading URef from wasm memory should work.");
+            let key: Key =
+                common::bytesrepr::deserialize(&tmp).expect("URef deserialization should work.");
+            key
         };
 
-        // Test that Runtime stored contract under expected hash
-        let transforms = test_fixture.tc.borrow().effect().1;
-        let effect = transforms.get(&hash).unwrap();
-        // Assert contract in the GlobalState is the one we wanted to store.
-        assert_eq!(effect, &Transform::Write(contract));
-    }))
+        let urefs: BTreeMap<String, Key> = {
+            let mut tmp = BTreeMap::new();
+            tmp.insert("KnownURef".to_owned(), uref);
+            tmp.insert("PublicHash".to_owned(), Key::Hash([1u8; 32]));
+            tmp
+        };
+
+        let contract = Value::Contract(contract_bytes_from_wat(
+            wasm_module.module.clone(),
+            "add".to_owned(),
+            urefs.clone(),
+        ));
+
+        let store_result = test_fixture
+            .memory
+            .store_contract(&wasm_module.func_name, urefs);
+
+        // This is the FFI call that Wasm triggers when it stores a contract in GS.
+        runtime
+            .store_function(
+                store_result.contract_ptr,
+                store_result.contract_len as u32,
+                store_result.urefs_ptr,
+                store_result.urefs_len as u32,
+                store_result.hash_ptr,
+            )
+            .expect("store_function should succeed");
+
+        (
+            read_contract_hash(&test_fixture.memory, store_result.hash_ptr),
+            contract,
+        )
+    };
+
+    // Test that Runtime stored contract under expected hash
+    let transforms = test_fixture.tc.borrow().effect().1;
+    let effect = transforms.get(&hash).unwrap();
+    // Assert contract in the GlobalState is the one we wanted to store.
+    assert_eq!(effect, &Transform::Write(contract));
 }
