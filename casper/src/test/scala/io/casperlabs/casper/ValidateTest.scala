@@ -21,6 +21,7 @@ import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ExecutionEngineServ
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
@@ -251,7 +252,7 @@ class ValidateTest
         val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
         val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
 
-        blockStore.put(hash, block) *> block.pure[Task]
+        blockStore.put(hash, block, Seq.empty) *> block.pure[Task]
       }
 
       for {
@@ -575,24 +576,21 @@ class ValidateTest
 
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-      val bonds           = HashSetCasperTest.createBonds(validators)
-      val genesis         = HashSetCasperTest.createGenesis(bonds)
-      val genesisBonds    = ProtoUtil.bonds(genesis)
+      val (_, validators)                         = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+      val bonds                                   = HashSetCasperTest.createBonds(validators)
+      val BlockMsgWithTransform(Some(genesis), _) = HashSetCasperTest.createGenesis(bonds)
+      val genesisBonds                            = ProtoUtil.bonds(genesis)
 
       val storageDirectory                 = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-      val storageSize: Long                = 1024L * 1024
       implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
       implicit val log                     = new LogStub[Task]
       for {
         _   <- casperSmartContractsApi.setBonds(bonds)
         dag <- blockDagStorage.getRepresentation
-        // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
-        _ <- BlockGenerator
+        _ <- ExecEngineUtil
               .validateBlockCheckpoint[Task](
                 genesis,
-                dag,
-                (_: BlockMetadata) => Seq.empty[TransformEntry].pure[Task]
+                dag
               )
         _                 <- Validate.bondsCache[Task](genesis, genesisBonds) shouldBeF Unit
         modifiedBonds     = Seq.empty[Bond]
@@ -607,9 +605,9 @@ class ValidateTest
 
   "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      implicit val log = new LogStub[Task]()
-      val (sk, pk)     = Ed25519.newKeyPair
-      val block        = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      implicit val log                          = new LogStub[Task]()
+      val (sk, pk)                              = Ed25519.newKeyPair
+      val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
@@ -633,7 +631,8 @@ class ValidateTest
   "Block hash format validation" should "fail on invalid hash" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
-      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val BlockMsgWithTransform(Some(block), _) =
+        HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
@@ -649,7 +648,8 @@ class ValidateTest
   "Block deploy count validation" should "fail on invalid number of deploys" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
-      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val BlockMsgWithTransform(Some(block), _) =
+        HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
@@ -663,8 +663,8 @@ class ValidateTest
   }
 
   "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
-    val (sk, pk) = Ed25519.newKeyPair
-    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val (sk, pk)                              = Ed25519.newKeyPair
+    val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
     for {
       dag     <- blockDagStorage.getRepresentation
       genesis <- ProtoUtil.signBlock(block, dag, pk, sk, "ed25519", "casperlabs")

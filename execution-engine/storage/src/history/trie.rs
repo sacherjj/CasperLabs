@@ -5,6 +5,9 @@ use shared::newtypes::Blake2bHash;
 use std::mem::size_of;
 use std::ops::Deref;
 
+#[cfg(test)]
+pub mod gens;
+
 const RADIX: usize = 256;
 
 const U32_SIZE: usize = size_of::<u32>();
@@ -242,6 +245,34 @@ mod tests {
         fn indexing_off_end() {
             let pointer_block = PointerBlock::new();
             let _val = pointer_block[RADIX];
+        }
+    }
+
+    mod serialization {
+        use history::trie::gens::*;
+        use proptest::prelude::proptest;
+        use shared::test_utils::test_serialization_roundtrip;
+
+        proptest! {
+            #[test]
+            fn roundtrip_blake2b_hash(hash in blake2b_hash_arb()) {
+                assert!(test_serialization_roundtrip(&hash));
+            }
+
+            #[test]
+            fn roundtrip_trie_pointer(pointer in trie_pointer_arb()) {
+                assert!(test_serialization_roundtrip(&pointer));
+            }
+
+            #[test]
+            fn roundtrip_trie_pointer_block(pointer_block in trie_pointer_block_arb()) {
+                assert!(test_serialization_roundtrip(&pointer_block));
+            }
+
+            #[test]
+            fn roundtrip_trie(trie in trie_arb()) {
+                assert!(test_serialization_roundtrip(&trie));
+            }
         }
     }
 }

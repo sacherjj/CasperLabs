@@ -14,6 +14,7 @@ object Dependencies {
   val bitcoinjCore           = "org.bitcoinj"               % "bitcoinj-core"                   % "0.14.6"
   val bouncyCastle           = "org.bouncycastle"           % "bcprov-jdk15on"                  % "1.60"
   val catsCore               = "org.typelevel"              %% "cats-core"                      % catsVersion
+  val catsPar                = "io.chrisdavenport"          %% "cats-par"                       % "0.2.1"
   val catsLawsTest           = "org.typelevel"              %% "cats-laws"                      % catsVersion % "test"
   val catsLawsTestkitTest    = "org.typelevel"              %% "cats-testkit"                   % catsVersion % "test"
   val catsEffect             = "org.typelevel"              %% "cats-effect"                    % "1.1.0"

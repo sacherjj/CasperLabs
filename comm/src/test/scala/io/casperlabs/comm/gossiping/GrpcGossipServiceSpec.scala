@@ -6,10 +6,13 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.comm.ServiceError.NotFound
-import io.casperlabs.comm.GrpcServer
+import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
+import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
 import io.casperlabs.comm.TestRuntime
-import io.grpc.netty.NettyChannelBuilder
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.grpc.{AuthInterceptor, GrpcServer, SslContexts}
+import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
+import io.netty.handler.ssl.{ClientAuth, SslContext}
 import java.util.concurrent.atomic.AtomicReference
 import monix.eval.Task
 import monix.execution.{ExecutionModel, Scheduler}
@@ -30,6 +33,8 @@ class GrpcGossipServiceSpec
 
   import GrpcGossipServiceSpec._
   import Scheduler.Implicits.global
+
+  implicit val consensusConfig = ConsensusConfig()
 
   // Test data that we can set in each test.
   val testDataRef = new AtomicReference(TestData.empty)
@@ -55,7 +60,8 @@ class GrpcGossipServiceSpec
   override def nestedSuites = Vector(
     GetBlockChunkedSpec,
     StreamBlockSummariesSpec,
-    StreamAncestorBlockSummariesSpec
+    StreamAncestorBlockSummariesSpec,
+    NewBlocksSpec
   )
 
   object GetBlockChunkedSpec extends WordSpecLike {
@@ -593,6 +599,87 @@ class GrpcGossipServiceSpec
       }
     }
   }
+
+  object NewBlocksSpec extends WordSpecLike {
+    implicit val config                         = PropertyCheckConfiguration(minSuccessful = 1)
+    implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
+
+    def expectError(
+        req: NewBlocksRequest,
+        client: GossipingGrpcMonix.GossipServiceStub = stub
+    )(pf: PartialFunction[Throwable, Unit]): Task[Unit] =
+      client.newBlocks(req).attempt.map { res =>
+        res.isLeft shouldBe true
+        pf.lift(res.left.get) getOrElse {
+          fail(s"Unexpected error: ${res.left.get}")
+        }
+      }
+
+    "newBlocks" when {
+      "called without a sender" should {
+        "return UNAUTHENTICATED" in {
+          forAll(arbitrary[List[ByteString]]) { blockHashes =>
+            runTestUnsafe(TestData()) {
+              expectError(
+                NewBlocksRequest(sender = None, blockHashes = blockHashes)
+              ) {
+                case Unauthenticated(msg) =>
+                  msg shouldBe "Sender cannot be empty."
+              }
+            }
+          }
+        }
+      }
+      "called with a sender whose ID doesn't match its SSL public key" should {
+        "return UNAUTHENTICATED" in {
+          forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
+            runTestUnsafe(TestData()) {
+              expectError(
+                NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes)
+              ) {
+                case Unauthenticated(msg) =>
+                  msg shouldBe "Sender doesn't match public key."
+              }
+            }
+          }
+        }
+      }
+      "called without an SSL certificate" when {
+
+        def expectErrorWithAnonymous(clientAuth: ClientAuth)(pf: PartialFunction[Throwable, Unit]) =
+          forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
+            runTestUnsafe(TestData()) {
+              TestEnvironment(testDataRef, anonymous = true, clientAuth = clientAuth).use {
+                anonymousStub =>
+                  expectError(
+                    NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes),
+                    client = anonymousStub
+                  )(pf)
+              }
+            }
+          }
+
+        "client auth is required" should {
+          "return UNAVAILABLE" in {
+            expectErrorWithAnonymous(ClientAuth.REQUIRE) {
+              case ex: io.grpc.StatusRuntimeException =>
+                // Becuase the server requires client auth this will be rejected straight away.
+                ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNAVAILABLE
+            }
+          }
+        }
+
+        "client auth is not required (due to misconfiguration)" should {
+          "return UNAUTHENTICATED" in {
+            expectErrorWithAnonymous(ClientAuth.NONE) {
+              case Unauthenticated(msg) =>
+                msg shouldBe "Cannot verify sender identity."
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 object GrpcGossipServiceSpec extends TestRuntime {
@@ -628,12 +715,18 @@ object GrpcGossipServiceSpec extends TestRuntime {
   }
 
   object TestEnvironment {
-    def apply(testData: AtomicReference[TestData])(
+    def apply(
+        testData: AtomicReference[TestData],
+        anonymous: Boolean = false,
+        clientAuth: ClientAuth = ClientAuth.REQUIRE
+    )(
         implicit
         oi: ObservableIterant[Task],
         scheduler: Scheduler
     ): Resource[Task, GossipingGrpcMonix.GossipServiceStub] = {
       val port = getFreePort
+
+      val serverCert = TestCert.generate
 
       val serverR = GrpcServer[Task](
         port,
@@ -649,29 +742,67 @@ object GrpcGossipServiceSpec extends TestRuntime {
               }
               GossipingGrpcMonix.bindService(svc, scheduler)
             }
+        ),
+        interceptors = List(
+          // For now the AuthInterceptor rejects calls without a certificate.
+          Option(new AuthInterceptor()).filter(_ => clientAuth == ClientAuth.REQUIRE)
+        ).flatten,
+        // If the server is using SSL then we can't connect to it using `.usePlaintext`
+        // on the client channel, it would get UNAVAILABLE.
+        // Conversely, if the server isn't using SSL, the client can't do so either.
+        sslContext = Some(
+          SslContexts.forServer(
+            serverCert.cert,
+            serverCert.key,
+            clientAuth
+          )
         )
       )
 
-      val channelR = Resource.make(
-        Task.delay {
-          NettyChannelBuilder
-            .forAddress("localhost", port)
-            .executor(scheduler)
-            .usePlaintext
-            .build
+      def sslContext =
+        if (anonymous) {
+          SslContexts.forClientUnauthenticated
+        } else {
+          val clientCert = TestCert.generate
+          SslContexts.forClient(clientCert.cert, clientCert.key)
         }
-      )(
-        channel =>
+
+      val channelR =
+        Resource.make(
           Task.delay {
-            channel.shutdown()
+            NettyChannelBuilder
+              .forAddress("localhost", port)
+              .executor(scheduler)
+              .negotiationType(NegotiationType.TLS)
+              .sslContext(sslContext)
+              .overrideAuthority(serverCert.id) // So that "localhost" isn't rejected, as it's not what the certificate is for.
+              .build
           }
-      )
+        )(
+          channel =>
+            Task.delay {
+              channel.shutdown()
+            }
+        )
 
       for {
         _       <- serverR
         channel <- channelR
-      } yield {
-        new GossipingGrpcMonix.GossipServiceStub(channel)
+        stub    = new GossipingGrpcMonix.GossipServiceStub(channel)
+      } yield stub
+    }
+
+    case class TestCert(cert: String, key: String, id: String)
+
+    object TestCert {
+      def generate = {
+        val pair  = CertificateHelper.generateKeyPair(useNonBlockingRandom = true)
+        val cert  = CertificateHelper.generate(pair)
+        val certS = CertificatePrinter.print(cert)
+        val keyS  = CertificatePrinter.printPrivateKey(pair.getPrivate)
+        val idS =
+          CertificateHelper.publicAddress(pair.getPublic).map(Base16.encode(_)).getOrElse("local")
+        TestCert(certS, keyS, idS)
       }
     }
   }

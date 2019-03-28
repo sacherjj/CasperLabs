@@ -2,13 +2,34 @@ package io.casperlabs.catscontrib
 
 import java.util.concurrent.TimeoutException
 
+import cats.effect.{Concurrent, Timer}
 import monix.eval.Task
 import monix.execution.Scheduler
 import cats.implicits._
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
 object TaskContrib {
+  implicit class ConcurrentOps[F[_], A](val fa: F[A]) extends AnyVal {
+    def nonCancelingTimeout(after: FiniteDuration)(implicit C: Concurrent[F], T: Timer[F]): F[A] =
+      nonCancelingTimeoutTo(
+        after,
+        C.raiseError[A](new TimeoutException(s"Task timed-out after $after of inactivity"))
+      )
+
+    def nonCancelingTimeoutTo[B >: A](
+        after: FiniteDuration,
+        backup: F[B]
+    )(implicit C: Concurrent[F], T: Timer[F]): F[B] =
+      C.race(fa, T.sleep(after)).flatMap {
+        case Left(a) =>
+          Concurrent[F].pure(a)
+        case Right(_) =>
+          backup
+      }
+  }
+
   implicit class TaskOps[A](task: Task[A]) {
     def unsafeRunSync(implicit scheduler: Scheduler): A =
       Await.result(task.runToFuture, Duration.Inf)

@@ -1,14 +1,15 @@
 package io.casperlabs.casper.util.execengine
 
+import cats.effect.Sync
 import cats.implicits._
 import cats.{Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
-import io.casperlabs.casper.{PrettyPrinter, protocol}
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.{DeployResult => _, _}
@@ -50,19 +51,29 @@ object ExecEngineUtil {
         )
     }
 
-  def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: Log: ExecutionEngineService](
+  implicit def functorRaiseInvalidBlock[F[_]: Sync] = Validate.raiseValidateErrorThroughSync[F]
+
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
+      b: BlockMessage,
+      dag: BlockDagRepresentation[F]
+  ): F[Either[Throwable, StateHash]] =
+    (for {
+      processedHash           <- ExecEngineUtil.effectsForBlock(b, dag)
+      (preStateHash, effects) = processedHash
+      _                       <- Validate.transactions[F](b, dag, preStateHash, effects)
+    } yield ProtoUtil.postStateHash(b)).attempt
+
+  def computeDeploysCheckpoint[
+      F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
-      dag: BlockDagRepresentation[F],
-      //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
-      transforms: BlockMetadata => F[Seq[TransformEntry]]
+      dag: BlockDagRepresentation[F]
   ): F[DeploysCheckpoint] =
     for {
       processedHash <- ExecEngineUtil.processDeploys(
                         parents,
                         dag,
-                        deploys,
-                        transforms
+                        deploys
                       )
       (preStateHash, processedDeploys) = processedHash
       deployLookup                     = processedDeploys.zip(deploys).toMap
@@ -101,15 +112,13 @@ object ExecEngineUtil {
             .info(s"Block #$number created with effects:\n$msgBody")
     } yield DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number)
 
-  def processDeploys[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
+  def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
-      deploys: Seq[DeployData],
-      //TODO: this parameter should not be needed because the BlockDagRepresentation could hold this info
-      transforms: BlockMetadata => F[Seq[TransformEntry]]
+      deploys: Seq[DeployData]
   ): F[(StateHash, Seq[DeployResult])] =
     for {
-      prestate <- computePrestate[F](parents.toList, dag, transforms)
+      prestate <- computePrestate[F](parents.toList, dag)
       ds       = deploys.map(deploy2deploy)
       result   <- MonadError[F, Throwable].rethrow(ExecutionEngineService[F].exec(prestate, ds))
     } yield (prestate, result)
@@ -128,8 +137,7 @@ object ExecEngineUtil {
 
   def effectsForBlock[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       block: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      transforms: BlockMetadata => F[Seq[TransformEntry]]
+      dag: BlockDagRepresentation[F]
   ): F[(StateHash, Seq[TransformEntry])] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](block)
@@ -137,25 +145,31 @@ object ExecEngineUtil {
       processedHash <- processDeploys(
                         parents,
                         dag,
-                        deploys.flatMap(_.deploy),
-                        transforms
+                        deploys.flatMap(_.deploy)
                       )
       (prestate, processedDeploys) = processedHash
       transformMap                 = findCommutingEffects(processedDeploys).unzip._1.flatMap(_.transformMap)
     } yield (prestate, transformMap)
 
-  private def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
+  private def computePrestate[
+      F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       parents: List[BlockMessage],
-      dag: BlockDagRepresentation[F],
-      transforms: BlockMetadata => F[Seq[TransformEntry]]
+      dag: BlockDagRepresentation[F]
   ): F[StateHash] = parents match {
     case Nil => ExecutionEngineService[F].emptyStateHash.pure[F] //no parents
     case soleParent :: Nil =>
       ProtoUtil.postStateHash(soleParent).pure[F] //single parent
     case initParent :: _ => //multiple parents
       for {
-        bs       <- blocksToApply[F](parents, dag)
-        diffs    <- bs.traverse(transforms).map(_.flatten)
+        bs <- blocksToApply[F](parents, dag)
+        diffs <- bs
+                  .traverse(
+                    b =>
+                      BlockStore[F]
+                        .getTransforms(b.blockHash)
+                        .map(_.getOrElse(Seq.empty[TransformEntry]))
+                  )
+                  .map(_.flatten)
         prestate = ProtoUtil.postStateHash(initParent)
         result <- MonadError[F, Throwable].rethrow(
                    ExecutionEngineService[F].commit(prestate, diffs)

@@ -13,6 +13,7 @@ pub enum AccessRights {
     Add,
     ReadAdd,
     ReadWrite,
+    AddWrite,
 }
 
 use AccessRights::*;
@@ -79,6 +80,16 @@ impl PartialOrd for AccessRights {
             (ReadWrite, Read) => Some(Ordering::Greater),
             (Write, Add) => None,
             (Add, Write) => None,
+            (Read, AddWrite) => None,
+            (Add, AddWrite) => Some(Ordering::Less),
+            (Write, AddWrite) => Some(Ordering::Less),
+            (ReadAdd, AddWrite) => None,
+            (ReadWrite, AddWrite) => None,
+            (AddWrite, Read) => None,
+            (AddWrite, Add) => Some(Ordering::Greater),
+            (AddWrite, Write) => Some(Ordering::Greater),
+            (AddWrite, ReadAdd) => None,
+            (AddWrite, ReadWrite) => None,
             (Write, ReadWrite) => Some(Ordering::Less),
             (ReadWrite, Write) => Some(Ordering::Greater),
             (Add, ReadAdd) => Some(Ordering::Less),
@@ -206,6 +217,7 @@ impl ToBytes for AccessRights {
             AccessRights::Write => 4u8.to_bytes(),
             AccessRights::ReadAdd => 5u8.to_bytes(),
             AccessRights::ReadWrite => 6u8.to_bytes(),
+            AccessRights::AddWrite => 7u8.to_bytes(),
         }
     }
 }
@@ -220,6 +232,7 @@ impl FromBytes for AccessRights {
             4 => Ok(AccessRights::Write),
             5 => Ok(AccessRights::ReadAdd),
             6 => Ok(AccessRights::ReadWrite),
+            7 => Ok(AccessRights::AddWrite),
             _ => Err(Error::FormattingError),
         };
         access_rights.map(|rights| (rights, rest))
@@ -311,5 +324,74 @@ impl AsRef<[u8]> for Key {
             Hash(h) => h,
             URef(u, ..) => u,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::key::AccessRights::{self, *};
+    use crate::key::Key;
+
+    fn test_key_capabilities<F>(
+        right: AccessRights,
+        requires: AccessRights,
+        is_true: bool,
+        predicate: F,
+    ) where
+        F: Fn(Key) -> bool,
+    {
+        let key = Key::URef([0u8; 32], right);
+        assert_eq!(
+            predicate(key),
+            is_true,
+            "{:?} isn't enough to perform {:?} operation",
+            right,
+            requires
+        )
+    }
+
+    fn test_readable(right: AccessRights, is_true: bool) {
+        test_key_capabilities(right, Read, is_true, |key| key.is_readable())
+    }
+
+    #[test]
+    fn test_is_readable() {
+        test_readable(Read, true);
+        test_readable(ReadAdd, true);
+        test_readable(ReadWrite, true);
+        test_readable(Add, false);
+        test_readable(AddWrite, false);
+        test_readable(Eqv, false);
+        test_readable(Write, false);
+    }
+
+    fn test_writable(right: AccessRights, is_true: bool) {
+        test_key_capabilities(right, Write, is_true, |key| key.is_writable())
+    }
+
+    #[test]
+    fn test_is_writable() {
+        test_writable(Write, true);
+        test_writable(ReadWrite, true);
+        test_writable(AddWrite, true);
+        test_writable(Eqv, false);
+        test_writable(Read, false);
+        test_writable(Add, false);
+        test_writable(ReadAdd, false);
+    }
+
+    fn test_addable(right: AccessRights, is_true: bool) {
+        test_key_capabilities(right, Add, is_true, |key| key.is_addable())
+    }
+
+    #[test]
+    fn test_is_addable() {
+        test_addable(Add, true);
+        test_addable(ReadAdd, true);
+        test_addable(ReadWrite, true);
+        test_addable(AddWrite, true);
+        test_addable(Eqv, false);
+        test_addable(Read, false);
+        test_addable(Write, false);
     }
 }

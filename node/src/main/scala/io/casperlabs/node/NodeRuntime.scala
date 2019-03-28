@@ -13,7 +13,6 @@ import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{BlockStore, InMemBlockDagStorage, InMemBlockStore}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -21,7 +20,7 @@ import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, task
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
-import io.casperlabs.comm.{GrpcServer => _, _}
+import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import io.casperlabs.comm.rp._
@@ -39,6 +38,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
 import com.olegpy.meow.effects._
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.concurrent.duration._
 
@@ -80,18 +80,32 @@ class NodeRuntime private[node] (
     */
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
 
-  val main = GrpcExecutionEngineService[Effect](
-    conf.grpc.socket,
-    conf.server.maxMessageSize,
-    initBonds = Map.empty
-  ) use { ee =>
+  val main: Effect[Unit] = {
     val rpConfState = localPeerNode[Task].flatMap(rpConf[Task]).toEffect
-    rpConfState >>= (_.runState(runMain(ee, _)))
+    rpConfState >>= (_.runState { implicit state =>
+      val resources = for {
+        ee <- GrpcExecutionEngineService[Effect](
+               conf.grpc.socket,
+               conf.server.maxMessageSize,
+               initBonds = Map.empty
+             )
+        nd <- effects.nodeDiscovery(id, kademliaPort, defaultTimeout)(initPeer)(
+               grpcScheduler,
+               effects.peerNodeAsk,
+               log,
+               effects.time,
+               diagnostics.effects.metrics
+             )
+      } yield (ee, nd)
+
+      resources.use { case (ee, nd) => runMain(ee, nd, state) }
+    })
   }
 
   def runMain(
       implicit
       executionEngineService: ExecutionEngineService[Effect],
+      nodeDiscovery: NodeDiscovery[Task],
       rpConfState: MonadState[Task, RPConf]
   ) =
     for {
@@ -100,7 +114,6 @@ class NodeRuntime private[node] (
       rpConfAsk            = effects.rpConfAsk
       peerNodeAsk          = effects.peerNodeAsk
       metrics              = diagnostics.effects.metrics[Task]
-      kademliaConnections  <- CachedConnections[Task, KademliaConnTag](Task.catsAsync, metrics).toEffect
       tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
       time                 = effects.time
       multiParentCasperRef <- MultiParentCasperRef.of[Effect]
@@ -116,23 +129,10 @@ class NodeRuntime private[node] (
         conf.server.chunkSize,
         commTmpFolder
       )(grpcScheduler, log, metrics, tcpConnections)
-      kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
-        grpcScheduler,
-        peerNodeAsk,
-        metrics,
-        log,
-        kademliaConnections
-      )
-      nodeDiscovery <- effects
-                        .nodeDiscovery(id, defaultTimeout)(initPeer)(
-                          log,
-                          time,
-                          metrics,
-                          kademliaRPC
-                        )
-                        .toEffect
       // TODO: This change is temporary until itegulov's BlockStore implementation is in
-      blockMap <- Ref.of[Effect, Map[BlockHash, BlockMessage]](Map.empty[BlockHash, BlockMessage])
+      blockMap <- Ref.of[Effect, Map[BlockHash, BlockMsgWithTransform]](
+                   Map.empty[BlockHash, BlockMsgWithTransform]
+                 )
       blockStore = InMemBlockStore.create[Effect](
         syncEffect,
         blockMap,
@@ -185,7 +185,6 @@ class NodeRuntime private[node] (
         peerNodeAsk,
         metrics,
         transport,
-        kademliaRPC,
         nodeDiscovery,
         rpConnections,
         blockStore,
@@ -253,7 +252,6 @@ class NodeRuntime private[node] (
   )(
       implicit
       transport: TransportLayer[Task],
-      kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Unit =
@@ -265,7 +263,6 @@ class NodeRuntime private[node] (
       loc <- peerNodeAsk.ask
       msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
-      _   <- kademliaRPC.shutdown()
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
@@ -278,7 +275,6 @@ class NodeRuntime private[node] (
       servers: Servers
   )(
       implicit transport: TransportLayer[Task],
-      kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Task[Unit] =
@@ -298,7 +294,6 @@ class NodeRuntime private[node] (
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
-      kademliaRPC: KademliaRPC[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
       blockStore: BlockStore[Effect],

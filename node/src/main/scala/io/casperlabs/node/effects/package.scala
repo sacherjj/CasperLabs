@@ -3,7 +3,7 @@ package io.casperlabs.node
 import java.nio.file.Path
 
 import cats.Applicative
-import cats.effect.Timer
+import cats.effect.{Resource, Timer}
 import cats.mtl._
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
 import io.casperlabs.comm._
@@ -15,6 +15,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval._
 import monix.execution._
+import monix.eval.instances._
 
 import scala.concurrent.duration._
 import scala.io.Source
@@ -23,14 +24,23 @@ package object effects {
 
   def log: Log[Task] = Log.log
 
-  def nodeDiscovery(id: NodeIdentifier, defaultTimeout: FiniteDuration)(init: Option[PeerNode])(
+  def nodeDiscovery(id: NodeIdentifier, port: Int, timeout: FiniteDuration)(init: Option[PeerNode])(
       implicit
+      scheduler: Scheduler,
+      peerNodeAsk: PeerNodeAsk[Task],
       log: Log[Task],
       time: Time[Task],
-      metrics: Metrics[Task],
-      kademliaRPC: KademliaRPC[Task]
-  ): Task[NodeDiscovery[Task]] =
-    KademliaNodeDiscovery.create[Task](id, defaultTimeout)(init)
+      metrics: Metrics[Task]
+  ): Resource[Effect, NodeDiscovery[Task]] =
+    Resource(
+      KademliaNodeDiscovery
+        .create[Task](id, port, timeout)(init)
+        .allocated
+        .map {
+          case (nd, release) => (nd, release.toEffect)
+        }
+        .toEffect
+    )
 
   def time(implicit timer: Timer[Task]): Time[Task] =
     new Time[Task] {
@@ -38,15 +48,6 @@ package object effects {
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-
-  def kademliaRPC(port: Int, timeout: FiniteDuration)(
-      implicit
-      scheduler: Scheduler,
-      peerNodeAsk: PeerNodeAsk[Task],
-      metrics: Metrics[Task],
-      log: Log[Task],
-      cache: ConnectionsCache[Task, KademliaConnTag]
-  ): KademliaRPC[Task] = new GrpcKademliaRPC(port, timeout)
 
   def tcpTransportLayer(
       port: Int,

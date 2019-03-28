@@ -450,8 +450,7 @@ object Validate {
               _ <- Log[F].warn(
                     ignore(
                       b,
-                      s"block parents did not match estimate based on justification. Expected parents are ${printHashes(
-                        computedParentHashes)}, got ${printHashes(parentHashes)}."
+                      s"block parents did not match estimate based on justification. Expected parents are ${printHashes(computedParentHashes)}, got ${printHashes(parentHashes)}."
                     )
                   )
               _ <- RaiseValidationError[F].raise[Unit](InvalidParents)
@@ -601,13 +600,12 @@ object Validate {
                 if (postStateHash == blockPostState) {
                   Applicative[F].unit
                 } else {
-                  RaiseValidationError[F].raise[Unit](InvalidTransaction)
+                  RaiseValidationError[F].raise[Unit](InvalidPostStateHash)
                 }
             }
       } yield ()
     } else {
-      //TODO: InvalidPrestate variant?
-      RaiseValidationError[F].raise[Unit](InvalidTransaction)
+      RaiseValidationError[F].raise[Unit](InvalidPreStateHash)
     }
   }
 

@@ -14,6 +14,7 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 
 import scala.collection.immutable.HashMap
@@ -173,9 +174,15 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
       _ <- blockDagStorage.insert(genesisBlock)
       _ <- blockDagStorage.insert(secondBlock)
       casperEffect <- NoOpsCasperEffect[Task](
-                       HashMap[BlockHash, BlockMessage](
-                         (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-                         (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+                       HashMap[BlockHash, BlockMsgWithTransform](
+                         (
+                           ProtoUtil.stringToByteString(genesisHashString),
+                           BlockMsgWithTransform(Some(genesisBlock), Seq.empty)
+                         ),
+                         (
+                           ProtoUtil.stringToByteString(secondHashString),
+                           BlockMsgWithTransform(Some(secondBlock), Seq.empty)
+                         )
                        )
                      )(Sync[Task], blockStore, blockDagStorage)
       logEff             = new LogStub[Task]()
@@ -190,9 +197,15 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
     for {
       casperEffect <- NoOpsCasperEffect(
-                       HashMap[BlockHash, BlockMessage](
-                         (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-                         (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+                       HashMap[BlockHash, BlockMsgWithTransform](
+                         (
+                           ProtoUtil.stringToByteString(genesisHashString),
+                           BlockMsgWithTransform(Some(genesisBlock), Seq.empty)
+                         ),
+                         (
+                           ProtoUtil.stringToByteString(secondHashString),
+                           BlockMsgWithTransform(Some(secondBlock), Seq.empty)
+                         )
                        )
                      )(Sync[Task], blockStore, blockDagStorage)
       logEff             = new LogStub[Task]()

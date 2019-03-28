@@ -7,23 +7,28 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, Bloc
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData}
 import io.casperlabs.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
+import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.collection.mutable.{Map => MutableMap}
 
 class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
-    private val blockStore: MutableMap[BlockHash, BlockMessage],
+    private val blockStore: MutableMap[BlockHash, BlockMsgWithTransform],
     estimatorFunc: IndexedSeq[BlockMessage]
 ) extends MultiParentCasper[F] {
 
-  def store: Map[BlockHash, BlockMessage] = blockStore.toMap
+  def store: Map[BlockHash, BlockMsgWithTransform] = blockStore.toMap
 
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
   ): F[BlockStatus] =
     for {
-      _ <- Sync[F].delay(blockStore.update(b.blockHash, b))
-      _ <- BlockStore[F].put(b.blockHash, b)
+      _ <- Sync[F].delay(
+            blockStore
+              .update(b.blockHash, BlockMsgWithTransform(Some(b), Seq.empty[TransformEntry]))
+          )
+      _ <- BlockStore[F].put(b.blockHash, BlockMsgWithTransform(Some(b), Seq.empty[TransformEntry]))
     } yield BlockStatus.valid
   def contains(b: BlockMessage): F[Boolean]             = false.pure[F]
   def deploy(r: DeployData): F[Either[Throwable, Unit]] = Applicative[F].pure(Right(()))
@@ -39,7 +44,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
 
 object NoOpsCasperEffect {
   def apply[F[_]: Sync: BlockStore: BlockDagStorage](
-      blockStore: Map[BlockHash, BlockMessage] = Map.empty,
+      blockStore: Map[BlockHash, BlockMsgWithTransform] = Map.empty,
       estimatorFunc: IndexedSeq[BlockMessage] = Vector(BlockMessage())
   ): F[NoOpsCasperEffect[F]] =
     for {
@@ -50,7 +55,7 @@ object NoOpsCasperEffect {
   def apply[F[_]: Sync: BlockStore: BlockDagStorage](): F[NoOpsCasperEffect[F]] =
     apply(Map.empty, Vector(BlockMessage()))
   def apply[F[_]: Sync: BlockStore: BlockDagStorage](
-      blockStore: Map[BlockHash, BlockMessage]
+      blockStore: Map[BlockHash, BlockMsgWithTransform]
   ): F[NoOpsCasperEffect[F]] =
     apply(blockStore, Vector(BlockMessage()))
 }

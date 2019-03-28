@@ -10,46 +10,34 @@ import DeployGrpcService.splitPath
 
 class DeployGrpcServiceTest extends FlatSpec with EitherValues with Matchers {
 
-  "toKey" should "convert a hash-type key successfully" in {
-    val keyValue = randomBytes(32)
-    val keyType  = "hash"
+  def attemptToKeyTest(
+      nBytes: Int,
+      keyType: String,
+      typeTest: ipc.Key.KeyInstance => Boolean,
+      bytesExtract: ipc.Key.KeyInstance => Array[Byte]
+  ) = {
+    val keyValue = randomBytes(nBytes)
 
     val maybeKey = attemptToKey(keyType, keyValue)
     maybeKey.isRight shouldBe true
 
     val ipc.Key(key) = maybeKey.right.get
-    key.isHash shouldBe true
+    typeTest(key) shouldBe true
 
-    val ipc.KeyHash(hash) = key.hash.get
-    Base16.encode(hash.toByteArray) shouldBe keyValue
+    val bytes = bytesExtract(key)
+    Base16.encode(bytes) shouldBe keyValue
+  }
+
+  "toKey" should "convert a hash-type key successfully" in {
+    attemptToKeyTest(32, "hash", _.isHash, _.hash.get.key.toByteArray)
   }
 
   it should "convert a uref-type key successfully" in {
-    val keyValue = randomBytes(32)
-    val keyType  = "uref"
-
-    val maybeKey = attemptToKey(keyType, keyValue)
-    maybeKey.isRight shouldBe true
-
-    val ipc.Key(key) = maybeKey.right.get
-    key.isUref shouldBe true
-
-    val ipc.KeyURef(uref) = key.uref.get
-    Base16.encode(uref.toByteArray) shouldBe keyValue
+    attemptToKeyTest(32, "uref", _.isUref, _.uref.get.uref.toByteArray)
   }
 
   it should "convert an address-type key successfully" in {
-    val keyValue = randomBytes(20)
-    val keyType  = "address"
-
-    val maybeKey = attemptToKey(keyType, keyValue)
-    maybeKey.isRight shouldBe true
-
-    val ipc.Key(key) = maybeKey.right.get
-    key.isAccount shouldBe true
-
-    val ipc.KeyAddress(address) = key.account.get
-    Base16.encode(address.toByteArray) shouldBe keyValue
+    attemptToKeyTest(20, "address", _.isAccount, _.account.get.account.toByteArray)
   }
 
   it should "fail for any invalid key type" in {

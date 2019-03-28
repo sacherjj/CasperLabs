@@ -70,7 +70,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
                      Option(children).pure[F]
                    case None =>
                      for {
-                       blockOpt <- BlockStore[F].get(blockHash)
+                       blockOpt <- BlockStore[F].getBlockMessage(blockHash)
                        result <- blockOpt match {
                                   case Some(block) =>
                                     val number = blockNumber(block)
@@ -93,7 +93,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
       dataLookup
         .get(blockHash)
         .fold(
-          BlockStore[F].get(blockHash).map(_.map(BlockMetadata.fromBlock))
+          BlockStore[F].getBlockMessage(blockHash).map(_.map(BlockMetadata.fromBlock))
         )(blockMetadata => Option(blockMetadata).pure[F])
 
     def contains(blockHash: BlockHash): F[Boolean] =

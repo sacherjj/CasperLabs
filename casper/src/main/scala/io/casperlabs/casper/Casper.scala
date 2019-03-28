@@ -1,28 +1,21 @@
 package io.casperlabs.casper
 
 import cats.effect.concurrent.Semaphore
-import cats.{Applicative, Monad}
-import cats.implicits._
 import cats.effect.{Concurrent, Sync}
+import cats.implicits._
+import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util._
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.rholang._
-import io.casperlabs.catscontrib._
+import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.shared._
-import monix.eval.Task
-import monix.execution.Scheduler
-import monix.execution.atomic.AtomicAny
-import io.casperlabs.catscontrib.ski._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-
-import scala.concurrent.SyncVar
 
 trait Casper[F[_], A] {
   def addBlock(
@@ -61,34 +54,17 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
+  def hashSetCasper[
+      F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
   ): F[MultiParentCasper[F]] =
     for {
       // Initialize DAG storage with genesis block in case it is empty
-      _   <- BlockDagStorage[F].insert(genesis)
-      dag <- BlockDagStorage[F].getRepresentation
-      // TODO: bring back when validation is working again
-      // maybePostGenesisStateHash <- InterpreterUtil
-      //                               .validateBlockCheckpoint[F](
-      //                                 genesis,
-      //                                 dag,
-      //                                 runtimeManager
-      //                               )
-      maybePostGenesisStateHash <- Sync[F]
-                                    .pure[Either[BlockException, Option[StateHash]]](Right(None))
-      postGenesisStateHash <- maybePostGenesisStateHash match {
-                               case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
-                               case Right(None)              =>
-                                 //todo when blessed contracts finished, this should be comment out.
-//                                 Sync[F].raiseError[StateHash](
-//                                   new Exception("Genesis tuplespace validation failed!")
-//                                 )
-                                 ByteString.copyFromUtf8("test").pure[F]
-                               case Right(Some(hash)) => hash.pure[F]
-                             }
+      _                   <- BlockDagStorage[F].insert(genesis)
+      dag                 <- BlockDagStorage[F].getRepresentation
+      _                   <- Sync[F].rethrow(ExecEngineUtil.validateBlockCheckpoint[F](genesis, dag))
       blockProcessingLock <- Semaphore[F](1)
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()
@@ -99,7 +75,6 @@ sealed abstract class MultiParentCasperInstances {
       new MultiParentCasperImpl[F](
         validatorId,
         genesis,
-        postGenesisStateHash,
         shardId,
         blockProcessingLock
       )

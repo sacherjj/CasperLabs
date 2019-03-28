@@ -74,6 +74,7 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
+      catsPar,
       catsEffect,
       catsEffectLaws,
       catsMtl,
@@ -282,8 +283,9 @@ lazy val node = (project in file("node"))
       val daemon = (daemonUser in Docker).value
       Seq(
         Cmd("FROM", dockerBaseImage.value),
+        ExecCmd("RUN", "apt", "clean"),
         ExecCmd("RUN", "apt", "update"),
-        ExecCmd("RUN", "apt", "install", "-yq", "openssl"),
+        ExecCmd("RUN", "apt", "install", "-yq", "openssl", "curl"),
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
@@ -337,9 +339,18 @@ lazy val blockStorage = (project in file("block-storage"))
       catsCore,
       catsEffect,
       catsMtl
-    )
-  )
-  .dependsOn(shared, models % "compile->compile;test->test")
+    ),
+	  PB.protoSources in Compile := Seq(protobufDirectory),
+    includeFilter in PB.generate := new SimpleFileFilter(
+      protobufSubDirectoryFilter(
+        "io/casperlabs/storage"
+      )),
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
+  	)
+	)
+  .dependsOn(shared,smartContracts,models % "compile->compile;test->test")
 
 // Smart contract execution.
 lazy val smartContracts = (project in file("smart-contracts"))

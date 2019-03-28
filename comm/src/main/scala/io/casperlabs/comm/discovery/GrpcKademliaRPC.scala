@@ -1,8 +1,10 @@
 package io.casperlabs.comm.discovery
 
+import cats.effect._
 import cats.implicits._
+import cats.temp.par._
 import com.google.protobuf.ByteString
-import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.catscontrib.TaskContrib.ConcurrentOps
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
 import io.casperlabs.comm._
@@ -18,14 +20,14 @@ import monix.execution._
 import scala.concurrent.duration._
 import scala.util.Try
 
-class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
+class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNodeAsk: Metrics: Par](
+    port: Int,
+    timeout: FiniteDuration
+)(
     implicit
     scheduler: Scheduler,
-    peerNodeAsk: PeerNodeAsk[Task],
-    metrics: Metrics[Task],
-    log: Log[Task],
-    connectionsCache: ConnectionsCache[Task, KademliaConnTag]
-) extends KademliaRPC[Task] {
+    connectionsCache: ConnectionsCache[F, KademliaConnTag]
+) extends KademliaRPC[F] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val metricsSource: Metrics.Source =
@@ -33,63 +35,61 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
 
   private val cell = connectionsCache(clientChannel)
 
-  def ping(peer: PeerNode): Task[Boolean] =
+  def ping(peer: PeerNode): F[Boolean] =
     for {
-      _     <- Metrics[Task].incrementCounter("ping")
-      local <- peerNodeAsk.ask
+      _     <- Metrics[F].incrementCounter("ping")
+      local <- PeerNodeAsk[F].ask
       ping  = Ping().withSender(node(local))
       pongErr <- withClient(peer)(
                   _.sendPing(ping)
+                    .to[F]
                     .timer("ping-time")
                     .nonCancelingTimeout(timeout)
                 ).attempt
     } yield pongErr.fold(kp(false), kp(true))
 
-  def lookup(id: NodeIdentifier, peer: PeerNode): Task[Seq[PeerNode]] =
+  def lookup(id: NodeIdentifier, peer: PeerNode): F[Seq[PeerNode]] =
     for {
-      _      <- Metrics[Task].incrementCounter("protocol-lookup-send")
-      local  <- peerNodeAsk.ask
+      _      <- Metrics[F].incrementCounter("protocol-lookup-send")
+      local  <- PeerNodeAsk[F].ask
       lookup = Lookup().withId(ByteString.copyFrom(id.key.toArray)).withSender(node(local))
       responseErr <- withClient(peer)(
                       _.sendLookup(lookup)
+                        .to[F]
                         .timer("lookup-time")
                         .nonCancelingTimeout(timeout)
                     ).attempt
     } yield responseErr.fold(kp(Seq.empty[PeerNode]), _.nodes.map(toPeerNode))
 
-  def disconnect(peer: PeerNode): Task[Unit] =
+  private def disconnect(peer: PeerNode): F[Unit] =
     cell.modify { s =>
       for {
         _ <- s.connections.get(peer) match {
               case Some(c) =>
-                log
-                  .debug(s"Disconnecting from peer ${peer.toAddress}")
+                Log[F]
+                  .info(s"Disconnecting from peer ${peer.toAddress}")
                   .map(kp(Try(c.shutdown())))
                   .void
-              case _ => Task.unit // ignore if connection does not exists already
+              case _ => ().pure[F] // ignore if connection does not exists already
             }
       } yield s.copy(connections = s.connections - peer)
     }
 
   private def withClient[A](peer: PeerNode, enforce: Boolean = false)(
-      f: KademliaRPCServiceStub => Task[A]
-  ): Task[A] =
+      f: KademliaRPCServiceStub => F[A]
+  ): F[A] =
     for {
       channel <- cell.connection(peer, enforce)
-      stub    <- Task.delay(KademliaGrpcMonix.stub(channel))
-      result <- f(stub).doOnFinish {
-                 case Some(_) => disconnect(peer)
-                 case _       => Task.unit
-               }
-      _ <- Task.unit.asyncBoundary // return control to caller thread
+      stub    <- Sync[F].delay(KademliaGrpcMonix.stub(channel))
+      result  <- f(stub).onError { case _ => disconnect(peer) }
     } yield result
 
   def receive(
-      pingHandler: PeerNode => Task[Unit],
-      lookupHandler: (PeerNode, NodeIdentifier) => Task[Seq[PeerNode]]
-  ): Task[Unit] =
+      pingHandler: PeerNode => F[Unit],
+      lookupHandler: (PeerNode, NodeIdentifier) => F[Seq[PeerNode]]
+  ): F[Unit] =
     cell.modify { s =>
-      Task.delay {
+      Sync[F].delay {
         val server = NettyServerBuilder
           .forPort(port)
           .executor(scheduler)
@@ -105,31 +105,31 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       }
     }
 
-  def shutdown(): Task[Unit] = {
-    def shutdownServer: Task[Unit] = cell.modify { s =>
+  def shutdown(): F[Unit] = {
+    def shutdownServer: F[Unit] = cell.modify { s =>
       for {
-        _ <- log.info("Shutting down Kademlia RPC server")
-        _ <- s.server.fold(Task.unit)(server => Task.delay(server.cancel()))
+        _ <- Log[F].info("Shutting down Kademlia RPC server")
+        _ <- s.server.fold(().pure[F])(server => Sync[F].delay(server.cancel()))
       } yield s.copy(server = None, shutdown = true)
     }
 
-    def disconnectFromPeers: Task[Unit] =
+    def disconnectFromPeers: F[Unit] =
       for {
-        peers <- cell.read.map(_.connections.keys.toSeq)
-        _     <- log.info("Disconnecting from all peers")
-        _     <- Task.gatherUnordered(peers.map(disconnect))
+        peers <- cell.read.map(_.connections.keys.toList)
+        _     <- Log[F].info("Disconnecting from all peers")
+        _     <- peers.parTraverse(disconnect)
       } yield ()
 
     cell.read.flatMap { s =>
-      if (s.shutdown) Task.unit
+      if (s.shutdown) ().pure[F]
       else shutdownServer *> disconnectFromPeers
     }
   }
 
-  private def clientChannel(peer: PeerNode): Task[ManagedChannel] =
+  private def clientChannel(peer: PeerNode): F[ManagedChannel] =
     for {
-      _ <- log.debug(s"Creating new channel to peer ${peer.toAddress}")
-      c <- Task.delay {
+      _ <- Log[F].info(s"Creating new channel to peer ${peer.toAddress}")
+      c <- Sync[F].delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.udpPort)
               .executor(scheduler)
@@ -149,20 +149,22 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
     PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host, n.protocolPort, n.discoveryPort))
 
   class SimpleKademliaRPCService(
-      pingHandler: PeerNode => Task[Unit],
-      lookupHandler: (PeerNode, NodeIdentifier) => Task[Seq[PeerNode]]
+      pingHandler: PeerNode => F[Unit],
+      lookupHandler: (PeerNode, NodeIdentifier) => F[Seq[PeerNode]]
   ) extends KademliaGrpcMonix.KademliaRPCService {
 
     def sendLookup(lookup: Lookup): Task[LookupResponse] = {
       val id               = NodeIdentifier(lookup.id.toByteArray)
       val sender: PeerNode = toPeerNode(lookup.sender.get)
-      lookupHandler(sender, id)
-        .map(peers => LookupResponse().withNodes(peers.map(node)))
+      TaskLike[F].toTask(
+        lookupHandler(sender, id)
+          .map(peers => LookupResponse().withNodes(peers.map(node)))
+      )
     }
 
     def sendPing(ping: Ping): Task[Pong] = {
       val sender: PeerNode = toPeerNode(ping.sender.get)
-      pingHandler(sender).as(Pong())
+      TaskLike[F].toTask(pingHandler(sender).as(Pong()))
     }
   }
 }

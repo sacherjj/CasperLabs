@@ -1,6 +1,5 @@
 package io.casperlabs.casper
 
-import cats.Applicative
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
@@ -14,9 +13,8 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
-import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.rholang._
+import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -24,9 +22,9 @@ import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ValidateRequest
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.BlockMsgWithTransform
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
@@ -43,16 +41,12 @@ final case class CasperState(
     deployHistory: Set[DeployData] = Set.empty[DeployData],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord],
-    //TODO: store this info in the BlockDagRepresentation instead
-    transforms: Map[BlockHash, Seq[ipc.TransformEntry]] =
-      Map.empty[BlockHash, Seq[ipc.TransformEntry]]
+    equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
 class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
-    postGenesisStateHash: StateHash,
     shardId: String,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f
@@ -322,11 +316,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     (for {
       now <- Time[F].currentMillis
       s   <- Cell[F, CasperState].read
-      //temporary function for getting transforms for blocks
-      f = (b: BlockMetadata) =>
-        s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
       stateResult <- ExecEngineUtil
-                      .computeDeploysCheckpoint(p, r, dag, f)
+                      .computeDeploysCheckpoint(p, r, dag)
       DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number) = stateResult
       //TODO: compute bonds properly
       newBonds = ProtoUtil.bonds(p.head)
@@ -382,14 +373,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       postValidationStatus <- Validate
                                .blockSummary[F](b, genesis, dag, shardId, lastFinalizedBlockHash)
       s <- Cell[F, CasperState].read
-      //temporary function for getting transforms for blocks
-      f = (b: BlockMetadata) =>
-        Sync[F].delay(
-          s.transforms
-            .getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry])
-        )
       processedHash <- ExecEngineUtil
-                        .effectsForBlock(b, dag, f)
+                        .effectsForBlock(b, dag)
                         .recoverWith {
                           case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                         }
@@ -578,12 +563,9 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       effects: Seq[ipc.TransformEntry]
   ): F[BlockDagRepresentation[F]] =
     for {
-      _          <- BlockStore[F].put(block.blockHash, block)
+      _          <- BlockStore[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
       updatedDag <- BlockDagStorage[F].insert(block)
       hash       = block.blockHash
-      _ <- Cell[F, CasperState].modify { s =>
-            s.copy(transforms = s.transforms + (hash -> effects))
-          }
     } yield updatedDag
 
   private def reAttemptBuffer(

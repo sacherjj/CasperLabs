@@ -1,17 +1,16 @@
 package io.casperlabs.casper.helper
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.Path
 
-import cats.{Applicative, ApplicativeError, Defer, Id, Monad}
 import cats.data.EitherT
+import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import cats.{Applicative, ApplicativeError, Defer, Id, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.catscontrib.ski._
 import io.casperlabs.blockstorage._
-import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper._
+import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
@@ -20,27 +19,26 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerInternal
 }
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
-import io.casperlabs.catscontrib._
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
+import io.casperlabs.catscontrib.ski._
+import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
-import io.casperlabs.comm.CommError.{CommErrT, ErrorHandler}
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.Connect
 import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.comm.rp.HandleMessages.handle
 import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.ipc
+import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
-import io.casperlabs.shared.{Cell, Log}
 import io.casperlabs.shared.PathOps.RichPath
+import io.casperlabs.shared.{Cell, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.ipc
-import io.casperlabs.ipc.TransformEntry
-import io.casperlabs.models.BlockMetadata
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -53,6 +51,7 @@ class HashSetCasperTestNode[F[_]](
     val local: PeerNode,
     tle: TransportLayerTestImpl[F],
     val genesis: BlockMessage,
+    val transforms: Seq[TransformEntry],
     sk: Array[Byte],
     logicalTime: LogicalTime[F],
     implicit val errorHandlerEff: ErrorHandler[F],
@@ -90,13 +89,13 @@ class HashSetCasperTestNode[F[_]](
 
   val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
 
-  implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
+  implicit val labF =
+    LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
   implicit val casperEff = new MultiParentCasperImpl[F](
     Some(validatorId),
     genesis,
-    postGenesisStateHash,
     shardId,
     blockProcessingLock,
     faultToleranceThreshold = faultToleranceThreshold
@@ -113,14 +112,12 @@ class HashSetCasperTestNode[F[_]](
 
   def initialize(): F[Unit] =
     // pre-population removed from internals of Casper
-    blockStore.put(genesis.blockHash, genesis) *>
+    blockStore.put(genesis.blockHash, genesis, Seq.empty) *>
       blockDagStorage.getRepresentation.flatMap { dag =>
-        BlockGenerator
+        ExecEngineUtil
           .validateBlockCheckpoint[F](
             genesis,
-            dag,
-            // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
-            (_: BlockMetadata) => Seq.empty[TransformEntry].pure[F]
+            dag
           )
           .void
       }
@@ -145,6 +142,7 @@ object HashSetCasperTestNode {
 
   def standaloneF[F[_]](
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
@@ -177,6 +175,7 @@ object HashSetCasperTestNode {
         identity,
         tle,
         genesis,
+        transforms,
         sk,
         logicalTime,
         errorHandler,
@@ -198,13 +197,14 @@ object HashSetCasperTestNode {
 
   def standaloneEff(
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   )(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
-    standaloneF[Effect](genesis, sk, storageSize, faultToleranceThreshold)(
+    standaloneF[Effect](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect]
     ).value.unsafeRunSync.right.get
@@ -212,6 +212,7 @@ object HashSetCasperTestNode {
   def networkF[F[_]](
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   )(
@@ -256,6 +257,7 @@ object HashSetCasperTestNode {
                 p,
                 tle,
                 genesis,
+                transforms,
                 sk,
                 logicalTime,
                 errorHandler,
@@ -300,10 +302,11 @@ object HashSetCasperTestNode {
   def networkEff(
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   ): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
-    networkF[Effect](sks, genesis, storageSize, faultToleranceThreshold)(
+    networkF[Effect](sks, genesis, transforms, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect]
     )
@@ -368,7 +371,7 @@ object HashSetCasperTestNode {
         ExecutionEffect(Seq(opEntry), Seq(transforEntry))
       }
 
-      override def emptyStateHash: ByteString = ByteString.copyFrom(zero)
+      override def emptyStateHash: ByteString = ByteString.EMPTY
 
       override def exec(
           prestate: ByteString,

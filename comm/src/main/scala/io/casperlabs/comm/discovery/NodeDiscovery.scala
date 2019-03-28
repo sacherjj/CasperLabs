@@ -1,14 +1,10 @@
 package io.casperlabs.comm.discovery
 
-import io.casperlabs.comm.transport._
-
 import cats.Monad
 import cats.data.EitherT
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.{MonadTrans, _}
-import io.casperlabs.comm.{CommError, PeerNode}, CommError.CommErr
-import io.casperlabs.comm.rp.ProtocolHelper
-import io.casperlabs.comm.protocol.routing._
+import io.casperlabs.comm.PeerNode
 
 trait NodeDiscovery[F[_]] {
   def discover: F[Unit]

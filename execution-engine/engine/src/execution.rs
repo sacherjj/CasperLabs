@@ -40,6 +40,7 @@ pub enum Error {
     ParityWasm(ParityWasmError),
     GasLimit,
     Ret(Vec<Key>),
+    Rng(rand::Error),
     Unreachable,
 }
 
@@ -894,6 +895,7 @@ where
 {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let known_urefs = refs.values().cloned().chain(extra_urefs).collect();
+    let rng = ChaChaRng::from_rng(&mut current_runtime.rng).map_err(Error::Rng)?;
     let mut runtime = Runtime {
         args,
         memory,
@@ -910,7 +912,7 @@ where
             account: current_runtime.context.account,
             base_key: key,
         },
-        rng: current_runtime.rng.clone(),
+        rng,
     };
 
     let result = instance.invoke_export("call", &[], &mut runtime);

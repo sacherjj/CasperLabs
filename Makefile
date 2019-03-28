@@ -1,5 +1,6 @@
 DOCKER_USERNAME ?= casperlabs
 DOCKER_PUSH_LATEST ?= false
+DOCKER_LATEST_TAG ?= latest
 # Use the git tag / hash as version. Easy to pinpoint. `git tag` can return more than 1 though. `git rev-parse --short HEAD` would just be the commit.
 $(eval TAGS_OR_SHA = $(shell git tag -l --points-at HEAD | grep -e . || git describe --tags --always --long))
 # Try to use the semantic version with any leading `v` stripped.
@@ -51,10 +52,10 @@ docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
 docker-push/%: docker-build/%
 	$(eval PROJECT = $*)
-	docker tag $(DOCKER_USERNAME)/$(PROJECT):latest $(DOCKER_USERNAME)/$(PROJECT):$(VER)
+	docker tag $(DOCKER_USERNAME)/$(PROJECT):$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/$(PROJECT):$(VER)
 	docker push $(DOCKER_USERNAME)/$(PROJECT):$(VER)
 	if [ "$(DOCKER_PUSH_LATEST)" = "true" ]; then \
-		docker push $(DOCKER_USERNAME)/$(PROJECT):latest ; \
+		docker push $(DOCKER_USERNAME)/$(PROJECT):$(DOCKER_LATEST_TAG) ; \
 	fi
 
 
@@ -99,7 +100,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	    -exec cp {} $(STAGE)/.docker/layers/1st \;
 	# Use the Dockerfile to build the project. Has to be within the context.
 	cp $(PROJECT)/Dockerfile $(STAGE)/Dockerfile
-	docker build -f $(STAGE)/Dockerfile -t $(DOCKER_USERNAME)/$(PROJECT):latest $(STAGE)
+	docker build -f $(STAGE)/Dockerfile -t $(DOCKER_USERNAME)/$(PROJECT):$(DOCKER_LATEST_TAG) $(STAGE)
 	rm -rf $(STAGE)/.docker $(STAGE)/Dockerfile
 	mkdir -p $(dir $@) && touch $@
 
@@ -111,7 +112,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/target/debian)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
-	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:latest $(RELEASE)
+	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(RELEASE)
 	rm -rf $(RELEASE)/Dockerfile
 	mkdir -p $(dir $@) && touch $@
 
@@ -125,7 +126,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Make a test version for the execution engine as well just so we can swith version easily.
 .make/docker-build/test/execution-engine: \
 		.make/docker-build/execution-engine
-	docker tag $(DOCKER_USERNAME)/execution-engine:latest $(DOCKER_USERNAME)/execution-engine:test
+	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:test
 	mkdir -p $(dir $@) && touch $@
 
 
@@ -181,7 +182,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	@# Going to ignore errors with the rpm build here so that we can get the .deb package for docker.
 	$(eval USERID = $(shell id -u))
 	docker pull $(DOCKER_USERNAME)/buildenv:latest
-	docker run -it --rm --entrypoint sh \
+	docker run --rm --entrypoint sh \
 		-v ${PWD}:/CasperLabs \
 		$(DOCKER_USERNAME)/buildenv:latest \
 		-c "\
