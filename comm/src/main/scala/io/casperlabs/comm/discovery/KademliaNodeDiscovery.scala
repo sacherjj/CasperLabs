@@ -102,11 +102,8 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
     } yield ()
   }
 
-  def lookup(id: NodeIdentifier): F[Option[PeerNode]] = {
-    def loop(
-        successQueriesN: Int,
-        alreadyQueried: Set[PeerNode],
-        shortlist: Seq[PeerNode],
+  def lookup(toLookup: NodeIdentifier): F[Option[PeerNode]] = {
+    def loop(successQueriesN: Int, alreadyQueried: Set[NodeIdentifier], shortlist: Seq[PeerNode])(
         maybeClosestPeerNode: Option[PeerNode]
     ): F[Option[PeerNode]] =
       if (shortlist.isEmpty || successQueriesN >= k) {
@@ -116,44 +113,36 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
         for {
           responses <- callees.parTraverse { callee =>
                         for {
-                          maybeNodes <- KademliaRPC[F].lookup(id, callee)
+                          maybeNodes <- KademliaRPC[F].lookup(toLookup, callee)
                           _          <- maybeNodes.fold(().pure[F])(_ => addNode(callee))
                         } yield (callee, maybeNodes)
                       }
           newAlreadyQueried = alreadyQueried ++ responses.collect {
-            case (callee, Some(_)) => callee
+            case (callee, Some(_)) => callee.id
           }.toSet
-          returnedPeers      = responses.flatMap(_._2.toList.flatten)
-          newShortlist       = rest ::: returnedPeers.filterNot(newAlreadyQueried)
-          newClosestPeerNode = returnedPeers.minBy(p => PeerTable.longestCommonBitPrefix(id, p.id))
-          newSuccessQueriesN = successQueriesN + responses.count(_._2.nonEmpty)
-          res <- maybeClosestPeerNode.fold(
-                  loop(
-                    newSuccessQueriesN,
-                    newAlreadyQueried,
-                    newShortlist,
-                    newClosestPeerNode.some
-                  )
-                ) { closestId =>
-                  if (PeerTable.xorDistance(id, newClosestPeerNode.id) <
-                        PeerTable.xorDistance(id, closestId.id)) {
-                    loop(
-                      newSuccessQueriesN,
-                      newAlreadyQueried,
-                      newShortlist,
-                      newClosestPeerNode.some
-                    )
-                  } else {
-                    closestId.some.pure[F]
-                  }
+          returnedPeers = responses.flatMap(_._2.toList.flatten)
+          recursion = loop(
+            successQueriesN + responses.count(_._2.nonEmpty),
+            newAlreadyQueried,
+            rest ::: returnedPeers.filterNot(p => newAlreadyQueried(p.id))
+          ) _
+          maybeNewClosestPeerNode = if (returnedPeers.nonEmpty)
+            returnedPeers.minBy(p => PeerTable.longestCommonBitPrefix(toLookup, p.id)).some
+          else None
+          res <- (maybeNewClosestPeerNode, maybeClosestPeerNode) match {
+                  case (x @ Some(_), None) => recursion(x)
+                  case (Some(newClosestPeerNode), Some(closestPeerNode))
+                      if PeerTable.xorDistance(toLookup, newClosestPeerNode.id) <
+                        PeerTable.xorDistance(toLookup, closestPeerNode.id) =>
+                    recursion(maybeNewClosestPeerNode)
+                  case _ => maybeClosestPeerNode.pure[F]
                 }
         } yield res
-
       }
 
     for {
-      shortlist   <- table.lookup(id).map(_.take(alpha))
-      closestNode <- loop(0, Set.empty[PeerNode], shortlist, None)
+      shortlist   <- table.lookup(toLookup).map(_.take(alpha))
+      closestNode <- loop(0, Set(id), shortlist)(None)
     } yield closestNode
   }
 
