@@ -145,7 +145,7 @@ mod simple {
                 InMemoryTrieStore,
                 InMemoryEnvironment,
                 in_memory::Error,
-            >(&store, &env, &data)
+            >(&store, &env, data)
         )
     }
 
@@ -451,8 +451,10 @@ mod roundtrip {
 
     fn in_memory_roundtrip(inputs: Vec<Trie<Key, Value>>) -> bool {
         use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
+
         let env = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&env);
+
         roundtrip_is_valid::<InMemoryTrieStore, InMemoryEnvironment, in_memory::Error>(
             &store, &env, inputs,
         )
@@ -461,9 +463,11 @@ mod roundtrip {
     fn lmdb_roundtrip(inputs: Vec<Trie<Key, Value>>) -> bool {
         use error;
         use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+
         let tmp_dir = tempdir().unwrap();
         let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
+
         let ret = roundtrip_is_valid::<LmdbTrieStore, LmdbEnvironment, error::Error>(
             &store, &env, inputs,
         );
