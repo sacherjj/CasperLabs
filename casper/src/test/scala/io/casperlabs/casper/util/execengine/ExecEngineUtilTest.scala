@@ -374,15 +374,18 @@ class ExecEngineUtilTest
       val b1DeploysWithCost      = prepareDeploys(Vector(contract), 2)
       val b2DeploysWithCost      = prepareDeploys(Vector(contract), 1)
       val b3DeploysWithCost      = prepareDeploys(Vector.empty, 5)
+      val invalidHash            = ByteString.copyFromUtf8("invalid")
 
       for {
         genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
         b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
         b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-        // set wrong preStateHash to b3
-        b3 <- createBlock[Task](Seq(b1.blockHash, b2.blockHash),
-                                deploys = b3DeploysWithCost,
-                                preStateHash = ByteString.EMPTY)
+        // set wrong preStateHash for b3
+        b3 <- createBlock[Task](
+               Seq(b1.blockHash, b2.blockHash),
+               deploys = b3DeploysWithCost,
+               preStateHash = invalidHash
+             )
         dag <- blockDagStorage.getRepresentation
         postState <- ExecEngineUtil.validateBlockCheckpoint[Task](
                       b3,
@@ -398,10 +401,10 @@ class ExecEngineUtilTest
       val processedDeploys = deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
       val invalidHash      = ByteString.copyFromUtf8("invalid")
       for {
-        block <- createBlock[Task](Seq.empty, deploys = processedDeploys, tsHash = invalidHash)
-        dag   <- blockDagStorage.getRepresentation
+        genesis <- createBlock[Task](Seq.empty, deploys = processedDeploys, tsHash = invalidHash)
+        dag     <- blockDagStorage.getRepresentation
         validateResult <- ExecEngineUtil.validateBlockCheckpoint[Task](
-                           block,
+                           genesis,
                            dag
                          )
       } yield validateResult shouldBe Left(Validate.ValidateErrorWrapper(InvalidPostStateHash))
