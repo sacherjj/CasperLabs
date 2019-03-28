@@ -293,7 +293,7 @@ object BlockAPI {
       header                   = block.header.getOrElse(Header.defaultInstance)
       version                  = header.version
       deployCount              = header.deployCount
-      postStateHash            = ProtoUtil.tuplespace(block).getOrElse(ByteString.EMPTY)
+      postStateHash            = ProtoUtil.postStateHash(block)
       timestamp                = header.timestamp
       mainParent               = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
       parentsHashList          = header.parentsHashList
