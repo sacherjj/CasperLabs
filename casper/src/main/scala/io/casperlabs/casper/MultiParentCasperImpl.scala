@@ -1,6 +1,5 @@
 package io.casperlabs.casper
 
-import cats.Applicative
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
@@ -14,9 +13,8 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
-import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.rholang._
+import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -24,7 +22,6 @@ import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ValidateRequest
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -50,7 +47,6 @@ final case class CasperState(
 class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
-    postGenesisStateHash: StateHash,
     shardId: String,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f

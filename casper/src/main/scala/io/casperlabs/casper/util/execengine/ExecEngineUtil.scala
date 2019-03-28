@@ -1,14 +1,15 @@
 package io.casperlabs.casper.util.execengine
 
+import cats.effect.Sync
 import cats.implicits._
 import cats.{Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
-import io.casperlabs.casper.{protocol, PrettyPrinter}
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.{DeployResult => _, _}
@@ -50,7 +51,20 @@ object ExecEngineUtil {
         )
     }
 
-  def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
+  implicit def functorRaiseInvalidBlock[F[_]: Sync] = Validate.raiseValidateErrorThroughSync[F]
+
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
+      b: BlockMessage,
+      dag: BlockDagRepresentation[F]
+  ): F[Either[Throwable, StateHash]] =
+    (for {
+      processedHash           <- ExecEngineUtil.effectsForBlock(b, dag)
+      (preStateHash, effects) = processedHash
+      _                       <- Validate.transactions[F](b, dag, preStateHash, effects)
+    } yield ProtoUtil.postStateHash(b)).attempt
+
+  def computeDeploysCheckpoint[
+      F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F]
@@ -137,7 +151,8 @@ object ExecEngineUtil {
       transformMap                 = findCommutingEffects(processedDeploys).unzip._1.flatMap(_.transformMap)
     } yield (prestate, transformMap)
 
-  private def computePrestate[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
+  private def computePrestate[
+      F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       parents: List[BlockMessage],
       dag: BlockDagRepresentation[F]
   ): F[StateHash] = parents match {
