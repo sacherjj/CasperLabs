@@ -127,7 +127,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
             rest ::: returnedPeers.filterNot(p => newAlreadyQueried(p.id))
           ) _
           maybeNewClosestPeerNode = if (returnedPeers.nonEmpty)
-            returnedPeers.minBy(p => PeerTable.longestCommonBitPrefix(toLookup, p.id)).some
+            returnedPeers.minBy(p => PeerTable.xorDistance(toLookup, p.id)).some
           else None
           res <- (maybeNewClosestPeerNode, maybeClosestPeerNode) match {
                   case (x @ Some(_), None) => recursion(x)
