@@ -107,7 +107,7 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
     }
 }
 
-// TODO: fn_by_name should, fn_bytes_by_name and ext_ffi::serialize_function should be removed.
+// TODO: fn_by_name, fn_bytes_by_name and ext_ffi::serialize_function should be removed.
 // Functions shouldn't be serialized and returned back to the contract because they're never used there.
 // Host should read the function pointer (and correct number of bytes) and persist it on the host side.
 

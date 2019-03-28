@@ -300,7 +300,7 @@ where
         }
     }
 
-    // Load the uref known by the given name into the wasm memory
+    // Load the uref known by the given name into the Wasm memory
     pub fn get_uref(&mut self, name_ptr: u32, name_size: u32, dest_ptr: u32) -> Result<(), Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let uref = self
@@ -346,7 +346,7 @@ where
 
     // Return a some bytes from the memory and terminate the current `sub_call`.
     // Note that the return type is `Trap`, indicating that this function will
-    // always kill the current wasm instance.
+    // always kill the current Wasm instance.
     pub fn ret(
         &mut self,
         value_ptr: u32,
@@ -597,23 +597,23 @@ where
     ) -> Result<Option<RuntimeValue>, Trap> {
         match index {
             READ_FUNC_INDEX => {
-                // args(0) = pointer to key in wasm memory
-                // args(1) = size of key in wasm memory
+                // args(0) = pointer to key in Wasm memory
+                // args(1) = size of key in Wasm memory
                 let (key_ptr, key_size) = Args::parse(args)?;
                 let size = self.read_value(key_ptr, key_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             SER_FN_FUNC_INDEX => {
-                // args(0) = pointer to name in wasm memory
-                // args(1) = size of name in wasm memory
+                // args(0) = pointer to name in Wasm memory
+                // args(1) = size of name in Wasm memory
                 let (name_ptr, name_size) = Args::parse(args)?;
                 let size = self.serialize_function(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
             WRITE_FUNC_INDEX => {
-                // args(0) = pointer to key in wasm memory
+                // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key
                 // args(2) = pointer to value
                 // args(3) = size of value
@@ -623,7 +623,7 @@ where
             }
 
             ADD_FUNC_INDEX => {
-                // args(0) = pointer to key in wasm memory
+                // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key
                 // args(2) = pointer to value
                 // args(3) = size of value
@@ -633,21 +633,21 @@ where
             }
 
             NEW_FUNC_INDEX => {
-                // args(0) = pointer to key destination in wasm memory
+                // args(0) = pointer to key destination in Wasm memory
                 let key_ptr = Args::parse(args)?;
                 self.new_uref(key_ptr)?;
                 Ok(None)
             }
 
             GET_READ_FUNC_INDEX => {
-                // args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             GET_FN_FUNC_INDEX => {
-                // args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
@@ -661,7 +661,7 @@ where
             }
 
             GET_ARG_FUNC_INDEX => {
-                // args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
@@ -685,7 +685,7 @@ where
             CALL_CONTRACT_FUNC_INDEX => {
                 // args(0) = pointer to key where contract is at in global state
                 // args(1) = size of key
-                // args(2) = pointer to function arguments in wasm memory
+                // args(2) = pointer to function arguments in Wasm memory
                 // args(3) = size of arguments
                 // args(4) = pointer to extra supplied urefs
                 // args(5) = size of extra urefs
@@ -704,23 +704,23 @@ where
             }
 
             GET_CALL_RESULT_FUNC_INDEX => {
-                // args(0) = pointer to destination in wasm memory
+                // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
             GET_UREF_FUNC_INDEX => {
-                // args(0) = pointer to uref name in wasm memory
+                // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
-                // args(2) = pointer to destination in wasm memory
+                // args(2) = pointer to destination in Wasm memory
                 let (name_ptr, name_size, dest_ptr) = Args::parse(args)?;
                 self.get_uref(name_ptr, name_size, dest_ptr)?;
                 Ok(None)
             }
 
             HAS_UREF_FUNC_INDEX => {
-                // args(0) = pointer to uref name in wasm memory
+                // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 let (name_ptr, name_size) = Args::parse(args)?;
                 let result = self.has_uref(name_ptr, name_size)?;
@@ -728,9 +728,9 @@ where
             }
 
             ADD_UREF_FUNC_INDEX => {
-                // args(0) = pointer to uref name in wasm memory
+                // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
-                // args(2) = pointer to destination in wasm memory
+                // args(2) = pointer to destination in Wasm memory
                 let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
                 self.add_uref(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(None)
@@ -743,12 +743,12 @@ where
             }
 
             STORE_FN_INDEX => {
-                // args(0) = pointer to function name in wasm memory
+                // args(0) = pointer to function name in Wasm memory
                 // args(1) = size of the name
                 // args(2) = pointer to additional unforgable names
-                //           to be save with the function body
+                //           to be saved with the function body
                 // args(3) = size of the additional unforgable names
-                // args(4) = pointer to a wasm memory where we will save
+                // args(4) = pointer to a Wasm memory where we will save
                 //           hash of the new function
                 let (name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr) = Args::parse(args)?;
                 self.store_function(name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr)?;
