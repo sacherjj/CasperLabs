@@ -78,10 +78,10 @@ where
     T: CheckedAdd + CheckedSub + From<i32>,
 {
     if j > 0 {
-        i.checked_add(T::from(j)).ok_or(Error::Overflow)
+        i.checked_add(j.into()).ok_or(Error::Overflow)
     } else {
         let j_abs = j.abs();
-        i.checked_sub(T::from(j_abs)).ok_or(Error::Overflow)
+        i.checked_sub(j_abs.into()).ok_or(Error::Overflow)
     }
 }
 
