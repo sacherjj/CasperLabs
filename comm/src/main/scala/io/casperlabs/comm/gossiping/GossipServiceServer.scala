@@ -3,6 +3,7 @@ package io.casperlabs.comm.gossiping
 import cats._
 import cats.implicits._
 import cats.effect._
+import cats.effect.concurrent._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.Compression
@@ -15,7 +16,8 @@ import scala.math.Ordering
 class GossipServiceServer[F[_]: Sync](
     getBlockSummary: ByteString => F[Option[BlockSummary]],
     getBlock: ByteString => F[Option[Block]],
-    maxChunkSize: Int
+    maxChunkSize: Int,
+    blockDownloadSemaphore: Semaphore[F]
 ) extends GossipService[F] {
   import GossipServiceServer._
 
@@ -89,20 +91,23 @@ class GossipServiceServer[F[_]: Sync](
       .flatMap(Iterant.fromIterable(_))
 
   def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
-    Iterant.liftF {
-      getBlock(request.blockHash)
-    } flatMap {
-      case Some(block) =>
-        val it = chunkIt(
-          block.toByteArray,
-          effectiveChunkSize(request.chunkSize),
-          request.acceptedCompressionAlgorithms
-        )
+    Iterant.resource(blockDownloadSemaphore.acquire)(_ => blockDownloadSemaphore.release) flatMap {
+      _ =>
+        Iterant.liftF {
+          getBlock(request.blockHash)
+        } flatMap {
+          case Some(block) =>
+            val it = chunkIt(
+              block.toByteArray,
+              effectiveChunkSize(request.chunkSize),
+              request.acceptedCompressionAlgorithms
+            )
 
-        Iterant.fromIterator(it)
+            Iterant.fromIterator(it)
 
-      case None =>
-        Iterant.raiseError(NotFound.block(request.blockHash))
+          case None =>
+            Iterant.raiseError(NotFound.block(request.blockHash))
+        }
     }
 
   def effectiveChunkSize(chunkSize: Int): Int =
@@ -143,4 +148,14 @@ object GossipServiceServer {
 
     Iterator(Chunk().withHeader(header)) ++ chunks
   }
+
+  def apply[F[_]: Concurrent](
+      getBlockSummary: ByteString => F[Option[BlockSummary]],
+      getBlock: ByteString => F[Option[Block]],
+      maxChunkSize: Int,
+      maxParallelBlockDownloads: Int
+  ): F[GossipServiceServer[F]] =
+    Semaphore[F](maxParallelBlockDownloads.toLong) map { blockDownloadSemaphore =>
+      new GossipServiceServer(getBlockSummary, getBlock, maxChunkSize, blockDownloadSemaphore)
+    }
 }

@@ -13,7 +13,7 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.grpc.{AuthInterceptor, GrpcServer, SslContexts}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import monix.eval.Task
 import monix.execution.{ExecutionModel, Scheduler}
 import monix.reactive.Observable
@@ -239,6 +239,117 @@ class GrpcGossipServiceSpec
                   // I'll leave it as a reminder, but the assertion on completion and message count should indicate early stop.
                   // To be fair doOnEarlyStop didn't seem to trigger with simple Observable(1,2,3) either.
                   //stopCount shouldBe 1
+                }
+              }
+            }
+          }
+        }
+      }
+
+      "many downloads are attempted at once" should {
+        "only allow them up to the limit" in {
+          val maxParallelBlockDownloads = 2
+          forAll { (block: Block) =>
+            runTestUnsafe(TestData.fromBlock(block)) {
+              TestEnvironment(testDataRef, maxParallelBlockDownloads = maxParallelBlockDownloads)
+                .use { stub =>
+                  val parallelNow = new AtomicInteger(0)
+                  val parallelMax = new AtomicInteger(0)
+
+                  val req = GetBlockChunkedRequest(blockHash = block.blockHash)
+                  val fetchers = List.fill(2 * maxParallelBlockDownloads) {
+                    stub
+                      .getBlockChunked(req)
+                      .doOnStart(_ => Task.delay { parallelNow.incrementAndGet() })
+                      .doOnNext(
+                        _ =>
+                          Task.delay { parallelMax.set(math.max(parallelMax.get, parallelNow.get)) }
+                      )
+                      .doOnComplete(Task.delay { parallelNow.decrementAndGet() })
+                      .toListL
+                  }
+
+                  Task.gatherUnordered(fetchers) map { res =>
+                    res.size shouldBe fetchers.size
+                    parallelMax.get shouldBe maxParallelBlockDownloads
+                  }
+                }
+            }
+          }
+        }
+      }
+
+      "a download is not consumed" should {
+        "cancel the idle stream" in {
+          // Tried to test this with short timeouts and delays but it looks like underlying gRPC
+          // reactive subscriber machinery will eagerly pull all the data from the server regardless
+          // of the backpressure applied in the subsequent processing. Nevertheless the timeout is
+          // applied so if someone tries to go deeper we should be covered.
+          forAll { (block: Block) =>
+            runTestUnsafe(TestData.fromBlock(block)) {
+              TestEnvironment(
+                testDataRef,
+                maxParallelBlockDownloads = 1,
+                blockChunkConsumerTimeout = Duration.Zero
+              ).use { stub =>
+                val req = GetBlockChunkedRequest(blockHash = block.blockHash)
+
+                for {
+                  r <- stub.getBlockChunked(req).toListL.attempt
+                  _ = {
+                    r.isLeft shouldBe true
+                    r.left.get match {
+                      case ex: io.grpc.StatusRuntimeException =>
+                        // TODO: When we add the ErrorInterceptor we can turn this into a proper status,
+                        // for example CANCELED or DEADLINE_EXCEEDED.
+                        ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNKNOWN
+                      case other =>
+                        fail(s"Unexpected error: $other")
+                    }
+                  }
+                  // The semaphore should be free for the next query. Otherwise the test will time out.
+                  _ <- stub.getBlockChunked(req).headL
+                } yield ()
+              }
+            }
+          }
+        }
+      }
+
+      "an error is thrown" should {
+        "release the download semaphore" in {
+          forAll(genHash) { (hash: ByteString) =>
+            @volatile var exploded = false
+            val bomb = new TestData {
+              val summaries = Map.empty
+              def blocks =
+                if (exploded) Map.empty
+                else {
+                  exploded = true; sys.error("Boom!")
+                }
+            }
+            runTestUnsafe(bomb) {
+              TestEnvironment(testDataRef, maxParallelBlockDownloads = 1).use { stub =>
+                val req = GetBlockChunkedRequest(blockHash = hash)
+                for {
+                  r1 <- stub.getBlockChunked(req).toListL.attempt
+                  r2 <- stub.getBlockChunked(req).toListL.attempt
+                } yield {
+                  r1.isLeft shouldBe true
+                  r1.left.get match {
+                    case ex: io.grpc.StatusRuntimeException =>
+                      ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNKNOWN
+                    case ex =>
+                      fail(s"Unexpected error: $ex")
+                  }
+                  // If the semaphore wasn't freed this would time out.
+                  r2.isLeft shouldBe true
+                  r2.left.get match {
+                    case NotFound(msg) =>
+                      msg shouldBe s"Block ${Base16.encode(hash.toByteArray)} could not be found."
+                    case ex =>
+                      fail(s"Unexpected error: $ex")
+                  }
                 }
               }
             }
@@ -692,8 +803,8 @@ object GrpcGossipServiceSpec extends TestRuntime {
   }
 
   trait TestData {
-    val summaries: Map[ByteString, BlockSummary]
-    val blocks: Map[ByteString, Block]
+    def summaries: Map[ByteString, BlockSummary]
+    def blocks: Map[ByteString, Block]
   }
 
   object TestData {
@@ -718,7 +829,9 @@ object GrpcGossipServiceSpec extends TestRuntime {
     def apply(
         testData: AtomicReference[TestData],
         anonymous: Boolean = false,
-        clientAuth: ClientAuth = ClientAuth.REQUIRE
+        clientAuth: ClientAuth = ClientAuth.REQUIRE,
+        maxParallelBlockDownloads: Int = 100,
+        blockChunkConsumerTimeout: FiniteDuration = 10.seconds
     )(
         implicit
         oi: ObservableIterant[Task],
@@ -732,14 +845,13 @@ object GrpcGossipServiceSpec extends TestRuntime {
         port,
         services = List(
           (scheduler: Scheduler) =>
-            Task.delay {
-              val svc = GrpcGossipService.fromGossipService {
-                new GossipServiceServer[Task](
-                  getBlockSummary = hash => Task.now(testData.get.summaries.get(hash)),
-                  getBlock = hash => Task.now(testData.get.blocks.get(hash)),
-                  maxChunkSize = DefaultMaxChunkSize
-                )
-              }
+            GossipServiceServer[Task](
+              getBlockSummary = hash => Task.now(testData.get.summaries.get(hash)),
+              getBlock = hash => Task.now(testData.get.blocks.get(hash)),
+              maxChunkSize = DefaultMaxChunkSize,
+              maxParallelBlockDownloads = maxParallelBlockDownloads
+            ) map { gss =>
+              val svc = GrpcGossipService.fromGossipService(gss, blockChunkConsumerTimeout)
               GossipingGrpcMonix.bindService(svc, scheduler)
             }
         ),
