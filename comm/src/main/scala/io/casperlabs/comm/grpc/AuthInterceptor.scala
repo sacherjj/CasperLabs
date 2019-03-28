@@ -52,8 +52,11 @@ class AuthInterceptor() extends ServerInterceptor {
 
     ctx.fold(
       ex => {
+        val method = call.getMethodDescriptor.getFullMethodName
+        val source = Option(call.getAttributes.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR))
+          .fold("unknown address")(_.toString)
         Log[Id].warn(
-          s"Rejecting gRPC call with ${ex.getStatus.getCode}: ${ex.getStatus.getDescription}"
+          s"Rejecting gRPC call from $source to $method with ${ex.getStatus.getCode}: ${ex.getStatus.getDescription}"
         )
         call.close(ex.getStatus, headers)
         NoopListener
