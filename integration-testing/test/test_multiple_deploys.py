@@ -91,7 +91,5 @@ def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fi
                             4,
                             context.node_startup_timeout
                         )
-
-    for _volume in docker_client_fixture.volumes.list():
-        if _volume.name.startswith("casperlabs"):
-            _volume.remove(force=True)
+            for v in (volume_name1, volume_name2, volume_name3):
+                docker_client_fixture.volumes.get(v).remove(force=True)
