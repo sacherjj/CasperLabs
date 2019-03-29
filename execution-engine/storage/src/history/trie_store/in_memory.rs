@@ -101,7 +101,6 @@
 use super::*;
 use common::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::ops::DerefMut;
 use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -145,7 +144,7 @@ impl<'a> InMemoryReadTransaction<'a> {
 impl<'a> Transaction for InMemoryReadTransaction<'a> {
     type Error = Error;
 
-    type Handle = PhantomData<()>;
+    type Handle = ();
 
     fn commit(self) -> Result<(), Self::Error> {
         Ok(())
@@ -177,7 +176,7 @@ impl<'a> InMemoryReadWriteTransaction<'a> {
 impl<'a> Transaction for InMemoryReadWriteTransaction<'a> {
     type Error = Error;
 
-    type Handle = PhantomData<()>;
+    type Handle = ();
 
     fn commit(mut self) -> Result<(), Self::Error> {
         self.guard.deref_mut().extend(self.view);
@@ -224,7 +223,7 @@ impl InMemoryEnvironment {
 impl<'a> TransactionSource<'a> for InMemoryEnvironment {
     type Error = Error;
 
-    type Handle = PhantomData<()>;
+    type Handle = ();
 
     type ReadTransaction = InMemoryReadTransaction<'a>;
 
@@ -251,14 +250,14 @@ impl InMemoryTrieStore {
 impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for InMemoryTrieStore {
     type Error = Error;
 
-    type Handle = PhantomData<()>;
+    type Handle = ();
 
     fn get<T>(&self, txn: &T, key: &Blake2bHash) -> Result<Option<Trie<K, V>>, Self::Error>
     where
         T: Readable<Handle = Self::Handle>,
         Self::Error: From<T::Error>,
     {
-        match txn.read(PhantomData, &key.to_bytes())? {
+        match txn.read((), &key.to_bytes())? {
             None => Ok(None),
             Some(bytes) => {
                 let trie = deserialize(&bytes)?;
@@ -272,7 +271,7 @@ impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for InMemor
         T: Writable<Handle = Self::Handle>,
         Self::Error: From<T::Error>,
     {
-        txn.write(PhantomData, &key.to_bytes(), &value.to_bytes())
+        txn.write((), &key.to_bytes(), &value.to_bytes())
             .map_err(Into::into)
     }
 }
