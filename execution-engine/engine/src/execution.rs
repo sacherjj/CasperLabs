@@ -115,6 +115,35 @@ impl<'a> RuntimeContext<'a> {
         self.known_urefs.insert(key);
     }
 
+    // Validates whether keys used in the `value` are not forged.
+    fn validate_keys(&self, value: Value) -> Result<Value, Error> {
+        match value.clone() {
+            Value::Int32(_)
+            | Value::UInt128(_)
+            | Value::UInt256(_)
+            | Value::UInt512(_)
+            | Value::ByteArray(_)
+            | Value::ListInt32(_)
+            | Value::String(_)
+            | Value::ListString(_) => Ok(value),
+            Value::NamedKey(_, key) => self.validate_key(&key).map(|_| value),
+            Value::Account(account) => {
+                // This should never happen as accounts can't be created by contracts.
+                // I am putting this here for the sake of completness.
+                account
+                    .urefs_lookup()
+                    .values()
+                    .try_for_each(|key| self.validate_key(key))
+                    .map(|_| value)
+            }
+            Value::Contract(contract) => contract
+                .urefs_lookup()
+                .values()
+                .try_for_each(|key| self.validate_key(key))
+                .map(|_| value),
+        }
+    }
+
     fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
             Key::URef(id, access_right) => {
@@ -245,7 +274,9 @@ where
 
     fn value_from_mem(&mut self, value_ptr: u32, value_size: u32) -> Result<Value, Error> {
         let bytes = self.memory.get(value_ptr, value_size as usize)?;
-        deserialize(&bytes).map_err(Into::into)
+        deserialize(&bytes)
+            .map_err(Into::into)
+            .and_then(|v| self.context.validate_keys(v))
     }
 
     fn string_from_mem(&mut self, ptr: u32, size: u32) -> Result<String, Trap> {
