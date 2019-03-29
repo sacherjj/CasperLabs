@@ -39,6 +39,41 @@ object DagOperations {
     * usage of IndexedSeq) and this is used to refer to that block in the result.
     * A block B is an ancestor of a starting block with index i if the BitSet for
     * B contains i.
+    * Example:
+    * The DAG looks like:
+    *         b6   b7
+    *        |  \ / |
+    *        b4  b5 |
+    *          \ |  |
+    *            b3 |
+    *            |  |
+    *           b1  b2
+    *            |  /
+    *          genesis
+    *
+    * Calling `uncommonAncestors(Vector(b6, b7), dag)` returns the following map:
+    * Map(
+    *   b6 -> BitSet(0),
+    *   b4 -> BitSet(0),
+    *   b7 -> BitSet(1),
+    *   b2 -> BitSet(1)
+    * )
+    * This is because in the input the index of b6 is 0 and the index of b7 is 1.
+    * Moreover, we can see from the DAG that b4 is an ancestor of b6, but not of b7,
+    * while b2 is an ancestor of b7, but not of b6. b5 (and any of its ancestors) is
+    * not included in the map because it is common to both b6 and b7.
+    *
+    * `uncommonAncestors(Vector(b2, b4, b5), dag)` returns the following map:
+    * Map(
+    *   b2 -> BitSet(0),
+    *   b4 -> Bitset(1),
+    *   b5 -> BitSet(2),
+    *   b3 -> BitSet(1, 2),
+    *   b1 -> BitSet(1, 2)
+    * )
+    * This is because in the input the index of b2 is 0, the index of b4 is 1 and
+    * the index of b5 is 2. Blocks b1 and b3 are ancestors of b4 and b5, but not b2.
+    * Genesis is not included because it is a common ancestor of all three input blocks.
     * @param blocks indexed sequence of blocks to determine uncommon ancestors of
     * @param dag the DAG
     * @param topoSort topological sort of the DAG, ensures ancestor computation is
