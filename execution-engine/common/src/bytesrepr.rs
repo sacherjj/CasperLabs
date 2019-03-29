@@ -31,7 +31,11 @@ pub enum Error {
 
     #[fail(display = "Deserialization error: left-over bytes")]
     LeftOverBytes,
+
+    #[fail(display = "Serialization error: out of memory")]
+    OutOfMemoryError,
 }
+
 impl HostError for Error {}
 
 pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {
@@ -133,6 +137,10 @@ impl FromBytes for Vec<u8> {
 impl ToBytes for Vec<u8> {
     type Error = Error;
     fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+        // Return error if size of vector would exceed length of serialized data
+        if self.len() >= u32::max_value() as usize - U32_SIZE {
+            return Err(Error::OutOfMemoryError);
+        }
         let size = self.len() as u32;
         let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize);
         result.extend(size.to_bytes()?);
@@ -192,6 +200,10 @@ impl<T: FromBytes> FromBytes for Option<T> {
 impl ToBytes for Vec<i32> {
     type Error = Error;
     fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+        // Return error if size of vector would exceed length of serialized data
+        if self.len() * I32_SIZE >= u32::max_value() as usize - U32_SIZE {
+            return Err(Error::OutOfMemoryError);
+        }
         let size = self.len() as u32;
         let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + (I32_SIZE * size as usize));
         result.extend(size.to_bytes()?);
@@ -222,8 +234,19 @@ impl FromBytes for Vec<Vec<u8>> {
 impl ToBytes for Vec<Vec<u8>> {
     type Error = Error;
     fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+        // Calculate total length of all vectors
+        let total_length: usize = self.iter().map(Vec::len).sum();
+        // It could be either length of vector which serialized would exceed
+        // the maximum size of vector (i.e. vector of vectors of size 1),
+        // or the total length of all vectors (i.e. vector of size 1 which olds
+        // vector of size 2^32-1)
+        if self.len() >= u32::max_value() as usize - U32_SIZE
+            || total_length >= u32::max_value() as usize - U32_SIZE
+        {
+            return Err(Error::OutOfMemoryError);
+        }
         let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize);
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize + total_length);
         result.extend_from_slice(&size.to_bytes()?);
         for n in 0..size {
             result.extend_from_slice(&self[n as usize].to_bytes()?);
@@ -406,6 +429,9 @@ where
 impl ToBytes for str {
     type Error = Error;
     fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+        if self.len() >= u32::max_value() as usize - U32_SIZE {
+            return Err(Error::OutOfMemoryError);
+        }
         let bytes = self.as_bytes();
         let size = self.len();
         let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size);
