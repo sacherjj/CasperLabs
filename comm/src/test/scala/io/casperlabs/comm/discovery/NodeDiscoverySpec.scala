@@ -40,7 +40,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
 
   val genFullyConnectedPeers: Gen[Map[PeerNode, List[PeerNode]]] =
     for {
-      n     <- Gen.choose(4, 4)
+      n     <- Gen.choose(4, 10)
       peers <- Gen.listOfN(n, genPeerNode)
     } yield
       peers.map { peer =>
