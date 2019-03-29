@@ -1,8 +1,11 @@
+use common::bytesrepr::Error as BytesReprError;
 use common::key::Key;
-use execution::Executor;
+use execution::{Error as ExecutionError, Executor};
+use failure::Fail;
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
+use storage::gs::error::GlobalStateError;
 use storage::gs::ExecutionEffect;
 use storage::history::*;
 use storage::transform::Transform;
@@ -44,12 +47,20 @@ impl ExecutionResult {
     }
 }
 
-#[derive(Debug)]
+#[derive(Fail, Debug)]
 pub enum Error {
+    #[fail(display = "{}", _0)]
     PreprocessingError(String),
+    #[fail(display = "Execution error")]
     ExecError(::execution::Error),
+    #[fail(display = "Storage error")]
     StorageError(storage::error::Error),
+    #[fail(display = "Unreachable")]
     Unreachable,
+    #[fail(display = "{}", _0)]
+    BytesReprError(BytesReprError),
+    #[fail(display = "{}", _0)]
+    GlobalStateError(GlobalStateError),
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -96,11 +107,21 @@ impl From<!> for Error {
     }
 }
 
+impl From<BytesReprError> for Error {
+    fn from(error: BytesReprError) -> Self {
+        Error::BytesReprError(error)
+    }
+}
+impl From<GlobalStateError> for Error {
+    fn from(error: GlobalStateError) -> Self {
+        Error::GlobalStateError(error)
+    }
+}
+
 impl<H> EngineState<H>
 where
     H: History,
-    Error: From<H::Error>,
-    H::Error: Into<::execution::Error>,
+    H::Error: Into<ExecutionError>,
 {
     pub fn new(state: H) -> EngineState<H> {
         EngineState {
@@ -113,7 +134,7 @@ where
         &self,
         hash: Blake2bHash,
     ) -> Result<Option<TrackingCopy<H::Reader>>, Error> {
-        match self.state.lock().checkout(hash)? {
+        match self.state.lock().checkout(hash).map_err(Into::into)? {
             Some(tc) => Ok(Some(TrackingCopy::new(tc))),
             None => Ok(None),
         }

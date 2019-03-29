@@ -43,57 +43,58 @@ const U512_ID: u8 = 10;
 use self::Value::*;
 
 impl ToBytes for Value {
-    fn to_bytes(&self) -> Vec<u8> {
+    type Error = Error;
+    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
         match self {
             Int32(i) => {
                 let mut result = Vec::with_capacity(5);
                 result.push(INT32_ID);
-                result.append(&mut i.to_bytes());
-                result
+                result.append(&mut i.to_bytes()?);
+                Ok(result)
             }
             UInt128(u) => {
                 let mut result = Vec::with_capacity(1 + 16);
                 result.push(U128_ID);
-                result.append(&mut u.to_bytes());
-                result
+                result.append(&mut u.to_bytes()?);
+                Ok(result)
             }
             UInt256(u) => {
                 let mut result = Vec::with_capacity(1 + 32);
                 result.push(U256_ID);
-                result.append(&mut u.to_bytes());
-                result
+                result.append(&mut u.to_bytes()?);
+                Ok(result)
             }
             UInt512(u) => {
                 let mut result = Vec::with_capacity(1 + 64);
                 result.push(U512_ID);
-                result.append(&mut u.to_bytes());
-                result
+                result.append(&mut u.to_bytes()?);
+                Ok(result)
             }
             ByteArray(arr) => {
                 let mut result = Vec::with_capacity(5 + arr.len());
                 result.push(BYTEARRAY_ID);
-                result.append(&mut arr.to_bytes());
-                result
+                result.append(&mut arr.to_bytes()?);
+                Ok(result)
             }
             ListInt32(arr) => {
                 let mut result = Vec::with_capacity(5 + 4 * arr.len());
                 result.push(LISTINT32_ID);
-                result.append(&mut arr.to_bytes());
-                result
+                result.append(&mut arr.to_bytes()?);
+                Ok(result)
             }
             String(s) => {
                 let mut result = Vec::with_capacity(5 + s.len());
                 result.push(STRING_ID);
-                result.append(&mut s.to_bytes());
-                result
+                result.append(&mut s.to_bytes()?);
+                Ok(result)
             }
             Account(a) => {
                 let mut result = Vec::new();
                 result.push(ACCT_ID);
-                result.append(&mut a.to_bytes());
-                result
+                result.append(&mut a.to_bytes()?);
+                Ok(result)
             }
-            Contract(c) => iter::once(CONTRACT_ID).chain(c.to_bytes()).collect(),
+            Contract(c) => Ok(iter::once(CONTRACT_ID).chain(c.to_bytes()?).collect()),
             NamedKey(n, k) => {
                 let size: usize = 1 + //size for ID
                   4 +                 //size for length of String
@@ -101,15 +102,15 @@ impl ToBytes for Value {
                   UREF_SIZE; //size of urefs
                 let mut result = Vec::with_capacity(size);
                 result.push(NAMEDKEY_ID);
-                result.append(&mut n.to_bytes());
-                result.append(&mut k.to_bytes());
-                result
+                result.append(&mut n.to_bytes()?);
+                result.append(&mut k.to_bytes()?);
+                Ok(result)
             }
             ListString(arr) => {
                 let mut result = Vec::with_capacity(5 + arr.len());
                 result.push(LISTSTRING_ID);
-                result.append(&mut arr.to_bytes());
-                result
+                result.append(&mut arr.to_bytes()?);
+                Ok(result)
             }
         }
     }

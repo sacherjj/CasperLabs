@@ -42,12 +42,13 @@ impl Account {
 }
 
 impl ToBytes for Account {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::new();
-        result.extend(&self.public_key.to_bytes());
-        result.append(&mut self.nonce.to_bytes());
-        result.append(&mut self.known_urefs.to_bytes());
-        result
+    type Error = Error;
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result: Vec<u8> = Vec::new();
+        result.extend(&self.public_key.to_bytes()?);
+        result.append(&mut self.nonce.to_bytes()?);
+        result.append(&mut self.known_urefs.to_bytes()?);
+        Ok(result)
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::bytesrepr::ToBytes;
 use alloc::alloc::{Alloc, Global};
 use alloc::vec::Vec;
+use core::fmt::Debug;
 
 #[allow(clippy::zero_ptr)]
 pub fn alloc_bytes(n: usize) -> *mut u8 {
@@ -16,14 +17,17 @@ pub fn alloc_bytes(n: usize) -> *mut u8 {
 // &str, but the compiler complains if I try to use the polymorphic
 // version with T = str.
 pub fn str_ref_to_ptr(t: &str) -> (*const u8, usize, Vec<u8>) {
-    let bytes = t.to_bytes();
+    let bytes = t.to_bytes().expect("Unable to serialize string");
     let ptr = bytes.as_ptr();
     let size = bytes.len();
     (ptr, size, bytes)
 }
 
-pub fn to_ptr<T: ToBytes>(t: &T) -> (*const u8, usize, Vec<u8>) {
-    let bytes = t.to_bytes();
+pub fn to_ptr<T: ToBytes>(t: &T) -> (*const u8, usize, Vec<u8>)
+where
+    T::Error: Debug,
+{
+    let bytes = t.to_bytes().expect("Unable to serialize data");
     let ptr = bytes.as_ptr();
     let size = bytes.len();
     (ptr, size, bytes)

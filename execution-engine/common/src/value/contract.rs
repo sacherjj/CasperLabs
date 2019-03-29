@@ -33,16 +33,17 @@ impl Contract {
 }
 
 impl ToBytes for Contract {
-    fn to_bytes(&self) -> Vec<u8> {
+    type Error = Error;
+    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
         let size: usize = 4 +                           //size for length of bytes
                     self.bytes.len() +                  //size for elements of bytes
                     4 +                                 //size for length of known_urefs
                     UREF_SIZE * self.known_urefs.len(); //size for known_urefs elements
 
         let mut result = Vec::with_capacity(size);
-        result.append(&mut self.bytes.to_bytes());
-        result.append(&mut self.known_urefs.to_bytes());
-        result
+        result.append(&mut self.bytes.to_bytes()?);
+        result.append(&mut self.known_urefs.to_bytes()?);
+        Ok(result)
     }
 }
 

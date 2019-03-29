@@ -1,5 +1,6 @@
 extern crate common;
 extern crate execution_engine;
+extern crate failure;
 extern crate parity_wasm;
 extern crate shared;
 extern crate storage;
@@ -12,6 +13,8 @@ use common::key::{AccessRights, Key, UREF_SIZE};
 use common::value::{self, Value};
 use execution_engine::execution::{Runtime, RuntimeContext};
 use execution_engine::trackingcopy::TrackingCopy;
+use failure::Error;
+use failure::Fail;
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
 use shared::newtypes::Blake2bHash;
@@ -120,11 +123,14 @@ impl WasmMemoryManager {
         }
     }
 
-    pub fn write<T: ToBytes>(&mut self, t: T) -> Result<(u32, usize), wasmi::Error> {
-        self.write_raw(t.to_bytes())
+    pub fn write<T: ToBytes>(&mut self, t: T) -> Result<(u32, usize), Error>
+    where
+        T::Error: Fail + Send,
+    {
+        self.write_raw(t.to_bytes()?)
     }
 
-    pub fn write_raw(&mut self, bytes: Vec<u8>) -> Result<(u32, usize), wasmi::Error> {
+    pub fn write_raw(&mut self, bytes: Vec<u8>) -> Result<(u32, usize), Error> {
         let ptr = self.offset as u32;
 
         match self.memory.set(ptr, &bytes) {
@@ -134,7 +140,7 @@ impl WasmMemoryManager {
                 Ok((ptr, len))
             }
 
-            Err(e) => Err(e),
+            Err(e) => Err(e.into()),
         }
     }
 

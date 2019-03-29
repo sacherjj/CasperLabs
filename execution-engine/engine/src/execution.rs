@@ -5,6 +5,7 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::{Account, Value};
+use storage::gs::error::GlobalStateError;
 use storage::gs::{DbReader, ExecutionEffect};
 use storage::transform::TypeMismatch;
 use trackingcopy::{AddResult, TrackingCopy};
@@ -42,6 +43,7 @@ pub enum Error {
     Ret(Vec<Key>),
     Rng(rand::Error),
     Unreachable,
+    GlobalStateError(GlobalStateError),
 }
 
 impl fmt::Display for Error {
@@ -77,6 +79,12 @@ impl From<BytesReprError> for Error {
 impl From<!> for Error {
     fn from(_err: !) -> Error {
         Error::Unreachable
+    }
+}
+
+impl From<GlobalStateError> for Error {
+    fn from(err: GlobalStateError) -> Error {
+        Error::GlobalStateError(err)
     }
 }
 
@@ -312,7 +320,7 @@ where
             .uref_lookup
             .get(&name)
             .ok_or_else(|| Error::URefNotFound(name))?;
-        let uref_bytes = uref.to_bytes();
+        let uref_bytes = uref.to_bytes()?;
 
         self.memory
             .set(dest_ptr, &uref_bytes)
@@ -455,17 +463,17 @@ where
             .iter()
             .try_for_each(|(_, v)| self.context.validate_key(&v))?;
         let contract = common::value::Contract::new(fn_bytes, urefs);
-        let new_hash = self.new_function_address();
+        let new_hash = self.new_function_address()?;
         self.state
             .write(Key::Hash(new_hash), Value::Contract(contract));
         self.function_address(new_hash, hash_ptr)
     }
 
-    fn new_function_address(&mut self) -> [u8; 32] {
+    fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
         pre_hash_bytes.extend_from_slice(self.context.account.pub_key());
-        pre_hash_bytes.append(&mut self.context.account.nonce().to_bytes());
-        pre_hash_bytes.append(&mut self.fn_store_id.to_bytes());
+        pre_hash_bytes.append(&mut self.context.account.nonce().to_bytes()?);
+        pre_hash_bytes.append(&mut self.fn_store_id.to_bytes()?);
 
         self.fn_store_id += 1;
 
@@ -473,7 +481,7 @@ where
         hasher.input(&pre_hash_bytes);
         let mut hash_bytes = [0; 32];
         hasher.variable_result(|hash| hash_bytes.clone_from_slice(hash));
-        hash_bytes
+        Ok(hash_bytes)
     }
 
     fn function_address(&mut self, hash_bytes: [u8; 32], dest_ptr: u32) -> Result<(), Trap> {
@@ -548,7 +556,7 @@ where
     pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
         let value_bytes = {
             let value = self.value_from_key(key_ptr, key_size)?;
-            value.to_bytes()
+            value.to_bytes()?
         };
         self.host_buf = value_bytes;
         Ok(self.host_buf.len())
@@ -560,7 +568,7 @@ where
         let key = Key::URef(key, AccessRights::ReadWrite);
         self.context.insert_uref(key);
         self.memory
-            .set(key_ptr, &key.to_bytes())
+            .set(key_ptr, &key.to_bytes()?)
             .map_err(|e| Error::Interpreter(e).into())
     }
 }

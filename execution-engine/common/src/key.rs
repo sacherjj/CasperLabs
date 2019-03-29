@@ -209,7 +209,8 @@ const ACCESS_RIGHTS_SIZE: usize = 1; // u8 used to tag AccessRights
 pub const UREF_SIZE: usize = U32_SIZE + N32 + KEY_ID_SIZE + ACCESS_RIGHTS_SIZE;
 
 impl ToBytes for AccessRights {
-    fn to_bytes(&self) -> Vec<u8> {
+    type Error = Error;
+    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
         match self {
             AccessRights::Eqv => 1u8.to_bytes(),
             AccessRights::Read => 2u8.to_bytes(),
@@ -240,27 +241,28 @@ impl FromBytes for AccessRights {
 }
 
 impl ToBytes for Key {
-    fn to_bytes(&self) -> Vec<u8> {
+    type Error = Error;
+    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
         match self {
             Account(addr) => {
                 let mut result = Vec::with_capacity(25);
                 result.push(ACCOUNT_ID);
-                result.append(&mut (20u32).to_bytes());
+                result.append(&mut (20u32).to_bytes()?);
                 result.extend(addr);
-                result
+                Ok(result)
             }
             Hash(hash) => {
                 let mut result = Vec::with_capacity(37);
                 result.push(HASH_ID);
-                result.append(&mut hash.to_bytes());
-                result
+                result.append(&mut hash.to_bytes()?);
+                Ok(result)
             }
             URef(rf, access_rights) => {
                 let mut result = Vec::with_capacity(UREF_SIZE);
                 result.push(UREF_ID);
-                result.append(&mut rf.to_bytes());
-                result.append(&mut access_rights.to_bytes());
-                result
+                result.append(&mut rf.to_bytes()?);
+                result.append(&mut access_rights.to_bytes()?);
+                Ok(result)
             }
         }
     }
@@ -307,12 +309,19 @@ impl FromBytes for Vec<Key> {
     }
 }
 impl ToBytes for Vec<Key> {
-    fn to_bytes(&self) -> Vec<u8> {
+    type Error = Error;
+    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
         let size = self.len() as u32;
         let mut result: Vec<u8> = Vec::with_capacity(4 + (size as usize) * UREF_SIZE);
-        result.extend(size.to_bytes());
-        result.extend(self.iter().flat_map(ToBytes::to_bytes));
-        result
+        result.extend(size.to_bytes()?);
+        result.extend(
+            self.iter()
+                .map(ToBytes::to_bytes)
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .flatten(),
+        );
+        Ok(result)
     }
 }
 
