@@ -459,6 +459,10 @@ lazy val client = (project in file("client"))
   )
   .dependsOn(crypto, shared, models)
 
+/**
+  * This project contains Gatling test suits which perform load testing.
+  * It could be run with `sbt "project gatling" gatling:test`.
+  */
 lazy val gatling = (project in file("gatling"))
   .enablePlugins(GatlingPlugin)
   .settings(
