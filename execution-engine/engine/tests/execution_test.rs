@@ -26,16 +26,15 @@ use wasmi::memory_units::Pages;
 use wasmi::{MemoryInstance, MemoryRef};
 
 struct MockEnv {
-    key: Key,
-    account: value::Account,
-    uref_lookup: BTreeMap<String, Key>,
-    gas_limit: u64,
-    memory: MemoryRef,
+    pub key: Key,
+    pub account: value::Account,
+    pub uref_lookup: BTreeMap<String, Key>,
+    pub gas_limit: u64,
+    pub memory: MemoryRef,
 }
 
 impl MockEnv {
-    pub fn new(key: Key, account: value::Account, gas_limit: u64) -> Self {
-        let uref_lookup = mock_uref_lookup();
+    pub fn new(key: Key, uref_lookup: BTreeMap<String, Key>, account: value::Account, gas_limit: u64) -> Self {
         let memory = MemoryInstance::alloc(Pages(17), Some(Pages(MAX_MEM_PAGES as usize)))
             .expect("Mocked memory should be able to be created.");
 
@@ -195,10 +194,6 @@ fn mock_context<'a>(
     RuntimeContext::new(uref_lookup, account, base_key)
 }
 
-fn mock_uref_lookup() -> BTreeMap<String, Key> {
-    BTreeMap::new()
-}
-
 fn mock_module() -> Module {
     module().build()
 }
@@ -250,7 +245,8 @@ impl Default for TestFixture {
         let nonce: u64 = 1;
         let (key, account) = mock_account(addr);
         let tc = Rc::new(RefCell::new(mock_tc(key, &account)));
-        let env = MockEnv::new(key, account, 0);
+        let urefs: BTreeMap<String, Key> = BTreeMap::new();
+        let env = MockEnv::new(key, urefs, account, 0);
         let memory = env.memory_manager();
         TestFixture::new(addr, timestamp, nonce, env, memory, tc)
     }
