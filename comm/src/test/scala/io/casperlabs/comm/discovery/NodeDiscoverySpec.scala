@@ -60,7 +60,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
     for {
       n      <- Gen.choose(4, 10)
       peers  <- Gen.listOfN(n, genPeerNode)
-      target <- Gen.pick(1, peers).map(_.head)
+      target <- Gen.oneOf(peers)
       ordered = peers
         .sorted(
           (x: PeerNode, y: PeerNode) =>
