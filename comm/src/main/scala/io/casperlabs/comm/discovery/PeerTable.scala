@@ -36,6 +36,29 @@ object PeerTable {
     Seq.fill(32)(2) ++
     Seq.fill(64)(1) ++
     Seq.fill(128)(0)).toArray
+
+  /**
+    * Returns the length of the longest common prefix in bits between
+    * the two sequences `a` and `b`. As in Ethereum's implementation,
+    * "closer" nodes have higher distance values.
+    *
+    * @return `Some(Int)` if `a` and `b` are comparable in this table,
+    * `None` otherwise.
+    */
+  private[discovery] def longestCommonBitPrefix(a: NodeIdentifier, b: NodeIdentifier): Int = {
+    @tailrec
+    def highBit(idx: Int): Int =
+      if (idx == a.key.size) 8 * a.key.size
+      else
+        a.key(idx) ^ b.key(idx) match {
+          case 0 => highBit(idx + 1)
+          case n => 8 * idx + PeerTable.dlut(n & 0xff)
+        }
+    highBit(0)
+  }
+
+  private[discovery] def xorDistance(a: NodeIdentifier, b: NodeIdentifier): BigInt =
+    BigInt(a.key.zip(b.key).map { case (l, r) => (l ^ r).toByte }.toArray).abs
 }
 
 /** `PeerTable` implements the routing table used in the Kademlia
@@ -49,32 +72,13 @@ final class PeerTable[F[_]: Monad](
 ) {
   private[discovery] val width = local.key.size // in bytes
 
-  /** Computes Kademlia XOR distance.
-    *
-    * Returns the length of the longest common prefix in bits between
-    * the two sequences `a` and `b`. As in Ethereum's implementation,
-    * "closer" nodes have higher distance values.
-    *
-    * @return `Some(Int)` if `a` and `b` are comparable in this table,
-    * `None` otherwise.
-    */
-  private[discovery] def distance(a: NodeIdentifier, b: NodeIdentifier): Int = {
-    @tailrec
-    def highBit(idx: Int): Int =
-      if (idx == width) 8 * width
-      else
-        a.key(idx) ^ b.key(idx) match {
-          case 0 => highBit(idx + 1)
-          case n => 8 * idx + PeerTable.dlut(n & 0xff)
-        }
-    highBit(0)
-  }
-
-  private[discovery] def distance(other: PeerNode): Int       = distance(local, other.id)
-  private[discovery] def distance(other: NodeIdentifier): Int = distance(local, other)
+  private[discovery] def longestCommonBitPrefix(other: PeerNode): Int =
+    PeerTable.longestCommonBitPrefix(local, other.id)
+  private[discovery] def longestCommonBitPrefix(other: NodeIdentifier): Int =
+    PeerTable.longestCommonBitPrefix(local, other)
 
   def updateLastSeen(peer: PeerNode)(implicit K: KademliaRPC[F]): F[Unit] = {
-    val index = distance(peer)
+    val index = longestCommonBitPrefix(peer)
     for {
       maybeCandidate <- tableRef.modify { table =>
                          val bucket = table(index)
@@ -122,23 +126,25 @@ final class PeerTable[F[_]: Monad](
       val flattenedArray = table.flatten.filterNot(_.node.key == toLookup.key).toArray
       Sorting.quickSort(flattenedArray)(
         (x: Entry, y: Entry) =>
-          (distance(toLookup, x.node.id), distance(toLookup, y.node.id)) match {
-            case (d0, d1) => Ordering[Int].compare(d0, d1)
-          }
+          Ordering[BigInt].compare(
+            PeerTable.xorDistance(toLookup, x.node.id),
+            PeerTable.xorDistance(toLookup, y.node.id)
+          )
       )
       flattenedArray.take(k).toList.map(_.node)
     }
 
   def find(toFind: NodeIdentifier): F[Option[PeerNode]] =
-    tableRef.get.map(_(distance(toFind)).find(_.node.id == toFind).map(_.node))
+    tableRef.get.map(_(longestCommonBitPrefix(toFind)).find(_.node.id == toFind).map(_.node))
 
   def peers: F[Seq[PeerNode]] = tableRef.get.map(_.flatMap(_.map(_.node)))
 
-  def sparseness(limit: Int = 255): F[Seq[Int]] =
+  def sparseness: F[Seq[Int]] =
     tableRef.get.map(
-      _.take(limit + 1).zipWithIndex
-        .map { case (l, i) => (l.size, i) }
-        .sortWith(_._1 < _._1)
+      _.zipWithIndex
+        .sortWith {
+          case ((bucketA, _), (bucketB, _)) => bucketA.size < bucketB.size
+        }
         .map(_._2)
     )
 }

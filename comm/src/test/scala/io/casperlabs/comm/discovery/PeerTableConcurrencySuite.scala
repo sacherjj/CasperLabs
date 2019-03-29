@@ -14,8 +14,8 @@ import scala.util.Random
 
 class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
   private trait KademliaMock extends KademliaRPC[Task] {
-    override def lookup(id: NodeIdentifier, peer: PeerNode): Task[Seq[PeerNode]] =
-      Task.now(Seq.empty)
+    override def lookup(id: NodeIdentifier, peer: PeerNode): Task[Option[Seq[PeerNode]]] =
+      Task.now(None)
     override def receive(
         pingHandler: PeerNode => Task[Unit],
         lookupHandler: (PeerNode, NodeIdentifier) => Task[Seq[PeerNode]]
