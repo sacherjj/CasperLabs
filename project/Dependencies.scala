@@ -11,6 +11,7 @@ object Dependencies {
   val catsMtlVersion = "0.4.0"
 
   // format: off
+  val julToSlf4j             = "org.slf4j"                  % "jul-to-slf4j"                    % "1.7.25"
   val bitcoinjCore           = "org.bitcoinj"               % "bitcoinj-core"                   % "0.14.6"
   val bouncyCastle           = "org.bouncycastle"           % "bcprov-jdk15on"                  % "1.60"
   val catsCore               = "org.typelevel"              %% "cats-core"                      % catsVersion
@@ -105,7 +106,7 @@ object Dependencies {
 
   private val testing = Seq(scalactic, scalatest, scalacheck, scalacheckShapeless)
 
-  private val logging = Seq(scalaLogging, logbackClassic, janino)
+  private val logging = Seq(scalaLogging, logbackClassic, janino, julToSlf4j)
 
   private val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)
