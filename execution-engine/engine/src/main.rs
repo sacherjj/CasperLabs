@@ -137,6 +137,10 @@ fn main() {
                     Ok(CommitResult::TypeMismatch(type_mismatch)) => {
                         println!("Result for file {}: {:?}", wasm_bytes.path, type_mismatch)
                     }
+                    Ok(CommitResult::Overflow) => println!(
+                        "Result for file {}: overflow during addition.",
+                        wasm_bytes.path
+                    ),
                     Ok(CommitResult::Success(new_root_hash)) => {
                         println!(
                             "Result for file {}: Success! New post state hash: {:?}",

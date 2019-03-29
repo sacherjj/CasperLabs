@@ -30,6 +30,7 @@ pub enum Error {
     BytesRepr(BytesReprError),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
+    Overflow,
     InvalidAccess { required: AccessRights },
     ForgedReference(Key),
     NoImportedMemory,
@@ -534,6 +535,7 @@ where
                 Ok(AddResult::TypeMismatch(type_mismatch)) => {
                     Err(Error::TypeMismatch(type_mismatch).into())
                 }
+                Ok(AddResult::Overflow) => Err(Error::Overflow.into()),
             }
         } else {
             Err(Error::InvalidAccess {
