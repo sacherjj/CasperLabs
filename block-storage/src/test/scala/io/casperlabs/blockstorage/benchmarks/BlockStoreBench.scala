@@ -62,6 +62,14 @@ abstract class BlockStoreBench {
   @Benchmark
   def checkpoint(): Unit =
     blockStore.checkpoint().runSyncUnsafe()
+
+  @Benchmark
+  def containsRandom(): Unit =
+    blockStore.contains(randomHash).runSyncUnsafe()
+
+  @Benchmark
+  def containsExistent(): Unit =
+    blockStore.contains(randomInserted._1).runSyncUnsafe()
 }
 
 class InMemBench extends BlockStoreBench {
