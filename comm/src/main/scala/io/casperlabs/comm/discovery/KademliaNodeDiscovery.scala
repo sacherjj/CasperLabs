@@ -78,7 +78,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
       _ <- findMorePeers()
     } yield ()
 
-    initRPC *> findNew.forever
+    initRPC *> lookup(id) *> findNew.forever
   }
 
   private def findMorePeers(
