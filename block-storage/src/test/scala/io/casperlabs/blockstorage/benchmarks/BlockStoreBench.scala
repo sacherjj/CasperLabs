@@ -44,31 +44,31 @@ abstract class BlockStoreBench {
     blockStore.put(blocksIter.next()).runSyncUnsafe()
 
   @Benchmark
-  def getRandom(): Unit =
+  def getRandom() =
     blockStore.get(randomHash).runSyncUnsafe()
 
   @Benchmark
-  def getExistent(): Unit =
+  def getExistent() =
     blockStore.get(randomInserted._1).runSyncUnsafe()
 
   @Benchmark
-  def findRandom(): Unit =
+  def findRandom() =
     blockStore.find(_ == randomHash).runSyncUnsafe()
 
   @Benchmark
-  def findExistent(): Unit =
+  def findExistent() =
     blockStore.find(_ == randomInserted._1).runSyncUnsafe()
 
   @Benchmark
-  def checkpoint(): Unit =
+  def checkpoint() =
     blockStore.checkpoint().runSyncUnsafe()
 
   @Benchmark
-  def containsRandom(): Unit =
+  def containsRandom() =
     blockStore.contains(randomHash).runSyncUnsafe()
 
   @Benchmark
-  def containsExistent(): Unit =
+  def containsExistent() =
     blockStore.contains(randomInserted._1).runSyncUnsafe()
 }
 
