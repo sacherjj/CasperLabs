@@ -2,6 +2,9 @@ package io.casperlabs.blockstorage.benchmarks
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.casper.protocol.{BlockMessage, Header, Justification}
+import io.casperlabs.ipc.Key.KeyInstance
+import io.casperlabs.ipc.Transform.TransformInstance
+import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.{metrics, shared}
 import io.casperlabs.shared.Log
@@ -61,8 +64,22 @@ object BlockStoreBenchSuite {
       .withSender(validator)
   }
 
+  def randomKey: Key = Key(
+    KeyInstance.Hash(KeyHash(randomHash))
+  )
+
+  def randomTransform: Transform = Transform(
+    TransformInstance.AddI32(TransformAddInt32(Random.nextInt()))
+  )
+
+  def randomTransformEntry: TransformEntry =
+    TransformEntry(Some(randomKey), Some(randomTransform))
+
   def randomBlockMsgWithTransform: BlockMsgWithTransform =
-    BlockMsgWithTransform(Some(randomBlockMessage), Seq.empty)
+    BlockMsgWithTransform(
+      Some(randomBlockMessage),
+      (0 to Random.nextInt(25)).map(_ => randomTransformEntry)
+    )
 
   //This is needed because the alternative `Iterator.continually(elems).flatten`
   //is not thread-safe, so it can throw OOB exception during the execution
