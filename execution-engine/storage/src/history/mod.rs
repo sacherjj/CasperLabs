@@ -13,6 +13,7 @@ pub enum CommitResult {
     Success(Blake2bHash),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
+    Overflow,
 }
 
 pub trait History {

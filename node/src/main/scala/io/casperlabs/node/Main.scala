@@ -41,7 +41,7 @@ object Main extends TaskApp {
   }
 
   private def updateLoggingProps(conf: Configuration): Task[Unit] = Task {
-    sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
+    java.util.logging.Logger.getLogger("io.grpc").setLevel(java.util.logging.Level.SEVERE)
   }
 
   private def mainProgram(command: Configuration.Command, conf: Configuration)(

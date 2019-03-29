@@ -43,6 +43,7 @@ object EffectsTestInstances {
       nodes
     }
     def discover: F[Unit]                                          = ???
+    def lookup(id: NodeIdentifier): F[Option[PeerNode]]            = ???
     def handleCommunications: Protocol => F[CommunicationResponse] = ???
   }
 

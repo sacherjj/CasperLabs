@@ -1,3 +1,5 @@
+mod uint;
+
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
@@ -20,18 +22,6 @@ fn parse_error<T>(message: String) -> Result<T, ParsingError> {
     Err(ParsingError(message))
 }
 
-/// Map a result into the expected error for this module, while also
-/// converting the type into a Value. Use case: parsing U128, U256,
-/// U512 from a string.
-fn to_value<T, E>(r: Result<T, E>) -> Result<common::value::Value, ParsingError>
-where
-    common::value::Value: From<T>,
-    E: std::fmt::Debug,
-{
-    r.map(common::value::Value::from)
-        .map_err(|e| ParsingError(format!("{:?}", e)))
-}
-
 impl TryFrom<&super::ipc::Transform> for transform::Transform {
     type Error = ParsingError;
     fn try_from(tr: &super::ipc::Transform) -> Result<transform::Transform, ParsingError> {
@@ -50,19 +40,22 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             Ok(transform::Transform::AddKeys(keys_map))
         } else if tr.has_add_i32() {
             Ok(transform::Transform::AddInt32(tr.get_add_i32().value))
+        } else if tr.has_add_big_int() {
+            let b = tr.get_add_big_int().get_value();
+            let v = b.try_into()?;
+            match v {
+                common::value::Value::UInt128(u) => Ok(u.into()),
+                common::value::Value::UInt256(u) => Ok(u.into()),
+                common::value::Value::UInt512(u) => Ok(u.into()),
+                other => parse_error(format!("Through some impossibility a RustBigInt was turned into a non-uint value type: ${:?}", other))
+            }
         } else if tr.has_write() {
             let v = tr.get_write().get_value();
             if v.has_integer() {
                 transform_write(common::value::Value::Int32(v.get_integer()))
             } else if v.has_big_int() {
                 let b = v.get_big_int();
-                let n = b.get_value();
-                let v = match b.get_bit_width() {
-                    128 => to_value(common::value::U128::from_dec_str(n)),
-                    256 => to_value(common::value::U256::from_dec_str(n)),
-                    512 => to_value(common::value::U512::from_dec_str(n)),
-                    other => parse_error(format!("BigInt bit width of {} is invalid", other)),
-                }?;
+                let v = b.try_into()?;
                 transform_write(v)
             } else if v.has_byte_arr() {
                 let v: Vec<u8> = Vec::from(v.get_byte_arr());
@@ -111,24 +104,9 @@ impl From<common::value::Value> for super::ipc::Value {
             common::value::Value::Int32(i) => {
                 tv.set_integer(i);
             }
-            common::value::Value::UInt128(u) => {
-                let mut b = super::ipc::RustBigInt::new();
-                b.set_value(format!("{}", u));
-                b.set_bit_width(128);
-                tv.set_big_int(b)
-            }
-            common::value::Value::UInt256(u) => {
-                let mut b = super::ipc::RustBigInt::new();
-                b.set_value(format!("{}", u));
-                b.set_bit_width(256);
-                tv.set_big_int(b)
-            }
-            common::value::Value::UInt512(u) => {
-                let mut b = super::ipc::RustBigInt::new();
-                b.set_value(format!("{}", u));
-                b.set_bit_width(512);
-                tv.set_big_int(b)
-            }
+            common::value::Value::UInt128(u) => tv.set_big_int(u.into()),
+            common::value::Value::UInt256(u) => tv.set_big_int(u.into()),
+            common::value::Value::UInt512(u) => tv.set_big_int(u.into()),
             common::value::Value::ByteArray(arr) => {
                 tv.set_byte_arr(arr);
             }
@@ -175,6 +153,12 @@ impl From<common::value::Value> for super::ipc::Value {
     }
 }
 
+fn add_big_int_transform<U: Into<super::ipc::RustBigInt>>(t: &mut super::ipc::Transform, u: U) {
+    let mut add = super::ipc::TransformAddBigInt::new();
+    add.set_value(u.into());
+    t.set_add_big_int(add);
+}
+
 impl From<transform::Transform> for super::ipc::Transform {
     fn from(tr: transform::Transform) -> Self {
         let mut t = super::ipc::Transform::new();
@@ -192,18 +176,35 @@ impl From<transform::Transform> for super::ipc::Transform {
                 add.set_value(i);
                 t.set_add_i32(add);
             }
+            transform::Transform::AddUInt128(u) => {
+                add_big_int_transform(&mut t, u);
+            }
+            transform::Transform::AddUInt256(u) => {
+                add_big_int_transform(&mut t, u);
+            }
+            transform::Transform::AddUInt512(u) => {
+                add_big_int_transform(&mut t, u);
+            }
             transform::Transform::AddKeys(keys_map) => {
                 let mut add = super::ipc::TransformAddKeys::new();
                 let keys = URefMap(keys_map).into();
                 add.set_value(protobuf::RepeatedField::from_vec(keys));
                 t.set_add_keys(add);
             }
-            transform::Transform::Failure(transform::TypeMismatch { expected, found }) => {
+            transform::Transform::Failure(transform::Error::TypeMismatch(
+                transform::TypeMismatch { expected, found },
+            )) => {
                 let mut fail = super::ipc::TransformFailure::new();
                 let mut typemismatch_err = super::ipc::TypeMismatch::new();
                 typemismatch_err.set_expected(expected.to_owned());
                 typemismatch_err.set_found(found.to_owned());
-                fail.set_error(typemismatch_err);
+                fail.set_type_mismatch(typemismatch_err);
+                t.set_failure(fail);
+            }
+            transform::Transform::Failure(transform::Error::Overflow) => {
+                let mut fail = super::ipc::TransformFailure::new();
+                let mut overflow_err = super::ipc::AdditionOverflow::new();
+                fail.set_overflow(overflow_err);
                 t.set_failure(fail);
             }
         };
@@ -453,6 +454,12 @@ where
             root.set_hash(prestate_hash.to_vec());
             let mut tmp_res = ipc::CommitResponse::new();
             tmp_res.set_missing_prestate(root);
+            tmp_res
+        }
+        Ok(CommitResult::Overflow) => {
+            let overflow = ipc::AdditionOverflow::new();
+            let mut tmp_res = ipc::CommitResponse::new();
+            tmp_res.set_overflow(overflow);
             tmp_res
         }
         Ok(CommitResult::Success(post_state_hash)) => {

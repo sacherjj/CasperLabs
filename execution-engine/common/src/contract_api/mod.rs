@@ -107,6 +107,10 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
     }
 }
 
+// TODO: fn_by_name, fn_bytes_by_name and ext_ffi::serialize_function should be removed.
+// Functions shouldn't be serialized and returned back to the contract because they're never used there.
+// Host should read the function pointer (and correct number of bytes) and persist it on the host side.
+
 /// Returns the serialized bytes of a function which is exported in the current module.
 /// Note that the function is wrapped up in a new module and re-exported under the name
 /// "call". `fn_bytes_by_name` is meant to be used when storing a contract on-chain at
@@ -120,18 +124,20 @@ pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
 /// computes gets the address from the host to produce a key where the contract is then
 /// stored in the global state. This key is returned.
 pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> ContractPointer {
-    let bytes = fn_bytes_by_name(name);
-    let fn_hash = {
-        let mut tmp = [0u8; 32];
-        unsafe {
-            ext_ffi::function_address(tmp.as_mut_ptr());
-        }
-        tmp
-    };
-    let key = Key::Hash(fn_hash);
-    let value = Value::Contract(Contract::new(bytes, known_urefs));
-    write_untyped(&key, &value);
-    ContractPointer::Hash(fn_hash)
+    let (fn_ptr, fn_size, _bytes1) = str_ref_to_ptr(name);
+    let (urefs_ptr, urefs_size, _bytes2) = to_ptr(&known_urefs);
+    let mut tmp = [0u8; 32];
+    let tmp_ptr = tmp.as_mut_ptr();
+    unsafe {
+        ext_ffi::store_function(fn_ptr, fn_size, urefs_ptr, urefs_size, tmp_ptr);
+    }
+    ContractPointer::Hash(tmp)
+}
+
+/// Finds function by the name and stores it at the unforgable name.
+pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: UPointer<Contract>) {
+    let contract = fn_by_name(name, known_urefs);
+    write(uref, contract);
 }
 
 /// Return the i-th argument passed to the host for the current module

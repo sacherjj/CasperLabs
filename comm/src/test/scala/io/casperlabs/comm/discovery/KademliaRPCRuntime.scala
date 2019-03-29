@@ -150,8 +150,8 @@ final class LookupHandler[F[_]: Monad: Timer](
   def handle(peer: PeerNode): (PeerNode, NodeIdentifier) => F[Seq[PeerNode]] =
     (p, a) =>
       for {
-        _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)
         _ <- receivedMessages.synchronized(receivedMessages += ((peer, (p, a)))).pure[F]
+        _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)
       } yield response
 }
 
