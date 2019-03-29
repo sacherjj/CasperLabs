@@ -88,7 +88,9 @@ object DagOperations {
         // so either the block should be one of the starting ones or we will have
         // already encountered the block's parent.
         val currSet = currMap(currBlock)
-        for {
+
+        // Compute inputs for the next iteration of the loop
+        val newInputs = for {
           // Look up the parents of the block
           currParents <- parents(currBlock)
 
@@ -124,12 +126,17 @@ object DagOperations {
               (map.updated(p, pSet), enq + p, newUnc)
           }
 
-          // Recursively call the function again (continuing the main loop), with the
-          // updated inputs. The current block is taken out of the ancestry map if it
-          // is a common ancestor because we are only interested in the common ancestors.
-          result <- if (isCommon(currSet)) loop(newMap - currBlock, newEnqueued, newUncommon)
-                   else loop(newMap, newEnqueued, newUncommon)
+          // The current block is taken out of the ancestry map if it is a
+          // common ancestor because we are only interested in the common ancestors.
+          result = if (isCommon(currSet)) (newMap - currBlock, newEnqueued, newUncommon)
+          else (newMap, newEnqueued, newUncommon)
         } yield result
+
+        // Recursively call the function again (continuing the main loop), with the
+        // updated inputs. This happens outside the for comprehension for stack safety.
+        newInputs.flatMap {
+          case (newMap, newEnqueued, newUncommon) => loop(newMap, newEnqueued, newUncommon)
+        }
       }
 
     val startingSet = HashSet(blocks: _*)
