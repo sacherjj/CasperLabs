@@ -65,8 +65,7 @@ class GrpcGossipServiceSpec
   )
 
   object GetBlockChunkedSpec extends WordSpecLike {
-    // Just want to test with random blocks; variety doesn't matter.
-    implicit val propCheckConfig = PropertyCheckConfiguration(minSuccessful = 1)
+    implicit val propCheckConfig = PropertyCheckConfiguration(minSuccessful = 3)
     implicit val patienceConfig  = PatienceConfig(1.second, 100.millis)
 
     "getBlocksChunked" when {
@@ -257,7 +256,7 @@ class GrpcGossipServiceSpec
                   val parallelMax = new AtomicInteger(0)
 
                   val req = GetBlockChunkedRequest(blockHash = block.blockHash)
-                  val fetchers = List.fill(2 * maxParallelBlockDownloads) {
+                  val fetchers = List.fill(maxParallelBlockDownloads * 5) {
                     stub
                       .getBlockChunked(req)
                       .doOnStart(_ => Task.delay { parallelNow.incrementAndGet() })
@@ -271,7 +270,10 @@ class GrpcGossipServiceSpec
 
                   Task.gatherUnordered(fetchers) map { res =>
                     res.size shouldBe fetchers.size
-                    parallelMax.get shouldBe maxParallelBlockDownloads
+                    // We may see some overlap between completion and the start of the next
+                    // due to the fact that gRPC will do client side buffering too.
+                    parallelMax.get should be <= (maxParallelBlockDownloads * 2)
+                    parallelMax.get should be >= maxParallelBlockDownloads
                   }
                 }
             }
