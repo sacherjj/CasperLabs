@@ -11,6 +11,7 @@ import io.casperlabs.node.effects._
 import io.casperlabs.shared._
 import monix.eval.{Task, TaskApp}
 import monix.execution.Scheduler
+import org.slf4j.bridge.SLF4JBridgeHandler
 
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
@@ -41,7 +42,10 @@ object Main extends TaskApp {
   }
 
   private def updateLoggingProps(conf: Configuration): Task[Unit] = Task {
-    java.util.logging.Logger.getLogger("io.grpc").setLevel(java.util.logging.Level.SEVERE)
+    //https://github.com/grpc/grpc-java/issues/1577#issuecomment-228342706
+    SLF4JBridgeHandler.removeHandlersForRootLogger()
+    SLF4JBridgeHandler.install()
+    sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
   }
 
   private def mainProgram(command: Configuration.Command, conf: Configuration)(
