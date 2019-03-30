@@ -72,24 +72,44 @@ def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fi
                         deploy2.join()
                         deploy3.join()
 
-                        expected_blocks_count = 7
+                        # An explanation given by @Akosh about number of expected blocks.
+                        # This is why the expected blocks are 4.
+                        """
+                        I think there is some randomness to it. --depth gives you the last
+                        layers in the topological sorting of the DAG, which I believe is
+                        stored by rank.
+                        I'm not sure about the details, for example if we have
+                        `G<-B1, G<-B2, B1<-B3` then G is rank 0, B1 and B2 are rank 1 and
+                        B3 is rank 2. But we could also argue that a depth of 1 should
+                        return B3 and B2.
+
+                        Whatever --depth does, the layout of the DAG depends on how the
+                        gossiping went when you did you proposals. If you did it real slow,
+                        one by one, then you might have a chain of 8 blocks
+                        (for example `G<-A1<-B1<-B2<-C1<-B3<-C2<-C3`), all linear;
+                        but if you did it in perfect parallelism you could have all of them
+                        branch out and be only 4 levels deep
+                        (`G<-A1, G<-B1, G<-C1, [A1,B1,C1]<-C2`, etc).
+                        """
+                        expected_blocks_count = 4
                         wait_for_blocks_count_at_least(
                             no1,
                             expected_blocks_count,
-                            4,
+                            3,
                             context.node_startup_timeout
                         )
                         wait_for_blocks_count_at_least(
                             no2,
                             expected_blocks_count,
-                            4,
+                            3,
                             context.node_startup_timeout
                         )
                         wait_for_blocks_count_at_least(
                             no3,
                             expected_blocks_count,
-                            4,
+                            3,
                             context.node_startup_timeout
                         )
+
             for v in (volume_name1, volume_name2, volume_name3):
                 docker_client_fixture.volumes.get(v).remove(force=True)

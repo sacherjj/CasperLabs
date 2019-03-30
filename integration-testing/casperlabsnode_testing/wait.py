@@ -143,15 +143,18 @@ def wait_for_approved_block_received_handler_state(node: 'Node', timeout: int):
     predicate = ApprovedBlockReceivedHandlerStateEntered(node)
     wait_on_using_wall_clock_time(predicate, timeout)
 
+
 def wait_for_peers_count_at_least(node: 'Node', npeers: int, timeout: int) -> None:
     predicate = HasAtLeastPeers(node, npeers)
     wait_using_wall_clock_time_or_fail(predicate, timeout)
 
-def wait_using_wall_clock_time_or_fail(predicate: PredicateProtocol, timeout: int) ->None:
+
+def wait_using_wall_clock_time_or_fail(predicate: PredicateProtocol, timeout: int) -> None:
     try:
         wait_using_wall_clock_time(predicate, timeout)
     except WaitTimeoutError:
         pytest.fail('Failed to satisfy {} after {}s'.format(predicate, timeout))
+
 
 def wait_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> None:
     logging.info("AWAITING {}".format(predicate))
@@ -178,7 +181,8 @@ def wait_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> No
     logging.info("TIMEOUT %s", predicate)
     raise WaitTimeoutError(predicate, timeout)
 
-def wait_for_approved_block_received(network: 'Network', timeout: int):
+
+def wait_for_approved_block_received(network: 'Network', timeout: int) -> None:
     for peer in network.peers:
         predicate = ApprovedBlockReceived(peer)
         wait_on_using_wall_clock_time(predicate, timeout)
