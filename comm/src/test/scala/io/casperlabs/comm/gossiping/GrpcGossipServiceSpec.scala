@@ -369,13 +369,13 @@ class GrpcGossipServiceSpec
     "streamBlockSummaries" when {
       "called with a mix of known and unknown hashes" should {
         "return a stream of the known summaries" in {
-          val genTestData = for {
+          val genTestCase = for {
             summaries <- arbitrary[Set[BlockSummary]]
             known     <- Gen.someOf(summaries.map(_.blockHash))
             other     <- arbitrary[Set[ByteString]]
           } yield (summaries, known, other)
 
-          forAll(genTestData) {
+          forAll(genTestCase) {
             case (summaries, known, other) =>
               runTestUnsafe(TestData(summaries = summaries.toSeq)) {
                 val req =
@@ -809,13 +809,13 @@ class GrpcGossipServiceSpec
 
         "receives no previously unknown blocks" should {
           "return false and not download anything" in {
-            val gen = for {
+            val genTestCase = for {
               dag  <- genBlockDag
               node <- arbitrary[Node].map(_.withId(stubCert.keyHash))
               n    <- Gen.choose(0, dag.size)
             } yield (dag, node, n)
 
-            forAll(gen) {
+            forAll(genTestCase) {
               case (dag, node, n) =>
                 runTestUnsafe(TestData(blocks = dag)) {
                   val req = NewBlocksRequest()
@@ -840,14 +840,14 @@ class GrpcGossipServiceSpec
                 newCount: Int
             )
 
-            val gen = for {
+            val genTestCase = for {
               dag  <- genBlockDag
               node <- arbitrary[Node].map(_.withId(stubCert.keyHash))
               k    <- Gen.choose(1, dag.size / 2)
               n    <- Gen.choose(1, k)
             } yield TestCase(dag, node, k, n)
 
-            forAll(gen) {
+            forAll(genTestCase) {
               case TestCase(dag, node, k, n) =>
                 val knownBlocks   = dag.take(k)
                 val unknownBlocks = dag.drop(k)
@@ -866,13 +866,14 @@ class GrpcGossipServiceSpec
                       source shouldBe node
                       targetBlockHashes should contain theSameElementsAs newBlocks.map(_.blockHash)
                       val dag = unknownBlocks.map(summaryOf(_))
-                      // Delay the DAG a little bit to be able to test that the response is immediate.
+                      // Delay the return of the DAG a little bit so we can assert that the call
+                      // to `newBlocks` returns before all the syncing and downloading is finished.
                       Task.now(dag).delayResult(250.millis)
                     }
                   }
 
                   val downloadManager = new DownloadManager[Task] {
-                    var scheduled = Vector.empty[ByteString]
+                    @volatile var scheduled = Vector.empty[ByteString]
                     def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = {
                       source shouldBe node
                       unknownBlocks.map(_.blockHash) should contain(summary.blockHash)
@@ -889,7 +890,7 @@ class GrpcGossipServiceSpec
                   }
 
                   val consensus = new GossipServiceServer.Consensus[Task] {
-                    var downloaded = Vector.empty[ByteString]
+                    @volatile var downloaded = Vector.empty[ByteString]
                     def onPending(dag: Vector[BlockSummary]) = Task.now {
                       dag.map(_.blockHash) shouldBe unknownBlocks.map(_.blockHash)
                     }

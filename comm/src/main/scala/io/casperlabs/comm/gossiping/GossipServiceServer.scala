@@ -10,9 +10,10 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.shared.{Compression, Log, LogSource}
 import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.comm.discovery.Node
 import monix.tail.Iterant
 import scala.collection.immutable.Queue
-import scala.math.Ordering
+import scala.util.control.NonFatal
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
 class GossipServiceServer[F[_]: Concurrent: Par: Log](
@@ -25,59 +26,59 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
 ) extends GossipService[F] {
   import GossipServiceServer._
 
-  implicit val log = LogSource(this.getClass)
-
   def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
     // Collect the blocks which we don't have yet;
     // reply about those that we are going to download and relay them,
-    // then asynchronously sync the DAG to get to them,
-    // schedule the downloads for each,
+    // then asynchronously sync the DAG, schedule the downloads,
     // and finally notify the consensus engine.
     request.blockHashes.distinct.toList
-      .traverse { blockHash =>
-        backend.hasBlock(blockHash).map(blockHash -> _)
+      .filterA { blockHash =>
+        backend.hasBlock(blockHash)
       }
-      .map(_.filterNot(_._2).map(_._1).toSet)
       .flatMap { newBlockHashes =>
         if (newBlockHashes.isEmpty) {
           Applicative[F].pure(NewBlocksResponse(isNew = false))
         } else {
-          val sender =
-            s"${Base16.encode(request.getSender.id.toByteArray)}@${request.getSender.host}"
-
-          val sync: F[Unit] = Sync[F].guaranteeCase {
-            for {
-              _ <- Log[F].info(s"Notified about ${newBlockHashes.size} new blocks by ${sender}.")
-              dag <- synchronizer.syncDag(
-                      source = request.getSender,
-                      targetBlockHashes = newBlockHashes
-                    )
-              _ <- consensus.onPending(dag)
-              watches <- dag.traverse { summary =>
-                          downloadManager.scheduleDownload(
-                            summary,
-                            source = request.getSender,
-                            relay = newBlockHashes(summary.blockHash)
-                          )
-                        }
-              _ <- (dag zip watches).parTraverse {
-                    case (summary, watch) =>
-                      watch *> consensus.onDownloaded(summary.blockHash)
-                  }
-              _ <- Log[F].info(s"Synced ${dag.size} blocks with ${sender}.")
-            } yield ()
-          } {
-            case ExitCase.Error(ex) =>
-              Log[F].error(s"Could not sync new blocks with ${sender}.", ex)
-            case _ =>
-              Sync[F].unit
-          }
-
-          Concurrent[F].start(sync).map { _ =>
-            NewBlocksResponse(isNew = true)
-          }
+          Concurrent[F]
+            .start(sync(request.getSender, newBlockHashes.toSet))
+            .as(NewBlocksResponse(isNew = true))
         }
       }
+
+  /** Synchronize and download any missing blocks to get to the new ones. */
+  private def sync(source: Node, newBlockHashes: Set[ByteString]): F[Unit] = {
+    val peer = s"${Base16.encode(source.id.toByteArray)}@${source.host}"
+
+    val trySync = for {
+      _ <- Log[F].info(s"Notified about ${newBlockHashes.size} new blocks by ${peer}.")
+      dag <- synchronizer.syncDag(
+              source = source,
+              targetBlockHashes = newBlockHashes
+            )
+      _ <- consensus.onPending(dag)
+      watches <- dag.traverse { summary =>
+                  downloadManager.scheduleDownload(
+                    summary,
+                    source = source,
+                    relay = newBlockHashes(summary.blockHash)
+                  )
+                }
+      _ <- (dag zip watches).parTraverse {
+            case (summary, watch) =>
+              // TODO: Called from here the consensus engine can be notified multiple times.
+              // The pending and final notifications should most likely be moved
+              // to the DownloadManager. We'll see this clearer when we integrate
+              // the new gossiping machinery with Casper and the Block Strategy.
+              watch *> consensus.onDownloaded(summary.blockHash)
+          }
+      _ <- Log[F].info(s"Synced ${dag.size} blocks with ${peer}.")
+    } yield ()
+
+    trySync.onError {
+      case NonFatal(ex) =>
+        Log[F].error(s"Could not sync new blocks with ${peer}.", ex)
+    }
+  }
 
   def streamAncestorBlockSummaries(
       request: StreamAncestorBlockSummariesRequest
