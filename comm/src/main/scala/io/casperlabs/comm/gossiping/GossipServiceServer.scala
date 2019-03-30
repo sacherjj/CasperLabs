@@ -33,7 +33,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
     // and finally notify the consensus engine.
     request.blockHashes.distinct.toList
       .filterA { blockHash =>
-        backend.hasBlock(blockHash)
+        backend.hasBlock(blockHash).map(!_)
       }
       .flatMap { newBlockHashes =>
         if (newBlockHashes.isEmpty) {
