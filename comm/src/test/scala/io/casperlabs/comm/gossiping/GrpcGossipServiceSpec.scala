@@ -4,13 +4,13 @@ import cats.implicits._
 import cats.effect._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.shared.Compression
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
 import io.casperlabs.comm.TestRuntime
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.grpc.{AuthInterceptor, GrpcServer, SslContexts}
+import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
@@ -34,16 +34,15 @@ class GrpcGossipServiceSpec
   import GrpcGossipServiceSpec._
   import Scheduler.Implicits.global
 
-  implicit val consensusConfig = ConsensusConfig()
-
   // Test data that we can set in each test.
   val testDataRef = new AtomicReference(TestData.empty)
   // Set up the server and client once, to be shared, to make tests faster.
+  val stubCert                                   = TestCert.generate
   var stub: GossipingGrpcMonix.GossipServiceStub = _
   var shutdown: Task[Unit]                       = _
 
   override def beforeAll() =
-    TestEnvironment(testDataRef).allocated.foreach {
+    TestEnvironment(testDataRef, clientCert = Some(stubCert)).allocated.foreach {
       case (stub, shutdown) =>
         this.stub = stub
         this.shutdown = shutdown
@@ -52,9 +51,9 @@ class GrpcGossipServiceSpec
   override def afterAll() =
     shutdown.runSyncUnsafe(10.seconds)
 
-  def runTestUnsafe(testData: TestData)(test: Task[Unit]): Unit = {
+  def runTestUnsafe(testData: TestData, timeout: FiniteDuration = 5.seconds)(test: Task[Unit]): Unit = {
     testDataRef.set(testData)
-    test.runSyncUnsafe(5.seconds)
+    test.runSyncUnsafe(timeout)
   }
 
   override def nestedSuites = Vector(
@@ -67,6 +66,7 @@ class GrpcGossipServiceSpec
   object GetBlockChunkedSpec extends WordSpecLike {
     implicit val propCheckConfig = PropertyCheckConfiguration(minSuccessful = 3)
     implicit val patienceConfig  = PatienceConfig(1.second, 100.millis)
+    implicit val consensusConfig = ConsensusConfig()
 
     "getBlocksChunked" when {
       "no compression is supported" should {
@@ -249,7 +249,7 @@ class GrpcGossipServiceSpec
         "only allow them up to the limit" in {
           val maxParallelBlockDownloads = 2
           forAll { (block: Block) =>
-            runTestUnsafe(TestData.fromBlock(block)) {
+            runTestUnsafe(TestData.fromBlock(block), timeout = 10.seconds) {
               TestEnvironment(testDataRef, maxParallelBlockDownloads = maxParallelBlockDownloads)
                 .use { stub =>
                   val parallelNow = new AtomicInteger(0)
@@ -364,17 +364,18 @@ class GrpcGossipServiceSpec
   object StreamBlockSummariesSpec extends WordSpecLike {
     implicit val config                         = PropertyCheckConfiguration(minSuccessful = 5)
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
+    implicit val consensusConfig                = ConsensusConfig()
 
     "streamBlockSummaries" when {
       "called with a mix of known and unknown hashes" should {
         "return a stream of the known summaries" in {
-          val genTestData = for {
+          val genTestCase = for {
             summaries <- arbitrary[Set[BlockSummary]]
             known     <- Gen.someOf(summaries.map(_.blockHash))
             other     <- arbitrary[Set[ByteString]]
           } yield (summaries, known, other)
 
-          forAll(genTestData) {
+          forAll(genTestCase) {
             case (summaries, known, other) =>
               runTestUnsafe(TestData(summaries = summaries.toSeq)) {
                 val req =
@@ -395,6 +396,7 @@ class GrpcGossipServiceSpec
   object StreamAncestorBlockSummariesSpec extends WordSpecLike {
     implicit val config                         = PropertyCheckConfiguration(minSuccessful = 25)
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
+    implicit val consensusConfig                = ConsensusConfig()
 
     def elders(summary: BlockSummary): Seq[ByteString] =
       summary.getHeader.parentHashes ++
@@ -714,8 +716,10 @@ class GrpcGossipServiceSpec
   }
 
   object NewBlocksSpec extends WordSpecLike {
-    implicit val config                         = PropertyCheckConfiguration(minSuccessful = 1)
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
+    implicit val consensusConfig =
+      ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 50, maxPaymentCodeBytes = 10)
+    implicit val patienceConfig = PatienceConfig(3.second, 100.millis)
 
     def expectError(
         req: NewBlocksRequest,
@@ -729,64 +733,195 @@ class GrpcGossipServiceSpec
       }
 
     "newBlocks" when {
-      "called without a sender" should {
-        "return UNAUTHENTICATED" in {
-          forAll(arbitrary[List[ByteString]]) { blockHashes =>
-            runTestUnsafe(TestData()) {
-              expectError(
-                NewBlocksRequest(sender = None, blockHashes = blockHashes)
-              ) {
-                case Unauthenticated(msg) =>
-                  msg shouldBe "Sender cannot be empty."
-              }
-            }
-          }
-        }
-      }
-      "called with a sender whose ID doesn't match its SSL public key" should {
-        "return UNAUTHENTICATED" in {
-          forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
-            runTestUnsafe(TestData()) {
-              expectError(
-                NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes)
-              ) {
-                case Unauthenticated(msg) =>
-                  msg shouldBe "Sender doesn't match public key."
-              }
-            }
-          }
-        }
-      }
-      "called without an SSL certificate" when {
+      "called with a problematic sender" when {
+        implicit val config = PropertyCheckConfiguration(minSuccessful = 1)
 
-        def expectErrorWithAnonymous(clientAuth: ClientAuth)(pf: PartialFunction[Throwable, Unit]) =
-          forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
-            runTestUnsafe(TestData()) {
-              TestEnvironment(testDataRef, anonymous = true, clientAuth = clientAuth).use {
-                anonymousStub =>
-                  expectError(
-                    NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes),
-                    client = anonymousStub
-                  )(pf)
-              }
-            }
-          }
-
-        "client auth is required" should {
-          "return UNAVAILABLE" in {
-            expectErrorWithAnonymous(ClientAuth.REQUIRE) {
-              case ex: io.grpc.StatusRuntimeException =>
-                // Becuase the server requires client auth this will be rejected straight away.
-                ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNAVAILABLE
-            }
-          }
-        }
-
-        "client auth is not required (due to misconfiguration)" should {
+        "called without a sender" should {
           "return UNAUTHENTICATED" in {
-            expectErrorWithAnonymous(ClientAuth.NONE) {
-              case Unauthenticated(msg) =>
-                msg shouldBe "Cannot verify sender identity."
+            forAll(arbitrary[List[ByteString]]) { blockHashes =>
+              runTestUnsafe(TestData()) {
+                expectError(
+                  NewBlocksRequest(sender = None, blockHashes = blockHashes)
+                ) {
+                  case Unauthenticated(msg) =>
+                    msg shouldBe "Sender cannot be empty."
+                }
+              }
+            }
+          }
+        }
+
+        "called with a sender whose ID doesn't match its SSL public key" should {
+          "return UNAUTHENTICATED" in {
+            forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
+              runTestUnsafe(TestData()) {
+                expectError(
+                  NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes)
+                ) {
+                  case Unauthenticated(msg) =>
+                    msg shouldBe "Sender doesn't match public key."
+                }
+              }
+            }
+          }
+        }
+
+        "called without an SSL certificate" when {
+
+          def expectErrorWithAnonymous(
+              clientAuth: ClientAuth
+          )(pf: PartialFunction[Throwable, Unit]) =
+            forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
+              runTestUnsafe(TestData()) {
+                TestEnvironment(testDataRef, clientCert = None, clientAuth = clientAuth).use {
+                  anonymousStub =>
+                    expectError(
+                      NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes),
+                      client = anonymousStub
+                    )(pf)
+                }
+              }
+            }
+
+          "client auth is required" should {
+            "return UNAVAILABLE" in {
+              expectErrorWithAnonymous(ClientAuth.REQUIRE) {
+                case ex: io.grpc.StatusRuntimeException =>
+                  // Becuase the server requires client auth this will be rejected straight away.
+                  ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNAVAILABLE
+              }
+            }
+          }
+
+          "client auth is not required (due to misconfiguration)" should {
+            "return UNAUTHENTICATED" in {
+              expectErrorWithAnonymous(ClientAuth.NONE) {
+                case Unauthenticated(msg) =>
+                  msg shouldBe "Cannot verify sender identity."
+              }
+            }
+          }
+        }
+      }
+
+      "called with a valid sender" when {
+        implicit val config = PropertyCheckConfiguration(minSuccessful = 5)
+
+        "receives no previously unknown blocks" should {
+          "return false and not download anything" in {
+            val genTestCase = for {
+              dag  <- genBlockDag
+              node <- arbitrary[Node].map(_.withId(stubCert.keyHash))
+              n    <- Gen.choose(0, dag.size)
+            } yield (dag, node, n)
+
+            forAll(genTestCase) {
+              case (dag, node, n) =>
+                runTestUnsafe(TestData(blocks = dag)) {
+                  val req = NewBlocksRequest()
+                    .withSender(node)
+                    .withBlockHashes(dag.takeRight(n).map(_.blockHash))
+
+                  // If `newBlocks` called any of the default empty mock classes they would throw.
+                  stub.newBlocks(req) map { res =>
+                    res.isNew shouldBe false
+                  }
+                }
+            }
+          }
+        }
+
+        "receives new blocks" should {
+          "download the new ones" in {
+            case class TestCase(
+                dag: Vector[Block],
+                node: Node,
+                knownCount: Int,
+                newCount: Int
+            )
+
+            val genTestCase = for {
+              dag  <- genBlockDag
+              node <- arbitrary[Node].map(_.withId(stubCert.keyHash))
+              k    <- Gen.choose(1, dag.size / 2)
+              n    <- Gen.choose(1, k)
+            } yield TestCase(dag, node, k, n)
+
+            forAll(genTestCase) {
+              case TestCase(dag, node, k, n) =>
+                val knownBlocks   = dag.take(k)
+                val unknownBlocks = dag.drop(k)
+                val newBlocks     = unknownBlocks.takeRight(n)
+
+                // Only pass the known part to the backend of the service.
+                runTestUnsafe(TestData(blocks = knownBlocks)) {
+
+                  val req = NewBlocksRequest()
+                    .withSender(node)
+                    .withBlockHashes(newBlocks.map(_.blockHash))
+
+                  // Pretend to sync the DAG and return the unknown part in topological order.
+                  val synchronizer = new Synchronizer[Task] {
+                    def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = {
+                      source shouldBe node
+                      targetBlockHashes should contain theSameElementsAs newBlocks.map(_.blockHash)
+                      val dag = unknownBlocks.map(summaryOf(_))
+                      // Delay the return of the DAG a little bit so we can assert that the call
+                      // to `newBlocks` returns before all the syncing and downloading is finished.
+                      Task.now(dag).delayResult(250.millis)
+                    }
+                  }
+
+                  val downloadManager = new DownloadManager[Task] {
+                    @volatile var scheduled = Vector.empty[ByteString]
+                    def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = {
+                      source shouldBe node
+                      unknownBlocks.map(_.blockHash) should contain(summary.blockHash)
+                      if (relay) {
+                        newBlocks.map(_.blockHash) should contain(summary.blockHash)
+                      } else {
+                        newBlocks.map(_.blockHash) should not contain (summary.blockHash)
+                      }
+                      synchronized {
+                        scheduled = scheduled :+ summary.blockHash
+                      }
+                      Task.now(Task.unit)
+                    }
+                  }
+
+                  val consensus = new GossipServiceServer.Consensus[Task] {
+                    @volatile var downloaded = Vector.empty[ByteString]
+                    def onPending(dag: Vector[BlockSummary]) = Task.now {
+                      dag.map(_.blockHash) shouldBe unknownBlocks.map(_.blockHash)
+                    }
+                    def onDownloaded(blockHash: ByteString) = Task.now {
+                      synchronized {
+                        downloaded = downloaded :+ blockHash
+                      }
+                    }
+                  }
+
+                  TestEnvironment(
+                    testDataRef,
+                    clientCert = Some(stubCert),
+                    synchronizer = synchronizer,
+                    downloadManager = downloadManager,
+                    consensus = consensus
+                  ).use { stub =>
+                    stub.newBlocks(req) map { res =>
+                      val unknownHashes = unknownBlocks.map(_.blockHash)
+                      res.isNew shouldBe true
+                      // Downloading should happen asynchronously.
+                      consensus.downloaded.size should be < unknownHashes.size
+                      eventually {
+                        downloadManager.scheduled should contain theSameElementsInOrderAs unknownHashes
+                      }
+                      eventually {
+                        consensus.downloaded should contain theSameElementsAs unknownHashes
+                      }
+                    }
+                  }
+                }
             }
           }
         }
@@ -803,6 +938,12 @@ object GrpcGossipServiceSpec extends TestRuntime {
     val md = java.security.MessageDigest.getInstance("MD5")
     new String(md.digest(data))
   }
+
+  def summaryOf(block: Block): BlockSummary =
+    BlockSummary()
+      .withBlockHash(block.blockHash)
+      .withHeader(block.getHeader)
+      .withSignature(block.getSignature)
 
   trait TestData {
     def summaries: Map[ByteString, BlockSummary]
@@ -828,28 +969,50 @@ object GrpcGossipServiceSpec extends TestRuntime {
   }
 
   object TestEnvironment {
+    private val emptySynchronizer = new Synchronizer[Task] {
+      def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
+    }
+    private val emptyDownloadManager = new DownloadManager[Task] {
+      def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
+    }
+    private val emptyConsensus = new GossipServiceServer.Consensus[Task] {
+      def onPending(dag: Vector[BlockSummary]) = ???
+      def onDownloaded(blockHash: ByteString)  = ???
+    }
+
     def apply(
         testData: AtomicReference[TestData],
-        anonymous: Boolean = false,
+        clientCert: Option[TestCert] = Some(TestCert.generate),
         clientAuth: ClientAuth = ClientAuth.REQUIRE,
         maxParallelBlockDownloads: Int = 100,
-        blockChunkConsumerTimeout: FiniteDuration = 10.seconds
+        blockChunkConsumerTimeout: FiniteDuration = 10.seconds,
+        synchronizer: Synchronizer[Task] = emptySynchronizer,
+        downloadManager: DownloadManager[Task] = emptyDownloadManager,
+        consensus: GossipServiceServer.Consensus[Task] = emptyConsensus
     )(
         implicit
         oi: ObservableIterant[Task],
         scheduler: Scheduler
     ): Resource[Task, GossipingGrpcMonix.GossipServiceStub] = {
-      val port = getFreePort
-
-      val serverCert = TestCert.generate
+      val port         = getFreePort
+      val serverCert   = TestCert.generate
+      implicit val log = new Log.NOPLog[Task]
 
       val serverR = GrpcServer[Task](
         port,
         services = List(
           (scheduler: Scheduler) =>
             GossipServiceServer[Task](
-              getBlockSummary = hash => Task.now(testData.get.summaries.get(hash)),
-              getBlock = hash => Task.now(testData.get.blocks.get(hash)),
+              backend = new GossipServiceServer.Backend[Task] {
+                def hasBlock(blockHash: ByteString) =
+                  Task.now(testData.get.blocks.contains(blockHash))
+                def getBlock(blockHash: ByteString) = Task.now(testData.get.blocks.get(blockHash))
+                def getBlockSummary(blockHash: ByteString) =
+                  Task.now(testData.get.summaries.get(blockHash))
+              },
+              synchronizer = synchronizer,
+              downloadManager = downloadManager,
+              consensus = consensus,
               maxChunkSize = DefaultMaxChunkSize,
               maxParallelBlockDownloads = maxParallelBlockDownloads
             ) map { gss =>
@@ -874,12 +1037,9 @@ object GrpcGossipServiceSpec extends TestRuntime {
       )
 
       def sslContext =
-        if (anonymous) {
+        clientCert.fold(
           SslContexts.forClientUnauthenticated
-        } else {
-          val clientCert = TestCert.generate
-          SslContexts.forClient(clientCert.cert, clientCert.key)
-        }
+        )(cc => SslContexts.forClient(cc.cert, cc.key))
 
       val channelR =
         Resource.make(
@@ -906,18 +1066,21 @@ object GrpcGossipServiceSpec extends TestRuntime {
       } yield stub
     }
 
-    case class TestCert(cert: String, key: String, id: String)
+  }
 
-    object TestCert {
-      def generate = {
-        val pair  = CertificateHelper.generateKeyPair(useNonBlockingRandom = true)
-        val cert  = CertificateHelper.generate(pair)
-        val certS = CertificatePrinter.print(cert)
-        val keyS  = CertificatePrinter.printPrivateKey(pair.getPrivate)
-        val idS =
-          CertificateHelper.publicAddress(pair.getPublic).map(Base16.encode(_)).getOrElse("local")
-        TestCert(certS, keyS, idS)
-      }
+  case class TestCert(cert: String, key: String, id: String, keyHash: ByteString)
+
+  object TestCert {
+    def generate = {
+      val pair = CertificateHelper.generateKeyPair(useNonBlockingRandom = true)
+      val cert = CertificateHelper.generate(pair)
+      val addr = CertificateHelper.publicAddress(pair.getPublic).get
+      TestCert(
+        cert = CertificatePrinter.print(cert),
+        key = CertificatePrinter.printPrivateKey(pair.getPrivate),
+        id = Base16.encode(addr),
+        keyHash = ByteString.copyFrom(addr)
+      )
     }
   }
 }
