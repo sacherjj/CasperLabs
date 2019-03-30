@@ -51,9 +51,9 @@ class GrpcGossipServiceSpec
   override def afterAll() =
     shutdown.runSyncUnsafe(10.seconds)
 
-  def runTestUnsafe(testData: TestData)(test: Task[Unit]): Unit = {
+  def runTestUnsafe(testData: TestData, timeout: FiniteDuration = 5.seconds)(test: Task[Unit]): Unit = {
     testDataRef.set(testData)
-    test.runSyncUnsafe(5.seconds)
+    test.runSyncUnsafe(timeout)
   }
 
   override def nestedSuites = Vector(
@@ -249,7 +249,7 @@ class GrpcGossipServiceSpec
         "only allow them up to the limit" in {
           val maxParallelBlockDownloads = 2
           forAll { (block: Block) =>
-            runTestUnsafe(TestData.fromBlock(block)) {
+            runTestUnsafe(TestData.fromBlock(block), timeout = 10.seconds) {
               TestEnvironment(testDataRef, maxParallelBlockDownloads = maxParallelBlockDownloads)
                 .use { stub =>
                   val parallelNow = new AtomicInteger(0)
