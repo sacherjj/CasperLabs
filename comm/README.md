@@ -1,6 +1,6 @@
-# RChain Communication Subsystem
+# CasperLabs Communication Subsystem
 
-Network related operations for RChain. 
+Network related operations for CasperLabs. 
 
 ## Build from the source
 
@@ -12,6 +12,6 @@ Simply run `sbt comm/compile` to compile the project, `sbt comm/test` to run all
 
 ## Exposed programming API for other modules
 
-`TransportLayer` - responsible for node2node communicaton
-`NodeDiscovery`  - responsible for node discovery within p2p network
-`Metrcis`        - responsible for storing metrics witin the running node
+1. [TransportLayer](/src/main/scala/io/casperlabs/comm/transport/TransportLayer.scala) - node2node communication
+2. [NodeDiscovery](/src/main/scala/io/casperlabs/comm/discovery/NodeDiscovery.scala)  - node discovery within p2p network
+3. [GossipService](/src/main/scala/io/casperlabs/comm/gossiping/GossipService.scala) - blocks gossiping
