@@ -14,7 +14,6 @@ use common::value::{self, Value};
 use execution_engine::execution::{Runtime, RuntimeContext};
 use execution_engine::trackingcopy::TrackingCopy;
 use failure::Error;
-use failure::Fail;
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
 use shared::newtypes::Blake2bHash;
@@ -123,10 +122,7 @@ impl WasmMemoryManager {
         }
     }
 
-    pub fn write<T: ToBytes>(&mut self, t: T) -> Result<(u32, usize), Error>
-    where
-        T::Error: Fail + Send,
-    {
+    pub fn write<T: ToBytes>(&mut self, t: T) -> Result<(u32, usize), Error> {
         self.write_raw(t.to_bytes()?)
     }
 
