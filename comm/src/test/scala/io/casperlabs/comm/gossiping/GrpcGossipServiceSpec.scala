@@ -51,7 +51,9 @@ class GrpcGossipServiceSpec
   override def afterAll() =
     shutdown.runSyncUnsafe(10.seconds)
 
-  def runTestUnsafe(testData: TestData, timeout: FiniteDuration = 5.seconds)(test: Task[Unit]): Unit = {
+  def runTestUnsafe(testData: TestData, timeout: FiniteDuration = 5.seconds)(
+      test: Task[Unit]
+  ): Unit = {
     testDataRef.set(testData)
     test.runSyncUnsafe(timeout)
   }
@@ -321,39 +323,53 @@ class GrpcGossipServiceSpec
       "an error is thrown" should {
         "release the download semaphore" in {
           forAll(genHash) { (hash: ByteString) =>
-            @volatile var exploded = false
-            val bomb = new TestData {
-              val summaries = Map.empty
-              def blocks =
-                if (exploded) Map.empty
-                else {
-                  exploded = true; sys.error("Boom!")
-                }
-            }
-            runTestUnsafe(bomb) {
-              TestEnvironment(testDataRef, maxParallelBlockDownloads = 1).use { stub =>
-                val req = GetBlockChunkedRequest(blockHash = hash)
-                for {
-                  r1 <- stub.getBlockChunked(req).toListL.attempt
-                  r2 <- stub.getBlockChunked(req).toListL.attempt
-                } yield {
-                  r1.isLeft shouldBe true
-                  r1.left.get match {
-                    case ex: io.grpc.StatusRuntimeException =>
-                      ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNKNOWN
-                    case ex =>
-                      fail(s"Unexpected error: $ex")
-                  }
-                  // If the semaphore wasn't freed this would time out.
-                  r2.isLeft shouldBe true
-                  r2.left.get match {
-                    case NotFound(msg) =>
-                      msg shouldBe s"Block ${Base16.encode(hash.toByteArray)} could not be found."
-                    case ex =>
-                      fail(s"Unexpected error: $ex")
+            @volatile var cnt = 0
+
+            val faultyBackend = (_: AtomicReference[TestData]) => {
+              new GossipServiceServer.Backend[Task] {
+                def getBlock(blockHash: ByteString) = {
+                  cnt = cnt + 1
+                  cnt match {
+                    case 1 =>
+                      Task.raiseError[Option[Block]](new RuntimeException("Delayed Boom!"))
+                    case 2 =>
+                      sys.error("Immediate Boom!")
+                    case _ =>
+                      Task.now(None)
                   }
                 }
+                def hasBlock(blockHash: ByteString)        = ???
+                def getBlockSummary(blockHash: ByteString) = ???
               }
+            }
+
+            runTestUnsafe(TestData()) {
+              TestEnvironment(testDataRef, maxParallelBlockDownloads = 1, mkBackend = faultyBackend)
+                .use { stub =>
+                  val req = GetBlockChunkedRequest(blockHash = hash)
+                  for {
+                    r1 <- stub.getBlockChunked(req).toListL.attempt
+                    r2 <- stub.getBlockChunked(req).toListL.attempt
+                    r3 <- stub.getBlockChunked(req).toListL.attempt
+                  } yield {
+                    r1.isLeft shouldBe true
+                    r1.left.get match {
+                      case ex: io.grpc.StatusRuntimeException =>
+                        ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNKNOWN
+                      case ex =>
+                        fail(s"Unexpected error: $ex")
+                    }
+                    // If the semaphore wasn't freed this would time out.
+                    r2.isLeft shouldBe true
+                    r3.isLeft shouldBe true
+                    r3.left.get match {
+                      case NotFound(msg) =>
+                        msg shouldBe s"Block ${Base16.encode(hash.toByteArray)} could not be found."
+                      case ex =>
+                        fail(s"Unexpected error: $ex")
+                    }
+                  }
+                }
             }
           }
         }
@@ -980,15 +996,26 @@ object GrpcGossipServiceSpec extends TestRuntime {
       def onDownloaded(blockHash: ByteString)  = ???
     }
 
+    private def defaultBackend(testDataRef: AtomicReference[TestData]) =
+      new GossipServiceServer.Backend[Task] {
+        def hasBlock(blockHash: ByteString) =
+          Task.delay(testDataRef.get.blocks.contains(blockHash))
+        def getBlock(blockHash: ByteString) =
+          Task.delay(testDataRef.get.blocks.get(blockHash))
+        def getBlockSummary(blockHash: ByteString) =
+          Task.delay(testDataRef.get.summaries.get(blockHash))
+      }
+
     def apply(
-        testData: AtomicReference[TestData],
+        testDataRef: AtomicReference[TestData],
         clientCert: Option[TestCert] = Some(TestCert.generate),
         clientAuth: ClientAuth = ClientAuth.REQUIRE,
         maxParallelBlockDownloads: Int = 100,
         blockChunkConsumerTimeout: FiniteDuration = 10.seconds,
         synchronizer: Synchronizer[Task] = emptySynchronizer,
         downloadManager: DownloadManager[Task] = emptyDownloadManager,
-        consensus: GossipServiceServer.Consensus[Task] = emptyConsensus
+        consensus: GossipServiceServer.Consensus[Task] = emptyConsensus,
+        mkBackend: AtomicReference[TestData] => GossipServiceServer.Backend[Task] = defaultBackend
     )(
         implicit
         oi: ObservableIterant[Task],
@@ -1003,13 +1030,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
         services = List(
           (scheduler: Scheduler) =>
             GossipServiceServer[Task](
-              backend = new GossipServiceServer.Backend[Task] {
-                def hasBlock(blockHash: ByteString) =
-                  Task.now(testData.get.blocks.contains(blockHash))
-                def getBlock(blockHash: ByteString) = Task.now(testData.get.blocks.get(blockHash))
-                def getBlockSummary(blockHash: ByteString) =
-                  Task.now(testData.get.summaries.get(blockHash))
-              },
+              backend = mkBackend(testDataRef),
               synchronizer = synchronizer,
               downloadManager = downloadManager,
               consensus = consensus,
