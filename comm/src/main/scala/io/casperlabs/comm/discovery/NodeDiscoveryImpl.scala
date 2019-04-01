@@ -13,7 +13,7 @@ import io.casperlabs.shared._
 import monix.eval.{TaskLift, TaskLike}
 import monix.execution.Scheduler
 
-object KademliaNodeDiscovery {
+object NodeDiscoveryImpl {
   def create[F[_]: Concurrent: Log: Time: Metrics: TaskLike: TaskLift: PeerNodeAsk: Timer: Par](
       id: NodeIdentifier,
       port: Int,
@@ -23,7 +23,7 @@ object KademliaNodeDiscovery {
   )(implicit scheduler: Scheduler): Resource[F, NodeDiscovery[F]] = {
     val kademliaRpcResource = Resource.make(CachedConnections[F, KademliaConnTag].map {
       implicit cache =>
-        new GrpcKademliaRPC(port, timeout)
+        new GrpcKademliaService(port, timeout)
     })(
       kRpc =>
         Concurrent[F]
@@ -35,14 +35,14 @@ object KademliaNodeDiscovery {
     kademliaRpcResource.flatMap { implicit kRpc =>
       Resource.liftF(for {
         table <- PeerTable[F](id)
-        knd   = new KademliaNodeDiscovery[F](id, table)
+        knd   = new NodeDiscoveryImpl[F](id, table)
         _     <- init.fold(().pure[F])(knd.addNode)
       } yield knd)
     }
   }
 }
 
-private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: KademliaRPC: Par](
+private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: KademliaService: Par](
     id: NodeIdentifier,
     table: PeerTable[F],
     alpha: Int = 3,
@@ -55,7 +55,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
   private[discovery] def addNode(peer: PeerNode): F[Unit] =
     for {
       _     <- table.updateLastSeen(peer)
-      peers <- table.peers
+      peers <- table.peersAscendingDistance
       _     <- Metrics[F].setGauge("peers", peers.length.toLong)
     } yield ()
 
@@ -71,7 +71,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
 
   def discover: F[Unit] = {
 
-    val initRPC = KademliaRPC[F].receive(pingHandler, lookupHandler)
+    val initRPC = KademliaService[F].receive(pingHandler, lookupHandler)
 
     val findNew = for {
       _ <- Time[F].sleep(9.seconds)
@@ -112,7 +112,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
         for {
           responses <- callees.parTraverse { callee =>
                         for {
-                          maybeNodes <- KademliaRPC[F].lookup(toLookup, callee)
+                          maybeNodes <- KademliaService[F].lookup(toLookup, callee)
                           _          <- maybeNodes.fold(().pure[F])(_ => addNode(callee))
                         } yield (callee, maybeNodes)
                       }
@@ -145,5 +145,10 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
     } yield closestNode
   }
 
-  override def peers: F[Seq[PeerNode]] = table.peers
+  override def alivePeersAscendingDistance: F[List[PeerNode]] =
+    table.peersAscendingDistance.flatMap { peers =>
+      peers.parFlatTraverse { peer =>
+        KademliaService[F].ping(peer).map(success => if (success) List(peer) else Nil)
+      }
+    }
 }

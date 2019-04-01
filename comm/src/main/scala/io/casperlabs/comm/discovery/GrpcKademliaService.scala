@@ -8,7 +8,7 @@ import io.casperlabs.catscontrib.TaskContrib.ConcurrentOps
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
 import io.casperlabs.comm._
-import io.casperlabs.comm.discovery.KademliaGrpcMonix.KademliaRPCServiceStub
+import io.casperlabs.comm.discovery.KademliaGrpcMonix.KademliaServiceStub
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.{Log, LogSource}
@@ -19,14 +19,14 @@ import monix.execution._
 
 import scala.concurrent.duration._
 
-class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNodeAsk: Metrics: Par](
+class GrpcKademliaService[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNodeAsk: Metrics: Par](
     port: Int,
     timeout: FiniteDuration
 )(
     implicit
     scheduler: Scheduler,
     connectionsCache: ConnectionsCache[F, KademliaConnTag]
-) extends KademliaRPC[F] {
+) extends KademliaService[F] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val metricsSource: Metrics.Source =
@@ -36,11 +36,11 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
 
   def ping(peer: PeerNode): F[Boolean] =
     for {
-      _     <- Metrics[F].incrementCounter("ping")
-      local <- PeerNodeAsk[F].ask
-      ping  = Ping().withSender(node(local))
+      _       <- Metrics[F].incrementCounter("ping")
+      local   <- PeerNodeAsk[F].ask
+      request = PingRequest().withSender(node(local))
       pongErr <- withClient(peer)(
-                  _.sendPing(ping)
+                  _.ping(request)
                     .to[F]
                     .timer("ping-time")
                     .nonCancelingTimeout(timeout)
@@ -49,11 +49,11 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
 
   def lookup(id: NodeIdentifier, peer: PeerNode): F[Option[Seq[PeerNode]]] =
     for {
-      _      <- Metrics[F].incrementCounter("protocol-lookup-send")
-      local  <- PeerNodeAsk[F].ask
-      lookup = Lookup().withId(ByteString.copyFrom(id.key.toArray)).withSender(node(local))
+      _       <- Metrics[F].incrementCounter("protocol-lookup-send")
+      local   <- PeerNodeAsk[F].ask
+      request = LookupRequest().withId(ByteString.copyFrom(id.key.toArray)).withSender(node(local))
       responseErr <- withClient(peer)(
-                      _.sendLookup(lookup)
+                      _.lookup(request)
                         .to[F]
                         .timer("lookup-time")
                         .nonCancelingTimeout(timeout)
@@ -71,7 +71,7 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
     }
 
   private def withClient[A](peer: PeerNode, enforce: Boolean = false)(
-      f: KademliaRPCServiceStub => F[A]
+      f: KademliaServiceStub => F[A]
   ): F[A] =
     for {
       channel <- cell.connection(peer, enforce)
@@ -90,7 +90,7 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
           .executor(scheduler)
           .addService(
             KademliaGrpcMonix
-              .bindService(new SimpleKademliaRPCService(pingHandler, lookupHandler), scheduler)
+              .bindService(new SimpleKademliaService(pingHandler, lookupHandler), scheduler)
           )
           .build
           .start
@@ -143,12 +143,12 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
   private def toPeerNode(n: Node): PeerNode =
     PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host, n.protocolPort, n.discoveryPort))
 
-  class SimpleKademliaRPCService(
+  class SimpleKademliaService(
       pingHandler: PeerNode => F[Unit],
       lookupHandler: (PeerNode, NodeIdentifier) => F[Seq[PeerNode]]
-  ) extends KademliaGrpcMonix.KademliaRPCService {
+  ) extends KademliaGrpcMonix.KademliaService {
 
-    def sendLookup(lookup: Lookup): Task[LookupResponse] = {
+    def lookup(lookup: LookupRequest): Task[LookupResponse] = {
       val id               = NodeIdentifier(lookup.id.toByteArray)
       val sender: PeerNode = toPeerNode(lookup.sender.get)
       TaskLike[F].toTask(
@@ -157,9 +157,9 @@ class GrpcKademliaRPC[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: PeerNode
       )
     }
 
-    def sendPing(ping: Ping): Task[Pong] = {
+    def ping(ping: PingRequest): Task[PingResponse] = {
       val sender: PeerNode = toPeerNode(ping.sender.get)
-      TaskLike[F].toTask(pingHandler(sender).as(Pong()))
+      TaskLike[F].toTask(pingHandler(sender).as(PingResponse()))
     }
   }
 }

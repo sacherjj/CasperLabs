@@ -3,23 +3,22 @@ package io.casperlabs.comm.discovery;
 
 import "io/casperlabs/comm/discovery/node.proto";
 
-message Ping {
-  Node   sender         = 1;
+service KademliaService {
+    rpc Ping (PingRequest) returns (PingResponse) {}
+    rpc Lookup (LookupRequest) returns (LookupResponse) {}
 }
 
-message Pong {
+message PingRequest {
+    Node sender = 1;
 }
 
-message Lookup {
-  bytes  id     = 1;
-  Node   sender = 2;
+message PingResponse {}
+
+message LookupRequest {
+    bytes id = 1;
+    Node sender = 2;
 }
 
 message LookupResponse {
     repeated Node nodes = 1;
-}
-
-service KademliaRPCService {
-  rpc SendPing (Ping) returns (Pong) {}
-  rpc SendLookup (Lookup) returns (LookupResponse) {}
 }

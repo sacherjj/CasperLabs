@@ -9,7 +9,7 @@ import io.casperlabs.comm.{NodeIdentifier, PeerNode}
 trait NodeDiscovery[F[_]] {
   def discover: F[Unit]
   def lookup(id: NodeIdentifier): F[Option[PeerNode]]
-  def peers: F[Seq[PeerNode]]
+  def alivePeersAscendingDistance: F[List[PeerNode]]
 }
 
 object NodeDiscovery extends NodeDiscoveryInstances {
@@ -21,7 +21,7 @@ object NodeDiscovery extends NodeDiscoveryInstances {
     new NodeDiscovery[T[F, ?]] {
       def discover: T[F, Unit]                               = C.discover.liftM[T]
       def lookup(id: NodeIdentifier): T[F, Option[PeerNode]] = C.lookup(id).liftM[T]
-      def peers: T[F, Seq[PeerNode]]                         = C.peers.liftM[T]
+      def alivePeersAscendingDistance: T[F, List[PeerNode]]  = C.alivePeersAscendingDistance.liftM[T]
     }
 }
 

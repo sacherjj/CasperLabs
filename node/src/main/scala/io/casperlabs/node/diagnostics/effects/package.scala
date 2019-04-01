@@ -245,7 +245,7 @@ package object effects {
         }
 
       def listDiscoveredPeers(request: Empty): Task[Peers] =
-        nodeDiscovery.peers.map { ps =>
+        nodeDiscovery.alivePeersAscendingDistance.map { ps =>
           Peers(
             ps.map(
               p => Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))
