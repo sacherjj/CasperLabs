@@ -1,5 +1,5 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes};
-use crate::key::Key;
+use crate::key::{Key, UREF_SIZE};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -43,6 +43,9 @@ impl Account {
 
 impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        if UREF_SIZE * self.known_urefs.len() >= u32::max_value() as usize - 32 - 8 {
+            return Err(Error::OutOfMemoryError);
+        }
         let mut result: Vec<u8> = Vec::new();
         result.extend(&self.public_key.to_bytes()?);
         result.append(&mut self.nonce.to_bytes()?);

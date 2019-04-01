@@ -294,6 +294,9 @@ impl FromBytes for [u8; N32] {
 
 impl<T: ToBytes> ToBytes for [T; N256] {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        if self.len() * size_of::<T>() >= u32::max_value() as usize - U32_SIZE {
+            return Err(Error::OutOfMemoryError);
+        }
         let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + (self.len() * size_of::<T>()));
         result.extend((N256 as u32).to_bytes()?);
         result.extend(
@@ -377,7 +380,12 @@ where
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .flatten();
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + bytes.size_hint().0);
+
+        let (lower_bound, _upper_bound) = bytes.size_hint();
+        if lower_bound >= u32::max_value() as usize - U32_SIZE {
+            return Err(Error::OutOfMemoryError);
+        }
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + lower_bound);
         result.append(&mut num_keys.to_bytes()?);
         result.extend(bytes);
         Ok(result)

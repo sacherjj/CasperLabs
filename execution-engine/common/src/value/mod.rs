@@ -8,6 +8,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::iter;
+use core::mem::size_of;
 
 pub use self::account::Account;
 pub use self::contract::Contract;
@@ -70,18 +71,27 @@ impl ToBytes for Value {
                 Ok(result)
             }
             ByteArray(arr) => {
+                if arr.len() >= u32::max_value() as usize - 5 {
+                    return Err(Error::OutOfMemoryError);
+                }
                 let mut result = Vec::with_capacity(5 + arr.len());
                 result.push(BYTEARRAY_ID);
                 result.append(&mut arr.to_bytes()?);
                 Ok(result)
             }
             ListInt32(arr) => {
+                if arr.len() * size_of::<i32>() >= u32::max_value() as usize - 5 {
+                    return Err(Error::OutOfMemoryError);
+                }
                 let mut result = Vec::with_capacity(5 + 4 * arr.len());
                 result.push(LISTINT32_ID);
                 result.append(&mut arr.to_bytes()?);
                 Ok(result)
             }
             String(s) => {
+                if s.len() >= u32::max_value() as usize - 5 {
+                    return Err(Error::OutOfMemoryError);
+                }
                 let mut result = Vec::with_capacity(5 + s.len());
                 result.push(STRING_ID);
                 result.append(&mut s.to_bytes()?);
@@ -90,11 +100,18 @@ impl ToBytes for Value {
             Account(a) => {
                 let mut result = Vec::new();
                 result.push(ACCT_ID);
-                result.append(&mut a.to_bytes()?);
+                let mut bytes = a.to_bytes()?;
+                if bytes.len() >= u32::max_value() as usize - result.len() {
+                    return Err(Error::OutOfMemoryError);
+                }
+                result.append(&mut bytes);
                 Ok(result)
             }
             Contract(c) => Ok(iter::once(CONTRACT_ID).chain(c.to_bytes()?).collect()),
             NamedKey(n, k) => {
+                if n.len() + UREF_SIZE >= u32::max_value() as usize - 4 - 1 {
+                    return Err(Error::OutOfMemoryError);
+                }
                 let size: usize = 1 + //size for ID
                   4 +                 //size for length of String
                   n.len() +           //size of String
@@ -108,6 +125,10 @@ impl ToBytes for Value {
             ListString(arr) => {
                 let mut result = Vec::with_capacity(5 + arr.len());
                 result.push(LISTSTRING_ID);
+                let bytes = arr.to_bytes()?;
+                if bytes.len() >= u32::max_value() as usize - result.len() {
+                    return Err(Error::OutOfMemoryError);
+                }
                 result.append(&mut arr.to_bytes()?);
                 Ok(result)
             }

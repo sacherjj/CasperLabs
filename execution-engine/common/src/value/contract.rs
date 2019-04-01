@@ -34,6 +34,9 @@ impl Contract {
 
 impl ToBytes for Contract {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        if self.bytes.len() + UREF_SIZE * self.known_urefs.len() >= u32::max_value() as usize - 8 {
+            return Err(Error::OutOfMemoryError);
+        }
         let size: usize = 4 +                           //size for length of bytes
                     self.bytes.len() +                  //size for elements of bytes
                     4 +                                 //size for length of known_urefs
