@@ -470,6 +470,7 @@ class GrpcGossipServiceSpec
     // and there's an error, ScalaCheck can shrink down the input to where it becomes nonsensical.
     // For example if we select N targets from the DAG it can narrow down the data to where the DAG
     // has 0 items but there are non-zero targets.
+    // Later I added implicit noop Shrinks to DAG vectors so this could be avoided that way as well.
     case class TestCase[T](dag: Vector[BlockSummary], data: T) {
       lazy val summaries = TestData(summaries = dag).summaries
     }
@@ -825,16 +826,14 @@ class GrpcGossipServiceSpec
 
         "receives no previously unknown blocks" should {
           "return false and not download anything" in {
-            case class TestCase(dag: Vector[Block], node: Node, newCount: Int)
-
             val genTestCase = for {
               dag  <- genBlockDag
               node <- arbitrary[Node].map(_.withId(stubCert.keyHash))
               n    <- Gen.choose(0, dag.size)
-            } yield TestCase(dag, node, n)
+            } yield (dag, node, n)
 
             forAll(genTestCase) {
-              case TestCase(dag, node, n) =>
+              case (dag, node, n) =>
                 runTestUnsafe(TestData(blocks = dag)) {
                   val req = NewBlocksRequest()
                     .withSender(node)
@@ -851,22 +850,15 @@ class GrpcGossipServiceSpec
 
         "receives new blocks" should {
           "download the new ones" in {
-            case class TestCase(
-                dag: Vector[Block],
-                node: Node,
-                knownCount: Int,
-                newCount: Int
-            )
-
             val genTestCase = for {
-              dag  <- genBlockDag
-              node <- arbitrary[Node].map(_.withId(stubCert.keyHash))
-              k    <- Gen.choose(1, dag.size / 2)
-              n    <- Gen.choose(1, k)
-            } yield TestCase(dag, node, k, n)
+              dag        <- genBlockDag
+              node       <- arbitrary[Node].map(_.withId(stubCert.keyHash))
+              knownCount <- Gen.choose(1, dag.size / 2)
+              newCount   <- Gen.choose(1, dag.size - knownCount)
+            } yield (dag, node, knownCount, newCount)
 
             forAll(genTestCase) {
-              case TestCase(dag, node, k, n) =>
+              case (dag, node, k, n) =>
                 val knownBlocks   = dag.take(k)
                 val unknownBlocks = dag.drop(k)
                 val newBlocks     = unknownBlocks.takeRight(n)
