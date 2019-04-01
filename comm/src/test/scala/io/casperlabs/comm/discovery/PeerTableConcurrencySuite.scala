@@ -87,7 +87,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
       hangUp.runAsyncAndForget
 
       Task
-        .race(Task.sleep(1.second), peerTable.peers)
+        .race(Task.sleep(1.second), peerTable.peersAscendingDistance)
         .runSyncUnsafe()
         .right
         .get should contain theSameElementsAs initial
@@ -112,7 +112,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
         peerTable <- PeerTable[Task](id, bucketSize)
         _         <- Task.gatherUnordered(initial.map(peerTable.updateLastSeen(_)))
         _         <- Task.gatherUnordered(restReplicated.map(peerTable.updateLastSeen(_)))
-        peers     <- peerTable.peers
+        peers     <- peerTable.peersAscendingDistance
       } yield peers
 
       addNodesParallel.runSyncUnsafe() should contain theSameElementsAs initial

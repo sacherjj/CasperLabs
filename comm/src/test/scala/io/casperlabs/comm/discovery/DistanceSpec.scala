@@ -86,7 +86,7 @@ class DistanceSpec extends FlatSpec with Matchers {
 
     it should "return no peers" in {
       val table = PeerTable(kr)
-      table.peers.size should be(0)
+      table.peersAscendingDistance.size should be(0)
     }
 
     it should "return no values on lookup" in {
@@ -135,7 +135,7 @@ class DistanceSpec extends FlatSpec with Matchers {
       for (k <- oneOffs(kr)) {
         table.updateLastSeen(PeerNode(k, endpoint))
       }
-      table.peers.size should be(8 * width)
+      table.peersAscendingDistance.size should be(8 * width)
     }
 
     it should "find each added peer" in {

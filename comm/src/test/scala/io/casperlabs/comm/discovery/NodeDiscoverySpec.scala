@@ -147,7 +147,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           ) { (_, nd, _) =>
             for {
               _         <- nd.lookup(target.id)
-              fromTable <- nd.peers
+              fromTable <- nd.alivePeersAscendingDistance
             } yield {
               fromTable should contain theSameElementsAs withFailures.collect {
                 case (k, Some(_)) => k
@@ -242,19 +242,43 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
           }
       }
     }
+    "alivePeersAscendingDistance" should {
+      "return only alive peers in ascending distance to itself" in {
+        forAll(genFullyConnectedPeers) { peers: Map[PeerNode, List[PeerNode]] =>
+          val target = peers.keys.toList(Random.nextInt(peers.size))
+          val all    = peers.toList.flatMap { case (k, vs) => k :: vs }.toSet
+          val alive  = all.filter(_ => Random.nextBoolean())
+          TextFixture.customInitial(target.id, Map.empty, all, all.size, 0, Some(alive)) {
+            (_, nd, _) =>
+              for {
+                response <- nd.alivePeersAscendingDistance
+              } yield {
+                response should contain theSameElementsInOrderAs alive.toList.sorted(
+                  (x: PeerNode, y: PeerNode) =>
+                    Ordering[BigInt].compare(
+                      PeerTable.xorDistance(x.id, NodeDiscoverySpec.id),
+                      PeerTable.xorDistance(y.id, NodeDiscoverySpec.id)
+                    )
+                )
+              }
+          }
+        }
+      }
+    }
   }
 }
 
 object NodeDiscoverySpec {
 
-  class KademliaMock(peers: Map[PeerNode, Option[List[PeerNode]]]) extends KademliaRPC[Task] {
+  class KademliaMock(peers: Map[PeerNode, Option[List[PeerNode]]], alive: PeerNode => Boolean)
+      extends KademliaRPC[Task] {
     private val lookupsByCallee                      = Atomic(Map.empty[PeerNode, Int].withDefaultValue(0))
     private val maxConcurrentRequests                = AtomicInt(0)
     private val concurrency                          = AtomicInt(0)
     def totalLookups: Int                            = lookupsByCallee.get().values.sum
     def lookupsBy(peer: PeerNode): Int               = lookupsByCallee.get()(peer)
     def concurrentRequests: Int                      = maxConcurrentRequests.get()
-    override def ping(node: PeerNode): Task[Boolean] = Task.now(true)
+    override def ping(node: PeerNode): Task[Boolean] = Task.now(alive(node))
     override def lookup(id: NodeIdentifier, peer: PeerNode): Task[Option[Seq[PeerNode]]] =
       Task {
         concurrency.increment()
@@ -285,11 +309,12 @@ object NodeDiscoverySpec {
         peers: Map[PeerNode, Option[List[PeerNode]]],
         initial: Set[PeerNode],
         k: Int,
-        alpha: Int = 2
+        alpha: Int = 2,
+        pings: Option[Set[PeerNode]] = None
     )(test: (KademliaMock, KademliaNodeDiscovery[Task], Int) => Task[Unit]): Unit =
       PeerTable[Task](id, k)
         .flatMap { table =>
-          implicit val K: KademliaMock = new KademliaMock(peers)
+          implicit val K: KademliaMock = new KademliaMock(peers, pings.getOrElse(_ => true))
           val fillTable = initial.toList
             .traverse(table.updateLastSeen)
             .void
@@ -304,22 +329,27 @@ object NodeDiscoverySpec {
         peers: Map[PeerNode, List[PeerNode]],
         initial: Set[PeerNode],
         k: Int,
-        alpha: Int = 2
+        alpha: Int = 2,
+        pings: Option[Set[PeerNode]] = None
     )(test: (KademliaMock, KademliaNodeDiscovery[Task], Int) => Task[Unit]): Unit =
-      customInitialWithFailures(toLookup, peers.mapValues(Option(_)), initial, k, alpha)(test)
+      customInitialWithFailures(toLookup, peers.mapValues(Option(_)), initial, k, alpha, pings)(
+        test
+      )
 
     def prefilledTable(
         toLookup: NodeIdentifier,
         peers: Map[PeerNode, List[PeerNode]],
         k: Int,
-        alpha: Int = 2
+        alpha: Int = 2,
+        pings: Option[Set[PeerNode]] = None
     )(test: (KademliaMock, KademliaNodeDiscovery[Task], Int) => Task[Unit]): Unit =
       customInitial(
         toLookup,
         peers,
         peers.flatMap { case (key, values) => key :: values }.filterNot(p => p.id == id).toSet,
         k,
-        alpha
+        alpha,
+        pings
       )(test)
   }
 }

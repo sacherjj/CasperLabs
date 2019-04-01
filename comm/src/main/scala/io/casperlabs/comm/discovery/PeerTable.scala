@@ -123,21 +123,19 @@ final class PeerTable[F[_]: Monad](
 
   def lookup(toLookup: NodeIdentifier): F[Seq[PeerNode]] =
     tableRef.get.map { table =>
-      val flattenedArray = table.flatten.filterNot(_.node.key == toLookup.key).toArray
-      Sorting.quickSort(flattenedArray)(
-        (x: Entry, y: Entry) =>
-          Ordering[BigInt].compare(
-            PeerTable.xorDistance(toLookup, x.node.id),
-            PeerTable.xorDistance(toLookup, y.node.id)
-          )
-      )
-      flattenedArray.take(k).toList.map(_.node)
+      sort(
+        table.flatten
+          .filterNot(_.node.key == toLookup.key),
+        toLookup
+      ).take(k).map(_.node).toList
     }
 
   def find(toFind: NodeIdentifier): F[Option[PeerNode]] =
     tableRef.get.map(_(longestCommonBitPrefix(toFind)).find(_.node.id == toFind).map(_.node))
 
-  def peers: F[Seq[PeerNode]] = tableRef.get.map(_.flatMap(_.map(_.node)))
+  def peersAscendingDistance: F[List[PeerNode]] = tableRef.get.map { table =>
+    sort(table.flatten.toList, local).map(_.node).toList
+  }
 
   def sparseness: F[Seq[Int]] =
     tableRef.get.map(
@@ -146,5 +144,14 @@ final class PeerTable[F[_]: Monad](
           case ((bucketA, _), (bucketB, _)) => bucketA.size < bucketB.size
         }
         .map(_._2)
+    )
+
+  private def sort(entries: Seq[Entry], target: NodeIdentifier): Seq[Entry] =
+    entries.sorted(
+      (x: Entry, y: Entry) =>
+        Ordering[BigInt].compare(
+          PeerTable.xorDistance(target, x.node.id),
+          PeerTable.xorDistance(target, y.node.id)
+        )
     )
 }

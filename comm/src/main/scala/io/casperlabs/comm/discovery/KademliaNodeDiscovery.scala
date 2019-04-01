@@ -55,7 +55,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
   private[discovery] def addNode(peer: PeerNode): F[Unit] =
     for {
       _     <- table.updateLastSeen(peer)
-      peers <- table.peers
+      peers <- table.peersAscendingDistance
       _     <- Metrics[F].setGauge("peers", peers.length.toLong)
     } yield ()
 
@@ -145,5 +145,10 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Sync: Log: Time: Metrics: K
     } yield closestNode
   }
 
-  override def peers: F[Seq[PeerNode]] = table.peers
+  override def alivePeersAscendingDistance: F[List[PeerNode]] =
+    table.peersAscendingDistance.flatMap { peers =>
+      peers.parFlatTraverse { peer =>
+        KademliaRPC[F].ping(peer).map(success => if (success) List(peer) else Nil)
+      }
+    }
 }
