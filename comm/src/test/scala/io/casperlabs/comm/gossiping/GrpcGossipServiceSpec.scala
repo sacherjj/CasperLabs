@@ -825,14 +825,16 @@ class GrpcGossipServiceSpec
 
         "receives no previously unknown blocks" should {
           "return false and not download anything" in {
+            case class TestCase(dag: Vector[Block], node: Node, newCount: Int)
+
             val genTestCase = for {
               dag  <- genBlockDag
               node <- arbitrary[Node].map(_.withId(stubCert.keyHash))
               n    <- Gen.choose(0, dag.size)
-            } yield (dag, node, n)
+            } yield TestCase(dag, node, n)
 
             forAll(genTestCase) {
-              case (dag, node, n) =>
+              case TestCase(dag, node, n) =>
                 runTestUnsafe(TestData(blocks = dag)) {
                   val req = NewBlocksRequest()
                     .withSender(node)
