@@ -17,8 +17,8 @@ use parity_wasm::elements::Module;
 use shared::newtypes::Blake2bHash;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::rc::Rc;
 use std::iter::once;
+use std::rc::Rc;
 use storage::gs::{inmem::*, DbReader};
 use storage::history::*;
 use storage::transform::Transform;
@@ -64,7 +64,12 @@ impl MockEnv {
         nonce: u64,
         module: Module,
     ) -> Runtime<'a, InMemGS<Key, Value>> {
-        let context = mock_context(&mut self.uref_lookup, &mut self.known_urefs, &self.account, self.key);
+        let context = mock_context(
+            &mut self.uref_lookup,
+            &mut self.known_urefs,
+            &self.account,
+            self.key,
+        );
         Runtime::new(
             self.memory.clone(),
             tc,
@@ -202,7 +207,9 @@ fn mock_context<'a>(
     base_key: Key,
 ) -> RuntimeContext<'a> {
     let mut context = RuntimeContext::new(uref_lookup, account, base_key);
-    known_urefs.iter().for_each(|key| context.insert_uref(key.clone()));
+    known_urefs
+        .iter()
+        .for_each(|key| context.insert_uref(key.clone()));
     context
 }
 
@@ -543,6 +550,83 @@ fn store_contract_hash_legal_urefs() {
     // Test that Runtime stored contract under expected hash
     let transforms = test_fixture.tc.borrow().effect().1;
     let effect = transforms.get(&hash).unwrap();
+    // Assert contract in the GlobalState is the one we wanted to store.
+    assert_eq!(effect, &Transform::Write(contract));
+}
+
+#[test]
+fn store_contract_uref_known_key() {
+    // ---- Test fixtures ----
+    // URef where we will write contract
+    let contract_uref = Key::URef([2u8; 32], AccessRights::ReadWrite);
+    // URef we want to store WITH the contract so that it can use it later
+    let known_uref = Key::URef([3u8; 32], AccessRights::ReadWrite);
+    let urefs: BTreeMap<String, Key> = once(("KnownURef".to_owned(), known_uref)).collect();
+    let known_urefs: HashSet<Key> = {
+        let mut tmp: HashSet<Key> = HashSet::new();
+        tmp.insert(contract_uref);
+        tmp.insert(known_uref);
+        tmp
+    };
+
+    let mut test_fixture: TestFixture = {
+        let addr = [0u8; 20];
+        let timestamp = 1u64;
+        let nonce = 1u64;
+        let (key, account) = mock_account(addr);
+        let tc = Rc::new(RefCell::new(mock_tc(key, &account)));
+        let env = MockEnv::new(key, urefs.clone(), known_urefs, account, 0);
+        let memory = env.memory_manager();
+        TestFixture::new(addr, timestamp, nonce, env, memory, tc)
+    };
+
+    let wasm_module = create_wasm_module();
+    // ---- Test fixture ----
+
+    // We need this braces so that the `tc_borrowed` gets dropped
+    // and we can borrow it again when we call `effect()`.
+    let contract = {
+        let mut tc_borrowed = test_fixture.tc.borrow_mut();
+        let mut runtime = test_fixture.env.runtime(
+            &mut tc_borrowed,
+            test_fixture.addr,
+            test_fixture.timestamp,
+            test_fixture.nonce,
+            wasm_module.module.clone(),
+        );
+
+        let (contract_uref_ptr, contract_uref_len) = test_fixture
+            .memory
+            .write(contract_uref)
+            .expect("Writing URef to Wasm memory should work.");
+
+        let contract = Value::Contract(contract_bytes_from_wat(
+            wasm_module.module.clone(),
+            wasm_module.func_name.clone(),
+            urefs.clone(),
+        ));
+
+        let (contract_ptr, contract_len) = test_fixture
+            .memory
+            .write(contract.clone())
+            .expect("Writing Contract to Wasm memory should succeed");
+
+        // This is the FFI call that Wasm triggers when it stores a contract in GS.
+        runtime
+            .write(
+                contract_uref_ptr,
+                contract_uref_len as u32,
+                contract_ptr,
+                contract_len as u32,
+            )
+            .expect("write should succeed");
+
+        contract
+    };
+
+    // Test that Runtime stored contract under expected hash
+    let transforms = test_fixture.tc.borrow().effect().1;
+    let effect = transforms.get(&contract_uref).unwrap();
     // Assert contract in the GlobalState is the one we wanted to store.
     assert_eq!(effect, &Transform::Write(contract));
 }
