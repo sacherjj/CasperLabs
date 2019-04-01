@@ -119,7 +119,7 @@ object DagOperations {
         // Look up the ancestors of this block (recall that ancestry
         // is represented by having the index of that block present
         // in the bit set) Note: The call should never throw an exception
-        // because we traverse in reverse topological order (i.e. down parent links),
+        // because we traverse in topological order (i.e. down parent links),
         // so either the block should be one of the starting ones or we will have
         // already encountered the block's parent.
         val currSet = currMap(currBlock)
@@ -162,7 +162,7 @@ object DagOperations {
           }
 
           // The current block is taken out of the ancestry map if it is a
-          // common ancestor because we are only interested in the common ancestors.
+          // common ancestor because we are only interested in the uncommon ancestors.
           result = if (isCommon(currSet)) (newMap - currBlock, newEnqueued, newUncommon)
           else (newMap, newEnqueued, newUncommon)
         } yield result
