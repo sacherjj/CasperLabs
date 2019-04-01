@@ -1,6 +1,6 @@
 //! Core types for a Merkle Trie
 
-use common::bytesrepr::{Error as BytesReprError, FromBytes, ToBytes};
+use common::bytesrepr::{self, FromBytes, ToBytes};
 use shared::newtypes::Blake2bHash;
 use std::mem::size_of;
 use std::ops::Deref;
@@ -36,7 +36,7 @@ impl Pointer {
 }
 
 impl ToBytes for Pointer {
-    fn to_bytes(&self) -> Result<Vec<u8>, BytesReprError> {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut hash_bytes = self.hash().to_bytes()?;
         let mut ret = Vec::with_capacity(U32_SIZE + hash_bytes.len());
         ret.append(&mut self.tag().to_bytes()?);
@@ -46,7 +46,7 @@ impl ToBytes for Pointer {
 }
 
 impl FromBytes for Pointer {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), BytesReprError> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (tag, rem): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
         match tag {
             0 => {
@@ -57,7 +57,7 @@ impl FromBytes for Pointer {
                 let (hash, rem): (Blake2bHash, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((Pointer::NodePointer(hash), rem))
             }
-            _ => Err(BytesReprError::FormattingError),
+            _ => Err(bytesrepr::Error::FormattingError),
         }
     }
 }
@@ -94,13 +94,13 @@ impl Default for PointerBlock {
 }
 
 impl ToBytes for PointerBlock {
-    fn to_bytes(&self) -> Result<Vec<u8>, BytesReprError> {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         ToBytes::to_bytes(&self.0)
     }
 }
 
 impl FromBytes for PointerBlock {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), BytesReprError> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         FromBytes::from_bytes(bytes).map(|(arr, rem)| (PointerBlock(arr), rem))
     }
 }
@@ -156,7 +156,7 @@ where
     K: ToBytes,
     V: ToBytes,
 {
-    fn to_bytes(&self) -> Result<Vec<u8>, BytesReprError> {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         match self {
             Trie::Leaf { key, value } => {
                 let mut key_bytes = ToBytes::to_bytes(key).map_err(Into::into)?;
@@ -178,6 +178,9 @@ where
             Trie::Extension { affix, pointer } => {
                 let mut affix_bytes = ToBytes::to_bytes(affix)?;
                 let mut pointer_bytes = ToBytes::to_bytes(pointer)?;
+                if affix_bytes.len() + pointer_bytes.len() > u32::max_value() as usize - U32_SIZE {
+                    return Err(bytesrepr::Error::OutOfMemoryError);
+                }
                 let mut ret: Vec<u8> =
                     Vec::with_capacity(U32_SIZE + affix_bytes.len() + pointer_bytes.len());
                 ret.append(&mut self.tag().to_bytes()?);
@@ -190,7 +193,7 @@ where
 }
 
 impl<K: FromBytes, V: FromBytes> FromBytes for Trie<K, V> {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), BytesReprError> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (tag, rem): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
         match tag {
             0 => {
@@ -212,7 +215,7 @@ impl<K: FromBytes, V: FromBytes> FromBytes for Trie<K, V> {
                 let (pointer, rem): (Pointer, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((Trie::Extension { affix, pointer }, rem))
             }
-            _ => Err(BytesReprError::FormattingError),
+            _ => Err(bytesrepr::Error::FormattingError),
         }
     }
 }
