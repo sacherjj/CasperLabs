@@ -433,12 +433,6 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             err
                         }
                     },
-                    EngineError::BytesReprError(e) => {
-                        let msg = format!("Bytes representation error: {:?}", e);
-                        let mut err = wasm_error(msg);
-                        err.set_cost(cost);
-                        err
-                    }
                     EngineError::Unreachable => panic!("Reached unreachable."),
                 }
             }

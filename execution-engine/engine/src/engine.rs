@@ -1,4 +1,3 @@
-use common::bytesrepr::Error as BytesReprError;
 use common::key::Key;
 use execution::{Error as ExecutionError, Executor};
 use failure::Fail;
@@ -56,8 +55,6 @@ pub enum Error {
     StorageError(storage::error::Error),
     #[fail(display = "Unreachable")]
     Unreachable,
-    #[fail(display = "{}", _0)]
-    BytesReprError(BytesReprError),
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -101,12 +98,6 @@ impl From<::execution::Error> for Error {
 impl From<!> for Error {
     fn from(_error: !) -> Self {
         Error::Unreachable
-    }
-}
-
-impl From<BytesReprError> for Error {
-    fn from(error: BytesReprError) -> Self {
-        Error::BytesReprError(error)
     }
 }
 
