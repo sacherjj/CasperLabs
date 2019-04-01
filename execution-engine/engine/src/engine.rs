@@ -1,5 +1,5 @@
 use common::key::Key;
-use execution::{Error as ExecutionError, Executor};
+use execution::{self, Executor};
 use failure::Fail;
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
@@ -104,7 +104,7 @@ impl From<!> for Error {
 impl<H> EngineState<H>
 where
     H: History,
-    H::Error: Into<ExecutionError>,
+    H::Error: Into<execution::Error>,
 {
     pub fn new(state: H) -> EngineState<H> {
         EngineState {
