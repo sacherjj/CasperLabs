@@ -231,15 +231,17 @@ impl FromBytes for Vec<Vec<u8>> {
 impl ToBytes for Vec<Vec<u8>> {
     type Error = Error;
     fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+        if self.len() >= u32::max_value() as usize - U32_SIZE {
+            // Fail fast for large enough vectors
+            return Err(Error::OutOfMemoryError);
+        }
         // Calculate total length of all vectors
         let total_length: usize = self.iter().map(Vec::len).sum();
         // It could be either length of vector which serialized would exceed
         // the maximum size of vector (i.e. vector of vectors of size 1),
-        // or the total length of all vectors (i.e. vector of size 1 which olds
+        // or the total length of all vectors (i.e. vector of size 1 which holds
         // vector of size 2^32-1)
-        if self.len() >= u32::max_value() as usize - U32_SIZE
-            || total_length >= u32::max_value() as usize - U32_SIZE
-        {
+        if total_length >= u32::max_value() as usize - U32_SIZE {
             return Err(Error::OutOfMemoryError);
         }
         let size = self.len() as u32;
