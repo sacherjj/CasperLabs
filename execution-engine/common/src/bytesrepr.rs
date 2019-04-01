@@ -158,6 +158,9 @@ impl<T: ToBytes> ToBytes for Option<T> {
         match self {
             Some(v) => {
                 let mut value = v.to_bytes()?;
+                if value.len() >= u32::max_value() as usize - U32_SIZE {
+                    return Err(Error::OutOfMemoryError)
+                }
                 let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + value.len());
                 result.append(&mut 1u32.to_bytes()?);
                 result.append(&mut value);
