@@ -162,7 +162,7 @@ object DagOperations {
           }
 
           // The current block is taken out of the ancestry map if it is a
-          // common ancestor because we are only interested in the common ancestors.
+          // common ancestor because we are only interested in the uncommon ancestors.
           result = if (isCommon(currSet)) (newMap - currBlock, newEnqueued, newUncommon)
           else (newMap, newEnqueued, newUncommon)
         } yield result
