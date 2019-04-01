@@ -56,13 +56,11 @@ impl<K: Ord, V> InMemHist<K, V> {
     where
         K: ToBytes,
         V: ToBytes,
-        K::Error: Into<StorageError> + Send,
-        V::Error: Into<StorageError> + Send,
     {
         let mut data: Vec<u8> = Vec::new();
         for (k, v) in state.iter() {
-            data.extend(k.to_bytes().map_err(Into::into)?);
-            data.extend(v.to_bytes().map_err(Into::into)?);
+            data.extend(k.to_bytes()?);
+            data.extend(v.to_bytes()?);
         }
         Ok(Blake2bHash::new(&data))
     }

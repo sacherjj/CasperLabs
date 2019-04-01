@@ -43,8 +43,7 @@ const U512_ID: u8 = 10;
 use self::Value::*;
 
 impl ToBytes for Value {
-    type Error = Error;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
             Int32(i) => {
                 let mut result = Vec::with_capacity(5);

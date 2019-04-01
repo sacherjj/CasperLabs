@@ -49,7 +49,6 @@ pub trait CheckedSub: core::ops::Sub<Self, Output = Self> + Sized {
 macro_rules! ser_and_num_impls {
     ($type:ident, $total_bytes:expr) => {
         impl ToBytes for $type {
-            type Error = Error;
             fn to_bytes(&self) -> Result<Vec<u8>, Error> {
                 let mut buf = [0u8; $total_bytes];
                 self.to_little_endian(&mut buf);

@@ -44,8 +44,7 @@ impl<'a> TryFrom<&'a [u8]> for Blake2bHash {
 }
 
 impl ToBytes for Blake2bHash {
-    type Error = BytesReprError;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+    fn to_bytes(&self) -> Result<Vec<u8>, BytesReprError> {
         ToBytes::to_bytes(&self.0)
     }
 }

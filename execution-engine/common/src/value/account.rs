@@ -42,7 +42,6 @@ impl Account {
 }
 
 impl ToBytes for Account {
-    type Error = Error;
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut result: Vec<u8> = Vec::new();
         result.extend(&self.public_key.to_bytes()?);

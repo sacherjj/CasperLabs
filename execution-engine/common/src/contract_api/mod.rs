@@ -11,7 +11,6 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::{TryFrom, TryInto};
-use core::fmt::Debug;
 
 /// Read value under the key in the global state
 pub fn read<T>(u_ptr: UPointer<T>) -> T
@@ -188,10 +187,7 @@ pub fn add_uref(name: &str, key: &Key) {
 /// return a value to their caller. The return value of a directly deployed
 /// contract is never looked at.
 #[allow(clippy::ptr_arg)]
-pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<Key>) -> !
-where
-    T::Error: Debug,
-{
+pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<Key>) -> ! {
     let (ptr, size, _bytes) = to_ptr(t);
     let (urefs_ptr, urefs_size, _bytes2) = to_ptr(extra_urefs);
     unsafe {

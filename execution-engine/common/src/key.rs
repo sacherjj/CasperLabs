@@ -209,8 +209,7 @@ const ACCESS_RIGHTS_SIZE: usize = 1; // u8 used to tag AccessRights
 pub const UREF_SIZE: usize = U32_SIZE + N32 + KEY_ID_SIZE + ACCESS_RIGHTS_SIZE;
 
 impl ToBytes for AccessRights {
-    type Error = Error;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
             AccessRights::Eqv => 1u8.to_bytes(),
             AccessRights::Read => 2u8.to_bytes(),
@@ -241,8 +240,7 @@ impl FromBytes for AccessRights {
 }
 
 impl ToBytes for Key {
-    type Error = Error;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
             Account(addr) => {
                 let mut result = Vec::with_capacity(25);
@@ -309,8 +307,7 @@ impl FromBytes for Vec<Key> {
     }
 }
 impl ToBytes for Vec<Key> {
-    type Error = Error;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let size = self.len() as u32;
         let mut result: Vec<u8> = Vec::with_capacity(4 + (size as usize) * UREF_SIZE);
         result.extend(size.to_bytes()?);

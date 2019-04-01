@@ -33,8 +33,7 @@ impl Contract {
 }
 
 impl ToBytes for Contract {
-    type Error = Error;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let size: usize = 4 +                           //size for length of bytes
                     self.bytes.len() +                  //size for elements of bytes
                     4 +                                 //size for length of known_urefs

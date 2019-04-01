@@ -36,7 +36,6 @@ impl Pointer {
 }
 
 impl ToBytes for Pointer {
-    type Error = BytesReprError;
     fn to_bytes(&self) -> Result<Vec<u8>, BytesReprError> {
         let mut hash_bytes = self.hash().to_bytes()?;
         let mut ret = Vec::with_capacity(U32_SIZE + hash_bytes.len());
@@ -95,8 +94,7 @@ impl Default for PointerBlock {
 }
 
 impl ToBytes for PointerBlock {
-    type Error = BytesReprError;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+    fn to_bytes(&self) -> Result<Vec<u8>, BytesReprError> {
         ToBytes::to_bytes(&self.0)
     }
 }
@@ -157,11 +155,8 @@ impl<K, V> ToBytes for Trie<K, V>
 where
     K: ToBytes,
     V: ToBytes,
-    K::Error: Into<BytesReprError> + Send,
-    V::Error: Into<BytesReprError> + Send,
 {
-    type Error = BytesReprError;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+    fn to_bytes(&self) -> Result<Vec<u8>, BytesReprError> {
         match self {
             Trie::Leaf { key, value } => {
                 let mut key_bytes = ToBytes::to_bytes(key).map_err(Into::into)?;
