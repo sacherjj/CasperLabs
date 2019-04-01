@@ -5,7 +5,6 @@ use failure::Fail;
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
-use storage::gs::error::GlobalStateError;
 use storage::gs::ExecutionEffect;
 use storage::history::*;
 use storage::transform::Transform;
@@ -59,8 +58,6 @@ pub enum Error {
     Unreachable,
     #[fail(display = "{}", _0)]
     BytesReprError(BytesReprError),
-    #[fail(display = "{}", _0)]
-    GlobalStateError(GlobalStateError),
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -110,11 +107,6 @@ impl From<!> for Error {
 impl From<BytesReprError> for Error {
     fn from(error: BytesReprError) -> Self {
         Error::BytesReprError(error)
-    }
-}
-impl From<GlobalStateError> for Error {
-    fn from(error: GlobalStateError) -> Self {
-        Error::GlobalStateError(error)
     }
 }
 

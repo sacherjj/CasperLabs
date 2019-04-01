@@ -439,12 +439,6 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         err.set_cost(cost);
                         err
                     }
-                    EngineError::GlobalStateError(e) => {
-                        let msg = format!("Global state error: {:?}", e);
-                        let mut err = wasm_error(msg);
-                        err.set_cost(cost);
-                        err
-                    }
                     EngineError::Unreachable => panic!("Reached unreachable."),
                 }
             }

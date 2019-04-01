@@ -1,8 +1,8 @@
+use crate::error::Error as StorageError;
 use crate::transform::{self, Transform};
 use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::value::Value;
-use gs::error::GlobalStateError;
 use gs::*;
 use history::*;
 use shared::newtypes::Blake2bHash;
@@ -23,7 +23,7 @@ impl<K, V> Clone for InMemGS<K, V> {
 }
 
 impl DbReader for InMemGS<Key, Value> {
-    type Error = GlobalStateError;
+    type Error = StorageError;
     fn get(&self, k: &Key) -> Result<Option<Value>, Self::Error> {
         Ok(self.0.get(k).map(Clone::clone))
     }
@@ -52,12 +52,12 @@ impl<K: Ord, V> InMemHist<K, V> {
 
     // TODO(mateusz.gorski): I know this is not efficient and we should be caching these values
     // but for the time being it should be enough.
-    fn get_root_hash(state: &BTreeMap<K, V>) -> Result<Blake2bHash, GlobalStateError>
+    fn get_root_hash(state: &BTreeMap<K, V>) -> Result<Blake2bHash, StorageError>
     where
         K: ToBytes,
         V: ToBytes,
-        K::Error: Into<GlobalStateError> + Send,
-        V::Error: Into<GlobalStateError> + Send,
+        K::Error: Into<StorageError> + Send,
+        V::Error: Into<StorageError> + Send,
     {
         let mut data: Vec<u8> = Vec::new();
         for (k, v) in state.iter() {
@@ -69,7 +69,7 @@ impl<K: Ord, V> InMemHist<K, V> {
 }
 
 impl History for InMemHist<Key, Value> {
-    type Error = GlobalStateError;
+    type Error = StorageError;
     type Reader = InMemGS<Key, Value>;
 
     fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {

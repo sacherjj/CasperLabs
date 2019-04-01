@@ -5,7 +5,6 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::{Account, Value};
-use storage::gs::error::GlobalStateError;
 use storage::gs::{DbReader, ExecutionEffect};
 use storage::transform::TypeMismatch;
 use trackingcopy::{AddResult, TrackingCopy};
@@ -43,7 +42,6 @@ pub enum Error {
     Ret(Vec<Key>),
     Rng(rand::Error),
     Unreachable,
-    GlobalStateError(GlobalStateError),
 }
 
 impl fmt::Display for Error {
@@ -79,12 +77,6 @@ impl From<BytesReprError> for Error {
 impl From<!> for Error {
     fn from(_err: !) -> Error {
         Error::Unreachable
-    }
-}
-
-impl From<GlobalStateError> for Error {
-    fn from(err: GlobalStateError) -> Error {
-        Error::GlobalStateError(err)
     }
 }
 

@@ -4,7 +4,6 @@ use crate::common::key::Key;
 use crate::common::value::{Account, Value};
 use std::collections::{BTreeMap, HashMap};
 
-pub mod error;
 pub mod inmem;
 pub mod lmdb;
 
