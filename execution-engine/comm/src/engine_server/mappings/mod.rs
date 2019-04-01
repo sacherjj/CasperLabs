@@ -512,7 +512,7 @@ fn wasm_error(msg: String) -> ipc::DeployResult {
 mod tests {
     use super::wasm_error;
     use common::key::Key;
-    use execution_engine::engine::{Error as EngineError, ExecutionResult};
+    use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
     use shared::newtypes::Blake2bHash;
     use std::collections::HashMap;
     use std::convert::TryInto;
@@ -534,7 +534,6 @@ mod tests {
 
     #[test]
     fn deploy_result_to_ipc_missing_root() {
-        use execution_engine::engine::RootNotFound;
         let root_hash: Blake2bHash = [1u8; 32].into();
         let mut result: super::ipc::RootNotFound = RootNotFound(root_hash).into();
         let ipc_missing_hash = result.take_hash();
