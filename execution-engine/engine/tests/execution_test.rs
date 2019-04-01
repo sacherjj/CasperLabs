@@ -515,7 +515,7 @@ fn store_contract_hash_legal_urefs() {
 
         let contract = Value::Contract(contract_bytes_from_wat(
             wasm_module.module.clone(),
-            "add".to_owned(),
+            wasm_module.func_name.clone(),
             urefs.clone(),
         ));
 
