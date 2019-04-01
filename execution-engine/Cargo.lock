@@ -132,7 +132,6 @@ dependencies = [
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "wee_alloc 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

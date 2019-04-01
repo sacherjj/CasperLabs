@@ -4,7 +4,6 @@ use super::alloc::vec::Vec;
 use core::mem::{size_of, MaybeUninit};
 
 use failure::Fail;
-use wasmi::HostError;
 
 const I32_SIZE: usize = size_of::<i32>();
 pub const U32_SIZE: usize = size_of::<u32>();
@@ -35,8 +34,6 @@ pub enum Error {
     #[fail(display = "Serialization error: out of memory")]
     OutOfMemoryError,
 }
-
-impl HostError for Error {}
 
 pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {
     let (t, rem): (T, &[u8]) = FromBytes::from_bytes(bytes)?;

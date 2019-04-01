@@ -320,7 +320,7 @@ where
             .uref_lookup
             .get(&name)
             .ok_or_else(|| Error::URefNotFound(name))?;
-        let uref_bytes = uref.to_bytes()?;
+        let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
 
         self.memory
             .set(dest_ptr, &uref_bytes)
@@ -556,7 +556,7 @@ where
     pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
         let value_bytes = {
             let value = self.value_from_key(key_ptr, key_size)?;
-            value.to_bytes()?
+            value.to_bytes().map_err(Error::BytesRepr)?
         };
         self.host_buf = value_bytes;
         Ok(self.host_buf.len())
@@ -568,7 +568,7 @@ where
         let key = Key::URef(key, AccessRights::ReadWrite);
         self.context.insert_uref(key);
         self.memory
-            .set(key_ptr, &key.to_bytes()?)
+            .set(key_ptr, &key.to_bytes().map_err(Error::BytesRepr)?)
             .map_err(|e| Error::Interpreter(e).into())
     }
 }
