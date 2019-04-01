@@ -16,8 +16,9 @@ use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
 use shared::newtypes::Blake2bHash;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
+use std::iter::once;
 use storage::gs::{inmem::*, DbReader};
 use storage::history::*;
 use storage::transform::Transform;
@@ -29,12 +30,19 @@ struct MockEnv {
     pub key: Key,
     pub account: value::Account,
     pub uref_lookup: BTreeMap<String, Key>,
+    pub known_urefs: HashSet<Key>,
     pub gas_limit: u64,
     pub memory: MemoryRef,
 }
 
 impl MockEnv {
-    pub fn new(key: Key, uref_lookup: BTreeMap<String, Key>, account: value::Account, gas_limit: u64) -> Self {
+    pub fn new(
+        key: Key,
+        uref_lookup: BTreeMap<String, Key>,
+        known_urefs: HashSet<Key>,
+        account: value::Account,
+        gas_limit: u64,
+    ) -> Self {
         let memory = MemoryInstance::alloc(Pages(17), Some(Pages(MAX_MEM_PAGES as usize)))
             .expect("Mocked memory should be able to be created.");
 
@@ -42,6 +50,7 @@ impl MockEnv {
             key,
             account,
             uref_lookup,
+            known_urefs,
             gas_limit,
             memory,
         }
@@ -55,7 +64,7 @@ impl MockEnv {
         nonce: u64,
         module: Module,
     ) -> Runtime<'a, InMemGS<Key, Value>> {
-        let context = mock_context(&mut self.uref_lookup, &self.account, self.key);
+        let context = mock_context(&mut self.uref_lookup, &mut self.known_urefs, &self.account, self.key);
         Runtime::new(
             self.memory.clone(),
             tc,
@@ -188,10 +197,13 @@ fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS
 
 fn mock_context<'a>(
     uref_lookup: &'a mut BTreeMap<String, Key>,
+    known_urefs: &'a mut HashSet<Key>,
     account: &'a value::Account,
     base_key: Key,
 ) -> RuntimeContext<'a> {
-    RuntimeContext::new(uref_lookup, account, base_key)
+    let mut context = RuntimeContext::new(uref_lookup, account, base_key);
+    known_urefs.iter().for_each(|key| context.insert_uref(key.clone()));
+    context
 }
 
 fn mock_module() -> Module {
@@ -245,8 +257,9 @@ impl Default for TestFixture {
         let nonce: u64 = 1;
         let (key, account) = mock_account(addr);
         let tc = Rc::new(RefCell::new(mock_tc(key, &account)));
-        let urefs: BTreeMap<String, Key> = BTreeMap::new();
-        let env = MockEnv::new(key, urefs, account, 0);
+        let uref_lookup: BTreeMap<String, Key> = BTreeMap::new();
+        let known_urefs: HashSet<Key> = HashSet::new();
+        let env = MockEnv::new(key, uref_lookup, known_urefs, account, 0);
         let memory = env.memory_manager();
         TestFixture::new(addr, timestamp, nonce, env, memory, tc)
     }
