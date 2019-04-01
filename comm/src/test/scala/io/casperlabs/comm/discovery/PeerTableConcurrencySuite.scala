@@ -13,7 +13,7 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
-  private trait KademliaMock extends KademliaRPC[Task] {
+  private trait KademliaMock extends KademliaService[Task] {
     override def lookup(id: NodeIdentifier, peer: PeerNode): Task[Option[Seq[PeerNode]]] =
       Task.now(None)
     override def receive(

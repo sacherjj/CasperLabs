@@ -13,7 +13,7 @@ import io.casperlabs.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 
-class GrpcKademliaRPCSpec extends KademliaRPCSpec[Task, GrpcEnvironment] {
+class GrpcKademliaServiceSpec extends KademliaServiceSpec[Task, GrpcEnvironment] {
 
   implicit val log: Log[Task]         = new Log.NOPLog[Task]
   implicit val scheduler: Scheduler   = Scheduler.Implicits.global
@@ -28,14 +28,17 @@ class GrpcKademliaRPCSpec extends KademliaRPCSpec[Task, GrpcEnvironment] {
       GrpcEnvironment(host, port, peer)
     }
 
-  def createKademliaRPC(env: GrpcEnvironment, timeout: FiniteDuration): Task[KademliaRPC[Task]] = {
+  def createKademliaService(
+      env: GrpcEnvironment,
+      timeout: FiniteDuration
+  ): Task[KademliaService[Task]] = {
     implicit val ask: PeerNodeAsk[Task] =
       new DefaultApplicativeAsk[Task, PeerNode] {
         val applicative: Applicative[Task] = Applicative[Task]
         def ask: Task[PeerNode]            = Task.pure(env.peer)
       }
     CachedConnections[Task, KademliaConnTag].map { implicit cache =>
-      new GrpcKademliaRPC(env.port, timeout)
+      new GrpcKademliaService(env.port, timeout)
     }
   }
 

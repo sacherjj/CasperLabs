@@ -271,7 +271,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
 object NodeDiscoverySpec {
 
   class KademliaMock(peers: Map[PeerNode, Option[List[PeerNode]]], alive: PeerNode => Boolean)
-      extends KademliaRPC[Task] {
+      extends KademliaService[Task] {
     private val lookupsByCallee                      = Atomic(Map.empty[PeerNode, Int].withDefaultValue(0))
     private val maxConcurrentRequests                = AtomicInt(0)
     private val concurrency                          = AtomicInt(0)
@@ -311,7 +311,7 @@ object NodeDiscoverySpec {
         k: Int,
         alpha: Int = 2,
         pings: Option[Set[PeerNode]] = None
-    )(test: (KademliaMock, KademliaNodeDiscovery[Task], Int) => Task[Unit]): Unit =
+    )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit =
       PeerTable[Task](id, k)
         .flatMap { table =>
           implicit val K: KademliaMock = new KademliaMock(peers, pings.getOrElse(_ => true))
@@ -319,7 +319,7 @@ object NodeDiscoverySpec {
             .traverse(table.updateLastSeen)
             .void
           fillTable
-            .map(_ => (K, new KademliaNodeDiscovery[Task](id, table, alpha, k)))
+            .map(_ => (K, new NodeDiscoveryImpl[Task](id, table, alpha, k)))
         }
         .flatMap { case (kademlia, nd) => test(kademlia, nd, alpha) }
         .runSyncUnsafe(5.seconds)
@@ -331,7 +331,7 @@ object NodeDiscoverySpec {
         k: Int,
         alpha: Int = 2,
         pings: Option[Set[PeerNode]] = None
-    )(test: (KademliaMock, KademliaNodeDiscovery[Task], Int) => Task[Unit]): Unit =
+    )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit =
       customInitialWithFailures(toLookup, peers.mapValues(Option(_)), initial, k, alpha, pings)(
         test
       )
@@ -342,7 +342,7 @@ object NodeDiscoverySpec {
         k: Int,
         alpha: Int = 2,
         pings: Option[Set[PeerNode]] = None
-    )(test: (KademliaMock, KademliaNodeDiscovery[Task], Int) => Task[Unit]): Unit =
+    )(test: (KademliaMock, NodeDiscoveryImpl[Task], Int) => Task[Unit]): Unit =
       customInitial(
         toLookup,
         peers,

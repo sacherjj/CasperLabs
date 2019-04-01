@@ -10,23 +10,23 @@ import io.casperlabs.comm.{NodeIdentifier, PeerNode}
 
 import org.scalatest._
 
-abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
-    extends KademliaRPCRuntime[F, E]
+abstract class KademliaServiceSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
+    extends KademliaServiceRuntime[F, E]
     with WordSpecLike
     with Matchers {
 
-  val kademliaRpcName: String = this.getClass.getSimpleName.replace("Spec", "")
+  val kademliaServiceName: String = this.getClass.getSimpleName.replace("Spec", "")
 
-  kademliaRpcName when {
+  kademliaServiceName when {
     "pinging a remote peer" when {
       "everything is fine" should {
         "send and receive a positive response" in
           new TwoNodesRuntime[Boolean]() {
             def execute(
-                kademliaRPC: KademliaRPC[F],
+                kademlia: KademliaService[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Boolean] = kademliaRPC.ping(remote)
+            ): F[Boolean] = kademlia.ping(remote)
 
             val result: TwoNodesResult = run()
 
@@ -40,13 +40,13 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
         "send twice and receive positive responses" in
           new TwoNodesRuntime[(Boolean, Boolean)]() {
             def execute(
-                kademliaRPC: KademliaRPC[F],
+                kademlia: KademliaService[F],
                 local: PeerNode,
                 remote: PeerNode
             ): F[(Boolean, Boolean)] =
               for {
-                r1 <- kademliaRPC.ping(remote)
-                r2 <- kademliaRPC.ping(remote)
+                r1 <- kademlia.ping(remote)
+                r2 <- kademlia.ping(remote)
               } yield (r1, r2)
 
             val result: TwoNodesResult = run()
@@ -69,10 +69,10 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
             timeout = 500.millis
           ) {
             def execute(
-                kademliaRPC: KademliaRPC[F],
+                kademlia: KademliaService[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Boolean] = kademliaRPC.ping(remote)
+            ): F[Boolean] = kademlia.ping(remote)
 
             val result: TwoNodesResult = run()
 
@@ -88,10 +88,10 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
         "get a negative result" in
           new TwoNodesRemoteDeadRuntime[Boolean]() {
             def execute(
-                kademliaRPC: KademliaRPC[F],
+                kademlia: KademliaService[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Boolean] = kademliaRPC.ping(remote)
+            ): F[Boolean] = kademlia.ping(remote)
 
             val result: TwoNodesResult = run()
 
@@ -114,10 +114,10 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
             lookupHandler = Handler.lookupHandler(Seq(otherPeer))
           ) {
             def execute(
-                kademliaRPC: KademliaRPC[F],
+                kademlia: KademliaService[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Option[Seq[PeerNode]]] = kademliaRPC.lookup(id, remote)
+            ): F[Option[Seq[PeerNode]]] = kademlia.lookup(id, remote)
 
             val result: TwoNodesResult = run()
 
@@ -137,10 +137,10 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
             timeout = 500.millis
           ) {
             def execute(
-                kademliaRPC: KademliaRPC[F],
+                kademlia: KademliaService[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Option[Seq[PeerNode]]] = kademliaRPC.lookup(id, remote)
+            ): F[Option[Seq[PeerNode]]] = kademlia.lookup(id, remote)
 
             val result: TwoNodesResult = run()
 
@@ -157,10 +157,10 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
         "get an None" in
           new TwoNodesRemoteDeadRuntime[Option[Seq[PeerNode]]]() {
             def execute(
-                kademliaRPC: KademliaRPC[F],
+                kademlia: KademliaService[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Option[Seq[PeerNode]]] = kademliaRPC.lookup(id, remote)
+            ): F[Option[Seq[PeerNode]]] = kademlia.lookup(id, remote)
 
             val result: TwoNodesResult = run()
 

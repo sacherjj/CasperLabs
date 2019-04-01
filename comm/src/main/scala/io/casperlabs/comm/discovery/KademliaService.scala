@@ -2,7 +2,7 @@ package io.casperlabs.comm.discovery
 
 import io.casperlabs.comm.{NodeIdentifier, PeerNode}
 
-trait KademliaRPC[F[_]] {
+trait KademliaService[F[_]] {
   def ping(node: PeerNode): F[Boolean]
   def lookup(id: NodeIdentifier, peer: PeerNode): F[Option[Seq[PeerNode]]]
   def receive(
@@ -12,6 +12,6 @@ trait KademliaRPC[F[_]] {
   def shutdown(): F[Unit]
 }
 
-object KademliaRPC {
-  def apply[F[_]](implicit P: KademliaRPC[F]): KademliaRPC[F] = P
+object KademliaService {
+  def apply[F[_]](implicit P: KademliaService[F]): KademliaService[F] = P
 }

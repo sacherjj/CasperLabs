@@ -77,7 +77,7 @@ final class PeerTable[F[_]: Monad](
   private[discovery] def longestCommonBitPrefix(other: NodeIdentifier): Int =
     PeerTable.longestCommonBitPrefix(local, other)
 
-  def updateLastSeen(peer: PeerNode)(implicit K: KademliaRPC[F]): F[Unit] = {
+  def updateLastSeen(peer: PeerNode)(implicit K: KademliaService[F]): F[Unit] = {
     val index = longestCommonBitPrefix(peer)
     for {
       maybeCandidate <- tableRef.modify { table =>
