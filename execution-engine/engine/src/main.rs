@@ -5,14 +5,13 @@ extern crate shared;
 extern crate storage;
 extern crate wasm_prep;
 
-use execution_engine::engine::RootNotFound;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter::Iterator;
 
 use clap::{App, Arg};
 
-use execution_engine::engine::{EngineState, ExecutionResult};
+use execution_engine::engine::{EngineState, ExecutionResult, RootNotFound};
 use execution_engine::execution::WasmiExecutor;
 use shared::newtypes::Blake2bHash;
 use storage::gs::inmem::InMemHist;
