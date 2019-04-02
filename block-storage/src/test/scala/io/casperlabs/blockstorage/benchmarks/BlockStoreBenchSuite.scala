@@ -37,10 +37,10 @@ object BlockStoreBenchSuite {
   implicit val metricsNop: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val logNop: Log[Task]         = new shared.Log.NOPLog[Task]
 
-  private val preCreatedBlocks = (0 to 50000).map(_ => randomBlock)
+  private val preCreatedBlocks = (0 to 500).map(_ => randomBlock)
 
   val blocksIter = repeatedIteratorFrom(preCreatedBlocks)
-  val preFilling = (0 to 10000).map(_ => randomBlock)
+  val preFilling = (0 to 100).map(_ => randomBlock)
 
   def randomInserted =
     preFilling(Random.nextInt(preFilling.size))
@@ -57,6 +57,22 @@ object BlockStoreBenchSuite {
 
   def randomHash: BlockHash =
     strToByteStr(randomHexString(32))
+
+  def randomDeployData: DeployData =
+    DeployData()
+      .withAddress(randomHexString(32))
+      .withPaymentCode(randomHexString(1024))
+      .withSessionCode(randomHexString(5120))
+
+  def randomDeploy: ProcessedDeploy =
+    ProcessedDeploy()
+      .withDeploy(randomDeployData)
+
+  def randomBody: Body =
+    Body()
+      .withDeploys(
+        (0 to 50) map (_ => randomDeploy)
+      )
 
   def randomBlockMessage: BlockMessage = {
     val hash      = randomHash
@@ -75,6 +91,7 @@ object BlockStoreBenchSuite {
           .withTimestamp(timestamp)
       )
       .withSender(validator)
+      .withBody(randomBody)
   }
 
   def randomKey: Key = Key(
