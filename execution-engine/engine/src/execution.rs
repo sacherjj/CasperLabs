@@ -117,16 +117,16 @@ impl<'a> RuntimeContext<'a> {
 
     // Validates whether keys used in the `value` are not forged.
     fn validate_keys(&self, value: Value) -> Result<Value, Error> {
-        match value.clone() {
-            Value::Int32(_)
-            | Value::UInt128(_)
-            | Value::UInt256(_)
-            | Value::UInt512(_)
-            | Value::ByteArray(_)
-            | Value::ListInt32(_)
-            | Value::String(_)
-            | Value::ListString(_) => Ok(value),
-            Value::NamedKey(_, key) => self.validate_key(&key).map(|_| value),
+        match value {
+            non_key @ Value::Int32(_)
+            | non_key @ Value::UInt128(_)
+            | non_key @ Value::UInt256(_)
+            | non_key @ Value::UInt512(_)
+            | non_key @ Value::ByteArray(_)
+            | non_key @ Value::ListInt32(_)
+            | non_key @ Value::String(_)
+            | non_key @ Value::ListString(_) => Ok(non_key),
+            Value::NamedKey(name, key) => self.validate_key(&key).map(|_| Value::NamedKey(name, key)),
             Value::Account(account) => {
                 // This should never happen as accounts can't be created by contracts.
                 // I am putting this here for the sake of completness.
@@ -134,13 +134,13 @@ impl<'a> RuntimeContext<'a> {
                     .urefs_lookup()
                     .values()
                     .try_for_each(|key| self.validate_key(key))
-                    .map(|_| value)
+                    .map(|_| Value::Account(account))
             }
             Value::Contract(contract) => contract
                 .urefs_lookup()
                 .values()
                 .try_for_each(|key| self.validate_key(key))
-                .map(|_| value),
+                .map(|_| Value::Contract(contract)),
         }
     }
 
