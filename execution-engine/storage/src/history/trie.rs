@@ -159,8 +159,11 @@ where
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         match self {
             Trie::Leaf { key, value } => {
-                let mut key_bytes = ToBytes::to_bytes(key).map_err(Into::into)?;
-                let mut value_bytes = ToBytes::to_bytes(value).map_err(Into::into)?;
+                let mut key_bytes = ToBytes::to_bytes(key)?;
+                let mut value_bytes = ToBytes::to_bytes(value)?;
+                if key_bytes.len() + value_bytes.len() > u32::max_value() as usize - U32_SIZE {
+                    return Err(bytesrepr::Error::OutOfMemoryError);
+                }
                 let mut ret: Vec<u8> =
                     Vec::with_capacity(U32_SIZE + key_bytes.len() + value_bytes.len());
                 ret.append(&mut self.tag().to_bytes()?);

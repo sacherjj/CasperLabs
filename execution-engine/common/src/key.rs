@@ -129,6 +129,8 @@ impl PartialOrd for AccessRights {
     }
 }
 
+pub const KEY_SIZE: usize = 32;
+
 #[repr(C)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd)]
 pub enum Key {

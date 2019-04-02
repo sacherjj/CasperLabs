@@ -1,4 +1,4 @@
-use crate::bytesrepr::{Error, FromBytes, ToBytes};
+use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE};
 use crate::key::{Key, UREF_SIZE};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
@@ -34,12 +34,14 @@ impl Contract {
 
 impl ToBytes for Contract {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        if self.bytes.len() + UREF_SIZE * self.known_urefs.len() >= u32::max_value() as usize - 8 {
+        if self.bytes.len() + UREF_SIZE * self.known_urefs.len()
+            >= u32::max_value() as usize - U32_SIZE * 2
+        {
             return Err(Error::OutOfMemoryError);
         }
-        let size: usize = 4 +                           //size for length of bytes
+        let size: usize = U32_SIZE +                           //size for length of bytes
                     self.bytes.len() +                  //size for elements of bytes
-                    4 +                                 //size for length of known_urefs
+                    U32_SIZE +                                 //size for length of known_urefs
                     UREF_SIZE * self.known_urefs.len(); //size for known_urefs elements
 
         let mut result = Vec::with_capacity(size);

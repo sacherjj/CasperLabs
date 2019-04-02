@@ -6,7 +6,13 @@ use core::mem::{size_of, MaybeUninit};
 use failure::Fail;
 
 const I32_SIZE: usize = size_of::<i32>();
+pub const U8_SIZE: usize = size_of::<u8>();
+pub const U16_SIZE: usize = size_of::<u16>();
 pub const U32_SIZE: usize = size_of::<u32>();
+pub const U64_SIZE: usize = size_of::<u64>();
+pub const U128_SIZE: usize = size_of::<u128>();
+pub const U256_SIZE: usize = U128_SIZE * 2;
+pub const U512_SIZE: usize = U256_SIZE * 2;
 
 pub const N32: usize = 32;
 const N256: usize = 256;
