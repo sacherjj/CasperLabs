@@ -363,7 +363,10 @@ object HashSetCasperTestNode {
       private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
       private def getExecutionEffect(deploy: Deploy) = {
-        val key           = Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
+        // The real execution engine will get the keys from what the code changes, which will include
+        // changes to the account nonce for example, but not the deploy timestamp. Make sure the `key`
+        // here isn't more specific to a deploy then the real thing would be.
+        val key           = Key(Key.KeyInstance.Hash(KeyHash(deploy.sessionCode)))
         val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
         val op            = Op(Op.OpInstance.Read(ReadOp()))
         val transforEntry = TransformEntry(Some(key), Some(transform))
