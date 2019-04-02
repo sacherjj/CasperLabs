@@ -16,7 +16,8 @@ use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
 use shared::newtypes::Blake2bHash;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::iter::once;
 use std::rc::Rc;
 use storage::gs::{inmem::*, DbReader};
 use storage::history::*;
@@ -26,16 +27,22 @@ use wasmi::memory_units::Pages;
 use wasmi::{MemoryInstance, MemoryRef};
 
 struct MockEnv {
-    key: Key,
-    account: value::Account,
-    uref_lookup: BTreeMap<String, Key>,
-    gas_limit: u64,
-    memory: MemoryRef,
+    pub key: Key,
+    pub account: value::Account,
+    pub uref_lookup: BTreeMap<String, Key>,
+    pub known_urefs: HashSet<Key>,
+    pub gas_limit: u64,
+    pub memory: MemoryRef,
 }
 
 impl MockEnv {
-    pub fn new(key: Key, account: value::Account, gas_limit: u64) -> Self {
-        let uref_lookup = mock_uref_lookup();
+    pub fn new(
+        key: Key,
+        uref_lookup: BTreeMap<String, Key>,
+        known_urefs: HashSet<Key>,
+        account: value::Account,
+        gas_limit: u64,
+    ) -> Self {
         let memory = MemoryInstance::alloc(Pages(17), Some(Pages(MAX_MEM_PAGES as usize)))
             .expect("Mocked memory should be able to be created.");
 
@@ -43,6 +50,7 @@ impl MockEnv {
             key,
             account,
             uref_lookup,
+            known_urefs,
             gas_limit,
             memory,
         }
@@ -56,7 +64,12 @@ impl MockEnv {
         nonce: u64,
         module: Module,
     ) -> Runtime<'a, InMemGS<Key, Value>> {
-        let context = mock_context(&mut self.uref_lookup, &self.account, self.key);
+        let context = mock_context(
+            &mut self.uref_lookup,
+            &mut self.known_urefs,
+            &self.account,
+            self.key,
+        );
         Runtime::new(
             self.memory.clone(),
             tc,
@@ -189,14 +202,15 @@ fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS
 
 fn mock_context<'a>(
     uref_lookup: &'a mut BTreeMap<String, Key>,
+    known_urefs: &'a mut HashSet<Key>,
     account: &'a value::Account,
     base_key: Key,
 ) -> RuntimeContext<'a> {
-    RuntimeContext::new(uref_lookup, account, base_key)
-}
-
-fn mock_uref_lookup() -> BTreeMap<String, Key> {
-    BTreeMap::new()
+    let mut context = RuntimeContext::new(uref_lookup, account, base_key);
+    known_urefs
+        .iter()
+        .for_each(|key| context.insert_uref(key.clone()));
+    context
 }
 
 fn mock_module() -> Module {
@@ -250,7 +264,9 @@ impl Default for TestFixture {
         let nonce: u64 = 1;
         let (key, account) = mock_account(addr);
         let tc = Rc::new(RefCell::new(mock_tc(key, &account)));
-        let env = MockEnv::new(key, account, 0);
+        let uref_lookup: BTreeMap<String, Key> = BTreeMap::new();
+        let known_urefs: HashSet<Key> = HashSet::new();
+        let env = MockEnv::new(key, uref_lookup, known_urefs, account, 0);
         let memory = env.memory_manager();
         TestFixture::new(addr, timestamp, nonce, env, memory, tc)
     }
@@ -421,6 +437,14 @@ fn store_contract_hash() {
     assert_eq!(effect, &Transform::Write(contract));
 }
 
+// Runtime will panic with ForgedReference exception.
+fn assert_panic_forged_keys(result: Result<(), wasmi::Trap>) {
+    match result {
+        Err(error) => assert!(format!("{:?}", error).contains("ForgedReference")),
+        Ok(_) => panic!("Error. Test should fail."),
+    }
+}
+
 #[test]
 fn store_contract_hash_illegal_urefs() {
     // Test fixtures
@@ -453,11 +477,7 @@ fn store_contract_hash_illegal_urefs() {
     );
 
     // Since we don't know the urefs we wanted to store together with the contract
-    // Runtime will panic with ForgedReference exception.
-    match result {
-        Err(error) => assert!(format!("{:?}", error).contains("ForgedReference")),
-        Ok(_) => panic!("Error. Test should fail."),
-    }
+    assert_panic_forged_keys(result)
 }
 
 #[test]
@@ -506,7 +526,7 @@ fn store_contract_hash_legal_urefs() {
 
         let contract = Value::Contract(contract_bytes_from_wat(
             wasm_module.module.clone(),
-            "add".to_owned(),
+            wasm_module.func_name.clone(),
             urefs.clone(),
         ));
 
@@ -536,4 +556,143 @@ fn store_contract_hash_legal_urefs() {
     let effect = transforms.get(&hash).unwrap();
     // Assert contract in the GlobalState is the one we wanted to store.
     assert_eq!(effect, &Transform::Write(contract));
+}
+
+#[test]
+fn store_contract_uref_known_key() {
+    // ---- Test fixtures ----
+    // URef where we will write contract
+    let contract_uref = Key::URef([2u8; 32], AccessRights::ReadWrite);
+    // URef we want to store WITH the contract so that it can use it later
+    let known_uref = Key::URef([3u8; 32], AccessRights::ReadWrite);
+    let urefs: BTreeMap<String, Key> = once(("KnownURef".to_owned(), known_uref)).collect();
+    let known_urefs: HashSet<Key> = {
+        let mut tmp: HashSet<Key> = HashSet::new();
+        tmp.insert(contract_uref);
+        tmp.insert(known_uref);
+        tmp
+    };
+
+    let mut test_fixture: TestFixture = {
+        let addr = [0u8; 20];
+        let timestamp = 1u64;
+        let nonce = 1u64;
+        let (key, account) = mock_account(addr);
+        let tc = Rc::new(RefCell::new(mock_tc(key, &account)));
+        let env = MockEnv::new(key, urefs.clone(), known_urefs, account, 0);
+        let memory = env.memory_manager();
+        TestFixture::new(addr, timestamp, nonce, env, memory, tc)
+    };
+
+    let wasm_module = create_wasm_module();
+    // ---- Test fixture ----
+
+    // We need this braces so that the `tc_borrowed` gets dropped
+    // and we can borrow it again when we call `effect()`.
+    let contract = {
+        let mut tc_borrowed = test_fixture.tc.borrow_mut();
+        let mut runtime = test_fixture.env.runtime(
+            &mut tc_borrowed,
+            test_fixture.addr,
+            test_fixture.timestamp,
+            test_fixture.nonce,
+            wasm_module.module.clone(),
+        );
+
+        let (contract_uref_ptr, contract_uref_len) = test_fixture
+            .memory
+            .write(contract_uref)
+            .expect("Writing URef to Wasm memory should work.");
+
+        let contract = Value::Contract(contract_bytes_from_wat(
+            wasm_module.module.clone(),
+            wasm_module.func_name.clone(),
+            urefs.clone(),
+        ));
+
+        let (contract_ptr, contract_len) = test_fixture
+            .memory
+            .write(contract.clone())
+            .expect("Writing Contract to Wasm memory should succeed");
+
+        // This is the FFI call that Wasm triggers when it stores a contract in GS.
+        runtime
+            .write(
+                contract_uref_ptr,
+                contract_uref_len as u32,
+                contract_ptr,
+                contract_len as u32,
+            )
+            .expect("write should succeed");
+
+        contract
+    };
+
+    // Test that Runtime stored contract under expected hash
+    let transforms = test_fixture.tc.borrow().effect().1;
+    let effect = transforms.get(&contract_uref).unwrap();
+    // Assert contract in the GlobalState is the one we wanted to store.
+    assert_eq!(effect, &Transform::Write(contract));
+}
+
+#[test]
+fn store_contract_uref_forged_key() {
+    // ---- Test fixtures ----
+    // URef where we will write contract
+    let forged_contract_uref = Key::URef([2u8; 32], AccessRights::ReadWrite);
+    // URef we want to store WITH the contract so that it can use it later
+    let known_uref = Key::URef([3u8; 32], AccessRights::ReadWrite);
+    let urefs: BTreeMap<String, Key> = once(("KnownURef".to_owned(), known_uref)).collect();
+    let known_urefs: HashSet<Key> = once(known_uref).collect();
+
+    let mut test_fixture: TestFixture = {
+        let addr = [0u8; 20];
+        let timestamp = 1u64;
+        let nonce = 1u64;
+        let (key, account) = mock_account(addr);
+        let tc = Rc::new(RefCell::new(mock_tc(key, &account)));
+        let env = MockEnv::new(key, urefs.clone(), known_urefs, account, 0);
+        let memory = env.memory_manager();
+        TestFixture::new(addr, timestamp, nonce, env, memory, tc)
+    };
+
+    let wasm_module = create_wasm_module();
+    // ---- Test fixture ----
+
+    // We need this braces so that the `tc_borrowed` gets dropped
+    // and we can borrow it again when we call `effect()`.
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        wasm_module.module.clone(),
+    );
+
+    let (contract_uref_ptr, contract_uref_len) = test_fixture
+        .memory
+        .write(forged_contract_uref)
+        .expect("Writing URef to Wasm memory should work.");
+
+    let contract = Value::Contract(contract_bytes_from_wat(
+        wasm_module.module.clone(),
+        wasm_module.func_name.clone(),
+        urefs.clone(),
+    ));
+
+    let (contract_ptr, contract_len) = test_fixture
+        .memory
+        .write(contract.clone())
+        .expect("Writing Contract to Wasm memory should succeed");
+
+    // This is the FFI call that Wasm triggers when it stores a contract in GS.
+    let result = runtime.write(
+        contract_uref_ptr,
+        contract_uref_len as u32,
+        contract_ptr,
+        contract_len as u32,
+    );
+
+    assert_panic_forged_keys(result);
 }
