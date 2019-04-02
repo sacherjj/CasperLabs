@@ -116,18 +116,14 @@ final class PeerTable[F[_]: Monad](
                     .filter(_.node.key != candidate.node.key)
                   table.updated(index, updated)
                 }
-              }
+            }
           )
     } yield ()
   }
 
   def lookup(toLookup: NodeIdentifier): F[Seq[PeerNode]] =
     tableRef.get.map { table =>
-      sort(
-        table.flatten
-          .filterNot(_.node.key == toLookup.key),
-        toLookup
-      ).take(k).map(_.node).toList
+      sort(table.flatten.toList, toLookup).take(k).map(_.node)
     }
 
   def find(toFind: NodeIdentifier): F[Option[PeerNode]] =
@@ -152,6 +148,6 @@ final class PeerTable[F[_]: Monad](
         Ordering[BigInt].compare(
           PeerTable.xorDistance(target, x.node.id),
           PeerTable.xorDistance(target, y.node.id)
-        )
+      )
     )
 }

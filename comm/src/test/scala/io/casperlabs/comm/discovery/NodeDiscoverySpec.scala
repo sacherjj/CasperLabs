@@ -80,17 +80,14 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
 
   "KademliaNodeDiscovery" when {
     "lookup" should {
-      "converge to the closest node if all peers are interconnected" in
+      "quit early if asked peer already in peer table" in
         forAll(genFullyConnectedPeers) { peers: Map[PeerNode, List[PeerNode]] =>
           val target = peers.keys.toList(Random.nextInt(peers.size))
           TextFixture.prefilledTable(target.id, peers, totalN(peers)) { (kademlia, nd, alpha) =>
             for {
               response <- nd.lookup(target.id)
             } yield {
-              //Each lookup request returns all peers
-              //So, second round will be the last,
-              //because no closer peer will be returned
-              kademlia.totalLookups shouldBe (alpha * 2)
+              kademlia.totalLookups shouldBe 0
               response shouldBe Some(target)
             }
           }
@@ -159,7 +156,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
         forAll(genSetPeerNodes) { peers: Set[PeerNode] =>
           val target              = peers.head
           val itself              = PeerNode(NodeDiscoverySpec.id, Endpoint("localhost", 40400, 40404))
-          val allPointingToItself = peers.map(p => (p, List(itself))).toMap
+          val allPointingToItself = peers.tail.map(p => (p, List(itself))).toMap
           TextFixture.prefilledTable(target.id, allPointingToItself, peers.size) {
             (kademlia, nd, _) =>
               for {

@@ -140,8 +140,11 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
       }
 
     for {
-      shortlist   <- table.lookup(toLookup).map(_.take(alpha))
-      closestNode <- loop(0, Set(id), shortlist)(None)
+      shortlist <- table.lookup(toLookup).map(_.take(alpha))
+      closestNode <- shortlist.headOption
+                      .filter(_.key == toLookup.key)
+                      .fold(loop(0, Set(id), shortlist)(None))(_.some.pure[F])
+
     } yield closestNode
   }
 

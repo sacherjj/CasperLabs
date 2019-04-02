@@ -120,16 +120,6 @@ class DistanceSpec extends FlatSpec with Matchers {
       table.lookup(NodeIdentifier(b.rand(width))).size should be(scala.math.min(table.k, 8 * width))
     }
 
-    it should "not return sought peer on lookup" in {
-      val table = PeerTable(kr)
-      for (k <- oneOffs(kr)) {
-        table.updateLastSeen(PeerNode(k, endpoint))
-      }
-      val target = table.tableRef.get(table.width * 4).head
-      val resp   = table.lookup(target.node.id)
-      assert(resp.forall(_.key != target.node.key))
-    }
-
     it should s"return ${8 * width} peers when sequenced" in {
       val table = PeerTable(kr)
       for (k <- oneOffs(kr)) {
