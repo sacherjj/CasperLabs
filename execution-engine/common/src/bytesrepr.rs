@@ -128,7 +128,8 @@ impl FromBytes for Vec<u8> {
 
 impl ToBytes for Vec<u8> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        // Return error if size of vector would exceed length of serialized data
+        // Return error if size of serialized vector would exceed limit for
+        // 32-bit architecture.
         if self.len() >= u32::max_value() as usize - U32_SIZE {
             return Err(Error::OutOfMemoryError);
         }
