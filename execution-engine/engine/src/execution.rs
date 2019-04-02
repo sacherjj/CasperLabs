@@ -82,6 +82,7 @@ impl From<!> for Error {
 
 impl HostError for Error {}
 
+/// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a> {
     // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
@@ -145,6 +146,9 @@ impl<'a> RuntimeContext<'a> {
         }
     }
 
+    // Validates whether key is not forged (whether it can be found in the `known_urefs`)
+    // and whether the version of a key that contract wants to use, has access rights
+    // that are less powerfull than access rights' of the key in the `known_urefs`.
     fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
             Key::URef(id, access_right) => {
@@ -492,6 +496,11 @@ where
         self.function_address(new_hash, hash_ptr)
     }
 
+    // Generates new function address.
+    // Function address is deterministic. It is a hash of public key, nonce and `fn_store_id`,
+    // which is a counter that is being incremented after every function generation. 
+    // If function address was based only on account's public key and deploy's nonce,
+    // then all function addresses generated within one deploy would have been the same.
     fn new_function_address(&mut self) -> [u8; 32] {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
         pre_hash_bytes.extend_from_slice(self.context.account.pub_key());
@@ -507,12 +516,14 @@ where
         hash_bytes
     }
 
+    // Writes function address (`hash_bytes`) into the Wasm memory (at `dest_ptr` pointer).
     fn function_address(&mut self, hash_bytes: [u8; 32], dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &hash_bytes)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
+    // Writes value under a key (specified by their pointer and length properties from the Wasm memory).
     pub fn write(
         &mut self,
         key_ptr: u32,
@@ -545,6 +556,9 @@ where
         self.add_transforms(key, value)
     }
 
+
+    // Reads value living under a key (found at `key_ptr` and `key_size` in Wasm memory).
+    // Fails if `key` is not "readable", i.e. its access rights are weaker than `AccessRights::Read`.
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
         if key.is_readable() {
@@ -557,6 +571,10 @@ where
         }
     }
 
+    // Adds `value` to the `key`. The premise for being able to `add` value is that
+    // the type of it [value] can be added (is a Monoid). If the values can't be added,
+    // either because they're not a Monoid or if the value stored under `key` has different type,
+    // then `TypeMismatch` errors is returned. Addition can also fail when `key` is not "addable".
     fn add_transforms(&mut self, key: Key, value: Value) -> Result<(), Trap> {
         if key.is_addable() {
             match self.state.add(key, value) {
@@ -576,6 +594,10 @@ where
         }
     }
 
+    /// Reads value from the GS living under key specified by `key_ptr` and `key_size`.
+    /// Wasm and host communicate through memory that Wasm module exports. 
+    /// If contract wants to pass data to the host, it has to tell it [the host]
+    /// where this data lives in the exported memory (pass its pointer and length).
     pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
         let value_bytes = {
             let value = self.value_from_key(key_ptr, key_size)?;
@@ -585,6 +607,7 @@ where
         Ok(self.host_buf.len())
     }
 
+    /// Generates new unforgable reference and adds it to the context's known_uref set.
     pub fn new_uref(&mut self, key_ptr: u32) -> Result<(), Trap> {
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
@@ -596,6 +619,7 @@ where
     }
 }
 
+// Helper function for turning result of lookup into domain values.
 fn err_on_missing_key<A, E>(key: Key, r: Result<Option<A>, E>) -> Result<A, Error>
 where
     E: Into<Error>,
