@@ -92,6 +92,7 @@ pub struct RuntimeContext<'a> {
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
+    gas_limit: u64,
 }
 
 impl<'a> RuntimeContext<'a> {
@@ -99,12 +100,14 @@ impl<'a> RuntimeContext<'a> {
         uref_lookup: &'a mut BTreeMap<String, Key>,
         account: &'a Account,
         base_key: Key,
+        gas_limit: u64,
     ) -> Self {
         RuntimeContext {
             uref_lookup,
             known_urefs: HashSet::new(),
             account,
             base_key,
+            gas_limit,
         }
     }
 
@@ -191,7 +194,6 @@ pub struct Runtime<'a, R: DbReader> {
     host_buf: Vec<u8>,
     fn_store_id: u32,
     gas_counter: u64,
-    gas_limit: u64,
     context: RuntimeContext<'a>,
     rng: ChaChaRng,
 }
@@ -221,7 +223,6 @@ where
         memory: MemoryRef,
         state: &'a mut TrackingCopy<R>,
         module: Module,
-        gas_limit: u64,
         account_addr: [u8; 20],
         nonce: u64,
         timestamp: u64,
@@ -237,7 +238,6 @@ where
             host_buf: Vec::new(),
             fn_store_id: 0,
             gas_counter: 0,
-            gas_limit,
             context,
             rng,
         }
@@ -252,7 +252,7 @@ where
         match prev.checked_add(amount) {
             // gas charge overflow protection
             None => false,
-            Some(val) if val > self.gas_limit => false,
+            Some(val) if val > self.context.gas_limit => false,
             Some(val) => {
                 self.gas_counter = val;
                 true
@@ -1004,12 +1004,12 @@ where
         host_buf: Vec::new(),
         fn_store_id: 0,
         gas_counter: current_runtime.gas_counter,
-        gas_limit: current_runtime.gas_limit,
         context: RuntimeContext {
             uref_lookup: refs,
             known_urefs,
             account: current_runtime.context.account,
             base_key: key,
+            gas_limit: current_runtime.context.gas_limit,
         },
         rng,
     };
@@ -1103,12 +1103,12 @@ impl Executor<Module> for WasmiExecutor {
             known_urefs,
             account: &account,
             base_key: acct_key,
+            gas_limit,
         };
         let mut runtime = Runtime::new(
             memory,
             tc,
             parity_module,
-            gas_limit,
             account_addr,
             nonce,
             timestamp,
