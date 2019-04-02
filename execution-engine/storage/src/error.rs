@@ -10,7 +10,7 @@ pub enum Error {
     #[fail(display = "{}", _0)]
     BytesRepr(#[fail(cause)] bytesrepr::Error),
 
-    #[fail(display = "That error is poison")]
+    #[fail(display = "Another thread panicked while holding a lock")]
     PoisonError,
 }
 
