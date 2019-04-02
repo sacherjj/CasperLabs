@@ -18,10 +18,10 @@ object Estimator {
 
   implicit val decreasingOrder = Ordering[Long].reverse
 
-  def tips[F[_]: Monad: BlockStore](
+  def tips[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       lastFinalizedBlockHash: BlockHash
-  ): F[IndexedSeq[BlockMessage]] =
+  ): F[IndexedSeq[BlockHash]] =
     for {
       latestMessageHashes <- blockDag.latestMessageHashes
       result              <- Estimator.tips[F](blockDag, lastFinalizedBlockHash, latestMessageHashes)
@@ -35,16 +35,16 @@ object Estimator {
     * be deeper than X blocks from the tip. This allows different validators to have
     * different last finalized blocks and still come up with the same estimator tips for a block.
     */
-  def tips[F[_]: Monad: BlockStore](
+  def tips[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       lastFinalizedBlockHash: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockMessage]] = {
+  ): F[IndexedSeq[BlockHash]] = {
     def sortChildren(
         blocks: List[BlockHash],
         blockDag: BlockDagRepresentation[F],
         scores: Map[BlockHash, Long]
-    ): F[List[BlockHash]] =
+    ): F[IndexedSeq[BlockHash]] =
       // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
       for {
         unsortedNewBlocks <- blocks.flatTraverse(replaceBlockHashWithChildren(_, blockDag, scores))
@@ -53,7 +53,7 @@ object Estimator {
           scores
         )
         result <- if (stillSame(blocks, newBlocks)) {
-                   blocks.pure[F]
+                   blocks.toIndexedSeq.pure[F]
                  } else {
                    sortChildren(newBlocks, blockDag, scores)
                  }
@@ -83,12 +83,10 @@ object Estimator {
                              blockDag,
                              scoresMap
                            )
-      maybeSortedChildren <- sortedChildrenHash.traverse(BlockStore[F].getBlockMessage)
-      sortedChildren      = maybeSortedChildren.flatten.toVector
-    } yield sortedChildren
+    } yield sortedChildrenHash
   }
 
-  def buildScoresMap[F[_]: Monad](
+  private def buildScoresMap[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash],
       lastFinalizedBlockHash: BlockHash

@@ -6,8 +6,9 @@ import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
-import io.casperlabs.casper.Estimator.Validator
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.catscontrib.ski._
@@ -28,7 +29,7 @@ trait Casper[F[_], A] {
   def createBlock: F[CreateBlockStatus]
 }
 
-trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
+trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
   def blockDag: F[BlockDagRepresentation[F]]
   def fetchDependencies: F[Unit]
   // This is the weight of faults that have been accumulated so far.
@@ -44,11 +45,12 @@ object MultiParentCasper extends MultiParentCasperInstances {
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
     kp2(().pure[F])
 
-  def forkChoiceTip[F[_]: MultiParentCasper: Monad]: F[BlockMessage] =
+  def forkChoiceTip[F[_]: MultiParentCasper: Monad: BlockStore]: F[BlockMessage] =
     for {
-      dag  <- MultiParentCasper[F].blockDag
-      tips <- MultiParentCasper[F].estimator(dag)
-      tip  = tips.head
+      dag       <- MultiParentCasper[F].blockDag
+      tipHashes <- MultiParentCasper[F].estimator(dag)
+      tipHash   = tipHashes.head
+      tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
     } yield tip
 }
 
