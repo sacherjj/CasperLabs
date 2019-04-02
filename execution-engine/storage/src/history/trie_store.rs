@@ -6,8 +6,10 @@
 use history::trie::Trie;
 use shared::newtypes::Blake2bHash;
 
-pub mod in_memory;
 pub mod lmdb;
+
+#[cfg(test)]
+mod in_memory;
 
 #[cfg(test)]
 mod tests;
