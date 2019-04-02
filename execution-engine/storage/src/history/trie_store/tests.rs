@@ -390,7 +390,7 @@ mod roundtrip {
 
     const DEFAULT_MIN_LENGTH: usize = 1;
 
-    const DEFAULT_MAX_LENGTH: usize = 1;
+    const DEFAULT_MAX_LENGTH: usize = 4;
 
     fn get_range() -> RangeInclusive<usize> {
         let start = option_env!("CL_TRIE_STORE_TEST_VECTOR_MIN_LENGTH")
