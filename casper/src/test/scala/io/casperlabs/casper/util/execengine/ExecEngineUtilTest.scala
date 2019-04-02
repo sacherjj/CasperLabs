@@ -366,6 +366,31 @@ class ExecEngineUtilTest
         } yield batchResult should contain theSameElementsAs singleResults
   }
 
+  it should "keep track of different deploys with identical effects (NODE-376)" in withStorage {
+    implicit blockStore =>
+      implicit blockDagStorage =>
+        // Create multiple identical deploys.
+        val startTime = System.currentTimeMillis
+        val deploys = List.range(0, 10).map { i =>
+          ProtoUtil.sourceDeploy(
+            ByteString.copyFromUtf8("Doesn't matter what this is."),
+            startTime + i,
+            Integer.MAX_VALUE
+          )
+        }
+        for {
+          dag <- blockDagStorage.getRepresentation
+          checkpoint <- ExecEngineUtil.computeDeploysCheckpoint(
+                         parents = Seq.empty,
+                         deploys = deploys,
+                         dag = dag
+                       )
+        } yield {
+          val processedDeploys = checkpoint.deploysForBlock.map(_.getDeploy)
+          processedDeploys should contain theSameElementsInOrderAs deploys
+      }
+  }
+
   "validateBlockCheckpoint" should "return InvalidPreStateHash when preStateHash of block is not correct" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val contract = ByteString.copyFromUtf8(registry)
