@@ -131,7 +131,9 @@ impl<'a> RuntimeContext<'a> {
             | non_key @ Value::ListInt32(_)
             | non_key @ Value::String(_)
             | non_key @ Value::ListString(_) => Ok(non_key),
-            Value::NamedKey(name, key) => self.validate_key(&key).map(|_| Value::NamedKey(name, key)),
+            Value::NamedKey(name, key) => {
+                self.validate_key(&key).map(|_| Value::NamedKey(name, key))
+            }
             Value::Account(account) => {
                 // This should never happen as accounts can't be created by contracts.
                 // I am putting this here for the sake of completness.
@@ -498,7 +500,7 @@ where
 
     // Generates new function address.
     // Function address is deterministic. It is a hash of public key, nonce and `fn_store_id`,
-    // which is a counter that is being incremented after every function generation. 
+    // which is a counter that is being incremented after every function generation.
     // If function address was based only on account's public key and deploy's nonce,
     // then all function addresses generated within one deploy would have been the same.
     fn new_function_address(&mut self) -> [u8; 32] {
@@ -556,7 +558,6 @@ where
         self.add_transforms(key, value)
     }
 
-
     // Reads value living under a key (found at `key_ptr` and `key_size` in Wasm memory).
     // Fails if `key` is not "readable", i.e. its access rights are weaker than `AccessRights::Read`.
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
@@ -595,7 +596,7 @@ where
     }
 
     /// Reads value from the GS living under key specified by `key_ptr` and `key_size`.
-    /// Wasm and host communicate through memory that Wasm module exports. 
+    /// Wasm and host communicate through memory that Wasm module exports.
     /// If contract wants to pass data to the host, it has to tell it [the host]
     /// where this data lives in the exported memory (pass its pointer and length).
     pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
