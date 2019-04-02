@@ -29,6 +29,7 @@ class GrpcGossipServiceSpec
     with Eventually
     with Matchers
     with BeforeAndAfterAll
+    with SequentialNestedSuiteExecution
     with ArbitraryConsensus {
 
   import GrpcGossipServiceSpec._
