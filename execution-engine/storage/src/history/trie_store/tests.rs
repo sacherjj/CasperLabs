@@ -3,11 +3,10 @@ use history::trie::Trie;
 use history::trie_store::{Readable, TrieStore, Writable};
 use shared::newtypes::Blake2bHash;
 
-fn put_many<'a, K, V, T, S, E>(
-    txn: &mut T,
-    store: &S,
-    items: &[(Blake2bHash, Trie<K, V>)],
-) -> Result<(), E>
+#[derive(Clone)]
+struct TestData<K: ToBytes, V: ToBytes>(Blake2bHash, Trie<K, V>);
+
+fn put_many<K, V, T, S, E>(txn: &mut T, store: &S, items: &[TestData<K, V>]) -> Result<(), E>
 where
     K: ToBytes,
     V: ToBytes,
@@ -16,13 +15,13 @@ where
     S::Error: From<T::Error>,
     E: From<S::Error>,
 {
-    for (hash, leaf) in items.iter() {
+    for TestData(hash, leaf) in items.iter() {
         store.put::<T>(txn, hash, leaf)?;
     }
     Ok(())
 }
 
-fn get_many<'a, K, V, T, S, E>(
+fn get_many<K, V, T, S, E>(
     txn: &T,
     store: &S,
     keys: &[&Blake2bHash],
@@ -45,6 +44,7 @@ where
 }
 
 mod simple {
+    use super::TestData;
     use common::bytesrepr::ToBytes;
     use error;
     use history::trie::{Pointer, PointerBlock, Trie};
@@ -53,7 +53,7 @@ mod simple {
     use shared::newtypes::Blake2bHash;
     use tempfile::tempdir;
 
-    fn create_data() -> Vec<(Blake2bHash, Trie<Vec<u8>, Vec<u8>>)> {
+    fn create_data() -> Vec<TestData<Vec<u8>, Vec<u8>>> {
         let leaf_1 = Trie::Leaf {
             key: vec![0u8, 0, 0],
             value: b"val_1".to_vec(),
@@ -100,19 +100,19 @@ mod simple {
         let node_1_hash = Blake2bHash::new(&node_1.to_bytes().unwrap());
 
         vec![
-            (leaf_1_hash, leaf_1),
-            (leaf_2_hash, leaf_2),
-            (leaf_3_hash, leaf_3),
-            (node_1_hash, node_1),
-            (node_2_hash, node_2),
-            (ext_node_hash, ext_node),
+            TestData(leaf_1_hash, leaf_1),
+            TestData(leaf_2_hash, leaf_2),
+            TestData(leaf_3_hash, leaf_3),
+            TestData(node_1_hash, node_1),
+            TestData(node_2_hash, node_2),
+            TestData(ext_node_hash, ext_node),
         ]
     }
 
     fn trie_store_put<'a, K, V, S, X, E>(
         store: &S,
         transaction_source: &'a X,
-        items: &[(Blake2bHash, Trie<K, V>)],
+        items: &[TestData<K, V>],
     ) -> Result<(), E>
     where
         K: ToBytes,
@@ -172,7 +172,7 @@ mod simple {
     fn trie_store_put_get<'a, K, V, S, X, E>(
         store: &S,
         transaction_source: &'a X,
-        items: &[(Blake2bHash, Trie<K, V>)],
+        items: &[TestData<K, V>],
     ) -> Result<Vec<Option<Trie<K, V>>>, E>
     where
         K: ToBytes,
@@ -184,7 +184,7 @@ mod simple {
     {
         let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
         super::put_many::<K, V, X::ReadWriteTransaction, S, E>(&mut txn, store, items)?;
-        let keys: Vec<&Blake2bHash> = items.iter().map(|(k, _)| k).collect();
+        let keys: Vec<&Blake2bHash> = items.iter().map(|TestData(k, _)| k).collect();
         let ret = super::get_many::<K, V, X::ReadWriteTransaction, S, E>(&txn, store, &keys);
         txn.commit()?;
         ret
@@ -200,7 +200,7 @@ mod simple {
         let data = &create_data()[0..1];
 
         let expected: Vec<Trie<Vec<u8>, Vec<u8>>> =
-            data.to_vec().into_iter().map(|(_, v)| v).collect();
+            data.to_vec().into_iter().map(|TestData(_, v)| v).collect();
 
         assert_eq!(
             expected,
@@ -229,7 +229,7 @@ mod simple {
         let data = &create_data()[0..1];
 
         let expected: Vec<Trie<Vec<u8>, Vec<u8>>> =
-            data.to_vec().into_iter().map(|(_, v)| v).collect();
+            data.to_vec().into_iter().map(|TestData(_, v)| v).collect();
 
         assert_eq!(
             expected,
@@ -255,7 +255,7 @@ mod simple {
         let data = create_data();
 
         let expected: Vec<Trie<Vec<u8>, Vec<u8>>> =
-            data.to_vec().into_iter().map(|(_, v)| v).collect();
+            data.to_vec().into_iter().map(|TestData(_, v)| v).collect();
 
         assert_eq!(
             expected,
@@ -284,7 +284,7 @@ mod simple {
         let data = create_data();
 
         let expected: Vec<Trie<Vec<u8>, Vec<u8>>> =
-            data.to_vec().into_iter().map(|(_, v)| v).collect();
+            data.to_vec().into_iter().map(|TestData(_, v)| v).collect();
 
         assert_eq!(
             expected,
@@ -303,7 +303,7 @@ mod simple {
     fn trie_store_failed_txn<'a, K, V, S, X, E>(
         store: &S,
         transaction_source: &'a X,
-        items: &[(Blake2bHash, Trie<K, V>)],
+        items: &[TestData<K, V>],
     ) -> Result<Vec<Option<Trie<K, V>>>, E>
     where
         K: ToBytes,
@@ -319,7 +319,7 @@ mod simple {
         }
         {
             let txn: X::ReadTransaction = transaction_source.create_read_txn()?;
-            let keys: Vec<&Blake2bHash> = items.iter().map(|(k, _)| k).collect();
+            let keys: Vec<&Blake2bHash> = items.iter().map(|TestData(k, _)| k).collect();
             let ret = super::get_many::<K, V, X::ReadTransaction, S, E>(&txn, store, &keys);
             txn.commit()?;
             ret
@@ -375,6 +375,7 @@ mod simple {
 }
 
 mod roundtrip {
+    use super::TestData;
     use common::bytesrepr::ToBytes;
     use common::key::Key;
     use common::value::Value;
@@ -405,7 +406,7 @@ mod roundtrip {
     fn roundtrip<'a, K, V, S, X, E>(
         store: &S,
         transaction_source: &'a X,
-        items: &[(Blake2bHash, Trie<K, V>)],
+        items: &[TestData<K, V>],
     ) -> Result<Vec<Option<Trie<K, V>>>, E>
     where
         K: ToBytes,
@@ -417,7 +418,7 @@ mod roundtrip {
     {
         let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
         super::put_many::<K, V, X::ReadWriteTransaction, S, E>(&mut txn, store, items)?;
-        let keys: Vec<&Blake2bHash> = items.iter().map(|(k, _)| k).collect();
+        let keys: Vec<&Blake2bHash> = items.iter().map(|TestData(k, _)| k).collect();
         let result = super::get_many::<K, V, X::ReadWriteTransaction, S, E>(&txn, store, &keys);
         txn.commit()?;
         result
@@ -435,9 +436,9 @@ mod roundtrip {
         E: From<S::Error> + From<X::Error> + std::fmt::Debug,
     {
         let outputs: Vec<Trie<Key, Value>> = {
-            let input_tuples: Vec<(Blake2bHash, Trie<Key, Value>)> = inputs
+            let input_tuples: Vec<TestData<Key, Value>> = inputs
                 .iter()
-                .map(|trie| (Blake2bHash::new(&trie.to_bytes().unwrap()), trie.to_owned()))
+                .map(|trie| TestData(Blake2bHash::new(&trie.to_bytes().unwrap()), trie.to_owned()))
                 .collect();
             roundtrip::<Key, Value, S, X, E>(store, transaction_source, &input_tuples)
                 .expect("roundtrip failed")
