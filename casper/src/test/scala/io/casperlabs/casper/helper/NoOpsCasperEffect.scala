@@ -14,7 +14,7 @@ import scala.collection.mutable.{Map => MutableMap}
 
 class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
     private val blockStore: MutableMap[BlockHash, BlockMsgWithTransform],
-    estimatorFunc: IndexedSeq[BlockMessage]
+    estimatorFunc: IndexedSeq[BlockHash]
 ) extends MultiParentCasper[F] {
 
   def store: Map[BlockHash, BlockMsgWithTransform] = blockStore.toMap
@@ -32,7 +32,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
     } yield BlockStatus.valid
   def contains(b: BlockMessage): F[Boolean]             = false.pure[F]
   def deploy(r: DeployData): F[Either[Throwable, Unit]] = Applicative[F].pure(Right(()))
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     estimatorFunc.pure[F]
   def createBlock: F[CreateBlockStatus]                               = CreateBlockStatus.noNewDeploys.pure[F]
   def blockDag: F[BlockDagRepresentation[F]]                          = BlockDagStorage[F].getRepresentation
@@ -45,7 +45,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
 object NoOpsCasperEffect {
   def apply[F[_]: Sync: BlockStore: BlockDagStorage](
       blockStore: Map[BlockHash, BlockMsgWithTransform] = Map.empty,
-      estimatorFunc: IndexedSeq[BlockMessage] = Vector(BlockMessage())
+      estimatorFunc: IndexedSeq[BlockHash] = Vector(BlockMessage().blockHash)
   ): F[NoOpsCasperEffect[F]] =
     for {
       _ <- blockStore.toList.traverse_ {
@@ -53,9 +53,12 @@ object NoOpsCasperEffect {
           }
     } yield new NoOpsCasperEffect[F](MutableMap(blockStore.toSeq: _*), estimatorFunc)
   def apply[F[_]: Sync: BlockStore: BlockDagStorage](): F[NoOpsCasperEffect[F]] =
-    apply(Map.empty, Vector(BlockMessage()))
+    apply(
+      Map(BlockMessage().blockHash -> BlockMsgWithTransform().withBlockMessage(BlockMessage())),
+      Vector(BlockMessage().blockHash)
+    )
   def apply[F[_]: Sync: BlockStore: BlockDagStorage](
       blockStore: Map[BlockHash, BlockMsgWithTransform]
   ): F[NoOpsCasperEffect[F]] =
-    apply(blockStore, Vector(BlockMessage()))
+    apply(blockStore, Vector(BlockMessage().blockHash))
 }

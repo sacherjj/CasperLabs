@@ -138,9 +138,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
       _                    = logEff.warns.isEmpty should be(true)
       dag                  <- MultiParentCasper[Effect].blockDag
-      result               <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock)
+      estimate             <- MultiParentCasper[Effect].estimator(dag)
+      _                    = estimate shouldBe IndexedSeq(signedBlock.blockHash)
       _                    = node.tearDown()
-    } yield result
+    } yield ()
   }
 
   it should "be able to create a chain of blocks from different deploys" in effectTest {
@@ -169,7 +170,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                     = logEff.warns shouldBe empty
       _                     = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
       dag                   <- MultiParentCasper[Effect].blockDag
-      _                     <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock2)
+      estimate              <- MultiParentCasper[Effect].estimator(dag)
+
+      _ = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
       _ = pendingUntilFixed {
         storage.contains("!(12)") should be(true)
       }

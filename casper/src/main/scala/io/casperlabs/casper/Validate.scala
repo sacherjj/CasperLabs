@@ -439,18 +439,27 @@ object Validate {
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
-      estimate             <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
-      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(estimate.map(_.blockHash))}")
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
+      tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
+      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
+      computedParents      <- ProtoUtil.chooseNonConflicting[F](tipHashes, genesis, dag)
       computedParentHashes = computedParents.map(_.blockHash)
       _ <- if (parentHashes == computedParentHashes)
             Applicative[F].unit
           else {
+            val parentsString =
+              parentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+            val estimateString =
+              computedParentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+            val justificationString = latestMessagesHashes.values
+              .map(hash => PrettyPrinter.buildString(hash))
+              .mkString(",")
+            val message =
+              s"block parents ${parentsString} did not match estimate ${estimateString} based on justification ${justificationString}."
             for {
               _ <- Log[F].warn(
                     ignore(
                       b,
-                      s"block parents did not match estimate based on justification. Expected parents are ${printHashes(computedParentHashes)}, got ${printHashes(parentHashes)}."
+                      message
                     )
                   )
               _ <- RaiseValidationError[F].raise[Unit](InvalidParents)
