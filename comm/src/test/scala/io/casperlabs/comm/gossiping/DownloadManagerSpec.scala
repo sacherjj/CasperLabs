@@ -532,14 +532,33 @@ object DownloadManagerSpec {
 
   /** Test implementation of the remote GossipService to download the blocks from. */
   object MockGossipService {
+    private val emptySynchronizer = new Synchronizer[Task] {
+      def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
+    }
+    private val emptyDownloadManager = new DownloadManager[Task] {
+      def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
+    }
+    private val emptyConsensus = new GossipServiceServer.Consensus[Task] {
+      def onPending(dag: Vector[BlockSummary]) = ???
+      def onDownloaded(blockHash: ByteString)  = ???
+    }
+
     // Used only as a default argument for when we aren't touching the remote service in a test.
-    val default =
+    val default = {
+      implicit val log = new Log.NOPLog[Task]
       GossipServiceServer[Task](
-        getBlock = _ => Task.now(None),
-        getBlockSummary = _ => ???,
+        backend = new GossipServiceServer.Backend[Task] {
+          def hasBlock(blockHash: ByteString)        = ???
+          def getBlock(blockHash: ByteString)        = Task.now(None)
+          def getBlockSummary(blockHash: ByteString) = ???
+        },
+        synchronizer = emptySynchronizer,
+        downloadManager = emptyDownloadManager,
+        consensus = emptyConsensus,
         maxChunkSize = 100 * 1024,
         maxParallelBlockDownloads = 100
       )
+    }
 
     def apply(
         blocks: Seq[Block] = Seq.empty,
@@ -547,14 +566,21 @@ object DownloadManagerSpec {
         rechunker: Iterant[Task, Chunk] => Iterant[Task, Chunk] = identity,
         // Pass in a `regetter` method to alter the behaviour of the `getBlock`, for example to add delays.
         regetter: Task[Option[Block]] => Task[Option[Block]] = identity
-    ) =
+    )(implicit log: Log[Task]) =
       for {
         blockMap  <- Task.now(toBlockMap(blocks))
         semaphore <- Semaphore[Task](100)
       } yield {
+        // Using `new` because I want to override `getBlockChunked`.
         new GossipServiceServer[Task](
-          getBlock = hash => regetter(Task.delay(blockMap.get(hash))),
-          getBlockSummary = hash => ???,
+          backend = new GossipServiceServer.Backend[Task] {
+            def hasBlock(blockHash: ByteString)        = ???
+            def getBlock(blockHash: ByteString)        = regetter(Task.delay(blockMap.get(blockHash)))
+            def getBlockSummary(blockHash: ByteString) = ???
+          },
+          synchronizer = emptySynchronizer,
+          downloadManager = emptyDownloadManager,
+          consensus = emptyConsensus,
           maxChunkSize = 100 * 1024,
           blockDownloadSemaphore = semaphore
         ) {

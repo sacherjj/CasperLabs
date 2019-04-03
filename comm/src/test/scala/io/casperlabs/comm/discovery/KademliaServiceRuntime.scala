@@ -13,11 +13,11 @@ import cats.implicits._
 import io.casperlabs.comm._
 import scala.concurrent.duration._
 
-abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] extends TestRuntime {
+abstract class KademliaServiceRuntime[F[_]: Monad: Timer, E <: Environment] extends TestRuntime {
 
   def createEnvironment(port: Int): F[E]
 
-  def createKademliaRPC(env: E, timeout: FiniteDuration): F[KademliaRPC[F]]
+  def createKademliaService(env: E, timeout: FiniteDuration): F[KademliaService[F]]
 
   def extract[A](fa: F[A]): A
 
@@ -45,27 +45,27 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] extends 
       // Give it ample time on Drone.
       timeout: FiniteDuration = 5.seconds
   ) extends Runtime[A] {
-    def execute(kademliaRPC: KademliaRPC[F], local: PeerNode, remote: PeerNode): F[A]
+    def execute(kademlia: KademliaService[F], local: PeerNode, remote: PeerNode): F[A]
 
     def run(): TwoNodesResult =
       extract(
         twoNodesEnvironment { (e1, e2) =>
           for {
-            localRpc  <- createKademliaRPC(e1, timeout)
-            remoteRpc <- createKademliaRPC(e2, timeout)
-            local     = e1.peer
-            remote    = e2.peer
-            _ <- localRpc.receive(
+            kademliaLocal  <- createKademliaService(e1, timeout)
+            kademliaRemote <- createKademliaService(e2, timeout)
+            local          = e1.peer
+            remote         = e2.peer
+            _ <- kademliaLocal.receive(
                   Handler.pingHandler[F].handle(local),
                   Handler.lookupHandlerNil[F].handle(local)
                 )
-            _ <- remoteRpc.receive(
+            _ <- kademliaRemote.receive(
                   pingHandler.handle(remote),
                   lookupHandler.handle(remote)
                 )
-            r <- execute(localRpc, local, remote)
-            _ <- remoteRpc.shutdown()
-            _ <- localRpc.shutdown()
+            r <- execute(kademliaLocal, local, remote)
+            _ <- kademliaRemote.shutdown()
+            _ <- kademliaLocal.shutdown()
           } yield
             new TwoNodesResult {
               def localNode: PeerNode  = local
@@ -84,21 +84,21 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] extends 
       val pingHandler: PingHandler[F] = Handler.pingHandler,
       val lookupHandler: LookupHandler[F] = Handler.lookupHandlerNil
   ) extends Runtime[A] {
-    def execute(kademliaRPC: KademliaRPC[F], local: PeerNode, remote: PeerNode): F[A]
+    def execute(kademliaService: KademliaService[F], local: PeerNode, remote: PeerNode): F[A]
 
     def run(): TwoNodesResult =
       extract(
         twoNodesEnvironment { (e1, e2) =>
           for {
-            localRpc <- createKademliaRPC(e1, timeout = 500.millis)
-            local    = e1.peer
-            remote   = e2.peer
-            _ <- localRpc.receive(
+            kademliaLocal <- createKademliaService(e1, timeout = 500.millis)
+            local         = e1.peer
+            remote        = e2.peer
+            _ <- kademliaLocal.receive(
                   Handler.pingHandler[F].handle(local),
                   Handler.lookupHandlerNil[F].handle(local)
                 )
-            r <- execute(localRpc, local, remote)
-            _ <- localRpc.shutdown()
+            r <- execute(kademliaLocal, local, remote)
+            _ <- kademliaLocal.shutdown()
           } yield
             new TwoNodesResult {
               def localNode: PeerNode  = local
@@ -150,8 +150,8 @@ final class LookupHandler[F[_]: Monad: Timer](
   def handle(peer: PeerNode): (PeerNode, NodeIdentifier) => F[Seq[PeerNode]] =
     (p, a) =>
       for {
-        _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)
         _ <- receivedMessages.synchronized(receivedMessages += ((peer, (p, a)))).pure[F]
+        _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)
       } yield response
 }
 

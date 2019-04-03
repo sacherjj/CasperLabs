@@ -11,8 +11,7 @@ import monix.execution.Scheduler
 
 object Main {
 
-  implicit val logSource: LogSource = LogSource(this.getClass)
-  implicit val log: Log[Task]       = Log.log
+  implicit val log: Log[Task] = Log.log
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.computation(

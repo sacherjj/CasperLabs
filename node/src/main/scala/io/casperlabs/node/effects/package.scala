@@ -33,7 +33,7 @@ package object effects {
       metrics: Metrics[Task]
   ): Resource[Effect, NodeDiscovery[Task]] =
     Resource(
-      KademliaNodeDiscovery
+      NodeDiscoveryImpl
         .create[Task](id, port, timeout)(init)
         .allocated
         .map {

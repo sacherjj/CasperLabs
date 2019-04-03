@@ -21,9 +21,9 @@ object b {
 class DistanceSpec extends FlatSpec with Matchers {
 
   val endpoint = Endpoint("", 0, 0)
-  implicit val ping: KademliaRPC[Id] = new KademliaRPC[Id] {
-    def ping(node: PeerNode): Boolean                             = true
-    def lookup(id: NodeIdentifier, peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
+  implicit val ping: KademliaService[Id] = new KademliaService[Id] {
+    def ping(node: PeerNode): Boolean                                     = true
+    def lookup(id: NodeIdentifier, peer: PeerNode): Option[Seq[PeerNode]] = None
     def receive(
         pingHandler: PeerNode => Id[Unit],
         lookupHandler: (PeerNode, NodeIdentifier) => Id[Seq[PeerNode]]
@@ -35,7 +35,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     for (i <- 1 to 64) {
       val home = PeerNode(NodeIdentifier(b.rand(i)), endpoint)
       val nt   = PeerTable(home.id)
-      nt.distance(home) should be(8 * nt.width)
+      nt.longestCommonBitPrefix(home) should be(8 * nt.width)
     }
   }
 
@@ -58,7 +58,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     def testKey(key: Seq[Byte]): Boolean = {
       val id    = NodeIdentifier(key)
       val table = PeerTable(id)
-      oneOffs(id).map(table.distance) == (0 until 8 * width)
+      oneOffs(id).map(table.longestCommonBitPrefix) == (0 until 8 * width)
     }
 
     def keyString(key: Seq[Byte]): String =
@@ -86,7 +86,7 @@ class DistanceSpec extends FlatSpec with Matchers {
 
     it should "return no peers" in {
       val table = PeerTable(kr)
-      table.peers.size should be(0)
+      table.peersAscendingDistance.size should be(0)
     }
 
     it should "return no values on lookup" in {
@@ -97,7 +97,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     s"A table of width $width" should "add a key at most once" in {
       val table = PeerTable(kr)
       val toAdd = oneOffs(kr).head
-      val dist  = table.distance(toAdd)
+      val dist  = table.longestCommonBitPrefix(toAdd)
       for (_ <- 1 to 10) {
         table.updateLastSeen(PeerNode(toAdd, endpoint))
         table.tableRef.get(dist).size should be(1)
@@ -120,22 +120,12 @@ class DistanceSpec extends FlatSpec with Matchers {
       table.lookup(NodeIdentifier(b.rand(width))).size should be(scala.math.min(table.k, 8 * width))
     }
 
-    it should "not return sought peer on lookup" in {
-      val table = PeerTable(kr)
-      for (k <- oneOffs(kr)) {
-        table.updateLastSeen(PeerNode(k, endpoint))
-      }
-      val target = table.tableRef.get(table.width * 4).head
-      val resp   = table.lookup(target.node.id)
-      assert(resp.forall(_.key != target.node.key))
-    }
-
     it should s"return ${8 * width} peers when sequenced" in {
       val table = PeerTable(kr)
       for (k <- oneOffs(kr)) {
         table.updateLastSeen(PeerNode(k, endpoint))
       }
-      table.peers.size should be(8 * width)
+      table.peersAscendingDistance.size should be(8 * width)
     }
 
     it should "find each added peer" in {

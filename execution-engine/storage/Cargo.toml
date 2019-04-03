@@ -5,7 +5,7 @@ authors = ["Michael Birch <birchmd@casperlabs.io>"]
 
 [dependencies]
 failure = "0.1.5"
-rkv = "0.9.1"
+lmdb = "0.8.0"
 num = { version = "0.2.0", default-features = false }
 wasmi = "0.4.2"
 common = { path = "../common", features = ["std"], package = "casperlabs-contract-ffi" }
@@ -15,3 +15,4 @@ shared = { path = "../shared" }
 [dev-dependencies]
 gens = { path = "../gens" }
 proptest = "0.9.2"
+tempfile = "3"

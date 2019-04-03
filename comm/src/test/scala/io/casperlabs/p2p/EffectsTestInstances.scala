@@ -39,10 +39,11 @@ object EffectsTestInstances {
     var nodes: List[PeerNode] = List.empty[PeerNode]
     def reset(): Unit =
       nodes = List.empty[PeerNode]
-    def peers: F[Seq[PeerNode]] = Sync[F].delay {
+    def alivePeersAscendingDistance: F[List[PeerNode]] = Sync[F].delay {
       nodes
     }
     def discover: F[Unit]                                          = ???
+    def lookup(id: NodeIdentifier): F[Option[PeerNode]]            = ???
     def handleCommunications: Protocol => F[CommunicationResponse] = ???
   }
 

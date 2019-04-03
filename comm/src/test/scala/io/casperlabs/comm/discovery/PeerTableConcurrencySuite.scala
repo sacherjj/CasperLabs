@@ -13,9 +13,9 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
-  private trait KademliaMock extends KademliaRPC[Task] {
-    override def lookup(id: NodeIdentifier, peer: PeerNode): Task[Seq[PeerNode]] =
-      Task.now(Seq.empty)
+  private trait KademliaMock extends KademliaService[Task] {
+    override def lookup(id: NodeIdentifier, peer: PeerNode): Task[Option[Seq[PeerNode]]] =
+      Task.now(None)
     override def receive(
         pingHandler: PeerNode => Task[Unit],
         lookupHandler: (PeerNode, NodeIdentifier) => Task[Seq[PeerNode]]
@@ -87,7 +87,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
       hangUp.runAsyncAndForget
 
       Task
-        .race(Task.sleep(1.second), peerTable.peers)
+        .race(Task.sleep(1.second), peerTable.peersAscendingDistance)
         .runSyncUnsafe()
         .right
         .get should contain theSameElementsAs initial
@@ -112,7 +112,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
         peerTable <- PeerTable[Task](id, bucketSize)
         _         <- Task.gatherUnordered(initial.map(peerTable.updateLastSeen(_)))
         _         <- Task.gatherUnordered(restReplicated.map(peerTable.updateLastSeen(_)))
-        peers     <- peerTable.peers
+        peers     <- peerTable.peersAscendingDistance
       } yield peers
 
       addNodesParallel.runSyncUnsafe() should contain theSameElementsAs initial
