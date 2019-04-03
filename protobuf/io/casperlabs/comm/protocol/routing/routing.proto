@@ -1,22 +1,10 @@
 syntax = "proto3";
 package io.casperlabs.comm.protocol.routing;
 
-import "scalapb/scalapb.proto";
-
-option (scalapb.options) = {
-  package_name: "io.casperlabs.comm.protocol.routing"
-  flat_package: true
-};
-
-message Node {
-    bytes  id       = 1;
-    bytes  host     = 2;
-    uint32 tcp_port = 3;
-    uint32 udp_port = 4;
-}
+import "io/casperlabs/comm/discovery/node.proto";
 
 message Header {
-  Node   sender         = 1;
+  io.casperlabs.comm.discovery.Node sender = 1;
 }
 
 message Heartbeat {
@@ -80,10 +68,10 @@ message TLResponse {
 }
 
 message ChunkHeader {
-  Node   sender             = 1;
-  string typeId             = 2;
-  bool   compressed         = 3;
-  int32  contentLength      = 4;
+  io.casperlabs.comm.discovery.Node sender = 1;
+  string typeId                            = 2;
+  bool   compressed                        = 3;
+  int32  contentLength                     = 4;
 }
 
 message ChunkData {

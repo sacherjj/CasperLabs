@@ -9,6 +9,7 @@ import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError._
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.ProtocolHelper._
 import io.casperlabs.comm.transport._
@@ -20,7 +21,7 @@ import scala.concurrent.duration._
 
 object Connect {
 
-  type Connection            = PeerNode
+  type Connection            = Node
   type Connections           = List[Connection]
   type ConnectionsCell[F[_]] = Cell[F, Connections]
 
@@ -77,7 +78,7 @@ object Connect {
   def clearConnections[F[_]: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
     : F[Int] = {
 
-    def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Protocol])] =
+    def sendHeartbeat(peer: Node): F[(Node, CommErr[Protocol])] =
       for {
         local   <- RPConfAsk[F].reader(_.local)
         timeout <- RPConfAsk[F].reader(_.defaultTimeout)
@@ -116,8 +117,8 @@ object Connect {
     }
 
   def findAndConnect[F[_]: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
-      conn: (PeerNode, FiniteDuration) => F[Unit]
-  ): F[List[PeerNode]] =
+      conn: (Node, FiniteDuration) => F[Unit]
+  ): F[List[Node]] =
     for {
       connections <- ConnectionsCell[F].read
       tout        <- RPConfAsk[F].reader(_.defaultTimeout)
@@ -128,21 +129,21 @@ object Connect {
                       case Left(error) =>
                         Log[F]
                           .debug(
-                            s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}"
-                          ) >> none[PeerNode].pure[F]
+                            s"Failed to connect to ${peer.show}. Reason: ${error.message}"
+                          ) >> none[Node].pure[F]
                       case Right(_) =>
-                        Log[F].info(s"Connected to ${peer.toAddress}.") >> peer.some.pure[F]
+                        Log[F].info(s"Connected to ${peer.show}.") >> peer.some.pure[F]
                     }
                   }
     } yield connected
 
   def connect[F[_]: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
-      peer: PeerNode,
+      peer: Node,
       timeout: FiniteDuration
   ): F[Unit] =
     (
       for {
-        address  <- Applicative[F].pure(peer.toAddress)
+        address  <- Applicative[F].pure(peer.show)
         _        <- Log[F].debug(s"Connecting to $address")
         _        <- Metrics[F].incrementCounter("connect")
         _        <- Log[F].debug(s"Initialize protocol handshake to $address")

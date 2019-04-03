@@ -17,11 +17,12 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.MonadTrans
 import io.casperlabs.comm.CommError.ErrorHandler
-import io.casperlabs.comm.discovery.NodeDiscovery
+import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
-import io.casperlabs.comm.{transport, PeerNode}
+import io.casperlabs.comm.transport
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockMetadata
@@ -155,17 +156,17 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   }
 
   trait CasperPacketHandlerInternal[F[_]] {
-    def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit]
+    def handleBlockMessage(peer: Node, bm: BlockMessage): F[Unit]
 
-    def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit]
+    def handleBlockRequest(peer: Node, br: BlockRequest): F[Unit]
 
-    def handleForkChoiceTipRequest(peer: PeerNode, fctr: ForkChoiceTipRequest): F[Unit]
+    def handleForkChoiceTipRequest(peer: Node, fctr: ForkChoiceTipRequest): F[Unit]
 
     def handleApprovedBlock(ab: ApprovedBlock): F[Option[MultiParentCasper[F]]]
 
-    def handleApprovedBlockRequest(peer: PeerNode, br: ApprovedBlockRequest): F[Unit]
+    def handleApprovedBlockRequest(peer: Node, br: ApprovedBlockRequest): F[Unit]
 
-    def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit]
+    def handleUnapprovedBlock(peer: Node, ub: UnapprovedBlock): F[Unit]
 
     def handleBlockApproval(ba: BlockApproval): F[Unit]
 
@@ -185,11 +186,11 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   ) extends CasperPacketHandlerInternal[F] {
     private val noop: F[Unit] = Applicative[F].unit
 
-    override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit] =
+    override def handleBlockMessage(peer: Node, bm: BlockMessage): F[Unit] =
       noop
-    override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
+    override def handleBlockRequest(peer: Node, br: BlockRequest): F[Unit] =
       noop
-    override def handleForkChoiceTipRequest(peer: PeerNode, fctr: ForkChoiceTipRequest): F[Unit] =
+    override def handleForkChoiceTipRequest(peer: Node, fctr: ForkChoiceTipRequest): F[Unit] =
       noop
     override def handleApprovedBlock(
         ab: ApprovedBlock
@@ -208,7 +209,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       } yield casperO
 
     override def handleApprovedBlockRequest(
-        peer: PeerNode,
+        peer: Node,
         br: ApprovedBlockRequest
     ): F[Unit] =
       sendNoApprovedBlockAvailable(peer, br.identifier)
@@ -216,7 +217,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     override def handleBlockApproval(ba: BlockApproval): F[Unit] =
       noop
 
-    override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit] =
+    override def handleUnapprovedBlock(peer: Node, ub: UnapprovedBlock): F[Unit] =
       blockApprover.unapprovedBlockPacketHandler(peer, ub)
 
     override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit] =
@@ -236,23 +237,23 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
     private val noop: F[Unit] = Applicative[F].unit
 
-    override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit] =
+    override def handleBlockMessage(peer: Node, bm: BlockMessage): F[Unit] =
       noop
-    override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
+    override def handleBlockRequest(peer: Node, br: BlockRequest): F[Unit] =
       noop
-    override def handleForkChoiceTipRequest(peer: PeerNode, fctr: ForkChoiceTipRequest): F[Unit] =
+    override def handleForkChoiceTipRequest(peer: Node, fctr: ForkChoiceTipRequest): F[Unit] =
       noop
     override def handleApprovedBlock(
         ab: ApprovedBlock
     ): F[Option[MultiParentCasper[F]]] =
       none[MultiParentCasper[F]].pure[F]
     override def handleApprovedBlockRequest(
-        peer: PeerNode,
+        peer: Node,
         br: ApprovedBlockRequest
     ): F[Unit] =
       sendNoApprovedBlockAvailable(peer, br.identifier)
 
-    override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit] =
+    override def handleUnapprovedBlock(peer: Node, ub: UnapprovedBlock): F[Unit] =
       noop
 
     override def handleBlockApproval(ba: BlockApproval): F[Unit] =
@@ -314,19 +315,19 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   ) extends CasperPacketHandlerInternal[F] {
     private val noop: F[Unit] = Applicative[F].unit
 
-    override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit] =
+    override def handleBlockMessage(peer: Node, bm: BlockMessage): F[Unit] =
       noop
-    override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
+    override def handleBlockRequest(peer: Node, br: BlockRequest): F[Unit] =
       noop
-    override def handleForkChoiceTipRequest(peer: PeerNode, fctr: ForkChoiceTipRequest): F[Unit] =
+    override def handleForkChoiceTipRequest(peer: Node, fctr: ForkChoiceTipRequest): F[Unit] =
       noop
     override def handleApprovedBlockRequest(
-        peer: PeerNode,
+        peer: Node,
         br: ApprovedBlockRequest
     ): F[Unit] =
       sendNoApprovedBlockAvailable(peer, br.identifier)
 
-    override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit] =
+    override def handleUnapprovedBlock(peer: Node, ub: UnapprovedBlock): F[Unit] =
       noop
     override def handleBlockApproval(ba: BlockApproval): F[Unit] = noop
 
@@ -366,13 +367,13 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     ): F[Option[MultiParentCasper[F]]] =
       none[MultiParentCasper[F]].pure[F]
 
-    override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit] =
+    override def handleUnapprovedBlock(peer: Node, ub: UnapprovedBlock): F[Unit] =
       noop
 
     override def handleBlockApproval(b: BlockApproval): F[Unit] =
       noop
 
-    override def handleBlockMessage(peer: PeerNode, b: BlockMessage): F[Unit] =
+    override def handleBlockMessage(peer: Node, b: BlockMessage): F[Unit] =
       for {
         _          <- Metrics[F].incrementCounter("blocks-received")
         isOldBlock <- MultiParentCasper[F].contains(b)
@@ -389,7 +390,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
             }
       } yield ()
 
-    override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
+    override def handleBlockRequest(peer: Node, br: BlockRequest): F[Unit] =
       for {
         local      <- RPConfAsk[F].reader(_.local)
         block      <- BlockStore[F].getBlockMessage(br.hash)
@@ -407,7 +408,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       } yield ()
 
     override def handleForkChoiceTipRequest(
-        peer: PeerNode,
+        peer: Node,
         fctr: ForkChoiceTipRequest
     ): F[Unit] =
       for {
@@ -420,7 +421,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       } yield ()
 
     override def handleApprovedBlockRequest(
-        peer: PeerNode,
+        peer: Node,
         br: ApprovedBlockRequest
     ): F[Unit] =
       for {
@@ -439,7 +440,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       private val cphI: Ref[F, CasperPacketHandlerInternal[F]]
   ) extends CasperPacketHandler[F] {
 
-    override def handle(peer: PeerNode): PartialFunction[Packet, F[Unit]] =
+    override def handle(peer: Node): PartialFunction[Packet, F[Unit]] =
       Function
         .unlift(
           (p: Packet) =>
@@ -519,7 +520,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   }
 
   private def handleDoppelganger[F[_]: Monad: Log](
-      peer: PeerNode,
+      peer: Node,
       b: BlockMessage,
       self: Validator
   ): F[Unit] =
@@ -612,14 +613,14 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       implicit C: CasperPacketHandler[F]
   ): CasperPacketHandler[T[F, ?]] =
     new CasperPacketHandler[T[F, ?]] {
-      override def handle(peer: PeerNode): PartialFunction[Packet, T[F, Unit]] =
+      override def handle(peer: Node): PartialFunction[Packet, T[F, Unit]] =
         PartialFunction { (p: Packet) =>
           C.handle(peer)(p).liftM[T]
         }
     }
 
   private def sendNoApprovedBlockAvailable[F[_]: RPConfAsk: TransportLayer: Monad](
-      peer: PeerNode,
+      peer: Node,
       identifier: String
   ): F[Unit] =
     for {
@@ -629,15 +630,15 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       _   <- TransportLayer[F].stream(Seq(peer), msg)
     } yield ()
 
-  private def noApprovedBlockAvailable(peer: PeerNode, identifier: String): Packet = Packet(
+  private def noApprovedBlockAvailable(peer: Node, identifier: String): Packet = Packet(
     transport.NoApprovedBlockAvailable.id,
-    NoApprovedBlockAvailable(identifier, peer.toString).toByteString
+    NoApprovedBlockAvailable(identifier, peer.show).toByteString
   )
 
 }
 
 trait CasperPacketHandler[F[_]] {
-  def handle(peer: PeerNode): PartialFunction[Packet, F[Unit]]
+  def handle(peer: Node): PartialFunction[Packet, F[Unit]]
 }
 
 abstract class CasperPacketHandlerInstances {

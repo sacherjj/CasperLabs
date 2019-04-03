@@ -253,7 +253,7 @@ class NodeRuntime private[node] (
       implicit
       transport: TransportLayer[Task],
       blockStore: BlockStore[Effect],
-      peerNodeAsk: PeerNodeAsk[Task]
+      peerNodeAsk: NodeAsk[Task]
   ): Unit =
     (for {
       _   <- log.info("Shutting down gRPC servers...")
@@ -276,7 +276,7 @@ class NodeRuntime private[node] (
   )(
       implicit transport: TransportLayer[Task],
       blockStore: BlockStore[Effect],
-      peerNodeAsk: PeerNodeAsk[Task]
+      peerNodeAsk: NodeAsk[Task]
   ): Task[Unit] =
     Task.delay(
       sys.addShutdownHook(clearResources(servers))
@@ -291,7 +291,7 @@ class NodeRuntime private[node] (
       time: Time[Task],
       rpConfState: RPConfState[Task],
       rpConfAsk: RPConfAsk[Task],
-      peerNodeAsk: PeerNodeAsk[Task],
+      peerNodeAsk: NodeAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
@@ -339,7 +339,7 @@ class NodeRuntime private[node] (
       blockApiLock <- Semaphore[Effect](1)
       _            <- info
       local        <- peerNodeAsk.ask.toEffect
-      host         = local.endpoint.host
+      host         = local.host
       servers      <- acquireServers(blockApiLock, executionEngineService)
       _            <- addShutdownHook(servers).toEffect
       _            <- servers.grpcServerExternal.start.toEffect
@@ -379,12 +379,12 @@ class NodeRuntime private[node] (
 
   private def syncEffect = cats.effect.Sync.catsEitherTSync[Task, CommError]
 
-  private val rpClearConnConf = ClearConnetionsConf(
+  private val rpClearConnConf = ClearConnectionsConf(
     conf.server.maxNumOfConnections,
     numOfConnectionsPinged = 10
   ) // TODO read from conf
 
-  private def rpConf[F[_]: Sync](local: PeerNode) =
+  private def rpConf[F[_]: Sync](local: Node) =
     Ref.of(RPConf(local, initPeer, defaultTimeout, rpClearConnConf))
 
   private def localPeerNode[F[_]: Sync: Log] =

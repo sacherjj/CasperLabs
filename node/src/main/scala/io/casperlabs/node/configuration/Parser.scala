@@ -4,7 +4,9 @@ import java.nio.file.{Path, Paths}
 
 import scala.util.Try
 import cats.syntax.either._
-import io.casperlabs.comm.{CommError, PeerNode}
+import io.casperlabs.comm.CommError
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.shared.StoreType
 
 import scala.concurrent.duration.Duration.Infinite
@@ -36,8 +38,8 @@ private[configuration] trait ParserImplicits {
   implicit val pathParser: Parser[Path] = s =>
     Try(Paths.get(s.replace("$HOME", sys.props("user.home")))).toEither
       .leftMap(_.getMessage)
-  implicit val peerNodeParser: Parser[PeerNode] = s =>
-    PeerNode.fromAddress(s).leftMap(CommError.errorMessage)
+  implicit val peerNodeParser: Parser[Node] = s =>
+    Node.fromAddress(s).leftMap(CommError.errorMessage)
   implicit val storeTypeParser: Parser[StoreType] = s =>
     StoreType
       .from(s)

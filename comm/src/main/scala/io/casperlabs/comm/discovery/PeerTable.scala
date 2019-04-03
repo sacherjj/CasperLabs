@@ -3,15 +3,16 @@ package io.casperlabs.comm.discovery
 import cats.Monad
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
-import cats.syntax.all._
+import cats.implicits._
+import cats.kernel.Eq
+import com.google.protobuf.ByteString
 import io.casperlabs.comm.discovery.PeerTable.Entry
-import io.casperlabs.comm.{NodeIdentifier, PeerNode}
 
 import scala.annotation.tailrec
 import scala.util.Sorting
 
 object PeerTable {
-  final case class Entry(node: PeerNode, pinging: Boolean = false) {
+  final case class Entry(node: Node, pinging: Boolean = false) {
     override def toString = s"#{PeerTableEntry $node}"
   }
 
@@ -21,7 +22,7 @@ object PeerTable {
   ): F[PeerTable[F]] =
     for {
       //160 buckets with at most 20 elements in each of them
-      buckets <- Ref.of(Vector.fill(8 * local.key.size)(List.empty[Entry]))
+      buckets <- Ref.of(Vector.fill(8 * local.key.length)(List.empty[Entry]))
     } yield new PeerTable(local, k, buckets)
 
   // Maximum length of each row of the routing table.
@@ -48,7 +49,7 @@ object PeerTable {
   private[discovery] def longestCommonBitPrefix(a: NodeIdentifier, b: NodeIdentifier): Int = {
     @tailrec
     def highBit(idx: Int): Int =
-      if (idx == a.key.size) 8 * a.key.size
+      if (idx === a.key.length) 8 * a.key.length
       else
         a.key(idx) ^ b.key(idx) match {
           case 0 => highBit(idx + 1)
@@ -59,6 +60,9 @@ object PeerTable {
 
   private[discovery] def xorDistance(a: NodeIdentifier, b: NodeIdentifier): BigInt =
     BigInt(a.key.zip(b.key).map { case (l, r) => (l ^ r).toByte }.toArray).abs
+
+  private[discovery] def xorDistance(a: ByteString, b: ByteString): BigInt =
+    xorDistance(NodeIdentifier(a), NodeIdentifier(b))
 }
 
 /** `PeerTable` implements the routing table used in the Kademlia
@@ -70,23 +74,27 @@ final class PeerTable[F[_]: Monad](
     private[discovery] val k: Int,
     private[discovery] val tableRef: Ref[F, Vector[List[Entry]]]
 ) {
-  private[discovery] val width = local.key.size // in bytes
+  private implicit def arrayEq[A]: Eq[Array[A]] = Eq.instance[Array[A]]((a, b) => a.sameElements(b))
+  private implicit val bytestringEq: Eq[ByteString] =
+    Eq.instance[ByteString]((a, b) => a.toByteArray === b.toByteArray)
 
-  private[discovery] def longestCommonBitPrefix(other: PeerNode): Int =
-    PeerTable.longestCommonBitPrefix(local, other.id)
+  private[discovery] val width = local.key.length // in bytes
+
+  private[discovery] def longestCommonBitPrefix(other: Node): Int =
+    PeerTable.longestCommonBitPrefix(local, NodeIdentifier(other.id))
   private[discovery] def longestCommonBitPrefix(other: NodeIdentifier): Int =
     PeerTable.longestCommonBitPrefix(local, other)
 
-  def updateLastSeen(peer: PeerNode)(implicit K: KademliaService[F]): F[Unit] = {
+  def updateLastSeen(peer: Node)(implicit K: KademliaService[F]): F[Unit] = {
     val index = longestCommonBitPrefix(peer)
     for {
       maybeCandidate <- tableRef.modify { table =>
                          val bucket = table(index)
                          val (updatedBucket, maybeCandidate) =
-                           bucket.find(_.node.key == peer.key) match {
+                           bucket.find(_.node.id === peer.id) match {
                              case Some(previous) =>
                                (
-                                 Entry(peer) :: bucket.filter(_.node.key != previous.node.key),
+                                 Entry(peer) :: bucket.filter(_.node.id != previous.node.id),
                                  none[Entry]
                                )
                              case None if bucket.size < k =>
@@ -99,7 +107,7 @@ final class PeerTable[F[_]: Monad](
                                  bucket.reverse.find(!_.pinging).map(_.copy(pinging = true))
                                val updatedBucket = maybeCandidate.fold(bucket) { candidate =>
                                  bucket.map(
-                                   p => if (p.node.key == candidate.node.key) candidate else p
+                                   p => if (p.node.id === candidate.node.id) candidate else p
                                  )
                                }
                                (updatedBucket, maybeCandidate)
@@ -113,23 +121,27 @@ final class PeerTable[F[_]: Monad](
                   val bucket = table(index)
                   val winner = if (responded) candidate else Entry(peer)
                   val updated = winner.copy(pinging = false) :: bucket
-                    .filter(_.node.key != candidate.node.key)
+                    .filter(_.node.id != candidate.node.id)
                   table.updated(index, updated)
                 }
-            }
+              }
           )
     } yield ()
   }
 
-  def lookup(toLookup: NodeIdentifier): F[Seq[PeerNode]] =
+  def lookup(toLookup: NodeIdentifier): F[Seq[Node]] =
     tableRef.get.map { table =>
       sort(table.flatten.toList, toLookup).take(k).map(_.node)
     }
 
-  def find(toFind: NodeIdentifier): F[Option[PeerNode]] =
-    tableRef.get.map(_(longestCommonBitPrefix(toFind)).find(_.node.id == toFind).map(_.node))
+  def find(toFind: NodeIdentifier): F[Option[Node]] =
+    tableRef.get.map(
+      _(longestCommonBitPrefix(toFind))
+        .find(_.node.id.toByteArray === toFind.key.toArray)
+        .map(_.node)
+    )
 
-  def peersAscendingDistance: F[List[PeerNode]] = tableRef.get.map { table =>
+  def peersAscendingDistance: F[List[Node]] = tableRef.get.map { table =>
     sort(table.flatten.toList, local).map(_.node).toList
   }
 
@@ -146,8 +158,8 @@ final class PeerTable[F[_]: Monad](
     entries.sorted(
       (x: Entry, y: Entry) =>
         Ordering[BigInt].compare(
-          PeerTable.xorDistance(target, x.node.id),
-          PeerTable.xorDistance(target, y.node.id)
-      )
+          PeerTable.xorDistance(target.asByteString, x.node.id),
+          PeerTable.xorDistance(target.asByteString, y.node.id)
+        )
     )
 }

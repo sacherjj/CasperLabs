@@ -1,13 +1,15 @@
 package io.casperlabs.comm.transport
 
 import scala.concurrent.duration.Duration
-
 import io.casperlabs.comm._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.shared.Log
 import io.casperlabs.metrics.Metrics
 import java.nio.file._
+
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils._
 import monix.catnap.MVar
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -37,7 +39,7 @@ class TcpTransportLayerSpec
       val key     = CertificatePrinter.printPrivateKey(keyPair.getPrivate)
       val id      = CertificateHelper.publicAddress(keyPair.getPublic).map(Base16.encode).get
       val address = s"casperlabs://$id@$host?protocol=$port&discovery=0"
-      val peer    = PeerNode.fromAddress(address).right.get
+      val peer    = Node.fromAddress(address).right.get
       TcpTlsEnvironment(host, port, cert, key, peer)
     }
 
@@ -67,5 +69,5 @@ case class TcpTlsEnvironment(
     port: Int,
     cert: String,
     key: String,
-    peer: PeerNode
+    peer: Node
 ) extends Environment

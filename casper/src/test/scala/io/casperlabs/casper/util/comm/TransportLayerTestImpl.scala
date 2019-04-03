@@ -1,27 +1,25 @@
 package io.casperlabs.casper.util.comm
 
-import cats.{Id, Monad}
+import cats.Monad
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import io.casperlabs.comm.CommError.CommErr
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.protocol.routing._
-import io.casperlabs.catscontrib._
-import io.casperlabs.comm.CommError.{peerNodeNotFound, CommErr}
-import io.casperlabs.comm.PeerNode
-import io.casperlabs.comm.rp.ProtocolHelper
 import io.casperlabs.comm.rp.ProtocolHelper.protocol
-
-import scala.concurrent.duration.FiniteDuration
-import scala.collection.mutable
 import io.casperlabs.comm.transport._
 
+import scala.collection.mutable
+import scala.concurrent.duration.FiniteDuration
+
 class TransportLayerTestImpl[F[_]: Monad](
-    identity: PeerNode,
-    val msgQueues: Map[PeerNode, Ref[F, mutable.Queue[Protocol]]]
+    identity: Node,
+    val msgQueues: Map[Node, Ref[F, mutable.Queue[Protocol]]]
 ) extends TransportLayer[F] {
 
-  def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] = ???
+  def roundTrip(peer: Node, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] = ???
 
-  def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
+  def send(peer: Node, msg: Protocol): F[CommErr[Unit]] =
     msgQueues.get(peer) match {
       case Some(qRef) =>
         qRef
@@ -32,7 +30,7 @@ class TransportLayerTestImpl[F[_]: Monad](
       case None => ().pure[F].map(Right(_))
     }
 
-  def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
+  def broadcast(peers: Seq[Node], msg: Protocol): F[Seq[CommErr[Unit]]] =
     peers.toList.traverse(send(_, msg)).map(_.toSeq)
 
   def receive(
@@ -41,14 +39,14 @@ class TransportLayerTestImpl[F[_]: Monad](
   ): F[Unit] =
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))
 
-  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
+  def stream(peers: Seq[Node], blob: Blob): F[Unit] =
     broadcast(peers, protocol(blob.sender).withPacket(blob.packet)).void
 
-  def disconnect(peer: PeerNode): F[Unit] = ???
+  def disconnect(peer: Node): F[Unit] = ???
 
   def shutdown(msg: Protocol): F[Unit] = ???
 
-  def clear(peer: PeerNode): F[Unit] =
+  def clear(peer: Node): F[Unit] =
     msgQueues.get(peer) match {
       case Some(qRef) =>
         qRef.update { q =>

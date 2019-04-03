@@ -1,13 +1,17 @@
 package io.casperlabs.p2p.effects
 
-import io.casperlabs.comm.{CommError, PeerNode}
+import io.casperlabs.comm.CommError
 import io.casperlabs.comm.protocol.routing.Packet
-import cats._, cats.data._, cats.implicits._
-import io.casperlabs.catscontrib._, Catscontrib._
+import cats._
+import cats.data._
+import cats.implicits._
+import io.casperlabs.catscontrib._
+import Catscontrib._
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.shared._
 
 trait PacketHandler[F[_]] {
-  def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]]
+  def handlePacket(peer: Node, packet: Packet): F[Option[Packet]]
 }
 
 object PacketHandler extends PacketHandlerInstances {
@@ -19,17 +23,17 @@ object PacketHandler extends PacketHandlerInstances {
       implicit C: PacketHandler[F]
   ): PacketHandler[T[F, ?]] =
     new PacketHandler[T[F, ?]] {
-      def handlePacket(peer: PeerNode, packet: Packet): T[F, Option[Packet]] =
+      def handlePacket(peer: Node, packet: Packet): T[F, Option[Packet]] =
         C.handlePacket(peer, packet).liftM[T]
     }
 
-  def pf[F[_]](pfForPeer: (PeerNode) => PartialFunction[Packet, F[Unit]])(
+  def pf[F[_]](pfForPeer: Node => PartialFunction[Packet, F[Unit]])(
       implicit ev1: Applicative[F],
       ev2: Log[F],
       errorHandler: ApplicativeError_[F, CommError]
   ): PacketHandler[F] =
     new PacketHandler[F] {
-      def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]] = {
+      def handlePacket(peer: Node, packet: Packet): F[Option[Packet]] = {
         val errorMsg = s"Unable to handle packet $packet"
         val pf       = pfForPeer(peer)
         if (pf.isDefinedAt(packet)) pf(packet).as(None)
@@ -41,7 +45,7 @@ object PacketHandler extends PacketHandlerInstances {
     }
 
   class NOPPacketHandler[F[_]: Applicative] extends PacketHandler[F] {
-    def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]] = packet.some.pure[F]
+    def handlePacket(peer: Node, packet: Packet): F[Option[Packet]] = packet.some.pure[F]
   }
 
 }

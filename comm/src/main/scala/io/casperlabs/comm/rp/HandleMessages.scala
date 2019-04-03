@@ -6,6 +6,8 @@ import cats.effect.Sync
 import cats.implicits._
 import io.casperlabs.comm._
 import io.casperlabs.comm.CommError._
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.rp.Connect.Connections._
@@ -33,7 +35,7 @@ object HandleMessages {
 
   private def handle_[F[_]: Sync: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       proto: Protocol,
-      sender: PeerNode,
+      sender: Node,
       defaultTimeout: FiniteDuration
   ): F[CommunicationResponse] =
     proto.message match {
@@ -48,18 +50,18 @@ object HandleMessages {
     }
 
   def handleDisconnect[F[_]: Sync: Metrics: TransportLayer: Log: ConnectionsCell](
-      sender: PeerNode,
+      sender: Node,
       disconnect: Disconnect
   ): F[CommunicationResponse] =
     for {
-      _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
+      _ <- Log[F].info(s"Forgetting about ${sender.show}.")
       _ <- TransportLayer[F].disconnect(sender)
       _ <- ConnectionsCell[F].flatModify(_.removeConn[F](sender))
       _ <- Metrics[F].incrementCounter("disconnect")
     } yield handledWithoutMessage
 
   def handlePacket[F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler: RPConfAsk](
-      remote: PeerNode,
+      remote: Node,
       packet: Packet
   ): F[CommunicationResponse] =
     for {
@@ -72,7 +74,7 @@ object HandleMessages {
         )
 
   def handleProtocolHandshake[F[_]: Monad: Time: TransportLayer: Log: ErrorHandler: ConnectionsCell: RPConfAsk: Metrics](
-      peer: PeerNode,
+      peer: Node,
       protocolHandshake: ProtocolHandshake,
       defaultTimeout: FiniteDuration
   ): F[CommunicationResponse] = {
@@ -82,7 +84,7 @@ object HandleMessages {
         .warn(s"Not adding. Could not receive response to heartbeat from $peer, reason: $error")
         .as(notHandled(error))
 
-    def handledHandshake(local: PeerNode): F[CommunicationResponse] =
+    def handledHandshake(local: Node): F[CommunicationResponse] =
       for {
         _ <- ConnectionsCell[F].flatModify(_.addConn[F](peer))
         _ <- Log[F].info(s"Responded to protocol handshake request from $peer")
@@ -96,7 +98,7 @@ object HandleMessages {
   }
 
   def handleHeartbeat[F[_]: Monad: Time: TransportLayer: ErrorHandler: RPConfAsk](
-      peer: PeerNode,
+      peer: Node,
       heartbeat: Heartbeat
   ): F[CommunicationResponse] =
     RPConfAsk[F].reader(_.local) map (

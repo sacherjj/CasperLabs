@@ -24,10 +24,10 @@ package object effects {
 
   def log: Log[Task] = Log.log
 
-  def nodeDiscovery(id: NodeIdentifier, port: Int, timeout: FiniteDuration)(init: Option[PeerNode])(
+  def nodeDiscovery(id: NodeIdentifier, port: Int, timeout: FiniteDuration)(init: Option[Node])(
       implicit
       scheduler: Scheduler,
-      peerNodeAsk: PeerNodeAsk[Task],
+      peerNodeAsk: NodeAsk[Task],
       log: Log[Task],
       time: Time[Task],
       metrics: Metrics[Task]
@@ -76,10 +76,10 @@ package object effects {
       def ask: Task[RPConf]              = state.get
     }
 
-  def peerNodeAsk(implicit state: MonadState[Task, RPConf]): ApplicativeAsk[Task, PeerNode] =
-    new DefaultApplicativeAsk[Task, PeerNode] {
+  def peerNodeAsk(implicit state: MonadState[Task, RPConf]): ApplicativeAsk[Task, Node] =
+    new DefaultApplicativeAsk[Task, Node] {
       val applicative: Applicative[Task] = Applicative[Task]
-      def ask: Task[PeerNode]            = state.get.map(_.local)
+      def ask: Task[Node]                = state.get.map(_.local)
     }
 
 }

@@ -3,7 +3,7 @@ package io.casperlabs.node
 import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.config.ConfigFactory
-import io.casperlabs.comm.NodeIdentifier
+import io.casperlabs.comm.discovery.NodeIdentifier
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.configuration.Configuration.Influx
 import io.casperlabs.node.diagnostics.JmxReporter

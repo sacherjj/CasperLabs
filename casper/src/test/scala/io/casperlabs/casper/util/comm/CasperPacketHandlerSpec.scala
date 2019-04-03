@@ -1,6 +1,7 @@
 package io.casperlabs.casper.util.comm
 
 import cats.effect.concurrent.Ref
+import cats.syntax.show._
 import cats.{Applicative, ApplicativeError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
@@ -14,6 +15,7 @@ import io.casperlabs.casper.helper.{
   NoOpsCasperEffect
 }
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
+import io.casperlabs.casper.util.TestTime
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
   BootstrapCasperHandler,
@@ -23,8 +25,10 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   StandaloneCasperHandler
 }
 import io.casperlabs.casper.util.comm.CasperPacketHandlerSpec._
-import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.ApplicativeError_
+import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.{Connections, ConnectionsCell}
 import io.casperlabs.comm.rp.ProtocolHelper
@@ -36,12 +40,10 @@ import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Cell
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
-import monix.eval.instances._
 import monix.execution.Scheduler
 import org.scalatest.{Matchers, WordSpec}
-import io.casperlabs.casper.util.TestTime
-import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.concurrent.duration._
 
@@ -71,8 +73,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       false,
       requiredSigs
     )
-    val local: PeerNode = peerNode("src", 40400)
-    val shardId         = "test-shardId"
+    val local: Node = peerNode("src", 40400)
+    val shardId     = "test-shardId"
 
     implicit val nodeDiscovery = new NodeDiscoveryStub[Task]
     implicit val connectionsCell: ConnectionsCell[Task] =
@@ -161,7 +163,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           response = packet(
             local,
             transport.NoApprovedBlockAvailable,
-            NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toByteString
+            NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.show).toByteString
           )
           _            = assert(head.peer == local && head.msg == response)
           _            = transportLayer.reset()
@@ -421,8 +423,6 @@ object CasperPacketHandlerSpec {
     Packet(transport.ApprovedBlockRequest.id, approvedBlockReq.toByteString)
   }
 
-  private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
-
-  private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+  private def peerNode(name: String, port: Int): Node =
+    Node(ByteString.copyFrom(name.getBytes), "host", port, port)
 }
