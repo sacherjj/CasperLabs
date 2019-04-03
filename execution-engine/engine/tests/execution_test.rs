@@ -113,13 +113,9 @@ impl WasmMemoryManager {
         name: &str,
         known_urefs: BTreeMap<String, Key>,
     ) -> StoreContractResult {
-        let (contract_ptr, contract_len) = self
-            .write(name.to_owned())
-            .expect("Writing contract to wasm memory should work");
+        let (contract_ptr, contract_len) = self.write(name.to_owned());
 
-        let (urefs_ptr, urefs_len) = self
-            .write(known_urefs)
-            .expect("Writing urefs to wasm memory should work.");
+        let (urefs_ptr, urefs_len) = self.write(known_urefs);
 
         let (hash_ptr, _) = self
             .write_raw([0u8; 32].to_vec())
@@ -134,8 +130,9 @@ impl WasmMemoryManager {
         }
     }
 
-    pub fn write<T: ToBytes>(&mut self, t: T) -> Result<(u32, usize), Error> {
-        self.write_raw(t.to_bytes()?)
+    pub fn write<T: ToBytes>(&mut self, t: T) -> (u32, usize) {
+        self.write_raw(t.to_bytes().expect("ToBytes conversion should work."))
+        .expect("Writing to Wasm memory should work.")
     }
 
     pub fn write_raw(&mut self, bytes: Vec<u8>) -> Result<(u32, usize), Error> {
@@ -292,13 +289,11 @@ fn valid_uref() {
     // write arbitrary value to wasm memory to allow call to write
     let init_value = test_fixture
         .memory
-        .write(value::Value::Int32(42))
-        .expect("writing value to wasm memory should succeed");
+        .write(value::Value::Int32(42));
 
     let new_value = test_fixture
         .memory
-        .write(value::Value::Int32(43))
-        .expect("writing value to wasm memory should succeed");
+        .write(value::Value::Int32(43));
 
     // create a valid uref in wasm memory via new_uref
     let uref = test_fixture
@@ -327,14 +322,10 @@ fn forged_uref() {
     // create a forged uref
     let uref = test_fixture
         .memory
-        .write(Key::URef([231u8; 32], AccessRights::ReadWrite))
-        .expect("writing key to wasm memory should succeed");
+        .write(Key::URef([231u8; 32], AccessRights::ReadWrite));
 
     // write arbitrary value to wasm memory to allow call to write
-    let value = test_fixture
-        .memory
-        .write(value::Value::Int32(42))
-        .expect("writing value to wasm memory should succeed");
+    let value = test_fixture.memory.write(value::Value::Int32(42));
 
     // Use uref as the key to perform an action on the global state.
     // This should fail because the uref was forged
@@ -510,8 +501,7 @@ fn store_contract_hash_legal_urefs() {
         // known_urefs map.
         let init_value = test_fixture
             .memory
-            .write(value::Value::Int32(42))
-            .expect("writing value to wasm memory should succeed");
+            .write(value::Value::Int32(42));
 
         let uref = {
             // We are generating new URef the "correct" way.
@@ -615,10 +605,7 @@ fn store_contract_uref_known_key() {
             wasm_module.module.clone(),
         );
 
-        let (contract_uref_ptr, contract_uref_len) = test_fixture
-            .memory
-            .write(contract_uref)
-            .expect("Writing URef to Wasm memory should work.");
+        let (contract_uref_ptr, contract_uref_len) = test_fixture.memory.write(contract_uref);
 
         let contract = Value::Contract(contract_bytes_from_wat(
             wasm_module.module.clone(),
@@ -626,10 +613,7 @@ fn store_contract_uref_known_key() {
             urefs.clone(),
         ));
 
-        let (contract_ptr, contract_len) = test_fixture
-            .memory
-            .write(contract.clone())
-            .expect("Writing Contract to Wasm memory should succeed");
+        let (contract_ptr, contract_len) = test_fixture.memory.write(contract.clone());
 
         // This is the FFI call that Wasm triggers when it stores a contract in GS.
         runtime
@@ -686,10 +670,7 @@ fn store_contract_uref_forged_key() {
         wasm_module.module.clone(),
     );
 
-    let (contract_uref_ptr, contract_uref_len) = test_fixture
-        .memory
-        .write(forged_contract_uref)
-        .expect("Writing URef to Wasm memory should work.");
+    let (contract_uref_ptr, contract_uref_len) = test_fixture.memory.write(forged_contract_uref);
 
     let contract = Value::Contract(contract_bytes_from_wat(
         wasm_module.module.clone(),
@@ -697,10 +678,7 @@ fn store_contract_uref_forged_key() {
         urefs.clone(),
     ));
 
-    let (contract_ptr, contract_len) = test_fixture
-        .memory
-        .write(contract.clone())
-        .expect("Writing Contract to Wasm memory should succeed");
+    let (contract_ptr, contract_len) = test_fixture.memory.write(contract.clone());
 
     // This is the FFI call that Wasm triggers when it stores a contract in GS.
     let result = runtime.write(
