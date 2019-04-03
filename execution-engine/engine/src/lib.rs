@@ -2,6 +2,7 @@
 #![feature(never_type)]
 extern crate common;
 extern crate core;
+extern crate failure;
 extern crate parity_wasm;
 extern crate parking_lot;
 extern crate pwasm_utils;

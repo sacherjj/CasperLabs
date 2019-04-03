@@ -1,5 +1,6 @@
+use crate::error::Error as StorageError;
 use crate::transform::{self, Transform};
-use common::bytesrepr::*;
+use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::value::Value;
 use gs::*;
@@ -22,7 +23,7 @@ impl<K, V> Clone for InMemGS<K, V> {
 }
 
 impl DbReader for InMemGS<Key, Value> {
-    type Error = !;
+    type Error = StorageError;
     fn get(&self, k: &Key) -> Result<Option<Value>, Self::Error> {
         Ok(self.0.get(k).map(Clone::clone))
     }
@@ -51,22 +52,22 @@ impl<K: Ord, V> InMemHist<K, V> {
 
     // TODO(mateusz.gorski): I know this is not efficient and we should be caching these values
     // but for the time being it should be enough.
-    fn get_root_hash(state: &BTreeMap<K, V>) -> Blake2bHash
+    fn get_root_hash(state: &BTreeMap<K, V>) -> Result<Blake2bHash, StorageError>
     where
         K: ToBytes,
         V: ToBytes,
     {
         let mut data: Vec<u8> = Vec::new();
         for (k, v) in state.iter() {
-            data.extend(k.to_bytes());
-            data.extend(v.to_bytes());
+            data.extend(k.to_bytes()?);
+            data.extend(v.to_bytes()?);
         }
-        Blake2bHash::new(&data)
+        Ok(Blake2bHash::new(&data))
     }
 }
 
 impl History for InMemHist<Key, Value> {
-    type Error = !;
+    type Error = StorageError;
     type Reader = InMemGS<Key, Value>;
 
     fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error> {
@@ -107,7 +108,7 @@ impl History for InMemHist<Key, Value> {
                         },
                     }
                 }
-                let hash = InMemHist::get_root_hash(&base);
+                let hash = InMemHist::get_root_hash(&base)?;
                 self.history.insert(hash, InMemGS(Arc::new(base)));
                 Ok(CommitResult::Success(hash))
             }

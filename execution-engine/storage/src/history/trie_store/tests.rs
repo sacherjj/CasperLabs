@@ -67,9 +67,9 @@ mod simple {
             value: b"val_3".to_vec(),
         };
 
-        let leaf_1_hash = Blake2bHash::new(&leaf_1.to_bytes());
-        let leaf_2_hash = Blake2bHash::new(&leaf_2.to_bytes());
-        let leaf_3_hash = Blake2bHash::new(&leaf_3.to_bytes());
+        let leaf_1_hash = Blake2bHash::new(&leaf_1.to_bytes().unwrap());
+        let leaf_2_hash = Blake2bHash::new(&leaf_2.to_bytes().unwrap());
+        let leaf_3_hash = Blake2bHash::new(&leaf_3.to_bytes().unwrap());
 
         let node_2: Trie<Vec<u8>, Vec<u8>> = {
             let mut pointer_block = PointerBlock::new();
@@ -79,7 +79,7 @@ mod simple {
             Trie::Node { pointer_block }
         };
 
-        let node_2_hash = Blake2bHash::new(&node_2.to_bytes());
+        let node_2_hash = Blake2bHash::new(&node_2.to_bytes().unwrap());
 
         let ext_node: Trie<Vec<u8>, Vec<u8>> = {
             let affix = vec![1u8, 0];
@@ -87,7 +87,7 @@ mod simple {
             Trie::Extension { affix, pointer }
         };
 
-        let ext_node_hash = Blake2bHash::new(&ext_node.to_bytes());
+        let ext_node_hash = Blake2bHash::new(&ext_node.to_bytes().unwrap());
 
         let node_1: Trie<Vec<u8>, Vec<u8>> = {
             let mut pointer_block = PointerBlock::new();
@@ -97,7 +97,7 @@ mod simple {
             Trie::Node { pointer_block }
         };
 
-        let node_1_hash = Blake2bHash::new(&node_1.to_bytes());
+        let node_1_hash = Blake2bHash::new(&node_1.to_bytes().unwrap());
 
         vec![
             (leaf_1_hash, leaf_1),
@@ -437,7 +437,7 @@ mod roundtrip {
         let outputs: Vec<Trie<Key, Value>> = {
             let input_tuples: Vec<(Blake2bHash, Trie<Key, Value>)> = inputs
                 .iter()
-                .map(|trie| (Blake2bHash::new(&trie.to_bytes()), trie.to_owned()))
+                .map(|trie| (Blake2bHash::new(&trie.to_bytes().unwrap()), trie.to_owned()))
                 .collect();
             roundtrip::<Key, Value, S, X, E>(store, transaction_source, &input_tuples)
                 .expect("roundtrip failed")

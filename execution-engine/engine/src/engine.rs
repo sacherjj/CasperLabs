@@ -1,5 +1,6 @@
 use common::key::Key;
-use execution::Executor;
+use execution::{self, Executor};
+use failure::Fail;
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
@@ -44,11 +45,15 @@ impl ExecutionResult {
     }
 }
 
-#[derive(Debug)]
+#[derive(Fail, Debug)]
 pub enum Error {
+    #[fail(display = "{}", _0)]
     PreprocessingError(String),
+    #[fail(display = "Execution error")]
     ExecError(::execution::Error),
+    #[fail(display = "Storage error")]
     StorageError(storage::error::Error),
+    #[fail(display = "Unreachable")]
     Unreachable,
 }
 
@@ -99,8 +104,7 @@ impl From<!> for Error {
 impl<H> EngineState<H>
 where
     H: History,
-    Error: From<H::Error>,
-    H::Error: Into<::execution::Error>,
+    H::Error: Into<execution::Error>,
 {
     pub fn new(state: H) -> EngineState<H> {
         EngineState {
@@ -113,7 +117,7 @@ where
         &self,
         hash: Blake2bHash,
     ) -> Result<Option<TrackingCopy<H::Reader>>, Error> {
-        match self.state.lock().checkout(hash)? {
+        match self.state.lock().checkout(hash).map_err(Into::into)? {
             Some(tc) => Ok(Some(TrackingCopy::new(tc))),
             None => Ok(None),
         }

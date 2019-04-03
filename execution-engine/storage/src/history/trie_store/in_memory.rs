@@ -257,7 +257,7 @@ impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for InMemor
         T: Readable<Handle = Self::Handle>,
         Self::Error: From<T::Error>,
     {
-        match txn.read((), &key.to_bytes())? {
+        match txn.read((), &key.to_bytes()?)? {
             None => Ok(None),
             Some(bytes) => {
                 let trie = deserialize(&bytes)?;
@@ -271,7 +271,7 @@ impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for InMemor
         T: Writable<Handle = Self::Handle>,
         Self::Error: From<T::Error>,
     {
-        txn.write((), &key.to_bytes(), &value.to_bytes())
+        txn.write((), &key.to_bytes()?, &value.to_bytes()?)
             .map_err(Into::into)
     }
 }

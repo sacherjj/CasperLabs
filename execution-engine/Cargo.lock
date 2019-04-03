@@ -246,6 +246,7 @@ dependencies = [
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "casperlabs-contract-ffi 0.3.0",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "gens 0.1.0",
  "matches 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -21,8 +21,8 @@
 //! let leaf_2 = Trie::Leaf { key: vec![1u8, 0, 0], value: b"val_2".to_vec() };
 //!
 //! // Get their hashes
-//! let leaf_1_hash = Blake2bHash::new(&leaf_1.to_bytes());
-//! let leaf_2_hash = Blake2bHash::new(&leaf_2.to_bytes());
+//! let leaf_1_hash = Blake2bHash::new(&leaf_1.to_bytes().unwrap());
+//! let leaf_2_hash = Blake2bHash::new(&leaf_2.to_bytes().unwrap());
 //!
 //! // Create a node
 //! let node: Trie<Vec<u8>, Vec<u8>> = {
@@ -34,7 +34,7 @@
 //! };
 //!
 //! // Get its hash
-//! let node_hash = Blake2bHash::new(&node.to_bytes());
+//! let node_hash = Blake2bHash::new(&node.to_bytes().unwrap());
 //!
 //! // Create the environment and the store. For both the in-memory and
 //! // LMDB-backed implementations, the environment is the source of
@@ -230,7 +230,7 @@ impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for LmdbTri
         T: Readable<Handle = Self::Handle>,
         Self::Error: From<T::Error>,
     {
-        match txn.read(self.db, &key.to_bytes())? {
+        match txn.read(self.db, &key.to_bytes()?)? {
             None => Ok(None),
             Some(bytes) => {
                 let trie = deserialize(&bytes)?;
@@ -249,7 +249,7 @@ impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for LmdbTri
         T: Writable<Handle = Self::Handle>,
         Self::Error: From<T::Error>,
     {
-        txn.write(self.db, &key.to_bytes(), &value.to_bytes())
+        txn.write(self.db, &key.to_bytes()?, &value.to_bytes()?)
             .map_err(Into::into)
     }
 }

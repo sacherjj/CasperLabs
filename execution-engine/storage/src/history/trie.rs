@@ -36,12 +36,12 @@ impl Pointer {
 }
 
 impl ToBytes for Pointer {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut hash_bytes = self.hash().to_bytes();
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let mut hash_bytes = self.hash().to_bytes()?;
         let mut ret = Vec::with_capacity(U32_SIZE + hash_bytes.len());
-        ret.append(&mut self.tag().to_bytes());
+        ret.append(&mut self.tag().to_bytes()?);
         ret.append(&mut hash_bytes);
-        ret
+        Ok(ret)
     }
 }
 
@@ -94,7 +94,7 @@ impl Default for PointerBlock {
 }
 
 impl ToBytes for PointerBlock {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         ToBytes::to_bytes(&self.0)
     }
 }
@@ -151,35 +151,45 @@ impl<K, V> Trie<K, V> {
     }
 }
 
-impl<K: ToBytes, V: ToBytes> ToBytes for Trie<K, V> {
-    fn to_bytes(&self) -> Vec<u8> {
+impl<K, V> ToBytes for Trie<K, V>
+where
+    K: ToBytes,
+    V: ToBytes,
+{
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         match self {
             Trie::Leaf { key, value } => {
-                let mut key_bytes = ToBytes::to_bytes(key);
-                let mut value_bytes = ToBytes::to_bytes(value);
+                let mut key_bytes = ToBytes::to_bytes(key)?;
+                let mut value_bytes = ToBytes::to_bytes(value)?;
+                if key_bytes.len() + value_bytes.len() > u32::max_value() as usize - U32_SIZE {
+                    return Err(bytesrepr::Error::OutOfMemoryError);
+                }
                 let mut ret: Vec<u8> =
                     Vec::with_capacity(U32_SIZE + key_bytes.len() + value_bytes.len());
-                ret.append(&mut self.tag().to_bytes());
+                ret.append(&mut self.tag().to_bytes()?);
                 ret.append(&mut key_bytes);
                 ret.append(&mut value_bytes);
-                ret
+                Ok(ret)
             }
             Trie::Node { pointer_block } => {
-                let mut pointer_block_bytes = ToBytes::to_bytes(pointer_block.deref());
+                let mut pointer_block_bytes = ToBytes::to_bytes(pointer_block.deref())?;
                 let mut ret: Vec<u8> = Vec::with_capacity(U32_SIZE + pointer_block_bytes.len());
-                ret.append(&mut self.tag().to_bytes());
+                ret.append(&mut self.tag().to_bytes()?);
                 ret.append(&mut pointer_block_bytes);
-                ret
+                Ok(ret)
             }
             Trie::Extension { affix, pointer } => {
-                let mut affix_bytes = ToBytes::to_bytes(affix);
-                let mut pointer_bytes = ToBytes::to_bytes(pointer);
+                let mut affix_bytes = ToBytes::to_bytes(affix)?;
+                let mut pointer_bytes = ToBytes::to_bytes(pointer)?;
+                if affix_bytes.len() + pointer_bytes.len() > u32::max_value() as usize - U32_SIZE {
+                    return Err(bytesrepr::Error::OutOfMemoryError);
+                }
                 let mut ret: Vec<u8> =
                     Vec::with_capacity(U32_SIZE + affix_bytes.len() + pointer_bytes.len());
-                ret.append(&mut self.tag().to_bytes());
+                ret.append(&mut self.tag().to_bytes()?);
                 ret.append(&mut affix_bytes);
                 ret.append(&mut pointer_bytes);
-                ret
+                Ok(ret)
             }
         }
     }

@@ -4,9 +4,9 @@
 extern crate failure;
 
 extern crate common;
+extern crate lmdb;
 extern crate num;
 extern crate parking_lot;
-extern crate lmdb;
 extern crate shared;
 extern crate wasmi;
 

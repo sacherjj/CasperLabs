@@ -3,14 +3,22 @@ use super::alloc::string::String;
 use super::alloc::vec::Vec;
 use core::mem::{size_of, MaybeUninit};
 
+use failure::Fail;
+
 const I32_SIZE: usize = size_of::<i32>();
+pub const U8_SIZE: usize = size_of::<u8>();
+pub const U16_SIZE: usize = size_of::<u16>();
 pub const U32_SIZE: usize = size_of::<u32>();
+pub const U64_SIZE: usize = size_of::<u64>();
+pub const U128_SIZE: usize = size_of::<u128>();
+pub const U256_SIZE: usize = U128_SIZE * 2;
+pub const U512_SIZE: usize = U256_SIZE * 2;
 
 pub const N32: usize = 32;
 const N256: usize = 256;
 
 pub trait ToBytes {
-    fn to_bytes(&self) -> Vec<u8>;
+    fn to_bytes(&self) -> Result<Vec<u8>, Error>;
 }
 
 pub trait FromBytes: Sized {
@@ -27,6 +35,9 @@ pub enum Error {
 
     #[fail(display = "Deserialization error: left-over bytes")]
     LeftOverBytes,
+
+    #[fail(display = "Serialization error: out of memory")]
+    OutOfMemoryError,
 }
 
 pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {
@@ -47,10 +58,10 @@ pub fn safe_split_at(bytes: &[u8], n: usize) -> Result<(&[u8], &[u8]), Error> {
 }
 
 impl ToBytes for u8 {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut result = Vec::with_capacity(1);
         result.push(*self);
-        result
+        Ok(result)
     }
 }
 
@@ -64,8 +75,8 @@ impl FromBytes for u8 {
 }
 
 impl ToBytes for i32 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_le_bytes().to_vec()
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.to_le_bytes().to_vec())
     }
 }
 
@@ -79,8 +90,8 @@ impl FromBytes for i32 {
 }
 
 impl ToBytes for u32 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_le_bytes().to_vec()
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.to_le_bytes().to_vec())
     }
 }
 
@@ -94,8 +105,8 @@ impl FromBytes for u32 {
 }
 
 impl ToBytes for u64 {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.to_le_bytes().to_vec()
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.to_le_bytes().to_vec())
     }
 }
 
@@ -122,12 +133,17 @@ impl FromBytes for Vec<u8> {
 }
 
 impl ToBytes for Vec<u8> {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        // Return error if size of serialized vector would exceed limit for
+        // 32-bit architecture.
+        if self.len() >= u32::max_value() as usize - U32_SIZE {
+            return Err(Error::OutOfMemoryError);
+        }
         let size = self.len() as u32;
         let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize);
-        result.extend(size.to_bytes());
+        result.extend(size.to_bytes()?);
         result.extend(self);
-        result
+        Ok(result)
     }
 }
 
@@ -145,18 +161,21 @@ impl FromBytes for Vec<i32> {
 }
 
 impl<T: ToBytes> ToBytes for Option<T> {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
             Some(v) => {
-                let mut value = v.to_bytes();
-                let mut result = Vec::with_capacity(U32_SIZE + value.len());
-                result.append(&mut 1u32.to_bytes());
+                let mut value = v.to_bytes()?;
+                if value.len() >= u32::max_value() as usize - U32_SIZE {
+                    return Err(Error::OutOfMemoryError);
+                }
+                let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + value.len());
+                result.append(&mut 1u32.to_bytes()?);
                 result.append(&mut value);
-                result
+                Ok(result)
             }
             // In the case of None there is no value to serialize, but we still
             // need to write out a tag to indicate which variant we are using
-            None => 0u32.to_bytes(),
+            None => Ok(0u32.to_bytes()?),
         }
     }
 }
@@ -176,12 +195,22 @@ impl<T: FromBytes> FromBytes for Option<T> {
 }
 
 impl ToBytes for Vec<i32> {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        // Return error if size of vector would exceed length of serialized data
+        if self.len() * I32_SIZE >= u32::max_value() as usize - U32_SIZE {
+            return Err(Error::OutOfMemoryError);
+        }
         let size = self.len() as u32;
         let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + (I32_SIZE * size as usize));
-        result.extend(size.to_bytes());
-        result.extend(self.iter().flat_map(ToBytes::to_bytes));
-        result
+        result.extend(size.to_bytes()?);
+        result.extend(
+            self.iter()
+                .map(ToBytes::to_bytes)
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .flatten(),
+        );
+        Ok(result)
     }
 }
 
@@ -199,14 +228,27 @@ impl FromBytes for Vec<Vec<u8>> {
 }
 
 impl ToBytes for Vec<Vec<u8>> {
-    fn to_bytes(&self) -> Vec<u8> {
-        let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize);
-        result.extend_from_slice(&size.to_bytes());
-        for n in 0..size {
-            result.extend_from_slice(&self[n as usize].to_bytes());
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        if self.len() >= u32::max_value() as usize - U32_SIZE {
+            // Fail fast for large enough vectors
+            return Err(Error::OutOfMemoryError);
         }
-        result
+        // Calculate total length of all vectors
+        let total_length: usize = self.iter().map(Vec::len).sum();
+        // It could be either length of vector which serialized would exceed
+        // the maximum size of vector (i.e. vector of vectors of size 1),
+        // or the total length of all vectors (i.e. vector of size 1 which holds
+        // vector of size 2^32-1)
+        if total_length >= u32::max_value() as usize - U32_SIZE {
+            return Err(Error::OutOfMemoryError);
+        }
+        let size = self.len() as u32;
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize + total_length);
+        result.extend_from_slice(&size.to_bytes()?);
+        for n in 0..size {
+            result.extend_from_slice(&self[n as usize].to_bytes()?);
+        }
+        Ok(result)
     }
 }
 
@@ -224,21 +266,27 @@ impl FromBytes for Vec<String> {
 }
 
 impl ToBytes for Vec<String> {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let size = self.len() as u32;
-        let mut result = Vec::with_capacity(U32_SIZE);
-        result.extend(size.to_bytes());
-        result.extend(self.iter().flat_map(ToBytes::to_bytes));
-        result
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE);
+        result.extend(size.to_bytes()?);
+        result.extend(
+            self.iter()
+                .map(ToBytes::to_bytes)
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .flatten(),
+        );
+        Ok(result)
     }
 }
 
 impl ToBytes for [u8; N32] {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(U32_SIZE + N32);
-        result.extend((N32 as u32).to_bytes());
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + N32);
+        result.extend((N32 as u32).to_bytes()?);
         result.extend(self);
-        result
+        Ok(result)
     }
 }
 
@@ -255,11 +303,20 @@ impl FromBytes for [u8; N32] {
 }
 
 impl<T: ToBytes> ToBytes for [T; N256] {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(U32_SIZE + (self.len() * size_of::<T>()));
-        result.extend((N256 as u32).to_bytes());
-        result.extend(self.iter().flat_map(ToBytes::to_bytes));
-        result
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        if self.len() * size_of::<T>() >= u32::max_value() as usize - U32_SIZE {
+            return Err(Error::OutOfMemoryError);
+        }
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + (self.len() * size_of::<T>()));
+        result.extend((N256 as u32).to_bytes()?);
+        result.extend(
+            self.iter()
+                .map(ToBytes::to_bytes)
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .flatten(),
+        );
+        Ok(result)
     }
 }
 
@@ -283,7 +340,7 @@ impl<T: FromBytes> FromBytes for [T; N256] {
 }
 
 impl ToBytes for String {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         self.as_str().to_bytes()
     }
 }
@@ -297,8 +354,8 @@ impl FromBytes for String {
 }
 
 impl ToBytes for () {
-    fn to_bytes(&self) -> Vec<u8> {
-        Vec::new()
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        Ok(Vec::new())
     }
 }
 
@@ -313,17 +370,35 @@ where
     K: ToBytes,
     V: ToBytes,
 {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let num_keys = self.len() as u32;
-        let bytes = self.iter().flat_map(|(k, v)| {
-            let mut b = k.to_bytes();
-            b.append(&mut v.to_bytes());
-            b
-        });
-        let mut result = Vec::with_capacity(U32_SIZE + bytes.size_hint().0);
-        result.append(&mut num_keys.to_bytes());
+        let bytes = self
+            .iter()
+            .map(move |(k, v)| {
+                let k_bytes = k.to_bytes().map_err(Into::into);
+                let v_bytes = v.to_bytes().map_err(Into::into);
+                // For each key and value pair create a vector of
+                // serialization results
+                let mut vs = Vec::with_capacity(2);
+                vs.push(k_bytes);
+                vs.push(v_bytes);
+                vs
+            })
+            // Flatten iterable of key and value pairs
+            .flatten()
+            // Collect into a single Result of bytes (if successful)
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten();
+
+        let (lower_bound, _upper_bound) = bytes.size_hint();
+        if lower_bound >= u32::max_value() as usize - U32_SIZE {
+            return Err(Error::OutOfMemoryError);
+        }
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + lower_bound);
+        result.append(&mut num_keys.to_bytes()?);
         result.extend(bytes);
-        result
+        Ok(result)
     }
 }
 
@@ -346,12 +421,15 @@ where
 }
 
 impl ToBytes for str {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        if self.len() >= u32::max_value() as usize - U32_SIZE {
+            return Err(Error::OutOfMemoryError);
+        }
         let bytes = self.as_bytes();
         let size = self.len();
-        let mut result = Vec::with_capacity(U32_SIZE + size);
-        result.extend((size as u32).to_bytes());
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size);
+        result.extend((size as u32).to_bytes()?);
         result.extend(bytes);
-        result
+        Ok(result)
     }
 }
