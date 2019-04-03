@@ -74,7 +74,6 @@ impl MockEnv {
             self.memory.clone(),
             tc,
             module,
-            self.gas_limit,
             address,
             nonce,
             timestamp,
@@ -206,7 +205,8 @@ fn mock_context<'a>(
     account: &'a value::Account,
     base_key: Key,
 ) -> RuntimeContext<'a> {
-    let mut context = RuntimeContext::new(uref_lookup, account, base_key);
+    let gas_limit = 1000u64;
+    let mut context = RuntimeContext::new(uref_lookup, account, base_key, gas_limit);
     known_urefs
         .iter()
         .for_each(|key| context.insert_uref(key.clone()));
