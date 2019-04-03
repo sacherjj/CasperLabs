@@ -8,7 +8,7 @@ extern crate wabt;
 extern crate wasm_prep;
 extern crate wasmi;
 
-use common::bytesrepr::ToBytes;
+use common::bytesrepr::{deserialize, FromBytes, ToBytes};
 use common::key::{AccessRights, Key, UREF_SIZE};
 use common::value::{self, Value};
 use execution_engine::execution::{Runtime, RuntimeContext};
@@ -149,8 +149,18 @@ impl WasmMemoryManager {
         }
     }
 
+    pub fn alloc(&mut self, len: usize) -> u32 {
+        let ptr = self.offset as u32;
+        self.offset += len;
+        ptr
+    }
+
     pub fn read_raw(&self, offset: u32, target: &mut [u8]) -> Result<(), wasmi::Error> {
         self.memory.get_into(offset, target)
+    }
+
+    pub fn read_bytes(&self, offset: u32, len: usize) -> Result<Vec<u8>, wasmi::Error> {
+        self.memory.get(offset, len)
     }
 
     pub fn new_uref<'a, R: DbReader>(
@@ -227,6 +237,30 @@ where
     R::Error: Into<execution_engine::execution::Error>,
 {
     runtime.write(key.0, key.1 as u32, value.0, value.1 as u32)
+}
+
+/// Reads data from the GlobalState that lives under a key
+/// that can be found in the Wasm memory under `key` (pointer, length) tuple.
+fn gs_read<'a, R: DbReader, T: FromBytes>(
+    memory: &mut WasmMemoryManager,
+    runtime: &mut Runtime<'a, R>,
+    key: (u32, usize),
+) -> Result<T, wasmi::Trap>
+where
+    R::Error: Into<execution_engine::execution::Error>,
+{
+    let size = runtime.read_value(key.0, key.1 as u32)?;
+    // prepare enough bytes in the Wasm memory
+    let value_ptr = memory.alloc(size);
+    // Ask runtime to write to prepared space in the Wasm memory
+    runtime
+        .set_mem_from_buf(value_ptr)
+        .expect("Writing value to WasmMemory should succeed.");
+    // Read value from the Wasm memory
+    let bytes = memory
+        .read_bytes(value_ptr, size)
+        .expect("Reading from WasmMemory should work");
+    Ok(deserialize(&bytes).expect("Deserializing should work"))
 }
 
 struct TestFixture {
