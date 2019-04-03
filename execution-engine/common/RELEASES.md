@@ -1,3 +1,10 @@
+Version 0.4.0 (2019-04-03)
+==========================
+
+* `new_uref` FFI now requires an initial value
+  [commit](https://github.com/CasperLabs/CasperLabs/pull/327/commits/58393ada6a41cf9a068125845c83dfc8af961b03).
+  This prevents creating "dangling" `URef`s.
+
 Version 0.2.0 (2019-03-14)
 ==========================
 

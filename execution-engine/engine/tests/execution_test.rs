@@ -159,13 +159,15 @@ impl WasmMemoryManager {
     pub fn new_uref<'a, R: DbReader>(
         &mut self,
         runtime: &mut Runtime<'a, R>,
+        value: (u32, usize), //pointer, length tuple
     ) -> Result<(u32, usize), wasmi::Trap>
     where
         R::Error: Into<execution_engine::execution::Error>,
     {
         let ptr = self.offset as u32;
+        let (value_ptr, value_size) = value;
 
-        match runtime.new_uref(ptr) {
+        match runtime.new_uref(ptr, value_ptr, value_size as u32) {
             Ok(_) => {
                 self.offset += UREF_SIZE;
                 Ok((ptr, UREF_SIZE))
@@ -287,21 +289,26 @@ fn valid_uref() {
         mock_module(),
     );
 
-    // create a valid uref in wasm memory via new_uref
-    let uref = test_fixture
-        .memory
-        .new_uref(&mut runtime)
-        .expect("call to new_uref should succeed");
-
     // write arbitrary value to wasm memory to allow call to write
-    let value = test_fixture
+    let init_value = test_fixture
         .memory
         .write(value::Value::Int32(42))
         .expect("writing value to wasm memory should succeed");
 
+    let new_value = test_fixture
+        .memory
+        .write(value::Value::Int32(43))
+        .expect("writing value to wasm memory should succeed");
+
+    // create a valid uref in wasm memory via new_uref
+    let uref = test_fixture
+        .memory
+        .new_uref(&mut runtime, init_value)
+        .expect("call to new_uref should succeed");
+
     // Use uref as the key to perform an action on the global state.
     // This should succeed because the uref is valid.
-    gs_write(&mut runtime, uref, value).expect("writing using valid uref should succeed");
+    gs_write(&mut runtime, uref, new_value).expect("writing using valid uref should succeed");
 }
 
 #[test]
@@ -499,6 +506,13 @@ fn store_contract_hash_legal_urefs() {
             wasm_module.module.clone(),
         );
 
+        // Initial value of the uref the in the contract's
+        // known_urefs map.
+        let init_value = test_fixture
+            .memory
+            .write(value::Value::Int32(42))
+            .expect("writing value to wasm memory should succeed");
+
         let uref = {
             // We are generating new URef the "correct" way.
             // It asks a host to generate a URef which puts it into
@@ -507,7 +521,7 @@ fn store_contract_hash_legal_urefs() {
             // because they "belong" to the context that uses them.
             let (uref_ptr, _) = test_fixture
                 .memory
-                .new_uref(&mut runtime)
+                .new_uref(&mut runtime, init_value)
                 .expect("URef generation failed");
             let mut tmp = [1u8; UREF_SIZE];
             test_fixture

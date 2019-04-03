@@ -609,10 +609,12 @@ where
     }
 
     /// Generates new unforgable reference and adds it to the context's known_uref set.
-    pub fn new_uref(&mut self, key_ptr: u32) -> Result<(), Trap> {
+    pub fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
+        let value = self.value_from_mem(value_ptr, value_size)?; // read initial value from memory
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
         let key = Key::URef(key, AccessRights::ReadWrite);
+        self.state.write(key, value); // write initial value to state
         self.context.insert_uref(key);
         self.memory
             .set(key_ptr, &key.to_bytes().map_err(Error::BytesRepr)?)
@@ -702,8 +704,10 @@ where
 
             NEW_FUNC_INDEX => {
                 // args(0) = pointer to key destination in Wasm memory
-                let key_ptr = Args::parse(args)?;
-                self.new_uref(key_ptr)?;
+                // args(1) = pointer to initial value
+                // args(2) = size of initial value
+                let (key_ptr, value_ptr, value_size) = Args::parse(args)?;
+                self.new_uref(key_ptr, value_ptr, value_size)?;
                 Ok(None)
             }
 
