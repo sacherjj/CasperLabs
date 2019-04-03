@@ -541,6 +541,7 @@ object DownloadManagerSpec {
     private val emptyConsensus = new GossipServiceServer.Consensus[Task] {
       def onPending(dag: Vector[BlockSummary]) = ???
       def onDownloaded(blockHash: ByteString)  = ???
+      def listTips                             = ???
     }
 
     // Used only as a default argument for when we aren't touching the remote service in a test.
