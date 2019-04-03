@@ -120,7 +120,7 @@ impl<'a> RuntimeContext<'a> {
         self.known_urefs.insert(key);
     }
 
-    // Validates whether keys used in the `value` are not forged.
+    /// Validates whether keys used in the `value` are not forged.
     fn validate_keys(&self, value: Value) -> Result<Value, Error> {
         match value {
             non_key @ Value::Int32(_)
@@ -151,9 +151,9 @@ impl<'a> RuntimeContext<'a> {
         }
     }
 
-    // Validates whether key is not forged (whether it can be found in the `known_urefs`)
-    // and whether the version of a key that contract wants to use, has access rights
-    // that are less powerfull than access rights' of the key in the `known_urefs`.
+    /// Validates whether key is not forged (whether it can be found in the `known_urefs`)
+    /// and whether the version of a key that contract wants to use, has access rights
+    /// that are less powerful than access rights' of the key in the `known_urefs`.
     fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
             Key::URef(id, access_right) => {
@@ -329,9 +329,9 @@ where
         Ok((key, value))
     }
 
-    // Load the i-th argument invoked as part of a `sub_call` into
-    // the runtime buffer so that a subsequent `get_arg` can return it
-    // to the caller.
+    /// Load the i-th argument invoked as part of a `sub_call` into
+    /// the runtime buffer so that a subsequent `get_arg` can return it
+    /// to the caller.
     pub fn load_arg(&mut self, i: usize) -> Result<usize, Trap> {
         if i < self.args.len() {
             self.host_buf = self.args[i].clone();
@@ -341,7 +341,7 @@ where
         }
     }
 
-    // Load the uref known by the given name into the Wasm memory
+    /// Load the uref known by the given name into the Wasm memory
     pub fn get_uref(&mut self, name_ptr: u32, name_size: u32, dest_ptr: u32) -> Result<(), Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let uref = self
@@ -385,9 +385,9 @@ where
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    // Return a some bytes from the memory and terminate the current `sub_call`.
-    // Note that the return type is `Trap`, indicating that this function will
-    // always kill the current Wasm instance.
+    /// Return a some bytes from the memory and terminate the current `sub_call`.
+    /// Note that the return type is `Trap`, indicating that this function will
+    /// always kill the current Wasm instance.
     pub fn ret(
         &mut self,
         value_ptr: u32,
@@ -498,11 +498,11 @@ where
         self.function_address(new_hash, hash_ptr)
     }
 
-    // Generates new function address.
-    // Function address is deterministic. It is a hash of public key, nonce and `fn_store_id`,
-    // which is a counter that is being incremented after every function generation.
-    // If function address was based only on account's public key and deploy's nonce,
-    // then all function addresses generated within one deploy would have been the same.
+    /// Generates new function address.
+    /// Function address is deterministic. It is a hash of public key, nonce and `fn_store_id`,
+    /// which is a counter that is being incremented after every function generation.
+    /// If function address was based only on account's public key and deploy's nonce,
+    /// then all function addresses generated within one deploy would have been the same.
     fn new_function_address(&mut self) -> [u8; 32] {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
         pre_hash_bytes.extend_from_slice(self.context.account.pub_key());
@@ -518,14 +518,14 @@ where
         hash_bytes
     }
 
-    // Writes function address (`hash_bytes`) into the Wasm memory (at `dest_ptr` pointer).
+    /// Writes function address (`hash_bytes`) into the Wasm memory (at `dest_ptr` pointer).
     fn function_address(&mut self, hash_bytes: [u8; 32], dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &hash_bytes)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    // Writes value under a key (specified by their pointer and length properties from the Wasm memory).
+    /// Writes value under a key (specified by their pointer and length properties from the Wasm memory).
     pub fn write(
         &mut self,
         key_ptr: u32,
@@ -558,8 +558,8 @@ where
         self.add_transforms(key, value)
     }
 
-    // Reads value living under a key (found at `key_ptr` and `key_size` in Wasm memory).
-    // Fails if `key` is not "readable", i.e. its access rights are weaker than `AccessRights::Read`.
+    /// Reads value living under a key (found at `key_ptr` and `key_size` in Wasm memory).
+    /// Fails if `key` is not "readable", i.e. its access rights are weaker than `AccessRights::Read`.
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
         if key.is_readable() {
@@ -572,10 +572,10 @@ where
         }
     }
 
-    // Adds `value` to the `key`. The premise for being able to `add` value is that
-    // the type of it [value] can be added (is a Monoid). If the values can't be added,
-    // either because they're not a Monoid or if the value stored under `key` has different type,
-    // then `TypeMismatch` errors is returned. Addition can also fail when `key` is not "addable".
+    /// Adds `value` to the `key`. The premise for being able to `add` value is that
+    /// the type of it [value] can be added (is a Monoid). If the values can't be added,
+    /// either because they're not a Monoid or if the value stored under `key` has different type,
+    /// then `TypeMismatch` errors is returned. Addition can also fail when `key` is not "addable".
     fn add_transforms(&mut self, key: Key, value: Value) -> Result<(), Trap> {
         if key.is_addable() {
             match self.state.add(key, value) {
