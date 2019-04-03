@@ -470,6 +470,29 @@ lazy val client = (project in file("client"))
   )
   .dependsOn(crypto, shared, models)
 
+/**
+  * This project contains Gatling test suits which perform load testing.
+  * It could be run with `sbt "project gatling" gatling:test`.
+  */
+lazy val gatling = (project in file("gatling"))
+  .enablePlugins(GatlingPlugin)
+  .settings(
+    libraryDependencies ++= gatlingDependencies,
+    dependencyOverrides ++= gatlingOverrides,
+    PB.protoSources in Compile := Seq(protobufDirectory),
+    includeFilter in PB.generate := new SimpleFileFilter(
+      protobufSubDirectoryFilter(
+        "io/casperlabs/comm/discovery"
+      )),
+    // Generating into /protobuf because of https://github.com/thesamet/sbt-protoc/issues/8
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf",
+      PB.gens.java  -> (sourceManaged in Compile).value / "protobuf"
+    )
+  )
+  .dependsOn(shared)
+
 lazy val casperlabs = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(
