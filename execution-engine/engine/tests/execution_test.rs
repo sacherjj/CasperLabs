@@ -10,7 +10,7 @@ extern crate wasmi;
 
 use common::bytesrepr::{deserialize, FromBytes, ToBytes};
 use common::key::{AccessRights, Key, UREF_SIZE};
-use common::value::{self, Value};
+use common::value::{self, Account, Value};
 use execution_engine::execution::{Runtime, RuntimeContext};
 use execution_engine::trackingcopy::TrackingCopy;
 use failure::Error;
@@ -727,4 +727,246 @@ fn store_contract_uref_forged_key() {
     );
 
     assert_panic_forged_keys(result);
+}
+
+#[test]
+fn account_key_writeable() {
+    // Test fixtures
+    let mut test_fixture: TestFixture = Default::default();
+    let wasm_module = create_wasm_module();
+
+    let account_key = Key::Account([0u8; 20]);
+    let wasm_key = test_fixture.memory.write(account_key);
+    let wasm_value = test_fixture.memory.write(Value::Int32(1));
+
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        wasm_module.module.clone(),
+    );
+
+    let result = runtime.write(
+        wasm_key.0,
+        wasm_key.1 as u32,
+        wasm_value.0,
+        wasm_value.1 as u32,
+    );
+
+    assert_error_contains(result, "InvalidAccess");
+}
+
+#[test]
+fn account_key_readable() {
+    // Test fixtures
+    let mut test_fixture: TestFixture = Default::default();
+    let wasm_module = create_wasm_module();
+
+    let account_key = Key::Account([0u8; 20]);
+    let wasm_key = test_fixture.memory.write(account_key);
+    let value = Value::Int32(1);
+
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    // We're putting some value directly into the GlobalState
+    // (to be 100% precise we put it into the cache of TrackingCopy,
+    // but it's not important for this test) because writing to an account
+    // is forbidded and would fail in the runtime.
+    tc_borrowed.write(account_key, value.clone());
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        wasm_module.module.clone(),
+    );
+
+    // Read value
+    let res: Value = gs_read(&mut test_fixture.memory, &mut runtime, wasm_key)
+        .expect("Reading from GS should work.");
+    assert_eq!(res, value);
+}
+
+#[test]
+fn account_key_addable_valid() {
+    // Adding to an account is valid iff it's being done from within
+    // the context of the account. I.e. if account A deploys a contract c1,
+    // then during execution of c1 it is allowed to add NamedKeys to A.
+    // On the other hand if contract c1, stored previously by A, is being
+    // called by some other acccount B then it [c1] cannot add keys to A.
+
+    // Test fixtures
+    let mut test_fixture: TestFixture = Default::default();
+    let wasm_module = create_wasm_module();
+    let known_urefs: BTreeMap<String, Key> = {
+        let mut tmp: BTreeMap<String, Key> = BTreeMap::new();
+        tmp.insert("PublicHash".to_owned(), Key::Hash([2u8; 32]));
+        tmp
+    };
+    let account = Account::new([1u8; 32], 1, known_urefs.clone());
+    // This is the key we will want to add to an account
+    let additional_key = ("PublichHash#2".to_owned(), Key::Hash([3u8; 32]));
+    let wasm_name = test_fixture.memory.write(additional_key.0.clone());
+    let wasm_key = test_fixture.memory.write(additional_key.1);
+    {
+        let mut tc_borrowed = test_fixture.tc.borrow_mut();
+        // Write an account under current context's key
+        tc_borrowed.write(
+            Key::Account(test_fixture.addr),
+            Value::Account(account.clone()),
+        );
+
+        let mut runtime = test_fixture.env.runtime(
+            &mut tc_borrowed,
+            test_fixture.addr,
+            test_fixture.timestamp,
+            test_fixture.nonce,
+            wasm_module.module.clone(),
+        );
+
+        // Add key to current context's account.
+        runtime
+            .add_uref(
+                wasm_name.0,
+                wasm_name.1 as u32,
+                wasm_key.0,
+                wasm_key.1 as u32,
+            )
+            .expect("Adding new named key should work");
+    }
+    let mut tc = test_fixture.tc.borrow_mut();
+    let updated_account = {
+        let mut additional_key_map: BTreeMap<String, Key> = BTreeMap::new();
+        additional_key_map.insert(additional_key.0.clone(), additional_key.1);
+        additional_key_map.append(&mut known_urefs.clone());
+        Account::new([1u8; 32], account.nonce(), additional_key_map)
+    };
+    let tc_account: Value = tc
+        .get(&Key::Account(test_fixture.addr))
+        .expect("Reading from TrackingCopy should work")
+        .unwrap();
+
+    assert_eq!(tc_account, Value::Account(updated_account));
+}
+
+#[test]
+fn account_key_addable_invalid() {
+    // Adding keys to another account should be invalid.
+    // See comment in the `account_key_addable_valid` test for more context.
+
+    // Test fixtures
+    let mut test_fixture: TestFixture = Default::default();
+    let wasm_module = create_wasm_module();
+    let known_urefs: BTreeMap<String, Key> = {
+        let mut tmp: BTreeMap<String, Key> = BTreeMap::new();
+        tmp.insert("PublicHash".to_owned(), Key::Hash([2u8; 32]));
+        tmp
+    };
+    let account = Account::new([1u8; 32], 1, known_urefs.clone());
+    // This is the key we will want to add to an account
+    let additional_key = ("PublichHash#2".to_owned(), Key::Hash([3u8; 32]));
+    let named_key = Value::NamedKey(additional_key.0, additional_key.1);
+    let wasm_named_key = test_fixture.memory.write(named_key);
+
+    let some_other_account = Key::Account([10u8; 20]);
+    let wasm_other_account = test_fixture.memory.write(some_other_account);
+    // We will try to add keys to an account that is not current context.
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    // Write an account under current context's key
+    tc_borrowed.write(some_other_account, Value::Account(account.clone()));
+
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        wasm_module.module.clone(),
+    );
+
+    // Add key to some account.
+    // We cannot use add_uref as in the other test because
+    // it would add keys to current context's account.
+    // We want to test that adding keys to some OTHER account is not possible.
+    let result = runtime.add(
+        wasm_other_account.0,
+        wasm_other_account.1 as u32,
+        wasm_named_key.0,
+        wasm_named_key.1 as u32,
+    );
+
+    println!("result = {:?}", result);
+    assert_error_contains(result, "InvalidAccess");
+}
+
+#[test]
+fn contract_key_writeable() {
+    unimplemented!()
+}
+
+#[test]
+fn contract_key_readable() {
+    // Test fixtures
+    let mut test_fixture: TestFixture = Default::default();
+    let wasm_module = create_wasm_module();
+
+    let contract_key = Key::Hash([0u8; 32]);
+    let wasm_key = test_fixture.memory.write(contract_key);
+    let empty_vec: Vec<u8> = Vec::new();
+    let wasm_args = test_fixture.memory.write(empty_vec);
+    let empty_urefs: Vec<Key> = Vec::new();
+    let wasm_urefs = test_fixture.memory.write(empty_urefs);
+
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        wasm_module.module.clone(),
+    );
+
+    let result = runtime.call_contract(
+        wasm_key.0,
+        wasm_key.1,
+        wasm_args.0,
+        wasm_args.1,
+        wasm_urefs.0,
+        wasm_urefs.1,
+    );
+
+    // call_contract call in the execution.rs (Runtime) first checks whether key is readable
+    // and then fetches value from the memory. In this case it will pass "is_readable" check
+    // but will not return results from the GlobalState. This is not perfect test but setting it
+    // up in a way where we actually call another contract if very cumbersome.
+    match result {
+        Err(execution_engine::execution::Error::KeyNotFound(key)) => assert_eq!(key, contract_key),
+        Err(error) => panic!("Test failed with unexpected error {:?}", error),
+        Ok(_) => panic!("Test should have failed but didn't"),
+    }
+}
+
+#[test]
+fn contract_key_addable() {
+    unimplemented!()
+}
+
+#[test]
+fn uref_key_readable() {
+    unimplemented!()
+}
+
+#[test]
+fn uref_key_writeable() {
+    unimplemented!()
+}
+
+#[test]
+fn uref_key_addable_valid() {
+    unimplemented!()
+}
+
+#[test]
+fn uref_key_addable_invalid() {
+    unimplemented!()
 }

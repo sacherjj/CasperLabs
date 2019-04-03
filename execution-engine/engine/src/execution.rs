@@ -416,7 +416,7 @@ where
         }
     }
 
-    fn call_contract(
+    pub fn call_contract(
         &mut self,
         key_ptr: u32,
         key_size: usize,
@@ -572,12 +572,26 @@ where
         }
     }
 
+    /// Tests whether addition to `key` is valid.
+    /// Addition to account key is valid iff it is being made from the contract
+    /// deployed from this account.
+    /// Addition to contract key is not valid. Contract can modify it's own internal
+    /// state using different idioms (add_uref for adding new urefs to its state).
+    /// Additions to unforgeable key is valid as long as key itself is addable
+    fn is_addable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) => &self.context.base_key == key,
+            Key::Hash(_) => false,
+            Key::URef(_, _) => key.is_addable()
+        }
+    }
+
     /// Adds `value` to the `key`. The premise for being able to `add` value is that
     /// the type of it [value] can be added (is a Monoid). If the values can't be added,
     /// either because they're not a Monoid or if the value stored under `key` has different type,
     /// then `TypeMismatch` errors is returned. Addition can also fail when `key` is not "addable".
     fn add_transforms(&mut self, key: Key, value: Value) -> Result<(), Trap> {
-        if key.is_addable() {
+        if self.is_addable(&key) {
             match self.state.add(key, value) {
                 Err(storage_error) => Err(storage_error.into().into()),
                 Ok(AddResult::Success) => Ok(()),
