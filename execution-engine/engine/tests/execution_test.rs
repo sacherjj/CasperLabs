@@ -437,12 +437,16 @@ fn store_contract_hash() {
     assert_eq!(effect, &Transform::Write(contract));
 }
 
+fn assert_error_contains(result: Result<(), wasmi::Trap>, msg: &str) {
+    match result {
+        Err(error) => assert!(format!("{:?}", error).contains(msg)),
+        Ok(_) => panic!("Error. Test should fail but it didn't."),
+    }
+}
+
 // Runtime will panic with ForgedReference exception.
 fn assert_panic_forged_keys(result: Result<(), wasmi::Trap>) {
-    match result {
-        Err(error) => assert!(format!("{:?}", error).contains("ForgedReference")),
-        Ok(_) => panic!("Error. Test should fail."),
-    }
+    assert_error_contains(result, "ForgedReference")
 }
 
 #[test]
