@@ -508,7 +508,7 @@ fn store_contract_hash() {
     assert_eq!(effect, &Transform::Write(contract));
 }
 
-fn assert_error_contains(result: Result<(), wasmi::Trap>, msg: &str) {
+fn assert_error_contains<T>(result: Result<T, wasmi::Trap>, msg: &str) {
     match result {
         Err(error) => assert!(format!("{:?}", error).contains(msg)),
         Ok(_) => panic!("Error. Test should fail but it didn't."),
@@ -918,7 +918,36 @@ fn account_key_addable_invalid() {
 
 #[test]
 fn contract_key_writeable() {
-    unimplemented!()
+    // Tests that contract keys (hashes) are not writeable.
+    // Contract can be persisted on the blockchain by the means of `ffi:store_function`.
+
+    let mut test_fixture: TestFixture = Default::default();
+    let mut rng = rand::thread_rng();
+    let contract_key = random_contract_key(&mut rng);
+    let wasm_module = create_wasm_module();
+
+    let urefs = urefs_map(std::iter::empty());
+
+    let contract = contract_bytes_from_wat(
+        wasm_module.module.clone(),
+        wasm_module.func_name.to_owned(),
+        urefs.clone(),
+    );
+
+    let wasm_key = wasm_write(&mut test_fixture.memory, contract_key);
+    let wasm_contract = wasm_write(&mut test_fixture.memory, contract);
+
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        wasm_module.module.clone(),
+    );
+
+    let result = gs_write(&mut runtime, wasm_key, wasm_contract);
+    assert_error_contains(result, "InvalidAccess");
 }
 
 #[test]
@@ -969,19 +998,98 @@ fn contract_key_readable() {
 #[test]
 fn contract_key_addable() {
     // Tests that contract key is not addable.
-    unimplemented!()
+    let mut test_fixture: TestFixture = Default::default();
+    let mut rng = rand::thread_rng();
+    let wasm_module = create_wasm_module();
+    // This is the key we will want to add to a contract
+    let wasm_named_key = {
+        let additional_key = ("PublichHash#2".to_owned(), random_contract_key(&mut rng));
+        let named_key = Value::NamedKey(additional_key.0, additional_key.1);
+        wasm_write(&mut test_fixture.memory, named_key)
+    };
+
+    let wasm_contract_hash = {
+        let contract_hash = random_contract_key(&mut rng);
+        wasm_write(&mut test_fixture.memory, contract_hash)
+    };
+
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        wasm_module.module.clone(),
+    );
+
+    let result = runtime.add(
+        wasm_contract_hash.0,
+        wasm_contract_hash.1 as u32,
+        wasm_named_key.0,
+        wasm_named_key.1 as u32,
+    );
+
+    assert_error_contains(result, "InvalidAccess");
+}
+
+// Test that is shared between two following tests for reading URef.
+// `init_value` is what is being written to the GS at the generated URef as part of test fixture.
+// `rights` defines `AccessRights` that will be used when reading URef. It doesn't matter
+// when setting up because we are writing directly to the GlobalState so rights are not checked.
+fn test_uref_key_readable(init_value: Value, rights: AccessRights) -> Result<Value, wasmi::Trap> {
+    let mut rng = rand::thread_rng();
+    // URef we will be trying to read.
+    let uref = random_uref_key(&mut rng, rights);
+    let mut test_fixture: TestFixture = {
+        // We need to put `uref`, which we will be using later, to `known_urefs` set
+        // of the context's account. Otherwise we will get ForgedReference error.
+        let known_urefs: HashSet<Key> = once(uref).collect();
+        let empty_uref_map = urefs_map(std::iter::empty());
+        let default: TestFixture = Default::default();
+        let (key, account) = mock_account(default.addr);
+        let env = MockEnv::new(key, empty_uref_map, known_urefs, account.clone(), 0);
+        let memory = env.memory_manager();
+        let mut init_tc = mock_tc(key, &account);
+        // We're putting some data under uref so that we can read it later.
+        init_tc.write(uref, init_value.clone());
+        let tc = Rc::new(RefCell::new(init_tc));
+        TestFixture::new(
+            default.addr,
+            default.timestamp,
+            default.nonce,
+            env,
+            memory,
+            tc,
+        )
+    };
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        mock_module(),
+    );
+    let wasm_uref = wasm_write(&mut test_fixture.memory, uref);
+    gs_read(&mut test_fixture.memory, &mut runtime, wasm_uref)
 }
 
 #[test]
 fn uref_key_readable_valid() {
     // Tests that URef key is readable when access rights of the key allows for reading.
-    unimplemented!()
+    let init_value = Value::Int32(1);
+    let test_result = test_uref_key_readable(init_value.clone(), AccessRights::Read)
+        .expect("Reading from GS should work.");
+    assert_eq!(test_result, init_value);
 }
 
 #[test]
 fn uref_key_readable_invalid() {
     // Tests that reading URef which is not readable fails.
-    unimplemented!()
+    let init_value = Value::Int32(1);
+    let test_result = test_uref_key_readable(init_value.clone(), AccessRights::Add);
+    assert_error_contains(test_result, "InvalidAccess")
 }
 
 #[test]
