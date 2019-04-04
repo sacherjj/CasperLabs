@@ -506,7 +506,7 @@ def make_execution_engine(
     return container
 
 
-def visualiza_dag(
+def visualize_dag(
     *,
     docker_client: "DockerClient",
     network: str,
