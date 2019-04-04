@@ -487,6 +487,7 @@ fn assert_error_contains(result: Result<(), wasmi::Trap>, msg: &str) {
 
 #[test]
 fn store_contract_hash_illegal_urefs() {
+    // Tests that storing function (contract) with illegal (unknown) urefs is an error.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
     let wasm_module = create_wasm_module();
@@ -522,6 +523,7 @@ fn store_contract_hash_illegal_urefs() {
 
 #[test]
 fn store_contract_hash_legal_urefs() {
+    // Tests that storing function (contract) with valid (known) uref works.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
     let wasm_module = create_wasm_module();
@@ -602,6 +604,8 @@ fn store_contract_hash_legal_urefs() {
 
 #[test]
 fn store_contract_uref_known_key() {
+    // Tests that storing function (contract) under known and writeable uref, 
+    // with known refs, works.
     // ---- Test fixtures ----
     // URef where we will write contract
     let contract_uref = Key::URef([2u8; 32], AccessRights::ReadWrite);
@@ -660,6 +664,7 @@ fn store_contract_uref_known_key() {
 
 #[test]
 fn store_contract_uref_forged_key() {
+    // Tests that storing function (contract) under forged but writeable uref fails.
     // ---- Test fixtures ----
     // URef where we will write contract
     let forged_contract_uref = Key::URef([2u8; 32], AccessRights::ReadWrite);
@@ -710,6 +715,7 @@ fn store_contract_uref_forged_key() {
 
 #[test]
 fn account_key_writeable() {
+    // Tests that account key is not writeable.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
     let wasm_module = create_wasm_module();
@@ -733,6 +739,7 @@ fn account_key_writeable() {
 
 #[test]
 fn account_key_readable() {
+    // Tests that accout key is readable.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
     let wasm_module = create_wasm_module();
@@ -871,6 +878,8 @@ fn contract_key_writeable() {
 
 #[test]
 fn contract_key_readable() {
+    // Tests that contracts are readable. This test checks that it is possible to execute
+    // `call_contract` function which checks whether the key is readable.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
     let wasm_module = create_wasm_module();
@@ -913,25 +922,42 @@ fn contract_key_readable() {
 
 #[test]
 fn contract_key_addable() {
+    // Tests that contract key is not addable.
     unimplemented!()
 }
 
 #[test]
-fn uref_key_readable() {
+fn uref_key_readable_valid() {
+    // Tests that URef key is readable when access rights of the key allows for reading.
     unimplemented!()
 }
 
 #[test]
-fn uref_key_writeable() {
+fn uref_key_readable_invalid() {
+    // Tests that reading URef which is not readable fails.
+    unimplemented!()
+}
+
+#[test]
+fn uref_key_writeable_valid() {
+    // Tests that URef key is writeable when access rights of the key allows for writing.
+    unimplemented!()
+}
+
+#[test]
+fn uref_key_writeable_invalid() {
+    // Tests that writing to URef which is not writeable fails.
     unimplemented!()
 }
 
 #[test]
 fn uref_key_addable_valid() {
+    // Tests that URef key is addable when access rights of the key allows for adding.
     unimplemented!()
 }
 
 #[test]
 fn uref_key_addable_invalid() {
+    // Tests that adding to URef which is not addable fails.
     unimplemented!()
 }
