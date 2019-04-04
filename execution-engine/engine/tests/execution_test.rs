@@ -380,10 +380,10 @@ fn contract_bytes_from_wat(
     mut module: Module,
     name: String,
     urefs: BTreeMap<String, Key>,
-) -> common::value::Contract {
+) -> Value {
     rename_export_to_call(&mut module, name);
     let contract_bytes = parity_wasm::serialize(module).expect("Failed to serialize Wasm module.");
-    common::value::Contract::new(contract_bytes, urefs)
+    Value::Contract(common::value::Contract::new(contract_bytes, urefs))
 }
 
 fn read_contract_hash(wasm_memory: &WasmMemoryManager, hash_ptr: u32) -> Key {
@@ -438,11 +438,8 @@ fn store_contract_hash() {
     let wasm_module = create_wasm_module();
     let urefs = urefs_map(once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))));
 
-    let contract = Value::Contract(contract_bytes_from_wat(
-        wasm_module.module.clone(),
-        "add".to_owned(),
-        urefs.clone(),
-    ));
+    let contract =
+        contract_bytes_from_wat(wasm_module.module.clone(), "add".to_owned(), urefs.clone());
 
     // We need this braces so that the `tc_borrowed` gets dropped
     // and we can borrow it again when we call `effect()`.
@@ -569,11 +566,11 @@ fn store_contract_hash_legal_urefs() {
                 .chain(once(("PublicHash".to_owned(), Key::Hash([1u8; 32])))),
         );
 
-        let contract = Value::Contract(contract_bytes_from_wat(
+        let contract = contract_bytes_from_wat(
             wasm_module.module.clone(),
             wasm_module.func_name.clone(),
             urefs.clone(),
-        ));
+        );
 
         let store_result = test_fixture
             .memory
@@ -640,11 +637,11 @@ fn store_contract_uref_known_key() {
 
         let wasm_contract_uref = wasm_write(&mut test_fixture.memory, contract_uref);
 
-        let contract = Value::Contract(contract_bytes_from_wat(
+        let contract = contract_bytes_from_wat(
             wasm_module.module.clone(),
             wasm_module.func_name.clone(),
             urefs.clone(),
-        ));
+        );
 
         let wasm_contract = wasm_write(&mut test_fixture.memory, contract.clone());
 
@@ -698,11 +695,11 @@ fn store_contract_uref_forged_key() {
 
     let wasm_contract_uref = wasm_write(&mut test_fixture.memory, forged_contract_uref);
 
-    let contract = Value::Contract(contract_bytes_from_wat(
+    let contract = contract_bytes_from_wat(
         wasm_module.module.clone(),
         wasm_module.func_name.clone(),
         urefs.clone(),
-    ));
+    );
 
     let wasm_contract = wasm_write(&mut test_fixture.memory, contract.clone());
 
