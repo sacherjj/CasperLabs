@@ -67,9 +67,14 @@ class GrpcGossipServiceSpec
   )
 
   object GetBlockChunkedSpec extends WordSpecLike {
-    implicit val propCheckConfig = PropertyCheckConfiguration(minSuccessful = 3)
+    implicit val propCheckConfig = PropertyCheckConfiguration(minSuccessful = 1)
     implicit val patienceConfig  = PatienceConfig(1.second, 100.millis)
-    implicit val consensusConfig = ConsensusConfig()
+    implicit val consensusConfig = ConsensusConfig(
+      maxSessionCodeBytes = 500 * 1024,
+      minSessionCodeBytes = 400 * 1024,
+      maxPaymentCodeBytes = 300 * 1024,
+      minPaymentCodeBytes = 200 * 1024
+    )
 
     "getBlocksChunked" when {
       "no compression is supported" should {
@@ -822,7 +827,7 @@ class GrpcGossipServiceSpec
       }
 
       "called with a valid sender" when {
-        implicit val config = PropertyCheckConfiguration(minSuccessful = 100)
+        implicit val config = PropertyCheckConfiguration(minSuccessful = 5)
 
         "receives no previously unknown blocks" should {
           "return false and not download anything" in {

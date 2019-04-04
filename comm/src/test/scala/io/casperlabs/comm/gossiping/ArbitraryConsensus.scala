@@ -16,7 +16,9 @@ trait ArbitraryConsensus {
       dagSize: Int = 0,
       // Maximum size of code in blocks. Slow to generate.
       maxSessionCodeBytes: Int = 500 * 1024,
-      maxPaymentCodeBytes: Int = 100 * 1024
+      maxPaymentCodeBytes: Int = 100 * 1024,
+      minSessionCodeBytes: Int = 0,
+      minPaymentCodeBytes: Int = 0
   )
 
   def genBytes(length: Int): Gen[ByteString] =
