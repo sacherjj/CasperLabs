@@ -132,7 +132,7 @@ impl WasmMemoryManager {
 
     pub fn write<T: ToBytes>(&mut self, t: T) -> (u32, usize) {
         self.write_raw(t.to_bytes().expect("ToBytes conversion should work."))
-        .expect("Writing to Wasm memory should work.")
+            .expect("Writing to Wasm memory should work.")
     }
 
     pub fn write_raw(&mut self, bytes: Vec<u8>) -> Result<(u32, usize), Error> {
@@ -321,13 +321,9 @@ fn valid_uref() {
     );
 
     // write arbitrary value to wasm memory to allow call to write
-    let init_value = test_fixture
-        .memory
-        .write(value::Value::Int32(42));
+    let init_value = test_fixture.memory.write(value::Value::Int32(42));
 
-    let new_value = test_fixture
-        .memory
-        .write(value::Value::Int32(43));
+    let new_value = test_fixture.memory.write(value::Value::Int32(43));
 
     // create a valid uref in wasm memory via new_uref
     let uref = test_fixture
@@ -420,13 +416,21 @@ fn create_wasm_module() -> TestModule {
     }
 }
 
+fn urefs_map<I: Iterator<Item = (String, Key)>>(input: I) -> BTreeMap<String, Key> {
+    let mut uref_tree = BTreeMap::new();
+    input.for_each(|(name, key)| {
+        uref_tree.insert(name, key);
+    });
+    uref_tree
+}
+
 #[test]
 fn store_contract_hash() {
+    // Tests that storing contracts (functions) works.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
     let wasm_module = create_wasm_module();
-    let urefs: BTreeMap<String, Key> =
-        std::iter::once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))).collect();
+    let urefs = urefs_map(once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))));
 
     let contract = Value::Contract(contract_bytes_from_wat(
         wasm_module.module.clone(),
@@ -490,7 +494,7 @@ fn store_contract_hash_illegal_urefs() {
     let wasm_module = create_wasm_module();
     // Create URef we don't own
     let uref = Key::URef([1u8; 32], AccessRights::Read);
-    let urefs: BTreeMap<String, Key> = std::iter::once(("ForgedURef".to_owned(), uref)).collect();
+    let urefs = urefs_map(once(("ForgedURef".to_owned(), uref)));
 
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
     let mut runtime = test_fixture.env.runtime(
@@ -537,9 +541,7 @@ fn store_contract_hash_legal_urefs() {
 
         // Initial value of the uref the in the contract's
         // known_urefs map.
-        let init_value = test_fixture
-            .memory
-            .write(value::Value::Int32(42));
+        let init_value = test_fixture.memory.write(value::Value::Int32(42));
 
         let uref = {
             // We are generating new URef the "correct" way.
@@ -561,12 +563,10 @@ fn store_contract_hash_legal_urefs() {
             key
         };
 
-        let urefs: BTreeMap<String, Key> = {
-            let mut tmp = BTreeMap::new();
-            tmp.insert("KnownURef".to_owned(), uref);
-            tmp.insert("PublicHash".to_owned(), Key::Hash([1u8; 32]));
-            tmp
-        };
+        let urefs = urefs_map(
+            once(("KnownURef".to_owned(), uref))
+                .chain(once(("PublicHash".to_owned(), Key::Hash([1u8; 32])))),
+        );
 
         let contract = Value::Contract(contract_bytes_from_wat(
             wasm_module.module.clone(),
@@ -609,14 +609,8 @@ fn store_contract_uref_known_key() {
     let contract_uref = Key::URef([2u8; 32], AccessRights::ReadWrite);
     // URef we want to store WITH the contract so that it can use it later
     let known_uref = Key::URef([3u8; 32], AccessRights::ReadWrite);
-    let urefs: BTreeMap<String, Key> = once(("KnownURef".to_owned(), known_uref)).collect();
-    let known_urefs: HashSet<Key> = {
-        let mut tmp: HashSet<Key> = HashSet::new();
-        tmp.insert(contract_uref);
-        tmp.insert(known_uref);
-        tmp
-    };
-
+    let urefs = urefs_map(once(("KnownURef".to_owned(), known_uref)));
+    let known_urefs: HashSet<Key> = once(contract_uref).chain(once(known_uref)).collect();
     let mut test_fixture: TestFixture = {
         let addr = [0u8; 20];
         let timestamp = 1u64;
@@ -680,7 +674,7 @@ fn store_contract_uref_forged_key() {
     let forged_contract_uref = Key::URef([2u8; 32], AccessRights::ReadWrite);
     // URef we want to store WITH the contract so that it can use it later
     let known_uref = Key::URef([3u8; 32], AccessRights::ReadWrite);
-    let urefs: BTreeMap<String, Key> = once(("KnownURef".to_owned(), known_uref)).collect();
+    let urefs = urefs_map(once(("KnownURef".to_owned(), known_uref)));
     let known_urefs: HashSet<Key> = once(known_uref).collect();
 
     let mut test_fixture: TestFixture = {
@@ -799,11 +793,7 @@ fn account_key_addable_valid() {
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
     let wasm_module = create_wasm_module();
-    let known_urefs: BTreeMap<String, Key> = {
-        let mut tmp: BTreeMap<String, Key> = BTreeMap::new();
-        tmp.insert("PublicHash".to_owned(), Key::Hash([2u8; 32]));
-        tmp
-    };
+    let known_urefs = urefs_map(once(("PublicHash".to_owned(), Key::Hash([2u8; 32]))));
     let account = Account::new([1u8; 32], 1, known_urefs.clone());
     // This is the key we will want to add to an account
     let additional_key = ("PublichHash#2".to_owned(), Key::Hash([3u8; 32]));
@@ -837,9 +827,9 @@ fn account_key_addable_valid() {
     }
     let mut tc = test_fixture.tc.borrow_mut();
     let updated_account = {
-        let mut additional_key_map: BTreeMap<String, Key> = BTreeMap::new();
-        additional_key_map.insert(additional_key.0.clone(), additional_key.1);
-        additional_key_map.append(&mut known_urefs.clone());
+        let additional_key_map = urefs_map(
+            once((additional_key.0.clone(), additional_key.1)).chain(known_urefs.clone()),
+        );
         Account::new([1u8; 32], account.nonce(), additional_key_map)
     };
     let tc_account: Value = tc
@@ -858,11 +848,7 @@ fn account_key_addable_invalid() {
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
     let wasm_module = create_wasm_module();
-    let known_urefs: BTreeMap<String, Key> = {
-        let mut tmp: BTreeMap<String, Key> = BTreeMap::new();
-        tmp.insert("PublicHash".to_owned(), Key::Hash([2u8; 32]));
-        tmp
-    };
+    let known_urefs = urefs_map(once(("PublicHash".to_owned(), Key::Hash([2u8; 32]))));
     let account = Account::new([1u8; 32], 1, known_urefs.clone());
     // This is the key we will want to add to an account
     let additional_key = ("PublichHash#2".to_owned(), Key::Hash([3u8; 32]));
