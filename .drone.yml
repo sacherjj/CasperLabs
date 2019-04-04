@@ -105,7 +105,7 @@ pipeline:
       - cd execution-engine
       - ~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)
       - ~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy
-      - ~/.cargo/bin/cargo clippy -- -D warnings -A renamed_and_removed_lints
+      - ~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
 
   run-unit-tests:
     <<: *sbtenv
