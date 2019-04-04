@@ -2,6 +2,8 @@ extern crate common;
 extern crate execution_engine;
 extern crate failure;
 extern crate parity_wasm;
+extern crate rand;
+extern crate rand_chacha;
 extern crate shared;
 extern crate storage;
 extern crate wabt;
@@ -16,6 +18,7 @@ use execution_engine::trackingcopy::TrackingCopy;
 use failure::Error;
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
+use rand::RngCore;
 use shared::newtypes::Blake2bHash;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -228,6 +231,27 @@ fn mock_module() -> Module {
     module().build()
 }
 
+// Create random account Key.
+fn random_account_key<G: RngCore>(entropy_source: &mut G) -> Key {
+    let mut key = [0u8; 20];
+    entropy_source.fill_bytes(&mut key);
+    Key::Account(key)
+}
+
+// Create random contract Key.
+fn random_contract_key<G: RngCore>(entropy_source: &mut G) -> Key {
+    let mut key = [0u8; 32];
+    entropy_source.fill_bytes(&mut key);
+    Key::Hash(key)
+}
+
+// Create random URef Key.
+fn random_uref_key<G: RngCore>(entropy_source: &mut G, rights: AccessRights) -> Key {
+    let mut key = [0u8; 32];
+    entropy_source.fill_bytes(&mut key);
+    Key::URef(key, rights)
+}
+
 fn gs_write<'a, R: DbReader>(
     runtime: &mut Runtime<'a, R>,
     key: (u32, usize),
@@ -354,10 +378,11 @@ fn forged_uref() {
         mock_module(),
     );
 
+    let mut rng = rand::thread_rng();
     // create a forged uref
     let uref = wasm_write(
         &mut test_fixture.memory,
-        Key::URef([231u8; 32], AccessRights::ReadWrite),
+        random_uref_key(&mut rng, AccessRights::ReadWrite),
     );
 
     // write arbitrary value to wasm memory to allow call to write
@@ -435,11 +460,16 @@ fn store_contract_hash() {
     // Tests that storing contracts (functions) works.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
+    let mut rng = rand::thread_rng();
+    let hash = random_contract_key(&mut rng);
     let wasm_module = create_wasm_module();
-    let urefs = urefs_map(once(("SomeKey".to_owned(), Key::Hash([1u8; 32]))));
+    let urefs = urefs_map(once(("SomeKey".to_owned(), hash)));
 
-    let contract =
-        contract_bytes_from_wat(wasm_module.module.clone(), "add".to_owned(), urefs.clone());
+    let contract = contract_bytes_from_wat(
+        wasm_module.module.clone(),
+        wasm_module.func_name.to_owned(),
+        urefs.clone(),
+    );
 
     // We need this braces so that the `tc_borrowed` gets dropped
     // and we can borrow it again when we call `effect()`.
@@ -490,9 +520,10 @@ fn store_contract_hash_illegal_urefs() {
     // Tests that storing function (contract) with illegal (unknown) urefs is an error.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
+    let mut rng = rand::thread_rng();
     let wasm_module = create_wasm_module();
     // Create URef we don't own
-    let uref = Key::URef([1u8; 32], AccessRights::Read);
+    let uref = random_uref_key(&mut rng, AccessRights::Read);
     let urefs = urefs_map(once(("ForgedURef".to_owned(), uref)));
 
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
@@ -526,6 +557,7 @@ fn store_contract_hash_legal_urefs() {
     // Tests that storing function (contract) with valid (known) uref works.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
+    let mut rng = rand::thread_rng();
     let wasm_module = create_wasm_module();
     // We need this braces so that the `tc_borrowed` gets dropped
     // and we can borrow it again when we call `effect()`.
@@ -563,10 +595,10 @@ fn store_contract_hash_legal_urefs() {
             key
         };
 
-        let urefs = urefs_map(
-            once(("KnownURef".to_owned(), uref))
-                .chain(once(("PublicHash".to_owned(), Key::Hash([1u8; 32])))),
-        );
+        let urefs = urefs_map(once(("KnownURef".to_owned(), uref)).chain(once((
+            "PublicHash".to_owned(),
+            random_contract_key(&mut rng),
+        ))));
 
         let contract = contract_bytes_from_wat(
             wasm_module.module.clone(),
@@ -604,13 +636,14 @@ fn store_contract_hash_legal_urefs() {
 
 #[test]
 fn store_contract_uref_known_key() {
-    // Tests that storing function (contract) under known and writeable uref, 
+    // Tests that storing function (contract) under known and writeable uref,
     // with known refs, works.
     // ---- Test fixtures ----
     // URef where we will write contract
-    let contract_uref = Key::URef([2u8; 32], AccessRights::ReadWrite);
+    let mut rng = rand::thread_rng();
+    let contract_uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
     // URef we want to store WITH the contract so that it can use it later
-    let known_uref = Key::URef([3u8; 32], AccessRights::ReadWrite);
+    let known_uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
     let urefs = urefs_map(once(("KnownURef".to_owned(), known_uref)));
     let known_urefs: HashSet<Key> = once(contract_uref).chain(once(known_uref)).collect();
     let mut test_fixture: TestFixture = {
@@ -667,9 +700,10 @@ fn store_contract_uref_forged_key() {
     // Tests that storing function (contract) under forged but writeable uref fails.
     // ---- Test fixtures ----
     // URef where we will write contract
-    let forged_contract_uref = Key::URef([2u8; 32], AccessRights::ReadWrite);
+    let mut rng = rand::thread_rng();
+    let forged_contract_uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
     // URef we want to store WITH the contract so that it can use it later
-    let known_uref = Key::URef([3u8; 32], AccessRights::ReadWrite);
+    let known_uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
     let urefs = urefs_map(once(("KnownURef".to_owned(), known_uref)));
     let known_urefs: HashSet<Key> = once(known_uref).collect();
 
@@ -718,9 +752,10 @@ fn account_key_writeable() {
     // Tests that account key is not writeable.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
+    let mut rng = rand::thread_rng();
     let wasm_module = create_wasm_module();
 
-    let account_key = Key::Account([0u8; 20]);
+    let account_key = random_account_key(&mut rng);
     let wasm_key = wasm_write(&mut test_fixture.memory, account_key);
     let wasm_value = wasm_write(&mut test_fixture.memory, Value::Int32(1));
 
@@ -742,9 +777,10 @@ fn account_key_readable() {
     // Tests that accout key is readable.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
+    let mut rng = rand::thread_rng();
     let wasm_module = create_wasm_module();
 
-    let account_key = Key::Account([0u8; 20]);
+    let account_key = random_account_key(&mut rng);
     let wasm_key = wasm_write(&mut test_fixture.memory, account_key);
     let value = Value::Int32(1);
 
@@ -778,11 +814,15 @@ fn account_key_addable_valid() {
 
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
+    let mut rng = rand::thread_rng();
     let wasm_module = create_wasm_module();
-    let known_urefs = urefs_map(once(("PublicHash".to_owned(), Key::Hash([2u8; 32]))));
+    let known_urefs = urefs_map(once((
+        "PublicHash".to_owned(),
+        random_contract_key(&mut rng),
+    )));
     let account = Account::new([1u8; 32], 1, known_urefs.clone());
     // This is the key we will want to add to an account
-    let additional_key = ("PublichHash#2".to_owned(), Key::Hash([3u8; 32]));
+    let additional_key = ("PublichHash#2".to_owned(), random_contract_key(&mut rng));
     let wasm_name = wasm_write(&mut test_fixture.memory, additional_key.0.clone());
     let wasm_key = wasm_write(&mut test_fixture.memory, additional_key.1);
     {
@@ -833,15 +873,19 @@ fn account_key_addable_invalid() {
 
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
+    let mut rng = rand::thread_rng();
     let wasm_module = create_wasm_module();
-    let known_urefs = urefs_map(once(("PublicHash".to_owned(), Key::Hash([2u8; 32]))));
+    let known_urefs = urefs_map(once((
+        "PublicHash".to_owned(),
+        random_contract_key(&mut rng),
+    )));
     let account = Account::new([1u8; 32], 1, known_urefs.clone());
     // This is the key we will want to add to an account
-    let additional_key = ("PublichHash#2".to_owned(), Key::Hash([3u8; 32]));
+    let additional_key = ("PublichHash#2".to_owned(), random_contract_key(&mut rng));
     let named_key = Value::NamedKey(additional_key.0, additional_key.1);
     let wasm_named_key = wasm_write(&mut test_fixture.memory, named_key);
 
-    let some_other_account = Key::Account([10u8; 20]);
+    let some_other_account = random_account_key(&mut rng);
     let wasm_other_account = wasm_write(&mut test_fixture.memory, some_other_account);
     // We will try to add keys to an account that is not current context.
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
@@ -867,7 +911,6 @@ fn account_key_addable_invalid() {
         wasm_named_key.1 as u32,
     );
 
-    println!("result = {:?}", result);
     assert_error_contains(result, "InvalidAccess");
 }
 
@@ -882,9 +925,10 @@ fn contract_key_readable() {
     // `call_contract` function which checks whether the key is readable.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
+    let mut rng = rand::thread_rng();
     let wasm_module = create_wasm_module();
 
-    let contract_key = Key::Hash([0u8; 32]);
+    let contract_key = random_contract_key(&mut rng);
     let wasm_key = wasm_write(&mut test_fixture.memory, contract_key);
     let empty_vec: Vec<u8> = Vec::new();
     let wasm_args = wasm_write(&mut test_fixture.memory, empty_vec);
