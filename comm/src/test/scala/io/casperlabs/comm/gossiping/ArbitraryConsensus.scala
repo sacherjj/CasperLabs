@@ -26,6 +26,16 @@ trait ArbitraryConsensus {
       ByteString.copyFrom(bytes.toArray)
     }
 
+  // A generators .sample.get can sometimes return None, but these examples have no reason to not generate a result,
+  // so defend against that and retry if it does happen.
+  def sample[T](g: Gen[T]): T = {
+    def loop(i: Int): T = {
+      assert(i > 0, "Should be able to generate a sample.")
+      g.sample.fold(loop(i - 1))(identity)
+    }
+    loop(10)
+  }
+
   val genHash = genBytes(20)
   val genKey  = genBytes(32)
 
