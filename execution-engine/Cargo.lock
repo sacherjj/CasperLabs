@@ -114,7 +114,6 @@ dependencies = [
 name = "casperlabs-contract-ffi"
 version = "0.4.0"
 dependencies = [
- "casperlabs-contract-ffi 0.4.0",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "gens 0.1.0",
  "num 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",

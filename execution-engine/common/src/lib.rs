@@ -13,9 +13,6 @@ extern crate alloc;
 extern crate uint;
 extern crate failure;
 extern crate wee_alloc;
-#[cfg(test)]
-#[macro_use]
-extern crate proptest;
 
 #[cfg(not(feature = "std"))]
 #[global_allocator]

@@ -337,9 +337,10 @@ impl AsRef<[u8]> for Key {
 
 #[cfg(test)]
 mod tests {
-    // Since gens depends on common with std enabled, we should import it through that crate,
-    // because technically common without std, and common with std is a different crate.
-    use casperlabs_contract_ffi::key::{AccessRights::*, *};
+    use crate::key::{
+        AccessRights::{self, *},
+        Key,
+    };
 
     fn test_key_capabilities<F>(
         right: AccessRights,
@@ -402,14 +403,6 @@ mod tests {
         test_addable(Eqv, false);
         test_addable(Read, false);
         test_addable(Write, false);
-    }
-
-    proptest! {
-        #[test]
-        fn eqv_access_is_implicit(access_right in gens::gens::access_rights_arb()) {
-            let gen_access_right: AccessRights = access_right;
-            assert_eq!(AccessRights::Eqv <= gen_access_right, true);
-        }
     }
 
     #[test]
