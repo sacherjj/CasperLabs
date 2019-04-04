@@ -114,8 +114,12 @@ dependencies = [
 name = "casperlabs-contract-ffi"
 version = "0.4.0"
 dependencies = [
+ "casperlabs-contract-ffi 0.4.0",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gens 0.1.0",
  "num 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proptest 0.9.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "shared 0.1.0",
  "uint 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wee_alloc 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1090,16 +1094,6 @@ dependencies = [
  "libc 0.2.50 (registry+https://github.com/rust-lang/crates.io-index)",
  "redox_syscall 0.1.51 (registry+https://github.com/rust-lang/crates.io-index)",
  "redox_termios 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "tests"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.4.0",
- "gens 0.1.0",
- "proptest 0.9.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "shared 0.1.0",
 ]
 
 [[package]]
