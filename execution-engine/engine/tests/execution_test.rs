@@ -1092,16 +1092,61 @@ fn uref_key_readable_invalid() {
     assert_error_contains(test_result, "InvalidAccess")
 }
 
+// Test that is being shared between two following tests for writing to a URef.
+// The drill is that we generate URef, add it to the current context (so it can be used by the contract),
+// Then we try to write to this URef. Host (Runtime) will validate whether the key we want
+// to write to is valid (belongs to the `known_urefs` set) and whether it's writeable.
+fn test_uref_key_writeable(rights: AccessRights) -> Result<(), wasmi::Trap> {
+    let init_value = Value::Int32(1);
+    let mut rng = rand::thread_rng();
+    // URef we will be trying to read.
+    let uref = random_uref_key(&mut rng, rights);
+    let mut test_fixture: TestFixture = {
+        // We need to put `uref`, which we will be using later, to `known_urefs` set
+        // of the context's account. Otherwise we will get ForgedReference error.
+        let known_urefs: HashSet<Key> = once(uref).collect();
+        let empty_uref_map = urefs_map(std::iter::empty());
+        let default: TestFixture = Default::default();
+        let (key, account) = mock_account(default.addr);
+        let env = MockEnv::new(key, empty_uref_map, known_urefs, account.clone(), 0);
+        let memory = env.memory_manager();
+        let mut init_tc = mock_tc(key, &account);
+        init_tc.write(uref, init_value.clone());
+        let tc = Rc::new(RefCell::new(init_tc));
+        TestFixture::new(
+            default.addr,
+            default.timestamp,
+            default.nonce,
+            env,
+            memory,
+            tc,
+        )
+    };
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        mock_module(),
+    );
+    let wasm_uref = wasm_write(&mut test_fixture.memory, uref);
+    let new_value = Value::Int32(2);
+    let wasm_new_value = wasm_write(&mut test_fixture.memory, new_value);
+    gs_write(&mut runtime, wasm_uref, wasm_new_value)
+}
+
 #[test]
 fn uref_key_writeable_valid() {
     // Tests that URef key is writeable when access rights of the key allows for writing.
-    unimplemented!()
+    test_uref_key_writeable(AccessRights::Write).expect("Writing to writeable URef should work.")
 }
 
 #[test]
 fn uref_key_writeable_invalid() {
     // Tests that writing to URef which is not writeable fails.
-    unimplemented!()
+    let result = test_uref_key_writeable(AccessRights::Read);
+    assert_error_contains(result, "InvalidAccess")
 }
 
 #[test]
