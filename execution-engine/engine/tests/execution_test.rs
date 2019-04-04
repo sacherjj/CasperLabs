@@ -1149,14 +1149,60 @@ fn uref_key_writeable_invalid() {
     assert_error_contains(result, "InvalidAccess")
 }
 
+fn test_uref_key_addable(rights: AccessRights) -> Result<(), wasmi::Trap> {
+    let init_value = Value::Int32(1);
+    let mut rng = rand::thread_rng();
+    // URef we will be trying to read.
+    let uref = random_uref_key(&mut rng, rights);
+    let mut test_fixture: TestFixture = {
+        // We need to put `uref`, which we will be using later, to `known_urefs` set
+        // of the context's account. Otherwise we will get ForgedReference error.
+        let known_urefs: HashSet<Key> = once(uref).collect();
+        let empty_uref_map = urefs_map(std::iter::empty());
+        let default: TestFixture = Default::default();
+        let (key, account) = mock_account(default.addr);
+        let env = MockEnv::new(key, empty_uref_map, known_urefs, account.clone(), 0);
+        let memory = env.memory_manager();
+        let mut init_tc = mock_tc(key, &account);
+        init_tc.write(uref, init_value.clone());
+        let tc = Rc::new(RefCell::new(init_tc));
+        TestFixture::new(
+            default.addr,
+            default.timestamp,
+            default.nonce,
+            env,
+            memory,
+            tc,
+        )
+    };
+    let mut tc_borrowed = test_fixture.tc.borrow_mut();
+    let mut runtime = test_fixture.env.runtime(
+        &mut tc_borrowed,
+        test_fixture.addr,
+        test_fixture.timestamp,
+        test_fixture.nonce,
+        mock_module(),
+    );
+    let wasm_uref = wasm_write(&mut test_fixture.memory, uref);
+    let new_value = Value::Int32(2);
+    let wasm_new_value = wasm_write(&mut test_fixture.memory, new_value);
+    runtime.add(
+        wasm_uref.0,
+        wasm_uref.1 as u32,
+        wasm_new_value.0,
+        wasm_new_value.1 as u32,
+    )
+}
 #[test]
 fn uref_key_addable_valid() {
     // Tests that URef key is addable when access rights of the key allows for adding.
-    unimplemented!()
+    test_uref_key_addable(AccessRights::Add)
+        .expect("Adding to URef when it is Addable should work.")
 }
 
 #[test]
 fn uref_key_addable_invalid() {
     // Tests that adding to URef which is not addable fails.
-    unimplemented!()
+    let result = test_uref_key_addable(AccessRights::Read);
+    assert_error_contains(result, "InvalidAccess");
 }
