@@ -74,19 +74,21 @@ def command_line_options_fixture(request):
 @contextlib.contextmanager
 def temporary_resources_genesis_folder(validator_keys: List[KeyPair]) -> Generator[str, None, None]:
     genesis_folder_path = "/tmp/resources/genesis"
-    if not os.path.exists(genesis_folder_path):
-        os.makedirs(genesis_folder_path)
+    if os.path.exists(genesis_folder_path):
+        shutil.rmtree(genesis_folder_path)
+    os.makedirs(genesis_folder_path)
     try:
-        with open(os.path.join(genesis_folder_path, "bonds.txt"), "w", buffering=1) as f:
+        with open(os.path.join(genesis_folder_path, "bonds.txt"), "w") as f:
             for pair in validator_keys:
                 bond = random.randint(1, 100)
                 f.write("{} {}\n".format(pair.public_key, bond))
                 with open(os.path.join("/tmp/resources/genesis/",
-                                       "{}.sk".format(pair.public_key)), 'w', buffering=1) as _file:
+                                       "{}.sk".format(pair.public_key)), 'w') as _file:
                     _file.write("{}\n".format(pair.private_key))
         yield genesis_folder_path
     finally:
-        pass
+        if os.path.exists(genesis_folder_path):
+            shutil.rmtree(genesis_folder_path)
 
 
 @pytest.yield_fixture(scope='session')
