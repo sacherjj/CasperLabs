@@ -263,6 +263,11 @@ where
     Ok(deserialize(&bytes).expect("Deserializing should work"))
 }
 
+// Helper method that writes `value` to `wasm_memory`
+fn wasm_write<T: ToBytes>(wasm_memory: &mut WasmMemoryManager, value: T) -> (u32, usize) {
+    wasm_memory.write(value)
+}
+
 struct TestFixture {
     addr: [u8; 20],
     timestamp: u64,
@@ -321,9 +326,9 @@ fn valid_uref() {
     );
 
     // write arbitrary value to wasm memory to allow call to write
-    let init_value = test_fixture.memory.write(value::Value::Int32(42));
+    let init_value = wasm_write(&mut test_fixture.memory, value::Value::Int32(42));
 
-    let new_value = test_fixture.memory.write(value::Value::Int32(43));
+    let new_value = wasm_write(&mut test_fixture.memory, value::Value::Int32(43));
 
     // create a valid uref in wasm memory via new_uref
     let uref = test_fixture
@@ -350,12 +355,13 @@ fn forged_uref() {
     );
 
     // create a forged uref
-    let uref = test_fixture
-        .memory
-        .write(Key::URef([231u8; 32], AccessRights::ReadWrite));
+    let uref = wasm_write(
+        &mut test_fixture.memory,
+        Key::URef([231u8; 32], AccessRights::ReadWrite),
+    );
 
     // write arbitrary value to wasm memory to allow call to write
-    let value = test_fixture.memory.write(value::Value::Int32(42));
+    let value = wasm_write(&mut test_fixture.memory, value::Value::Int32(42));
 
     // Use uref as the key to perform an action on the global state.
     // This should fail because the uref was forged
@@ -482,11 +488,6 @@ fn assert_error_contains(result: Result<(), wasmi::Trap>, msg: &str) {
     }
 }
 
-// Runtime will panic with ForgedReference exception.
-fn assert_panic_forged_keys(result: Result<(), wasmi::Trap>) {
-    assert_error_contains(result, "ForgedReference")
-}
-
 #[test]
 fn store_contract_hash_illegal_urefs() {
     // Test fixtures
@@ -519,7 +520,7 @@ fn store_contract_hash_illegal_urefs() {
     );
 
     // Since we don't know the urefs we wanted to store together with the contract
-    assert_panic_forged_keys(result)
+    assert_error_contains(result, "ForgedReference");
 }
 
 #[test]
@@ -541,7 +542,7 @@ fn store_contract_hash_legal_urefs() {
 
         // Initial value of the uref the in the contract's
         // known_urefs map.
-        let init_value = test_fixture.memory.write(value::Value::Int32(42));
+        let init_value = wasm_write(&mut test_fixture.memory, value::Value::Int32(42));
 
         let uref = {
             // We are generating new URef the "correct" way.
@@ -637,7 +638,7 @@ fn store_contract_uref_known_key() {
             wasm_module.module.clone(),
         );
 
-        let (contract_uref_ptr, contract_uref_len) = test_fixture.memory.write(contract_uref);
+        let wasm_contract_uref = wasm_write(&mut test_fixture.memory, contract_uref);
 
         let contract = Value::Contract(contract_bytes_from_wat(
             wasm_module.module.clone(),
@@ -645,17 +646,10 @@ fn store_contract_uref_known_key() {
             urefs.clone(),
         ));
 
-        let (contract_ptr, contract_len) = test_fixture.memory.write(contract.clone());
+        let wasm_contract = wasm_write(&mut test_fixture.memory, contract.clone());
 
         // This is the FFI call that Wasm triggers when it stores a contract in GS.
-        runtime
-            .write(
-                contract_uref_ptr,
-                contract_uref_len as u32,
-                contract_ptr,
-                contract_len as u32,
-            )
-            .expect("write should succeed");
+        gs_write(&mut runtime, wasm_contract_uref, wasm_contract).expect("write should succeed");
 
         contract
     };
@@ -702,7 +696,7 @@ fn store_contract_uref_forged_key() {
         wasm_module.module.clone(),
     );
 
-    let (contract_uref_ptr, contract_uref_len) = test_fixture.memory.write(forged_contract_uref);
+    let wasm_contract_uref = wasm_write(&mut test_fixture.memory, forged_contract_uref);
 
     let contract = Value::Contract(contract_bytes_from_wat(
         wasm_module.module.clone(),
@@ -710,17 +704,11 @@ fn store_contract_uref_forged_key() {
         urefs.clone(),
     ));
 
-    let (contract_ptr, contract_len) = test_fixture.memory.write(contract.clone());
+    let wasm_contract = wasm_write(&mut test_fixture.memory, contract.clone());
 
     // This is the FFI call that Wasm triggers when it stores a contract in GS.
-    let result = runtime.write(
-        contract_uref_ptr,
-        contract_uref_len as u32,
-        contract_ptr,
-        contract_len as u32,
-    );
-
-    assert_panic_forged_keys(result);
+    let result = gs_write(&mut runtime, wasm_contract_uref, wasm_contract);
+    assert_error_contains(result, "ForgedReference");
 }
 
 #[test]
@@ -730,8 +718,8 @@ fn account_key_writeable() {
     let wasm_module = create_wasm_module();
 
     let account_key = Key::Account([0u8; 20]);
-    let wasm_key = test_fixture.memory.write(account_key);
-    let wasm_value = test_fixture.memory.write(Value::Int32(1));
+    let wasm_key = wasm_write(&mut test_fixture.memory, account_key);
+    let wasm_value = wasm_write(&mut test_fixture.memory, Value::Int32(1));
 
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
     let mut runtime = test_fixture.env.runtime(
@@ -742,13 +730,7 @@ fn account_key_writeable() {
         wasm_module.module.clone(),
     );
 
-    let result = runtime.write(
-        wasm_key.0,
-        wasm_key.1 as u32,
-        wasm_value.0,
-        wasm_value.1 as u32,
-    );
-
+    let result = gs_write(&mut runtime, wasm_key, wasm_value);
     assert_error_contains(result, "InvalidAccess");
 }
 
@@ -759,7 +741,7 @@ fn account_key_readable() {
     let wasm_module = create_wasm_module();
 
     let account_key = Key::Account([0u8; 20]);
-    let wasm_key = test_fixture.memory.write(account_key);
+    let wasm_key = wasm_write(&mut test_fixture.memory, account_key);
     let value = Value::Int32(1);
 
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
@@ -797,8 +779,8 @@ fn account_key_addable_valid() {
     let account = Account::new([1u8; 32], 1, known_urefs.clone());
     // This is the key we will want to add to an account
     let additional_key = ("PublichHash#2".to_owned(), Key::Hash([3u8; 32]));
-    let wasm_name = test_fixture.memory.write(additional_key.0.clone());
-    let wasm_key = test_fixture.memory.write(additional_key.1);
+    let wasm_name = wasm_write(&mut test_fixture.memory, additional_key.0.clone());
+    let wasm_key = wasm_write(&mut test_fixture.memory, additional_key.1);
     {
         let mut tc_borrowed = test_fixture.tc.borrow_mut();
         // Write an account under current context's key
@@ -853,10 +835,10 @@ fn account_key_addable_invalid() {
     // This is the key we will want to add to an account
     let additional_key = ("PublichHash#2".to_owned(), Key::Hash([3u8; 32]));
     let named_key = Value::NamedKey(additional_key.0, additional_key.1);
-    let wasm_named_key = test_fixture.memory.write(named_key);
+    let wasm_named_key = wasm_write(&mut test_fixture.memory, named_key);
 
     let some_other_account = Key::Account([10u8; 20]);
-    let wasm_other_account = test_fixture.memory.write(some_other_account);
+    let wasm_other_account = wasm_write(&mut test_fixture.memory, some_other_account);
     // We will try to add keys to an account that is not current context.
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
     // Write an account under current context's key
@@ -897,11 +879,11 @@ fn contract_key_readable() {
     let wasm_module = create_wasm_module();
 
     let contract_key = Key::Hash([0u8; 32]);
-    let wasm_key = test_fixture.memory.write(contract_key);
+    let wasm_key = wasm_write(&mut test_fixture.memory, contract_key);
     let empty_vec: Vec<u8> = Vec::new();
-    let wasm_args = test_fixture.memory.write(empty_vec);
+    let wasm_args = wasm_write(&mut test_fixture.memory, empty_vec);
     let empty_urefs: Vec<Key> = Vec::new();
-    let wasm_urefs = test_fixture.memory.write(empty_urefs);
+    let wasm_urefs = wasm_write(&mut test_fixture.memory, empty_urefs);
 
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
     let mut runtime = test_fixture.env.runtime(
