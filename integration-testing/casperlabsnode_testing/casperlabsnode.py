@@ -20,7 +20,10 @@ from casperlabsnode_testing.common import (
     make_tempdir,
     random_string,
 )
-from casperlabsnode_testing.wait import wait_for_node_started
+from casperlabsnode_testing.wait import (
+    wait_for_approved_block_received_handler_state,
+    wait_for_node_started,
+)
 
 
 if TYPE_CHECKING:
@@ -41,6 +44,7 @@ DEFAULT_IMAGE = os.environ.get(
     "casperlabs/node:{}".format(TAG))
 
 DEFAULT_ENGINE_IMAGE = "casperlabs/execution-engine:test"
+DEFAULT_CLIENT_IMAGE = "casperlabs/client:test"
 
 casperlabsnode_binary = '/opt/docker/bin/bootstrap'
 casperlabsnode_directory = "/root/.casperlabs"
@@ -502,12 +506,54 @@ def make_execution_engine(
     return container
 
 
+def visualize_dag(
+    *,
+    docker_client: "DockerClient",
+    network: str,
+    host_name: str,
+    depth: int,
+    directory_path: str,
+    image: str = DEFAULT_CLIENT_IMAGE,
+):
+    name = make_vdag_name(network, host_name)
+    command = " ".join([
+        "--host", host_name,
+        "--port", "40401",
+        "vdag", "--show-justification-lines",
+        "--depth", str(depth),
+        "--out", "/data/sample.png",
+        "--stream", "multiple-outputs"
+    ])
+
+    volumes = {
+        directory_path: {
+            "mode": "rw",
+            "bind": "/data"
+        }
+    }
+    container = docker_client.containers.run(
+        image,
+        name=name,
+        user='root',
+        detach=True,
+        command=command,
+        network=network,
+        hostname=host_name,
+        volumes=volumes
+    )
+    return container
+
+
 def make_peer_name(network: str, i: Union[int, str]) -> str:
     return "peer{i}.{network}".format(i=i, network=network)
 
 
 def make_engine_name(network: str, i: Union[int, str]) -> str:
     return "engine{i}.{network}".format(i=i, network=network)
+
+
+def make_vdag_name(network: str, i: Union[int, str]) -> str:
+    return "vdag.{i}.{network}".format(i=i, network=network)
 
 
 def make_peer(
@@ -559,6 +605,37 @@ def make_peer(
         mem_limit=mem_limit if not None else '4G',
     )
     return container
+
+
+@contextlib.contextmanager
+def bootstrap_connected_peer(
+    *,
+    context: TestingContext,
+    bootstrap: Node,
+    name: str,
+    keypair: "KeyPair",
+    socket_volume: str
+) -> Generator[Node, None, None]:
+    engine = make_execution_engine(
+        docker_client=context.docker,
+        name='{}-engine'.format(name),
+        command=execution_engine_command,
+        network=bootstrap.network,
+        socket_volume=socket_volume,
+    )
+    with started_peer(
+        context=context,
+        network=bootstrap.network,
+        socket_volume=socket_volume,
+        name=name,
+        bootstrap=bootstrap,
+        key_pair=keypair
+    ) as peer:
+        try:
+            wait_for_approved_block_received_handler_state(peer, context.node_startup_timeout)
+            yield peer
+        finally:
+            engine.remove(force=True, v=True)
 
 
 @contextlib.contextmanager
