@@ -639,8 +639,8 @@ fn store_contract_uref_known_key() {
     // Tests that storing function (contract) under known and writeable uref,
     // with known refs, works.
     // ---- Test fixtures ----
-    // URef where we will write contract
     let mut rng = rand::thread_rng();
+    // URef where we will write contract
     let contract_uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
     // URef we want to store WITH the contract so that it can use it later
     let known_uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
@@ -798,10 +798,12 @@ fn account_key_readable() {
         wasm_module.module.clone(),
     );
 
+    panic!("This test should fail. Accounts shouldn't probably be readable. Think it over.")
+
     // Read value
-    let res: Value = gs_read(&mut test_fixture.memory, &mut runtime, wasm_key)
-        .expect("Reading from GS should work.");
-    assert_eq!(res, value);
+    // let res: Value = gs_read(&mut test_fixture.memory, &mut runtime, wasm_key)
+    // .expect("Reading from GS should work.");
+    // assert_eq!(res, value);
 }
 
 #[test]
