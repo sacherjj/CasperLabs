@@ -2,9 +2,10 @@ package io.casperlabs.node.configuration
 
 import java.nio.file.Path
 
+import cats.Show
 import cats.syntax.either._
 import cats.syntax.option._
-import io.casperlabs.comm.PeerNode
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.configuration.cli.scallop
 import io.casperlabs.node.BuildInfo
 import io.casperlabs.node.configuration.Utils._
@@ -19,11 +20,11 @@ import scala.language.implicitConversions
 private[configuration] object Converter extends ParserImplicits {
   import Options._
 
-  implicit val bootstrapAddressConverter: ValueConverter[PeerNode] = new ValueConverter[PeerNode] {
-    def parse(s: List[(String, List[String])]): Either[String, Option[PeerNode]] =
+  implicit val bootstrapAddressConverter: ValueConverter[Node] = new ValueConverter[Node] {
+    def parse(s: List[(String, List[String])]): Either[String, Option[Node]] =
       s match {
         case (_, uri :: Nil) :: Nil =>
-          Parser[PeerNode].parse(uri).map(_.some)
+          Parser[Node].parse(uri).map(_.some)
         case Nil => Right(None)
         case _   => Left("provide the casperlabs node bootstrap address")
       }
@@ -82,8 +83,14 @@ private[configuration] final case class Options private (
     defaults: Map[CamelCase, String]
 ) extends ScallopConf(arguments) {
   helpWidth(120)
+  //Do not clean this imports, they needed for @scallop macro
   import Converter._
+  import cats.syntax.show._
+  import io.casperlabs.comm.discovery.NodeUtils._
+  import io.casperlabs.comm.discovery.NodeUtils
   import Options.Flag
+
+  private implicit def show[T: NotNode]: Show[T] = Show.show(_.toString)
 
   //Needed only for eliminating red code from IntelliJ IDEA, see @scallop definition
   private def gen[A](descr: String, short: Char = '\u0000'): ScallopOption[A] =
@@ -280,7 +287,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverBootstrap =
-      gen[PeerNode](
+      gen[Node](
         "Bootstrap casperlabs node address for initial seed.",
         'b'
       )

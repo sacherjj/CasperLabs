@@ -2,7 +2,8 @@ package io.casperlabs.node.configuration
 import java.io.File
 import java.nio.file.{Path, Paths}
 
-import io.casperlabs.comm.{Endpoint, NodeIdentifier, PeerNode}
+import com.google.protobuf.ByteString
+import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
 import org.scalacheck.{Arbitrary, Gen}
 
 import scala.concurrent.duration._
@@ -28,16 +29,15 @@ trait ArbitraryImplicits {
     Gen.const(true)
   }
 
-  implicit val peerNodeGen: Arbitrary[PeerNode] = Arbitrary {
+  implicit val nodeGen: Arbitrary[Node] = Arbitrary {
     for {
-      n        <- Gen.choose(1, 100)
-      bytes    <- Gen.listOfN(n, Gen.choose(Byte.MinValue, Byte.MaxValue))
-      id       = NodeIdentifier(bytes)
-      host     <- Gen.listOfN(n, Gen.alphaNumChar)
-      tcpPort  <- Gen.posNum[Int]
-      udpPort  <- Gen.posNum[Int]
-      endpoint = Endpoint(host.mkString(""), tcpPort, udpPort)
-    } yield PeerNode(id, endpoint)
+      n       <- Gen.choose(1, 100)
+      bytes   <- Gen.listOfN(n, Gen.choose(Byte.MinValue, Byte.MaxValue))
+      id      = ByteString.copyFrom(bytes.toArray)
+      host    <- Gen.listOfN(n, Gen.alphaNumChar)
+      tcpPort <- Gen.posNum[Int]
+      udpPort <- Gen.posNum[Int]
+    } yield Node(id, host.mkString(""), tcpPort, udpPort)
   }
 
   // There are some comparison problems with default generator

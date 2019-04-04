@@ -7,6 +7,7 @@ import cats.data.EitherT.{leftT, rightT}
 import cats.syntax.applicativeError._
 import cats.syntax.either._
 import io.casperlabs.comm._
+import io.casperlabs.comm.discovery.NodeIdentifier
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.CertificateHelper
 import io.casperlabs.node.configuration.Configuration

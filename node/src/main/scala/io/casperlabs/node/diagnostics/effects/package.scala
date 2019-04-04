@@ -2,13 +2,8 @@ package io.casperlabs.node.diagnostics
 
 import java.lang.management.{ManagementFactory, MemoryType}
 
-import scala.collection.JavaConverters._
-
-import cats.syntax.flatMap._
-import cats.syntax.functor._
-
 import cats.effect.Sync
-import com.google.protobuf.ByteString
+import cats.implicits._
 import com.google.protobuf.empty.Empty
 import io.casperlabs.comm.discovery.NodeDiscovery
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
@@ -16,6 +11,8 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.diagnostics._
 import javax.management.ObjectName
 import monix.eval.Task
+
+import scala.collection.JavaConverters._
 
 package object effects {
 
@@ -223,7 +220,7 @@ package object effects {
               t  <- Sync[F].delay(c.start())
               r0 <- Sync[F].attempt(block)
               _  = t.stop()
-              r  <- r0.fold(Sync[F].raiseError, Sync[F].pure)
+              r  <- r0.fold(Sync[F].raiseError[A], Sync[F].pure)
             } yield r
         }
     }
@@ -239,7 +236,7 @@ package object effects {
         connectionsCell.read.map { ps =>
           Peers(
             ps.map(
-              p => Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))
+              p => Peer(p.host, p.protocolPort, p.id)
             )
           )
         }
@@ -248,7 +245,7 @@ package object effects {
         nodeDiscovery.alivePeersAscendingDistance.map { ps =>
           Peers(
             ps.map(
-              p => Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))
+              p => Peer(p.host, p.protocolPort, p.id)
             )
           )
         }

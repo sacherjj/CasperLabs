@@ -5,14 +5,16 @@ import java.nio.file._
 import java.util.concurrent.TimeoutException
 
 import cats.implicits._
-import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
 import io.casperlabs.comm.CommError._
 import io.casperlabs.comm._
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
 import io.casperlabs.comm.protocol.routing._
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared._
@@ -20,7 +22,6 @@ import io.grpc._
 import io.grpc.netty._
 import io.netty.handler.ssl._
 import monix.eval._
-import io.casperlabs.shared.PathOps._
 import monix.execution._
 import monix.reactive._
 
@@ -79,29 +80,29 @@ class TcpTransportLayer(
         throw e
     }
 
-  private def clientChannel(peer: PeerNode): Task[ManagedChannel] =
+  private def clientChannel(peer: Node): Task[ManagedChannel] =
     for {
-      _ <- log.debug(s"Creating new channel to peer ${peer.toAddress}")
+      _ <- log.debug(s"Creating new channel to peer ${peer.show}")
       c <- Task.delay {
             NettyChannelBuilder
-              .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
+              .forAddress(peer.host, peer.protocolPort)
               .executor(scheduler)
               .maxInboundMessageSize(maxMessageSize)
               .negotiationType(NegotiationType.TLS)
               .sslContext(clientSslContext)
               .intercept(new SslSessionClientInterceptor())
-              .overrideAuthority(peer.id.toString)
+              .overrideAuthority(Base16.encode(peer.id.toByteArray))
               .build()
           }
     } yield c
 
-  def disconnect(peer: PeerNode): Task[Unit] =
+  def disconnect(peer: Node): Task[Unit] =
     cell.modify { s =>
       for {
         _ <- s.connections.get(peer) match {
               case Some(c) =>
                 log
-                  .debug(s"Disconnecting from peer ${peer.toAddress}")
+                  .debug(s"Disconnecting from peer ${peer.show}")
                   .map(kp(Try(c.shutdown())))
                   .void
               case _ => Task.unit // ignore if connection does not exists already
@@ -109,7 +110,7 @@ class TcpTransportLayer(
       } yield s.copy(connections = s.connections - peer)
     }
 
-  private def withClient[A](peer: PeerNode, enforce: Boolean)(
+  private def withClient[A](peer: Node, enforce: Boolean)(
       f: TransportLayerStub => Task[A]
   ): Task[A] =
     for {
@@ -122,12 +123,12 @@ class TcpTransportLayer(
       _ <- Task.unit.asyncBoundary // return control to caller thread
     } yield result
 
-  private def transport(peer: PeerNode, enforce: Boolean)(
+  private def transport(peer: Node, enforce: Boolean)(
       f: TransportLayerStub => Task[TLResponse]
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
-  def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
+  def stream(peers: Seq[Node], blob: Blob): Task[Unit] =
     streamObservable.stream(peers.toList, blob) *> log.info(s"stream to $peers blob")
 
   private object PeerUnavailable {
@@ -141,7 +142,7 @@ class TcpTransportLayer(
   }
 
   private def processResponse(
-      peer: PeerNode,
+      peer: Node,
       response: Either[Throwable, TLResponse]
   ): CommErr[Option[Protocol]] =
     response
@@ -160,7 +161,7 @@ class TcpTransportLayer(
           }
       )
 
-  def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
+  def roundTrip(peer: Node, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
     for {
       _ <- metrics.incrementCounter("round-trip")
       result <- transport(peer, enforce = false)(
@@ -175,7 +176,7 @@ class TcpTransportLayer(
     } yield result
 
   private def innerSend(
-      peer: PeerNode,
+      peer: Node,
       msg: Protocol,
       enforce: Boolean = false,
       timeout: FiniteDuration = DefaultSendTimeout
@@ -194,20 +195,20 @@ class TcpTransportLayer(
     } yield result
 
   private def innerBroadcast(
-      peers: Seq[PeerNode],
+      peers: Seq[Node],
       msg: Protocol,
       enforce: Boolean = false,
       timeOut: FiniteDuration = DefaultSendTimeout
   ): Task[Seq[CommErr[Unit]]] =
     Task.gatherUnordered(peers.map(innerSend(_, msg, enforce, timeOut)))
 
-  def send(peer: PeerNode, msg: Protocol): Task[CommErr[Unit]] =
+  def send(peer: Node, msg: Protocol): Task[CommErr[Unit]] =
     innerSend(peer, msg)
 
-  def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
+  def broadcast(peers: Seq[Node], msg: Protocol): Task[Seq[CommErr[Unit]]] =
     innerBroadcast(peers, msg)
 
-  private def streamToPeer(peer: PeerNode, path: Path, sender: PeerNode): Task[Unit] = {
+  private def streamToPeer(peer: Node, path: Path, sender: Node): Task[Unit] = {
 
     def delay[A](a: => Task[A]): Task[A] =
       Task.defer(a).delayExecution(1.second)

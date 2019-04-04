@@ -5,11 +5,13 @@ import java.util.concurrent.TimeUnit
 
 import cats.data.Validated.Valid
 import cats.syntax.option._
+import cats.syntax.show._
 import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
+import io.casperlabs.comm.discovery.{Node, NodeIdentifier, NodeUtils}
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.transport.Tls
-import io.casperlabs.comm.{Endpoint, NodeIdentifier, PeerNode}
-import io.casperlabs.configuration.{ignore, SubConfig}
+import io.casperlabs.configuration.ignore
 import io.casperlabs.node.configuration.MagnoliaArbitrary._
 import io.casperlabs.node.configuration.Utils._
 import io.casperlabs.shared.StoreType
@@ -45,9 +47,11 @@ class ConfigurationSpec
       dynamicHostAddress = false,
       noUpnp = false,
       defaultTimeout = 1,
-      bootstrap = PeerNode(
+      bootstrap = Node(
         NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
-        Endpoint("52.119.8.109", 1, 1)
+        "52.119.8.109",
+        1,
+        1
       ),
       storeType = StoreType.LMDB,
       dataDir = Paths.get("/tmp"),
@@ -327,7 +331,7 @@ class ConfigurationSpec
             case (Some(a), None)    => a.some
             case (None, Some(b))    => b.some
             case (None, None)       => None
-          }
+        }
       implicit def optionPlain[A: NotSubConfig: NotOption]: Merge[Option[A]] = _ orElse _
     }
 
@@ -346,7 +350,7 @@ class ConfigurationSpec
       case _: StoreType.Mixed.type => s""""mixed""""
       case _: StoreType.LMDB.type  => s""""lmdb""""
       case _: StoreType.InMem.type => s""""inmem""""
-      case p: PeerNode             => s""""${p.toString}""""
+      case p: Node                 => s""""${p.show}""""
       case p: java.nio.file.Path   => s""""${p.toString}""""
       case x                       => x.toString
     } { (acc, fullFieldName, field) =>
@@ -384,13 +388,19 @@ class ConfigurationSpec
       }
       .toList
 
-  def toEnvVars(conf: Configuration): Map[String, String] =
-    reduce(conf, Map.empty[String, String])(_.toString.replace(" ", "") match {
+  def toEnvVars(conf: Configuration): Map[String, String] = {
+    val mapper = (_: String).replace(" ", "") match {
       case x @ ("InMem" | "Mixed" | "LMDB") => x.toLowerCase
       case x                                => x
+    }
+
+    reduce(conf, Map.empty[String, String])({
+      case n: Node => mapper(n.show)
+      case x       => mapper(x.toString)
     }) { (envVars, fieldName, field) =>
       envVars + (snakify(("CL" :: fieldName).mkString("_")) -> field)
     }
+  }
 
   def reduce[Accumulator](conf: Configuration, accumulator: Accumulator)(
       innerFieldsMapper: Any => String
@@ -399,15 +409,13 @@ class ConfigurationSpec
 
     import scala.language.experimental.macros
 
-    type NotPeerNode[A] = A <:!< PeerNode
-
     trait Flattener[A] {
       def flatten(path: List[String], a: A): List[(List[String], String)]
     }
 
     object Flattener {
       type Typeclass[T] = Flattener[T]
-      def combine[T: NotPeerNode](caseClass: CaseClass[Typeclass, T]): Typeclass[T] =
+      def combine[T: NotNode](caseClass: CaseClass[Typeclass, T]): Typeclass[T] =
         (path, v) =>
           caseClass.parameters.toList
             .flatMap(
@@ -416,12 +424,12 @@ class ConfigurationSpec
                   List.empty
                 } else {
                   p.typeclass.flatten(path :+ p.label, p.dereference(v))
-                }
-            )
+              }
+          )
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
       implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
 
-      implicit val peerNode: Flattener[PeerNode] =
+      implicit val peerNode: Flattener[Node] =
         (path, a) => List((path, innerFieldsMapper(a)))
       implicit def default[A: NotSubConfig]: Flattener[A] =
         (path, a) => List((path, innerFieldsMapper(a)))

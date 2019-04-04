@@ -1,10 +1,9 @@
 package io.casperlabs.comm.discovery
 
 import cats._
-import cats.syntax.either._
-import io.casperlabs.comm._
-import io.casperlabs.crypto.codec.Base16
+import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib.effect.implicits._
+import io.casperlabs.crypto.codec.Base16
 import org.scalatest._
 
 object b {
@@ -20,21 +19,20 @@ object b {
 
 class DistanceSpec extends FlatSpec with Matchers {
 
-  val endpoint = Endpoint("", 0, 0)
   implicit val ping: KademliaService[Id] = new KademliaService[Id] {
-    def ping(node: PeerNode): Boolean                                     = true
-    def lookup(id: NodeIdentifier, peer: PeerNode): Option[Seq[PeerNode]] = None
+    def ping(node: Node): Boolean                                 = true
+    def lookup(id: NodeIdentifier, peer: Node): Option[Seq[Node]] = None
     def receive(
-        pingHandler: PeerNode => Id[Unit],
-        lookupHandler: (PeerNode, NodeIdentifier) => Id[Seq[PeerNode]]
+        pingHandler: Node => Id[Unit],
+        lookupHandler: (Node, NodeIdentifier) => Id[Seq[Node]]
     ): Id[Unit]              = ()
     def shutdown(): Id[Unit] = ()
   }
 
   "A PeerNode of width n bytes" should "have distance to itself equal to 8n" in {
     for (i <- 1 to 64) {
-      val home = PeerNode(NodeIdentifier(b.rand(i)), endpoint)
-      val nt   = PeerTable(home.id)
+      val home = Node(ByteString.copyFrom(b.rand(i).toArray))
+      val nt   = PeerTable(NodeIdentifier(home.id))
       nt.longestCommonBitPrefix(home) should be(8 * nt.width)
     }
   }
@@ -49,8 +47,8 @@ class DistanceSpec extends FlatSpec with Matchers {
         i <- 0 until width
         j <- 7 to 0 by -1
       } yield {
-        val k1 = Array.fill(id.key.size)(b(0))
-        Array.copy(k1, 0, id.key.toArray, 0, id.key.size)
+        val k1 = Array.fill(id.key.length)(b(0))
+        Array.copy(id.key.toArray, 0, k1, 0, id.key.length)
         k1(i) = b(k1(i) ^ b(1 << j))
         NodeIdentifier(k1)
       }
@@ -76,7 +74,7 @@ class DistanceSpec extends FlatSpec with Matchers {
 
     val kr = NodeIdentifier(b.rand(width))
     s"A node with random key (${kr.toString})" should "compute distance correctly" in {
-      testKey(kr.key.toArray) should be(true)
+      testKey(kr.key) should be(true)
     }
 
     s"An empty table of width $width" should "have no peers" in {
@@ -99,7 +97,7 @@ class DistanceSpec extends FlatSpec with Matchers {
       val toAdd = oneOffs(kr).head
       val dist  = table.longestCommonBitPrefix(toAdd)
       for (_ <- 1 to 10) {
-        table.updateLastSeen(PeerNode(toAdd, endpoint))
+        table.updateLastSeen(Node(toAdd.asByteString))
         table.tableRef.get(dist).size should be(1)
       }
     }
@@ -107,7 +105,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     s"A table of width $width with peers at all distances" should "have no empty buckets" in {
       val table = PeerTable(kr)
       for (k <- oneOffs(kr)) {
-        table.updateLastSeen(PeerNode(k, endpoint))
+        table.updateLastSeen(Node(k.asByteString))
       }
       assert(table.tableRef.get.forall(_.nonEmpty))
     }
@@ -115,15 +113,17 @@ class DistanceSpec extends FlatSpec with Matchers {
     it should s"return min(k, ${8 * width}) peers on lookup" in {
       val table = PeerTable(kr)
       for (k <- oneOffs(kr)) {
-        table.updateLastSeen(PeerNode(k, endpoint))
+        table.updateLastSeen(Node(k.asByteString))
       }
-      table.lookup(NodeIdentifier(b.rand(width))).size should be(scala.math.min(table.k, 8 * width))
+      table.lookup(NodeIdentifier(b.rand(width))).size should be(
+        scala.math.min(table.k, 8 * width)
+      )
     }
 
     it should s"return ${8 * width} peers when sequenced" in {
       val table = PeerTable(kr)
       for (k <- oneOffs(kr)) {
-        table.updateLastSeen(PeerNode(k, endpoint))
+        table.updateLastSeen(Node(k.asByteString))
       }
       table.peersAscendingDistance.size should be(8 * width)
     }
@@ -131,10 +131,10 @@ class DistanceSpec extends FlatSpec with Matchers {
     it should "find each added peer" in {
       val table = PeerTable(kr)
       for (k <- oneOffs(kr)) {
-        table.updateLastSeen(PeerNode(k, endpoint))
+        table.updateLastSeen(Node(k.asByteString))
       }
       for (k <- oneOffs(kr)) {
-        table.find(k) should be(Some(PeerNode(k, endpoint)))
+        table.find(k) should be(Some(Node(k.asByteString)))
       }
     }
   }

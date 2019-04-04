@@ -14,10 +14,11 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.deploy2deploy
 import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.RPConfAsk
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
-import io.casperlabs.comm.{transport, PeerNode}
+import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
 import io.casperlabs.crypto.hash.Blake2b256
@@ -50,7 +51,7 @@ class BlockApproverProtocol(
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
   def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk: ExecutionEngineService](
-      peer: PeerNode,
+      peer: Node,
       u: UnapprovedBlock
   ): F[Unit] =
     if (u.candidate.isEmpty) {

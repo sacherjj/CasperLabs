@@ -14,12 +14,12 @@ import monix.eval.{TaskLift, TaskLike}
 import monix.execution.Scheduler
 
 object NodeDiscoveryImpl {
-  def create[F[_]: Concurrent: Log: Time: Metrics: TaskLike: TaskLift: PeerNodeAsk: Timer: Par](
+  def create[F[_]: Concurrent: Log: Time: Metrics: TaskLike: TaskLift: NodeAsk: Timer: Par](
       id: NodeIdentifier,
       port: Int,
       timeout: FiniteDuration
   )(
-      init: Option[PeerNode]
+      init: Option[Node]
   )(implicit scheduler: Scheduler): Resource[F, NodeDiscovery[F]] = {
     val kademliaRpcResource = Resource.make(CachedConnections[F, KademliaConnTag].map {
       implicit cache =>
@@ -52,17 +52,17 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
   // TODO inline usage
-  private[discovery] def addNode(peer: PeerNode): F[Unit] =
+  private[discovery] def addNode(peer: Node): F[Unit] =
     for {
       _     <- table.updateLastSeen(peer)
       peers <- table.peersAscendingDistance
       _     <- Metrics[F].setGauge("peers", peers.length.toLong)
     } yield ()
 
-  private def pingHandler(peer: PeerNode): F[Unit] =
+  private def pingHandler(peer: Node): F[Unit] =
     addNode(peer) *> Metrics[F].incrementCounter("handle.ping")
 
-  private def lookupHandler(peer: PeerNode, id: NodeIdentifier): F[Seq[PeerNode]] =
+  private def lookupHandler(peer: Node, id: NodeIdentifier): F[Seq[Node]] =
     for {
       peers <- table.lookup(id)
       _     <- Metrics[F].incrementCounter("handle.lookup")
@@ -92,7 +92,7 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
       val byteIndex    = distance / 8
       val differentBit = 1 << (distance % 8)
       target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
-      NodeIdentifier(target)
+      NodeIdentifier(target.toList)
     }
 
     for {
@@ -101,10 +101,10 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
     } yield ()
   }
 
-  def lookup(toLookup: NodeIdentifier): F[Option[PeerNode]] = {
-    def loop(successQueriesN: Int, alreadyQueried: Set[NodeIdentifier], shortlist: Seq[PeerNode])(
-        maybeClosestPeerNode: Option[PeerNode]
-    ): F[Option[PeerNode]] =
+  def lookup(toLookup: NodeIdentifier): F[Option[Node]] = {
+    def loop(successQueriesN: Int, alreadyQueried: Set[NodeIdentifier], shortlist: Seq[Node])(
+        maybeClosestPeerNode: Option[Node]
+    ): F[Option[Node]] =
       if (shortlist.isEmpty || successQueriesN >= k) {
         maybeClosestPeerNode.pure[F]
       } else {
@@ -117,22 +117,22 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
                         } yield (callee, maybeNodes)
                       }
           newAlreadyQueried = alreadyQueried ++ responses.collect {
-            case (callee, Some(_)) => callee.id
+            case (callee, Some(_)) => NodeIdentifier(callee.id)
           }.toSet
           returnedPeers = responses.flatMap(_._2.toList.flatten).distinct
           recursion = loop(
             successQueriesN + responses.count(_._2.nonEmpty),
             newAlreadyQueried,
-            rest ::: returnedPeers.filterNot(p => newAlreadyQueried(p.id))
+            rest ::: returnedPeers.filterNot(p => newAlreadyQueried(NodeIdentifier(p.id)))
           ) _
           maybeNewClosestPeerNode = if (returnedPeers.nonEmpty)
-            returnedPeers.minBy(p => PeerTable.xorDistance(toLookup, p.id)).some
+            returnedPeers.minBy(p => PeerTable.xorDistance(toLookup.asByteString, p.id)).some
           else None
           res <- (maybeNewClosestPeerNode, maybeClosestPeerNode) match {
                   case (x @ Some(_), None) => recursion(x)
                   case (x @ Some(newClosestPeerNode), Some(closestPeerNode))
-                      if PeerTable.xorDistance(toLookup, newClosestPeerNode.id) <
-                        PeerTable.xorDistance(toLookup, closestPeerNode.id) =>
+                      if PeerTable.xorDistance(toLookup.asByteString, newClosestPeerNode.id) <
+                        PeerTable.xorDistance(toLookup.asByteString, closestPeerNode.id) =>
                     recursion(x)
                   case _ => maybeClosestPeerNode.pure[F]
                 }
@@ -142,13 +142,13 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Sync: Log: Time: Metrics: Kadem
     for {
       shortlist <- table.lookup(toLookup).map(_.take(alpha))
       closestNode <- shortlist.headOption
-                      .filter(_.key == toLookup.key)
+                      .filter(p => NodeIdentifier(p.id) == toLookup)
                       .fold(loop(0, Set(id), shortlist)(None))(_.some.pure[F])
 
     } yield closestNode
   }
 
-  override def alivePeersAscendingDistance: F[List[PeerNode]] =
+  override def alivePeersAscendingDistance: F[List[Node]] =
     table.peersAscendingDistance.flatMap { peers =>
       peers.parFlatTraverse { peer =>
         KademliaService[F].ping(peer).map(success => if (success) List(peer) else Nil)

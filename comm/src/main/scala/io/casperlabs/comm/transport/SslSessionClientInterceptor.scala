@@ -1,8 +1,9 @@
 package io.casperlabs.comm.transport
 
-import io.casperlabs.comm.rp.ProtocolHelper
-import io.casperlabs.comm.protocol.routing._
+import cats.syntax.show._
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.protocol.routing.TLResponse.Payload
+import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.crypto.util.CertificateHelper
 import io.casperlabs.shared.{Log, LogSource}
 import io.grpc._
@@ -46,9 +47,8 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
       message match {
         case TLResponse(Payload.Protocol(Protocol(Some(Header(Some(sender))), msg))) =>
           if (log.isTraceEnabled) {
-            val peerNode = ProtocolHelper.toPeerNode(sender)
-            val msgType  = msg.getClass.toString
-            log.trace(s"Response [$msgType] from peer ${peerNode.toAddress}")
+            val msgType = msg.getClass.toString
+            log.trace(s"Response [$msgType] from peer ${sender.show}")
           }
           val sslSession: Option[SSLSession] = Option(
             self.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION)

@@ -16,7 +16,7 @@ import io.casperlabs.comm.rp.Connect.RPConfAsk
 import io.casperlabs.comm.rp._
 import io.casperlabs.comm.rp.ProtocolHelper.{packet, toPacket}
 import io.casperlabs.comm.transport.{Blob, PacketType, TransportLayer}
-import io.casperlabs.comm.{transport, PeerNode}
+import io.casperlabs.comm.transport
 import io.casperlabs.comm.rp.ProtocolHelper
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.effects._

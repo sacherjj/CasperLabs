@@ -3,16 +3,16 @@ package io.casperlabs.node.diagnostics.client
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
 
-import io.casperlabs.comm._
-import io.casperlabs.node.api.diagnostics._
-
+import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.node.api.diagnostics._
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
 trait DiagnosticsService[F[_]] {
-  def listPeers: F[Seq[PeerNode]]
-  def listDiscoveredPeers: F[Seq[PeerNode]]
+  def listPeers: F[Seq[Node]]
+  def listDiscoveredPeers: F[Seq[Node]]
   def nodeCoreMetrics: F[NodeCoreMetrics]
   def processCpu: F[ProcessCpu]
   def memoryUsage: F[MemoryUsage]
@@ -38,29 +38,33 @@ class GrpcDiagnosticsService(host: String, port: Int, maxMessageSize: Int)
 
   private val stub = DiagnosticsGrpcMonix.stub(channel)
 
-  def listPeers: Task[Seq[PeerNode]] =
+  def listPeers: Task[Seq[Node]] =
     stub
       .listPeers(Empty())
       .map(
         _.peers.map(
           p =>
-            PeerNode(
-              NodeIdentifier(p.key.toByteArray.toSeq),
-              Endpoint(p.host, p.port, p.port)
+            Node(
+              ByteString.copyFrom(p.key.toByteArray),
+              p.host,
+              p.port,
+              p.port
             )
         )
       )
 
-  def listDiscoveredPeers: Task[Seq[PeerNode]] =
+  def listDiscoveredPeers: Task[Seq[Node]] =
     stub
       .listDiscoveredPeers(Empty())
       .map(
         _.peers
           .map(
             p =>
-              PeerNode(
-                NodeIdentifier(p.key.toByteArray.toSeq),
-                Endpoint(p.host, p.port, p.port)
+              Node(
+                ByteString.copyFrom(p.key.toByteArray),
+                p.host,
+                p.port,
+                p.port
               )
           )
       )

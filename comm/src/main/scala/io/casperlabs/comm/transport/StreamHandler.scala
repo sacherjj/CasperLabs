@@ -6,7 +6,7 @@ import java.nio.file.{Files, Path}
 import cats.data._
 import cats.implicits._
 import io.casperlabs.shared.PathOps._
-import io.casperlabs.comm.PeerNode
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.ProtocolHelper
 import io.casperlabs.comm.transport.PacketOps._
@@ -21,7 +21,7 @@ object StreamHandler {
   type CircuitBreaker = Long => Boolean
 
   private final case class Streamed(
-      sender: Option[PeerNode] = None,
+      sender: Option[Node] = None,
       typeId: Option[String] = None,
       contentLength: Option[Int] = None,
       compressed: Boolean = false,
@@ -72,7 +72,7 @@ object StreamHandler {
       case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
         Left(
           stmd.copy(
-            sender = sender.map(ProtocolHelper.toPeerNode(_)),
+            sender = sender,
             typeId = Some(typeId),
             compressed = compressed,
             contentLength = Some(cl)

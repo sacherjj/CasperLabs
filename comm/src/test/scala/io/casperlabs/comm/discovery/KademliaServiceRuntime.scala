@@ -34,7 +34,7 @@ abstract class KademliaServiceRuntime[F[_]: Monad: Timer, E <: Environment] exte
     protected def lookupHandler: LookupHandler[F]
     def run(): Result
     trait Result {
-      def localNode: PeerNode
+      def localNode: Node
       def apply(): A
     }
   }
@@ -45,7 +45,7 @@ abstract class KademliaServiceRuntime[F[_]: Monad: Timer, E <: Environment] exte
       // Give it ample time on Drone.
       timeout: FiniteDuration = 5.seconds
   ) extends Runtime[A] {
-    def execute(kademlia: KademliaService[F], local: PeerNode, remote: PeerNode): F[A]
+    def execute(kademlia: KademliaService[F], local: Node, remote: Node): F[A]
 
     def run(): TwoNodesResult =
       extract(
@@ -68,15 +68,15 @@ abstract class KademliaServiceRuntime[F[_]: Monad: Timer, E <: Environment] exte
             _ <- kademliaLocal.shutdown()
           } yield
             new TwoNodesResult {
-              def localNode: PeerNode  = local
-              def remoteNode: PeerNode = remote
-              def apply(): A           = r
+              def localNode: Node  = local
+              def remoteNode: Node = remote
+              def apply(): A       = r
             }
         }
       )
 
     trait TwoNodesResult extends Result {
-      def remoteNode: PeerNode
+      def remoteNode: Node
     }
   }
 
@@ -84,7 +84,7 @@ abstract class KademliaServiceRuntime[F[_]: Monad: Timer, E <: Environment] exte
       val pingHandler: PingHandler[F] = Handler.pingHandler,
       val lookupHandler: LookupHandler[F] = Handler.lookupHandlerNil
   ) extends Runtime[A] {
-    def execute(kademliaService: KademliaService[F], local: PeerNode, remote: PeerNode): F[A]
+    def execute(kademliaService: KademliaService[F], local: Node, remote: Node): F[A]
 
     def run(): TwoNodesResult =
       extract(
@@ -101,22 +101,22 @@ abstract class KademliaServiceRuntime[F[_]: Monad: Timer, E <: Environment] exte
             _ <- kademliaLocal.shutdown()
           } yield
             new TwoNodesResult {
-              def localNode: PeerNode  = local
-              def remoteNode: PeerNode = remote
-              def apply(): A           = r
+              def localNode: Node  = local
+              def remoteNode: Node = remote
+              def apply(): A       = r
             }
         }
       )
 
     trait TwoNodesResult extends Result {
-      def remoteNode: PeerNode
+      def remoteNode: Node
     }
   }
 
 }
 
 trait Environment {
-  def peer: PeerNode
+  def peer: Node
   def host: String
   def port: Int
 }
@@ -127,15 +127,15 @@ final class DispatcherCallback[F[_]: Functor](state: MVar[F, Unit]) {
 }
 
 abstract class Handler[F[_]: Monad: Timer, R] {
-  def received: Seq[(PeerNode, R)] = receivedMessages
-  protected val receivedMessages: mutable.MutableList[(PeerNode, R)] =
-    mutable.MutableList.empty[(PeerNode, R)]
+  def received: Seq[(Node, R)] = receivedMessages
+  protected val receivedMessages: mutable.MutableList[(Node, R)] =
+    mutable.MutableList.empty[(Node, R)]
 }
 
 final class PingHandler[F[_]: Monad: Timer](
     delay: Option[FiniteDuration] = None
-) extends Handler[F, PeerNode] {
-  def handle(peer: PeerNode): PeerNode => F[Unit] =
+) extends Handler[F, Node] {
+  def handle(peer: Node): Node => F[Unit] =
     p =>
       for {
         _ <- receivedMessages.synchronized(receivedMessages += ((peer, p))).pure[F]
@@ -144,10 +144,10 @@ final class PingHandler[F[_]: Monad: Timer](
 }
 
 final class LookupHandler[F[_]: Monad: Timer](
-    response: Seq[PeerNode],
+    response: Seq[Node],
     delay: Option[FiniteDuration] = None
-) extends Handler[F, (PeerNode, NodeIdentifier)] {
-  def handle(peer: PeerNode): (PeerNode, NodeIdentifier) => F[Seq[PeerNode]] =
+) extends Handler[F, (Node, NodeIdentifier)] {
+  def handle(peer: Node): (Node, NodeIdentifier) => F[Seq[Node]] =
     (p, a) =>
       for {
         _ <- receivedMessages.synchronized(receivedMessages += ((peer, (p, a)))).pure[F]
@@ -166,6 +166,6 @@ object Handler {
   def lookupHandlerWithDelay[F[_]: Monad: Timer](delay: FiniteDuration): LookupHandler[F] =
     new LookupHandler[F](Nil, Some(delay))
 
-  def lookupHandler[F[_]: Monad: Timer](result: Seq[PeerNode]): LookupHandler[F] =
+  def lookupHandler[F[_]: Monad: Timer](result: Seq[Node]): LookupHandler[F] =
     new LookupHandler[F](result)
 }

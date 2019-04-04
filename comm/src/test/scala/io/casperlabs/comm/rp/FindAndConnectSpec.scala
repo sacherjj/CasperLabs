@@ -3,10 +3,12 @@ package io.casperlabs.comm.rp
 import cats.Id
 import cats.data._
 import cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.comm.CommError._
 import io.casperlabs.comm._
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.rp.Connect.Connections._
 import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.metrics.Metrics
@@ -22,7 +24,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
 
   type Effect[A] = EitherT[Id, CommError, A]
 
-  val src: PeerNode              = peer("src")
+  val src: Node                  = peer("src")
   val deftimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
   implicit val log               = new Log.NOPLog[Id]
   implicit val time              = new LogicalTime[Effect]
@@ -30,16 +32,16 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
   implicit val nodeDiscovery     = new NodeDiscoveryStub[Effect]()
   implicit val rpConf            = conf(defaultTimeout = deftimeout)
 
-  var willConnectSuccessfully       = List.empty[PeerNode]
-  var connectCalled: List[PeerNode] = List.empty[PeerNode]
+  var willConnectSuccessfully   = List.empty[Node]
+  var connectCalled: List[Node] = List.empty[Node]
 
   override def beforeEach(): Unit = {
-    willConnectSuccessfully = List.empty[PeerNode]
+    willConnectSuccessfully = List.empty[Node]
     nodeDiscovery.nodes = List(peer("A"), peer("B"), peer("C"))
-    connectCalled = List.empty[PeerNode]
+    connectCalled = List.empty[Node]
   }
 
-  val connect: (PeerNode, FiniteDuration) => Effect[Unit] = (peer, to) => {
+  val connect: (Node, FiniteDuration) => Effect[Unit] = (peer, to) => {
     connectCalled = connectCalled :+ peer
     if (willConnectSuccessfully.contains(peer)) ().pure[Effect]
     else EitherT[Id, CommError, Unit](Left(timeout))
@@ -104,10 +106,10 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
 
   }
 
-  private def peer(name: String): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), Endpoint("host", 80, 80))
+  private def peer(name: String): Node =
+    Node(ByteString.copyFrom(name.getBytes), "host", 80, 80)
 
-  private def mkConnections(peers: PeerNode*): ConnectionsCell[Id] =
+  private def mkConnections(peers: Node*): ConnectionsCell[Id] =
     Cell.id[Connections](peers.reverse.foldLeft(Connections.empty) {
       case (acc, el) => acc.addConn[Id](el)
     })
@@ -119,7 +121,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
   ): RPConfAsk[Id] =
     new ConstApplicativeAsk(
       RPConf(
-        clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
+        clearConnections = ClearConnectionsConf(maxNumOfConnections, numOfConnectionsPinged),
         defaultTimeout = defaultTimeout,
         local = peer("src"),
         bootstrap = None

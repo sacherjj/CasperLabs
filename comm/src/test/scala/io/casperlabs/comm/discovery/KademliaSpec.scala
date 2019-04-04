@@ -1,8 +1,8 @@
 package io.casperlabs.comm.discovery
 
 import cats.Id
+import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib.effect.implicits._
-import io.casperlabs.comm._
 import org.scalatest._
 
 import scala.collection.mutable
@@ -18,12 +18,12 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   val DISTANCE_4 = 4
   val DISTANCE_6 = 6
 
-  var table       = PeerTable[Id](local.id, 3)
-  var pingedPeers = mutable.MutableList.empty[PeerNode]
+  var table       = PeerTable[Id](NodeIdentifier(local.id), 3)
+  var pingedPeers = mutable.MutableList.empty[Node]
 
   override def beforeEach(): Unit = {
-    table = PeerTable(local.id, 3)
-    pingedPeers = mutable.MutableList.empty[PeerNode]
+    table = PeerTable(NodeIdentifier(local.id), 3)
+    pingedPeers = mutable.MutableList.empty[Node]
     // peer1-4 distance is 4
     table.longestCommonBitPrefix(peer1) shouldBe DISTANCE_4
     table.longestCommonBitPrefix(peer2) shouldBe DISTANCE_4
@@ -49,7 +49,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         // when
         table.updateLastSeen(peer0)
         // then
-        pingedPeers should contain theSameElementsAs Seq.empty[PeerNode]
+        pingedPeers should contain theSameElementsAs Seq.empty[Node]
       }
     }
 
@@ -59,7 +59,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         implicit val ping: KademliaService[Id] = pingOk
         table.updateLastSeen(peer1)
         // when
-        val newPeer1 = peer1.copy(endpoint = Endpoint("otherIP", 0, 0))
+        val newPeer1 = peer1.copy(host = "otherIP")
         table.updateLastSeen(newPeer1)
         // then
         bucketEntriesAt(DISTANCE_4) should contain theSameElementsAs Seq(newPeer1)
@@ -73,7 +73,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         table.updateLastSeen(peer3)
         bucketEntriesAt(DISTANCE_4) should contain theSameElementsAs Seq(peer2, peer1, peer3)
         // when
-        val newPeer1 = peer1.copy(endpoint = Endpoint("otherIP", 0, 0))
+        val newPeer1 = peer1.copy(host = "otherIP")
         table.updateLastSeen(newPeer1)
         // then
         bucketEntriesAt(DISTANCE_4) should contain theSameElementsAs Seq(peer2, peer3, newPeer1)
@@ -102,7 +102,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         // when
         table.updateLastSeen(peer1)
         // then
-        pingedPeers should contain theSameElementsAs Seq.empty[PeerNode]
+        pingedPeers should contain theSameElementsAs Seq.empty[Node]
       }
     }
 
@@ -148,25 +148,25 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     table.updateLastSeen(peer3)
   }
 
-  private def bucketEntriesAt(distance: Int): Seq[PeerNode] =
+  private def bucketEntriesAt(distance: Int): Seq[Node] =
     table.tableRef.get(distance).map(_.node)
 
   private val pingOk: KademliaService[Id]   = new KademliaServiceMock(returns = true)
   private val pingFail: KademliaService[Id] = new KademliaServiceMock(returns = false)
 
   private class KademliaServiceMock(returns: Boolean) extends KademliaService[Id] {
-    def ping(peer: PeerNode): Boolean = {
+    def ping(peer: Node): Boolean = {
       pingedPeers += peer
       returns
     }
-    def lookup(id: NodeIdentifier, peer: PeerNode): Option[Seq[PeerNode]] = None
+    def lookup(id: NodeIdentifier, peer: Node): Option[Seq[Node]] = None
     def receive(
-        pingHandler: PeerNode => Id[Unit],
-        lookupHandler: (PeerNode, NodeIdentifier) => Id[Seq[PeerNode]]
+        pingHandler: Node => Id[Unit],
+        lookupHandler: (Node, NodeIdentifier) => Id[Seq[Node]]
     ): Id[Unit]              = ()
     def shutdown(): Id[Unit] = ()
   }
 
-  private def createPeer(id: String): PeerNode =
-    PeerNode(NodeIdentifier(Seq(id.b)), Endpoint(id, 0, 0))
+  private def createPeer(id: String): Node =
+    Node(ByteString.copyFrom(Array(id.b)), id)
 }

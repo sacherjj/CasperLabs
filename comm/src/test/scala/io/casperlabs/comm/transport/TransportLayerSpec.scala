@@ -1,13 +1,14 @@
 package io.casperlabs.comm.transport
 
 import scala.concurrent.duration._
-
 import cats._
 import cats.implicits._
-import io.casperlabs.comm._, rp.ProtocolHelper
+import io.casperlabs.comm._
+import rp.ProtocolHelper
 import io.casperlabs.comm.protocol.routing.{Packet, Protocol}
 import io.casperlabs.comm.CommError.CommErr
 import com.google.protobuf.ByteString
+import io.casperlabs.comm.discovery.Node
 import org.scalatest._
 
 abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
@@ -29,8 +30,8 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.heartbeatResponseDispatcher[F]) {
             def execute(
                 transportLayer: TransportLayer[F],
-                local: PeerNode,
-                remote: PeerNode
+                local: Node,
+                remote: Node
             ): F[CommErr[Protocol]] =
               roundTripWithHeartbeat(transportLayer, local, remote)
 
@@ -45,8 +46,8 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
             }
 
             protocolDispatcher.received should have length 1
-            val (_, protocol2)           = protocolDispatcher.received.head
-            val sender: Option[PeerNode] = ProtocolHelper.sender(protocol2)
+            val (_, protocol2)       = protocolDispatcher.received.head
+            val sender: Option[Node] = ProtocolHelper.sender(protocol2)
             sender shouldBe 'defined
             sender.get shouldEqual result.localNode
             protocol2.message shouldBe 'heartbeat
@@ -60,8 +61,8 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           ) {
             def execute(
                 transportLayer: TransportLayer[F],
-                local: PeerNode,
-                remote: PeerNode
+                local: Node,
+                remote: Node
             ): F[CommErr[Protocol]] =
               roundTripWithHeartbeat(transportLayer, local, remote, 200.millis)
 
@@ -76,8 +77,8 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           new TwoNodesRuntime[CommErr[Protocol]]() {
             def execute(
                 transportLayer: TransportLayer[F],
-                local: PeerNode,
-                remote: PeerNode
+                local: Node,
+                remote: Node
             ): F[CommErr[Protocol]] =
               roundTripWithHeartbeat(transportLayer, local, remote)
 
@@ -96,8 +97,8 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           ) {
             def execute(
                 transportLayer: TransportLayer[F],
-                local: PeerNode,
-                remote: PeerNode
+                local: Node,
+                remote: Node
             ): F[CommErr[Protocol]] =
               roundTripWithHeartbeat(transportLayer, local, remote)
 
@@ -112,8 +113,8 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.internalCommunicationErrorDispatcher[F]) {
             def execute(
                 transportLayer: TransportLayer[F],
-                local: PeerNode,
-                remote: PeerNode
+                local: Node,
+                remote: Node
             ): F[CommErr[Protocol]] =
               roundTripWithHeartbeat(transportLayer, local, remote)
 
@@ -131,15 +132,15 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new TwoNodesRuntime[CommErr[Unit]]() {
           def execute(
               transportLayer: TransportLayer[F],
-              local: PeerNode,
-              remote: PeerNode
+              local: Node,
+              remote: Node
           ): F[CommErr[Unit]] = sendHeartbeat(transportLayer, local, remote)
 
           val result: TwoNodesResult = run()
 
           protocolDispatcher.received should have length 1
-          val (_, protocol2)           = protocolDispatcher.received.head
-          val sender: Option[PeerNode] = ProtocolHelper.sender(protocol2)
+          val (_, protocol2)       = protocolDispatcher.received.head
+          val sender: Option[Node] = ProtocolHelper.sender(protocol2)
           sender shouldBe 'defined
           sender.get shouldEqual result.localNode
           protocol2.message shouldBe 'heartbeat
@@ -151,17 +152,17 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new ThreeNodesRuntime[Seq[CommErr[Unit]]]() {
           def execute(
               transportLayer: TransportLayer[F],
-              local: PeerNode,
-              remote1: PeerNode,
-              remote2: PeerNode
+              local: Node,
+              remote1: Node,
+              remote2: Node
           ): F[Seq[CommErr[Unit]]] = broadcastHeartbeat(transportLayer, local, remote1, remote2)
 
           val result: ThreeNodesResult = run()
 
           protocolDispatcher.received should have length 2
-          val Seq((r1, p1), (r2, p2))   = protocolDispatcher.received
-          val sender1: Option[PeerNode] = ProtocolHelper.sender(p1)
-          val sender2: Option[PeerNode] = ProtocolHelper.sender(p2)
+          val Seq((r1, p1), (r2, p2)) = protocolDispatcher.received
+          val sender1: Option[Node]   = ProtocolHelper.sender(p1)
+          val sender2: Option[Node]   = ProtocolHelper.sender(p2)
           sender1 shouldBe 'defined
           sender2 shouldBe 'defined
           sender1.get shouldEqual result.localNode
@@ -179,8 +180,8 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           new TwoNodesRuntime[CommErr[Protocol]]() {
             def execute(
                 transportLayer: TransportLayer[F],
-                local: PeerNode,
-                remote: PeerNode
+                local: Node,
+                remote: Node
             ): F[CommErr[Protocol]] =
               for {
                 _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
@@ -203,8 +204,8 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           new TwoNodesRuntime[CommErr[Unit]]() {
             def execute(
                 transportLayer: TransportLayer[F],
-                local: PeerNode,
-                remote: PeerNode
+                local: Node,
+                remote: Node
             ): F[CommErr[Unit]] =
               for {
                 _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
@@ -221,9 +222,9 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           new ThreeNodesRuntime[Seq[CommErr[Unit]]]() {
             def execute(
                 transportLayer: TransportLayer[F],
-                local: PeerNode,
-                remote1: PeerNode,
-                remote2: PeerNode
+                local: Node,
+                remote1: Node,
+                remote2: Node
             ): F[Seq[CommErr[Unit]]] =
               for {
                 _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
@@ -249,8 +250,8 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new TwoNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
-              local: PeerNode,
-              remote: PeerNode
+              local: Node,
+              remote: Node
           ): F[Unit] =
             transportLayer.stream(
               List(remote),
@@ -270,9 +271,9 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new ThreeNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
-              local: PeerNode,
-              remote1: PeerNode,
-              remote2: PeerNode
+              local: Node,
+              remote1: Node,
+              remote2: Node
           ): F[Unit] =
             transportLayer.stream(
               List(remote1, remote2),

@@ -77,7 +77,7 @@ object scallopImpl {
 
     q"""
           val tomlType: String = classOf[$t].getSimpleName match {
-            case "Path" | "String" | "PeerNode" | "StoreType" | "FiniteDuration" => "String"
+            case "Path" | "String" | "Node" | "StoreType" | "FiniteDuration" => "String"
             case "int" | "long"                                                  => "Integer"
             case "boolean"                                                       => "Boolean"
           }"""
@@ -142,6 +142,6 @@ object scallopImpl {
   /*Value is lambda because of macroses limitation generating all code wrapped into {...}*/
   private def putIntoMap(c: blackbox.Context)(term: c.universe.TermName, termName: String) = {
     import c.universe._
-    q"fields += ((this, CamelCase($termName)), () => $term.map(_.toString));"
+    q"fields += ((this, CamelCase($termName)), () => $term.map(_.show));"
   }
 }

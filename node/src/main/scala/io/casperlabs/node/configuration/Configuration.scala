@@ -9,7 +9,7 @@ import cats.syntax.validated._
 import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.node.configuration.Utils._
-import io.casperlabs.comm.PeerNode
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.{relativeToDataDir, SubConfig}
 import io.casperlabs.shared.StoreType
@@ -58,7 +58,7 @@ object Configuration extends ParserImplicits {
       dynamicHostAddress: Boolean,
       noUpnp: Boolean,
       defaultTimeout: Int,
-      bootstrap: PeerNode,
+      bootstrap: Node,
       dataDir: Path,
       storeType: StoreType,
       maxNumOfConnections: Int,

@@ -1,9 +1,8 @@
 package io.casperlabs.comm.transport
 
+import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.ProtocolHelper
 import io.casperlabs.shared.Compression._
-import io.casperlabs.comm.protocol.routing._
-import monix.eval._
 
 object Chunker {
 
@@ -18,7 +17,7 @@ object Chunker {
         ChunkHeader()
           .withCompressed(compress)
           .withContentLength(raw.length)
-          .withSender(ProtocolHelper.node(blob.sender))
+          .withSender(blob.sender)
           .withTypeId(blob.packet.typeId)
       )
     val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff

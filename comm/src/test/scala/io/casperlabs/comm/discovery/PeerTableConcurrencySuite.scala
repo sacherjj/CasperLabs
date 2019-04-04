@@ -1,7 +1,7 @@
 package io.casperlabs.comm.discovery
 import java.util.concurrent.atomic.AtomicLong
 
-import io.casperlabs.comm.{Endpoint, NodeIdentifier, PeerNode}
+import com.google.protobuf.ByteString
 import monix.eval.Task
 import monix.execution.CancelablePromise
 import monix.execution.Scheduler.Implicits.global
@@ -14,11 +14,11 @@ import scala.util.Random
 
 class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
   private trait KademliaMock extends KademliaService[Task] {
-    override def lookup(id: NodeIdentifier, peer: PeerNode): Task[Option[Seq[PeerNode]]] =
+    override def lookup(id: NodeIdentifier, peer: Node): Task[Option[Seq[Node]]] =
       Task.now(None)
     override def receive(
-        pingHandler: PeerNode => Task[Unit],
-        lookupHandler: (PeerNode, NodeIdentifier) => Task[Seq[PeerNode]]
+        pingHandler: Node => Task[Unit],
+        lookupHandler: (Node, NodeIdentifier) => Task[Seq[Node]]
     ): Task[Unit]                       = Task.unit
     override def shutdown(): Task[Unit] = Task.unit
   }
@@ -36,7 +36,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
   private val allPotentialPeers =
     Seq
       .iterate(min, maxPeersN)(b => (b + 1).toByte)
-      .map(b => PeerNode(NodeIdentifier(Seq(b)), Endpoint("", 0, 0)))
+      .map(b => Node(ByteString.copyFrom(Array(b))))
   private implicit val propCheckConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(
     minSuccessful = 500
   )
@@ -52,7 +52,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
         .choose(1, bucketSize)
     ) { uniquePeersN: Int =>
       var pingCounter = 0
-      implicit val K: KademliaMock = (_: PeerNode) => {
+      implicit val K: KademliaMock = (_: Node) => {
         Task(pingCounter += 1).map(_ => true)
       }
 
@@ -76,7 +76,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
            """.stripMargin) {
     forAll { _: Int =>
       val never                    = CancelablePromise[Boolean]()
-      implicit val K: KademliaMock = (_: PeerNode) => Task.fromCancelablePromise(never)
+      implicit val K: KademliaMock = (_: Node) => Task.fromCancelablePromise(never)
 
       val (initial, rest) = Random.shuffle(allPotentialPeers).splitAt(bucketSize)
       val peerTable       = PeerTable[Task](id, bucketSize).runSyncUnsafe()
@@ -100,7 +100,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
            """.stripMargin) {
     forAll { _: Int =>
       val pingsCounter = new AtomicLong(0)
-      implicit val K: KademliaMock = (_: PeerNode) => {
+      implicit val K: KademliaMock = (_: Node) => {
         pingsCounter.incrementAndGet()
         Task.now(true)
       }

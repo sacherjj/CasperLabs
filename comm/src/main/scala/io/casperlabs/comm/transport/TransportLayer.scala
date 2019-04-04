@@ -1,25 +1,27 @@
 package io.casperlabs.comm.transport
 
 import scala.concurrent.duration.FiniteDuration
-
-import cats._, cats.data._, cats.implicits._
-import io.casperlabs.comm.{CommError, PeerNode}, CommError.CommErr
-import io.casperlabs.comm.rp.ProtocolHelper
+import cats._
+import cats.data._
+import cats.implicits._
+import io.casperlabs.comm.CommError
+import io.casperlabs.comm.CommError.CommErr
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.shared._
 import io.casperlabs.comm.protocol.routing._
 
-final case class Blob(sender: PeerNode, packet: Packet)
+final case class Blob(sender: Node, packet: Packet)
 
 trait TransportLayer[F[_]] {
-  def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]]
-  def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]]
-  def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]]
+  def roundTrip(peer: Node, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]]
+  def send(peer: Node, msg: Protocol): F[CommErr[Unit]]
+  def broadcast(peers: Seq[Node], msg: Protocol): F[Seq[CommErr[Unit]]]
   def receive(
       dispatch: Protocol => F[CommunicationResponse],
       handleStreamed: Blob => F[Unit]
   ): F[Unit]
-  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit]
-  def disconnect(peer: PeerNode): F[Unit]
+  def stream(peers: Seq[Node], blob: Blob): F[Unit]
+  def disconnect(peer: Node): F[Unit]
   def shutdown(msg: Protocol): F[Unit]
 }
 
@@ -40,22 +42,22 @@ sealed abstract class TransportLayerInstances {
     new TransportLayer[EitherT[F, CommError, ?]] {
 
       def roundTrip(
-          peer: PeerNode,
+          peer: Node,
           msg: Protocol,
           timeout: FiniteDuration
       ): EitherT[F, CommError, CommErr[Protocol]] =
         EitherT.liftF(evF.roundTrip(peer, msg, timeout))
 
-      def send(peer: PeerNode, msg: Protocol): EitherT[F, CommError, CommErr[Unit]] =
+      def send(peer: Node, msg: Protocol): EitherT[F, CommError, CommErr[Unit]] =
         EitherT.liftF(evF.send(peer, msg))
 
       def broadcast(
-          peers: Seq[PeerNode],
+          peers: Seq[Node],
           msg: Protocol
       ): EitherT[F, CommError, Seq[CommErr[Unit]]] =
         EitherT.liftF(evF.broadcast(peers, msg))
 
-      def stream(peers: Seq[PeerNode], blob: Blob): EitherT[F, CommError, Unit] =
+      def stream(peers: Seq[Node], blob: Blob): EitherT[F, CommError, Unit] =
         EitherT.liftF(evF.stream(peers, blob))
 
       def receive(
@@ -79,7 +81,7 @@ sealed abstract class TransportLayerInstances {
         EitherT.liftF(evF.receive(dis, hb))
       }
 
-      def disconnect(peer: PeerNode): EitherT[F, CommError, Unit] =
+      def disconnect(peer: Node): EitherT[F, CommError, Unit] =
         EitherT.liftF(evF.disconnect(peer))
 
       def shutdown(msg: Protocol): EitherT[F, CommError, Unit] = EitherT.liftF(evF.shutdown(msg))

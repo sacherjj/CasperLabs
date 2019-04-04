@@ -36,32 +36,32 @@ object EffectsTestInstances {
 
   class NodeDiscoveryStub[F[_]: Sync]() extends NodeDiscovery[F] {
 
-    var nodes: List[PeerNode] = List.empty[PeerNode]
+    var nodes: List[Node] = List.empty[Node]
     def reset(): Unit =
-      nodes = List.empty[PeerNode]
-    def alivePeersAscendingDistance: F[List[PeerNode]] = Sync[F].delay {
+      nodes = List.empty[Node]
+    def alivePeersAscendingDistance: F[List[Node]] = Sync[F].delay {
       nodes
     }
     def discover: F[Unit]                                          = ???
-    def lookup(id: NodeIdentifier): F[Option[PeerNode]]            = ???
+    def lookup(id: NodeIdentifier): F[Option[Node]]                = ???
     def handleCommunications: Protocol => F[CommunicationResponse] = ???
   }
 
   def createRPConfAsk[F[_]: Applicative](
-      local: PeerNode,
+      local: Node,
       defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS),
-      clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)
+      clearConnections: ClearConnectionsConf = ClearConnectionsConf(1, 1)
   ) =
     new ConstApplicativeAsk[F, RPConf](
       RPConf(local, Some(local), defaultTimeout, clearConnections)
     )
 
   class TransportLayerStub[F[_]: Sync] extends TransportLayer[F] {
-    case class Request(peer: PeerNode, msg: Protocol)
-    type Responses = PeerNode => Protocol => CommErr[Protocol]
-    var reqresp: Option[Responses]  = None
-    var requests: List[Request]     = List.empty[Request]
-    var disconnects: List[PeerNode] = List.empty[PeerNode]
+    case class Request(peer: Node, msg: Protocol)
+    type Responses = Node => Protocol => CommErr[Protocol]
+    var reqresp: Option[Responses] = None
+    var requests: List[Request]    = List.empty[Request]
+    var disconnects: List[Node]    = List.empty[Node]
 
     def setResponses(responses: Responses): Unit =
       reqresp = Some(responses)
@@ -69,27 +69,27 @@ object EffectsTestInstances {
     def reset(): Unit = {
       reqresp = None
       requests = List.empty[Request]
-      disconnects = List.empty[PeerNode]
+      disconnects = List.empty[Node]
     }
 
-    def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] =
+    def roundTrip(peer: Node, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] =
       Sync[F].delay {
         requests = requests :+ Request(peer, msg)
         reqresp.get.apply(peer).apply(msg)
       }
 
-    def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
+    def send(peer: Node, msg: Protocol): F[CommErr[Unit]] =
       Sync[F].delay {
         requests = requests :+ Request(peer, msg)
         Right(())
       }
 
-    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] = Sync[F].delay {
+    def broadcast(peers: Seq[Node], msg: Protocol): F[Seq[CommErr[Unit]]] = Sync[F].delay {
       requests = requests ++ peers.map(peer => Request(peer, msg))
       peers.map(_ => Right(()))
     }
 
-    def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
+    def stream(peers: Seq[Node], blob: Blob): F[Unit] =
       broadcast(peers, ProtocolHelper.protocol(blob.sender).withPacket(blob.packet)).void
 
     def receive(
@@ -97,7 +97,7 @@ object EffectsTestInstances {
         handleStreamed: Blob => F[Unit]
     ): F[Unit] = ???
 
-    def disconnect(peer: PeerNode): F[Unit] =
+    def disconnect(peer: Node): F[Unit] =
       Sync[F].delay {
         disconnects = disconnects :+ peer
       }
