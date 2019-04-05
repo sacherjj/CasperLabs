@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.implicits._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.ipc.{Deploy => EEDeploy}
+import io.casperlabs.ipc.{Deploy => EEDeploy, DeployCode}
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{Log, Time}
 
@@ -526,8 +526,8 @@ object ProtoUtil {
   def deployDataToEEDeploy(dd: DeployData): EEDeploy = EEDeploy(
     address = dd.address,
     timestamp = dd.timestamp,
-    sessionCode = dd.sessionCode,
-    paymentCode = dd.paymentCode,
+    session = Some(DeployCode().withCode(dd.sessionCode)),
+    payment = Some(DeployCode().withCode(dd.paymentCode)),
     gasLimit = dd.gasLimit,
     gasPrice = dd.gasPrice,
     nonce = dd.nonce

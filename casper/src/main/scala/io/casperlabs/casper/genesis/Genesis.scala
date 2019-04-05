@@ -10,7 +10,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
+import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.Sorting
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -61,7 +61,7 @@ object Genesis {
     for {
       processedDeploys <- MonadError[F, Throwable].rethrow(
                            ExecutionEngineService[F]
-                             .exec(startHash, blessedTerms.map(ExecEngineUtil.deploy2deploy))
+                             .exec(startHash, blessedTerms.map(deployDataToEEDeploy))
                          )
       deployEffects = ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
 
