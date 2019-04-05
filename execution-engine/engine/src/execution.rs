@@ -430,7 +430,7 @@ where
         let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
 
         let key = self.context.deserialize_key(&key_bytes)?;
-        if key.is_readable() {
+        if self.is_readable(&key) {
             let (args, module, mut refs) = {
                 match self.state.read(key).map_err(Into::into)? {
                     None => Err(Error::KeyNotFound(key)),
@@ -535,7 +535,7 @@ where
     ) -> Result<(), Trap> {
         self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)
             .and_then(|(key, value)| {
-                if key.is_writable() {
+                if self.is_writeable(&key) {
                     self.state.write(key, value);
                     Ok(())
                 } else {
@@ -565,7 +565,32 @@ where
     fn is_readable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) => &self.context.base_key == key,
-            _ => key.is_readable(),
+            Key::Hash(_) => true,
+            Key::URef(_, rights) => rights.is_readable(),
+        }
+    }
+
+    /// Tests whether addition to `key` is valid.
+    /// Addition to account key is valid iff it is being made from the contract
+    /// deployed from this account.
+    /// Addition to contract key is not valid. Contract can modify it's own internal
+    /// state using different idioms (add_uref for adding new urefs to its state).
+    /// Additions to unforgeable key is valid as long as key itself is addable
+    fn is_addable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) => &self.context.base_key == key,
+            Key::Hash(_) => false,
+            Key::URef(_, rights) => rights.is_addable(),
+        }
+    }
+
+    // Test whether writing to `kay` is valid.
+    // For Accounts and Hashes it's always invalid.
+    // For URefs it depends on the access rights that uref has.
+    fn is_writeable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) | Key::Hash(_) => false,
+            Key::URef(_, rights) => rights.is_writeable(),
         }
     }
 
@@ -580,20 +605,6 @@ where
                 required: AccessRights::Read,
             }
             .into())
-        }
-    }
-
-    /// Tests whether addition to `key` is valid.
-    /// Addition to account key is valid iff it is being made from the contract
-    /// deployed from this account.
-    /// Addition to contract key is not valid. Contract can modify it's own internal
-    /// state using different idioms (add_uref for adding new urefs to its state).
-    /// Additions to unforgeable key is valid as long as key itself is addable
-    fn is_addable(&self, key: &Key) -> bool {
-        match key {
-            Key::Account(_) => &self.context.base_key == key,
-            Key::Hash(_) => false,
-            Key::URef(_, _) => key.is_addable(),
         }
     }
 

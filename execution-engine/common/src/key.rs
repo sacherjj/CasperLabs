@@ -16,6 +16,20 @@ pub enum AccessRights {
     AddWrite,
 }
 
+impl AccessRights {
+    pub fn is_readable(&self) -> bool {
+        *self >= AccessRights::Read
+    }
+
+    pub fn is_writeable(&self) -> bool {
+        *self >= AccessRights::Write
+    }
+
+    pub fn is_addable(&self) -> bool {
+        *self >= AccessRights::Add
+    }
+}
+
 use AccessRights::*;
 
 /// Partial order of the access rights.
@@ -137,32 +151,6 @@ pub enum Key {
     Account([u8; 20]),
     Hash([u8; 32]),
     URef([u8; 32], AccessRights), //TODO: more bytes?
-}
-
-impl Key {
-    pub fn is_readable(&self) -> bool {
-        match self {
-            Key::URef(.., access_right) => *access_right >= AccessRights::Read,
-            _ => true,
-        }
-    }
-
-    pub fn is_writable(&self) -> bool {
-        match self {
-            Key::URef(.., access_right) => *access_right >= AccessRights::Write,
-            _ => false,
-        }
-    }
-
-    pub fn is_addable(&self) -> bool {
-        match self {
-            Key::URef(.., access_right) => *access_right >= AccessRights::Add,
-            // From within the body of a contract/account adding
-            // to its state should be possible (only allows for adding new URefs)
-            // but it's guarded by the RuntimeContext (see Runtime::is_addable)
-            _ => false,
-        }
-    }
 }
 
 use Key::*;
@@ -338,22 +326,11 @@ impl AsRef<[u8]> for Key {
 
 #[cfg(test)]
 mod tests {
-    use crate::key::{
-        AccessRights::{self, *},
-        Key,
-    };
+    use crate::key::AccessRights::{self, *};
 
-    fn test_key_capabilities<F>(
-        right: AccessRights,
-        requires: AccessRights,
-        is_true: bool,
-        predicate: F,
-    ) where
-        F: Fn(Key) -> bool,
-    {
-        let key = Key::URef([0u8; 32], right);
+    fn test_capabilities(right: AccessRights, requires: AccessRights, is_true: bool) {
         assert_eq!(
-            predicate(key),
+            right >= requires,
             is_true,
             "{:?} isn't enough to perform {:?} operation",
             right,
@@ -362,7 +339,7 @@ mod tests {
     }
 
     fn test_readable(right: AccessRights, is_true: bool) {
-        test_key_capabilities(right, Read, is_true, |key| key.is_readable())
+        test_capabilities(right, AccessRights::Read, is_true)
     }
 
     #[test]
@@ -377,7 +354,7 @@ mod tests {
     }
 
     fn test_writable(right: AccessRights, is_true: bool) {
-        test_key_capabilities(right, Write, is_true, |key| key.is_writable())
+        test_capabilities(right, Write, is_true)
     }
 
     #[test]
@@ -392,7 +369,7 @@ mod tests {
     }
 
     fn test_addable(right: AccessRights, is_true: bool) {
-        test_key_capabilities(right, Add, is_true, |key| key.is_addable())
+        test_capabilities(right, Add, is_true)
     }
 
     #[test]
