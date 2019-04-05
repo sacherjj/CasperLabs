@@ -120,6 +120,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
     implicit val log = new Log.NOPLog[Task]()
+    implicit val met = new MetricsNOP[Task]
     val env          = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
     FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir).map(_.right.get)
   }

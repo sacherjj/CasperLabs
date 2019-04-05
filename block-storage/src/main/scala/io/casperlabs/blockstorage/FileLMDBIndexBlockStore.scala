@@ -20,6 +20,7 @@ import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.catscontrib.MonadStateOps._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -282,7 +283,7 @@ object FileLMDBIndexBlockStore {
       }
     } yield result
 
-  def create[F[_]: Concurrent: Log](
+  def create[F[_]: Concurrent: Log: Metrics](
       env: Env[ByteBuffer],
       blockStoreDataDir: Path
   ): F[StorageErr[BlockStore[F]]] =
