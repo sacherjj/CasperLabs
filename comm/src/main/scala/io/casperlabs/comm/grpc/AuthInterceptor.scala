@@ -5,7 +5,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.comm.auth.Principal
 import io.casperlabs.comm.ServiceError.Unauthenticated
 import io.casperlabs.crypto.util.CertificateHelper
-import io.casperlabs.shared.{Log, LogSource}
+import io.casperlabs.shared.Log
 import io.grpc.{
   Context,
   Contexts,
@@ -20,12 +20,9 @@ import javax.net.ssl.SSLSession
 import scala.util.Try
 
 /** Put the remote peer identity into the gRPC Context. */
-class AuthInterceptor() extends ServerInterceptor {
+class AuthInterceptor()(implicit log: Log[Id]) extends ServerInterceptor {
 
   // Based on https://github.com/saturnism/grpc-java-by-example/tree/master/metadata-context-example/src/main/java/com/example/grpc/server
-
-  implicit val logSource = LogSource(this.getClass)
-  implicit val logId     = Log.logId
 
   def NoopListener[A] = new ServerCall.Listener[A] {}
 
