@@ -171,7 +171,6 @@ class Node:
     def get_block(self, block_hash: str) -> str:
         return self.call_casperlabsnode('show-block', block_hash, stderr=False)
 
-    # deprecated, don't use, why? ask @adaszko
     def exec_run(self, cmd: Union[Tuple[str, ...], str], stderr=True) -> Tuple[int, str]:
         queue: Queue = Queue(1)
 
@@ -209,34 +208,34 @@ class Node:
         if volumes is None:
             volumes = {}
         try:
-            logging.info("COMMAND {}".format(command))
+            logging.info(f"COMMAND {command}")
             output = self.docker_client.containers.run(
-                image="casperlabs/client:{}".format(TAG),
+                image=f"casperlabs/client:{TAG}",
                 auto_remove=True,
                 name=f"client-{random_string(5)}-latest",
                 command=command,
                 network=self.network,
                 volumes=volumes
             ).decode('utf-8')
-            logging.debug("OUTPUT {}".format(output))
+            logging.debug(f"OUTPUT {output}")
             return output
         except ContainerError as err:
-            logging.warning("EXITED code={} command='{}' stderr='{}'".format(err.exit_status, err.command, err.stderr))
+            logging.warning(f"EXITED code={err.exit_status} command='{err.command}' stderr='{err.stderr}'")
             raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
 
     def deploy(self, from_address: str = "00000000000000000000",
                gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
 
         command = " ".join([
-            "--host",
+            f"--host",
             self.name,
             "deploy",
             "--from", from_address,
             "--gas-limit", str(gas_limit),
             "--gas-price", str(gas_price),
             "--nonce", str(nonce),
-            "--session=/data/{}".format(CONTRACT_NAME),
-            "--payment=/data/{}".format(CONTRACT_NAME)
+            f"--session=/data/{CONTRACT_NAME}",
+            f"--payment=/data/{CONTRACT_NAME}"
         ])
 
         volumes = {
@@ -246,13 +245,6 @@ class Node:
             }
         }
         return self.invoke_client(command, volumes)
-
-    # def deploy_string(self, rholang_code: str) -> str:
-    #     quoted_rholang = shlex.quote(rholang_code)
-    #     return self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {CL_NODE_BINARY} deploy --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
-    #         CL_NODE_BINARY=CL_NODE_BINARY,
-    #         quoted_rholang=quoted_rholang,
-    #     ))
 
     def propose(self) -> str:
         command = f"--host {self.name} propose"
@@ -265,14 +257,8 @@ class Node:
                                         f'--public-key={public_key}',
                                         f'--sig-algorithm=ed25519')
 
-    # def cat_forward_file(self, public_key: str) -> str:
-    #     return self.shell_out('cat', '/opt/docker/forward_{}.rho'.format(public_key))
-    #
-    # def cat_bond_file(self, public_key: str) -> str:
-    #     return self.shell_out('cat', '/opt/docker/bond_{}.rho'.format(public_key))
-
     __timestamp_rx = "\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d"
-    __log_message_rx = re.compile("^{timestamp_rx} (.*?)(?={timestamp_rx})".format(timestamp_rx=__timestamp_rx), re.MULTILINE | re.DOTALL)
+    __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
 
     def log_lines(self) -> List[str]:
         log_content = self.logs()
@@ -293,7 +279,7 @@ class LoggingThread(threading.Thread):
                 if self.terminate_thread_event.is_set():
                     break
                 line = next(containers_log_lines_generator)
-                self.logger.info('\t{}: {}'.format(self.container.name, line.decode('utf-8').rstrip()))
+                self.logger.info(f"\t{self.container.name}: {line.decode('utf-8').rstrip()}")
         except StopIteration:
             pass
 
@@ -520,15 +506,15 @@ def visualize_dag(
 
 
 def make_peer_name(network: str, i: Union[int, str]) -> str:
-    return "peer{i}.{network}".format(i=i, network=network)
+    return f"peer{i}.{network}"
 
 
 def make_engine_name(network: str, i: Union[int, str]) -> str:
-    return "engine{i}.{network}".format(i=i, network=network)
+    return f"engine{i}.{network}"
 
 
 def make_vdag_name(network: str, i: Union[int, str]) -> str:
-    return "vdag.{i}.{network}".format(i=i, network=network)
+    return f"vdag.{i}.{network}"
 
 
 def make_peer(
@@ -593,7 +579,7 @@ def bootstrap_connected_peer(
 ) -> Generator[Node, None, None]:
     engine = make_execution_engine(
         docker_client=context.docker,
-        name='{}-engine'.format(name),
+        name=f'{name}-engine',
         command=EXECUTION_ENGINE_COMMAND,
         network=bootstrap.network,
         socket_volume=socket_volume,
@@ -662,7 +648,7 @@ def create_peer_nodes(
     execution_engines = []
     try:
         for i, key_pair in enumerate(key_pairs):
-            volume_name = "casperlabs{}".format(random_string(5).lower())
+            volume_name = f"casperlabs{random_string(5)}"
             docker_client.volumes.create(name=volume_name, driver="local")
             engine = make_execution_engine(
                 docker_client=docker_client,
