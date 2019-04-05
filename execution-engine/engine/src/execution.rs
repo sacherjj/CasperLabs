@@ -571,15 +571,12 @@ where
     }
 
     /// Tests whether addition to `key` is valid.
-    /// Addition to account key is valid iff it is being made from the contract
-    /// deployed from this account.
-    /// Addition to contract key is not valid. Contract can modify it's own internal
-    /// state using different idioms (add_uref for adding new urefs to its state).
+    /// Addition to account key is valid iff it is being made from the context of the account.
+    /// Addition to contract key is valid iff it is being made from the context of the contract.
     /// Additions to unforgeable key is valid as long as key itself is addable
     fn is_addable(&self, key: &Key) -> bool {
         match key {
-            Key::Account(_) => &self.context.base_key == key,
-            Key::Hash(_) => false,
+            Key::Account(_) | Key::Hash(_) => &self.context.base_key == key,
             Key::URef(_, rights) => rights.is_addable(),
         }
     }

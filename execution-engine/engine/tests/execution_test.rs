@@ -12,7 +12,7 @@ extern crate wasmi;
 
 use common::bytesrepr::{deserialize, FromBytes, ToBytes};
 use common::key::{AccessRights, Key, UREF_SIZE};
-use common::value::{self, Account, Value};
+use common::value::{self, Account, Contract, Value};
 use execution_engine::execution::{Runtime, RuntimeContext};
 use execution_engine::trackingcopy::TrackingCopy;
 use failure::Error;
@@ -1016,23 +1016,44 @@ fn contract_key_readable() {
     }
 }
 
-#[test]
-fn contract_key_addable() {
-    // Tests that contract key is not addable.
-    let mut test_fixture: TestFixture = Default::default();
-    let mut rng = rand::thread_rng();
+fn test_contract_key_addable(base_key: Key, add_to_key: Key) -> Result<(), wasmi::Trap> {
+    let init_contract = Contract::new(Vec::new(), urefs_map(std::iter::empty()));
+    // We're setting up the test fixture so that the current context is pointing at `base_key`.
+    let mut test_fixture: TestFixture = {
+        let addr = [0u8; 20];
+        let nonce = 1u64;
+        let timestamp = 1u64;
+        let gas_limit = 0u64;
+        let (acc_key, account) = mock_account(addr);
+        let uref_lookup = urefs_map(std::iter::empty());
+        let known_urefs: HashSet<Key> = HashSet::new();
+        let mut tc = mock_tc(acc_key, &account);
+        // Here we create MockEnv with the `base_key` as being an entity under which
+        // the contract is executing.
+        let env = MockEnv::new(base_key, uref_lookup, known_urefs, account, gas_limit);
+
+        tc.write(base_key, Value::Contract(init_contract.clone()));
+
+        let memory = env.memory_manager();
+        TestFixture::new(
+            addr,
+            timestamp,
+            nonce,
+            env,
+            memory,
+            Rc::new(RefCell::new(tc)),
+        )
+    };
     let wasm_module = create_wasm_module();
     // This is the key we will want to add to a contract
     let wasm_named_key = {
+        let mut rng = rand::thread_rng();
         let additional_key = ("PublichHash#2".to_owned(), random_contract_key(&mut rng));
         let named_key = Value::NamedKey(additional_key.0, additional_key.1);
         wasm_write(&mut test_fixture.memory, named_key)
     };
 
-    let wasm_contract_hash = {
-        let contract_hash = random_contract_key(&mut rng);
-        wasm_write(&mut test_fixture.memory, contract_hash)
-    };
+    let wasm_contract_hash = wasm_write(&mut test_fixture.memory, add_to_key);
 
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
 
@@ -1044,13 +1065,31 @@ fn contract_key_addable() {
         wasm_module.module.clone(),
     );
 
-    let result = runtime.add(
+    // We're trying to add to `add_to_key` (which may be different than `base_key`).
+    // This way we simulate addition to current (or not) context's base key.
+    runtime.add(
         wasm_contract_hash.0,
         wasm_contract_hash.1 as u32,
         wasm_named_key.0,
         wasm_named_key.1 as u32,
-    );
+    )
+}
 
+#[test]
+fn contract_key_addable_valid() {
+    // Tests that adding to contract key, when it's a base key, is valid.
+    let mut rng = rand::thread_rng();
+    let contract_key = random_contract_key(&mut rng);
+    assert!(test_contract_key_addable(contract_key, contract_key).is_ok());
+}
+
+#[test]
+fn contract_key_addable_invalid() {
+    // Tests that adding to contract key, when it's not a base key, is invalid.
+    let mut rng = rand::thread_rng();
+    let contract_key = random_contract_key(&mut rng);
+    let other_contract_key = random_contract_key(&mut rng);
+    let result = test_contract_key_addable(contract_key, other_contract_key);
     assert_error_contains(result, "InvalidAccess");
 }
 
