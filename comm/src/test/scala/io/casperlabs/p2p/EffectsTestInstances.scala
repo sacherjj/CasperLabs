@@ -107,11 +107,11 @@ object EffectsTestInstances {
 
   class LogStub[F[_]: Applicative] extends Log[F] {
 
-    var debugs: Vector[String]    = Vector.empty[String]
-    var infos: Vector[String]     = Vector.empty[String]
-    var warns: Vector[String]     = Vector.empty[String]
-    var errors: Vector[String]    = Vector.empty[String]
-    var causes: Vector[Throwable] = Vector.empty[Throwable]
+    @volatile var debugs: Vector[String]    = Vector.empty[String]
+    @volatile var infos: Vector[String]     = Vector.empty[String]
+    @volatile var warns: Vector[String]     = Vector.empty[String]
+    @volatile var errors: Vector[String]    = Vector.empty[String]
+    @volatile var causes: Vector[Throwable] = Vector.empty[Throwable]
 
     // To be able to reconstruct the timeline.
     var all: Vector[String] = Vector.empty[String]
@@ -126,27 +126,27 @@ object EffectsTestInstances {
     }
     def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
     def trace(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
-    def debug(msg: String)(implicit ev: LogSource): F[Unit] = {
+    def debug(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
       debugs = debugs :+ msg
       all = all :+ msg
       ().pure[F]
     }
-    def info(msg: String)(implicit ev: LogSource): F[Unit] = {
+    def info(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
       infos = infos :+ msg
       all = all :+ msg
       ().pure[F]
     }
-    def warn(msg: String)(implicit ev: LogSource): F[Unit] = {
+    def warn(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
       warns = warns :+ msg
       all = all :+ msg
       ().pure[F]
     }
-    def error(msg: String)(implicit ev: LogSource): F[Unit] = {
+    def error(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
       errors = errors :+ msg
       all = all :+ msg
       ().pure[F]
     }
-    def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = {
+    def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = synchronized {
       causes = causes :+ cause
       errors = errors :+ msg
       all = all :+ msg

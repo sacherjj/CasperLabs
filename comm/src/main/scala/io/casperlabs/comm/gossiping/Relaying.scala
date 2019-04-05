@@ -76,10 +76,10 @@ class RelayingImpl[F[_]: Sync: Par: Log: NodeAsk](
         s"${peer.show} accepted block for downloading ${toStr(hash)}"
       else
         s"${peer.show} rejected block ${toStr(hash)}"
-      _ <- Log[F].trace(msg)
+      _ <- Log[F].debug(msg)
     } yield response.isNew).handleErrorWith { e =>
       for {
-        _ <- Log[F].trace(s"Request failed ${peer.show}, $e")
+        _ <- Log[F].debug(s"NewBlocks request failed ${peer.show}, $e")
       } yield false
     }
 
