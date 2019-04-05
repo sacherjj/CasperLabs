@@ -772,24 +772,32 @@ fn account_key_writeable() {
     assert_error_contains(result, "InvalidAccess");
 }
 
-#[test]
-fn account_key_readable() {
+// Test that is shared between two following tests for reading Account key.
+// It is the case that reading an account key should be possible only from within
+// the context of the account - i.e. only in the body of "call" function of the deployment.
+// `init_value` is the value being written to the `TestFixture`'s account key.
+// `base_key_different` is a flag that decides whether we will be writing/reading to
+// an account key that is the same as the one in the current context (valid), or different one (invalid).
+fn test_account_key_readable(
+    init_value: Value,
+    base_key_different: bool,
+) -> Result<Value, wasmi::Trap> {
     // Tests that accout key is readable.
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
-    let mut rng = rand::thread_rng();
     let wasm_module = create_wasm_module();
-
-    let account_key = random_account_key(&mut rng);
-    let wasm_key = wasm_write(&mut test_fixture.memory, account_key);
-    let value = Value::Int32(1);
+    let mut rng = rand::thread_rng();
 
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
-    // We're putting some value directly into the GlobalState
-    // (to be 100% precise we put it into the cache of TrackingCopy,
-    // but it's not important for this test) because writing to an account
-    // is forbidded and would fail in the runtime.
-    tc_borrowed.write(account_key, value.clone());
+    // We write directly to GlobalState so that we can read it later.
+    // We purposefully write under account key which is the same as current context's.
+    // This way we will be able to read account key.
+    let account_key = if base_key_different {
+        random_account_key(&mut rng)
+    } else {
+        Key::Account(test_fixture.addr)
+    };
+    tc_borrowed.write(account_key, init_value);
     let mut runtime = test_fixture.env.runtime(
         &mut tc_borrowed,
         test_fixture.addr,
@@ -797,13 +805,24 @@ fn account_key_readable() {
         test_fixture.nonce,
         wasm_module.module.clone(),
     );
+    let wasm_account_key = wasm_write(&mut test_fixture.memory, account_key);
 
-    panic!("This test should fail. Accounts shouldn't probably be readable. Think it over.")
+    gs_read(&mut test_fixture.memory, &mut runtime, wasm_account_key)
+}
 
-    // Read value
-    // let res: Value = gs_read(&mut test_fixture.memory, &mut runtime, wasm_key)
-    // .expect("Reading from GS should work.");
-    // assert_eq!(res, value);
+#[test]
+fn account_key_readable_valid() {
+    let init_value = Value::Int32(1);
+    let value_read = test_account_key_readable(init_value.clone(), false)
+        .expect("Reading account Key should succeed");
+    assert_eq!(value_read, init_value);
+}
+
+#[test]
+fn account_key_readable_invalid() {
+    let init_value = Value::Int32(1);
+    let read_result = test_account_key_readable(init_value, true);
+    assert_error_contains(read_result, "InvalidAccess");
 }
 
 #[test]

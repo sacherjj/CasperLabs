@@ -558,11 +558,22 @@ where
         self.add_transforms(key, value)
     }
 
+    // Tests whether reading from the `key` is valid.
+    // For Accounts it's valid to read when the operation is done on the current context's key.
+    // For Contracts it's always valid.
+    // For URefs it's valid if the access rights of the URef allow for reading.
+    fn is_readable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) => &self.context.base_key == key,
+            _ => key.is_readable(),
+        }
+    }
+
     /// Reads value living under a key (found at `key_ptr` and `key_size` in Wasm memory).
     /// Fails if `key` is not "readable", i.e. its access rights are weaker than `AccessRights::Read`.
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        if key.is_readable() {
+        if self.is_readable(&key) {
             err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
         } else {
             Err(Error::InvalidAccess {
@@ -582,7 +593,7 @@ where
         match key {
             Key::Account(_) => &self.context.base_key == key,
             Key::Hash(_) => false,
-            Key::URef(_, _) => key.is_addable()
+            Key::URef(_, _) => key.is_addable(),
         }
     }
 
