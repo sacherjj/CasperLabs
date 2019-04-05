@@ -211,13 +211,21 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     } yield (blockStoreContains || bufferContains)
 
   //TODO: verify sig immediately (again, so we fail fast)
-  def deploy(d: DeployData): F[Either[Throwable, Unit]] = {
-    val req = ExecutionEngineService[F].verifyWasm(ValidateRequest(d.sessionCode, d.paymentCode))
+  def deploy(d: DeployData): F[Either[Throwable, Unit]] = (d.session, d.payment) match {
+    case (Some(session), Some(payment)) =>
+      val req = ExecutionEngineService[F].verifyWasm(ValidateRequest(session.code, payment.code))
 
-    EitherT(req)
-      .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
-      .flatMapF(_ => addDeploy(d) map (_.asRight[Throwable]))
-      .value
+      EitherT(req)
+        .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
+        .flatMapF(_ => addDeploy(d) map (_.asRight[Throwable]))
+        .value
+
+    case (None, _) | (_, None) =>
+      Either
+        .left[Throwable, Unit](
+          new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
+        )
+        .pure[F]
   }
 
   def addDeploy(deployData: DeployData): F[Unit] =

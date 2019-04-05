@@ -124,8 +124,8 @@ trait ArbitraryConsensus {
         .withBody(
           Deploy
             .Body()
-            .withSessionCode(sessionCode)
-            .withPaymentCode(paymentCode)
+            .withSession(DeployCode().withCode(sessionCode))
+            .withPayment(DeployCode().withCode(paymentCode))
         )
         .withSignature(signature)
     }
