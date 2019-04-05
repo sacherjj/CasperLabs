@@ -35,18 +35,20 @@ else:
 DEFAULT_NODE_IMAGE = f"casperlabs/node:{TAG}"
 DEFAULT_ENGINE_IMAGE = f"casperlabs/execution-engine:{TAG}"
 DEFAULT_CLIENT_IMAGE = f"casperlabs/client:{TAG}"
-
 CL_NODE_BINARY = '/opt/docker/bin/bootstrap'
 CL_NODE_DIRECTORY = "/root/.casperlabs"
 CL_NODE_DEPLOY_DIR = f"{CL_NODE_DIRECTORY}/deploy"
 CL_GENESIS_DIR = f'{CL_NODE_DIRECTORY}/genesis/'
 CL_SOCKETS_DIR = f'{CL_NODE_DIRECTORY}/sockets'
 CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
-
+CL_BONDS_FILE = f"{CL_GENESIS_DIR}bonds.txt"
 GRPC_SOCKET_FILE = f"{CL_SOCKETS_DIR}/.casper-node.sock"
 EXECUTION_ENGINE_COMMAND = ".casperlabs/sockets/.casper-node.sock"
 CONTRACT_NAME = "helloname.wasm"
 
+HOST_MOUNT_DIR = f"/tmp/{TAG}/resources"
+HOST_GENESIS_DIR = HOST_MOUNT_DIR + "/genesis"
+HOST_BOOTSTRAP_DIR = HOST_MOUNT_DIR + "/bootstrap_certificate"
 
 class InterruptedException(Exception):
     pass
@@ -238,7 +240,7 @@ class Node:
         ])
 
         volumes = {
-            "/tmp/resources/": {
+            HOST_MOUNT_DIR: {
                 "bind": "/data",
                 "mode": "ro"
             }
@@ -302,6 +304,7 @@ def make_node(
     container_command: str,
     container_command_options: Dict,
     command_timeout: int,
+    bonds_file: str,
     extra_volumes: Dict[str, Dict[str, str]],
     image: str = DEFAULT_NODE_IMAGE,
     mem_limit: Optional[str] = None,
@@ -309,8 +312,8 @@ def make_node(
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
-    deploy_dir = make_tempdir(prefix="resources/")
-    # end slash is necessary to create in format /tmp/resources/xxxxxxxx
+    deploy_dir = make_tempdir(prefix=f"{TAG}/resources/")
+    # end slash is necessary to create in format /tmp/DRONE-${DRONE_BUILD_NUMBER}/resources/xxxxxxxx
 
     command = make_container_command(container_command, container_command_options, is_bootstrap)
 
@@ -323,6 +326,10 @@ def make_node(
     logging.debug('Using _JAVA_OPTIONS: {}'.format(java_options))
 
     volumes = {
+        bonds_file: {
+            "bind": CL_BONDS_FILE,
+            "mode": "rw"
+        },
         deploy_dir: {
             "bind": CL_NODE_DEPLOY_DIR,
             "mode": "rw"
@@ -387,13 +394,11 @@ def make_bootstrap_node(
     socket_volume: str,
     key_pair: "KeyPair",
     command_timeout: int,
+    bonds_file: str,
     mem_limit: Optional[str] = None,
     cli_options: Optional[Dict] = None,
     container_name: Optional[str] = None,
 ) -> Node:
-
-    genesis_folder = "/tmp/resources/genesis"
-    bootstrap_folder = "/tmp/resources/bootstrap_certificate"
 
     name = "{node_name}.{network_name}".format(
         node_name='bootstrap' if container_name is None else container_name,
@@ -412,11 +417,15 @@ def make_bootstrap_node(
         container_command_options.update(cli_options)
 
     volumes = {
-        bootstrap_folder: {
+        bonds_file: {
+            "bind": CL_BONDS_FILE,
+            "mode": "rw"
+        },
+        HOST_BOOTSTRAP_DIR: {
             "bind": CL_BOOTSTRAP_DIR,
             "mode": "rw"
         },
-        genesis_folder: {
+        HOST_GENESIS_DIR: {
             "bind": CL_GENESIS_DIR,
             "mode": "rw"
         }
@@ -426,6 +435,7 @@ def make_bootstrap_node(
         docker_client=docker_client,
         name=name,
         network=network,
+        bonds_file=bonds_file,
         socket_volume=socket_volume,
         container_command='run',
         container_command_options=container_command_options,
@@ -523,6 +533,7 @@ def make_peer(
         socket_volume: str,
         name: str,
         command_timeout: int,
+        bonds_file: str,
         bootstrap: Node,
         key_pair: "KeyPair",
         mem_limit: Optional[str] = None,
@@ -531,9 +542,6 @@ def make_peer(
     assert '_' not in name, 'Underscore is not allowed in host name'
     name = make_peer_name(network, name)
     bootstrap_address = bootstrap.get_casperlabsnode_address()
-
-    genesis_folder = "/tmp/resources/genesis"
-    bootstrap_folder = "/tmp/resources/bootstrap_certificate"
 
     container_command_options = {
         "--server-bootstrap": bootstrap_address,
@@ -544,11 +552,11 @@ def make_peer(
     }
 
     volumes = {
-        bootstrap_folder: {
+        HOST_BOOTSTRAP_DIR: {
             "bind": CL_BOOTSTRAP_DIR,
             "mode": "rw"
         },
-        genesis_folder: {
+        HOST_GENESIS_DIR: {
             "bind": CL_GENESIS_DIR,
             "mode": "rw"
         }
@@ -557,6 +565,7 @@ def make_peer(
         docker_client=docker_client,
         name=name,
         network=network,
+        bonds_file=bonds_file,
         socket_volume=socket_volume,
         container_command='run',
         container_command_options=container_command_options,
@@ -614,6 +623,7 @@ def started_peer(
         socket_volume=socket_volume,
         name=name,
         bootstrap=bootstrap,
+        bonds_file=context.bonds_file,
         key_pair=key_pair,
         command_timeout=context.command_timeout,
     )
@@ -631,6 +641,7 @@ def create_peer_nodes(
     network: str,
     key_pairs: List["KeyPair"],
     command_timeout: int,
+    bonds_file: str,
     allowed_peers: Optional[List[str]] = None,
     allowed_engines: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
@@ -663,6 +674,7 @@ def create_peer_nodes(
                 network=network,
                 socket_volume=volume_name,
                 name=str(i),
+                bonds_file=bonds_file,
                 command_timeout=command_timeout,
                 bootstrap=bootstrap,
                 key_pair=key_pair,
@@ -718,6 +730,7 @@ def started_bootstrap_node(*, context: TestingContext, network: str, socket_volu
         docker_client=context.docker,
         network=network,
         socket_volume=socket_volume,
+        bonds_file=context.bonds_file,
         key_pair=context.bootstrap_keypair,
         command_timeout=context.command_timeout,
         container_name=container_name,

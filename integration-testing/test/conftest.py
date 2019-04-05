@@ -1,8 +1,12 @@
 import contextlib
 import dataclasses
+import logging
 import os
 import random
 import shutil
+import tempfile
+import sys
+
 from typing import TYPE_CHECKING, Generator, List
 
 import docker as docker_py
@@ -10,7 +14,7 @@ import pytest
 
 from .cl_node.common import KeyPair, TestingContext
 from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
-from .cl_node.casperlabsnode import docker_network_with_started_bootstrap
+from .cl_node.casperlabsnode import docker_network_with_started_bootstrap, HOST_GENESIS_DIR
 
 
 if TYPE_CHECKING:
@@ -68,24 +72,26 @@ def command_line_options_fixture(request):
     yield command_line_options
 
 
-@contextlib.contextmanager
-def temporary_resources_genesis_folder(validator_keys: List[KeyPair]) -> Generator[str, None, None]:
-    genesis_folder_path = "/tmp/resources/genesis"
-    if os.path.exists(genesis_folder_path):
-        shutil.rmtree(genesis_folder_path)
-    os.makedirs(genesis_folder_path)
+def create_genesis_folder() -> None:
     try:
-        with open(os.path.join(genesis_folder_path, "bonds.txt"), "w") as f:
+        if os.path.exists(HOST_GENESIS_DIR):
+            shutil.rmtree(HOST_GENESIS_DIR)
+        os.makedirs(HOST_GENESIS_DIR)
+    except Exception as ex:
+        sys.exit(1)
+        logging.exception(f"An exception occured while creating the folder {HOST_GENESIS_DIR}: {ex}")
+
+
+def create_bonds_file(validator_keys: List[KeyPair]) -> str:
+    (fd, _file) = tempfile.mkstemp(prefix="bonds-", suffix=".txt", dir="/tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
             for pair in validator_keys:
                 bond = random.randint(1, 100)
                 f.write("{} {}\n".format(pair.public_key, bond))
-                with open(os.path.join("/tmp/resources/genesis/",
-                                       "{}.sk".format(pair.public_key)), 'w') as _file:
-                    _file.write("{}\n".format(pair.private_key))
-        yield genesis_folder_path
-    finally:
-        if os.path.exists(genesis_folder_path):
-            shutil.rmtree(genesis_folder_path)
+        return _file
+    except Exception as ex:
+        logging.exception(f"An exception occured: {ex}")
 
 
 @pytest.yield_fixture(scope='session')
@@ -108,18 +114,17 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
     # Using pre-generated validator key pairs by cl_node. We do this because warning below  with python generated keys
     # WARN  io.casperlabs.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
     validator_keys = [kp for kp in [bootstrap_keypair] + peers_keypairs[0: command_line_options_fixture.peer_count + 1]]
-    with temporary_resources_genesis_folder(validator_keys) as genesis_folder:
-        bonds_file = os.path.join(genesis_folder, "bonds.txt")
-        peers_keypairs = validator_keys
-        context = TestingContext(
-            bonds_file=bonds_file,
-            bootstrap_keypair=bootstrap_keypair,
-            peers_keypairs=peers_keypairs,
-            docker=docker_client_fixture,
-            **dataclasses.asdict(command_line_options_fixture),
-        )
-
-        yield context
+    create_genesis_folder()
+    bonds_file = create_bonds_file(validator_keys)
+    peers_keypairs = validator_keys
+    context = TestingContext(
+        bonds_file=bonds_file,
+        bootstrap_keypair=bootstrap_keypair,
+        peers_keypairs=peers_keypairs,
+        docker=docker_client_fixture,
+        **dataclasses.asdict(command_line_options_fixture),
+    )
+    yield context
 
 
 @pytest.yield_fixture(scope='module')

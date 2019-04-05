@@ -31,6 +31,7 @@ def start_network(*, context: TestingContext, bootstrap: 'Node', allowed_peers=N
         docker_client=context.docker,
         bootstrap=bootstrap,
         network=bootstrap.network,
+        bonds_file=context.bonds_file,
         key_pairs=context.peers_keypairs,
         command_timeout=context.command_timeout,
         allowed_peers=allowed_peers,
