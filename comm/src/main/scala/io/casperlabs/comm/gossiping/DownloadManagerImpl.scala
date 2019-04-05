@@ -279,7 +279,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
         // This could arguably be done by `storeBlock` but this way it's explicit,
         // so we don't forget to talk to both kind of storages.
         _ <- backend.storeBlockSummary(summary)
-        _ <- if (relay) relaying.relay(summary) else ().pure[F]
+        _ <- if (relay) relaying.relay(List(summary.blockHash)) else ().pure[F]
         _ <- success
       } yield ()
 

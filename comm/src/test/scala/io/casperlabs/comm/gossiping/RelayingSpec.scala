@@ -1,11 +1,15 @@
 package io.casperlabs.comm.gossiping
 
 import cats.Applicative
+import cats.effect.Sync
 import cats.mtl.DefaultApplicativeAsk
+import cats.temp.par.Par
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
+import io.casperlabs.shared.Log
+import io.casperlabs.shared.Log.NOPLog
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
@@ -39,7 +43,7 @@ class RelayingSpec
       minSuccessful = 500
     )
 
-  private val summary = sample(arbitrary[BlockSummary])
+  private val hash = sample(genHash)
 
   "Relaying" when {
     "scheduled to relay a block" should {
@@ -47,7 +51,7 @@ class RelayingSpec
         forAll { peers: List[Node] =>
           TestFixture(peers.size / 2, 0, peers, accept = _ => false) { (relaying, asked) =>
             for {
-              _ <- relaying.relay(summary)
+              _ <- relaying.relay(List(hash))
             } yield asked.get() shouldBe (peers.size / 2)
           }
         }
@@ -56,7 +60,7 @@ class RelayingSpec
         forAll { peers: List[Node] =>
           TestFixture(1, 50, peers, accept = _ => false) { (relaying, asked) =>
             for {
-              _ <- relaying.relay(summary)
+              _ <- relaying.relay(List(hash))
             } yield asked.get() shouldBe 2
           }
         }
@@ -66,7 +70,7 @@ class RelayingSpec
           val relayFactor = Random.nextInt(peers.size) + 1
           TestFixture(relayFactor, 100, peers, accept = _ => true) { (relaying, asked) =>
             for {
-              _ <- relaying.relay(summary)
+              _ <- relaying.relay(List(hash))
             } yield asked.get() shouldBe relayFactor
           }
         }
@@ -77,10 +81,12 @@ class RelayingSpec
 object RelayingSpec {
   private val local = Node(NodeIdentifier("0000"), "localhost", 40400, 40404)
 
-  private implicit val ask: NodeAsk[Task] = new DefaultApplicativeAsk[Task, Node] {
+  private val ask: NodeAsk[Task] = new DefaultApplicativeAsk[Task, Node] {
     val applicative: Applicative[Task] = Applicative[Task]
     def ask: Task[Node]                = Task.pure(local)
   }
+
+  private val noOpLog: Log[Task] = new NOPLog[Task]
 
   def summaryOf(block: Block): BlockSummary =
     BlockSummary()
@@ -105,8 +111,11 @@ object RelayingSpec {
   }
 
   object TestFixture {
-    def apply(relayFactor: Int, relaySaturation: Int, peers: List[Node], accept: Node => Boolean)(
-        test: (Relaying[Task], AtomicInt) => Task[Unit]): Unit = {
+    def apply(relayFactor: Int,
+              relaySaturation: Int,
+              peers: List[Node],
+              accept: Node => Boolean,
+              log: Log[Task] = noOpLog)(test: (Relaying[Task], AtomicInt) => Task[Unit]): Unit = {
       val nd = new NodeDiscovery[Task] {
         override def discover: Task[Unit]                           = ???
         override def lookup(id: NodeIdentifier): Task[Option[Node]] = ???
@@ -135,7 +144,11 @@ object RelayingSpec {
               ???
           }
       }
-      val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)
+      val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)(
+        Sync[Task],
+        Par[Task],
+        log,
+        ask)
       test(relayingImpl, asked).runSyncUnsafe(5.seconds)
     }
   }

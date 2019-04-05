@@ -3,20 +3,23 @@ package io.casperlabs.comm.gossiping
 import cats.effect._
 import cats.implicits._
 import cats.temp.par._
-import io.casperlabs.casper.consensus.BlockSummary
+import com.google.protobuf.ByteString
 import io.casperlabs.comm.NodeAsk
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.shared.Log
 import simulacrum.typeclass
 
 import scala.util.Random
 
 @typeclass
 trait Relaying[F[_]] {
-  def relay(summary: BlockSummary): F[Unit]
+  def relay(hashes: List[ByteString]): F[Unit]
 }
 
 object RelayingImpl {
-  def apply[F[_]: Sync: Par: NodeAsk](
+  def apply[F[_]: Sync: Par: Log: NodeAsk](
       nd: NodeDiscovery[F],
       connectToGossip: Node => F[GossipService[F]],
       relayFactor: Int,
@@ -34,22 +37,22 @@ object RelayingImpl {
 /**
   * https://techspec.casperlabs.io/technical-details/global-state/communications#picking-nodes-for-gossip
   */
-class RelayingImpl[F[_]: Sync: Par: NodeAsk](
+class RelayingImpl[F[_]: Sync: Par: Log: NodeAsk](
     nd: NodeDiscovery[F],
     connectToGossip: Node => F[GossipService[F]],
     relayFactor: Int,
     maxToTry: Int
 ) extends Relaying[F] {
 
-  override def relay(summary: BlockSummary): F[Unit] = {
-    def loop(peers: List[Node], contacted: Int): F[Unit] = {
+  override def relay(hashes: List[ByteString]): F[Unit] = {
+    def loop(hash: ByteString, peers: List[Node], contacted: Int): F[Unit] = {
       val parallelism = math.min(relayFactor, maxToTry - contacted)
       if (parallelism > 0 && peers.nonEmpty) {
         val (recipients, rest) = Random.shuffle(peers).splitAt(parallelism)
         for {
-          results <- recipients.parTraverse(relay(_, summary))
+          results <- recipients.parTraverse(relay(_, hash))
           _ <- if (results.exists(!_))
-                loop(rest, contacted + recipients.size)
+                loop(hash, rest, contacted + recipients.size)
               else
                 ().pure[F]
         } yield ()
@@ -60,15 +63,25 @@ class RelayingImpl[F[_]: Sync: Par: NodeAsk](
 
     for {
       peers <- nd.alivePeersAscendingDistance
-      _     <- loop(peers, 0)
+      _     <- hashes.parTraverse(hash => loop(hash, peers, 0))
     } yield ()
   }
 
-  private def relay(peer: Node, summary: BlockSummary): F[Boolean] =
+  private def relay(peer: Node, hash: ByteString): F[Boolean] =
     (for {
-      service <- connectToGossip(peer)
-      local   <- NodeAsk[F].ask
-      response <- service.newBlocks(
-                   NewBlocksRequest(sender = local.some, blockHashes = List(summary.blockHash)))
-    } yield response.isNew).handleError(_ => false)
+      service  <- connectToGossip(peer)
+      local    <- NodeAsk[F].ask
+      response <- service.newBlocks(NewBlocksRequest(sender = local.some, blockHashes = List(hash)))
+      msg = if (response.isNew)
+        s"${peer.show} accepted block for downloading ${toStr(hash)}"
+      else
+        s"${peer.show} rejected block ${toStr(hash)}"
+      _ <- Log[F].trace(msg)
+    } yield response.isNew).handleErrorWith { e =>
+      for {
+        _ <- Log[F].trace(s"Request failed ${peer.show}, $e")
+      } yield false
+    }
+
+  private def toStr(hash: ByteString): String = Base16.encode(hash.toByteArray)
 }

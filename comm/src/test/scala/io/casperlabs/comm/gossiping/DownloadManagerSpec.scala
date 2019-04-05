@@ -152,7 +152,7 @@ class DownloadManagerSpec
             ws <- scheduleAll(manager)
             _  <- awaitAll(ws)
           } yield {
-            relaying.relayed should contain theSameElementsAs relayed.map(summaryOf)
+            relaying.relayed should contain theSameElementsAs relayed.map(_.blockHash)
           }
       }
     }
@@ -539,10 +539,10 @@ object DownloadManagerSpec {
   }
 
   class MockRelaying extends Relaying[Task] {
-    @volatile var relayed = Vector.empty[BlockSummary]
+    @volatile var relayed = Vector.empty[ByteString]
 
-    override def relay(summary: BlockSummary): Task[Unit] = Task.delay {
-      synchronized { relayed = relayed :+ summary }
+    override def relay(hashes: List[ByteString]): Task[Unit] = Task.delay {
+      synchronized { relayed = relayed ++ hashes }
     }
   }
   object MockRelaying {
