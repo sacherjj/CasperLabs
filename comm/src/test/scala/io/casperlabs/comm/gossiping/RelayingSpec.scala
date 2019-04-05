@@ -135,7 +135,7 @@ object RelayingSpec {
               ???
           }
       }
-      val relayingImpl = new RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)
+      val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)
       test(relayingImpl, asked).runSyncUnsafe(5.seconds)
     }
   }

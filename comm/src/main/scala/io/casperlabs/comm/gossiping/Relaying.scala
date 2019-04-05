@@ -15,6 +15,22 @@ trait Relaying[F[_]] {
   def relay(summary: BlockSummary): F[Unit]
 }
 
+object RelayingImpl {
+  def apply[F[_]: Sync: Par: NodeAsk](
+      nd: NodeDiscovery[F],
+      connectToGossip: Node => F[GossipService[F]],
+      relayFactor: Int,
+      relaySaturation: Int
+  ): Relaying[F] = {
+    val maxToTry = try {
+      (relayFactor * 100) / (100 - relaySaturation)
+    } catch {
+      case e: ArithmeticException if e.getMessage.contains("/ by zero") => Int.MaxValue
+    }
+    new RelayingImpl[F](nd, connectToGossip, relayFactor, maxToTry)
+  }
+}
+
 /**
   * https://techspec.casperlabs.io/technical-details/global-state/communications#picking-nodes-for-gossip
   */
@@ -22,14 +38,8 @@ class RelayingImpl[F[_]: Sync: Par: NodeAsk](
     nd: NodeDiscovery[F],
     connectToGossip: Node => F[GossipService[F]],
     relayFactor: Int,
-    relaySaturation: Int
+    maxToTry: Int
 ) extends Relaying[F] {
-  private val maxToTry =
-    try {
-      (relayFactor * 100) / (100 - relaySaturation)
-    } catch {
-      case e: ArithmeticException if e.getMessage.contains("/ by zero") => Int.MaxValue
-    }
 
   override def relay(summary: BlockSummary): F[Unit] = {
     def loop(peers: List[Node], contacted: Int): F[Unit] = {
