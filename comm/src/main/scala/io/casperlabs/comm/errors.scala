@@ -120,8 +120,9 @@ object ServiceError {
       apply(s"Block ${Base16.encode(blockHash.toByteArray)} could not be found.")
   }
 
-  object InvalidArgument extends StatusError(Status.INVALID_ARGUMENT)
-  object Unauthenticated extends StatusError(Status.UNAUTHENTICATED)
+  object InvalidArgument  extends StatusError(Status.INVALID_ARGUMENT)
+  object Unauthenticated  extends StatusError(Status.UNAUTHENTICATED)
+  object DeadlineExceeded extends StatusError(Status.DEADLINE_EXCEEDED)
 }
 
 sealed trait GossipError extends NoStackTrace
