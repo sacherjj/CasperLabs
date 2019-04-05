@@ -842,10 +842,12 @@ fn account_key_addable_valid() {
         random_contract_key(&mut rng),
     )));
     let account = Account::new([1u8; 32], 1, known_urefs.clone());
+    let account_key = Key::Account(test_fixture.addr);
+    let wasm_account_key = wasm_write(&mut test_fixture.memory, account_key);
     // This is the key we will want to add to an account
     let additional_key = ("PublichHash#2".to_owned(), random_contract_key(&mut rng));
-    let wasm_name = wasm_write(&mut test_fixture.memory, additional_key.0.clone());
-    let wasm_key = wasm_write(&mut test_fixture.memory, additional_key.1);
+    let named_key = Value::NamedKey(additional_key.0.clone(), additional_key.1);
+    let wasm_named_key = wasm_write(&mut test_fixture.memory, named_key.clone());
     {
         let mut tc_borrowed = test_fixture.tc.borrow_mut();
         // Write an account under current context's key
@@ -864,11 +866,11 @@ fn account_key_addable_valid() {
 
         // Add key to current context's account.
         runtime
-            .add_uref(
-                wasm_name.0,
-                wasm_name.1 as u32,
-                wasm_key.0,
-                wasm_key.1 as u32,
+            .add(
+                wasm_account_key.0,
+                wasm_account_key.1 as u32,
+                wasm_named_key.0,
+                wasm_named_key.1 as u32,
             )
             .expect("Adding new named key should work");
     }
