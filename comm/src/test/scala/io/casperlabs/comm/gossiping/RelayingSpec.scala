@@ -39,13 +39,13 @@ class RelayingSpec
       minSuccessful = 500
     )
 
-  private val summary = summaryOf(sample(arbitrary[Block]))
+  private val summary = sample(arbitrary[BlockSummary])
 
   "Relaying" when {
     "scheduled to relay a block" should {
       "try to achieve certain level of 'relay factor" in
         forAll { peers: List[Node] =>
-          TestFixture(peers.size / 2, 0, peers, _ => false) { (relaying, asked) =>
+          TestFixture(peers.size / 2, 0, peers, accept = _ => false) { (relaying, asked) =>
             for {
               _ <- relaying.relay(summary)
             } yield asked.get() shouldBe (peers.size / 2)
@@ -54,7 +54,7 @@ class RelayingSpec
 
       "stop trying to relay a block if already achieved specified relay saturation" in
         forAll { peers: List[Node] =>
-          TestFixture(1, 50, peers, _ => false) { (relaying, asked) =>
+          TestFixture(1, 50, peers, accept = _ => false) { (relaying, asked) =>
             for {
               _ <- relaying.relay(summary)
             } yield asked.get() shouldBe 2
@@ -64,7 +64,7 @@ class RelayingSpec
       "stop trying to relay a block if already gossiped to 'relay factor' number of peers" in
         forAll { peers: List[Node] =>
           val relayFactor = Random.nextInt(peers.size) + 1
-          TestFixture(relayFactor, 100, peers, _ => true) { (relaying, asked) =>
+          TestFixture(relayFactor, 100, peers, accept = _ => true) { (relaying, asked) =>
             for {
               _ <- relaying.relay(summary)
             } yield asked.get() shouldBe relayFactor

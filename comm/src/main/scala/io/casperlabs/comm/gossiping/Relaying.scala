@@ -22,10 +22,10 @@ object RelayingImpl {
       relayFactor: Int,
       relaySaturation: Int
   ): Relaying[F] = {
-    val maxToTry = try {
+    val maxToTry = if (relaySaturation == 100) {
+      Int.MaxValue
+    } else {
       (relayFactor * 100) / (100 - relaySaturation)
-    } catch {
-      case e: ArithmeticException if e.getMessage.contains("/ by zero") => Int.MaxValue
     }
     new RelayingImpl[F](nd, connectToGossip, relayFactor, maxToTry)
   }
