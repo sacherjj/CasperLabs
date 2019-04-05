@@ -12,8 +12,9 @@ from typing import TYPE_CHECKING, Generator, List
 import docker as docker_py
 import pytest
 
-from casperlabsnode_testing.common import KeyPair, TestingContext
-from casperlabsnode_testing.pregenerated_keypairs import PREGENERATED_KEYPAIRS
+from .cl_node.common import KeyPair, TestingContext
+from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
+from .cl_node.casperlabsnode import docker_network_with_started_bootstrap
 
 
 if TYPE_CHECKING:
@@ -37,7 +38,7 @@ def pytest_addoption(parser: "Parser") -> None:
     parser.addoption("--start-timeout", action="store", default="0", help="timeout in seconds for starting a node. Defaults to 30 + peer_count * 10")
     parser.addoption("--converge-timeout", action="store", default="0", help="timeout in seconds for network converge. Defaults to 200 + peer_count * 10")
     parser.addoption("--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message. Defaults to 10 + peer_count * 10")
-    parser.addoption("--command-timeout", action="store", default="10", help="timeout in seconds for executing an casperlabsnode call (Examples: propose, show-logs etc.). Defaults to 10s")
+    parser.addoption("--command-timeout", action="store", default="10", help="timeout in seconds for executing an cl_node call (Examples: propose, show-logs etc.). Defaults to 10s")
     parser.addoption("--blocks", action="store", default="1", help="the number of deploys per test deploy")
     parser.addoption("--mount-dir", action="store", default=None, help="globally accesible directory for mounting between containers")
 
@@ -108,7 +109,7 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
     if peers_keypairs is None:
         peers_keypairs = PREGENERATED_KEYPAIRS[1:]
 
-    # Using pre-generated validator key pairs by casperlabsnode. We do this because warning below  with python generated keys
+    # Using pre-generated validator key pairs by cl_node. We do this because warning below  with python generated keys
     # WARN  io.casperlabs.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
     validator_keys = [kp for kp in [bootstrap_keypair] + peers_keypairs[0: command_line_options_fixture.peer_count + 1]]
     with temporary_resources_genesis_folder(validator_keys) as genesis_folder:
@@ -123,3 +124,10 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
         )
 
         yield context
+
+
+@pytest.yield_fixture(scope='module')
+def started_standalone_bootstrap_node(command_line_options_fixture, docker_client_fixture):
+    with testing_context(command_line_options_fixture, docker_client_fixture) as context:
+        with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
+            yield bootstrap_node

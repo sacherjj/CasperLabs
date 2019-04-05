@@ -1,15 +1,15 @@
 import contextlib
 
 import pytest
-import conftest
+from . import conftest
 
-from casperlabsnode_testing.common import TestingContext
-from casperlabsnode_testing.casperlabsnode import (
+from .cl_node.common import TestingContext
+from .cl_node.casperlabsnode import (
     docker_network_with_started_bootstrap,
     started_peer,
     Node,
 )
-from casperlabsnode_testing.wait import (
+from .cl_node.wait import (
     wait_for_blocks_count_at_least,
     wait_for_approved_block_received_handler_state,
 )
@@ -19,7 +19,7 @@ from typing import Generator, TYPE_CHECKING
 if TYPE_CHECKING:
     from _pytest.fixtures import SubRequest
     from docker.client import DockerClient
-    from casperlabsnode_testing.casperlabsnode import Node
+    from .cl_node.casperlabsnode import Node
 
 """
 First approximation:

@@ -1,14 +1,14 @@
 import threading
 
-import conftest
-from casperlabsnode_testing.casperlabsnode import (
+from . import conftest
+from .cl_node.casperlabsnode import (
     Node,
     bootstrap_connected_peer,
     docker_network_with_started_bootstrap,
 )
-from casperlabsnode_testing.common import random_string
-from casperlabsnode_testing.pregenerated_keypairs import PREGENERATED_KEYPAIRS
-from casperlabsnode_testing.wait import (
+from .cl_node.common import random_string
+from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
+from .cl_node.wait import (
     wait_for_blocks_count_at_least,
     wait_for_peers_count_at_least,
 )

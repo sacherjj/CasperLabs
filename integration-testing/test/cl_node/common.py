@@ -30,7 +30,7 @@ class TestingContext:
 
 
 def random_string(length: int) -> str:
-    return ''.join(random.choice(string.ascii_letters) for m in range(length))
+    return ''.join(random.choice(string.ascii_letters) for _ in range(length)).lower()
 
 
 def make_tempfile(prefix: str, content: str) -> str:
