@@ -66,7 +66,6 @@ class NodeRuntime private[node] (
 
   private val initPeer = if (conf.casper.standalone) None else Some(conf.server.bootstrap)
 
-  private implicit val logSource: LogSource       = LogSource(this.getClass)
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
 
   implicit def eitherTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
