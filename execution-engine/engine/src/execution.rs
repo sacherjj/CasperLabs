@@ -1065,6 +1065,7 @@ macro_rules! on_fail_charge {
 }
 
 pub trait Executor<A> {
+    #[allow(clippy::too_many_arguments)]
     fn exec<R: DbReader>(
         &self,
         parity_module: A,
