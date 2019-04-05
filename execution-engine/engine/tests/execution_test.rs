@@ -32,8 +32,8 @@ use wasmi::memory_units::Pages;
 use wasmi::{MemoryInstance, MemoryRef};
 
 struct MockEnv {
-    pub key: Key,
-    pub account: value::Account,
+    pub base_key: Key,
+    pub deploy_account: value::Account,
     pub uref_lookup: BTreeMap<String, Key>,
     pub known_urefs: HashSet<Key>,
     pub gas_limit: u64,
@@ -42,18 +42,18 @@ struct MockEnv {
 
 impl MockEnv {
     pub fn new(
-        key: Key,
+        base_key: Key,
         uref_lookup: BTreeMap<String, Key>,
         known_urefs: HashSet<Key>,
-        account: value::Account,
+        deploy_account: value::Account,
         gas_limit: u64,
     ) -> Self {
         let memory = MemoryInstance::alloc(Pages(17), Some(Pages(MAX_MEM_PAGES as usize)))
             .expect("Mocked memory should be able to be created.");
 
         MockEnv {
-            key,
-            account,
+            base_key,
+            deploy_account,
             uref_lookup,
             known_urefs,
             gas_limit,
@@ -72,8 +72,8 @@ impl MockEnv {
         let context = mock_context(
             &mut self.uref_lookup,
             &mut self.known_urefs,
-            &self.account,
-            self.key,
+            &self.deploy_account,
+            self.base_key,
         );
         Runtime::new(
             self.memory.clone(),
