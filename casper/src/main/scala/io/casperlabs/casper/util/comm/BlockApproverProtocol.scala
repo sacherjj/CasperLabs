@@ -9,8 +9,8 @@ import io.casperlabs.casper.{protocol, ValidatorIdentity}
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.deploy2deploy
 import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
@@ -155,7 +155,7 @@ object BlockApproverProtocol {
       processedDeploys <- EitherT(
                            ExecutionEngineService[F].exec(
                              ExecutionEngineService[F].emptyStateHash,
-                             deploys.map(deploy2deploy)
+                             deploys.map(ProtoUtil.deployDataToEEDeploy)
                            )
                          ).leftMap(_.getMessage)
       deployEffects    = ExecEngineUtil.processedDeployEffects(deploys zip processedDeploys)
