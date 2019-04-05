@@ -892,7 +892,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 ADD_FUNC_INDEX,
             ),
             "new_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
+                Signature::new(&[ValueType::I32; 3][..], None),
                 NEW_FUNC_INDEX,
             ),
             "load_arg" => FuncInstance::alloc_host(
