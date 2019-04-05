@@ -63,6 +63,7 @@ class GrpcGossipServiceSpec
     GetBlockChunkedSpec,
     StreamBlockSummariesSpec,
     StreamAncestorBlockSummariesSpec,
+    StreamDagTipBlockSummariesSpec,
     NewBlocksSpec
   )
 
@@ -737,6 +738,37 @@ class GrpcGossipServiceSpec
     }
   }
 
+  object StreamDagTipBlockSummariesSpec extends WordSpecLike {
+    implicit val config          = PropertyCheckConfiguration(minSuccessful = 5)
+    implicit val consensusConfig = ConsensusConfig()
+
+    "streamDagTipBlockSummaries" should {
+      "return the tips from the consensus" in {
+        forAll(genDag) { dag =>
+          // Tips are the ones without children.
+          val tips = dag.filterNot { parent =>
+            dag.exists { child =>
+              child.getHeader.parentHashes.contains(parent.blockHash)
+            }
+          }
+          val consensus = new GossipServiceServer.Consensus[Task] {
+            def onPending(dag: Vector[BlockSummary]) = ???
+            def onDownloaded(blockHash: ByteString)  = ???
+            def listTips                             = Task.delay(tips)
+          }
+          runTestUnsafe(TestData(summaries = dag)) {
+            TestEnvironment(testDataRef, consensus = consensus).use { stub =>
+              stub.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL map {
+                res =>
+                  res should contain theSameElementsInOrderAs tips
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   object NewBlocksSpec extends WordSpecLike {
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
     implicit val consensusConfig =
@@ -918,6 +950,7 @@ class GrpcGossipServiceSpec
                         downloaded = downloaded :+ blockHash
                       }
                     }
+                    def listTips = ???
                   }
 
                   TestEnvironment(
@@ -997,6 +1030,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
     private val emptyConsensus = new GossipServiceServer.Consensus[Task] {
       def onPending(dag: Vector[BlockSummary]) = ???
       def onDownloaded(blockHash: ByteString)  = ???
+      def listTips                             = ???
     }
 
     private def defaultBackend(testDataRef: AtomicReference[TestData]) =
