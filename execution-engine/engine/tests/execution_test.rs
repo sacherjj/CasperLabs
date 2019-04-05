@@ -402,12 +402,11 @@ use execution_engine::execution::rename_export_to_call;
 // Renames "name" function to "call" in the passed Wasm module.
 // This is necessary because host runtime will do the same thing prior to saving it.
 fn contract_bytes_from_wat(
-    mut module: Module,
-    name: String,
+    mut test_module: TestModule,
     urefs: BTreeMap<String, Key>,
 ) -> Value {
-    rename_export_to_call(&mut module, name);
-    let contract_bytes = parity_wasm::serialize(module).expect("Failed to serialize Wasm module.");
+    rename_export_to_call(&mut test_module.module, test_module.func_name);
+    let contract_bytes = parity_wasm::serialize(test_module.module).expect("Failed to serialize Wasm module.");
     Value::Contract(common::value::Contract::new(contract_bytes, urefs))
 }
 
@@ -419,6 +418,7 @@ fn read_contract_hash(wasm_memory: &WasmMemoryManager, hash_ptr: u32) -> Key {
     Key::Hash(target)
 }
 
+#[derive(Clone)]
 struct TestModule {
     module: Module,
     func_name: String,
@@ -466,8 +466,7 @@ fn store_contract_hash() {
     let urefs = urefs_map(once(("SomeKey".to_owned(), hash)));
 
     let contract = contract_bytes_from_wat(
-        wasm_module.module.clone(),
-        wasm_module.func_name.to_owned(),
+        wasm_module.clone(),
         urefs.clone(),
     );
 
@@ -601,8 +600,7 @@ fn store_contract_hash_legal_urefs() {
         ))));
 
         let contract = contract_bytes_from_wat(
-            wasm_module.module.clone(),
-            wasm_module.func_name.clone(),
+            wasm_module.clone(),
             urefs.clone(),
         );
 
@@ -675,8 +673,7 @@ fn store_contract_uref_known_key() {
         let wasm_contract_uref = wasm_write(&mut test_fixture.memory, contract_uref);
 
         let contract = contract_bytes_from_wat(
-            wasm_module.module.clone(),
-            wasm_module.func_name.clone(),
+            wasm_module,
             urefs.clone(),
         );
 
@@ -735,8 +732,7 @@ fn store_contract_uref_forged_key() {
     let wasm_contract_uref = wasm_write(&mut test_fixture.memory, forged_contract_uref);
 
     let contract = contract_bytes_from_wat(
-        wasm_module.module.clone(),
-        wasm_module.func_name.clone(),
+        wasm_module,
         urefs.clone(),
     );
 
@@ -950,8 +946,7 @@ fn contract_key_writeable() {
     let urefs = urefs_map(std::iter::empty());
 
     let contract = contract_bytes_from_wat(
-        wasm_module.module.clone(),
-        wasm_module.func_name.to_owned(),
+        wasm_module.clone(),
         urefs.clone(),
     );
 
