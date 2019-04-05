@@ -107,6 +107,7 @@ fn main() {
         println!("Pre state hash: {:?}", state_hash);
         let result = engine_state.run_deploy(
             &wasm_bytes.bytes,
+            &[], // TODO: consume args from CLI
             account_addr,
             timestamp,
             nonce,

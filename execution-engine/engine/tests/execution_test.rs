@@ -73,6 +73,7 @@ impl MockEnv {
             self.key,
         );
         Runtime::new(
+            Vec::new(),
             self.memory.clone(),
             tc,
             module,

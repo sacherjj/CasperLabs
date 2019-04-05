@@ -129,6 +129,7 @@ where
     pub fn run_deploy<A, P: Preprocessor<A>, E: Executor<A>>(
         &self,
         module_bytes: &[u8],
+        args: &[u8],
         address: [u8; 20],
         timestamp: u64,
         nonce: u64,
@@ -144,7 +145,9 @@ where
                 Ok(checkout_result) => match checkout_result {
                     None => Err(RootNotFound(prestate_hash)),
                     Some(mut tc) => {
-                        match executor.exec(module, address, timestamp, nonce, gas_limit, &mut tc) {
+                        match executor
+                            .exec(module, args, address, timestamp, nonce, gas_limit, &mut tc)
+                        {
                             (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
                             (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),
                         }

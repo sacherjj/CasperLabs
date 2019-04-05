@@ -222,6 +222,7 @@ where
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        args: Vec<Vec<u8>>,
         memory: MemoryRef,
         state: &'a mut TrackingCopy<R>,
         module: Module,
@@ -232,7 +233,7 @@ where
     ) -> Self {
         let rng = create_rng(&account_addr, timestamp, nonce);
         Runtime {
-            args: Vec::new(),
+            args,
             memory,
             state,
             module,
@@ -1067,6 +1068,7 @@ pub trait Executor<A> {
     fn exec<R: DbReader>(
         &self,
         parity_module: A,
+        args: &[u8],
         account_addr: [u8; 20],
         timestamp: u64,
         nonce: u64,
@@ -1083,6 +1085,7 @@ impl Executor<Module> for WasmiExecutor {
     fn exec<R: DbReader>(
         &self,
         parity_module: Module,
+        args: &[u8],
         account_addr: [u8; 20],
         timestamp: u64,
         nonce: u64,
@@ -1110,7 +1113,14 @@ impl Executor<Module> for WasmiExecutor {
             base_key: acct_key,
             gas_limit,
         };
+        let arguments: Vec<Vec<u8>> = if args.is_empty() {
+            Vec::new()
+        } else {
+            // TODO: Do we need to charge in proportion to the length of `args`?
+            on_fail_charge!(deserialize(args), 0)
+        };
         let mut runtime = Runtime::new(
+            arguments,
             memory,
             tc,
             parity_module,
