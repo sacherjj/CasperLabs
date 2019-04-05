@@ -12,6 +12,7 @@ import cats.syntax.functor._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{
   BlockDagFileStorage,
+  BlockDagStorage,
   BlockStore,
   Context,
   FileLMDBIndexBlockStore,
@@ -204,6 +205,7 @@ class NodeRuntime private[node] (
         transport,
         nodeDiscovery,
         rpConnections,
+        blockDagStorage,
         blockStore,
         oracle,
         packetHandler,
@@ -270,6 +272,7 @@ class NodeRuntime private[node] (
       implicit
       transport: TransportLayer[Task],
       blockStore: BlockStore[Effect],
+      blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: NodeAsk[Task]
   ): Unit =
     (for {
@@ -283,6 +286,8 @@ class NodeRuntime private[node] (
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
+      _   <- log.info("Bringing DagStorage down ...")
+      _   <- blockDagStorage.close().value
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
@@ -293,6 +298,7 @@ class NodeRuntime private[node] (
   )(
       implicit transport: TransportLayer[Task],
       blockStore: BlockStore[Effect],
+      blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: NodeAsk[Task]
   ): Task[Unit] =
     Task.delay(
@@ -313,6 +319,7 @@ class NodeRuntime private[node] (
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
+      blockDagStorage: BlockDagStorage[Effect],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       packetHandler: PacketHandler[Effect],
