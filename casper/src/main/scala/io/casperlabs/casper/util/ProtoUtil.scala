@@ -487,6 +487,7 @@ object ProtoUtil {
           .withUser(ByteString.EMPTY)
           .withTimestamp(now)
           .withSession(DeployCode())
+          .withPayment(DeployCode())
           .withGasLimit(Integer.MAX_VALUE)
     )
 
@@ -504,6 +505,7 @@ object ProtoUtil {
       user = ByteString.EMPTY,
       timestamp = timestamp,
       session = Some(DeployCode().withCode(ByteString.copyFromUtf8(source))),
+      payment = Some(DeployCode()),
       gasLimit = gasLimit
     )
 
@@ -517,6 +519,7 @@ object ProtoUtil {
       user = ByteString.EMPTY,
       timestamp = timestamp,
       session = Some(DeployCode().withCode(sessionCode)),
+      payment = Some(DeployCode()),
       gasLimit = gasLimit
     )
 
