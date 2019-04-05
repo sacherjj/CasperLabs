@@ -10,7 +10,14 @@ import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.{BlockStore, InMemBlockDagStorage, InMemBlockStore}
+import io.casperlabs.blockstorage.{
+  BlockDagFileStorage,
+  BlockStore,
+  Context,
+  FileLMDBIndexBlockStore,
+  InMemBlockDagStorage,
+  InMemBlockStore
+}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.util.comm.CasperPacketHandler
@@ -38,6 +45,9 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
 import com.olegpy.meow.effects._
+import io.casperlabs.blockstorage.util.fileIO
+import io.casperlabs.blockstorage.util.fileIO.IOError
+import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.concurrent.duration._
@@ -55,7 +65,8 @@ class NodeRuntime private[node] (
 
   private val initPeer = if (conf.casper.standalone) None else Some(conf.server.bootstrap)
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val logSource: LogSource       = LogSource(this.getClass)
+  implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
 
   implicit def eitherTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
@@ -64,6 +75,8 @@ class NodeRuntime private[node] (
 
   private val port           = conf.server.port
   private val kademliaPort   = conf.server.kademliaPort
+  private val blockstorePath = conf.server.dataDir.resolve("blockstore")
+  private val dagStoragePath = conf.server.dataDir.resolve("dagstorage")
   private val defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
   case class Servers(
@@ -129,21 +142,22 @@ class NodeRuntime private[node] (
         conf.server.chunkSize,
         commTmpFolder
       )(grpcScheduler, log, metrics, tcpConnections)
-      // TODO: This change is temporary until itegulov's BlockStore implementation is in
-      blockMap <- Ref.of[Effect, Map[BlockHash, BlockMsgWithTransform]](
-                   Map.empty[BlockHash, BlockMsgWithTransform]
-                 )
-      blockStore = InMemBlockStore.create[Effect](
-        syncEffect,
-        blockMap,
-        Metrics.eitherT(Monad[Task], metrics)
-      )
-      blockDagStorage <- InMemBlockDagStorage.create[Effect](
+      _             <- fileIO.makeDirectory[Effect](conf.server.dataDir)
+      _             <- fileIO.makeDirectory[Effect](blockstorePath)
+      _             <- fileIO.makeDirectory[Effect](dagStoragePath)
+      blockstoreEnv = Context.env(blockstorePath, 100L * 1024L * 1024L * 4096L)
+      blockStore <- FileLMDBIndexBlockStore
+                     .create[Effect](blockstoreEnv, blockstorePath)(
+                       Concurrent[Effect],
+                       Log.eitherTLog(Monad[Task], log)
+                     )
+                     .map(_.right.get)
+      dagConfig = BlockDagFileStorage.Config(dagStoragePath)
+      blockDagStorage <- BlockDagFileStorage.create[Effect](dagConfig)(
                           Concurrent[Effect],
                           Log.eitherTLog(Monad[Task], log),
                           blockStore
                         )
-      _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
       oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](
