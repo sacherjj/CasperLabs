@@ -62,7 +62,8 @@ object DownloadManagerImpl {
   def apply[F[_]: Concurrent: Log](
       maxParallelDownloads: Int,
       connectToGossip: Node => F[GossipService[F]],
-      backend: Backend[F]
+      backend: Backend[F],
+      relaying: Relaying[F]
   ): Resource[F, DownloadManager[F]] =
     Resource.make {
       for {
@@ -78,7 +79,8 @@ object DownloadManagerImpl {
           semaphore,
           signal,
           connectToGossip,
-          backend
+          backend,
+          relaying
         )
         managerLoop <- Concurrent[F].start(manager.run)
       } yield (isShutdown, workersRef, managerLoop, manager)
@@ -115,7 +117,8 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
     signal: MVar[F, DownloadManagerImpl.Signal[F]],
     // Establish gRPC connection to another node.
     connectToGossip: Node => F[GossipService[F]],
-    backend: DownloadManagerImpl.Backend[F]
+    backend: DownloadManagerImpl.Backend[F],
+    relaying: Relaying[F]
 ) extends DownloadManager[F] {
 
   import DownloadManagerImpl._
@@ -276,7 +279,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
         // This could arguably be done by `storeBlock` but this way it's explicit,
         // so we don't forget to talk to both kind of storages.
         _ <- backend.storeBlockSummary(summary)
-        // TODO: Gossip
+        _ <- if (relay) relaying.relay(List(summary.blockHash)) else ().pure[F]
         _ <- success
       } yield ()
 
