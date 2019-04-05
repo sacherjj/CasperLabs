@@ -17,16 +17,16 @@ pub enum AccessRights {
 }
 
 impl AccessRights {
-    pub fn is_readable(&self) -> bool {
-        *self >= AccessRights::Read
+    pub fn is_readable(self) -> bool {
+        self >= AccessRights::Read
     }
 
-    pub fn is_writeable(&self) -> bool {
-        *self >= AccessRights::Write
+    pub fn is_writeable(self) -> bool {
+        self >= AccessRights::Write
     }
 
-    pub fn is_addable(&self) -> bool {
-        *self >= AccessRights::Add
+    pub fn is_addable(self) -> bool {
+        self >= AccessRights::Add
     }
 }
 
