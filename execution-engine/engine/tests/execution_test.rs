@@ -507,6 +507,10 @@ fn store_contract_hash() {
     assert_eq!(effect, &Transform::Write(contract));
 }
 
+fn assert_invalid_access<T>(result: Result<T, wasmi::Trap>) {
+    assert_error_contains(result, "InvalidAccess")
+}
+
 fn assert_error_contains<T>(result: Result<T, wasmi::Trap>, msg: &str) {
     match result {
         Err(error) => assert!(format!("{:?}", error).contains(msg)),
@@ -765,7 +769,7 @@ fn account_key_writeable() {
     );
 
     let result = gs_write(&mut runtime, wasm_key, wasm_value);
-    assert_error_contains(result, "InvalidAccess");
+    assert_invalid_access(result);
 }
 
 // Test that is shared between two following tests for reading Account key.
@@ -818,7 +822,7 @@ fn account_key_readable_valid() {
 fn account_key_readable_invalid() {
     let init_value = Value::Int32(1);
     let read_result = test_account_key_readable(init_value, true);
-    assert_error_contains(read_result, "InvalidAccess");
+    assert_invalid_access(read_result);
 }
 
 #[test]
@@ -930,7 +934,7 @@ fn account_key_addable_invalid() {
         wasm_named_key.1 as u32,
     );
 
-    assert_error_contains(result, "InvalidAccess");
+    assert_invalid_access(result);
 }
 
 #[test]
@@ -963,7 +967,7 @@ fn contract_key_writeable() {
     );
 
     let result = gs_write(&mut runtime, wasm_key, wasm_contract);
-    assert_error_contains(result, "InvalidAccess");
+    assert_invalid_access(result);
 }
 
 #[test]
@@ -1085,7 +1089,7 @@ fn contract_key_addable_invalid() {
     let contract_key = random_contract_key(&mut rng);
     let other_contract_key = random_contract_key(&mut rng);
     let result = test_contract_key_addable(contract_key, other_contract_key);
-    assert_error_contains(result, "InvalidAccess");
+    assert_invalid_access(result);
 }
 
 // Test that is shared between two following tests for reading URef.
@@ -1144,7 +1148,7 @@ fn uref_key_readable_invalid() {
     // Tests that reading URef which is not readable fails.
     let init_value = Value::Int32(1);
     let test_result = test_uref_key_readable(init_value.clone(), AccessRights::Add);
-    assert_error_contains(test_result, "InvalidAccess")
+    assert_invalid_access(test_result);
 }
 
 // Test that is being shared between two following tests for writing to a URef.
@@ -1201,7 +1205,7 @@ fn uref_key_writeable_valid() {
 fn uref_key_writeable_invalid() {
     // Tests that writing to URef which is not writeable fails.
     let result = test_uref_key_writeable(AccessRights::Read);
-    assert_error_contains(result, "InvalidAccess")
+    assert_invalid_access(result);
 }
 
 fn test_uref_key_addable(rights: AccessRights) -> Result<(), wasmi::Trap> {
@@ -1259,5 +1263,5 @@ fn uref_key_addable_valid() {
 fn uref_key_addable_invalid() {
     // Tests that adding to URef which is not addable fails.
     let result = test_uref_key_addable(AccessRights::Read);
-    assert_error_contains(result, "InvalidAccess");
+    assert_invalid_access(result);
 }
