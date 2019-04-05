@@ -1116,7 +1116,8 @@ impl Executor<Module> for WasmiExecutor {
         let arguments: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
         } else {
-            // TODO: Do we need to charge in proportion to the length of `args`?
+            // TODO: figure out how this works with the cost model
+            // https://casperlabs.atlassian.net/browse/EE-239
             on_fail_charge!(deserialize(args), 0)
         };
         let mut runtime = Runtime::new(
