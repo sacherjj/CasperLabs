@@ -10,6 +10,14 @@ message Signature {
     bytes sig = 2;
 }
 
+// Code (either session or payment) to be deployed to the platform.
+// Includes both binary instructions (wasm) and optionally, arguments
+// to those instructions encoded via our ABI
+message DeployCode {
+    bytes code = 1; // wasm byte code
+    bytes args = 2; // ABI-encoded arguments
+}
+
 // A smart contract invocation, singed by the account that sent it.
 message Deploy {
     // blake2b256 hash of the `header`.
@@ -36,9 +44,9 @@ message Deploy {
 
     message Body {
         // Wasm code of the smart contract to be executed.
-        bytes session_code = 1;
+        DeployCode session = 1;
         // Wasm code that transfers some tokens to the validators as payment in exchange to run the Deploy.
-        bytes payment_code = 2;
+        DeployCode payment = 2;
     }
 }
 

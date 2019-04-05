@@ -8,7 +8,13 @@ import cats.effect.{Sync, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
-import io.casperlabs.casper.protocol.{BlockQuery, BlocksQuery, DeployData, VisualizeDagQuery}
+import io.casperlabs.casper.protocol.{
+  BlockQuery,
+  BlocksQuery,
+  DeployCode,
+  DeployData,
+  VisualizeDagQuery
+}
 import io.casperlabs.client.configuration.Streaming
 
 import scala.util.Try
@@ -123,8 +129,8 @@ object DeployRuntime {
             //TODO: allow user to specify their public key
             DeployData()
               .withTimestamp(System.currentTimeMillis())
-              .withSessionCode(session)
-              .withPaymentCode(payment)
+              .withSession(DeployCode().withCode(session))
+              .withPayment(DeployCode().withCode(payment))
               .withAddress(ByteString.copyFromUtf8(from))
               .withGasLimit(gasLimit)
               .withGasPrice(gasPrice)

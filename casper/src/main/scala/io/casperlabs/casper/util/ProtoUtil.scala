@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.implicits._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.ipc.{Deploy => EEDeploy, DeployCode}
+import io.casperlabs.ipc
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{Log, Time}
 
@@ -486,7 +486,7 @@ object ProtoUtil {
         DeployData()
           .withUser(ByteString.EMPTY)
           .withTimestamp(now)
-          .withSessionCode(ByteString.EMPTY)
+          .withSession(DeployCode())
           .withGasLimit(Integer.MAX_VALUE)
     )
 
@@ -503,7 +503,7 @@ object ProtoUtil {
     DeployData(
       user = ByteString.EMPTY,
       timestamp = timestamp,
-      sessionCode = ByteString.copyFromUtf8(source),
+      session = Some(DeployCode().withCode(ByteString.copyFromUtf8(source))),
       gasLimit = gasLimit
     )
 
@@ -516,18 +516,18 @@ object ProtoUtil {
     DeployData(
       user = ByteString.EMPTY,
       timestamp = timestamp,
-      sessionCode = sessionCode,
+      session = Some(DeployCode().withCode(sessionCode)),
       gasLimit = gasLimit
     )
 
   def termDeployNow(sessionCode: ByteString): DeployData =
     sourceDeploy(sessionCode, System.currentTimeMillis(), Integer.MAX_VALUE)
 
-  def deployDataToEEDeploy(dd: DeployData): EEDeploy = EEDeploy(
+  def deployDataToEEDeploy(dd: DeployData): ipc.Deploy = ipc.Deploy(
     address = dd.address,
     timestamp = dd.timestamp,
-    session = Some(DeployCode().withCode(dd.sessionCode)),
-    payment = Some(DeployCode().withCode(dd.paymentCode)),
+    session = dd.session.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
+    payment = dd.payment.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
     gasLimit = dd.gasLimit,
     gasPrice = dd.gasPrice,
     nonce = dd.nonce
