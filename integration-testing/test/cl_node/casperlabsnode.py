@@ -128,7 +128,7 @@ class Node:
         self.background_logging.start()
 
     def __repr__(self) -> str:
-        return f'<Node(name={repr(self.name)})>'
+        return f'<{self.__class__.__name__}(name={repr(self.name)})>'
 
     def logs(self) -> str:
         return self.container.logs().decode('utf-8')
@@ -227,8 +227,7 @@ class Node:
                gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
 
         command = " ".join([
-            f"--host",
-            self.name,
+            f"--host {self.name}",
             "deploy",
             "--from", from_address,
             "--gas-limit", str(gas_limit),
