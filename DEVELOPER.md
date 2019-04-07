@@ -484,6 +484,22 @@ You will need a virtual machine running the appropriate version of Linux.
 
 For a more convenient experience, you can share a folder on your Mac with the virtual machine. To do this you will need to install the VirtualBox Guest Additions. Unfortunately there are some gotchas with this. You may need to utilize one of these [solutions](https://askubuntu.com/questions/573596/unable-to-install-guest-additions-cd-image-on-virtual-box).
 
+### Running benchmarks
+
+Currently, only `BlockStore` benchmarks are done.
+The recommended way to run them is to use `sbt` as follows:
+```
+ sbt "project blockStorage" "jmh:run -i 10 -wi 10 -f2 -t4"
+```
+This tells `sbt` to run `JMH` benchmarks from the `blockStorage` project with the following parameters:
+- 10 warmup iterations
+- 10 measuring iterations
+- 2 forks
+- 4 threads
+This procedure requires machinbe with at least 32GB RAM.
+This is a recommended way to run benchmarks. 
+For more information about JMH, you can visit JMH project page: http://openjdk.java.net/projects/code-tools/jmh/
+
 ## Description of subprojects
 
 ### Communication
