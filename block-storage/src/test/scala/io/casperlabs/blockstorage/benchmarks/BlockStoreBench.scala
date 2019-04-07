@@ -40,7 +40,7 @@ abstract class BlockStoreBench {
     blockStore.get(randomHash).runSyncUnsafe()
 
   @Benchmark
-  def getExistent() =
+  def getInserted() =
     blockStore.get(inserted.next()).runSyncUnsafe()
 
   @Benchmark
@@ -48,7 +48,7 @@ abstract class BlockStoreBench {
     blockStore.find(_ == randomHash).runSyncUnsafe()
 
   @Benchmark
-  def findExistent() =
+  def findInserted() =
     blockStore.find(_ == inserted.next()).runSyncUnsafe()
 
   @Benchmark
@@ -60,7 +60,7 @@ abstract class BlockStoreBench {
     blockStore.contains(randomHash).runSyncUnsafe()
 
   @Benchmark
-  def containsExistent() =
+  def containsInserted() =
     blockStore.contains(inserted.next()).runSyncUnsafe()
 }
 
