@@ -1,21 +1,31 @@
 package io.casperlabs.blockstorage.benchmarks
 
-import cats.instances.list._
-import cats.syntax.traverse._
 import BlockStoreBenchSuite._
+import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations._
-
 @State(Scope.Benchmark)
 @BenchmarkMode(Array(Mode.Throughput))
 abstract class BlockStoreBench {
   val blockStore: BlockStore[Task]
+  var inserted: Iterator[BlockHash] = _
 
   @Setup(Level.Iteration)
-  def setupWithRandomData(): Unit =
-    preFilling.toList.traverse(b => blockStore.put(b)).runSyncUnsafe()
+  def setupWithRandomData(): Unit = {
+    val preAllocSize = 100
+    val hashes       = Array.fill[BlockHash](preAllocSize)(null)
+
+    for (i <- 0 until preAllocSize) {
+      val block = randomBlock
+      blockStore.put(block).runSyncUnsafe()
+      hashes(i) = block._1
+    }
+
+    inserted = repeatedIteratorFrom(hashes.toIndexedSeq)
+    System.gc()
+  }
 
   @TearDown(Level.Iteration)
   def clearStore(): Unit =
@@ -31,7 +41,7 @@ abstract class BlockStoreBench {
 
   @Benchmark
   def getExistent() =
-    blockStore.get(randomInserted._1).runSyncUnsafe()
+    blockStore.get(inserted.next()).runSyncUnsafe()
 
   @Benchmark
   def findRandom() =
@@ -39,7 +49,7 @@ abstract class BlockStoreBench {
 
   @Benchmark
   def findExistent() =
-    blockStore.find(_ == randomInserted._1).runSyncUnsafe()
+    blockStore.find(_ == inserted.next()).runSyncUnsafe()
 
   @Benchmark
   def checkpoint() =
@@ -51,7 +61,7 @@ abstract class BlockStoreBench {
 
   @Benchmark
   def containsExistent() =
-    blockStore.contains(randomInserted._1).runSyncUnsafe()
+    blockStore.contains(inserted.next()).runSyncUnsafe()
 }
 
 class InMemBench extends BlockStoreBench {

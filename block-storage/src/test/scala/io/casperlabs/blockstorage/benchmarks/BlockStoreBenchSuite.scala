@@ -1,6 +1,6 @@
 package io.casperlabs.blockstorage.benchmarks
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.Paths
 import java.util.UUID
 
 import cats.Monad
@@ -37,13 +37,9 @@ object BlockStoreBenchSuite {
   implicit val metricsNop: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val logNop: Log[Task]         = new shared.Log.NOPLog[Task]
 
-  private val preCreatedBlocks = (0 to 500).map(_ => randomBlock)
+  private val preCreatedBlocks = (0 to 40).map(_ => randomBlock)
 
   val blocksIter = repeatedIteratorFrom(preCreatedBlocks)
-  val preFilling = (0 to 100).map(_ => randomBlock)
-
-  def randomInserted =
-    preFilling(Random.nextInt(preFilling.size))
 
   def randomHexString(numchars: Int): String = {
     val sb = new StringBuffer
@@ -61,8 +57,8 @@ object BlockStoreBenchSuite {
   def randomDeployData: DeployData =
     DeployData()
       .withAddress(randomHexString(32))
-      .withPaymentCode(randomHexString(1024))
-      .withSessionCode(randomHexString(5120))
+      .withPaymentCode(randomHexString(512))
+      .withSessionCode(randomHexString(480))
 
   def randomDeploy: ProcessedDeploy =
     ProcessedDeploy()
@@ -71,7 +67,7 @@ object BlockStoreBenchSuite {
   def randomBody: Body =
     Body()
       .withDeploys(
-        (0 to 50) map (_ => randomDeploy)
+        (0 to 80000) map (_ => randomDeploy)
       )
 
   def randomBlockMessage: BlockMessage = {
@@ -132,7 +128,7 @@ object Init {
   def lmdbBlockStore = LMDBBlockStore.create[Task](
     LMDBBlockStore.Config(
       dir = createPath("lmdb_block_store"),
-      blockStoreSize = 1073741824,
+      blockStoreSize = 1073741824L * 12,
       maxDbs = 1,
       maxReaders = 126,
       useTls = false
@@ -146,7 +142,7 @@ object Init {
           storagePath = createPath("file_lmdb_storage"),
           indexPath = createPath("file_lmdb_index"),
           checkpointsDirPath = createPath("file_lmdb_checkpoints"),
-          mapSize = 1073741824
+          mapSize = 1073741824L * 12
         )
       )
       .runSyncUnsafe()
