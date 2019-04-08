@@ -6,6 +6,7 @@ import io.casperlabs.blockstorage._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations._
+
 @State(Scope.Benchmark)
 @BenchmarkMode(Array(Mode.Throughput))
 abstract class BlockStoreBench {
@@ -14,8 +15,7 @@ abstract class BlockStoreBench {
 
   @Setup(Level.Iteration)
   def setupWithRandomData(): Unit = {
-    val preAllocSize = 100
-    val hashes       = Array.fill[BlockHash](preAllocSize)(null)
+    val hashes = Array.fill[BlockHash](preAllocSize)(null)
 
     for (i <- 0 until preAllocSize) {
       val block = randomBlock

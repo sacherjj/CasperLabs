@@ -2,7 +2,7 @@ package io.casperlabs.blockstorage.benchmarks
 
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Paths
-import java.util.UUID
+import java.util.{Properties, UUID}
 
 import cats.Monad
 import cats.effect.Concurrent
@@ -47,7 +47,22 @@ object BlockStoreBenchSuite {
   implicit val metricsNop: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val logNop: Log[Task]         = new shared.Log.NOPLog[Task]
 
-  private val preCreatedBlocks = (0 to 40).map(_ => randomBlock)
+  private val props = {
+    val p  = new Properties()
+    val in = getClass.getResourceAsStream("/block-store-benchmark.properties")
+    p.load(in)
+    in.close()
+    p
+  }
+
+  def getIntProp(name: String) =
+    props.get(name).asInstanceOf[String].toInt
+
+  val blockSize    = getIntProp("blockSizeInKb")
+  val preCreated   = getIntProp("preCreatedBlocks")
+  val preAllocSize = getIntProp("preAllocBlocksEachIteration")
+
+  private val preCreatedBlocks = (0 to preCreated).map(_ => randomBlock)
 
   val blocksIter = repeatedIteratorFrom(preCreatedBlocks)
 
@@ -77,7 +92,7 @@ object BlockStoreBenchSuite {
   def randomBody: Body =
     Body()
       .withDeploys(
-        (0 to 80000) map (_ => randomDeploy)
+        (0 to blockSize) map (_ => randomDeploy)
       )
 
   def randomBlockMessage: BlockMessage = {

@@ -14,8 +14,6 @@ abstract class BlockDagStorageBench {
 
   @Setup(Level.Iteration)
   def setupWithRandomData(): Unit = {
-    val preAllocSize = 100
-
     (0 until preAllocSize) foreach { _ =>
       dagStore.insert(randomBlockMessage).runSyncUnsafe()
     }
