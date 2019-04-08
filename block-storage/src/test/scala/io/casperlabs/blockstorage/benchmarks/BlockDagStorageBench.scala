@@ -1,7 +1,7 @@
 package io.casperlabs.blockstorage.benchmarks
 
 import io.casperlabs.blockstorage.BlockDagStorage
-import io.casperlabs.blockstorage.benchmarks.BlockStoreBenchSuite._
+import io.casperlabs.blockstorage.benchmarks.StoreBenchSuite._
 import io.casperlabs.blockstorage.benchmarks.Init._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -14,7 +14,7 @@ abstract class BlockDagStorageBench {
 
   @Setup(Level.Iteration)
   def setupWithRandomData(): Unit = {
-    (0 until preAllocSize) foreach { _ =>
+    (0 until StoreBenchSuite.preAllocSize) foreach { _ =>
       dagStore.insert(randomBlockMessage).runSyncUnsafe()
     }
     System.gc()
@@ -34,7 +34,9 @@ abstract class BlockDagStorageBench {
 
   @Benchmark
   def insert() =
-    dagStore.insert(blocksIter.next()._2.blockMessage.get).runSyncUnsafe()
+    dagStore.insert(
+      StoreBenchSuite.blocksIter.next()._2.blockMessage.get
+    ).runSyncUnsafe()
 }
 
 class FileStorageWithLmdbBlockStoreBench extends BlockDagStorageBench {

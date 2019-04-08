@@ -1,6 +1,6 @@
 package io.casperlabs.blockstorage.benchmarks
 
-import BlockStoreBenchSuite._
+import StoreBenchSuite._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage._
 import monix.eval.Task
@@ -15,9 +15,9 @@ abstract class BlockStoreBench {
 
   @Setup(Level.Iteration)
   def setupWithRandomData(): Unit = {
-    val hashes = Array.fill[BlockHash](preAllocSize)(null)
+    val hashes = Array.fill[BlockHash](StoreBenchSuite.preAllocSize)(null)
 
-    for (i <- 0 until preAllocSize) {
+    for (i <- 0 until StoreBenchSuite.preAllocSize) {
       val block = randomBlock
       blockStore.put(block).runSyncUnsafe()
       hashes(i) = block._1
@@ -33,7 +33,9 @@ abstract class BlockStoreBench {
 
   @Benchmark
   def put(): Unit =
-    blockStore.put(blocksIter.next()).runSyncUnsafe()
+    blockStore.put(
+      StoreBenchSuite.blocksIter.next()
+    ).runSyncUnsafe()
 
   @Benchmark
   def getRandom() =

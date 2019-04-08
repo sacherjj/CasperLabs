@@ -8,26 +8,11 @@ import cats.Monad
 import cats.effect.Concurrent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.{
-  BlockDagFileStorage,
-  BlockDagStorage,
-  BlockStore,
-  FileLMDBIndexBlockStore,
-  InMemBlockStore,
-  IndexedBlockDagStorage,
-  LMDBBlockStore
-}
-import io.casperlabs.casper.protocol.{
-  BlockMessage,
-  Body,
-  DeployData,
-  Header,
-  Justification,
-  ProcessedDeploy
-}
+import io.casperlabs.blockstorage.{BlockDagFileStorage, BlockDagStorage, BlockStore, FileLMDBIndexBlockStore, InMemBlockStore, IndexedBlockDagStorage, LMDBBlockStore}
+import io.casperlabs.casper.protocol.{BlockMessage, Body, DeployCode, DeployData, Header, Justification, ProcessedDeploy}
 import io.casperlabs.ipc.Key.KeyInstance
 import io.casperlabs.ipc.Transform.TransformInstance
-import io.casperlabs.ipc._
+import io.casperlabs.ipc.{DeployCode => _, _}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -38,7 +23,7 @@ import monix.execution.Scheduler.Implicits.global
 import scala.collection.immutable.IndexedSeq
 import scala.util.Random
 
-object BlockStoreBenchSuite {
+object StoreBenchSuite {
   import scala.language.implicitConversions
 
   implicit def strToByteStr(str: String): ByteString =
@@ -79,11 +64,18 @@ object BlockStoreBenchSuite {
   def randomHash: BlockHash =
     strToByteStr(randomHexString(32))
 
+  //The implementation assumes that this method will return a data
+  //with approximately 1KB size
+  //Take this into account before change it
   def randomDeployData: DeployData =
     DeployData()
       .withAddress(randomHexString(32))
-      .withPaymentCode(randomHexString(512))
-      .withSessionCode(randomHexString(480))
+      .withPayment(DeployCode()
+        .withCode(randomHexString(512))
+      )
+      .withSession(DeployCode()
+        .withCode(randomHexString(480))
+      )
 
   def randomDeploy: ProcessedDeploy =
     ProcessedDeploy()
@@ -145,7 +137,7 @@ object BlockStoreBenchSuite {
 }
 
 object Init {
-  import BlockStoreBenchSuite._
+  import StoreBenchSuite._
 
   def createPath(path: String) =
     Paths.get(s"/tmp/$path-${UUID.randomUUID()}")
