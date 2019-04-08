@@ -203,9 +203,9 @@ mod tests {
     use proptest::collection::vec;
     use proptest::prelude::*;
 
+    use common::gens::*;
     use common::key::{AccessRights, Key};
     use common::value::{Account, Contract, Value};
-    use gens::gens::*;
     use storage::gs::inmem::InMemGS;
     use storage::gs::DbReader;
     use storage::op::Op;

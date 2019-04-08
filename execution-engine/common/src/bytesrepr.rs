@@ -437,10 +437,11 @@ impl ToBytes for str {
 #[cfg(test)]
 mod proptests {
     // Bring the macros and other important things into scope.
-    use gens::gens::*;
+    use crate::gens::*;
     use proptest::collection::vec;
     use proptest::prelude::*;
-    use shared::test_utils::test_serialization_roundtrip;
+    // use shared::test_utils::test_serialization_roundtrip;
+    use crate::test_utils::test_serialization_roundtrip;
 
     proptest! {
 

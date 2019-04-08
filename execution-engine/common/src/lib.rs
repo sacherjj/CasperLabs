@@ -8,11 +8,24 @@
     maybe_uninit
 )]
 
+// For test targets alloc is imported with `macro_use` which will
+// allow proptest utilities to work properly as they require `vec!`
+// macro to be available internally.
+#[cfg(any(test, feature = "gens"))]
+#[macro_use]
 extern crate alloc;
+
+#[cfg(not(any(test, feature = "gens")))]
+extern crate alloc;
+
+
 #[macro_use]
 extern crate uint;
 extern crate failure;
 extern crate wee_alloc;
+
+#[cfg(any(test, feature = "gens"))]
+extern crate proptest;
 
 #[cfg(not(feature = "std"))]
 #[global_allocator]
@@ -20,7 +33,11 @@ pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 pub mod bytesrepr;
 pub mod contract_api;
+#[cfg(any(test, feature = "gens"))]
+pub mod gens;
 pub mod key;
+#[cfg(any(test, feature = "gens"))]
+pub mod test_utils;
 pub mod value;
 
 mod ext_ffi {
