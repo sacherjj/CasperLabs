@@ -417,7 +417,7 @@ where
         }
     }
 
-    fn call_contract(
+    pub fn call_contract(
         &mut self,
         key_ptr: u32,
         key_size: usize,
@@ -431,7 +431,7 @@ where
         let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
 
         let key = self.context.deserialize_key(&key_bytes)?;
-        if key.is_readable() {
+        if self.is_readable(&key) {
             let (args, module, mut refs) = {
                 match self.state.read(key).map_err(Into::into)? {
                     None => Err(Error::KeyNotFound(key)),
@@ -536,7 +536,7 @@ where
     ) -> Result<(), Trap> {
         self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)
             .and_then(|(key, value)| {
-                if key.is_writable() {
+                if self.is_writeable(&key) {
                     self.state.write(key, value);
                     Ok(())
                 } else {
@@ -559,11 +559,44 @@ where
         self.add_transforms(key, value)
     }
 
+    // Tests whether reading from the `key` is valid.
+    // For Accounts it's valid to read when the operation is done on the current context's key.
+    // For Contracts it's always valid.
+    // For URefs it's valid if the access rights of the URef allow for reading.
+    fn is_readable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) => &self.context.base_key == key,
+            Key::Hash(_) => true,
+            Key::URef(_, rights) => rights.is_readable(),
+        }
+    }
+
+    /// Tests whether addition to `key` is valid.
+    /// Addition to account key is valid iff it is being made from the context of the account.
+    /// Addition to contract key is valid iff it is being made from the context of the contract.
+    /// Additions to unforgeable key is valid as long as key itself is addable
+    fn is_addable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) | Key::Hash(_) => &self.context.base_key == key,
+            Key::URef(_, rights) => rights.is_addable(),
+        }
+    }
+
+    // Test whether writing to `kay` is valid.
+    // For Accounts and Hashes it's always invalid.
+    // For URefs it depends on the access rights that uref has.
+    fn is_writeable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) | Key::Hash(_) => false,
+            Key::URef(_, rights) => rights.is_writeable(),
+        }
+    }
+
     /// Reads value living under a key (found at `key_ptr` and `key_size` in Wasm memory).
     /// Fails if `key` is not "readable", i.e. its access rights are weaker than `AccessRights::Read`.
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        if key.is_readable() {
+        if self.is_readable(&key) {
             err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
         } else {
             Err(Error::InvalidAccess {
@@ -578,7 +611,7 @@ where
     /// either because they're not a Monoid or if the value stored under `key` has different type,
     /// then `TypeMismatch` errors is returned. Addition can also fail when `key` is not "addable".
     fn add_transforms(&mut self, key: Key, value: Value) -> Result<(), Trap> {
-        if key.is_addable() {
+        if self.is_addable(&key) {
             match self.state.add(key, value) {
                 Err(storage_error) => Err(storage_error.into().into()),
                 Ok(AddResult::Success) => Ok(()),
