@@ -440,7 +440,6 @@ mod proptests {
     use crate::gens::*;
     use proptest::collection::vec;
     use proptest::prelude::*;
-    // use shared::test_utils::test_serialization_roundtrip;
     use crate::test_utils::test_serialization_roundtrip;
 
     proptest! {
