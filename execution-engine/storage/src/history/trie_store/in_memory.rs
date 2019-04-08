@@ -101,8 +101,15 @@
 use super::*;
 use common::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use std::collections::HashMap;
-use std::ops::DerefMut;
-use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
+
+/// A marker for use in a mutex which represents the capability to perform a
+/// write transaction.
+struct WriteCapability;
+
+type WriteLock<'a> = MutexGuard<'a, WriteCapability>;
+
+type BytesMap = HashMap<Vec<u8>, Vec<u8>>;
 
 #[derive(Debug, Fail, PartialEq, Eq)]
 pub enum Error {
@@ -125,23 +132,23 @@ impl<T> From<std::sync::PoisonError<T>> for Error {
     }
 }
 
-type BytesMap = HashMap<Vec<u8>, Vec<u8>>;
-
 /// A read transaction for the in-memory trie store.
-pub struct InMemoryReadTransaction<'a> {
-    guard: RwLockReadGuard<'a, BytesMap>,
+pub struct InMemoryReadTransaction {
+    view: BytesMap,
 }
 
-impl<'a> InMemoryReadTransaction<'a> {
-    pub fn new(
-        store: &'a InMemoryEnvironment,
-    ) -> Result<InMemoryReadTransaction<'a>, PoisonError<RwLockReadGuard<'a, BytesMap>>> {
-        let guard = store.data.read()?;
-        Ok(InMemoryReadTransaction { guard })
+impl InMemoryReadTransaction {
+    pub fn new(store: &InMemoryEnvironment) -> Result<InMemoryReadTransaction, Error> {
+        let view = {
+            let arc = store.data.clone();
+            let lock = arc.lock()?;
+            lock.to_owned()
+        };
+        Ok(InMemoryReadTransaction { view })
     }
 }
 
-impl<'a> Transaction for InMemoryReadTransaction<'a> {
+impl Transaction for InMemoryReadTransaction {
     type Error = Error;
 
     type Handle = ();
@@ -151,25 +158,33 @@ impl<'a> Transaction for InMemoryReadTransaction<'a> {
     }
 }
 
-impl<'a> Readable for InMemoryReadTransaction<'a> {
+impl Readable for InMemoryReadTransaction {
     fn read(&self, _handle: Self::Handle, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self.guard.get(&key.to_vec()).map(ToOwned::to_owned))
+        Ok(self.view.get(&key.to_vec()).map(ToOwned::to_owned))
     }
 }
 
 /// A read-write transaction for the in-memory trie store.
+#[allow(dead_code)]
 pub struct InMemoryReadWriteTransaction<'a> {
-    guard: RwLockWriteGuard<'a, BytesMap>,
     view: BytesMap,
+    store_ref: Arc<Mutex<BytesMap>>,
+    write_lock: WriteLock<'a>,
 }
 
 impl<'a> InMemoryReadWriteTransaction<'a> {
-    pub fn new(
-        store: &'a InMemoryEnvironment,
-    ) -> Result<InMemoryReadWriteTransaction<'a>, PoisonError<RwLockWriteGuard<'a, BytesMap>>> {
-        let guard = store.data.write()?;
-        let view = guard.to_owned();
-        Ok(InMemoryReadWriteTransaction { guard, view })
+    pub fn new(store: &'a InMemoryEnvironment) -> Result<InMemoryReadWriteTransaction<'a>, Error> {
+        let write_lock = store.write_mutex.lock()?;
+        let store_ref = store.data.clone();
+        let view = {
+            let view_lock = store_ref.lock()?;
+            view_lock.to_owned()
+        };
+        Ok(InMemoryReadWriteTransaction {
+            write_lock,
+            store_ref,
+            view,
+        })
     }
 }
 
@@ -178,8 +193,9 @@ impl<'a> Transaction for InMemoryReadWriteTransaction<'a> {
 
     type Handle = ();
 
-    fn commit(mut self) -> Result<(), Self::Error> {
-        self.guard.deref_mut().extend(self.view);
+    fn commit(self) -> Result<(), Self::Error> {
+        let mut store_ref_lock = self.store_ref.lock()?;
+        store_ref_lock.extend(self.view);
         Ok(())
     }
 }
@@ -204,13 +220,15 @@ impl<'a> Writable for InMemoryReadWriteTransaction<'a> {
 
 /// An environment for the in-memory trie store.
 pub struct InMemoryEnvironment {
-    data: Arc<RwLock<BytesMap>>,
+    data: Arc<Mutex<BytesMap>>,
+    write_mutex: Arc<Mutex<WriteCapability>>,
 }
 
 impl Default for InMemoryEnvironment {
     fn default() -> Self {
-        let data = Arc::new(RwLock::new(HashMap::new()));
-        InMemoryEnvironment { data }
+        let data = Arc::new(Mutex::new(HashMap::new()));
+        let write_mutex = Arc::new(Mutex::new(WriteCapability));
+        InMemoryEnvironment { data, write_mutex }
     }
 }
 
@@ -225,11 +243,11 @@ impl<'a> TransactionSource<'a> for InMemoryEnvironment {
 
     type Handle = ();
 
-    type ReadTransaction = InMemoryReadTransaction<'a>;
+    type ReadTransaction = InMemoryReadTransaction;
 
     type ReadWriteTransaction = InMemoryReadWriteTransaction<'a>;
 
-    fn create_read_txn(&'a self) -> Result<InMemoryReadTransaction<'a>, Self::Error> {
+    fn create_read_txn(&'a self) -> Result<InMemoryReadTransaction, Self::Error> {
         InMemoryReadTransaction::new(self).map_err(Into::into)
     }
 
