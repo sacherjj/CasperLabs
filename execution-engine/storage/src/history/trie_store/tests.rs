@@ -63,7 +63,7 @@ fn create_data() -> Vec<TestData<Vec<u8>, Vec<u8>>> {
     ]
 }
 
-fn put_many<'a, K, V, T, S, E>(txn: &mut T, store: &S, items: &[TestData<K, V>]) -> Result<(), E>
+fn put_many<K, V, T, S, E>(txn: &mut T, store: &S, items: &[TestData<K, V>]) -> Result<(), E>
 where
     K: ToBytes,
     V: ToBytes,
