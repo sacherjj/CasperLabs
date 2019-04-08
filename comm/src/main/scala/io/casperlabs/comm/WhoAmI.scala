@@ -3,14 +3,15 @@ package io.casperlabs.comm
 import java.io.{BufferedReader, InputStreamReader}
 import java.net.{InetAddress, URL}
 
-import scala.util.Try
-
+import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
-import cats.Applicative
-
 import io.casperlabs.catscontrib.ski.kp
+import io.casperlabs.comm.discovery.NodeUtils._
+import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
 import io.casperlabs.shared.Log
+
+import scala.util.Try
 
 object WhoAmI {
 
@@ -20,24 +21,24 @@ object WhoAmI {
       discoveryPort: Int,
       noUpnp: Boolean,
       id: NodeIdentifier
-  ): F[PeerNode] =
+  ): F[Node] =
     for {
       externalAddress <- retrieveExternalAddress(noUpnp, protocolPort)
       host            <- fetchHost(host, externalAddress)
-      peerNode        = PeerNode.from(id, host, protocolPort, discoveryPort)
+      peerNode        = Node(id, host, protocolPort, discoveryPort)
     } yield peerNode
 
   def checkLocalPeerNode[F[_]: Sync: Log](
       protocolPort: Int,
       discoveryPort: Int,
-      peerNode: PeerNode
-  ): F[Option[PeerNode]] =
+      peerNode: Node
+  ): F[Option[Node]] =
     for {
       r      <- checkAll()
       (_, a) = r
-      host <- if (a == peerNode.endpoint.host) Option.empty[String].pure[F]
+      host <- if (a == peerNode.host) Option.empty[String].pure[F]
              else Log[F].info(s"external IP address has changed to $a").map(kp(Option(a)))
-    } yield host.map(h => PeerNode.from(peerNode.id, h, protocolPort, discoveryPort))
+    } yield host.map(h => Node(peerNode.id, h, protocolPort, discoveryPort))
 
   private def fetchHost[F[_]: Sync: Log](
       host: Option[String],

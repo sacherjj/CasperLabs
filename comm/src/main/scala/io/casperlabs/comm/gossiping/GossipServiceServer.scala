@@ -26,7 +26,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
 ) extends GossipService[F] {
   import GossipServiceServer._
 
-  def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
+  override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
     // Collect the blocks which we don't have yet;
     // reply about those that we are going to download and relay them,
     // then asynchronously sync the DAG, schedule the downloads,
@@ -80,7 +80,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
     }
   }
 
-  def streamAncestorBlockSummaries(
+  override def streamAncestorBlockSummaries(
       request: StreamAncestorBlockSummariesRequest
   ): Iterant[F, BlockSummary] = {
     // We return known hashes but not their parents.
@@ -135,11 +135,12 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
     }
   }
 
-  def streamDagTipBlockSummaries(
+  override def streamDagTipBlockSummaries(
       request: StreamDagTipBlockSummariesRequest
-  ): Iterant[F, BlockSummary] = ???
+  ): Iterant[F, BlockSummary] =
+    Iterant.liftF(consensus.listTips).flatMap(Iterant.fromSeq(_))
 
-  def streamBlockSummaries(
+  override def streamBlockSummaries(
       request: StreamBlockSummariesRequest
   ): Iterant[F, BlockSummary] =
     Iterant[F]
@@ -147,7 +148,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
       .mapEval(backend.getBlockSummary(_))
       .flatMap(Iterant.fromIterable(_))
 
-  def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
+  override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
     Iterant.resource(blockDownloadSemaphore.acquire)(_ => blockDownloadSemaphore.release) flatMap {
       _ =>
         Iterant.liftF {
@@ -222,6 +223,9 @@ object GossipServiceServer {
 
     /** Notify about a new block we downloaded, verified and stored. */
     def onDownloaded(blockHash: ByteString): F[Unit]
+
+    /** Retrieve the current tips of the DAG, the ones we'd build a block on. */
+    def listTips: F[Seq[BlockSummary]]
   }
 
   def apply[F[_]: Concurrent: Par: Log](

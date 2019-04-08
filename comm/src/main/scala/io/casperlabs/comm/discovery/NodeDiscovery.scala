@@ -4,12 +4,11 @@ import cats.Monad
 import cats.data.EitherT
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.{MonadTrans, _}
-import io.casperlabs.comm.{NodeIdentifier, PeerNode}
 
 trait NodeDiscovery[F[_]] {
   def discover: F[Unit]
-  def lookup(id: NodeIdentifier): F[Option[PeerNode]]
-  def alivePeersAscendingDistance: F[List[PeerNode]]
+  def lookup(id: NodeIdentifier): F[Option[Node]]
+  def alivePeersAscendingDistance: F[List[Node]]
 }
 
 object NodeDiscovery extends NodeDiscoveryInstances {
@@ -19,9 +18,9 @@ object NodeDiscovery extends NodeDiscoveryInstances {
       implicit C: NodeDiscovery[F]
   ): NodeDiscovery[T[F, ?]] =
     new NodeDiscovery[T[F, ?]] {
-      def discover: T[F, Unit]                               = C.discover.liftM[T]
-      def lookup(id: NodeIdentifier): T[F, Option[PeerNode]] = C.lookup(id).liftM[T]
-      def alivePeersAscendingDistance: T[F, List[PeerNode]]  = C.alivePeersAscendingDistance.liftM[T]
+      def discover: T[F, Unit]                           = C.discover.liftM[T]
+      def lookup(id: NodeIdentifier): T[F, Option[Node]] = C.lookup(id).liftM[T]
+      def alivePeersAscendingDistance: T[F, List[Node]]  = C.alivePeersAscendingDistance.liftM[T]
     }
 }
 

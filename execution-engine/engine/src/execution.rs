@@ -222,6 +222,7 @@ where
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        args: Vec<Vec<u8>>,
         memory: MemoryRef,
         state: &'a mut TrackingCopy<R>,
         module: Module,
@@ -232,7 +233,7 @@ where
     ) -> Self {
         let rng = create_rng(&account_addr, timestamp, nonce);
         Runtime {
-            args: Vec::new(),
+            args,
             memory,
             state,
             module,
@@ -416,7 +417,7 @@ where
         }
     }
 
-    fn call_contract(
+    pub fn call_contract(
         &mut self,
         key_ptr: u32,
         key_size: usize,
@@ -430,7 +431,7 @@ where
         let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
 
         let key = self.context.deserialize_key(&key_bytes)?;
-        if key.is_readable() {
+        if self.is_readable(&key) {
             let (args, module, mut refs) = {
                 match self.state.read(key).map_err(Into::into)? {
                     None => Err(Error::KeyNotFound(key)),
@@ -535,7 +536,7 @@ where
     ) -> Result<(), Trap> {
         self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)
             .and_then(|(key, value)| {
-                if key.is_writable() {
+                if self.is_writeable(&key) {
                     self.state.write(key, value);
                     Ok(())
                 } else {
@@ -558,11 +559,44 @@ where
         self.add_transforms(key, value)
     }
 
+    // Tests whether reading from the `key` is valid.
+    // For Accounts it's valid to read when the operation is done on the current context's key.
+    // For Contracts it's always valid.
+    // For URefs it's valid if the access rights of the URef allow for reading.
+    fn is_readable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) => &self.context.base_key == key,
+            Key::Hash(_) => true,
+            Key::URef(_, rights) => rights.is_readable(),
+        }
+    }
+
+    /// Tests whether addition to `key` is valid.
+    /// Addition to account key is valid iff it is being made from the context of the account.
+    /// Addition to contract key is valid iff it is being made from the context of the contract.
+    /// Additions to unforgeable key is valid as long as key itself is addable
+    fn is_addable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) | Key::Hash(_) => &self.context.base_key == key,
+            Key::URef(_, rights) => rights.is_addable(),
+        }
+    }
+
+    // Test whether writing to `kay` is valid.
+    // For Accounts and Hashes it's always invalid.
+    // For URefs it depends on the access rights that uref has.
+    fn is_writeable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) | Key::Hash(_) => false,
+            Key::URef(_, rights) => rights.is_writeable(),
+        }
+    }
+
     /// Reads value living under a key (found at `key_ptr` and `key_size` in Wasm memory).
     /// Fails if `key` is not "readable", i.e. its access rights are weaker than `AccessRights::Read`.
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        if key.is_readable() {
+        if self.is_readable(&key) {
             err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
         } else {
             Err(Error::InvalidAccess {
@@ -577,7 +611,7 @@ where
     /// either because they're not a Monoid or if the value stored under `key` has different type,
     /// then `TypeMismatch` errors is returned. Addition can also fail when `key` is not "addable".
     fn add_transforms(&mut self, key: Key, value: Value) -> Result<(), Trap> {
-        if key.is_addable() {
+        if self.is_addable(&key) {
             match self.state.add(key, value) {
                 Err(storage_error) => Err(storage_error.into().into()),
                 Ok(AddResult::Success) => Ok(()),
@@ -609,10 +643,12 @@ where
     }
 
     /// Generates new unforgable reference and adds it to the context's known_uref set.
-    pub fn new_uref(&mut self, key_ptr: u32) -> Result<(), Trap> {
+    pub fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
+        let value = self.value_from_mem(value_ptr, value_size)?; // read initial value from memory
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
         let key = Key::URef(key, AccessRights::ReadWrite);
+        self.state.write(key, value); // write initial value to state
         self.context.insert_uref(key);
         self.memory
             .set(key_ptr, &key.to_bytes().map_err(Error::BytesRepr)?)
@@ -702,8 +738,10 @@ where
 
             NEW_FUNC_INDEX => {
                 // args(0) = pointer to key destination in Wasm memory
-                let key_ptr = Args::parse(args)?;
-                self.new_uref(key_ptr)?;
+                // args(1) = pointer to initial value
+                // args(2) = size of initial value
+                let (key_ptr, value_ptr, value_size) = Args::parse(args)?;
+                self.new_uref(key_ptr, value_ptr, value_size)?;
                 Ok(None)
             }
 
@@ -888,7 +926,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 ADD_FUNC_INDEX,
             ),
             "new_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
+                Signature::new(&[ValueType::I32; 3][..], None),
                 NEW_FUNC_INDEX,
             ),
             "load_arg" => FuncInstance::alloc_host(
@@ -1060,9 +1098,11 @@ macro_rules! on_fail_charge {
 }
 
 pub trait Executor<A> {
+    #[allow(clippy::too_many_arguments)]
     fn exec<R: DbReader>(
         &self,
         parity_module: A,
+        args: &[u8],
         account_addr: [u8; 20],
         timestamp: u64,
         nonce: u64,
@@ -1079,6 +1119,7 @@ impl Executor<Module> for WasmiExecutor {
     fn exec<R: DbReader>(
         &self,
         parity_module: Module,
+        args: &[u8],
         account_addr: [u8; 20],
         timestamp: u64,
         nonce: u64,
@@ -1106,7 +1147,15 @@ impl Executor<Module> for WasmiExecutor {
             base_key: acct_key,
             gas_limit,
         };
+        let arguments: Vec<Vec<u8>> = if args.is_empty() {
+            Vec::new()
+        } else {
+            // TODO: figure out how this works with the cost model
+            // https://casperlabs.atlassian.net/browse/EE-239
+            on_fail_charge!(deserialize(args), 0)
+        };
         let mut runtime = Runtime::new(
+            arguments,
             memory,
             tc,
             parity_module,

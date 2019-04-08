@@ -1,13 +1,13 @@
 package io.casperlabs.comm
 
 import scala.language.higherKinds
-
 import cats.MonadError
 import cats.effect.Concurrent
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import io.casperlabs.catscontrib.ski.kp
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Cell
 import io.grpc.ManagedChannel
@@ -16,10 +16,10 @@ import monix.execution.Cancelable
 import scala.language.higherKinds
 
 class CachedConnections[F[_]: Metrics, T](val cell: Transport.TransportCell[F])(
-    clientChannel: PeerNode => F[ManagedChannel]
+    clientChannel: Node => F[ManagedChannel]
 )(implicit E: MonadError[F, Throwable]) {
 
-  def connection(peer: PeerNode, enforce: Boolean)(implicit ms: Metrics.Source): F[ManagedChannel] =
+  def connection(peer: Node, enforce: Boolean)(implicit ms: Metrics.Source): F[ManagedChannel] =
     modify { s =>
       if (s.shutdown && !enforce)
         E.raiseError(new RuntimeException("The transport layer has been shut down")).as(s)
@@ -40,7 +40,7 @@ class CachedConnections[F[_]: Metrics, T](val cell: Transport.TransportCell[F])(
 }
 
 object CachedConnections {
-  type ConnectionsCache[F[_], T] = (PeerNode => F[ManagedChannel]) => CachedConnections[F, T]
+  type ConnectionsCache[F[_], T] = (Node => F[ManagedChannel]) => CachedConnections[F, T]
 
   def apply[F[_]: Concurrent: Metrics, T]: F[ConnectionsCache[F, T]] =
     for {
@@ -50,7 +50,7 @@ object CachedConnections {
 
 object Transport {
   type Connection          = ManagedChannel
-  type Connections         = Map[PeerNode, Connection]
+  type Connections         = Map[Node, Connection]
   type TransportCell[F[_]] = Cell[F, TransportState]
 }
 

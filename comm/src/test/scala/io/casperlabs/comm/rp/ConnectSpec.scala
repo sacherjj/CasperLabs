@@ -1,28 +1,29 @@
 package io.casperlabs.comm.rp
 
-import Connect._
-import org.scalatest._
-import io.casperlabs.comm.protocol.routing._
-import io.casperlabs.comm._
-import CommError._
-import io.casperlabs.p2p.effects._
-import io.casperlabs.catscontrib._
-import Catscontrib._
 import cats.Id
-import ski._
+import com.google.protobuf.ByteString
+import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
-import io.casperlabs.metrics.Metrics
+import io.casperlabs.catscontrib.ski._
+import io.casperlabs.comm.CommError._
+import io.casperlabs.comm._
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.protocol.routing._
+import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.comm.rp.ProtocolHelper._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
+import io.casperlabs.p2p.effects._
 import io.casperlabs.shared._
+import org.scalatest._
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
-  val src: PeerNode                  = peerNode("src", 40400)
-  val remote: PeerNode               = peerNode("remote", 40401)
+  val src: Node                      = peerNode("src", 40400)
+  val remote: Node                   = peerNode("remote", 40401)
 
   type Effect[A] = CommErrT[Id, A]
 
@@ -65,8 +66,7 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
   def alwaysSuccess: Protocol => CommErr[Protocol] =
     kp(Right(protocolHandshake(src)))
 
-  private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
-  private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+  private def peerNode(name: String, port: Int): Node =
+    Node(ByteString.copyFrom(name.getBytes), "host", port, port)
 
 }

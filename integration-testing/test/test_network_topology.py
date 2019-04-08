@@ -4,15 +4,15 @@ import os
 import shutil
 from typing import TYPE_CHECKING, Generator
 
-import conftest
-from casperlabsnode_testing.casperlabsnode import (
-    contract_name as CONTRACT_NAME,
+from . import conftest
+from .cl_node.casperlabsnode import (
+    CONTRACT_NAME,
     create_peer_nodes,
     docker_network_with_started_bootstrap,
     extract_block_hash_from_propose_output,
 )
-from casperlabsnode_testing.common import Network, TestingContext
-from casperlabsnode_testing.wait import (
+from .cl_node.common import Network, TestingContext
+from .cl_node.wait import (
     wait_for_approved_block_received,
     wait_for_approved_block_received_handler_state,
     wait_for_block_contains,
@@ -22,7 +22,7 @@ from casperlabsnode_testing.wait import (
 
 
 if TYPE_CHECKING:
-    from casperlabsnode_testing.casperlabsnode import Node
+    from .cl_node.casperlabsnode import Node
 
 
 @contextlib.contextmanager

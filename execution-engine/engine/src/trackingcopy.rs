@@ -414,7 +414,7 @@ mod tests {
         // reading then writing should update the op
         let value = Value::Int32(3);
         let _ = tc.read(k);
-        let _ = tc.write(k, value.clone());
+        tc.write(k, value.clone());
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::Write(value)));
         assert_eq!(tc.ops.len(), 1);
@@ -450,7 +450,7 @@ mod tests {
         let value = Value::Int32(3);
         let write_value = Value::Int32(7);
         let _ = tc.add(k, value);
-        let _ = tc.write(k, write_value.clone());
+        tc.write(k, write_value.clone());
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::Write(write_value)));
         assert_eq!(tc.ops.len(), 1);
@@ -503,7 +503,7 @@ mod tests {
             }
 
             if missing_name != name {
-                let result = tc.query(contract_key, &vec!(missing_name));
+                let result = tc.query(contract_key, &[missing_name]);
                 assert_matches!(result, Ok(QueryResult::ValueNotFound(_)));
             }
         }
@@ -541,7 +541,7 @@ mod tests {
             }
 
             if missing_name != name {
-                let result = tc.query(account_key, &vec!(missing_name));
+                let result = tc.query(account_key, &[missing_name]);
                 assert_matches!(result, Ok(QueryResult::ValueNotFound(_)));
             }
         }

@@ -16,6 +16,9 @@ class KeyPair:
 
 @dataclasses.dataclass
 class TestingContext:
+    # Tell pytest this isn't Unittest class due to 'Test' name start
+    __test__ = False
+
     peer_count: int
     node_startup_timeout: int
     network_converge_timeout: int
@@ -30,7 +33,7 @@ class TestingContext:
 
 
 def random_string(length: int) -> str:
-    return ''.join(random.choice(string.ascii_letters) for m in range(length))
+    return ''.join(random.choice(string.ascii_letters) for _ in range(length)).lower()
 
 
 def make_tempfile(prefix: str, content: str) -> str:
@@ -52,3 +55,10 @@ class Network:
         self.bootstrap = bootstrap
         self.peers = peers
         self.nodes = [bootstrap] + peers
+
+
+class WaitTimeoutError(Exception):
+    def __init__(self, predicate: 'PredicateProtocol', timeout: int) -> None:
+        super().__init__()
+        self.predicate = predicate
+        self.timeout = timeout

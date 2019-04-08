@@ -83,14 +83,14 @@ where
     Value: From<T>,
 {
     let key_ptr = alloc_bytes(UREF_SIZE);
+    let value: Value = init.into();
+    let (value_ptr, value_size, _bytes2) = to_ptr(&value);
     let bytes = unsafe {
-        ext_ffi::new_uref(key_ptr); // new_uref creates a URef with ReadWrite access writes
+        ext_ffi::new_uref(key_ptr, value_ptr, value_size); // new_uref creates a URef with ReadWrite access writes
         Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
     };
     let key: Key = deserialize(&bytes).unwrap();
     if let Key::URef(id, access_rights) = key {
-        let value: Value = init.into();
-        write_untyped(&key, &value);
         UPointer::new(id, access_rights)
     } else {
         panic!("URef FFI did not return a URef!");

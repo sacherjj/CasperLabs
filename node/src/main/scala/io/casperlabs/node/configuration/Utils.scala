@@ -3,13 +3,16 @@ import java.nio.file.Path
 
 import scala.io.Source
 import cats.syntax.either._
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.configuration.SubConfig
 import shapeless.<:!<
 import shapeless.tag.@@
+
 import scala.util.matching.Regex
 
 private[configuration] object Utils {
   type NotPath[A]      = A <:!< Path
+  type NotNode[A]      = A <:!< Node
   type IsSubConfig[A]  = A <:< SubConfig
   type NotSubConfig[A] = A <:!< SubConfig
   type NotOption[A]    = A <:!< Option[_]

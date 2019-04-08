@@ -26,6 +26,7 @@ import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.Connect
 import io.casperlabs.comm.rp.Connect._
@@ -48,7 +49,7 @@ import scala.util.Random
 
 class HashSetCasperTestNode[F[_]](
     name: String,
-    val local: PeerNode,
+    val local: Node,
     tle: TransportLayerTestImpl[F],
     val genesis: BlockMessage,
     val transforms: Seq[TransformEntry],
@@ -154,7 +155,7 @@ object HashSetCasperTestNode {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
     val tle =
-      new TransportLayerTestImpl[F](identity, Map.empty[PeerNode, Ref[F, mutable.Queue[Protocol]]])
+      new TransportLayerTestImpl[F](identity, Map.empty[Node, Ref[F, mutable.Queue[Protocol]]])
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
     implicit val log                = new Log.NOPLog[F]()
     implicit val metricEff          = new Metrics.MetricsNOP[F]
@@ -348,10 +349,8 @@ object HashSetCasperTestNode {
 
   def randomBytes(length: Int): Array[Byte] = Array.fill(length)(Random.nextInt(256).toByte)
 
-  def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
-
-  def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+  def peerNode(name: String, port: Int): Node =
+    Node(ByteString.copyFrom(name.getBytes), "host", port, port)
 
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
   def simpleEEApi[F[_]: Defer: Applicative](
@@ -366,7 +365,7 @@ object HashSetCasperTestNode {
         // The real execution engine will get the keys from what the code changes, which will include
         // changes to the account nonce for example, but not the deploy timestamp. Make sure the `key`
         // here isn't more specific to a deploy then the real thing would be.
-        val key           = Key(Key.KeyInstance.Hash(KeyHash(deploy.sessionCode)))
+        val key           = Key(Key.KeyInstance.Hash(KeyHash(deploy.session.fold(ByteString.EMPTY)(_.code))))
         val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
         val op            = Op(Op.OpInstance.Read(ReadOp()))
         val transforEntry = TransformEntry(Some(key), Some(transform))

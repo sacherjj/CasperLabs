@@ -1,25 +1,28 @@
 package io.casperlabs.comm.transport
 
-import PacketOps._
+import java.nio.file._
+
+import cats.implicits._
+import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm._
-import cats._, cats.data._, cats.implicits._
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.transport.PacketOps._
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import monix.execution.{Cancelable, Scheduler}
 import monix.reactive.Observable
 import monix.reactive.observers.Subscriber
-import java.nio.file._
-import scala.concurrent.duration._
-import io.casperlabs.catscontrib.Catscontrib._
 
-final case class StreamToPeers(peers: Seq[PeerNode], path: Path, sender: PeerNode)
+import scala.concurrent.duration._
+
+final case class StreamToPeers(peers: Seq[Node], path: Path, sender: Node)
 
 class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], scheduler: Scheduler)
     extends Observable[StreamToPeers] {
 
   private val subject = buffer.LimitedBufferObservable.dropNew[StreamToPeers](bufferSize)
 
-  def stream(peers: List[PeerNode], blob: Blob): Task[Unit] = {
+  def stream(peers: List[Node], blob: Blob): Task[Unit] = {
 
     val storeBlob: Task[Option[Path]] =
       blob.packet.store[Task](folder) >>= {

@@ -4,6 +4,9 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => AnyProto}
 import io.casperlabs.comm.CommError._
 import io.casperlabs.comm._
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery._
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.protocol.routing._
 import com.google.protobuf.ByteString
 import io.casperlabs.comm.transport.{Blob, PacketType}
@@ -15,30 +18,20 @@ object ProtocolHelper {
   def toProtocolBytes(x: Array[Byte]): ByteString = ByteString.copyFrom(x)
   def toProtocolBytes(x: Seq[Byte]): ByteString   = ByteString.copyFrom(x.toArray)
 
-  def header(src: PeerNode): Header =
+  def header(src: Node): Header =
     Header()
-      .withSender(node(src))
+      .withSender(src)
 
-  def node(n: PeerNode): Node =
-    Node()
-      .withId(ByteString.copyFrom(n.key.toArray))
-      .withHost(ByteString.copyFromUtf8(n.endpoint.host))
-      .withUdpPort(n.endpoint.udpPort)
-      .withTcpPort(n.endpoint.tcpPort)
-
-  def sender(proto: Protocol): Option[PeerNode] =
+  def sender(proto: Protocol): Option[Node] =
     for {
       h <- proto.header
       s <- h.sender
-    } yield toPeerNode(s)
+    } yield s
 
-  def toPeerNode(n: Node): PeerNode =
-    PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
-
-  def protocol(src: PeerNode): Protocol =
+  def protocol(src: Node): Protocol =
     Protocol().withHeader(header(src))
 
-  def protocolHandshake(src: PeerNode): Protocol =
+  def protocolHandshake(src: Node): Protocol =
     protocol(src).withProtocolHandshake(ProtocolHandshake())
 
   def toProtocolHandshake(proto: Protocol): CommErr[ProtocolHandshake] =
@@ -46,10 +39,10 @@ object ProtocolHelper {
       Left(UnknownProtocolError(s"Was expecting ProtocolHandshake, got ${proto.message}"))
     )(Right(_))
 
-  def protocolHandshakeResponse(src: PeerNode): Protocol =
+  def protocolHandshakeResponse(src: Node): Protocol =
     protocol(src).withProtocolHandshakeResponse(ProtocolHandshakeResponse())
 
-  def heartbeat(src: PeerNode): Protocol =
+  def heartbeat(src: Node): Protocol =
     protocol(src).withHeartbeat(Heartbeat())
 
   def toHeartbeat(proto: Protocol): CommErr[Heartbeat] =
@@ -57,13 +50,13 @@ object ProtocolHelper {
       Left(UnknownProtocolError(s"Was expecting Heartbeat, got ${proto.message}"))
     )(Right(_))
 
-  def heartbeatResponse(src: PeerNode): Protocol =
+  def heartbeatResponse(src: Node): Protocol =
     protocol(src).withHeartbeatResponse(HeartbeatResponse())
 
-  def packet(src: PeerNode, pType: PacketType, content: Array[Byte]): Protocol =
+  def packet(src: Node, pType: PacketType, content: Array[Byte]): Protocol =
     packet(src, pType, ByteString.copyFrom(content))
 
-  def packet(src: PeerNode, pType: PacketType, content: ByteString): Protocol =
+  def packet(src: Node, pType: PacketType, content: ByteString): Protocol =
     protocol(src).withPacket(Packet(pType.id, content))
 
   def toPacket(proto: Protocol): CommErr[Packet] =
@@ -71,7 +64,7 @@ object ProtocolHelper {
       Left(UnknownProtocolError(s"Was expecting Packet, got ${proto.message}"))
     )(Right(_))
 
-  def disconnect(src: PeerNode): Protocol =
+  def disconnect(src: Node): Protocol =
     protocol(src).withDisconnect(Disconnect())
 
   def toDisconnect(proto: Protocol): CommErr[Disconnect] =
@@ -79,7 +72,7 @@ object ProtocolHelper {
       Left(UnknownProtocolError(s"Was expecting Disconnect, got ${proto.message}"))
     )(Right(_))
 
-  def blob(sender: PeerNode, typeId: String, content: Array[Byte]): Blob =
+  def blob(sender: Node, typeId: String, content: Array[Byte]): Blob =
     Blob(
       sender,
       Packet()

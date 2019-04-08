@@ -1,5 +1,6 @@
 package io.casperlabs.comm.gossiping
 
+import cats.Id
 import cats.implicits._
 import cats.effect._
 import com.google.protobuf.ByteString
@@ -9,7 +10,7 @@ import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
 import io.casperlabs.comm.TestRuntime
 import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.grpc.{AuthInterceptor, GrpcServer, SslContexts}
+import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
 import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
@@ -63,13 +64,19 @@ class GrpcGossipServiceSpec
     GetBlockChunkedSpec,
     StreamBlockSummariesSpec,
     StreamAncestorBlockSummariesSpec,
+    StreamDagTipBlockSummariesSpec,
     NewBlocksSpec
   )
 
   object GetBlockChunkedSpec extends WordSpecLike {
-    implicit val propCheckConfig = PropertyCheckConfiguration(minSuccessful = 3)
+    implicit val propCheckConfig = PropertyCheckConfiguration(minSuccessful = 1)
     implicit val patienceConfig  = PatienceConfig(1.second, 100.millis)
-    implicit val consensusConfig = ConsensusConfig()
+    implicit val consensusConfig = ConsensusConfig(
+      maxSessionCodeBytes = 500 * 1024,
+      minSessionCodeBytes = 400 * 1024,
+      maxPaymentCodeBytes = 300 * 1024,
+      minPaymentCodeBytes = 200 * 1024
+    )
 
     "getBlocksChunked" when {
       "no compression is supported" should {
@@ -305,9 +312,7 @@ class GrpcGossipServiceSpec
                     r.isLeft shouldBe true
                     r.left.get match {
                       case ex: io.grpc.StatusRuntimeException =>
-                        // TODO: When we add the ErrorInterceptor we can turn this into a proper status,
-                        // for example CANCELED or DEADLINE_EXCEEDED.
-                        ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNKNOWN
+                        ex.getStatus.getCode shouldBe io.grpc.Status.Code.DEADLINE_EXCEEDED
                       case other =>
                         fail(s"Unexpected error: $other")
                     }
@@ -356,7 +361,7 @@ class GrpcGossipServiceSpec
                     r1.isLeft shouldBe true
                     r1.left.get match {
                       case ex: io.grpc.StatusRuntimeException =>
-                        ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNKNOWN
+                        ex.getStatus.getCode shouldBe io.grpc.Status.Code.INTERNAL
                       case ex =>
                         fail(s"Unexpected error: $ex")
                     }
@@ -732,6 +737,37 @@ class GrpcGossipServiceSpec
     }
   }
 
+  object StreamDagTipBlockSummariesSpec extends WordSpecLike {
+    implicit val config          = PropertyCheckConfiguration(minSuccessful = 5)
+    implicit val consensusConfig = ConsensusConfig()
+
+    "streamDagTipBlockSummaries" should {
+      "return the tips from the consensus" in {
+        forAll(genDag) { dag =>
+          // Tips are the ones without children.
+          val tips = dag.filterNot { parent =>
+            dag.exists { child =>
+              child.getHeader.parentHashes.contains(parent.blockHash)
+            }
+          }
+          val consensus = new GossipServiceServer.Consensus[Task] {
+            def onPending(dag: Vector[BlockSummary]) = ???
+            def onDownloaded(blockHash: ByteString)  = ???
+            def listTips                             = Task.delay(tips)
+          }
+          runTestUnsafe(TestData(summaries = dag)) {
+            TestEnvironment(testDataRef, consensus = consensus).use { stub =>
+              stub.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL map {
+                res =>
+                  res should contain theSameElementsInOrderAs tips
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   object NewBlocksSpec extends WordSpecLike {
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
     implicit val consensusConfig =
@@ -822,7 +858,7 @@ class GrpcGossipServiceSpec
       }
 
       "called with a valid sender" when {
-        implicit val config = PropertyCheckConfiguration(minSuccessful = 100)
+        implicit val config = PropertyCheckConfiguration(minSuccessful = 5)
 
         "receives no previously unknown blocks" should {
           "return false and not download anything" in {
@@ -913,6 +949,7 @@ class GrpcGossipServiceSpec
                         downloaded = downloaded :+ blockHash
                       }
                     }
+                    def listTips = ???
                   }
 
                   TestEnvironment(
@@ -992,6 +1029,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
     private val emptyConsensus = new GossipServiceServer.Consensus[Task] {
       def onPending(dag: Vector[BlockSummary]) = ???
       def onDownloaded(blockHash: ByteString)  = ???
+      def listTips                             = ???
     }
 
     private def defaultBackend(testDataRef: AtomicReference[TestData]) =
@@ -1019,9 +1057,10 @@ object GrpcGossipServiceSpec extends TestRuntime {
         oi: ObservableIterant[Task],
         scheduler: Scheduler
     ): Resource[Task, GossipingGrpcMonix.GossipServiceStub] = {
-      val port         = getFreePort
-      val serverCert   = TestCert.generate
-      implicit val log = new Log.NOPLog[Task]
+      val port             = getFreePort
+      val serverCert       = TestCert.generate
+      implicit val logTask = new Log.NOPLog[Task]
+      implicit val logId   = new Log.NOPLog[Id]
 
       val serverR = GrpcServer[Task](
         port,
@@ -1041,7 +1080,8 @@ object GrpcGossipServiceSpec extends TestRuntime {
         ),
         interceptors = List(
           // For now the AuthInterceptor rejects calls without a certificate.
-          Option(new AuthInterceptor()).filter(_ => clientAuth == ClientAuth.REQUIRE)
+          Option(new AuthInterceptor()).filter(_ => clientAuth == ClientAuth.REQUIRE),
+          Some(ErrorInterceptor.default)
         ).flatten,
         // If the server is using SSL then we can't connect to it using `.usePlaintext`
         // on the client channel, it would get UNAVAILABLE.

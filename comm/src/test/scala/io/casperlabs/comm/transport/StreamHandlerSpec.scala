@@ -6,7 +6,7 @@ import java.util.UUID
 import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib.ski._
-import io.casperlabs.comm._
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.transport.StreamHandler.CircuitBreaker
 import io.casperlabs.shared.Log
@@ -49,7 +49,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       // when
       val msg: StreamMessage = handleStream(stream)
       // then
-      msg.sender shouldBe peerNode("sender")
+      msg.sender shouldBe node("sender")
       msg.typeId shouldBe BlockMessage.id
     }
 
@@ -168,13 +168,13 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
 
     val content = Array.fill(contentLength)((Random.nextInt(256) - 128).toByte)
     val packet  = Packet(BlockMessage.id, ByteString.copyFrom(content))
-    val sender  = peerNode("sender")
+    val sender  = node("sender")
     val blob    = Blob(sender, packet)
     Task(Chunker.chunkIt(blob, messageSize))
   }
 
-  private def peerNode(name: String): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), Endpoint("", 80, 80))
+  private def node(name: String): Node =
+    Node(ByteString.copyFrom(name.getBytes), "", 80, 80)
 
   private val alwaysBreak: CircuitBreaker = kp(true)
   private val neverBreak: CircuitBreaker  = kp(false)

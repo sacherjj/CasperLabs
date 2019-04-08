@@ -1,13 +1,15 @@
 package io.casperlabs.comm
 
-import cats._, cats.data._, cats.implicits._
-import com.google.protobuf.ByteString
-import io.casperlabs.catscontrib._, Catscontrib._, ski._
-import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.comm.protocol.routing._
-import io.casperlabs.comm.discovery.Node
-import io.grpc.{Status, StatusRuntimeException}
 import java.nio.file._
+
+import cats.data._
+import com.google.protobuf.ByteString
+import io.casperlabs.catscontrib._
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.protocol.routing._
+import io.casperlabs.crypto.codec.Base16
+import io.grpc.{Status, StatusRuntimeException}
+
 import scala.util.control.NoStackTrace
 
 // TODO we need lower level errors and general error, for now all in one place
@@ -21,12 +23,12 @@ final case class DatagramException(ex: Exception)                   extends Comm
 final case object HeaderNotAvailable                                extends CommError
 final case class ProtocolException(th: Throwable)                   extends CommError
 final case class UnknownProtocolError(msg: String)                  extends CommError
-final case class PublicKeyNotAvailable(node: PeerNode)              extends CommError
+final case class PublicKeyNotAvailable(node: Node)                  extends CommError
 final case class ParseError(msg: String)                            extends CommError
 final case object EncryptionHandshakeIncorrectlySigned              extends CommError
 final case object BootstrapNotProvided                              extends CommError
-final case class PeerNodeNotFound(peer: PeerNode)                   extends CommError
-final case class PeerUnavailable(peer: PeerNode)                    extends CommError
+final case class PeerNodeNotFound(peer: Node)                       extends CommError
+final case class PeerUnavailable(peer: Node)                        extends CommError
 final case class MalformedMessage(pm: Protocol)                     extends CommError
 final case object CouldNotConnectToBootstrap                        extends CommError
 final case class InternalCommunicationError(msg: String)            extends CommError
@@ -35,7 +37,7 @@ final case object NoResponseForRequest                              extends Comm
 final case object UpstreamNotAvailable                              extends CommError
 final case class UnexpectedMessage(msgStr: String)                  extends CommError
 final case object SenderNotAvailable                                extends CommError
-final case class PongNotReceivedForPing(peer: PeerNode)             extends CommError
+final case class PongNotReceivedForPing(peer: Node)                 extends CommError
 final case class UnableToStorePacket(packet: Packet, th: Throwable) extends CommError
 final case class UnabletoRestorePacket(path: Path, th: Throwable)   extends CommError
 // TODO add Show instance
@@ -57,9 +59,9 @@ object CommError {
   def parseError(msg: String): CommError                 = ParseError(msg)
   def protocolException(th: Throwable): CommError        = ProtocolException(th)
   def headerNotAvailable: CommError                      = HeaderNotAvailable
-  def peerNodeNotFound(peer: PeerNode): CommError        = PeerNodeNotFound(peer)
-  def peerUnavailable(peer: PeerNode): CommError         = PeerUnavailable(peer)
-  def publicKeyNotAvailable(peer: PeerNode): CommError   = PublicKeyNotAvailable(peer)
+  def peerNodeNotFound(peer: Node): CommError            = PeerNodeNotFound(peer)
+  def peerUnavailable(peer: Node): CommError             = PeerUnavailable(peer)
+  def publicKeyNotAvailable(peer: Node): CommError       = PublicKeyNotAvailable(peer)
   def couldNotConnectToBootstrap: CommError              = CouldNotConnectToBootstrap
   def internalCommunicationError(msg: String): CommError = InternalCommunicationError(msg)
   def malformedMessage(pm: Protocol): CommError          = MalformedMessage(pm)
@@ -67,7 +69,7 @@ object CommError {
   def upstreamNotAvailable: CommError                    = UpstreamNotAvailable
   def unexpectedMessage(msgStr: String): CommError       = UnexpectedMessage(msgStr)
   def senderNotAvailable: CommError                      = SenderNotAvailable
-  def pongNotReceivedForPing(peer: PeerNode): CommError  = PongNotReceivedForPing(peer)
+  def pongNotReceivedForPing(peer: Node): CommError      = PongNotReceivedForPing(peer)
   def timeout: CommError                                 = TimeOut
   def unableToStorePacket(packet: Packet, th: Throwable): CommError =
     UnableToStorePacket(packet, th)
@@ -118,8 +120,9 @@ object ServiceError {
       apply(s"Block ${Base16.encode(blockHash.toByteArray)} could not be found.")
   }
 
-  object InvalidArgument extends StatusError(Status.INVALID_ARGUMENT)
-  object Unauthenticated extends StatusError(Status.UNAUTHENTICATED)
+  object InvalidArgument  extends StatusError(Status.INVALID_ARGUMENT)
+  object Unauthenticated  extends StatusError(Status.UNAUTHENTICATED)
+  object DeadlineExceeded extends StatusError(Status.DEADLINE_EXCEEDED)
 }
 
 sealed trait GossipError extends NoStackTrace

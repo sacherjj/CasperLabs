@@ -9,9 +9,8 @@ import io.casperlabs.casper.util.TestTime
 import io.casperlabs.casper.util.comm.ApproveBlockProtocolTest.TestFixture
 import io.casperlabs.casper.{HashSetCasperTest, LastApprovedBlock}
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib._
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.rp.Connect.Connections
-import io.casperlabs.comm.{Endpoint, NodeIdentifier, PeerNode}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances._
@@ -21,8 +20,8 @@ import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
-import scala.language.higherKinds
 import scala.concurrent.duration._
+import scala.language.higherKinds
 import scala.util.Success
 
 class ApproveBlockProtocolTest extends FlatSpec with Matchers {
@@ -332,7 +331,7 @@ object ApproveBlockProtocolTest {
   )(implicit logStub: LogStub[Task], metrics: MetricsTestImpl[Task]): TestFixture = {
     implicit val time            = TestTime.instance
     implicit val transportLayer  = new TransportLayerStub[Task]
-    val src: PeerNode            = peerNode("src", 40400)
+    val src: Node                = peerNode("src", 40400)
     implicit val rpConfAsk       = createRPConfAsk[Task](src)
     implicit val ctx             = monix.execution.Scheduler.Implicits.global
     implicit val connectionsCell = Cell.mvarCell[Task, Connections](List(src)).unsafeRunSync
@@ -362,8 +361,6 @@ object ApproveBlockProtocolTest {
     TestFixture(lab, protocol, candidate, startTime, sigs)
   }
 
-  private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
-
-  private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+  private def peerNode(name: String, port: Int): Node =
+    Node(ByteString.copyFrom(name.getBytes), "host", port, port)
 }
