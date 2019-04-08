@@ -165,23 +165,22 @@ impl Readable for InMemoryReadTransaction {
 }
 
 /// A read-write transaction for the in-memory trie store.
-#[allow(dead_code)]
 pub struct InMemoryReadWriteTransaction<'a> {
     view: BytesMap,
     store_ref: Arc<Mutex<BytesMap>>,
-    write_lock: WriteLock<'a>,
+    _write_lock: WriteLock<'a>,
 }
 
 impl<'a> InMemoryReadWriteTransaction<'a> {
     pub fn new(store: &'a InMemoryEnvironment) -> Result<InMemoryReadWriteTransaction<'a>, Error> {
-        let write_lock = store.write_mutex.lock()?;
+        let _write_lock = store.write_mutex.lock()?;
         let store_ref = store.data.clone();
         let view = {
             let view_lock = store_ref.lock()?;
             view_lock.to_owned()
         };
         Ok(InMemoryReadWriteTransaction {
-            write_lock,
+            _write_lock,
             store_ref,
             view,
         })
