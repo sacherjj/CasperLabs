@@ -6,12 +6,14 @@ use transform::{Transform, TypeMismatch};
 
 // needs to be public for use in the gens crate
 pub mod trie;
+pub mod trie_store;
 
 pub enum CommitResult {
     RootNotFound,
     Success(Blake2bHash),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
+    Overflow,
 }
 
 pub trait History {

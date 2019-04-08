@@ -13,13 +13,14 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
-  private trait KademliaMock extends KademliaRPC[Task] {
-    override def lookup(id: NodeIdentifier, peer: PeerNode): Task[Seq[PeerNode]] =
-      Task.now(Seq.empty)
+  private trait KademliaMock extends KademliaService[Task] {
+    override def lookup(id: NodeIdentifier, peer: PeerNode): Task[Option[Seq[PeerNode]]] =
+      Task.now(None)
     override def receive(
         pingHandler: PeerNode => Task[Unit],
-        lookupHandler: (PeerNode, NodeIdentifier) => Task[Seq[PeerNode]]): Task[Unit] = Task.unit
-    override def shutdown(): Task[Unit]                                               = Task.unit
+        lookupHandler: (PeerNode, NodeIdentifier) => Task[Seq[PeerNode]]
+    ): Task[Unit]                       = Task.unit
+    override def shutdown(): Task[Unit] = Task.unit
   }
 
   //1 byte width
@@ -37,16 +38,19 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
       .iterate(min, maxPeersN)(b => (b + 1).toByte)
       .map(b => PeerNode(NodeIdentifier(Seq(b)), Endpoint("", 0, 0)))
   private implicit val propCheckConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(
-    minSuccessful = 500)
+    minSuccessful = 500
+  )
 
   property(
     """
       |updateLastSeen
       |atomically adds new unique peer if bucket is not full and moves it if has seen previously;
-      |there shouldn't be any ping requests, since 'uniquePeersN' <= bucketSize""".stripMargin) {
+      |there shouldn't be any ping requests, since 'uniquePeersN' <= bucketSize""".stripMargin
+  ) {
     forAll(
       Gen
-        .choose(1, bucketSize)) { uniquePeersN: Int =>
+        .choose(1, bucketSize)
+    ) { uniquePeersN: Int =>
       var pingCounter = 0
       implicit val K: KademliaMock = (_: PeerNode) => {
         Task(pingCounter += 1).map(_ => true)
@@ -83,7 +87,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
       hangUp.runAsyncAndForget
 
       Task
-        .race(Task.sleep(1.second), peerTable.peers)
+        .race(Task.sleep(1.second), peerTable.peersAscendingDistance)
         .runSyncUnsafe()
         .right
         .get should contain theSameElementsAs initial
@@ -108,7 +112,7 @@ class PeerTableConcurrencySuite extends PropSpec with GeneratorDrivenPropertyChe
         peerTable <- PeerTable[Task](id, bucketSize)
         _         <- Task.gatherUnordered(initial.map(peerTable.updateLastSeen(_)))
         _         <- Task.gatherUnordered(restReplicated.map(peerTable.updateLastSeen(_)))
-        peers     <- peerTable.peers
+        peers     <- peerTable.peersAscendingDistance
       } yield peers
 
       addNodesParallel.runSyncUnsafe() should contain theSameElementsAs initial

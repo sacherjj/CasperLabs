@@ -3,7 +3,7 @@ package io.casperlabs.comm.gossiping
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import io.casperlabs.comm.discovery.Node
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.{Arbitrary, Gen, Shrink}
 import scala.collection.JavaConverters._
 
 object ArbitraryConsensus extends ArbitraryConsensus
@@ -209,4 +209,9 @@ trait ArbitraryConsensus {
       blocks    <- Gen.sequence(summaries.map(genBlockFromSummary))
     } yield blocks.asScala.toVector
 
+  // It doesn't make sense to shrink DAGs because the default shrink
+  // will most likely get rid of parents, and make any derived selections
+  // invalid too.
+  implicit val noShrinkBlockDag: Shrink[Vector[Block]]               = Shrink(_ => Stream.empty)
+  implicit val noShrinkBlockSummaryDag: Shrink[Vector[BlockSummary]] = Shrink(_ => Stream.empty)
 }

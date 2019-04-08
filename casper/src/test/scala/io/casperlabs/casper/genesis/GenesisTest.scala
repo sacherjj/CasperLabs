@@ -178,13 +178,12 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             _ <- BlockStore[Task]
                   .put(genesis.blockHash, genesis, transforms)
             dag <- blockDagStorage.getRepresentation
-            // FIXME: we should insert the TransformEntry into blockStore, now we simply return empty TransformEntry, this is not correct
-            maybePostGenesisStateHash <- BlockGenerator
+            maybePostGenesisStateHash <- ExecEngineUtil
                                           .validateBlockCheckpoint[Task](
                                             genesis,
                                             dag
                                           )
-          } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
+          } yield maybePostGenesisStateHash shouldBe 'right
       }
   }
 

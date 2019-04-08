@@ -9,18 +9,18 @@ import io.casperlabs.node.configuration._
 import io.casperlabs.node.diagnostics.client.GrpcDiagnosticsService
 import io.casperlabs.node.effects._
 import io.casperlabs.shared._
-import monix.eval.{Task, TaskApp}
+import monix.eval.Task
 import monix.execution.Scheduler
+import org.slf4j.bridge.SLF4JBridgeHandler
 
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
 
-object Main extends TaskApp {
+object Main {
 
-  private implicit lazy val logSource: LogSource = LogSource(this.getClass)
-  private implicit lazy val log: Log[Task]       = effects.log
+  implicit val log: Log[Task] = effects.log
 
-  override def run(args: List[String]): Task[ExitCode] = {
+  def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
       "node-runner",
@@ -37,10 +37,13 @@ object Main extends TaskApp {
               )
       } yield ()
 
-    exec.as(ExitCode(0))
+    exec.runSyncUnsafe()
   }
 
   private def updateLoggingProps(conf: Configuration): Task[Unit] = Task {
+    //https://github.com/grpc/grpc-java/issues/1577#issuecomment-228342706
+    SLF4JBridgeHandler.removeHandlersForRootLogger()
+    SLF4JBridgeHandler.install()
     sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
   }
 
@@ -75,7 +78,6 @@ object Main extends TaskApp {
         case None =>
           Task.delay(System.exit(0))
       }
-
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {

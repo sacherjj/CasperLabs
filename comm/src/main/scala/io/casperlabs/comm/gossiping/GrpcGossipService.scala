@@ -2,9 +2,14 @@ package io.casperlabs.comm.gossiping
 
 import cats.effect._
 import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.comm.auth.Principal
+import io.casperlabs.comm.grpc.ContextKeys
+import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
+import io.casperlabs.shared.ObservableOps._
 import monix.eval.{Task, TaskLift, TaskLike}
 import monix.reactive.Observable
 import monix.tail.Iterant
+import scala.concurrent.duration.FiniteDuration
 
 /** Adapt the GossipService to Monix generated interfaces. */
 object GrpcGossipService {
@@ -13,13 +18,30 @@ object GrpcGossipService {
   /** Create Monix specific instance from the internal interface,
 	  * to be used as the "server side", i.e. to return data to another peer. */
   def fromGossipService[F[_]: Sync: TaskLike: ObservableIterant](
-      service: GossipService[F]
+      service: GossipService[F],
+      blockChunkConsumerTimeout: FiniteDuration
   ): GossipingGrpcMonix.GossipService =
     new GossipingGrpcMonix.GossipService {
 
       /** Handle notification about some new blocks on the caller. */
       def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
-        TaskLike[F].toTask(service.newBlocks(request))
+        // Verify that the sender holds the same node identity as the public key
+        // in the client SSL certificate. Alternatively we could drop the sender
+        // altogether and use Kademlia to lookup the Node with that ID the first
+        // time we see it.
+        (request.sender, Option(ContextKeys.Principal.get)) match {
+          case (None, _) =>
+            Task.raiseError(Unauthenticated("Sender cannot be empty."))
+
+          case (_, None) =>
+            Task.raiseError(Unauthenticated("Cannot verify sender identity."))
+
+          case (Some(sender), Some(Principal.Peer(id))) if sender.id != id =>
+            Task.raiseError(Unauthenticated("Sender doesn't match public key."))
+
+          case (Some(_), Some(Principal.Peer(_))) =>
+            TaskLike[F].toTask(service.newBlocks(request))
+        }
 
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
@@ -37,7 +59,7 @@ object GrpcGossipService {
         service.streamBlockSummaries(request).toObservable
 
       def getBlockChunked(request: GetBlockChunkedRequest): Observable[Chunk] =
-        service.getBlockChunked(request).toObservable
+        service.getBlockChunked(request).toObservable.withConsumerTimeout(blockChunkConsumerTimeout)
     }
 
   /** Create the internal interface from the Monix specific instance,

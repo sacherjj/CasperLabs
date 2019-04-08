@@ -62,8 +62,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       deploy <- ProtoUtil.basicDeployData[Effect](0)
       _      <- MultiParentCasper[Effect].deploy(deploy)
 
-      _      = logEff.infos.size should be(2)
-      result = logEff.infos(1).contains("Received Deploy") should be(true)
+      _      = logEff.infos.size should be(1)
+      result = logEff.infos(0).contains("Received Deploy") should be(true)
       _      <- node.tearDown()
     } yield result
   }
@@ -138,9 +138,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
       _                    = logEff.warns.isEmpty should be(true)
       dag                  <- MultiParentCasper[Effect].blockDag
-      result               <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock)
+      estimate             <- MultiParentCasper[Effect].estimator(dag)
+      _                    = estimate shouldBe IndexedSeq(signedBlock.blockHash)
       _                    = node.tearDown()
-    } yield result
+    } yield ()
   }
 
   it should "be able to create a chain of blocks from different deploys" in effectTest {
@@ -169,7 +170,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                     = logEff.warns shouldBe empty
       _                     = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
       dag                   <- MultiParentCasper[Effect].blockDag
-      _                     <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock2)
+      estimate              <- MultiParentCasper[Effect].estimator(dag)
+
+      _ = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
       _ = pendingUntilFixed {
         storage.contains("!(12)") should be(true)
       }
@@ -1107,8 +1110,8 @@ object HashSetCasperTest {
   def blockTuplespaceContents(
       block: BlockMessage
   )(implicit casper: MultiParentCasper[Effect]): Effect[String] = {
-    val tsHash = ProtoUtil.postStateHash(block)
-    MultiParentCasper[Effect].storageContents(tsHash)
+    val postStateHash = ProtoUtil.postStateHash(block)
+    MultiParentCasper[Effect].storageContents(postStateHash)
   }
 
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =

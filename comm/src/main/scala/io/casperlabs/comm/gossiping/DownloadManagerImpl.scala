@@ -16,8 +16,6 @@ import scala.util.control.NonFatal
 
 object DownloadManagerImpl {
 
-  implicit val logSource: LogSource = LogSource(this.getClass)
-
   type Feedback[F[_]] = Deferred[F, Either[Throwable, Unit]]
 
   /** Interface to the local backend dependencies. */
@@ -61,7 +59,7 @@ object DownloadManagerImpl {
   }
 
   /** Start the download manager. */
-  def apply[F[_]: Sync: Concurrent: Log](
+  def apply[F[_]: Concurrent: Log](
       maxParallelDownloads: Int,
       connectToGossip: Node => F[GossipService[F]],
       backend: Backend[F]
@@ -121,8 +119,6 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
 ) extends DownloadManager[F] {
 
   import DownloadManagerImpl._
-
-  implicit val logSource: LogSource = LogSource(this.getClass)
 
   private def ensureNotShutdown: F[Unit] =
     isShutdown.get.ifM(

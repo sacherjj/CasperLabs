@@ -4,7 +4,7 @@ use common::key::Key;
 use common::value::Value;
 use storage::gs::{DbReader, ExecutionEffect};
 use storage::op::Op;
-use storage::transform::{Transform, TypeMismatch};
+use storage::transform::{self, Transform, TypeMismatch};
 use utils::add;
 
 #[derive(Debug)]
@@ -25,6 +25,7 @@ pub enum AddResult {
     Success,
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
+    Overflow,
 }
 
 impl<R: DbReader> TrackingCopy<R> {
@@ -73,6 +74,9 @@ impl<R: DbReader> TrackingCopy<R> {
             Some(curr) => {
                 let t = match v {
                     Value::Int32(i) => Transform::AddInt32(i),
+                    Value::UInt128(i) => Transform::AddUInt128(i),
+                    Value::UInt256(i) => Transform::AddUInt256(i),
+                    Value::UInt512(i) => Transform::AddUInt512(i),
                     Value::NamedKey(n, k) => {
                         let mut map = BTreeMap::new();
                         map.insert(n, k);
@@ -80,7 +84,7 @@ impl<R: DbReader> TrackingCopy<R> {
                     }
                     other => {
                         return Ok(AddResult::TypeMismatch(TypeMismatch::new(
-                            "Int32 or NamedKey".to_string(),
+                            "Int32 or UInt* or NamedKey".to_string(),
                             other.type_string(),
                         )))
                     }
@@ -92,7 +96,10 @@ impl<R: DbReader> TrackingCopy<R> {
                         add(&mut self.fns, k, t);
                         Ok(AddResult::Success)
                     }
-                    Err(type_mismatch) => Ok(AddResult::TypeMismatch(type_mismatch)),
+                    Err(transform::Error::TypeMismatch(type_mismatch)) => {
+                        Ok(AddResult::TypeMismatch(type_mismatch))
+                    }
+                    Err(transform::Error::Overflow) => Ok(AddResult::Overflow),
                 }
             }
         }

@@ -87,7 +87,8 @@ def temporary_resources_genesis_folder(validator_keys: List[KeyPair]) -> Generat
                     _file.write("{}\n".format(pair.private_key))
         yield genesis_folder_path
     finally:
-        shutil.rmtree(genesis_folder_path)
+        if os.path.exists(genesis_folder_path):
+            shutil.rmtree(genesis_folder_path)
 
 
 @pytest.yield_fixture(scope='session')

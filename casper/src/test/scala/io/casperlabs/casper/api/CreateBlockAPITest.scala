@@ -10,7 +10,7 @@ import io.casperlabs.casper.helper.HashSetCasperTestNode
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.rholang._
-import io.casperlabs.casper.Estimator.Validator
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.signatures.Ed25519
@@ -90,7 +90,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   ): F[BlockStatus]                                     = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
   def contains(b: BlockMessage): F[Boolean]             = underlying.contains(b)
   def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
   def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =

@@ -1,14 +1,15 @@
 package io.casperlabs.casper.util.execengine
 
+import cats.effect.Sync
 import cats.implicits._
 import cats.{Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
-import io.casperlabs.casper.{protocol, PrettyPrinter}
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.{DeployResult => _, _}
@@ -50,28 +51,34 @@ object ExecEngineUtil {
         )
     }
 
+  implicit def functorRaiseInvalidBlock[F[_]: Sync] = Validate.raiseValidateErrorThroughSync[F]
+
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
+      b: BlockMessage,
+      dag: BlockDagRepresentation[F]
+  ): F[Either[Throwable, StateHash]] =
+    (for {
+      processedHash           <- ExecEngineUtil.effectsForBlock(b, dag)
+      (preStateHash, effects) = processedHash
+      _                       <- Validate.transactions[F](b, dag, preStateHash, effects)
+    } yield ProtoUtil.postStateHash(b)).attempt
+
   def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F]
   ): F[DeploysCheckpoint] =
     for {
-      processedHash <- ExecEngineUtil.processDeploys(
+      processedHash <- processDeploys(
                         parents,
                         dag,
                         deploys
                       )
       (preStateHash, processedDeploys) = processedHash
-      deployLookup                     = processedDeploys.zip(deploys).toMap
-      commutingEffects                 = ExecEngineUtil.findCommutingEffects(processedDeploys)
-      deploysForBlock = commutingEffects.map {
-        case (eff, cost) => {
-          val deploy = deployLookup(
-            ipc.DeployResult(
-              cost,
-              ipc.DeployResult.Result.Effects(eff)
-            )
-          )
+      deployEffects                    = processedDeployEffects(deploys zip processedDeploys)
+      commutingEffects                 = findCommutingEffects(deployEffects)
+      deploysForBlock = deployEffects.collect {
+        case (deploy, Some((_, cost))) => {
           protocol.ProcessedDeploy(
             Some(deploy),
             cost,
@@ -109,16 +116,26 @@ object ExecEngineUtil {
       result   <- MonadError[F, Throwable].rethrow(ExecutionEngineService[F].exec(prestate, ds))
     } yield (prestate, result)
 
+  /** Produce effects for each processed deploy. */
+  def processedDeployEffects(
+      deployResults: Seq[(DeployData, DeployResult)]
+  ): Seq[(DeployData, Option[(ExecutionEffect, Long)])] =
+    deployResults.map {
+      case (deploy, DeployResult(_, DeployResult.Result.Empty)) =>
+        deploy -> None //This should never happen either
+      case (deploy, DeployResult(_, DeployResult.Result.Error(_))) =>
+        deploy -> None //We should not be ignoring error cost
+      case (deploy, DeployResult(cost, DeployResult.Result.Effects(eff))) =>
+        deploy -> Some((eff, cost))
+    }
+
   //TODO: actually find which ones commute
   //TODO: How to handle errors?
-  def findCommutingEffects(processedDeploys: Seq[DeployResult]): Seq[(ExecutionEffect, Long)] =
-    processedDeploys.flatMap {
-      case DeployResult(_, DeployResult.Result.Empty) =>
-        None //This should never happen either
-      case DeployResult(errCost, DeployResult.Result.Error(_)) =>
-        None //We should not be ignoring error cost
-      case DeployResult(cost, DeployResult.Result.Effects(eff)) =>
-        Some((eff, cost))
+  def findCommutingEffects(
+      deployEffects: Seq[(DeployData, Option[(ExecutionEffect, Long)])]
+  ): Seq[(ExecutionEffect, Long)] =
+    deployEffects.collect {
+      case (_, Some((eff, cost))) => (eff, cost)
     }
 
   def effectsForBlock[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
@@ -134,7 +151,8 @@ object ExecEngineUtil {
                         deploys.flatMap(_.deploy)
                       )
       (prestate, processedDeploys) = processedHash
-      transformMap                 = findCommutingEffects(processedDeploys).unzip._1.flatMap(_.transformMap)
+      deployEffects                = processedDeployEffects(deploys.map(_.getDeploy) zip processedDeploys)
+      transformMap                 = findCommutingEffects(deployEffects).unzip._1.flatMap(_.transformMap)
     } yield (prestate, transformMap)
 
   private def computePrestate[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](

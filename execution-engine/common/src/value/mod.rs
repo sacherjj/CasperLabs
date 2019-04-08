@@ -2,12 +2,15 @@ pub mod account;
 pub mod contract;
 pub mod uint;
 
-use crate::bytesrepr::{Error, FromBytes, ToBytes};
+use crate::bytesrepr::{
+    Error, FromBytes, ToBytes, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U8_SIZE,
+};
 use crate::key::{Key, UREF_SIZE};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::iter;
+use core::mem::size_of;
 
 pub use self::account::Account;
 pub use self::contract::Contract;
@@ -43,73 +46,95 @@ const U512_ID: u8 = 10;
 use self::Value::*;
 
 impl ToBytes for Value {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
             Int32(i) => {
-                let mut result = Vec::with_capacity(5);
+                let mut result = Vec::with_capacity(U8_SIZE + U32_SIZE);
                 result.push(INT32_ID);
-                result.append(&mut i.to_bytes());
-                result
+                result.append(&mut i.to_bytes()?);
+                Ok(result)
             }
             UInt128(u) => {
-                let mut result = Vec::with_capacity(1 + 16);
+                let mut result = Vec::with_capacity(U8_SIZE + U128_SIZE);
                 result.push(U128_ID);
-                result.append(&mut u.to_bytes());
-                result
+                result.append(&mut u.to_bytes()?);
+                Ok(result)
             }
             UInt256(u) => {
-                let mut result = Vec::with_capacity(1 + 32);
+                let mut result = Vec::with_capacity(U8_SIZE + U256_SIZE);
                 result.push(U256_ID);
-                result.append(&mut u.to_bytes());
-                result
+                result.append(&mut u.to_bytes()?);
+                Ok(result)
             }
             UInt512(u) => {
-                let mut result = Vec::with_capacity(1 + 64);
+                let mut result = Vec::with_capacity(U8_SIZE + U512_SIZE);
                 result.push(U512_ID);
-                result.append(&mut u.to_bytes());
-                result
+                result.append(&mut u.to_bytes()?);
+                Ok(result)
             }
             ByteArray(arr) => {
-                let mut result = Vec::with_capacity(5 + arr.len());
+                if arr.len() >= u32::max_value() as usize - U8_SIZE - U32_SIZE {
+                    return Err(Error::OutOfMemoryError);
+                }
+                let mut result = Vec::with_capacity(U8_SIZE + U32_SIZE + arr.len());
                 result.push(BYTEARRAY_ID);
-                result.append(&mut arr.to_bytes());
-                result
+                result.append(&mut arr.to_bytes()?);
+                Ok(result)
             }
             ListInt32(arr) => {
-                let mut result = Vec::with_capacity(5 + 4 * arr.len());
+                if arr.len() * size_of::<i32>() >= u32::max_value() as usize - U8_SIZE - U32_SIZE {
+                    return Err(Error::OutOfMemoryError);
+                }
+                let mut result = Vec::with_capacity(U8_SIZE + U32_SIZE + U32_SIZE * arr.len());
                 result.push(LISTINT32_ID);
-                result.append(&mut arr.to_bytes());
-                result
+                result.append(&mut arr.to_bytes()?);
+                Ok(result)
             }
             String(s) => {
-                let mut result = Vec::with_capacity(5 + s.len());
+                if s.len() >= u32::max_value() as usize - U8_SIZE - U32_SIZE {
+                    return Err(Error::OutOfMemoryError);
+                }
+                let size = U8_SIZE + U32_SIZE + s.len();
+                let mut result = Vec::with_capacity(size);
                 result.push(STRING_ID);
-                result.append(&mut s.to_bytes());
-                result
+                result.append(&mut s.to_bytes()?);
+                Ok(result)
             }
             Account(a) => {
                 let mut result = Vec::new();
                 result.push(ACCT_ID);
-                result.append(&mut a.to_bytes());
-                result
+                let mut bytes = a.to_bytes()?;
+                if bytes.len() >= u32::max_value() as usize - result.len() {
+                    return Err(Error::OutOfMemoryError);
+                }
+                result.append(&mut bytes);
+                Ok(result)
             }
-            Contract(c) => iter::once(CONTRACT_ID).chain(c.to_bytes()).collect(),
+            Contract(c) => Ok(iter::once(CONTRACT_ID).chain(c.to_bytes()?).collect()),
             NamedKey(n, k) => {
-                let size: usize = 1 + //size for ID
-                  4 +                 //size for length of String
+                if n.len() + UREF_SIZE >= u32::max_value() as usize - U32_SIZE - U8_SIZE {
+                    return Err(Error::OutOfMemoryError);
+                }
+                let size: usize = U8_SIZE + //size for ID
+                  U32_SIZE +                 //size for length of String
                   n.len() +           //size of String
                   UREF_SIZE; //size of urefs
                 let mut result = Vec::with_capacity(size);
                 result.push(NAMEDKEY_ID);
-                result.append(&mut n.to_bytes());
-                result.append(&mut k.to_bytes());
-                result
+                result.append(&mut n.to_bytes()?);
+                result.append(&mut k.to_bytes()?);
+                Ok(result)
             }
             ListString(arr) => {
-                let mut result = Vec::with_capacity(5 + arr.len());
+                let size: usize = U8_SIZE + U32_SIZE + arr.len();
+                let mut result = Vec::with_capacity(size);
                 result.push(LISTSTRING_ID);
-                result.append(&mut arr.to_bytes());
-                result
+                let bytes = arr.to_bytes()?;
+                if bytes.len() >= u32::max_value() as usize - result.len() {
+                    return Err(Error::OutOfMemoryError);
+                }
+                result.append(&mut arr.to_bytes()?);
+                Ok(result)
             }
         }
     }
@@ -202,13 +227,13 @@ macro_rules! from_try_from_impl {
         }
 
         impl TryFrom<Value> for $type {
-            type Error = ();
+            type Error = String;
 
-            fn try_from(v: Value) -> Result<$type, ()> {
+            fn try_from(v: Value) -> Result<$type, String> {
                 if let Value::$variant(x) = v {
                     Ok(x)
                 } else {
-                    Err(())
+                    Err(v.type_string())
                 }
             }
         }

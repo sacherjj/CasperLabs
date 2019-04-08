@@ -1,26 +1,35 @@
 use common::bytesrepr;
-use rkv;
+use lmdb;
 use wasmi;
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Fail, PartialEq, Eq)]
 pub enum Error {
     #[fail(display = "{}", _0)]
-    Rkv(#[fail(cause)] rkv::error::StoreError),
+    Lmdb(#[fail(cause)] lmdb::Error),
 
     #[fail(display = "{}", _0)]
     BytesRepr(#[fail(cause)] bytesrepr::Error),
+
+    #[fail(display = "Another thread panicked while holding a lock")]
+    PoisonError,
 }
 
 impl wasmi::HostError for Error {}
 
-impl From<rkv::error::StoreError> for Error {
-    fn from(e: rkv::error::StoreError) -> Self {
-        Error::Rkv(e)
+impl From<lmdb::Error> for Error {
+    fn from(e: lmdb::Error) -> Self {
+        Error::Lmdb(e)
     }
 }
 
 impl From<bytesrepr::Error> for Error {
     fn from(e: bytesrepr::Error) -> Self {
         Error::BytesRepr(e)
+    }
+}
+
+impl<T> From<std::sync::PoisonError<T>> for Error {
+    fn from(_e: std::sync::PoisonError<T>) -> Self {
+        Error::PoisonError
     }
 }

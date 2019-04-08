@@ -63,19 +63,14 @@ object Genesis {
                            ExecutionEngineService[F]
                              .exec(startHash, blessedTerms.map(ExecEngineUtil.deploy2deploy))
                          )
-      deployLookup = processedDeploys.zip(blessedTerms).toMap
+      deployEffects = ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
+
       // Todo We shouldn't need to do any commutivity checking for the genesis block.
       // Either we make it a "SEQ" block (which is not a feature that exists yet)
       // or there should be a single deploy containing all the blessed contracts.
-      commutingEffects = ExecEngineUtil.findCommutingEffects(processedDeploys)
-      deploysForBlock = commutingEffects.map {
-        case (eff, cost) => {
-          val deploy = deployLookup(
-            ipc.DeployResult(
-              cost,
-              ipc.DeployResult.Result.Effects(eff)
-            )
-          )
+      commutingEffects = ExecEngineUtil.findCommutingEffects(deployEffects)
+      deploysForBlock = deployEffects.collect {
+        case (deploy, Some((_, cost))) => {
           protocol.ProcessedDeploy(
             Some(deploy),
             cost,

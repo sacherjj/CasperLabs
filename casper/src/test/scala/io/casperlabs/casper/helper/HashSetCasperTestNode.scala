@@ -1,17 +1,16 @@
 package io.casperlabs.casper.helper
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.Path
 
-import cats.{Applicative, ApplicativeError, Defer, Id, Monad}
 import cats.data.EitherT
+import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import cats.{Applicative, ApplicativeError, Defer, Id, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.catscontrib.ski._
 import io.casperlabs.blockstorage._
-import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper._
+import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
@@ -20,27 +19,26 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerInternal
 }
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
-import io.casperlabs.catscontrib._
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
+import io.casperlabs.catscontrib.ski._
+import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
-import io.casperlabs.comm.CommError.{CommErrT, ErrorHandler}
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.Connect
 import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.comm.rp.HandleMessages.handle
 import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.ipc
+import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
-import io.casperlabs.shared.{Cell, Log}
 import io.casperlabs.shared.PathOps.RichPath
+import io.casperlabs.shared.{Cell, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.ipc
-import io.casperlabs.ipc.TransformEntry
-import io.casperlabs.models.BlockMetadata
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -98,7 +96,6 @@ class HashSetCasperTestNode[F[_]](
   implicit val casperEff = new MultiParentCasperImpl[F](
     Some(validatorId),
     genesis,
-    postGenesisStateHash,
     shardId,
     blockProcessingLock,
     faultToleranceThreshold = faultToleranceThreshold
@@ -117,7 +114,7 @@ class HashSetCasperTestNode[F[_]](
     // pre-population removed from internals of Casper
     blockStore.put(genesis.blockHash, genesis, Seq.empty) *>
       blockDagStorage.getRepresentation.flatMap { dag =>
-        BlockGenerator
+        ExecEngineUtil
           .validateBlockCheckpoint[F](
             genesis,
             dag
@@ -366,7 +363,10 @@ object HashSetCasperTestNode {
       private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
       private def getExecutionEffect(deploy: Deploy) = {
-        val key           = Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
+        // The real execution engine will get the keys from what the code changes, which will include
+        // changes to the account nonce for example, but not the deploy timestamp. Make sure the `key`
+        // here isn't more specific to a deploy then the real thing would be.
+        val key           = Key(Key.KeyInstance.Hash(KeyHash(deploy.sessionCode)))
         val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
         val op            = Op(Op.OpInstance.Read(ReadOp()))
         val transforEntry = TransformEntry(Some(key), Some(transform))
@@ -374,7 +374,7 @@ object HashSetCasperTestNode {
         ExecutionEffect(Seq(opEntry), Seq(transforEntry))
       }
 
-      override def emptyStateHash: ByteString = ByteString.copyFrom(zero)
+      override def emptyStateHash: ByteString = ByteString.EMPTY
 
       override def exec(
           prestate: ByteString,

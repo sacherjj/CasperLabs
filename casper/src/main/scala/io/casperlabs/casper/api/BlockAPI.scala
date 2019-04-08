@@ -104,8 +104,9 @@ object BlockAPI {
   ): F[IndexedSeq[BlockMessage]] =
     for {
       dag       <- MultiParentCasper[F].blockDag
-      estimates <- MultiParentCasper[F].estimator(dag)
-      tip       = estimates.head
+      tipHashes <- MultiParentCasper[F].estimator(dag)
+      tipHash   = tipHashes.head
+      tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
       mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
     } yield mainChain
 
@@ -184,8 +185,9 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag        <- MultiParentCasper[F].blockDag
-        estimates  <- MultiParentCasper[F].estimator(dag)
-        tip        = estimates.head
+        tipHashes  <- MultiParentCasper[F].estimator(dag)
+        tipHash    = tipHashes.head
+        tip        <- ProtoUtil.unsafeGetBlock[F](tipHash)
         mainChain  <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
         blockInfos <- mainChain.toList.traverse(getBlockInfoWithoutTuplespace[F])
       } yield blockInfos
@@ -289,14 +291,11 @@ object BlockAPI {
       ) => F[A]
   ): F[A] =
     for {
-      dag         <- MultiParentCasper[F].blockDag
-      header      = block.header.getOrElse(Header.defaultInstance)
-      version     = header.version
-      deployCount = header.deployCount
-      tsHash = ProtoUtil.tuplespace(block) match {
-        case Some(hash) => hash
-        case None       => ByteString.EMPTY
-      }
+      dag                      <- MultiParentCasper[F].blockDag
+      header                   = block.header.getOrElse(Header.defaultInstance)
+      version                  = header.version
+      deployCount              = header.deployCount
+      postStateHash            = ProtoUtil.postStateHash(block)
       timestamp                = header.timestamp
       mainParent               = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
       parentsHashList          = header.parentsHashList
@@ -306,7 +305,7 @@ object BlockAPI {
                     block,
                     version,
                     deployCount,
-                    tsHash,
+                    postStateHash,
                     timestamp,
                     mainParent,
                     parentsHashList,
@@ -327,7 +326,7 @@ object BlockAPI {
       block: BlockMessage,
       version: Long,
       deployCount: Int,
-      tsHash: BlockHash,
+      postStateHash: BlockHash,
       timestamp: Long,
       mainParent: BlockHash,
       parentsHashList: Seq[BlockHash],
@@ -335,7 +334,7 @@ object BlockAPI {
       initialFault: Float
   ): F[BlockInfo] =
     for {
-      tsDesc <- MultiParentCasper[F].storageContents(tsHash)
+      tsDesc <- MultiParentCasper[F].storageContents(postStateHash)
     } yield
       BlockInfo(
         blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
@@ -343,7 +342,7 @@ object BlockAPI {
         blockNumber = ProtoUtil.blockNumber(block),
         version = version,
         deployCount = deployCount,
-        tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
+        tupleSpaceHash = PrettyPrinter.buildStringNoLimit(postStateHash),
         tupleSpaceDump = tsDesc,
         timestamp = timestamp,
         faultTolerance = normalizedFaultTolerance - initialFault,
@@ -357,7 +356,7 @@ object BlockAPI {
       block: BlockMessage,
       version: Long,
       deployCount: Int,
-      tsHash: BlockHash,
+      postStateHash: BlockHash,
       timestamp: Long,
       mainParent: BlockHash,
       parentsHashList: Seq[BlockHash],
@@ -370,7 +369,7 @@ object BlockAPI {
       blockNumber = ProtoUtil.blockNumber(block),
       version = version,
       deployCount = deployCount,
-      tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
+      tupleSpaceHash = PrettyPrinter.buildStringNoLimit(postStateHash),
       timestamp = timestamp,
       faultTolerance = normalizedFaultTolerance - initialFault,
       mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
