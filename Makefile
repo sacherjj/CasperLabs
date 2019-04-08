@@ -45,7 +45,7 @@ docker-push-all: \
 	docker-push/execution-engine
 
 docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
-docker-build/client: .make/docker-build/universal/client
+docker-build/client: .make/docker-build/universal/client .make/docker-build/test/client
 docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
 
 # Tag the `latest` build with the version from git and push it.
@@ -129,6 +129,11 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:test
 	mkdir -p $(dir $@) && touch $@
 
+# Make a test tagged version of client so all tags exist for integration-testing
+.make/docker-build/test/client: \
+		.make/docker-build/universal/client
+	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:test
+	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
 .make/sbt-stage/%: $(SCALA_SRC)
