@@ -530,7 +530,8 @@ mod concurrent {
             let reader_env = env.clone();
             let reader_store = store.clone();
             let reader_barrier = barrier.clone();
-            let leaf_1_hash = leaf_1_hash.clone();
+            let leaf_1_hash = *leaf_1_hash;
+            #[allow(clippy::clone_on_copy)]
             let leaf_1 = leaf_1.clone();
 
             handles.push(thread::spawn(move || {
@@ -580,7 +581,8 @@ mod concurrent {
             let reader_env = env.clone();
             let reader_store = store.clone();
             let reader_barrier = barrier.clone();
-            let leaf_1_hash = leaf_1_hash.clone();
+            let leaf_1_hash = *leaf_1_hash;
+            #[allow(clippy::clone_on_copy)]
             let leaf_1 = leaf_1.clone();
 
             handles.push(thread::spawn(move || {
