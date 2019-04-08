@@ -3,6 +3,7 @@ use core::hash::{Hash, Hasher};
 use gens::gens::*;
 use proptest::prelude::*;
 use siphasher::sip::SipHasher;
+use core::cmp::Ordering;
 
 proptest! {
     #[test]
@@ -27,6 +28,15 @@ proptest! {
                 hasher.finish()
             };
             assert!(key_a_hash == key_b_hash);
+        }
+    }
+
+    // According to Rust documentation, following property must hold::
+    // forall a, b: a.cmp(b) == Ordering::Equal iff a == b and Some(a.cmp(b)) == a.partial_cmp(b)
+    #[test]
+    fn test_key_partialeq_partialord_ord_property(key_a in key_arb(), key_b in key_arb()) {
+        if key_a == key_b && Some(key_a.cmp(&key_b)) == key_a.partial_cmp(&key_b) {
+            assert!(key_a.cmp(&key_b) == Ordering::Equal);
         }
     }
 }
