@@ -353,6 +353,270 @@ mod simple {
 
         tmp_dir.close().unwrap();
     }
+
+    fn read_write_transaction_does_not_block_read_transaction<'a, X, E>(
+        transaction_source: &'a X,
+    ) -> Result<(), E>
+    where
+        X: TransactionSource<'a>,
+        E: From<X::Error>,
+    {
+        let read_write_txn = transaction_source.create_read_write_txn()?;
+        let read_txn = transaction_source.create_read_txn()?;
+        read_write_txn.commit()?;
+        read_txn.commit()?;
+        Ok(())
+    }
+
+    #[test]
+    fn in_memory_read_write_transaction_does_not_block_read_transaction() {
+        let env = InMemoryEnvironment::new();
+
+        let result: Result<(), in_memory::Error> =
+            read_write_transaction_does_not_block_read_transaction(&env);
+
+        assert!(result.is_ok())
+    }
+
+    #[test]
+    fn lmdb_read_write_transaction_does_not_block_read_transaction() {
+        let dir = tempdir().unwrap();
+        let env = LmdbEnvironment::new(&dir.path().to_path_buf()).unwrap();
+
+        let result: Result<(), error::Error> =
+            read_write_transaction_does_not_block_read_transaction(&env);
+
+        assert!(result.is_ok())
+    }
+
+    fn reads_are_isolated<'a, S, X, E>(store: &S, env: &'a X) -> Result<(), E>
+    where
+        S: TrieStore<Vec<u8>, Vec<u8>>,
+        X: TransactionSource<'a, Handle = S::Handle>,
+        S::Error: From<X::Error>,
+        E: From<S::Error> + From<X::Error> + From<common::bytesrepr::Error>,
+    {
+        let TestData(leaf_1_hash, leaf_1) = &super::create_data()[0..1][0];
+
+        {
+            let read_txn_1 = env.create_read_txn()?;
+            let result = store.get(&read_txn_1, &leaf_1_hash)?;
+            assert_eq!(result, None);
+
+            {
+                let mut write_txn = env.create_read_write_txn()?;
+                store.put(&mut write_txn, &leaf_1_hash, &leaf_1)?;
+                write_txn.commit()?;
+            }
+
+            let result = store.get(&read_txn_1, &leaf_1_hash)?;
+            read_txn_1.commit()?;
+            assert_eq!(result, None);
+        }
+
+        {
+            let read_txn_2 = env.create_read_txn()?;
+            let result = store.get(&read_txn_2, &leaf_1_hash)?;
+            read_txn_2.commit()?;
+            assert_eq!(result, Some(leaf_1.to_owned()));
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn in_memory_reads_are_isolated() {
+        let env = InMemoryEnvironment::new();
+        let store = InMemoryTrieStore::new(&env);
+
+        let result: Result<(), in_memory::Error> = reads_are_isolated(&store, &env);
+
+        assert!(result.is_ok())
+    }
+
+    #[test]
+    fn lmdb_reads_are_isolated() {
+        let dir = tempdir().unwrap();
+        let env = LmdbEnvironment::new(&dir.path().to_path_buf()).unwrap();
+        let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
+
+        let result: Result<(), error::Error> = reads_are_isolated(&store, &env);
+
+        assert!(result.is_ok())
+    }
+
+    fn reads_are_isolated_2<'a, S, X, E>(store: &S, env: &'a X) -> Result<(), E>
+    where
+        S: TrieStore<Vec<u8>, Vec<u8>>,
+        X: TransactionSource<'a, Handle = S::Handle>,
+        S::Error: From<X::Error>,
+        E: From<S::Error> + From<X::Error> + From<common::bytesrepr::Error>,
+    {
+        let data = super::create_data();
+        let TestData(ref leaf_1_hash, ref leaf_1) = data[0];
+        let TestData(ref leaf_2_hash, ref leaf_2) = data[1];
+
+        {
+            let mut write_txn = env.create_read_write_txn()?;
+            store.put(&mut write_txn, leaf_1_hash, leaf_1)?;
+            write_txn.commit()?;
+        }
+
+        {
+            let read_txn_1 = env.create_read_txn()?;
+            {
+                let mut write_txn = env.create_read_write_txn()?;
+                store.put(&mut write_txn, leaf_2_hash, leaf_2)?;
+                write_txn.commit()?;
+            }
+            let result = store.get(&read_txn_1, leaf_1_hash)?;
+            read_txn_1.commit()?;
+            assert_eq!(result, Some(leaf_1.to_owned()));
+        }
+
+        {
+            let read_txn_2 = env.create_read_txn()?;
+            let result = store.get(&read_txn_2, leaf_2_hash)?;
+            read_txn_2.commit()?;
+            assert_eq!(result, Some(leaf_2.to_owned()));
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn in_memory_reads_are_isolated_2() {
+        let env = InMemoryEnvironment::new();
+        let store = InMemoryTrieStore::new(&env);
+
+        let result: Result<(), in_memory::Error> = reads_are_isolated_2(&store, &env);
+
+        assert!(result.is_ok())
+    }
+
+    #[test]
+    fn lmdb_reads_are_isolated_2() {
+        let dir = tempdir().unwrap();
+        let env = LmdbEnvironment::new(&dir.path().to_path_buf()).unwrap();
+        let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
+
+        let result: Result<(), error::Error> = reads_are_isolated_2(&store, &env);
+
+        assert!(result.is_ok())
+    }
+}
+
+mod concurrent {
+    use super::TestData;
+    use history::trie::Trie;
+    use history::trie_store::in_memory::{InMemoryEnvironment, InMemoryTrieStore};
+    use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+    use history::trie_store::{Transaction, TransactionSource, TrieStore};
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+    use tempfile::tempdir;
+
+    #[test]
+    fn lmdb_writer_mutex_does_not_collide_with_readers() {
+        let dir = tempdir().unwrap();
+        let env = Arc::new(LmdbEnvironment::new(&dir.path().to_path_buf()).unwrap());
+        let store = Arc::new(LmdbTrieStore::open(&env, None).unwrap());
+        let num_threads = 10;
+        let barrier = Arc::new(Barrier::new(num_threads + 1));
+        let mut handles = Vec::new();
+        let TestData(ref leaf_1_hash, ref leaf_1) = &super::create_data()[0..1][0];
+
+        for _ in 0..num_threads {
+            let reader_env = env.clone();
+            let reader_store = store.clone();
+            let reader_barrier = barrier.clone();
+            let leaf_1_hash = leaf_1_hash.clone();
+            let leaf_1 = leaf_1.clone();
+
+            handles.push(thread::spawn(move || {
+                {
+                    let txn = reader_env.create_read_txn().unwrap();
+                    let result: Option<Trie<Vec<u8>, Vec<u8>>> =
+                        reader_store.get(&txn, &leaf_1_hash).unwrap();
+                    assert_eq!(result, None);
+                    txn.commit().unwrap();
+                }
+                // wait for other reader threads to read and the main thread to
+                // take a read-write transaction
+                reader_barrier.wait();
+                // wait for main thread to put and commit
+                reader_barrier.wait();
+                {
+                    let txn = reader_env.create_read_txn().unwrap();
+                    let result: Option<Trie<Vec<u8>, Vec<u8>>> =
+                        reader_store.get(&txn, &leaf_1_hash).unwrap();
+                    txn.commit().unwrap();
+                    result.unwrap() == leaf_1
+                }
+            }));
+        }
+
+        let mut txn = env.create_read_write_txn().unwrap();
+        // wait for reader threads to read
+        barrier.wait();
+        store.put(&mut txn, &leaf_1_hash, &leaf_1).unwrap();
+        txn.commit().unwrap();
+        // sync with reader threads
+        barrier.wait();
+
+        assert!(handles.into_iter().all(|b| b.join().unwrap()))
+    }
+
+    #[test]
+    fn in_memory_writer_mutex_does_not_collide_with_readers() {
+        let env = Arc::new(InMemoryEnvironment::new());
+        let store = Arc::new(InMemoryTrieStore::new(&env));
+        let num_threads = 10;
+        let barrier = Arc::new(Barrier::new(num_threads + 1));
+        let mut handles = Vec::new();
+        let TestData(ref leaf_1_hash, ref leaf_1) = &super::create_data()[0..1][0];
+
+        for _ in 0..num_threads {
+            let reader_env = env.clone();
+            let reader_store = store.clone();
+            let reader_barrier = barrier.clone();
+            let leaf_1_hash = leaf_1_hash.clone();
+            let leaf_1 = leaf_1.clone();
+
+            handles.push(thread::spawn(move || {
+                {
+                    let txn = reader_env.create_read_txn().unwrap();
+                    let result: Option<Trie<Vec<u8>, Vec<u8>>> =
+                        reader_store.get(&txn, &leaf_1_hash).unwrap();
+                    assert_eq!(result, None);
+                    txn.commit().unwrap();
+                }
+                // wait for other reader threads to read and the main thread to
+                // take a read-write transaction
+                reader_barrier.wait();
+                // wait for main thread to put and commit
+                reader_barrier.wait();
+                {
+                    let txn = reader_env.create_read_txn().unwrap();
+                    let result: Option<Trie<Vec<u8>, Vec<u8>>> =
+                        reader_store.get(&txn, &leaf_1_hash).unwrap();
+                    txn.commit().unwrap();
+                    result.unwrap() == leaf_1
+                }
+            }));
+        }
+
+        let store = store.clone();
+        let mut txn = env.create_read_write_txn().unwrap();
+        // wait for reader threads to read
+        barrier.wait();
+        store.put(&mut txn, &leaf_1_hash, &leaf_1).unwrap();
+        txn.commit().unwrap();
+        // sync with reader threads
+        barrier.wait();
+
+        assert!(handles.into_iter().all(|b| b.join().unwrap()))
+    }
 }
 
 mod proptests {
