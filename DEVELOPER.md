@@ -486,7 +486,7 @@ For a more convenient experience, you can share a folder on your Mac with the vi
 
 ### Running benchmarks
 
-Currently, only `BlockStore` benchmarks are done.
+Currently, only `BlockStore` and `DAGStore` benchmarks are done.
 The recommended way to run them is to use `sbt` as follows:
 ```
  sbt "project blockStorage" "jmh:run -i 10 -wi 10 -f2 -t4"
@@ -496,9 +496,13 @@ This tells `sbt` to run `JMH` benchmarks from the `blockStorage` project with th
 - 10 measuring iterations
 - 2 forks
 - 4 threads
-This procedure requires machinbe with at least 32GB RAM.
-This is a recommended way to run benchmarks. 
-For more information about JMH, you can visit JMH project page: http://openjdk.java.net/projects/code-tools/jmh/
+
+This procedure requires machine with at least 32GB RAM.
+This is a recommended way to run benchmarks.
+
+There is also a properties file which could be use to configure some values: `block-storage/src/test/resources/block-store-benchmark.properties` 
+
+For more information about JMH, you can visit JMH project page: http://openjdk.java.net/projects/code-tools/jmh/ 
 
 ## Description of subprojects
 
