@@ -1,12 +1,69 @@
 use common::bytesrepr::ToBytes;
 use history::trie::Trie;
+use history::trie::{Pointer, PointerBlock};
 use history::trie_store::{Readable, TrieStore, Writable};
 use shared::newtypes::Blake2bHash;
 
 #[derive(Clone)]
-struct TestData<K: ToBytes, V: ToBytes>(Blake2bHash, Trie<K, V>);
+struct TestData<K, V>(Blake2bHash, Trie<K, V>);
 
-fn put_many<K, V, T, S, E>(txn: &mut T, store: &S, items: &[TestData<K, V>]) -> Result<(), E>
+fn create_data() -> Vec<TestData<Vec<u8>, Vec<u8>>> {
+    let leaf_1 = Trie::Leaf {
+        key: vec![0u8, 0, 0],
+        value: b"val_1".to_vec(),
+    };
+    let leaf_2 = Trie::Leaf {
+        key: vec![1u8, 0, 0],
+        value: b"val_2".to_vec(),
+    };
+    let leaf_3 = Trie::Leaf {
+        key: vec![1u8, 0, 1],
+        value: b"val_3".to_vec(),
+    };
+
+    let leaf_1_hash = Blake2bHash::new(&leaf_1.to_bytes().unwrap());
+    let leaf_2_hash = Blake2bHash::new(&leaf_2.to_bytes().unwrap());
+    let leaf_3_hash = Blake2bHash::new(&leaf_3.to_bytes().unwrap());
+
+    let node_2: Trie<Vec<u8>, Vec<u8>> = {
+        let mut pointer_block = PointerBlock::new();
+        pointer_block[0] = Some(Pointer::LeafPointer(leaf_2_hash));
+        pointer_block[1] = Some(Pointer::LeafPointer(leaf_3_hash));
+        let pointer_block = Box::new(pointer_block);
+        Trie::Node { pointer_block }
+    };
+
+    let node_2_hash = Blake2bHash::new(&node_2.to_bytes().unwrap());
+
+    let ext_node: Trie<Vec<u8>, Vec<u8>> = {
+        let affix = vec![1u8, 0];
+        let pointer = Pointer::NodePointer(node_2_hash);
+        Trie::Extension { affix, pointer }
+    };
+
+    let ext_node_hash = Blake2bHash::new(&ext_node.to_bytes().unwrap());
+
+    let node_1: Trie<Vec<u8>, Vec<u8>> = {
+        let mut pointer_block = PointerBlock::new();
+        pointer_block[0] = Some(Pointer::LeafPointer(leaf_1_hash));
+        pointer_block[1] = Some(Pointer::NodePointer(ext_node_hash));
+        let pointer_block = Box::new(pointer_block);
+        Trie::Node { pointer_block }
+    };
+
+    let node_1_hash = Blake2bHash::new(&node_1.to_bytes().unwrap());
+
+    vec![
+        TestData(leaf_1_hash, leaf_1),
+        TestData(leaf_2_hash, leaf_2),
+        TestData(leaf_3_hash, leaf_3),
+        TestData(node_1_hash, node_1),
+        TestData(node_2_hash, node_2),
+        TestData(ext_node_hash, ext_node),
+    ]
+}
+
+fn put_many<'a, K, V, T, S, E>(txn: &mut T, store: &S, items: &[TestData<K, V>]) -> Result<(), E>
 where
     K: ToBytes,
     V: ToBytes,
@@ -47,69 +104,15 @@ mod simple {
     use super::TestData;
     use common::bytesrepr::ToBytes;
     use error;
-    use history::trie::{Pointer, PointerBlock, Trie};
+    use history::trie::Trie;
+    use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
+    use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
     use history::trie_store::{Transaction, TransactionSource, TrieStore};
     use lmdb::DatabaseFlags;
     use shared::newtypes::Blake2bHash;
     use tempfile::tempdir;
 
-    fn create_data() -> Vec<TestData<Vec<u8>, Vec<u8>>> {
-        let leaf_1 = Trie::Leaf {
-            key: vec![0u8, 0, 0],
-            value: b"val_1".to_vec(),
-        };
-        let leaf_2 = Trie::Leaf {
-            key: vec![1u8, 0, 0],
-            value: b"val_2".to_vec(),
-        };
-        let leaf_3 = Trie::Leaf {
-            key: vec![1u8, 0, 1],
-            value: b"val_3".to_vec(),
-        };
-
-        let leaf_1_hash = Blake2bHash::new(&leaf_1.to_bytes().unwrap());
-        let leaf_2_hash = Blake2bHash::new(&leaf_2.to_bytes().unwrap());
-        let leaf_3_hash = Blake2bHash::new(&leaf_3.to_bytes().unwrap());
-
-        let node_2: Trie<Vec<u8>, Vec<u8>> = {
-            let mut pointer_block = PointerBlock::new();
-            pointer_block[0] = Some(Pointer::LeafPointer(leaf_2_hash));
-            pointer_block[1] = Some(Pointer::LeafPointer(leaf_3_hash));
-            let pointer_block = Box::new(pointer_block);
-            Trie::Node { pointer_block }
-        };
-
-        let node_2_hash = Blake2bHash::new(&node_2.to_bytes().unwrap());
-
-        let ext_node: Trie<Vec<u8>, Vec<u8>> = {
-            let affix = vec![1u8, 0];
-            let pointer = Pointer::NodePointer(node_2_hash);
-            Trie::Extension { affix, pointer }
-        };
-
-        let ext_node_hash = Blake2bHash::new(&ext_node.to_bytes().unwrap());
-
-        let node_1: Trie<Vec<u8>, Vec<u8>> = {
-            let mut pointer_block = PointerBlock::new();
-            pointer_block[0] = Some(Pointer::LeafPointer(leaf_1_hash));
-            pointer_block[1] = Some(Pointer::NodePointer(ext_node_hash));
-            let pointer_block = Box::new(pointer_block);
-            Trie::Node { pointer_block }
-        };
-
-        let node_1_hash = Blake2bHash::new(&node_1.to_bytes().unwrap());
-
-        vec![
-            TestData(leaf_1_hash, leaf_1),
-            TestData(leaf_2_hash, leaf_2),
-            TestData(leaf_3_hash, leaf_3),
-            TestData(node_1_hash, node_1),
-            TestData(node_2_hash, node_2),
-            TestData(ext_node_hash, ext_node),
-        ]
-    }
-
-    fn trie_store_put<'a, K, V, S, X, E>(
+    fn put_succeeds<'a, K, V, S, X, E>(
         store: &S,
         transaction_source: &'a X,
         items: &[TestData<K, V>],
@@ -129,47 +132,39 @@ mod simple {
     }
 
     #[test]
-    fn in_memory_trie_store_put() {
-        use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
-
+    fn in_memory_put_succeeds() {
         let env = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&env);
+        let data = &super::create_data()[0..1];
 
-        let data = &create_data()[0..1];
-
-        assert_eq!(
-            Ok(()),
-            trie_store_put::<
-                Vec<u8>,
-                Vec<u8>,
-                InMemoryTrieStore,
-                InMemoryEnvironment,
-                in_memory::Error,
-            >(&store, &env, data)
-        )
+        assert!(put_succeeds::<
+            Vec<u8>,
+            Vec<u8>,
+            InMemoryTrieStore,
+            InMemoryEnvironment,
+            in_memory::Error,
+        >(&store, &env, data)
+        .is_ok());
     }
 
     #[test]
-    fn lmdb_trie_store_put() {
-        use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-
+    fn lmdb_put_succeeds() {
         let tmp_dir = tempdir().unwrap();
         let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
+        let data = &super::create_data()[0..1];
 
-        let data = &create_data()[0..1];
-
-        assert_eq!(
-            Ok(()),
-            trie_store_put::<Vec<u8>, Vec<u8>, LmdbTrieStore, LmdbEnvironment, error::Error>(
+        assert!(
+            put_succeeds::<Vec<u8>, Vec<u8>, LmdbTrieStore, LmdbEnvironment, error::Error>(
                 &store, &env, data
             )
+            .is_ok()
         );
 
         tmp_dir.close().unwrap();
     }
 
-    fn trie_store_put_get<'a, K, V, S, X, E>(
+    fn put_get_succeeds<'a, K, V, S, X, E>(
         store: &S,
         transaction_source: &'a X,
         items: &[TestData<K, V>],
@@ -191,27 +186,24 @@ mod simple {
     }
 
     #[test]
-    fn in_memory_trie_store_put_get() {
-        use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
-
+    fn in_memory_put_get_succeeds() {
         let env = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&env);
-
-        let data = &create_data()[0..1];
+        let data = &super::create_data()[0..1];
 
         let expected: Vec<Trie<Vec<u8>, Vec<u8>>> =
             data.to_vec().into_iter().map(|TestData(_, v)| v).collect();
 
         assert_eq!(
             expected,
-            trie_store_put_get::<
+            put_get_succeeds::<
                 Vec<u8>,
                 Vec<u8>,
                 InMemoryTrieStore,
                 InMemoryEnvironment,
                 in_memory::Error,
             >(&store, &env, data)
-            .expect("trie_store_put_get failed")
+            .expect("put_get_succeeds failed")
             .into_iter()
             .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
             .expect("one of the outputs was empty")
@@ -219,24 +211,21 @@ mod simple {
     }
 
     #[test]
-    fn lmdb_trie_store_put_get() {
-        use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-
+    fn lmdb_put_get_succeeds() {
         let tmp_dir = tempdir().unwrap();
         let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
-
-        let data = &create_data()[0..1];
+        let data = &super::create_data()[0..1];
 
         let expected: Vec<Trie<Vec<u8>, Vec<u8>>> =
             data.to_vec().into_iter().map(|TestData(_, v)| v).collect();
 
         assert_eq!(
             expected,
-            trie_store_put_get::<Vec<u8>, Vec<u8>, LmdbTrieStore, LmdbEnvironment, error::Error>(
+            put_get_succeeds::<Vec<u8>, Vec<u8>, LmdbTrieStore, LmdbEnvironment, error::Error>(
                 &store, &env, data
             )
-            .expect("trie_store_put_get failed")
+            .expect("put_get_succeeds failed")
             .into_iter()
             .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
             .expect("one of the outputs was empty")
@@ -246,27 +235,24 @@ mod simple {
     }
 
     #[test]
-    fn in_memory_trie_store_put_get_many() {
-        use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
-
+    fn in_memory_put_get_many_succeeds() {
         let env = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&env);
-
-        let data = create_data();
+        let data = super::create_data();
 
         let expected: Vec<Trie<Vec<u8>, Vec<u8>>> =
             data.to_vec().into_iter().map(|TestData(_, v)| v).collect();
 
         assert_eq!(
             expected,
-            trie_store_put_get::<
+            put_get_succeeds::<
                 Vec<u8>,
                 Vec<u8>,
                 InMemoryTrieStore,
                 InMemoryEnvironment,
                 in_memory::Error,
             >(&store, &env, &data)
-            .expect("trie_store_put_get failed")
+            .expect("put_get failed")
             .into_iter()
             .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
             .expect("one of the outputs was empty")
@@ -274,24 +260,21 @@ mod simple {
     }
 
     #[test]
-    fn lmdb_trie_store_put_get_many() {
-        use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-
+    fn lmdb_put_get_many_succeeds() {
         let tmp_dir = tempdir().unwrap();
         let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
-
-        let data = create_data();
+        let data = super::create_data();
 
         let expected: Vec<Trie<Vec<u8>, Vec<u8>>> =
             data.to_vec().into_iter().map(|TestData(_, v)| v).collect();
 
         assert_eq!(
             expected,
-            trie_store_put_get::<Vec<u8>, Vec<u8>, LmdbTrieStore, LmdbEnvironment, error::Error>(
+            put_get_succeeds::<Vec<u8>, Vec<u8>, LmdbTrieStore, LmdbEnvironment, error::Error>(
                 &store, &env, &data
             )
-            .expect("trie_store_put_get failed")
+            .expect("put_get failed")
             .into_iter()
             .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
             .expect("one of the outputs was empty")
@@ -300,7 +283,7 @@ mod simple {
         tmp_dir.close().unwrap();
     }
 
-    fn trie_store_failed_txn<'a, K, V, S, X, E>(
+    fn uncommitted_read_write_txn_does_not_persist<'a, K, V, S, X, E>(
         store: &S,
         transaction_source: &'a X,
         items: &[TestData<K, V>],
@@ -327,45 +310,43 @@ mod simple {
     }
 
     #[test]
-    fn in_memory_trie_store_failed_txn() {
-        use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
-
+    fn in_memory_uncommitted_read_write_txn_does_not_persist() {
         let env = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&env);
-
-        let data = create_data();
+        let data = super::create_data();
 
         assert_eq!(
             None,
-            trie_store_failed_txn::<
+            uncommitted_read_write_txn_does_not_persist::<
                 Vec<u8>,
                 Vec<u8>,
                 InMemoryTrieStore,
                 InMemoryEnvironment,
                 in_memory::Error,
             >(&store, &env, &data)
-            .expect("trie_store_failed_txn failed")
+            .expect("uncommitted_read_write_txn_does_not_persist failed")
             .into_iter()
             .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
         )
     }
 
     #[test]
-    fn lmdb_trie_store_failed_txn() {
-        use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-
+    fn lmdb_uncommitted_read_write_txn_does_not_persist() {
         let tmp_dir = tempdir().unwrap();
         let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
-
-        let data = create_data();
+        let data = super::create_data();
 
         assert_eq!(
             None,
-            trie_store_failed_txn::<Vec<u8>, Vec<u8>, LmdbTrieStore, LmdbEnvironment, error::Error>(
-                &store, &env, &data
-            )
-            .expect("trie_store_failed_txn failed")
+            uncommitted_read_write_txn_does_not_persist::<
+                Vec<u8>,
+                Vec<u8>,
+                LmdbTrieStore,
+                LmdbEnvironment,
+                error::Error,
+            >(&store, &env, &data)
+            .expect("uncommitted_read_write_txn_does_not_persist failed")
             .into_iter()
             .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
         );
@@ -374,7 +355,7 @@ mod simple {
     }
 }
 
-mod roundtrip {
+mod proptests {
     use super::TestData;
     use common::bytesrepr::ToBytes;
     use common::key::Key;
@@ -424,7 +405,7 @@ mod roundtrip {
         result
     }
 
-    fn roundtrip_is_valid<'a, S, X, E>(
+    fn roundtrip_succeeds<'a, S, X, E>(
         store: &S,
         transaction_source: &'a X,
         inputs: Vec<Trie<Key, Value>>,
@@ -450,18 +431,18 @@ mod roundtrip {
         outputs == inputs
     }
 
-    fn in_memory_roundtrip(inputs: Vec<Trie<Key, Value>>) -> bool {
+    fn in_memory_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
         use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
 
         let env = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&env);
 
-        roundtrip_is_valid::<InMemoryTrieStore, InMemoryEnvironment, in_memory::Error>(
+        roundtrip_succeeds::<InMemoryTrieStore, InMemoryEnvironment, in_memory::Error>(
             &store, &env, inputs,
         )
     }
 
-    fn lmdb_roundtrip(inputs: Vec<Trie<Key, Value>>) -> bool {
+    fn lmdb_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
         use error;
         use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
@@ -469,7 +450,7 @@ mod roundtrip {
         let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 
-        let ret = roundtrip_is_valid::<LmdbTrieStore, LmdbEnvironment, error::Error>(
+        let ret = roundtrip_succeeds::<LmdbTrieStore, LmdbEnvironment, error::Error>(
             &store, &env, inputs,
         );
         tmp_dir.close().unwrap();
@@ -478,13 +459,13 @@ mod roundtrip {
 
     proptest! {
         #[test]
-        fn test_roundtrip(v in vec(trie_arb(), get_range())) {
-            assert!(in_memory_roundtrip(v))
+        fn prop_in_memory_roundtrip_succeeds(v in vec(trie_arb(), get_range())) {
+            assert!(in_memory_roundtrip_succeeds(v))
         }
 
         #[test]
-        fn test_lmdb_roundtrip(v in vec(trie_arb(), get_range())) {
-            assert!(lmdb_roundtrip(v))
+        fn prop_lmdb_roundtrip_succeeds(v in vec(trie_arb(), get_range())) {
+            assert!(lmdb_roundtrip_succeeds(v))
         }
     }
 }
