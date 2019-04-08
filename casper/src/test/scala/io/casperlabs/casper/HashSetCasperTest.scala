@@ -554,13 +554,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
       result <- nodes(1).casperEff
                  .contains(signedBlock4) shouldBeF true // Invalid blocks are still added
-      // TODO: Fix with https://rchain.atlassian.net/browse/RHOL-1048
-      // nodes(0).casperEff.contains(signedBlock4) should be(false)
-      //
-      // nodes(0).logEff.warns
-      //   .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
-      //   1
-      // )
+      _ <- nodes(0).casperEff.contains(signedBlock4) shouldBeF (false)
+      _ = nodes(0).logEff.warns
+        .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") shouldBe (1)
       _ <- nodes.map(_.tearDownNode()).toList.sequence
 
       _ = nodes.toList.traverse_[Effect, Assertion] { node =>
