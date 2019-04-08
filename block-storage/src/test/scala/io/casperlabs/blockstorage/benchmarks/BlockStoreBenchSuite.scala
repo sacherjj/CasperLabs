@@ -1,12 +1,22 @@
 package io.casperlabs.blockstorage.benchmarks
 
+import java.nio.file.Files.createTempDirectory
 import java.nio.file.Paths
 import java.util.UUID
 
 import cats.Monad
+import cats.effect.Concurrent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.{FileLMDBIndexBlockStore, InMemBlockStore, LMDBBlockStore}
+import io.casperlabs.blockstorage.{
+  BlockDagFileStorage,
+  BlockDagStorage,
+  BlockStore,
+  FileLMDBIndexBlockStore,
+  InMemBlockStore,
+  IndexedBlockDagStorage,
+  LMDBBlockStore
+}
 import io.casperlabs.casper.protocol.{
   BlockMessage,
   Body,
@@ -154,4 +164,20 @@ object Init {
     InMemBlockStore.emptyMapRef[Task].runSyncUnsafe(),
     metricsNop
   )
+
+  def fileStorage(blockStore: BlockStore[Task]) =
+    BlockDagFileStorage
+      .create(
+        BlockDagFileStorage.Config(
+          dir = createTempDirectory("block_dag_file_storage")
+        )
+      )(
+        Concurrent[Task],
+        logNop,
+        blockStore
+      )
+      .runSyncUnsafe()
+
+  def indexedStorage(blockDagStorage: BlockDagStorage[Task]) =
+    IndexedBlockDagStorage.create[Task](blockDagStorage).runSyncUnsafe()
 }
