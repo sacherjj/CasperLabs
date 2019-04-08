@@ -8,8 +8,8 @@ import typing_extensions
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from casperlabsnode_testing.common import Network, WaitTimeoutError
-    from casperlabsnode_testing.casperlabsnode import Node
+    from .common import Network, WaitTimeoutError
+    from .casperlabsnode import Node
 
 
 class PredicateProtocol(typing_extensions.Protocol):
