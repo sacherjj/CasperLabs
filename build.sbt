@@ -68,6 +68,15 @@ lazy val profilerSettings = Seq(
 
 lazy val commonSettings = projectSettings ++ coverageSettings ++ CompilerSettings.options ++ profilerSettings
 
+lazy val jmhSettings = Seq(
+  sourceDirectory in Jmh := (sourceDirectory in Test).value,
+  classDirectory in Jmh := (classDirectory in Test).value,
+  dependencyClasspath in Jmh := (dependencyClasspath in Test).value,
+  // rewire tasks, so that 'jmh:run' automatically invokes 'jmh:compile' (otherwise a clean 'jmh:run' would fail)
+  compile in Jmh := (compile in Jmh).dependsOn(compile in Test).value,
+  run in Jmh := (run in Jmh).dependsOn(Keys.compile in Jmh).evaluated,
+)
+
 lazy val shared = (project in file("shared"))
   .settings(commonSettings: _*)
   .settings(
@@ -330,7 +339,9 @@ lazy val node = (project in file("node"))
   .dependsOn(casper, comm, crypto)
 
 lazy val blockStorage = (project in file("block-storage"))
+  .enablePlugins(JmhPlugin)
   .settings(commonSettings: _*)
+  .settings(jmhSettings: _*)
   .settings(
     name := "block-storage",
     version := "0.0.1-SNAPSHOT",
