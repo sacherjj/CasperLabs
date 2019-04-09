@@ -24,7 +24,6 @@ mod utils;
 #[cfg(test)]
 #[macro_use]
 extern crate matches;
-#[cfg(test)]
-extern crate gens;
+
 #[cfg(test)]
 extern crate proptest;

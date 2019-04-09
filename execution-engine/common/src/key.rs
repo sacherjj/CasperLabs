@@ -328,6 +328,11 @@ impl AsRef<[u8]> for Key {
 #[cfg(test)]
 mod tests {
     use crate::key::AccessRights::{self, *};
+    use core::cmp::Ordering;
+    use core::hash::{Hash, Hasher};
+    use crate::gens::*;
+    use proptest::prelude::*;
+    use siphasher::sip::SipHasher;
 
     fn test_capabilities(right: AccessRights, requires: AccessRights, is_true: bool) {
         assert_eq!(
@@ -415,5 +420,41 @@ mod tests {
         assert_eq!(write != AccessRights::Read, true);
         assert_eq!(write != AccessRights::Add, true);
         assert_eq!(write != AccessRights::ReadAdd, true);
+    }
+
+    proptest! {
+        #[test]
+        fn eqv_access_is_implicit(access_right in access_rights_arb()) {
+            assert_eq!(AccessRights::Eqv <= access_right, true);
+        }
+
+        // According to the Rust documentation:
+        // https://doc.rust-lang.org/std/hash/trait.Hash.html#hash-and-eq
+        // following property must hold:
+        // k1 == k2 -> hash(k1) == hash(k2)
+        #[test]
+        fn test_key_eqv_hash_property(key_a in key_arb(), key_b in key_arb()) {
+            if key_a == key_b {
+                let mut hasher = SipHasher::new();
+                let key_a_hash = {
+                    key_a.hash(&mut hasher);
+                    hasher.finish()
+                };
+                let key_b_hash = {
+                    key_b.hash(&mut hasher);
+                    hasher.finish()
+                };
+                assert!(key_a_hash == key_b_hash);
+            }
+        }
+
+        // According to Rust documentation, following property must hold::
+        // forall a, b: a.cmp(b) == Ordering::Equal iff a == b and Some(a.cmp(b)) == a.partial_cmp(b)
+        #[test]
+        fn test_key_partialeq_partialord_ord_property(key_a in key_arb(), key_b in key_arb()) {
+            if key_a == key_b && Some(key_a.cmp(&key_b)) == key_a.partial_cmp(&key_b) {
+                assert!(key_a.cmp(&key_b) == Ordering::Equal);
+            }
+        }
     }
 }

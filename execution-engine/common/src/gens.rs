@@ -1,8 +1,9 @@
-use common::key::*;
-use common::value::*;
+use crate::key::*;
+use crate::value::*;
+use alloc::collections::BTreeMap;
+use alloc::string::String;
 use proptest::collection::{btree_map, vec};
 use proptest::prelude::*;
-use std::collections::BTreeMap;
 
 pub fn u8_slice_20() -> impl Strategy<Value = [u8; 20]> {
     vec(any::<u8>(), 20).prop_map(|b| {
@@ -45,34 +46,33 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
     ]
 }
 
-pub fn account_arb() -> impl Strategy<Value = common::value::Account> {
+pub fn account_arb() -> impl Strategy<Value = Account> {
     u8_slice_32().prop_flat_map(|b| {
         any::<u64>().prop_flat_map(move |u64arb| {
-            uref_map_arb(3).prop_map(move |urefs| common::value::Account::new(b, u64arb, urefs))
+            uref_map_arb(3).prop_map(move |urefs| Account::new(b, u64arb, urefs))
         })
     })
 }
 
-pub fn contract_arb() -> impl Strategy<Value = common::value::Contract> {
+pub fn contract_arb() -> impl Strategy<Value = Contract> {
     uref_map_arb(20).prop_flat_map(|urefs| {
-        vec(any::<u8>(), 1..1000)
-            .prop_map(move |body| common::value::Contract::new(body, urefs.clone()))
+        vec(any::<u8>(), 1..1000).prop_map(move |body| Contract::new(body, urefs.clone()))
     })
 }
 
-pub fn u128_arb() -> impl Strategy<Value = common::value::U128> {
+pub fn u128_arb() -> impl Strategy<Value = U128> {
     vec(any::<u8>(), 0..16).prop_map(|b| U128::from_little_endian(b.as_slice()))
 }
 
-pub fn u256_arb() -> impl Strategy<Value = common::value::U256> {
+pub fn u256_arb() -> impl Strategy<Value = U256> {
     vec(any::<u8>(), 0..32).prop_map(|b| U256::from_little_endian(b.as_slice()))
 }
 
-pub fn u512_arb() -> impl Strategy<Value = common::value::U512> {
+pub fn u512_arb() -> impl Strategy<Value = U512> {
     vec(any::<u8>(), 0..64).prop_map(|b| U512::from_little_endian(b.as_slice()))
 }
 
-pub fn value_arb() -> impl Strategy<Value = common::value::Value> {
+pub fn value_arb() -> impl Strategy<Value = Value> {
     prop_oneof![
         (any::<i32>().prop_map(Value::Int32)),
         (vec(any::<u8>(), 1..1000).prop_map(Value::ByteArray)),
