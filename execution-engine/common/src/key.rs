@@ -163,7 +163,8 @@ impl Ord for Key {
     fn cmp(&self, other: &Key) -> Ordering {
         match (self, other) {
             (Account(id_1), Account(id_2)) => id_1.cmp(id_2),
-            (Account(_), _) => Ordering::Less,
+            (Account(_), Hash(_)) => Ordering::Less,
+            (Account(_), URef(_, ..)) => Ordering::Less,
             (Hash(id_1), Hash(id_2)) => id_1.cmp(id_2),
             (Hash(_), URef(_, _)) => Ordering::Less,
             (Hash(_), Account(_)) => Ordering::Greater,
