@@ -45,17 +45,13 @@ class RelayingImpl[F[_]: Sync: Par: Log: NodeAsk](
 ) extends Relaying[F] {
 
   override def relay(hashes: List[ByteString]): F[Unit] = {
-    def loop(hash: ByteString, peers: List[Node], contacted: Int): F[Unit] = {
-      val parallelism = math.min(relayFactor, maxToTry - contacted)
+    def loop(hash: ByteString, peers: List[Node], relayed: Int, contacted: Int): F[Unit] = {
+      val parallelism = math.min(relayFactor - relayed, maxToTry - contacted)
       if (parallelism > 0 && peers.nonEmpty) {
-        val (recipients, rest) = Random.shuffle(peers).splitAt(parallelism)
-        for {
-          results <- recipients.parTraverse(relay(_, hash))
-          _ <- if (results.exists(!_))
-                loop(hash, rest, contacted + recipients.size)
-              else
-                ().pure[F]
-        } yield ()
+        val (recipients, rest) = peers.splitAt(parallelism)
+        recipients.parTraverse(relay(_, hash)) flatMap { results =>
+          loop(hash, rest, relayed + results.count(identity), contacted + recipients.size)
+        }
       } else {
         ().pure[F]
       }
@@ -63,7 +59,7 @@ class RelayingImpl[F[_]: Sync: Par: Log: NodeAsk](
 
     for {
       peers <- nd.alivePeersAscendingDistance
-      _     <- hashes.parTraverse(hash => loop(hash, peers, 0))
+      _     <- hashes.parTraverse(hash => loop(hash, Random.shuffle(peers), 0, 0))
     } yield ()
   }
 
