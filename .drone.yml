@@ -300,6 +300,8 @@ pipeline:
     fork: true
     repositories:
       - CasperLabs/contract-examples@master
+    when:
+      event: [ push, tag ]
 
   cleanup:
     <<: *sbtenv
