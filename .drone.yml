@@ -294,6 +294,13 @@ pipeline:
     when:
       event: [ push, tag ]
 
+  contract-examples:
+    image: plugins/downstream
+    secrets: [ downstream_token, downstream_server ]
+    fork: true
+    repositories:
+      - CasperLabs/contract-examples@master
+
   cleanup:
     <<: *sbtenv
     group: cleanup
