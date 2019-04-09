@@ -7,7 +7,7 @@ import cats.effect.concurrent._
 import cats.temp.par._
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.shared.{Compression, Log, LogSource}
 import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
@@ -168,7 +168,11 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
         }
     }
 
-  def effectiveChunkSize(chunkSize: Int): Int =
+  override def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] = ???
+
+  override def addApproval(request: AddApprovalRequest): F[Empty] = ???
+
+  private def effectiveChunkSize(chunkSize: Int): Int =
     if (0 < chunkSize && chunkSize < maxChunkSize) chunkSize
     else maxChunkSize
 }
