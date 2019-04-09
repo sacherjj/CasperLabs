@@ -300,12 +300,12 @@ If make fails, contract can be manually built:
 
 #### Building node:
 
-  1. Go to node's root directory (it's where `build.sbt` file is located).
+  1. Go to the root directory of CasperLabs (where `build.sbt` file is located).
   2. Run `sbt -mem 5000 node/universal:stage`
 
 #### Building node's client:
 
-  1. Go to node's root directory (it's where `build.sbt` file is located).
+  1. Go to the root directory of CasperLabs (where `build.sbt` file is located).
   2. Run `sbt -mem 5000 client/universal:stage`
 
 #### Building Execution Engine:
