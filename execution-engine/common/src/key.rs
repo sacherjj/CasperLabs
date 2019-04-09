@@ -325,6 +325,7 @@ impl AsRef<[u8]> for Key {
     }
 }
 
+#[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
     use crate::key::AccessRights::{self, *};
