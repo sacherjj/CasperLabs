@@ -1,6 +1,6 @@
 package io.casperlabs.casper
 
-import cats.Applicative
+import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
@@ -13,18 +13,18 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.rholang._
+import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
-import io.casperlabs.models.BlockMetadata
+import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.BlockMsgWithTransform
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
@@ -38,19 +38,15 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 final case class CasperState(
     seenBlockHashes: Set[BlockHash] = Set.empty[BlockHash],
     blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
-    deployHistory: Set[Deploy] = Set.empty[Deploy],
+    deployHistory: Set[DeployData] = Set.empty[DeployData],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord],
-    //TODO: store this info in the BlockDagRepresentation instead
-    transforms: Map[BlockHash, Seq[ipc.TransformEntry]] =
-      Map.empty[BlockHash, Seq[ipc.TransformEntry]]
+    equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
 class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
-    postGenesisStateHash: StateHash,
     shardId: String,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f
@@ -129,12 +125,12 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
             case _ =>
               reAttemptBuffer(updatedDag, lastFinalizedBlockHash) // reAttempt for any status that resulted in the adding of the block into the view
           }
-      estimates <- estimator(updatedDag)
+      tipHashes <- estimator(updatedDag)
       _ <- Log[F].debug(
-            s"Tip estimates: ${estimates.map(x => PrettyPrinter.buildString(x.blockHash)).mkString(", ")}"
+            s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
           )
-      tip                           = estimates.head
-      _                             <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
+      tipHash                       = tipHashes.head
+      _                             <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
       lastFinalizedBlockHash        <- lastFinalizedBlockHashContainer.get
       updatedLastFinalizedBlockHash <- updateLastFinalizedBlock(updatedDag, lastFinalizedBlockHash)
       _                             <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
@@ -214,24 +210,33 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       bufferContains     = state.blockBuffer.exists(_.blockHash == b.blockHash)
     } yield (blockStoreContains || bufferContains)
 
-  //TODO: `Deploy` is now redundant with `DeployData`, so we should remove it.
-  //The reason we needed both in RChain was because rholang was submitted as source
-  //code and parsed by the node. Now we just accept wasm code directly. We still need
-  //to verify the wasm code for correctness though.
-  //TODO: verify wasm code correctness (done in rust but should be immediate so that we fail fast)
   //TODO: verify sig immediately (again, so we fail fast)
-  def deploy(d: DeployData): F[Either[Throwable, Unit]] =
-    addDeploy(Deploy(d.sessionCode, Some(d))).map(_ => Right(()))
+  def deploy(d: DeployData): F[Either[Throwable, Unit]] = (d.session, d.payment) match {
+    case (Some(session), Some(payment)) =>
+      val req = ExecutionEngineService[F].verifyWasm(ValidateRequest(session.code, payment.code))
 
-  def addDeploy(deploy: Deploy): F[Unit] =
+      EitherT(req)
+        .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
+        .flatMapF(_ => addDeploy(d) map (_.asRight[Throwable]))
+        .value
+
+    case (None, _) | (_, None) =>
+      Either
+        .left[Throwable, Unit](
+          new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
+        )
+        .pure[F]
+  }
+
+  def addDeploy(deployData: DeployData): F[Unit] =
     for {
       _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployHistory = s.deployHistory + deploy)
+            s.copy(deployHistory = s.deployHistory + deployData)
           }
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
+      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deployData)}")
     } yield ()
 
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     for {
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
       rankedEstimates        <- Estimator.tips[F](dag, lastFinalizedBlockHash)
@@ -252,11 +257,11 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
-        dag          <- blockDag
-        orderedHeads <- estimator(dag)
-        p            <- chooseNonConflicting[F](orderedHeads, genesis, dag)
+        dag       <- blockDag
+        tipHashes <- estimator(dag)
+        p         <- chooseNonConflicting[F](tipHashes, genesis, dag)
         _ <- Log[F].info(
-              s"${p.size} parents out of ${orderedHeads.size} latest blocks will be used."
+              s"${p.size} parents out of ${tipHashes.size} latest blocks will be used."
             )
         r                <- remainingDeploys(dag, p)
         bondedValidators = bonds(p.head).map(_.validator).toSet
@@ -292,7 +297,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   private def remainingDeploys(
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage]
-  ): F[Seq[Deploy]] =
+  ): F[Seq[DeployData]] =
     for {
       state <- Cell[F, CasperState].read
       hist  = state.deployHistory
@@ -313,51 +318,17 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   private def createProposal(
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage],
-      r: Seq[Deploy],
+      r: Seq[DeployData],
       justifications: Seq[Justification]
   ): F[CreateBlockStatus] =
     (for {
       now <- Time[F].currentMillis
       s   <- Cell[F, CasperState].read
-      //temporary function for getting transforms for blocks
-      f = (b: BlockMetadata) =>
-        s.transforms.getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry]).pure[F]
-      processedHash <- ExecEngineUtil.processDeploys(
-                        p,
-                        dag,
-                        r,
-                        f
-                      )
-      (preStateHash, processedDeploys) = processedHash
-      deployLookup                     = processedDeploys.zip(r).toMap
-      commutingEffects                 = ExecEngineUtil.findCommutingEffects(processedDeploys)
-      deploysForBlock = commutingEffects.map {
-        case (eff, cost) => {
-          val deploy = deployLookup(
-            ipc.DeployResult(
-              cost,
-              ipc.DeployResult.Result.Effects(eff)
-            )
-          )
-          protocol.ProcessedDeploy(
-            Some(deploy),
-            cost,
-            false
-          )
-        }
-      }
-      maxBlockNumber = p.foldLeft(-1L) {
-        case (acc, b) => math.max(acc, blockNumber(b))
-      }
+      stateResult <- ExecEngineUtil
+                      .computeDeploysCheckpoint(p, r, dag)
+      DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number) = stateResult
       //TODO: compute bonds properly
-      newBonds              = ProtoUtil.bonds(p.head)
-      transforms            = commutingEffects.unzip._1.flatMap(_.transformMap)
-      possiblePostStateHash <- ExecutionEngineService[F].commit(preStateHash, transforms)
-      postStateHash <- possiblePostStateHash match {
-                        case Left(ex)    => Sync[F].raiseError(ex)
-                        case Right(hash) => hash.pure[F]
-                      }
-      number = maxBlockNumber + 1
+      newBonds = ProtoUtil.bonds(p.head)
       postState = RChainState()
         .withPreStateHash(preStateHash)
         .withPostStateHash(postStateHash)
@@ -369,16 +340,6 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         .withDeploys(deploysForBlock)
       header = blockHeader(body, p.map(_.blockHash), version, now)
       block  = unsignedBlockProto(body, header, justifications, shardId)
-
-      msgBody = transforms
-        .map(t => {
-          val k    = PrettyPrinter.buildString(t.key.get)
-          val tStr = PrettyPrinter.buildString(t.transform.get)
-          s"$k :: $tStr"
-        })
-        .mkString("\n")
-      _ <- Log[F]
-            .info(s"Block #$number created with effects:\n$msgBody")
     } yield CreateBlockStatus.created(block)).handleErrorWith(
       ex =>
         Log[F]
@@ -420,14 +381,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       postValidationStatus <- Validate
                                .blockSummary[F](b, genesis, dag, shardId, lastFinalizedBlockHash)
       s <- Cell[F, CasperState].read
-      //temporary function for getting transforms for blocks
-      f = (b: BlockMetadata) =>
-        Sync[F].delay(
-          s.transforms
-            .getOrElse(b.blockHash, Seq.empty[ipc.TransformEntry])
-        )
       processedHash <- ExecEngineUtil
-                        .effectsForBlock(b, dag, f)
+                        .effectsForBlock(b, dag)
                         .recoverWith {
                           case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                         }
@@ -616,12 +571,9 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       effects: Seq[ipc.TransformEntry]
   ): F[BlockDagRepresentation[F]] =
     for {
-      _          <- BlockStore[F].put(block.blockHash, block)
+      _          <- BlockStore[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
       updatedDag <- BlockDagStorage[F].insert(block)
       hash       = block.blockHash
-      _ <- Cell[F, CasperState].modify { s =>
-            s.copy(transforms = s.transforms + (hash -> effects))
-          }
     } yield updatedDag
 
   private def reAttemptBuffer(
@@ -689,10 +641,6 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
           DoublyLinkedDagOperations.remove(acc, successfulAdd._1.blockHash)
       })
     }
-
-  //TODO: Delete this method
-  def getRuntimeManager: F[Option[RuntimeManager[F]]] =
-    Applicative[F].pure(None)
 
   def fetchDependencies: F[Unit] =
     for {

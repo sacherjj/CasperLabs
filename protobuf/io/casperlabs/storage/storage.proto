@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package io.casperlabs.storage;
+
+import "io/casperlabs/casper/protocol/CasperMessage.proto";
+import "io/casperlabs/ipc/ipc.proto";
+
+// This is the content storing in BlockStore, the reason why we need it is that,
+// we take protobuf as the way to (de)serializer.
+message BlockMsgWithTransform {
+    io.casperlabs.casper.protocol.BlockMessage block_message = 1;
+    repeated io.casperlabs.ipc.TransformEntry transform_entry = 2;
+}

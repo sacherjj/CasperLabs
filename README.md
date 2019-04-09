@@ -3,7 +3,28 @@
 The open-source CasperLabs project is building a decentralized, economic, censorship-resistant, public compute infrastructure and blockchain. It will host and execute programs popularly referred to as “smart contracts”. It will be trustworthy, scalable, concurrent, with proof-of-stake consensus and content delivery.
 
 ## Download
-Check our public repository with prebuilt binaries: http://repo.casperlabs.io/casperlabs/repo/
+Check our public repositories with prebuilt binaries: 
+
+  http://repo.casperlabs.io/casperlabs/repo/
+  
+  https://dl.bintray.com/casperlabs/debian/
+  
+  https://dl.bintray.com/casperlabs/rpm/
+
+## Installing from debian repository
+```
+echo "deb https://dl.bintray.com/casperlabs/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
+curl -o casperlabs-public.key.asc https://bintray.com/user/downloadSubjectPublicKey?username=casperlabs
+sudo apt-key add casperlabs-public.key.asc
+sudo apt update
+sudo apt install casperlabs
+```
+
+## Installing from rpm repository
+```
+curl https://bintray.com/casperlabs/rpm/rpm | sudo tee /etc/yum.repos.d/bintray-casperlabs-rpm.repo
+sudo yum install casperlabs
+```
 
 ## Running
 

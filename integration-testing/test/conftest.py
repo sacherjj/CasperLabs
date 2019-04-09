@@ -1,29 +1,17 @@
-import sys
-
-sys.path.insert(0, '.')
-
+import contextlib
+import dataclasses
 import os
 import random
-import pathlib
-import tempfile
-import contextlib
-import collections
-import dataclasses
-from typing import (
-    TYPE_CHECKING,
-    List,
-    Generator,
-    TextIO,
-)
+import shutil
+from typing import TYPE_CHECKING, Generator, List
 
-import pytest
 import docker as docker_py
+import pytest
 
-from casperlabsnode_testing.common import (
-    KeyPair,
-    TestingContext,
-)
-from casperlabsnode_testing.pregenerated_keypairs import PREGENERATED_KEYPAIRS
+from .cl_node.common import KeyPair, TestingContext
+from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
+from .cl_node.casperlabsnode import docker_network_with_started_bootstrap
+
 
 if TYPE_CHECKING:
     from docker.client import DockerClient
@@ -46,7 +34,7 @@ def pytest_addoption(parser: "Parser") -> None:
     parser.addoption("--start-timeout", action="store", default="0", help="timeout in seconds for starting a node. Defaults to 30 + peer_count * 10")
     parser.addoption("--converge-timeout", action="store", default="0", help="timeout in seconds for network converge. Defaults to 200 + peer_count * 10")
     parser.addoption("--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message. Defaults to 10 + peer_count * 10")
-    parser.addoption("--command-timeout", action="store", default="10", help="timeout in seconds for executing an casperlabsnode call (Examples: propose, show-logs etc.). Defaults to 10s")
+    parser.addoption("--command-timeout", action="store", default="10", help="timeout in seconds for executing an cl_node call (Examples: propose, show-logs etc.). Defaults to 10s")
     parser.addoption("--blocks", action="store", default="1", help="the number of deploys per test deploy")
     parser.addoption("--mount-dir", action="store", default=None, help="globally accesible directory for mounting between containers")
 
@@ -80,18 +68,24 @@ def command_line_options_fixture(request):
     yield command_line_options
 
 
-
 @contextlib.contextmanager
-def temporary_bonds_txt_file(validator_keys: List[KeyPair]) -> Generator[str, None, None]:
-    (fd, file) = tempfile.mkstemp(prefix="casperlabs-bonds-file-", suffix=".txt", dir="/tmp")
+def temporary_resources_genesis_folder(validator_keys: List[KeyPair]) -> Generator[str, None, None]:
+    genesis_folder_path = "/tmp/resources/genesis"
+    if os.path.exists(genesis_folder_path):
+        shutil.rmtree(genesis_folder_path)
+    os.makedirs(genesis_folder_path)
     try:
-        with os.fdopen(fd, "w") as f:
+        with open(os.path.join(genesis_folder_path, "bonds.txt"), "w") as f:
             for pair in validator_keys:
                 bond = random.randint(1, 100)
                 f.write("{} {}\n".format(pair.public_key, bond))
-        yield file
+                with open(os.path.join("/tmp/resources/genesis/",
+                                       "{}.sk".format(pair.public_key)), 'w') as _file:
+                    _file.write("{}\n".format(pair.private_key))
+        yield genesis_folder_path
     finally:
-        os.unlink(file)
+        if os.path.exists(genesis_folder_path):
+            shutil.rmtree(genesis_folder_path)
 
 
 @pytest.yield_fixture(scope='session')
@@ -111,12 +105,12 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
     if peers_keypairs is None:
         peers_keypairs = PREGENERATED_KEYPAIRS[1:]
 
-    # Using pre-generated validator key pairs by casperlabsnode. We do this because warning below  with python generated keys
+    # Using pre-generated validator key pairs by cl_node. We do this because warning below  with python generated keys
     # WARN  io.casperlabs.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
-    validator_keys = [kp for kp in [bootstrap_keypair] + peers_keypairs[0:command_line_options_fixture.peer_count+1]]
-    with temporary_bonds_txt_file(validator_keys) as bonds_file:
-        peers_keypairs=validator_keys[1:]
-
+    validator_keys = [kp for kp in [bootstrap_keypair] + peers_keypairs[0: command_line_options_fixture.peer_count + 1]]
+    with temporary_resources_genesis_folder(validator_keys) as genesis_folder:
+        bonds_file = os.path.join(genesis_folder, "bonds.txt")
+        peers_keypairs = validator_keys
         context = TestingContext(
             bonds_file=bonds_file,
             bootstrap_keypair=bootstrap_keypair,
@@ -126,3 +120,10 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
         )
 
         yield context
+
+
+@pytest.yield_fixture(scope='module')
+def started_standalone_bootstrap_node(command_line_options_fixture, docker_client_fixture):
+    with testing_context(command_line_options_fixture, docker_client_fixture) as context:
+        with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
+            yield bootstrap_node

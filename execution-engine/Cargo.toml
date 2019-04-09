@@ -4,9 +4,8 @@ members = [
     "comm",
     "common",
     "engine",
-    "gens",
+    "shared",
     "storage",
-    "tests",
     "vm",
     "wasm-prep",
 ]

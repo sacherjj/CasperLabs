@@ -104,5 +104,4 @@ object GrpcMonix {
       override def onComplete(): Unit            = subject.onComplete()
       override def onNext(value: I): Future[Ack] = subject.onNext(value)
     }
-
 }

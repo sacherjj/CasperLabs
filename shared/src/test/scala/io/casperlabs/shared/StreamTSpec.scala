@@ -5,8 +5,10 @@ import cats.implicits._
 
 import org.scalatest.{FunSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-
+import monix.eval.Task
+import monix.execution.Scheduler
 import scala.util.{Failure, Success, Try}
+import scala.concurrent.duration._
 
 class StreamTSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChecks {
   import StreamTSpec._
@@ -17,6 +19,25 @@ class StreamTSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChec
         val stream: StreamT[Id, Int] = StreamT.fromList[Id, Int](list)
 
         stream.toList[Int] shouldBe list
+      }
+    }
+
+    it("should be able to be constructed from iterators") {
+      forAll { (list: List[Int]) =>
+        val it                       = list.iterator
+        val stream: StreamT[Id, Int] = StreamT.fromIterator[Id, Int](it)
+
+        stream.toList[Int] shouldBe list
+      }
+    }
+
+    it("should be able to be constructed from delayed iterator constructors") {
+      import Scheduler.Implicits.global
+      forAll { (list: List[Int]) =>
+        val it                         = Task.delay(list.iterator)
+        val stream: StreamT[Task, Int] = StreamT.fromIterator[Task, Int](it)
+
+        stream.toList[Int].foreach(_ shouldBe list)
       }
     }
 

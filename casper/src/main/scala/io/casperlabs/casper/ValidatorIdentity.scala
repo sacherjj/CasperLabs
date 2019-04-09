@@ -42,16 +42,18 @@ object ValidatorIdentity {
       privateKeyBase16: String
   ) = {
     val privateKey     = Base16.decode(privateKeyBase16)
-    val maybePublicKey = conf.publicKeyBase16.map(Base16.decode)
+    val maybePublicKey = conf.validatorPublicKey.map(Base16.decode)
 
     val publicKey =
-      CasperConf.publicKey(maybePublicKey, conf.sigAlgorithm, privateKey)
+      CasperConf.publicKey(maybePublicKey, conf.validatorSigAlgorithm, privateKey)
 
-    ValidatorIdentity(publicKey, privateKey, conf.sigAlgorithm).some.pure[F]
+    ValidatorIdentity(publicKey, privateKey, conf.validatorSigAlgorithm).some.pure[F]
   }
 
   def fromConfig[F[_]: Sync: Log](conf: CasperConf): F[Option[ValidatorIdentity]] =
-    conf.privateKey match {
+    conf.validatorPrivateKey
+      .map(_.asLeft[Path])
+      .orElse(conf.validatorPrivateKeyPath.map(_.asRight[String])) match {
       case Some(key) =>
         key.map(fileContent[F]).leftMap(_.pure[F]).merge >>= (createValidatorIdentity(conf, _))
       case None =>

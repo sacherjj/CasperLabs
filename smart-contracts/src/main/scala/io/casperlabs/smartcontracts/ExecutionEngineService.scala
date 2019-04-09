@@ -1,23 +1,19 @@
 package io.casperlabs.smartcontracts
 
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 
-import cats.syntax.applicative._
-import cats.syntax.either._
-import cats.syntax.functor._
-import cats.{Applicative, Monad}
+import cats.effect.{Resource, Sync}
+import cats.syntax._
+import cats.implicits._
+import cats.{Applicative, Defer}
 import com.google.protobuf.ByteString
-import io.casperlabs.catscontrib.ToAbstractContext
+import io.casperlabs.casper.protocol.Bond
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
-import io.grpc.ManagedChannel
-import io.grpc.netty.NettyChannelBuilder
-import io.netty.channel.epoll.{Epoll, EpollDomainSocketChannel, EpollEventLoopGroup}
-import io.netty.channel.kqueue.{KQueueDomainSocketChannel, KQueueEventLoopGroup}
-import io.netty.channel.unix.DomainSocketAddress
-import monix.eval.Task
+import io.casperlabs.shared.Log
+import io.casperlabs.smartcontracts.ExecutionEngineService.Stub
+import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
 
 import scala.util.Either
@@ -30,121 +26,119 @@ import scala.util.Either
       deploys: Seq[Deploy]
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
+  def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
+  def setBonds(bonds: Map[Array[Byte], Long]): F[Unit]
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
-  def close(): F[Unit]
+  def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
 
-class GrpcExecutionEngineService[F[_]: Monad: ToAbstractContext](addr: Path, maxMessageSize: Int)
-    extends ExecutionEngineService[F] {
+class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smartcontracts] (
+    addr: Path,
+    maxMessageSize: Int,
+    initialBonds: Map[Array[Byte], Long],
+    stub: Stub
+) extends ExecutionEngineService[F] {
 
-  private val channelType =
-    if (Epoll.isAvailable) classOf[EpollDomainSocketChannel] else classOf[KQueueDomainSocketChannel]
-
-  private val eventLoopGroup =
-    if (Epoll.isAvailable) new EpollEventLoopGroup() else new KQueueEventLoopGroup()
-
-  private val channel: ManagedChannel =
-    NettyChannelBuilder
-      .forAddress(new DomainSocketAddress(addr.toFile))
-      .channelType(channelType)
-      .maxInboundMessageSize(maxMessageSize)
-      .eventLoopGroup(eventLoopGroup)
-      .usePlaintext()
-      .build()
-
-  private val stub: IpcGrpcMonix.ExecutionEngineServiceStub = IpcGrpcMonix.stub(channel)
+  private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
   override def emptyStateHash: ByteString = ByteString.copyFrom(Array.fill(32)(0.toByte))
 
-  override def close(): F[Unit] =
-    ToAbstractContext[F].fromTask(Task.delay {
-      val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
-      if (!terminated) {
-        println(
-          "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
+  def sendMessage[A, B, R](msg: A, rpc: Stub => A => Task[B])(f: B => R): F[R] =
+    rpc(stub)(msg).to[F].map(f(_)).recoverWith {
+      case ex: io.grpc.StatusRuntimeException
+          if ex.getStatus.getCode == io.grpc.Status.Code.UNAVAILABLE &&
+            ex.getCause != null &&
+            ex.getCause.isInstanceOf[java.io.FileNotFoundException] =>
+        Sync[F].raiseError(
+          new java.io.FileNotFoundException(
+            s"It looks like the Execution Engine is not listening at the socket file ${addr}"
+          )
         )
-        channel.awaitTermination(10, TimeUnit.SECONDS)
-      }
-    })
+    }
 
   override def exec(
       prestate: ByteString,
       deploys: Seq[Deploy]
   ): F[Either[Throwable, Seq[DeployResult]]] =
-    ToAbstractContext[F].fromTask(stub.exec(ExecRequest(prestate, deploys)).attempt).map {
-      case Left(err) => Left(err)
-      case Right(ExecResponse(result)) =>
-        result match {
-          case ExecResponse.Result.Success(ExecResult(deployResults)) =>
-            Right(deployResults)
-          //TODO: Capture errors better than just as a string
-          case ExecResponse.Result.Empty => Left(new SmartContractEngineError("empty response"))
-          case ExecResponse.Result.MissingParent(RootNotFound(missing)) =>
-            Left(
-              new SmartContractEngineError(s"Missing states: ${Base16.encode(missing.toByteArray)}")
-            )
-        }
+    sendMessage(ExecRequest(prestate, deploys), _.exec) {
+      _.result match {
+        case ExecResponse.Result.Success(ExecResult(deployResults)) =>
+          Right(deployResults)
+        //TODO: Capture errors better than just as a string
+        case ExecResponse.Result.Empty =>
+          Left(new SmartContractEngineError("empty response"))
+        case ExecResponse.Result.MissingParent(RootNotFound(missing)) =>
+          Left(
+            new SmartContractEngineError(s"Missing states: ${Base16.encode(missing.toByteArray)}")
+          )
+      }
     }
 
   override def commit(
       prestate: ByteString,
       effects: Seq[TransformEntry]
   ): F[Either[Throwable, ByteString]] =
-    ToAbstractContext[F]
-      .fromTask(stub.commit(CommitRequest(prestate, effects)).attempt)
-      .map {
-        case Left(err) => Left(err)
-        case Right(CommitResponse(result)) =>
-          result match {
-            case CommitResponse.Result.Success(CommitResult(poststateHash)) => Right(poststateHash)
-            case CommitResponse.Result.Empty                                => Left(new SmartContractEngineError("empty response"))
-            case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
-              Left(new SmartContractEngineError(s"Missing pre-state: $hash"))
-            case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
-              Left(new SmartContractEngineError(s"Error executing transform: $message"))
-          }
+    sendMessage(CommitRequest(prestate, effects), _.commit) {
+      _.result match {
+        case CommitResponse.Result.Success(CommitResult(poststateHash)) =>
+          Right(poststateHash)
+        case CommitResponse.Result.Empty =>
+          Left(new SmartContractEngineError("empty response"))
+        case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
+          Left(new SmartContractEngineError(s"Missing pre-state: $hash"))
+        case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
+          Left(new SmartContractEngineError(s"Error executing transform: $message"))
       }
+    }
 
   override def query(
       state: ByteString,
       baseKey: Key,
       path: Seq[String]
   ): F[Either[Throwable, Value]] =
-    ToAbstractContext[F]
-      .fromTask(
-        stub.query(QueryRequest(state, Some(baseKey), path)).attempt
-      )
-      .map {
-        case Left(err) => Left(err)
-        case Right(QueryResponse(result)) =>
-          result match {
-            case QueryResponse.Result.Success(value) => Right(value)
-            case QueryResponse.Result.Empty          => Left(new SmartContractEngineError("empty response"))
-            case QueryResponse.Result.Failure(err)   => Left(new SmartContractEngineError(err))
-          }
+    sendMessage(QueryRequest(state, Some(baseKey), path), _.query) {
+      _.result match {
+        case QueryResponse.Result.Success(value) => Right(value)
+        case QueryResponse.Result.Empty          => Left(new SmartContractEngineError("empty response"))
+        case QueryResponse.Result.Failure(err)   => Left(new SmartContractEngineError(err))
       }
+    }
+  // Todo
+  override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
+    // FIXME: Implement bonds!
+    bonds.pure[F]
+
+  // Todo Pass in the genesis bonds until we have a solution based on the BlockStore.
+  override def setBonds(newBonds: Map[Array[Byte], Long]): F[Unit] =
+    Defer[F].defer(Applicative[F].pure {
+      bonds = newBonds.map {
+        case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
+      }.toSeq
+    })
+  override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
+    stub.validate(contracts).to[F] >>= (
+      _.result match {
+        case ValidateResponse.Result.Empty =>
+          Sync[F].raiseError(
+            new IllegalStateException("Execution Engine service has sent a corrupted reply")
+          )
+        case ValidateResponse.Result.Success(_) =>
+          ().asRight[String].pure[F]
+        case ValidateResponse.Result.Failure(cause: String) =>
+          cause.asLeft[Unit].pure[F]
+      }
+    )
 }
 
 object ExecutionEngineService {
-  def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
-    new ExecutionEngineService[F] {
-      override def emptyStateHash: ByteString = ByteString.EMPTY
-      override def exec(
-          prestate: ByteString,
-          deploys: Seq[Deploy]
-      ): F[Either[Throwable, Seq[DeployResult]]] =
-        Seq.empty[DeployResult].asRight[Throwable].pure
-      override def commit(
-          prestate: ByteString,
-          effects: Seq[TransformEntry]
-      ): F[Either[Throwable, ByteString]] = ByteString.EMPTY.asRight[Throwable].pure
-      override def close(): F[Unit]       = ().pure
-      override def query(
-          state: ByteString,
-          baseKey: Key,
-          path: Seq[String]
-      ): F[Either[Throwable, Value]] =
-        Applicative[F]
-          .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented")))
-    }
+  type Stub = IpcGrpcMonix.ExecutionEngineServiceStub
+}
+
+object GrpcExecutionEngineService {
+  def apply[F[_]: Sync: Log: TaskLift](
+      addr: Path,
+      maxMessageSize: Int,
+      initBonds: Map[Array[Byte], Long]
+  ): Resource[F, GrpcExecutionEngineService[F]] =
+    new ExecutionEngineConf[F](addr, maxMessageSize, initBonds).apply
 }

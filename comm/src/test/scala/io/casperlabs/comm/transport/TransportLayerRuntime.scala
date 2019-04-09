@@ -1,7 +1,5 @@
 package io.casperlabs.comm.transport
 
-import java.net.ServerSocket
-
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.Random
@@ -14,9 +12,10 @@ import io.casperlabs.comm._
 import io.casperlabs.comm.protocol.routing.Protocol
 import io.casperlabs.comm.CommError.CommErr
 import io.casperlabs.comm.rp.ProtocolHelper
-import io.casperlabs.shared.Resources
+import io.casperlabs.comm.TestRuntime
+import io.casperlabs.comm.discovery.Node
 
-abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
+abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] extends TestRuntime {
 
   def createEnvironment(port: Int): F[E]
 
@@ -25,12 +24,6 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
   def createDispatcherCallback: F[DispatcherCallback[F]]
 
   def extract[A](fa: F[A]): A
-
-  private def getFreePort: Int =
-    Resources.withResource(new ServerSocket(0)) { s =>
-      s.setReuseAddress(true)
-      s.getLocalPort
-    }
 
   def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
     for {
@@ -52,7 +45,7 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
     protected def streamDispatcher: Dispatcher[F, Blob, Unit]
     def run(blockUntilDispatched: Boolean): Result
     trait Result {
-      def localNode: PeerNode
+      def localNode: Node
       def apply(): A
     }
   }
@@ -62,7 +55,7 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
         Dispatcher.withoutMessageDispatcher[F],
       val streamDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullPacketDispatcher[F]
   ) extends Runtime[A] {
-    def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
+    def execute(transportLayer: TransportLayer[F], local: Node, remote: Node): F[A]
 
     def run(blockUntilDispatched: Boolean = true): TwoNodesResult =
       extract(
@@ -89,16 +82,16 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new TwoNodesResult {
-              def localNode: PeerNode        = local
-              def remoteNode: PeerNode       = remote
-              def remoteNodes: Seq[PeerNode] = Seq(remote)
-              def apply(): A                 = r
+              def localNode: Node        = local
+              def remoteNode: Node       = remote
+              def remoteNodes: Seq[Node] = Seq(remote)
+              def apply(): A             = r
             }
         }
       )
 
     trait TwoNodesResult extends Result {
-      def remoteNode: PeerNode
+      def remoteNode: Node
     }
   }
 
@@ -107,7 +100,7 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
         Dispatcher.withoutMessageDispatcher[F],
       val streamDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullPacketDispatcher[F]
   ) extends Runtime[A] {
-    def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
+    def execute(transportLayer: TransportLayer[F], local: Node, remote: Node): F[A]
 
     def run(blockUntilDispatched: Boolean = false): TwoNodesResult =
       extract(
@@ -125,15 +118,15 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new TwoNodesResult {
-              def localNode: PeerNode  = local
-              def remoteNode: PeerNode = remote
-              def apply(): A           = r
+              def localNode: Node  = local
+              def remoteNode: Node = remote
+              def apply(): A       = r
             }
         }
       )
 
     trait TwoNodesResult extends Result {
-      def remoteNode: PeerNode
+      def remoteNode: Node
     }
   }
 
@@ -144,9 +137,9 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
   ) extends Runtime[A] {
     def execute(
         transportLayer: TransportLayer[F],
-        local: PeerNode,
-        remote1: PeerNode,
-        remote2: PeerNode
+        local: Node,
+        remote1: Node,
+        remote2: Node
     ): F[A]
 
     def run(blockUntilDispatched: Boolean = true): ThreeNodesResult =
@@ -184,24 +177,24 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new ThreeNodesResult {
-              def localNode: PeerNode   = local
-              def remoteNode1: PeerNode = remote1
-              def remoteNode2: PeerNode = remote2
-              def apply(): A            = r
+              def localNode: Node   = local
+              def remoteNode1: Node = remote1
+              def remoteNode2: Node = remote2
+              def apply(): A        = r
             }
         }
       )
 
     trait ThreeNodesResult extends Result {
-      def remoteNode1: PeerNode
-      def remoteNode2: PeerNode
+      def remoteNode1: Node
+      def remoteNode2: Node
     }
   }
 
   def roundTripWithHeartbeat(
       transport: TransportLayer[F],
-      local: PeerNode,
-      remote: PeerNode,
+      local: Node,
+      remote: Node,
       timeout: FiniteDuration = 10.second
   ): F[CommErr[Protocol]] = {
     val msg = ProtocolHelper.heartbeat(local)
@@ -210,8 +203,8 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
 
   def sendHeartbeat(
       transport: TransportLayer[F],
-      local: PeerNode,
-      remote: PeerNode
+      local: Node,
+      remote: Node
   ): F[CommErr[Unit]] = {
     val msg = ProtocolHelper.heartbeat(local)
     transport.send(remote, msg)
@@ -219,8 +212,8 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
 
   def broadcastHeartbeat(
       transport: TransportLayer[F],
-      local: PeerNode,
-      remotes: PeerNode*
+      local: Node,
+      remotes: Node*
   ): F[Seq[CommErr[Unit]]] = {
     val msg = ProtocolHelper.heartbeat(local)
     transport.broadcast(remotes, msg)
@@ -229,7 +222,7 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
 }
 
 trait Environment {
-  def peer: PeerNode
+  def peer: Node
   def host: String
   def port: Int
 }
@@ -240,11 +233,11 @@ final class DispatcherCallback[F[_]: Functor](state: MVar[F, Unit]) {
 }
 
 final class Dispatcher[F[_]: Monad: Timer, R, S](
-    response: PeerNode => S,
+    response: Node => S,
     delay: Option[FiniteDuration] = None,
     ignore: R => Boolean = kp(false)
 ) {
-  def dispatch(peer: PeerNode, callback: DispatcherCallback[F]): R => F[S] =
+  def dispatch(peer: Node, callback: DispatcherCallback[F]): R => F[S] =
     p =>
       for {
         _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)
@@ -253,8 +246,8 @@ final class Dispatcher[F[_]: Monad: Timer, R, S](
         _ <- callback.notifyThatDispatched()
       } yield r
 
-  def received: Seq[(PeerNode, R)] = receivedMessages
-  private val receivedMessages     = mutable.MutableList.empty[(PeerNode, R)]
+  def received: Seq[(Node, R)] = receivedMessages
+  private val receivedMessages = mutable.MutableList.empty[(Node, R)]
 }
 
 object Dispatcher {

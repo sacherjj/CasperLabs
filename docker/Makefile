@@ -101,24 +101,29 @@ slow:
 
 # Generate keys and bonds.
 .casperlabs:
-	@# Start a node to generate keys.
 	mkdir -p .bootstrap
+	@# The node needs the execution engine to listen on the socket, otherwise it quits before
+	@# it prints the node ID in the logs. In the future (NODE-235 and NODE-237) we'll have
+	@# dedicated CLI entry point to generate keys.
+	docker run --rm -d \
+		--name make-genesis-ee \
+		-v ${PWD}/.bootstrap:/root/.casperlabs \
+		casperlabs/execution-engine:$(CL_VERSION) \
+		/root/.casperlabs/.caspernode.sock
+	@# Start a node to generate keys.
 	docker run --rm -d \
 		--name make-genesis \
 		-v ${PWD}/.bootstrap:/root/.casperlabs \
 		casperlabs/node:$(CL_VERSION) \
 		run -s \
-		--casper-num-validators $(CL_CASPER_NUM_VALIDATORS)
+		--casper-num-validators $(CL_CASPER_NUM_VALIDATORS) \
+		--grpc-socket /root/.casperlabs/.caspernode.sock
 
 	@# Wait until the node is running, so we know it generated the files. Capture the Node ID fromt the logs.
-	@# Can't write to the bootstrap dir from here as it's owned by the docker user.
-	NODE_ID=`(docker logs -f make-genesis &) | grep -m 1 "Listening for traffic" | awk -F'[//|@]' '{print $$3}'` && \
-	docker run --rm \
-		-v ${PWD}/.bootstrap:/root/.casperlabs \
-		--entrypoint sh \
-		casperlabs/node:$(CL_VERSION) \
-		-c "echo $$NODE_ID > /root/.casperlabs/node-id"
-	docker stop make-genesis
+	NODE_ID=`(docker logs -f make-genesis &) | grep -m 1 "Listening for traffic" | awk -F'[//|@]' '{print $$3}' | grep -e .` && \
+	echo $$NODE_ID > .bootstrap/node-id
+
+	docker stop make-genesis make-genesis-ee
 
 	@# Copy files to where we can mount them separately from.
 	mkdir -p .casperlabs/bootstrap

@@ -1,18 +1,14 @@
 package io.casperlabs.comm.rp
 
-import Connect._
-import Connections._
-import io.casperlabs.shared._
-import io.casperlabs.comm._
-import CommError._
-import io.casperlabs.p2p.effects._
-import io.casperlabs.catscontrib.effect.implicits._
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.catscontrib._
-import Catscontrib._
 import cats.Id
-import ski._
+import com.google.protobuf.ByteString
+import io.casperlabs.catscontrib.effect.implicits._
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.rp.Connect.Connections._
+import io.casperlabs.comm.rp.Connect._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
+import io.casperlabs.shared._
 import org.scalatest._
 
 class ConnectionsSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
@@ -98,8 +94,7 @@ class ConnectionsSpec extends FunSpec with Matchers with BeforeAndAfterEach with
     }
   }
 
-  private def endpoint(host: String, port: Int): Endpoint = Endpoint(host, port, port)
-  private def peer(name: String, host: String = "host", port: Int = 8080): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(host, port))
+  private def peer(name: String, host: String = "host", port: Int = 8080): Node =
+    Node(ByteString.copyFrom(name.getBytes), host, port, port)
 
 }

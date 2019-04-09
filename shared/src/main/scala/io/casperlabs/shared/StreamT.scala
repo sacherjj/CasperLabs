@@ -250,6 +250,18 @@ object StreamT {
     StreamT.delay(Eval.now(listF.map(build(_))))
   }
 
+  def fromIterator[F[_], A](
+      itF: F[Iterator[A]]
+  )(implicit applicative: Applicative[F]): StreamT[F, A] = {
+    def build(it: Iterator[A]): StreamT[F, A] =
+      if (it.hasNext) {
+        StreamT.cons(it.next, Eval.later(build(it).pure[F]))
+      } else {
+        StreamT.empty[F, A]
+      }
+    StreamT.delay(Eval.now(itF.map(build(_))))
+  }
+
   private def flatMapHelper[F[_], A, B, BB <: B](
       f: A => StreamT[F, B],
       lazyTail: STail[F, A],

@@ -3,12 +3,12 @@ package io.casperlabs.casper.util.comm
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import com.google.protobuf.ByteString
 import cats.Monad
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol._
-import io.casperlabs.catscontrib.Capture
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.protocol.routing.Packet
@@ -16,7 +16,7 @@ import io.casperlabs.comm.rp.Connect.RPConfAsk
 import io.casperlabs.comm.rp._
 import io.casperlabs.comm.rp.ProtocolHelper.{packet, toPacket}
 import io.casperlabs.comm.transport.{Blob, PacketType, TransportLayer}
-import io.casperlabs.comm.{transport, PeerNode}
+import io.casperlabs.comm.transport
 import io.casperlabs.comm.rp.ProtocolHelper
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.effects._
@@ -80,7 +80,7 @@ object CommUtil {
       _     <- TransportLayer[F].stream(peers, msg)
     } yield ()
 
-  def requestApprovedBlock[F[_]: Monad: Capture: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk](
+  def requestApprovedBlock[F[_]: Monad: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk](
       delay: FiniteDuration
   ): F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString

@@ -1,6 +1,6 @@
 [package]
 name = "casperlabs-engine-grpc-server"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 description = "WASM execution engine for CasperLabs smart contracts"
 license = "Apache-2.0"
@@ -12,9 +12,11 @@ futures = "0.1.8"
 futures-cpupool = "0.1.8"
 execution-engine = { path = "../engine" }
 clap = "2.32.0"
+shared = { path = "../shared" }
 storage = { path = "../storage" }
 wasm-prep = { path = "../wasm-prep" }
 common = { path = "../common", package = "casperlabs-contract-ffi" }
+wabt = "0.7.4"
 
 [build-dependencies]
 protoc-rust-grpc = "0.6.1"

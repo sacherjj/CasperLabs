@@ -11,14 +11,18 @@ object Dependencies {
   val catsMtlVersion = "0.4.0"
 
   // format: off
+  val julToSlf4j             = "org.slf4j"                  % "jul-to-slf4j"                    % "1.7.25"
   val bitcoinjCore           = "org.bitcoinj"               % "bitcoinj-core"                   % "0.14.6"
   val bouncyCastle           = "org.bouncycastle"           % "bcprov-jdk15on"                  % "1.60"
   val catsCore               = "org.typelevel"              %% "cats-core"                      % catsVersion
+  val catsPar                = "io.chrisdavenport"          %% "cats-par"                       % "0.2.1"
   val catsLawsTest           = "org.typelevel"              %% "cats-laws"                      % catsVersion % "test"
   val catsLawsTestkitTest    = "org.typelevel"              %% "cats-testkit"                   % catsVersion % "test"
   val catsEffect             = "org.typelevel"              %% "cats-effect"                    % "1.1.0"
+  val catsEffectLaws         = "org.typelevel"              %% "cats-effect-laws"               % "1.1.0" % "test"
   val catsMtl                = "org.typelevel"              %% "cats-mtl-core"                  % catsMtlVersion
   val catsMtlLawsTest        = "org.typelevel"              %% "cats-mtl-laws"                  % catsMtlVersion % "test"
+  val meowMtl                = "com.olegpy"                 %% "meow-mtl"                       % "0.2.0"
   val circeCore              = "io.circe"                   %% "circe-core"                     % circeVersion
   val circeGeneric           = "io.circe"                   %% "circe-generic"                  % circeVersion
   val circeGenericExtras     = "io.circe"                   %% "circe-generic-extras"           % circeVersion
@@ -49,8 +53,8 @@ object Dependencies {
   val monix                  = "io.monix"                   %% "monix"                          % "3.0.0-RC2"
   val scalaLogging           = "com.typesafe.scala-logging" %% "scala-logging"                  % "3.9.0"
   val scalaUri               = "io.lemonlabs"               %% "scala-uri"                      % "1.1.5"
-  val scalacheck             = "org.scalacheck"             %% "scalacheck"                     % "1.14.0" % "test"
-  val scalacheckNoTest       = "org.scalacheck"             %% "scalacheck"                     % "1.14.0"
+  val scalacheck             = "org.scalacheck"             %% "scalacheck"                     % "1.13.5" % "test"
+  val scalacheckNoTest       = "org.scalacheck"             %% "scalacheck"                     % "1.13.5"
   val scalacheckShapeless    = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13"      % "1.1.8" % "test"
   val graphvizJava           = "guru.nidi"                  %  "graphviz-java"                  % "0.8.3"
   val scalactic              = "org.scalactic"              %% "scalactic"                      % "3.0.5" % "test"
@@ -72,9 +76,11 @@ object Dependencies {
   val scodecCats             = "org.scodec"                 %% "scodec-cats"                    % "0.8.0"
   val scodecBits             = "org.scodec"                 %% "scodec-bits"                    % "1.1.7"
   val shapeless              = "com.chuusai"                %% "shapeless"                      % "2.3.3"
-  val shapelessScalaCheck    = "com.github.alexarchambault" %% "scalacheck-shapeless_1.14"      % "1.2.0"
   val magnolia               = "com.propensive"             %% "magnolia"                       % "0.10.0"
   val weupnp                 = "org.bitlet"                 % "weupnp"                          % "0.1.4"
+  val gatlingHighcharts      = "io.gatling.highcharts"      % "gatling-charts-highcharts"       % "3.0.3" % "test"
+  val gatlingFramework       = "io.gatling"                 % "gatling-test-framework"          % "3.0.3" % "test"
+  val gatlingGrpc            = "com.github.phisgr"          %% "gatling-grpc"                   % "0.3.0" % "test"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java          = "com.github.rchain"          % "secp256k1-java"                  % "0.1"
   val tomlScala              = "tech.sparse"                %% "toml-scala"                     % "0.1.1"
@@ -101,9 +107,9 @@ object Dependencies {
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
-  private val testing = Seq(scalactic, scalatest, scalacheck, shapelessScalaCheck)
+  private val testing = Seq(scalactic, scalatest, scalacheck, scalacheckShapeless)
 
-  private val logging = Seq(scalaLogging, logbackClassic, janino)
+  private val logging = Seq(scalaLogging, logbackClassic, janino, julToSlf4j)
 
   private val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)
@@ -125,4 +131,29 @@ object Dependencies {
 
   val commonDependencies: Seq[ModuleID] =
     logging ++ testing :+ kindProjector :+ macroParadise
+
+  val gatlingDependencies: Seq[ModuleID] = Seq(
+      gatlingFramework,
+      gatlingGrpc,
+      gatlingHighcharts,
+      scalapbRuntime,
+      scalapbRuntimegGrpc,
+      grpcNetty
+    )
+
+  //needed because Gatling transitively bring binary incompatible dependencies
+  val gatlingOverrides: Seq[ModuleID] = Seq(
+    "com.thesamet.scalapb" %% "compilerplugin" % "0.8.2",
+    "com.thesamet.scalapb" %% "scalapb-runtime"                % "0.8.2",
+    "com.thesamet.scalapb" %% "scalapb-runtime-grpc"           % "0.8.2",
+    "io.grpc"              % "grpc-netty"                      % "1.15.1",
+    "io.netty" % "netty-buffer" % "4.1.33.Final",
+    "io.netty" % "netty-handler" % "4.1.33.Final",
+    "io.netty" % "netty-handler-proxy" % "4.1.33.Final",
+    "io.netty" % "netty-codec" % "4.1.33.Final",
+    "io.netty" % "netty-codec-http" % "4.1.33.Final",
+    "io.netty" % "netty-codec-http2" % "4.1.33.Final",
+    "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
+    "com.google.protobuf" % "protobuf-java" % "3.6.1"
+  )
 }

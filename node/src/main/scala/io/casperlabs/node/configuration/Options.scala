@@ -2,27 +2,29 @@ package io.casperlabs.node.configuration
 
 import java.nio.file.Path
 
-import io.casperlabs.comm.PeerNode
-import io.casperlabs.node.BuildInfo
-import io.casperlabs.shared.StoreType
-import org.rogach.scallop._
+import cats.Show
 import cats.syntax.either._
 import cats.syntax.option._
-import scala.concurrent.duration.{Duration, FiniteDuration}
-import scala.io.Source
-import scala.util.Try
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.configuration.cli.scallop
+import io.casperlabs.node.BuildInfo
+import io.casperlabs.node.configuration.Utils._
+import io.casperlabs.shared.StoreType
+import org.rogach.scallop._
 
-private[configuration] object Converter {
+import scala.collection.mutable
+import scala.concurrent.duration.FiniteDuration
+import scala.io.Source
+import scala.language.implicitConversions
+
+private[configuration] object Converter extends ParserImplicits {
   import Options._
 
-  implicit val bootstrapAddressConverter: ValueConverter[PeerNode] = new ValueConverter[PeerNode] {
-    def parse(s: List[(String, List[String])]): Either[String, Option[PeerNode]] =
+  implicit val bootstrapAddressConverter: ValueConverter[Node] = new ValueConverter[Node] {
+    def parse(s: List[(String, List[String])]): Either[String, Option[Node]] =
       s match {
         case (_, uri :: Nil) :: Nil =>
-          PeerNode
-            .fromAddress(uri)
-            .map(u => Right(Some(u)))
-            .getOrElse(Left("can't parse the casperlabs node bootstrap address"))
+          Parser[Node].parse(uri).map(_.some)
         case Nil => Right(None)
         case _   => Left("provide the casperlabs node bootstrap address")
       }
@@ -43,10 +45,7 @@ private[configuration] object Converter {
       override def parse(s: List[(String, List[String])]): Either[String, Option[FiniteDuration]] =
         s match {
           case (_, duration :: Nil) :: Nil =>
-            val finiteDuration = Some(Duration(duration)).collect { case f: FiniteDuration => f }
-            finiteDuration.fold[Either[String, Option[FiniteDuration]]](
-              Left("Expected finite duration.")
-            )(fd => Right(Some(fd)))
+            Parser[FiniteDuration].parse(duration).map(_.some)
           case Nil => Right(None)
           case _   => Left("Provide a duration.")
         }
@@ -58,10 +57,7 @@ private[configuration] object Converter {
     def parse(s: List[(String, List[String])]): Either[String, Option[StoreType]] =
       s match {
         case (_, storeType :: Nil) :: Nil =>
-          StoreType
-            .from(storeType)
-            .map(u => Right(Some(u)))
-            .getOrElse(Left("can't parse the store type"))
+          Parser[StoreType].parse(storeType).map(_.some)
         case Nil => Right(None)
         case _   => Left("provide the store type")
       }
@@ -77,191 +73,62 @@ private[configuration] object Options {
 
   def flag(b: Boolean): Flag = b.asInstanceOf[Flag]
 
-  implicit def scallopOptionToOption[A](so: ScallopOption[A]): Option[A] = so.toOption
-
-  // We need this conversion because ScallopOption[A] is invariant in A
-  implicit def scallopOptionFlagToBoolean(so: ScallopOption[Flag]): ScallopOption[Boolean] =
-    so.map(identity)
-
-  def parseConf(
-      arguments: Seq[String],
-      defaults: ConfigurationSoft
-  ): Either[String, ConfigurationSoft] = {
-    val e = for {
-      c <- parseCommand(arguments, defaults)
-    } yield
-      Try {
-        val options = Options(arguments, defaults)
-        val server = ConfigurationSoft.Server(
-          options.run.serverHost,
-          options.run.serverPort,
-          options.run.serverHttpPort,
-          options.run.serverKademliaPort,
-          options.run.serverDynamicHostAddress,
-          options.run.serverNoUpnp,
-          options.run.serverDefaultTimeout,
-          options.run.serverBootstrap,
-          options.run.serverStandalone,
-          options.run.serverMapSize,
-          options.run.serverStoreType,
-          options.run.serverDataDir,
-          options.run.serverMaxNumOfConnections,
-          c match {
-            case _: Configuration.Command.Diagnostics.type =>
-              options.diagnostics.serverMaxMessageSize
-            case _: Configuration.Command.Run.type => options.run.serverMaxMessageSize
-          },
-          c match {
-            case _: Configuration.Command.Diagnostics.type =>
-              options.diagnostics.serverChunkSize
-            case _: Configuration.Command.Run.type => options.run.serverChunkSize
-          }
-        )
-        val grpcServer = ConfigurationSoft.GrpcServer(
-          c match {
-            case _: Configuration.Command.Diagnostics.type =>
-              options.diagnostics.grpcHost
-            case _: Configuration.Command.Run.type =>
-              options.run.grpcHost
-          },
-          options.run.grpcSocket,
-          c match {
-            case _: Configuration.Command.Diagnostics.type =>
-              options.diagnostics.grpcPortExternal
-            case _: Configuration.Command.Run.type => options.run.grpcPortExternal
-          },
-          options.run.grpcPortInternal
-        )
-        val tls = ConfigurationSoft.Tls(
-          options.run.tlsCertificate,
-          options.run.tlsKey,
-          options.run.tlsSecureRandomNonBlocking
-        )
-        val casper = ConfigurationSoft.Casper(
-          options.run.casperValidatorPublicKey,
-          options.run.casperValidatorPrivateKey,
-          options.run.casperValidatorPrivateKeyPath,
-          options.run.casperValidatorSigAlgorithm,
-          options.run.casperBondsFile,
-          options.run.casperKnownValidatorsFile,
-          options.run.casperNumValidators,
-          options.run.casperWalletsFile,
-          options.run.casperMinimumBond,
-          options.run.casperMaximumBond,
-          options.run.casperHasFaucet,
-          options.run.casperRequiredSigs,
-          options.run.casperShardId,
-          options.run.casperApproveGenesis,
-          options.run.casperApproveGenesisInterval,
-          options.run.casperApproveGenesisDuration,
-          options.run.casperDeployTimestamp
-        )
-
-        val lmdb = ConfigurationSoft.LmdbBlockStore(
-          options.run.lmdbBlockStoreSize,
-          options.run.lmdbMaxDbs,
-          options.run.lmdbMaxReaders,
-          options.run.lmdbUseTls
-        )
-
-        val blockstorage = ConfigurationSoft.BlockDagFileStorage(
-          options.run.blockstorageLatestMessagesLogMaxSizeFactor
-        )
-
-        val metrics = ConfigurationSoft.Metrics(
-          options.run.metricsPrometheus,
-          options.run.metricsZipkin,
-          options.run.metricsSigar
-        )
-
-        val influx = ConfigurationSoft.Influx(
-          options.run.influxHostname,
-          options.run.influxPort,
-          options.run.influxDatabase,
-          options.run.influxProtocol
-        )
-
-        ConfigurationSoft(
-          server,
-          grpcServer,
-          tls,
-          casper,
-          lmdb,
-          blockstorage,
-          metrics,
-          influx,
-          ConfigurationSoft.InfluxAuth(
-            None,
-            None
-          )
-        )
-      }.toEither.leftMap(_.getMessage)
-    e.joinRight
-  }
-
-  def parseCommand(
-      args: Seq[String],
-      defaults: ConfigurationSoft
-  ): Either[String, Configuration.Command] =
-    Try {
-      val options = Options(args, defaults)
-      options.subcommand.fold(s"Command was not provided".asLeft[Configuration.Command]) {
-        case options.run         => Configuration.Command.Run.asRight[String]
-        case options.diagnostics => Configuration.Command.Run.asRight[String]
-      }
-    }.toEither.leftMap(_.getMessage).joinRight
-
-  def tryReadConfigFile(
-      args: Seq[String],
-      defaults: ConfigurationSoft
-  ): Option[Either[String, String]] =
-    Options(args, defaults).configFile
-      .map(p => Try(Source.fromFile(p.toFile).mkString).toEither.leftMap(_.getMessage))
-      .toOption
+  def safeCreate(args: Seq[String], defaults: Map[CamelCase, String]): Either[String, Options] =
+    Either.catchNonFatal(Options(args, defaults)).leftMap(_.getMessage)
 }
 
-private[configuration] final case class Options(
+//noinspection TypeAnnotation
+private[configuration] final case class Options private (
     arguments: Seq[String],
-    defaultsForHelpPrinting: ConfigurationSoft
+    defaults: Map[CamelCase, String]
 ) extends ScallopConf(arguments) {
   helpWidth(120)
+  //Do not clean this imports, they needed for @scallop macro
   import Converter._
+  import cats.syntax.show._
+  import io.casperlabs.comm.discovery.NodeUtils._
+  import io.casperlabs.comm.discovery.NodeUtils
   import Options.Flag
 
-  implicit def optionToString[A](opt: Option[A]) =
-    opt.fold(" No default.")(v => s" Default is '$v'.")
+  private implicit def show[T: NotNode]: Show[T] = Show.show(_.toString)
 
-  //TODO: Use Monocle lenses?
-  def s[A](select: ConfigurationSoft.Server => Option[A]): String =
-    select(defaultsForHelpPrinting.server)
+  //Needed only for eliminating red code from IntelliJ IDEA, see @scallop definition
+  private def gen[A](descr: String, short: Char = '\u0000'): ScallopOption[A] =
+    sys.error("Add @scallop macro annotation")
 
-  def g[A](select: ConfigurationSoft.GrpcServer => Option[A]): String =
-    select(defaultsForHelpPrinting.grpc)
+  /**
+    * Converts between string representation of field name and its actual value
+    * Filled by [[io.casperlabs.configuration.cli.scallop]] macro
+    */
+  private val fields =
+    mutable.Map.empty[(ScallopConfBase, CamelCase), () => ScallopOption[String]]
 
-  def t[A](select: ConfigurationSoft.Tls => Option[A]): String =
-    select(defaultsForHelpPrinting.tls)
+  def fieldByName(fieldName: CamelCase): Option[String] =
+    subcommand
+      .flatMap(command => fields.get((command, fieldName)).flatMap(_.apply().toOption))
 
-  def c[A](select: ConfigurationSoft.Casper => Option[A]): String =
-    select(defaultsForHelpPrinting.casper)
+  def parseCommand: Either[String, Configuration.Command] =
+    subcommand.fold(s"Command was not provided".asLeft[Configuration.Command]) {
+      case this.run         => Configuration.Command.Run.asRight[String]
+      case this.diagnostics => Configuration.Command.Run.asRight[String]
+      case _                => "Failed to parse command".asLeft[Configuration.Command]
+    }
 
-  def l[A](select: ConfigurationSoft.LmdbBlockStore => Option[A]): String =
-    select(defaultsForHelpPrinting.lmdb)
+  def readConfigFile: Either[String, Option[String]] =
+    configFile.toOption
+      .map(
+        p => Either.catchNonFatal(Source.fromFile(p.toFile).mkString.some).leftMap(_.getMessage)
+      )
+      .fold(none[String].asRight[String])(identity)
 
-  def b[A](select: ConfigurationSoft.BlockDagFileStorage => Option[A]): String =
-    select(defaultsForHelpPrinting.blockstorage)
-
-  def m[A](select: ConfigurationSoft.Metrics => Option[A]): String =
-    select(defaultsForHelpPrinting.metrics)
-
-  def i[A](select: ConfigurationSoft.Influx => Option[A]): String =
-    select(defaultsForHelpPrinting.influx)
+  val configFile = opt[Path](descr = "Path to the TOML configuration file.")
 
   version(s"Casper Labs Node ${BuildInfo.version}")
   printedName = "casperlabs"
   banner(
     """
       |Configuration file --config-file can contain tables
-      |[server], [grpc], [lmdb], [casper], [tls], [metrics], [influx] and [block-storage].
+      |[server], [grpc], [lmdb], [casper], [tls], [metrics], [influx] and [blockstorage].
       |
       |CLI options match TOML keys and environment variables, example:
       |    --[prefix]-[key-name]=value e.g. --server-data-dir=/casperlabs
@@ -278,363 +145,299 @@ private[configuration] final case class Options(
     """.stripMargin
   )
 
-  val configFile = opt[Path](descr = "String. Path to the TOML configuration file.")
-
   val diagnostics = new Subcommand("diagnostics") {
     helpWidth(120)
     descr("Node diagnostics")
 
+    @scallop
     val grpcPortExternal =
-      opt[Int](descr = s"Int. Port used for external gRPC API.${g(_.portExternal)}")
+      gen[Int]("Port used for external gRPC API, e.g. deployments.")
 
+    @scallop
     val grpcHost =
-      opt[String](
-        descr = s"String. Hostname or IP of node on which gRPC service is running.${g(_.host)}"
-      )
+      gen[String]("Externally addressable hostname or IP of node on which gRPC service is running.")
 
+    @scallop
     val serverMaxMessageSize =
-      opt[Int](
-        descr =
-          s"Int. Maximum size of message that can be sent via transport layer.${s(_.maxMessageSize)}"
-      )
+      gen[Int]("Maximum size of message that can be sent via transport layer.")
 
+    @scallop
     val serverChunkSize =
-      opt[Int](
-        descr =
-          s"Int. Size of chunks to split larger payloads into when streamed via transport layer.${s(_.chunkSize)}"
-      )
+      gen[Int]("Size of chunks to split larger payloads into when streamed via transport layer.")
   }
   addSubcommand(diagnostics)
 
   val run = new Subcommand("run") {
+
     helpWidth(120)
 
+    @scallop
     val grpcPortExternal =
-      opt[Int](descr = s"Int. Port used for external gRPC API.${g(_.portExternal)}")
+      gen[Int]("Port used for external gRPC API, e.g. deployments.")
 
+    @scallop
     val grpcHost =
-      opt[String](
-        descr = s"String. Hostname or IP of node on which gRPC service is running.${g(_.host)}"
-      )
+      gen[String]("Externally addressable hostname or IP of node on which gRPC service is running.")
 
+    @scallop
     val serverMaxMessageSize =
-      opt[Int](
-        descr =
-          s"Int. Maximum size of message that can be sent via transport layer.${s(_.maxMessageSize)}"
-      )
+      gen[Int]("Maximum size of message that can be sent via transport layer.")
 
+    @scallop
     val serverChunkSize =
-      opt[Int](
-        descr =
-          s"Int. Size of chunks to split larger payloads into when streamed via transport layer.${s(_.chunkSize)}"
-      )
+      gen[Int]("Size of chunks to split larger payloads into when streamed via transport layer.")
 
+    @scallop
     val grpcPortInternal =
-      opt[Int](descr = s"Int. Port used for internal gRPC API.${g(_.portInternal)}")
+      gen[Int]("Port used for internal gRPC API, e.g. diagnostics.")
 
+    @scallop
     val grpcSocket =
-      opt[Path](descr = s"String. Socket path used for internal gRPC API.${g(_.socket)}")
+      gen[Path]("Socket path used for internal gRPC API.")
 
+    @scallop
     val serverDynamicHostAddress =
-      opt[Flag](descr = s"Boolean. Host IP address changes dynamically.${s(_.dynamicHostAddress)}")
+      gen[Flag]("Host IP address changes dynamically.")
 
-    val serverNoUpnp = opt[Flag](descr = s"Boolean. Use this flag to disable UpNp.${s(_.noUpnp)}")
+    @scallop
+    val serverNoUpnp =
+      gen[Flag]("Use this flag to disable UpNp.")
 
+    @scallop
     val serverDefaultTimeout =
-      opt[Int](
-        descr = s"Int. Default timeout for roundtrip connections.${s(_.defaultTimeout)}"
+      gen[Int](
+        "Default timeout for roundtrip connections."
       )
 
+    @scallop
     val tlsCertificate =
-      opt[Path](
-        short = 'c',
-        descr =
-          s"String. Path to node's X.509 certificate file, that is being used for identification.${t(_.certificate)}"
+      gen[Path](
+        "Path to node's X.509 certificate file, that is being used for identification.",
+        'c'
       )
 
+    @scallop
     val tlsKey =
-      opt[Path](
-        short = 'k',
-        descr =
-          s"String. Path to node's private key PEM file, that is being used for TLS communication.${t(_.key)}"
+      gen[Path](
+        "Path to node's private key PEM file, that is being used for TLS communication.",
+        'k'
       )
 
+    @scallop
     val tlsSecureRandomNonBlocking =
-      opt[Flag](
-        descr =
-          s"Boolean. Use a non blocking secure random instance.${t(_.secureRandomNonBlocking)}"
+      gen[Flag](
+        "Use a non blocking secure random instance."
       )
 
+    @scallop
     val serverPort =
-      opt[Int](short = 'p', descr = s"Int. Network port to use.${s(_.port)}")
+      gen[Int]("Network port to use for intra-node gRPC communication.", 'p')
 
+    @scallop
     val serverHttpPort =
-      opt[Int](
-        descr =
-          s"Int. HTTP port (deprecated - all API features will be ported to gRPC API).${s(_.httpPort)}"
-      )
+      gen[Int]("HTTP port for utility services: /metrics, /version and /status.")
 
+    @scallop
     val serverKademliaPort =
-      opt[Int](
-        descr =
-          s"Int. Kademlia port used for node discovery based on Kademlia algorithm.${s(_.kademliaPort)}"
+      gen[Int](
+        "Kademlia port used for node discovery based on Kademlia algorithm."
       )
 
+    @scallop
     val casperNumValidators =
-      opt[Int](descr = s"Int of validators at genesis.${c(_.numValidators)}")
+      gen[Int](
+        "Amount of random validator keys to generate at genesis if no `bonds.txt` file is present."
+      )
 
-    val casperBondsFile = opt[Path](
-      descr = "String. Path to plain text file consisting of lines of the form `<pk> <stake>`, " +
-        "which defines the bond amounts for each validator at genesis. " +
-        "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
-        s"is the amount of Rev they have bonded (an integer). Note: this overrides the --num-validators option.${c(_.bondsFile)}"
-    )
-    val casperKnownValidatorsFile = opt[String](
-      descr = "String. Path to plain text file listing the public keys of validators known to the user (one per line). " +
-        "Signatures from these validators are required in order to accept a block which starts the local" +
-        s"node's view of the blockDAG.${c(_.knownValidatorsFile)}"
-    )
-    val casperWalletsFile = opt[Path](
-      descr = "String. Path to plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
-        "which defines the Rev wallets that exist at genesis. " +
-        "<algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1)," +
-        "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
-        s"is the amount of Rev in the wallet.${c(_.walletsFile)}"
-    )
-    val casperMinimumBond = opt[Long](
-      descr =
-        s"Long. Minimum bond accepted by the PoS contract in the genesis block.${c(_.minimumBond)}"
-    )
-    val casperMaximumBond = opt[Long](
-      descr =
-        s"Long. Maximum bond accepted by the PoS contract in the genesis block.${c(_.maximumBond)}"
-    )
-    val casperHasFaucet = opt[Flag](
-      descr =
-        s"Boolean. True if there should be a public access Rev faucet in the genesis block.${c(_.hasFaucet)}"
-    )
+    @scallop
+    val casperBondsFile =
+      gen[Path](
+        "Path to plain text file consisting of lines of the form `<pk> <stake>`, " +
+          "which defines the bond amounts for each validator at genesis. " +
+          "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
+          s"is the amount of CSPR they have bonded (an integer). Note: this overrides the --num-validators option."
+      )
+    @scallop
+    val casperKnownValidatorsFile =
+      gen[Path](
+        "Path to plain text file listing the public keys of validators known to the user (one per line). " +
+          "Signatures from these validators are required in order to accept a block which starts the local" +
+          s"node's view of the blockDAG."
+      )
+    @scallop
+    val casperWalletsFile =
+      gen[Path](
+        "Path to plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
+          "which defines the CSPR wallets that exist at genesis. " +
+          "<algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1)," +
+          "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
+          s"is the amount of CSPR in the wallet."
+      )
+    @scallop
+    val casperMinimumBond =
+      gen[Long]("Minimum bond accepted by the PoS contract in the genesis block.")
 
+    @scallop
+    val casperMaximumBond =
+      gen[Long]("Maximum bond accepted by the PoS contract in the genesis block.")
+
+    @scallop
+    val casperHasFaucet =
+      gen[Flag]("True if there should be a public access CSPR faucet in the genesis block.")
+
+    @scallop
     val serverBootstrap =
-      opt[PeerNode](
-        short = 'b',
-        descr = s"String. Bootstrap casperlabs node address for initial seed.${s(_.bootstrap)}"
+      gen[Node](
+        "Bootstrap casperlabs node address for initial seed.",
+        'b'
       )
 
-    val serverStandalone =
-      opt[Flag](
-        short = 's',
-        descr = s"Boolean. Start a stand-alone node (no bootstrapping).${s(_.standalone)}"
+    @scallop
+    val serverRelayFactor =
+      gen[Int]("Number of new nodes to which try to gossip a new block.")
+
+    @scallop
+    val serverRelaySaturation =
+      gen[Int](
+        "Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes."
       )
 
+    @scallop
+    val casperStandalone =
+      gen[Flag](
+        "Start a stand-alone node (no bootstrapping).",
+        's'
+      )
+
+    @scallop
     val casperRequiredSigs =
-      opt[Int](
-        descr =
-          s"Int of signatures from trusted validators required to creating an approved genesis block.${c(_.requiredSigs)}"
+      gen[Int](
+        "Number of signatures from trusted validators required to creating an approved genesis block."
       )
 
+    @scallop
     val casperDeployTimestamp =
-      opt[Long](
-        descr = s"Long. Timestamp for the deploys.${c(_.deployTimestamp)}"
-      )
+      gen[Long]("Timestamp for the deploys.")
 
+    @scallop
     val casperApproveGenesisDuration =
-      opt[FiniteDuration](
-        short = 'd',
-        descr =
-          s"String. Time window in which BlockApproval messages will be accumulated before checking conditions.${c(_.approveGenesisDuration)}"
+      gen[FiniteDuration](
+        "Time window in which BlockApproval messages will be accumulated before checking conditions.",
+        'd'
       )
 
+    @scallop
     val casperApproveGenesisInterval =
-      opt[FiniteDuration](
-        short = 'i',
-        descr =
-          s"String. Interval at which condition for creating ApprovedBlock will be checked.${c(_.approveGenesisInterval)}"
+      gen[FiniteDuration](
+        "Interval at which condition for creating ApprovedBlock will be checked.",
+        'i'
       )
 
+    @scallop
     val casperApproveGenesis =
-      opt[Flag](descr = s"Boolean. Start a node as a genesis validator.${c(_.approveGenesis)}")
+      gen[Flag]("Start a node as a genesis validator.")
 
-    val serverHost = opt[String](descr = s"String. Hostname or IP of this node.${s(_.host)}")
+    @scallop
+    val serverHost =
+      gen[String]("Hostname or IP of this node.")
 
+    @scallop
     val serverDataDir =
-      opt[Path](required = false, descr = s"String. Path to data directory. ${s(_.dataDir)}")
+      gen[Path]("Path to data directory. ")
 
-    val serverMapSize =
-      opt[Long](required = false, descr = s"Long. Map size (in bytes).${s(_.mapSize)}")
-
+    @scallop
     val serverStoreType =
-      opt[StoreType](
-        required = false,
-        descr = s"String. Type of Casperlabs space backing store.${s(_.storeType)}"
+      gen[StoreType](
+        s"Type of Casperlabs space backing store. Valid values are: ${StoreType.values.mkString(",")}"
       )
 
+    @scallop
     val serverMaxNumOfConnections =
-      opt[Int](
-        descr =
-          s"Int. Maximum number of peers allowed to connect to the node.${s(_.maxNumOfConnections)}"
-      )
+      gen[Int]("Maximum number of peers allowed to connect to the node.")
 
+    @scallop
     val lmdbBlockStoreSize =
-      opt[Long](
-        required = false,
-        descr = s"Long. Casper BlockStore map size (in bytes).${l(_.blockStoreSize)}"
-      )
+      gen[Long]("Casper BlockStore map size (in bytes).")
 
+    @scallop
     val lmdbMaxDbs =
-      opt[Int](
-        required = false,
-        descr = s"Int. LMDB max databases.${l(_.maxDbs)}"
-      )
+      gen[Int]("LMDB max databases.")
 
+    @scallop
     val lmdbMaxReaders =
-      opt[Int](
-        required = false,
-        descr = s"Int. LMDB max readers.${l(_.maxReaders)}"
-      )
+      gen[Int]("LMDB max readers.")
 
+    @scallop
     val lmdbUseTls =
-      opt[Flag](
-        required = false,
-        descr = s"Boolean. LMDB use TLS.${l(_.useTls)}"
-      )
+      gen[Flag]("LMDB use TLS.")
 
+    @scallop
     val blockstorageLatestMessagesLogMaxSizeFactor =
-      opt[Int](
-        descr =
-          s"Int. Size factor for squashing block storage latest messages.${b(_.latestMessagesLogMaxSizeFactor)}"
+      gen[Int]("Size factor for squashing block storage latest messages.")
+
+    @scallop
+    val casperValidatorPublicKey =
+      gen[String](
+        "Base16 encoding of the public key to use for signing a proposed blocks. " +
+          s"Can be inferred from the private key for some signature algorithms."
       )
 
-    val casperValidatorPublicKey = opt[String](
-      descr = "String. Base16 encoding of the public key to use for signing a proposed blocks. " +
-        s"Can be inferred from the private key for some signature algorithms.${c(_.validatorPublicKey)}"
-    )
+    @scallop
+    val casperValidatorPrivateKey =
+      gen[String](
+        "Base16 encoding of the private key to use for signing a proposed blocks. " +
+          s"It is not recommended to use in production since private key could be revealed through the process table." +
+          "Use the `validator-private-key-path` instead."
+      )
 
-    val casperValidatorPrivateKey = opt[String](
-      descr = "String. Base16 encoding of the private key to use for signing a proposed blocks. " +
-        s"It is not recommended to use in production since private key could be revealed through the process table.${c(_.validatorPrivateKey)}"
-    )
+    @scallop
+    val casperValidatorPrivateKeyPath =
+      gen[Path]("Path to the base16 encoded private key to use for signing a proposed blocks.")
 
-    val casperValidatorPrivateKeyPath = opt[Path](
-      descr =
-        s"String. Path to the base16 encoded private key to use for signing a proposed blocks.${c(_.validatorPrivateKeyPath)}"
-    )
+    @scallop
+    val casperValidatorSigAlgorithm =
+      gen[String](
+        "Name of the algorithm to use for signing proposed blocks. " +
+          s"Currently supported values: ed25519."
+      )
 
-    val casperValidatorSigAlgorithm = opt[String](
-      descr = "String. Name of the algorithm to use for signing proposed blocks. " +
-        s"Currently supported values: ed25519.${c(_.validatorSigAlgorithm)}"
-    )
+    @scallop
+    val casperShardId =
+      gen[String](s"Identifier of the shard this node is connected to.")
 
-    val casperShardId = opt[String](
-      descr = s"String. Identifier of the shard this node is connected to.${c(_.shardId)}"
-    )
-
+    @scallop
     val metricsPrometheus =
-      opt[Flag](descr = s"Boolean. Enable the Prometheus metrics reporter.${m(_.prometheus)}")
+      gen[Flag]("Enable the Prometheus metrics reporter.")
 
+    @scallop
     val metricsZipkin =
-      opt[Flag](descr = s"Boolean. Enable the Zipkin span reporter.${m(_.zipkin)}")
+      gen[Flag]("Enable the Zipkin span reporter.")
 
+    @scallop
     val metricsSigar =
-      opt[Flag](descr = s"Boolean. Enable Sigar host system metrics.${m(_.sigar)}")
+      gen[Flag]("Enable Sigar host system metrics.")
 
+    @scallop
+    val metricsInflux =
+      gen[Flag]("Enable Influx system metrics.")
+
+    @scallop
     val influxHostname =
-      opt[String](descr = s"String. Hostname or IP of the Influx instance.${i(_.hostname)}")
+      gen[String]("Hostname or IP of the Influx instance.")
 
+    @scallop
     val influxDatabase =
-      opt[String](descr = s"String. Name of the database in Influx.${i(_.database)}")
+      gen[String]("Name of the database in Influx.")
 
+    @scallop
     val influxPort =
-      opt[Int](descr = s"Int. Port of the Influx instance.${i(_.port)}")
+      gen[Int]("Port of the Influx instance.")
 
+    @scallop
     val influxProtocol =
-      opt[String](descr = s"String. Protocol used in Influx.${i(_.protocol)}")
+      gen[String]("Protocol used in Influx.")
   }
   addSubcommand(run)
-
-  val hexCheck: String => Boolean     = _.matches("[0-9a-fA-F]+")
-  val addressCheck: String => Boolean = addr => addr.startsWith("0x") && hexCheck(addr.drop(2))
-
-  val bondingDeployGen = new Subcommand("generateBondingDeploys") {
-    descr(
-      "Creates the rholang source files needed for bonding assuming you have a " +
-        "pre-wallet from the REV issuance. These files must be" +
-        "deployed to a node operated by a presently bonded validator. The rho files" +
-        "are created in the working directory where the command is executed. Note: " +
-        "for security reasons it is best to deploy `unlock*.rho` and `forward*.rho` first" +
-        "and `bond*.rho` in a separate block after those (i.e. only deploy `bond*.rho` " +
-        "after `unlock*.rho` and `forward*.rho` have safely been included in a propsed block)."
-    )
-
-    val ethAddr = opt[String](
-      descr = "Ethereum address associated with the \"pre-wallet\" to bond.",
-      validate = addressCheck,
-      required = true
-    )
-
-    val bondKey = opt[String](
-      descr = "Hex-encoded public key which will be used as the validator idenity after bonding. " +
-        "Note: as of this version of node this must be an ED25519 key.",
-      validate = hexCheck,
-      required = true
-    )
-
-    val amount = opt[Long](
-      descr = "The amount of REV to bond. Must be less than or equal to the wallet balance.",
-      validate = _ > 0,
-      required = true
-    )
-
-    val publicKey = opt[String](
-      descr = "Hex-encoded public key associated with the Ethereum address of the pre-wallet.",
-      validate = hexCheck,
-      required = true
-    )
-
-    val privateKey = opt[String](
-      descr = "Hex-encoded private key associated with the Ethereum address of the pre-wallet.",
-      validate = hexCheck,
-      required = true
-    )
-  }
-  addSubcommand(bondingDeployGen)
-
-  val faucetBondingDeployGen = new Subcommand("generateFaucetBondingDeploys") {
-    descr(
-      "Creates the rholang source files needed for bonding by making use of " +
-        "test net faucet. These files must be" +
-        "deployed to a node operated by a presently bonded validator. The rho files" +
-        "are created in the working directory where the command is executed. Note: " +
-        "for security reasons it is best to deploy `forward*.rho` first" +
-        "and then `bond*.rho` in a separate block afterwards (i.e. only deploy `bond*.rho` " +
-        "after `forward*.rho` has safely been included in a propsed block)."
-    )
-
-    val amount = opt[Long](
-      descr = "The amount of REV to bond. Must be less than or equal to the wallet balance.",
-      validate = _ > 0,
-      required = true
-    )
-
-    val sigAlgorithm = opt[String](
-      descr =
-        "Signature algorithm to be used with the provided keys. Must be one of ed25519 or secp256k1.",
-      validate = (s: String) => { s == "ed25519" || s == "secp256k1" },
-      required = true
-    )
-
-    val publicKey = opt[String](
-      descr = "Hex-encoded public key to be used as the validator id when bonding.",
-      validate = hexCheck,
-      required = true
-    )
-
-    val privateKey = opt[String](
-      descr = "Hex-encoded private key associated with the supplied public key.",
-      validate = hexCheck,
-      required = true
-    )
-  }
-  addSubcommand(faucetBondingDeployGen)
 
   verify()
 }

@@ -9,7 +9,7 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage, Bond, Justification}
 import io.casperlabs.casper.util.ProtoUtil.bonds
-import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
@@ -184,8 +184,6 @@ object Validate {
 
   /*
    * TODO: Double check ordering of validity checks
-   * TODO: Add check for missing fields
-   * TODO: Check that justifications follow from bonds of creator justification
    */
   def blockSummary[F[_]: Monad: Log: Time: BlockStore: RaiseValidationError](
       block: BlockMessage,
@@ -244,8 +242,7 @@ object Validate {
     val deployKeySet = (for {
       bd <- block.body.toList
       d  <- bd.deploys.flatMap(_.deploy)
-      r  <- d.raw.toList
-    } yield (r.user, r.timestamp)).toSet
+    } yield (d.user, d.timestamp)).toSet
 
     for {
       initParents <- ProtoUtil.unsafeGetParents[F](block)
@@ -255,9 +252,7 @@ object Validate {
                             _.body.exists(
                               _.deploys
                                 .flatMap(_.deploy)
-                                .exists(
-                                  _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
-                                )
+                                .exists(p => deployKeySet.contains((p.user, p.timestamp)))
                             )
                           )
       _ <- duplicatedBlock match {
@@ -444,18 +439,27 @@ object Validate {
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
-      estimate             <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
-      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(estimate.map(_.blockHash))}")
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
+      tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
+      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
+      computedParents      <- ProtoUtil.chooseNonConflicting[F](tipHashes, genesis, dag)
       computedParentHashes = computedParents.map(_.blockHash)
       _ <- if (parentHashes == computedParentHashes)
             Applicative[F].unit
           else {
+            val parentsString =
+              parentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+            val estimateString =
+              computedParentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+            val justificationString = latestMessagesHashes.values
+              .map(hash => PrettyPrinter.buildString(hash))
+              .mkString(",")
+            val message =
+              s"block parents ${parentsString} did not match estimate ${estimateString} based on justification ${justificationString}."
             for {
               _ <- Log[F].warn(
                     ignore(
                       b,
-                      s"block parents did not match estimate based on justification. Expected parents are ${printHashes(computedParentHashes)}, got ${printHashes(parentHashes)}."
+                      message
                     )
                   )
               _ <- RaiseValidationError[F].raise[Unit](InvalidParents)
@@ -605,13 +609,12 @@ object Validate {
                 if (postStateHash == blockPostState) {
                   Applicative[F].unit
                 } else {
-                  RaiseValidationError[F].raise[Unit](InvalidTransaction)
+                  RaiseValidationError[F].raise[Unit](InvalidPostStateHash)
                 }
             }
       } yield ()
     } else {
-      //TODO: InvalidPrestate variant?
-      RaiseValidationError[F].raise[Unit](InvalidTransaction)
+      RaiseValidationError[F].raise[Unit](InvalidPreStateHash)
     }
   }
 

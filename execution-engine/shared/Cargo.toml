@@ -1,0 +1,9 @@
+[package]
+name = "shared"
+version = "0.1.0"
+authors = ["Henry Till <henrytill@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+blake2 = "0.8"
+common = { path = "../common", features = ["std"], package = "casperlabs-contract-ffi" }

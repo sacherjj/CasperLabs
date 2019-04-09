@@ -4,18 +4,19 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.mtl.MonadState
 import cats.syntax.applicative._
 import cats.syntax.apply._
+import cats.syntax.flatMap._
 import cats.syntax.functor._
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{BlockStore, InMemBlockDagStorage, InMemBlockStore}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.comm.CasperPacketHandler
-import io.casperlabs.casper.util.rholang.RuntimeManager
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
@@ -36,6 +37,8 @@ import kamon._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
+import com.olegpy.meow.effects._
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.concurrent.duration._
 
@@ -49,6 +52,8 @@ class NodeRuntime private[node] (
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
   private[this] val grpcScheduler =
     Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
+
+  private val initPeer = if (conf.casper.standalone) None else Some(conf.server.bootstrap)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -74,129 +79,123 @@ class NodeRuntime private[node] (
     * 3. run the node program.
     */
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
-  val main: Effect[Unit] = for {
-    local <- WhoAmI
-              .fetchLocalPeerNode[Task](
-                conf.server.host,
-                conf.server.port,
-                conf.server.kademliaPort,
-                conf.server.noUpnp,
-                id
-              )
-              .toEffect
 
-    defaultTimeout = conf.server.defaultTimeout.millis
+  val main: Effect[Unit] = {
+    val rpConfState = localPeerNode[Task].flatMap(rpConf[Task]).toEffect
+    rpConfState >>= (_.runState { implicit state =>
+      val resources = for {
+        ee <- GrpcExecutionEngineService[Effect](
+               conf.grpc.socket,
+               conf.server.maxMessageSize,
+               initBonds = Map.empty
+             )
+        nd <- effects.nodeDiscovery(id, kademliaPort, defaultTimeout)(initPeer)(
+               grpcScheduler,
+               effects.peerNodeAsk,
+               log,
+               effects.time,
+               diagnostics.effects.metrics
+             )
+      } yield (ee, nd)
 
-    initPeer             = if (conf.server.standalone) None else Some(conf.server.bootstrap)
-    rpConfState          = effects.rpConfState(rpConf(local, initPeer))
-    rpConfAsk            = effects.rpConfAsk(rpConfState)
-    peerNodeAsk          = effects.peerNodeAsk(rpConfState)
-    rpConnections        <- effects.rpConnections.toEffect
-    metrics              = diagnostics.effects.metrics[Task]
-    kademliaConnections  <- CachedConnections[Task, KademliaConnTag](Task.catsAsync, metrics).toEffect
-    tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
-    time                 = effects.time
-    multiParentCasperRef <- MultiParentCasperRef.of[Effect]
-    lab                  <- LastApprovedBlock.of[Task].toEffect
-    labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
-    commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
-    _                    <- commTmpFolder.deleteDirectory[Task]().toEffect
-    transport = effects.tcpTransportLayer(
-      port,
-      conf.tls.certificate,
-      conf.tls.key,
-      conf.server.maxMessageSize,
-      conf.server.chunkSize,
-      commTmpFolder
-    )(grpcScheduler, log, metrics, tcpConnections)
-    kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
-      grpcScheduler,
-      peerNodeAsk,
-      metrics,
-      log,
-      kademliaConnections
-    )
-    nodeDiscovery <- effects
-                      .nodeDiscovery(id, defaultTimeout)(initPeer)(
-                        log,
-                        time,
-                        metrics,
-                        kademliaRPC
-                      )
-                      .toEffect
-    // TODO: This change is temporary until itegulov's BlockStore implementation is in
-    blockMap <- Ref.of[Effect, Map[BlockHash, BlockMessage]](Map.empty[BlockHash, BlockMessage])
-    blockStore = InMemBlockStore.create[Effect](
-      syncEffect,
-      blockMap,
-      Metrics.eitherT(Monad[Task], metrics)
-    )
-    blockDagStorage <- InMemBlockDagStorage.create[Effect](
-                        Concurrent[Effect],
-                        Log.eitherTLog(Monad[Task], log),
-                        blockStore
-                      )
-    _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
-    abs = new ToAbstractContext[Effect] {
-      def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
-    }
-    // TODO Replace the RuntimeManager to SmartContractsApi
-    executionEngineService = new GrpcExecutionEngineService[Effect](
-      conf.grpcServer.socket,
-      conf.server.maxMessageSize
-    )(Monad[Effect], abs)
-    casperPacketHandler <- CasperPacketHandler
-                            .of[Effect](
-                              conf.casper,
-                              defaultTimeout,
-                              executionEngineService,
-                              _.value
-                            )(
-                              labEff,
-                              Metrics.eitherT(Monad[Task], metrics),
-                              blockStore,
-                              Cell.eitherTCell(Monad[Task], rpConnections),
-                              NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
-                              TransportLayer.eitherTTransportLayer(Monad[Task], log, transport),
-                              ErrorHandler[Effect],
-                              eitherTrpConfAsk(rpConfAsk),
-                              oracle,
-                              Capture[Effect],
-                              Concurrent[Effect],
-                              Time.eitherTTime(Monad[Task], time),
-                              Log.eitherTLog(Monad[Task], log),
-                              multiParentCasperRef,
-                              blockDagStorage,
-                              scheduler
-                            )
-    packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
-      Applicative[Effect],
-      Log.eitherTLog(Monad[Task], log),
-      ErrorHandler[Effect]
-    )
-    nodeCoreMetrics = diagnostics.effects.nodeCoreMetrics[Task]
-    jvmMetrics      = diagnostics.effects.jvmMetrics[Task]
+      resources.use { case (ee, nd) => runMain(ee, nd, state) }
+    })
+  }
 
-    program = nodeProgram(executionEngineService)(
-      time,
-      rpConfState,
-      rpConfAsk,
-      peerNodeAsk,
-      metrics,
-      transport,
-      kademliaRPC,
-      nodeDiscovery,
-      rpConnections,
-      blockStore,
-      oracle,
-      packetHandler,
-      multiParentCasperRef,
-      nodeCoreMetrics,
-      jvmMetrics
-    )
-    _ <- handleUnrecoverableErrors(program)
-  } yield ()
+  def runMain(
+      implicit
+      executionEngineService: ExecutionEngineService[Effect],
+      nodeDiscovery: NodeDiscovery[Task],
+      rpConfState: MonadState[Task, RPConf]
+  ) =
+    for {
+      rpConnections        <- effects.rpConnections.toEffect
+      defaultTimeout       = conf.server.defaultTimeout.millis
+      rpConfAsk            = effects.rpConfAsk
+      peerNodeAsk          = effects.peerNodeAsk
+      metrics              = diagnostics.effects.metrics[Task]
+      tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
+      time                 = effects.time
+      multiParentCasperRef <- MultiParentCasperRef.of[Effect]
+      lab                  <- LastApprovedBlock.of[Task].toEffect
+      labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
+      commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
+      _                    <- commTmpFolder.deleteDirectory[Task]().toEffect
+      transport = effects.tcpTransportLayer(
+        port,
+        conf.tls.certificate,
+        conf.tls.key,
+        conf.server.maxMessageSize,
+        conf.server.chunkSize,
+        commTmpFolder
+      )(grpcScheduler, log, metrics, tcpConnections)
+      // TODO: This change is temporary until itegulov's BlockStore implementation is in
+      blockMap <- Ref.of[Effect, Map[BlockHash, BlockMsgWithTransform]](
+                   Map.empty[BlockHash, BlockMsgWithTransform]
+                 )
+      blockStore = InMemBlockStore.create[Effect](
+        syncEffect,
+        blockMap,
+        Metrics.eitherT(Monad[Task], metrics)
+      )
+      blockDagStorage <- InMemBlockDagStorage.create[Effect](
+                          Concurrent[Effect],
+                          Log.eitherTLog(Monad[Task], log),
+                          blockStore
+                        )
+      _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
+      oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
+      casperPacketHandler <- CasperPacketHandler
+                              .of[Effect](
+                                conf.casper,
+                                defaultTimeout,
+                                executionEngineService,
+                                _.value
+                              )(
+                                labEff,
+                                Metrics.eitherT(Monad[Task], metrics),
+                                blockStore,
+                                Cell.eitherTCell(Monad[Task], rpConnections),
+                                NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
+                                TransportLayer.eitherTTransportLayer(Monad[Task], log, transport),
+                                ErrorHandler[Effect],
+                                eitherTrpConfAsk(rpConfAsk),
+                                oracle,
+                                Sync[Effect],
+                                Concurrent[Effect],
+                                Time.eitherTTime(Monad[Task], time),
+                                Log.eitherTLog(Monad[Task], log),
+                                multiParentCasperRef,
+                                blockDagStorage,
+                                executionEngineService,
+                                scheduler
+                              )
+      packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
+        Applicative[Effect],
+        Log.eitherTLog(Monad[Task], log),
+        ErrorHandler[Effect]
+      )
+      nodeCoreMetrics = diagnostics.effects.nodeCoreMetrics[Task]
+      jvmMetrics      = diagnostics.effects.jvmMetrics[Task]
+
+      program = nodeProgram(executionEngineService)(
+        time,
+        rpConfState,
+        rpConfAsk,
+        peerNodeAsk,
+        metrics,
+        transport,
+        nodeDiscovery,
+        rpConnections,
+        blockStore,
+        oracle,
+        packetHandler,
+        multiParentCasperRef,
+        nodeCoreMetrics,
+        jvmMetrics
+      )
+      _ <- handleUnrecoverableErrors(program)
+    } yield ()
 
   private def acquireServers(blockApiLock: Semaphore[Effect], ee: ExecutionEngineService[Effect])(
       implicit
@@ -215,7 +214,7 @@ class NodeRuntime private[node] (
     for {
       grpcServerExternal <- GrpcServer
                              .acquireExternalServer[Effect](
-                               conf.grpcServer.portExternal,
+                               conf.grpc.portExternal,
                                conf.server.maxMessageSize,
                                grpcScheduler,
                                blockApiLock
@@ -223,7 +222,7 @@ class NodeRuntime private[node] (
 
       grpcServerInternal <- GrpcServer
                              .acquireInternalServer(
-                               conf.grpcServer.portInternal,
+                               conf.grpc.portInternal,
                                conf.server.maxMessageSize,
                                grpcScheduler
                              )
@@ -249,14 +248,12 @@ class NodeRuntime private[node] (
   }
 
   private def clearResources[F[_]: Monad](
-      servers: Servers,
-      executionEngineService: ExecutionEngineService[F]
+      servers: Servers
   )(
       implicit
       transport: TransportLayer[Task],
-      kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
-      peerNodeAsk: PeerNodeAsk[Task]
+      peerNodeAsk: NodeAsk[Task]
   ): Unit =
     (for {
       _   <- log.info("Shutting down gRPC servers...")
@@ -266,28 +263,23 @@ class NodeRuntime private[node] (
       loc <- peerNodeAsk.ask
       msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
-      _   <- kademliaRPC.shutdown()
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
-      _   <- log.info("Shutting down executionEngine service...")
-      _   <- Task.delay(executionEngineService.close())
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
   private def addShutdownHook[F[_]: Monad](
-      servers: Servers,
-      casperSmartContractsApi: ExecutionEngineService[F]
+      servers: Servers
   )(
       implicit transport: TransportLayer[Task],
-      kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
-      peerNodeAsk: PeerNodeAsk[Task]
+      peerNodeAsk: NodeAsk[Task]
   ): Task[Unit] =
     Task.delay(
-      sys.addShutdownHook(clearResources(servers, casperSmartContractsApi))
+      sys.addShutdownHook(clearResources(servers))
     )
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
@@ -299,10 +291,9 @@ class NodeRuntime private[node] (
       time: Time[Task],
       rpConfState: RPConfState[Task],
       rpConfAsk: RPConfAsk[Task],
-      peerNodeAsk: PeerNodeAsk[Task],
+      peerNodeAsk: NodeAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
-      kademliaRPC: KademliaRPC[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
       blockStore: BlockStore[Effect],
@@ -314,7 +305,7 @@ class NodeRuntime private[node] (
   ): Effect[Unit] = {
 
     val info: Effect[Unit] =
-      if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
+      if (conf.casper.standalone) Log[Effect].info(s"Starting stand-alone node.")
       else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
 
     val dynamicIpCheck: Task[Unit] =
@@ -348,9 +339,9 @@ class NodeRuntime private[node] (
       blockApiLock <- Semaphore[Effect](1)
       _            <- info
       local        <- peerNodeAsk.ask.toEffect
-      host         = local.endpoint.host
+      host         = local.host
       servers      <- acquireServers(blockApiLock, executionEngineService)
-      _            <- addShutdownHook(servers, executionEngineService).toEffect
+      _            <- addShutdownHook(servers).toEffect
       _            <- servers.grpcServerExternal.start.toEffect
       _ <- Log[Effect].info(
             s"gRPC external server started at $host:${servers.grpcServerExternal.port}"
@@ -388,13 +379,23 @@ class NodeRuntime private[node] (
 
   private def syncEffect = cats.effect.Sync.catsEitherTSync[Task, CommError]
 
-  private val rpClearConnConf = ClearConnetionsConf(
+  private val rpClearConnConf = ClearConnectionsConf(
     conf.server.maxNumOfConnections,
     numOfConnectionsPinged = 10
   ) // TODO read from conf
 
-  private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
-    RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
+  private def rpConf[F[_]: Sync](local: Node) =
+    Ref.of(RPConf(local, initPeer, defaultTimeout, rpClearConnConf))
+
+  private def localPeerNode[F[_]: Sync: Log] =
+    WhoAmI
+      .fetchLocalPeerNode[F](
+        conf.server.host,
+        conf.server.port,
+        conf.server.kademliaPort,
+        conf.server.noUpnp,
+        id
+      )
 }
 
 object NodeRuntime {

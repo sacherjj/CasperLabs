@@ -1,18 +1,13 @@
-import contextlib
 from typing import (
-    Generator,
-    List,
     TYPE_CHECKING,
 )
 
 import pytest
 
-import conftest
-from casperlabsnode_testing.casperlabsnode import docker_network_with_started_bootstrap
+from . import conftest
 
 if TYPE_CHECKING:
-    from _pytest.fixtures import FixtureRequest
-    from conftest import (
+    from .cl_node.casperlabsnode import (
         KeyPair,
     )
     from docker.client import DockerClient

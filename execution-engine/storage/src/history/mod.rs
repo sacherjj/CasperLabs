@@ -1,27 +1,33 @@
-use TreeRootHash;
-
 use common::key::Key;
-use error::{Error as StorageError, RootNotFound};
-use gs::{DbReader, TrackingCopy};
+use gs::DbReader;
+use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
-use transform::Transform;
+use transform::{Transform, TypeMismatch};
+
+// needs to be public for use in the gens crate
+pub mod trie;
+pub mod trie_store;
 
 pub enum CommitResult {
-    Success(TreeRootHash),
-    Failure(StorageError),
+    RootNotFound,
+    Success(Blake2bHash),
+    KeyNotFound(Key),
+    TypeMismatch(TypeMismatch),
+    Overflow,
 }
 
-pub trait History<R: DbReader> {
+pub trait History {
+    type Error;
+    type Reader: DbReader<Error = Self::Error>;
+
     /// Checkouts to the post state of a specific block.
-    fn checkout(&self, prestate_hash: TreeRootHash) -> Result<TrackingCopy<R>, RootNotFound>;
+    fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error>;
 
     /// Applies changes and returns a new post state hash.
     /// block_hash is used for computing a deterministic and unique keys.
     fn commit(
         &mut self,
-        prestate_hash: TreeRootHash,
+        prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
-    ) -> Result<CommitResult, RootNotFound>;
+    ) -> Result<CommitResult, Self::Error>;
 }
-
-pub const EMPTY_ROOT_HASH: [u8; 32] = [0u8; 32];

@@ -1,6 +1,7 @@
 package io.casperlabs.casper.util.comm
 
 import cats.effect.concurrent.Ref
+import cats.syntax.show._
 import cats.{Applicative, ApplicativeError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
@@ -8,7 +9,11 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage,
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.genesis.contracts.Faucet
-import io.casperlabs.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
+import io.casperlabs.casper.helper.{
+  BlockDagStorageTestFixture,
+  HashSetCasperTestNode,
+  NoOpsCasperEffect
+}
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
 import io.casperlabs.casper.util.TestTime
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
@@ -20,9 +25,10 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   StandaloneCasperHandler
 }
 import io.casperlabs.casper.util.comm.CasperPacketHandlerSpec._
-import io.casperlabs.casper.util.rholang.RuntimeManager
+import io.casperlabs.catscontrib.ApplicativeError_
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib.{ApplicativeError_, Capture}
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.{Connections, ConnectionsCell}
 import io.casperlabs.comm.rp.ProtocolHelper
@@ -34,31 +40,28 @@ import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Cell
-import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.{Ignore, Matchers, WordSpec}
-import io.casperlabs.casper.util.TestTime
-import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.smartcontracts.ExecutionEngineService
+import org.scalatest.{Matchers, WordSpec}
+
 import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec with Matchers {
   private def setup() = new {
     val scheduler                  = Scheduler.io("test")
     val runtimeDir                 = BlockDagStorageTestFixture.blockStorageDir
-    implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = createBonds(Seq(validatorPk))
     val requiredSigs               = 1
     val deployTimestamp            = 1L
-    val genesis                    = buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
-    val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
-    val storageSize: Long          = 1024L * 1024
+    val BlockMsgWithTransform(Some(genesis), transforms) =
+      buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
+    val validatorId       = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
+    val storageSize: Long = 1024L * 1024
 
-    val casperSmartContractsApi = ExecutionEngineService.noOpApi[Task]()
-    val runtimeManager          = RuntimeManager(casperSmartContractsApi, bonds)
+    implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](bonds)
 
     val bap = new BlockApproverProtocol(
       validatorId,
@@ -70,8 +73,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       false,
       requiredSigs
     )
-    val local: PeerNode = peerNode("src", 40400)
-    val shardId         = "test-shardId"
+    val local: Node = peerNode("src", 40400)
+    val shardId     = "test-shardId"
 
     implicit val nodeDiscovery = new NodeDiscoveryStub[Task]
     implicit val connectionsCell: ConnectionsCell[Task] =
@@ -92,7 +95,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val metrics = new MetricsNOP[Task]
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
+    implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMsgWithTransform]](Map.empty)
     implicit val blockStore = InMemBlockStore.create[Task]
     implicit val blockDagStorage = InMemBlockDagStorage
       .create[Task]
@@ -116,7 +119,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
-            new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
+            new GenesisValidatorHandler(validatorId, shardId, bap)
           )
         val packetHandler     = new CasperPacketHandlerImpl[Task](ref)
         val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
@@ -148,7 +151,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
-            new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
+            new GenesisValidatorHandler(validatorId, shardId, bap)
           )
         val packetHandler = new CasperPacketHandlerImpl[Task](ref)
 
@@ -160,7 +163,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           response = packet(
             local,
             transport.NoApprovedBlockAvailable,
-            NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toByteString
+            NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.show).toByteString
           )
           _            = assert(head.peer == local && head.msg == response)
           _            = transportLayer.reset()
@@ -198,6 +201,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           sigs <- Ref.of[Task, Set[Signature]](Set.empty)
           abp = ApproveBlockProtocol.unsafe[Task](
             genesis,
+            transforms,
             Set(ByteString.copyFrom(validatorPk)),
             requiredSigns,
             duration,
@@ -213,7 +217,6 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
             .approveBlockInterval(
               interval,
               shardId,
-              runtimeManager,
               Some(validatorId),
               refCasper
             )
@@ -229,7 +232,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           //wait until casper is defined, with 1 minute timeout (indicating failure)
           possiblyCasper  <- Task.racePair(Task.sleep(1.minute), waitUtilCasperIsDefined)
           _               = assert(possiblyCasper.isRight)
-          blockO          <- blockStore.get(genesis.blockHash)
+          blockO          <- blockStore.getBlockMessage(genesis.blockHash)
           _               = assert(blockO.isDefined)
           _               = assert(blockO.contains(genesis))
           handlerInternal <- refCasper.get
@@ -241,7 +244,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           head              = transportLayer.requests.head
           _ = assert(
             ApprovedBlock
-              .parseFrom(head.msg.message.packet.get.content.toByteArray) == lastApprovedBlock.get
+              .parseFrom(head.msg.message.packet.get.content.toByteArray) == lastApprovedBlock.get.approvedBlock
           )
         } yield ()
 
@@ -260,7 +263,6 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
           new BootstrapCasperHandler[Task](
-            runtimeManager,
             shardId,
             Some(validatorId),
             validators
@@ -289,7 +291,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           _                   <- casperPacketHandler.handle(local).apply(approvedPacket)
           casperO             <- MultiParentCasperRef[Task].get
           _                   = assert(casperO.isDefined)
-          blockO              <- blockStore.get(genesis.blockHash)
+          blockO              <- blockStore.getBlockMessage(genesis.blockHash)
           _                   = assert(blockO.isDefined)
           _                   = assert(blockO.contains(genesis))
           handlerInternal     <- refCasper.get
@@ -319,10 +321,10 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       val fixture = setup()
       import fixture._
 
-      val (_, validators)        = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-      val bonds                  = HashSetCasperTest.createBonds(validators)
-      val genesis                = HashSetCasperTest.createGenesis(bonds)
-      val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
+      val (_, validators)                                  = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+      val bonds                                            = HashSetCasperTest.createBonds(validators)
+      val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.createGenesis(bonds)
+      val approvedBlockCandidate                           = ApprovedBlockCandidate(block = Some(genesis))
       val approvedBlock: ApprovedBlock = ApprovedBlock(
         candidate = Some(approvedBlockCandidate),
         sigs = Seq(
@@ -362,7 +364,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           BlockRequest(Base16.encode(genesis.blockHash.toByteArray), genesis.blockHash)
         val requestPacket = Packet(transport.BlockRequest.id, blockRequest.toByteString)
         val test = for {
-          _     <- blockStore.put(genesis.blockHash, genesis)
+          _     <- blockStore.put(genesis.blockHash, genesis, transforms)
           _     <- casperPacketHandler.handle(local)(requestPacket)
           head  = transportLayer.requests.head
           block = packet(local, transport.BlockMessage, genesis.toByteString)
@@ -421,8 +423,6 @@ object CasperPacketHandlerSpec {
     Packet(transport.ApprovedBlockRequest.id, approvedBlockReq.toByteString)
   }
 
-  private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
-
-  private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+  private def peerNode(name: String, port: Int): Node =
+    Node(ByteString.copyFrom(name.getBytes), "host", port, port)
 }

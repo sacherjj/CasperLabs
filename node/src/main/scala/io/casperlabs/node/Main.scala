@@ -1,7 +1,7 @@
 package io.casperlabs.node
 
+import cats.effect.ExitCode
 import cats.implicits._
-import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm._
 import io.casperlabs.node.configuration.Configuration.Command.{Diagnostics, Run}
@@ -9,16 +9,16 @@ import io.casperlabs.node.configuration._
 import io.casperlabs.node.diagnostics.client.GrpcDiagnosticsService
 import io.casperlabs.node.effects._
 import io.casperlabs.shared._
-import io.casperlabs.smartcontracts.GrpcExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.slf4j.bridge.SLF4JBridgeHandler
+
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
 
 object Main {
 
-  private implicit lazy val logSource: LogSource = LogSource(this.getClass)
-  private implicit lazy val log: Log[Task]       = effects.log
+  implicit val log: Log[Task] = effects.log
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.computation(
@@ -29,32 +29,37 @@ object Main {
 
     val exec: Task[Unit] =
       for {
-        conf <- Task(Configuration.parse(args, sys.env))
-        _ <- conf
+        commandAndConf <- Task(Configuration.parse(args.toArray, sys.env))
+        _ <- commandAndConf
               .fold(
                 errors => log.error(errors.mkString_("", "\n", "")),
-                conf => updateLoggingProps(conf) >> mainProgram(conf)
+                { case (command, conf) => updateLoggingProps(conf) >> mainProgram(command, conf) }
               )
       } yield ()
 
-    exec.unsafeRunSync
+    exec.runSyncUnsafe()
   }
 
   private def updateLoggingProps(conf: Configuration): Task[Unit] = Task {
+    //https://github.com/grpc/grpc-java/issues/1577#issuecomment-228342706
+    SLF4JBridgeHandler.removeHandlersForRootLogger()
+    SLF4JBridgeHandler.install()
     sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
   }
 
-  private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+  private def mainProgram(command: Configuration.Command, conf: Configuration)(
+      implicit scheduler: Scheduler
+  ): Task[Unit] = {
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
-        conf.grpcServer.host,
-        conf.grpcServer.portInternal,
+        conf.grpc.host,
+        conf.grpc.portInternal,
         conf.server.maxMessageSize
       )
 
     implicit val consoleIO: ConsoleIO[Task] = (str: String) => Task(println(str))
 
-    val program = conf.command match {
+    val program = command match {
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
       case Run         => nodeProgram(conf)
     }
@@ -73,7 +78,6 @@ object Main {
         case None =>
           Task.delay(System.exit(0))
       }
-
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {

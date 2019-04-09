@@ -1,70 +1,208 @@
+# io.casperlabs.node.configuration.Configuration.Server
 [server]
-#host =
+
+# Hostname or IP of this node.
+# host =
+
+# Network port to use for intra-node gRPC communication.
 port = 40400
+
+# HTTP port for utility services: /metrics, /version and /status.
 http-port = 40403
+
+# Kademlia port used for node discovery based on Kademlia algorithm.
 kademlia-port = 40404
+
+# Host IP address changes dynamically.
 dynamic-host-address = false
+
+# Use this flag to disable UpNp.
 no-upnp = false
+
+# Default timeout for roundtrip connections.
 default-timeout = 2000
+
+# Bootstrap casperlabs node address for initial seed.
 bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
-standalone = false
-map-size = 1073741824
+
+# Type of Casperlabs space backing store. Valid values are: lmdb, inmem, mixed.
 store-type = "lmdb"
+
+# Path to data directory.
 data-dir = "$HOME/.casperlabs"
+
+# Maximum number of peers allowed to connect to the node.
 max-num-of-connections = 500
+
+# Maximum size of message that can be sent via transport layer.
 max-message-size = 4194304
+
+# Size of chunks to split larger payloads into when streamed via transport layer.
 chunk-size = 1048576
 
+# Number of new nodes to which try to gossip a new block.
+relay-factor = 2
+
+# Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes.
+relay-saturation = 100
+
+# io.casperlabs.blockstorage.LMDBBlockStore.Config
 [lmdb]
+
+# LMDB blockstorage  map size (in bytes).
 block-store-size = 1073741824
+
+# LMDB blockstorage max databases.
 max-dbs = 1
+
+# LMDB blockstorage max readers.
 max-readers = 126
+
+# LMDB blockstorage use TLS.
 use-tls = false
 
+
+# io.casperlabs.blockstorage.BlockDagFileStorage.Config
 [blockstorage]
+
+# Size factor for squashing block storage latest messages.
 latest-messages-log-max-size-factor = 10
 
+
+# io.casperlabs.node.configuration.Configuration.GrpcServer
 [grpc]
+
+# Externally addressable hostname or IP of node on which gRPC service is running.
 host = "localhost"
+
+# Socket path used for internal gRPC API.
 socket = "$HOME/.casperlabs/.casper-node.sock"
+
+# Port used for external gRPC API, e.g. deployments.
 port-external = 40401
+
+# Port used for internal gRPC API, e.g. diagnostics.
 port-internal = 40402
 
+
+# io.casperlabs.comm.transport.Tls
 [tls]
+
+# Path to node's X.509 certificate file, that is being used for identification.
 certificate = "$HOME/.casperlabs/node.certificate.pem"
+
+# Path to node's private key PEM file, that is being used for TLS communication.
 key = "$HOME/.casperlabs/node.key.pem"
+
+# Use a non blocking secure random instance.
 secure-random-non-blocking = false
 
-[casper]
-#validator-public-key =
-#validator-private-key =
-#validator-private-key-path =
-validator-sig-algorithm = "ed25519"
-bonds-file = "$HOME/.casperlabs/genesis/bonds.txt"
-#known-validators-file =
-num-validators = 5
-wallets-file = "$HOME/.casperlabs/genesis/wallets.txt"
-minimum-bond = 1
-maximum-bond = 9223372036854775807
-has-faucet = false
-required-sigs = 0
-shard-id = "casperlabs"
-approve-genesis = false
-approve-genesis-interval = "5seconds"
-approve-genesis-duration = "5minutes"
-#deploy-timestamp =
 
+# io.casperlabs.casper.CasperConf
+[casper]
+
+# Base16 encoding of the public key to use for signing a proposed blocks.
+# Can be inferred from the private key for some signature algorithms.
+# validator-public-key =
+
+# Base16 encoding of the private key to use for signing a proposed blocks.
+# It is not recommended to use in production since private key could be revealed through the process table.
+# Use the `validator-private-key-path` instead.
+# validator-private-key =
+
+# Path to the base16 encoded private key to use for signing a proposed blocks.
+# validator-private-key-path =
+
+# Name of the algorithm to use for signing proposed blocks.
+# Currently supported values: ed25519.
+validator-sig-algorithm = "ed25519"
+
+# Path to plain text file consisting of lines of the form `<pk> <stake>`
+# which defines the bond amounts for each validator at genesis.
+# <pk> is the public key (in base-16 encoding) identifying the validator and
+# <stake> is the amount of CSPR they have bonded (an integer).
+# Note: this overrides the --num-validators option.
+bonds-file = "$HOME/.casperlabs/genesis/bonds.txt"
+
+# Path to plain text file listing the public keys of validators known to the user (one per line).
+# Signatures from these validators are required in order to accept a block which starts the local
+# node's view of the blockDAG.
+# known-validators-file =
+
+# Amount of random validator keys to generate at genesis if no `bonds.txt` file is present.
+num-validators = 5
+
+# Path to plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`
+# which defines the CSPR wallets that exist at genesis.
+# <algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1),
+# <pk> is the public key (in base-16 encoding) identifying the wallet and
+# <revBalance> is the amount of CSPR in the wallet.
+wallets-file = "$HOME/.casperlabs/genesis/wallets.txt"
+
+# Minimum bond accepted by the PoS contract in the genesis block.
+minimum-bond = 1
+
+# Maximum bond accepted by the PoS contract in the genesis block.
+maximum-bond = 9223372036854775807
+
+# True if there should be a public access CSPR faucet in the genesis block.
+has-faucet = false
+
+# Number of signatures from trusted validators required to creating an approved genesis block.
+required-sigs = 0
+
+# Identifier of the shard this node is connected to.
+shard-id = "casperlabs"
+
+# Start a stand-alone node (no bootstrapping).
+standalone = false
+
+# Start a node as a genesis validator.
+approve-genesis = false
+
+# Interval at which condition for creating ApprovedBlock will be checked.
+approve-genesis-interval = "5seconds"
+
+# Time window in which BlockApproval messages will be accumulated before checking conditions.
+approve-genesis-duration = "5minutes"
+
+# Timestamp for the deploys.
+# deploy-timestamp =
+
+
+# io.casperlabs.node.configuration.Configuration.Kamon
 [metrics]
+
+# Enable the Prometheus metrics reporter.
 prometheus = false
+
+# Enable the Zipkin span reporter.
 zipkin = false
+
+# Enable Sigar host system metrics.
 sigar = false
 
+# Enable Influx system metrics.
+influx = false
+
+
+# io.casperlabs.node.configuration.Configuration.Influx
 [influx]
-#hostname = "0.0.0.0"
-#port = 14
-#database = "test"
-#protocol = "https"
-#
-[influx-auth]
-#user = "user"
-#password = "password"
+
+# Hostname or IP of the Influx instance.
+# hostname = "0.0.0.0"
+
+# Port of the Influx instance.
+# port = 14
+
+# Name of the database in Influx.
+# database = "test"
+
+# Protocol used in Influx.
+# protocol = "https"
+
+# Username for Influx database authentication.
+# user = "user"
+
+# Password for Influx database authentication.
+# password = "password"

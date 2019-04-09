@@ -5,25 +5,25 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
-import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.language.higherKinds
 
 class InMemBlockStore[F[_]] private (
     implicit
     monadF: Monad[F],
-    refF: Ref[F, Map[BlockHash, BlockMessage]]
+    refF: Ref[F, Map[BlockHash, BlockMsgWithTransform]]
 ) extends BlockStore[F] {
 
-  def get(blockHash: BlockHash): F[Option[BlockMessage]] =
+  def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     refF.get.map(_.get(blockHash))
 
-  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
     refF.get.map(_.filterKeys(p).toSeq)
 
-  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
+  def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
     refF.update(_ + f)
 
   def checkpoint(): F[Unit] =
@@ -40,7 +40,7 @@ object InMemBlockStore {
   def create[F[_]](
       implicit
       monadF: Monad[F],
-      refF: Ref[F, Map[BlockHash, BlockMessage]],
+      refF: Ref[F, Map[BlockHash, BlockMsgWithTransform]],
       metricsF: Metrics[F]
   ): BlockStore[F] =
     new InMemBlockStore[F] with MeteredBlockStore[F] {
@@ -57,7 +57,9 @@ object InMemBlockStore {
     InMemBlockStore.create(syncId, refId, metrics)
   }
 
-  def emptyMapRef[F[_]](implicit syncEv: Sync[F]): F[Ref[F, Map[BlockHash, BlockMessage]]] =
-    Ref[F].of(Map.empty[BlockHash, BlockMessage])
+  def emptyMapRef[F[_]](
+      implicit syncEv: Sync[F]
+  ): F[Ref[F, Map[BlockHash, BlockMsgWithTransform]]] =
+    Ref[F].of(Map.empty[BlockHash, BlockMsgWithTransform])
 
 }

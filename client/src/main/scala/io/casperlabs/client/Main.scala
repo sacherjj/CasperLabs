@@ -4,7 +4,6 @@ import cats.effect.{Sync, Timer}
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import io.casperlabs.client.configuration._
-import io.casperlabs.ipc
 import io.casperlabs.casper.protocol
 import io.casperlabs.shared.{Log, LogSource, UncaughtExceptionLogger}
 import monix.eval.Task
@@ -12,8 +11,7 @@ import monix.execution.Scheduler
 
 object Main {
 
-  implicit val logSource: LogSource = LogSource(this.getClass)
-  implicit val log: Log[Task]       = Log.log
+  implicit val log: Log[Task] = Log.log
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.computation(

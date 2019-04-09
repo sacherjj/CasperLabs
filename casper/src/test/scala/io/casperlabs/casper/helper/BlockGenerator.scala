@@ -8,15 +8,13 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBl
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
-import io.casperlabs.catscontrib._
+import io.casperlabs.casper.util.execengine.DeploysCheckpoint
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
@@ -26,8 +24,7 @@ object BlockGenerator {
 
   def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ExecutionEngineService: Log](
       id: Int,
-      genesis: BlockMessage,
-      runtimeManager: RuntimeManager[F]
+      genesis: BlockMessage
   ): F[BlockMessage] =
     for {
       b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id)
@@ -35,8 +32,7 @@ object BlockGenerator {
       computeBlockCheckpointResult <- computeBlockCheckpoint[F](
                                        b,
                                        genesis,
-                                       dag,
-                                       runtimeManager
+                                       dag
                                      )
       (postStateHash, processedDeploys) = computeBlockCheckpointResult
       _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
@@ -45,14 +41,15 @@ object BlockGenerator {
   def computeBlockCheckpoint[F[_]: Sync: BlockStore: ExecutionEngineService: Log](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
+      dag: BlockDagRepresentation[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] =
     for {
-      result <- InterpreterUtil
-                 .computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
-      Right((preStateHash, postStateHash, processedDeploys)) = result
-    } yield (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
+      result <- computeBlockCheckpointFromDeploys[F](
+                 b,
+                 genesis,
+                 dag
+               )
+    } yield (result.postStateHash, result.deploysForBlock)
 
   def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
       id: Int,
@@ -64,9 +61,32 @@ object BlockGenerator {
     val updatedBlockBody =
       b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
-    BlockStore[F].put(b.blockHash, updatedBlock) *>
+    BlockStore[F].put(b.blockHash, updatedBlock, Seq.empty) *>
       IndexedBlockDagStorage[F].inject(id, updatedBlock)
   }
+
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: Log: ExecutionEngineService](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDagRepresentation[F]
+  ): F[DeploysCheckpoint] =
+    for {
+      parents <- ProtoUtil.unsafeGetParents[F](b)
+
+      deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
+
+      _ = assert(
+        parents.nonEmpty || (parents.isEmpty && b == genesis),
+        "Received a different genesis block."
+      )
+
+      result <- computeDeploysCheckpoint[F](
+                 parents,
+                 deploys,
+                 dag
+               )
+    } yield result
+
 }
 
 trait BlockGenerator {
@@ -76,7 +96,7 @@ trait BlockGenerator {
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
-      tsHash: ByteString = ByteString.EMPTY,
+      postStateHash: ByteString = ByteString.EMPTY,
       shardId: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY
   ): F[BlockMessage] =
@@ -84,11 +104,11 @@ trait BlockGenerator {
       now <- Time[F].currentMillis
       postState = RChainState()
         .withPreStateHash(preStateHash)
-        .withPostStateHash(tsHash)
+        .withPostStateHash(postStateHash)
         .withBonds(bonds)
-      postStateHash = Blake2b256.hash(postState.toByteArray)
+      computedHash = Blake2b256.hash(postState.toByteArray)
       header = Header()
-        .withPostStateHash(ByteString.copyFrom(postStateHash))
+        .withPostStateHash(ByteString.copyFrom(computedHash))
         .withParentsHashList(parentsHashList)
         .withDeploysHash(ProtoUtil.protoSeqHash(deploys))
         .withTimestamp(now)
@@ -108,6 +128,7 @@ trait BlockGenerator {
         shardId = shardId
       )
       modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(block)
-      _             <- BlockStore[F].put(serializedBlockHash, modifiedBlock)
+      _ <- BlockStore[F]
+            .put(serializedBlockHash, modifiedBlock, Seq.empty)
     } yield modifiedBlock
 }

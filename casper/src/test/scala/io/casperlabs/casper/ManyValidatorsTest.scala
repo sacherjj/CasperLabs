@@ -12,6 +12,7 @@ import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.{Log, Time}
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.schedulers.CanBlock
 import org.scalatest.{FlatSpec, Matchers}
@@ -58,7 +59,7 @@ class ManyValidatorsTest
       initialLatestMessages = bonds.map { case Bond(validator, _) => validator -> b }.toMap
       _ <- Sync[Task].delay {
             BlockDagStorageTestFixture.writeInitialLatestMessages(
-              blockDagStorageDir.resolve("latest-messages-data"),
+              blockDagStorageDir.resolve("latest-messages-log"),
               blockDagStorageDir.resolve("latest-messages-crc"),
               initialLatestMessages
             )
@@ -70,9 +71,9 @@ class ManyValidatorsTest
                            )
       newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
       dag                       <- newIndexedBlockDagStorage.getRepresentation
-      tips                      <- Estimator.tips[Task](dag, genesis.blockHash)(Monad[Task], blockStore)
+      tips                      <- Estimator.tips[Task](dag, genesis.blockHash)(Monad[Task])
       casperEffect <- NoOpsCasperEffect[Task](
-                       HashMap.empty[BlockHash, BlockMessage],
+                       HashMap.empty[BlockHash, BlockMsgWithTransform],
                        tips.toIndexedSeq
                      )(Sync[Task], blockStore, newIndexedBlockDagStorage)
       logEff             = new LogStub[Task]

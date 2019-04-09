@@ -3,12 +3,13 @@ package io.casperlabs.node.diagnostics.client
 import cats._
 import cats.implicits._
 import io.casperlabs.node.effects.ConsoleIO
-import io.casperlabs.node.model.diagnostics._
+import io.casperlabs.node.api.diagnostics._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.Catscontrib._
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils._
 
 import scala.concurrent.duration._
-import io.casperlabs.comm.PeerNode
 
 object Runtime {
 
@@ -46,10 +47,10 @@ object Runtime {
   private def processError(t: Throwable): Throwable =
     Option(t.getCause).getOrElse(t)
 
-  def showPeers(peers: Seq[PeerNode], peerType: String): String =
+  def showPeers(peers: Seq[Node], peerType: String): String =
     List(
       s"List of $peerType peers:",
-      peers.map(_.toAddress).mkString("\n")
+      peers.map(_.show).mkString("\n")
     ).mkString("", "\n", "\n")
 
   def showProcessCpu(processCpu: ProcessCpu): String = {

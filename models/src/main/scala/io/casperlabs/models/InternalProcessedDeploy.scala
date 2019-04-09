@@ -1,9 +1,8 @@
 package io.casperlabs.models
-import io.casperlabs.casper.protocol.Deploy
+import io.casperlabs.casper.protocol.DeployData
 
 final case class InternalProcessedDeploy(
-    deploy: Deploy,
-    //TODO: `cost` should be a Long, not a Double
-    cost: Double,
+    deploy: DeployData,
+    cost: Long,
     result: DeployResult
 )

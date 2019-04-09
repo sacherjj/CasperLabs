@@ -1,6 +1,7 @@
 package io.casperlabs.comm.rp
 
 import cats.Id
+import com.google.protobuf.ByteString
 
 import scala.concurrent.duration._
 import io.casperlabs.catscontrib._
@@ -8,6 +9,7 @@ import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm._
 import io.casperlabs.comm.CommError._
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.comm.rp.ProtocolHelper._
@@ -24,7 +26,7 @@ class ClearConnectionsSpec
 
   import ScalaTestCats._
 
-  val src: PeerNode      = peer("src")
+  val src: Node          = peer("src")
   implicit val transport = new TransportLayerStub[Id]
   implicit val log       = new Log.NOPLog[Id]
   implicit val metric    = new Metrics.MetricsNOP[Id]
@@ -124,10 +126,10 @@ class ClearConnectionsSpec
     }
   }
 
-  private def peer(name: String, host: String = "host"): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), Endpoint(host, 80, 80))
+  private def peer(name: String, host: String = "host"): Node =
+    Node(ByteString.copyFrom(name.getBytes), host, 80, 80)
 
-  private def mkConnections(peers: PeerNode*): ConnectionsCell[Id] =
+  private def mkConnections(peers: Node*): ConnectionsCell[Id] =
     Cell.id[Connections](peers.toList)
 
   private def conf(
@@ -136,7 +138,7 @@ class ClearConnectionsSpec
   ): RPConfAsk[Id] =
     new ConstApplicativeAsk(
       RPConf(
-        clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
+        clearConnections = ClearConnectionsConf(maxNumOfConnections, numOfConnectionsPinged),
         defaultTimeout = 1.milli,
         local = peer("src"),
         bootstrap = None

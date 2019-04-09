@@ -3,7 +3,9 @@ extern crate common;
 extern crate execution_engine;
 extern crate grpc;
 extern crate protobuf;
+extern crate shared;
 extern crate storage;
+extern crate wabt;
 extern crate wasm_prep;
 
 pub mod engine_server;
@@ -12,7 +14,6 @@ use clap::{App, Arg};
 use engine_server::*;
 use execution_engine::engine::EngineState;
 use storage::gs::inmem::InMemHist;
-use storage::history::EMPTY_ROOT_HASH;
 
 fn main() {
     let matches = App::new("Execution engine server")
@@ -27,7 +28,8 @@ fn main() {
     }
 
     let init_state = storage::gs::mocked_account([48u8; 20]);
-    let engine_state = EngineState::new(InMemHist::new_initialized(&EMPTY_ROOT_HASH, init_state));
+    let engine_state =
+        EngineState::new(InMemHist::new_initialized(&([0u8; 32].into()), init_state));
     let server_builder = engine_server::new(socket, engine_state);
     let _server = server_builder.build().expect("Start server");
 

@@ -2,26 +2,21 @@ package io.casperlabs.node.diagnostics
 
 import java.lang.management.{ManagementFactory, MemoryType}
 
-import scala.collection.JavaConverters._
-
-import cats.syntax.flatMap._
-import cats.syntax.functor._
-
 import cats.effect.Sync
-import com.google.protobuf.ByteString
+import cats.implicits._
 import com.google.protobuf.empty.Empty
-import io.casperlabs.catscontrib.Capture
 import io.casperlabs.comm.discovery.NodeDiscovery
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.diagnostics.{JvmMetrics, NodeMXBean, NodeMetrics}
-import io.casperlabs.node.model.diagnostics._
+import io.casperlabs.node.api.diagnostics._
 import javax.management.ObjectName
 import monix.eval.Task
 
+import scala.collection.JavaConverters._
+
 package object effects {
 
-  def jvmMetrics[F[_]: Capture]: JvmMetrics[F] =
+  def jvmMetrics[F[_]: Sync]: JvmMetrics[F] =
     new JvmMetrics[F] {
 
       private def check[A](a: A)(implicit n: Numeric[A]): Option[A] = checkOpt(Some(a))
@@ -30,7 +25,7 @@ package object effects {
         a.filter(n.gteq(_, n.zero))
 
       def processCpu: F[ProcessCpu] =
-        Capture[F].capture {
+        Sync[F].delay {
           ManagementFactory.getOperatingSystemMXBean match {
             case b: com.sun.management.OperatingSystemMXBean =>
               ProcessCpu(check(b.getProcessCpuLoad), check(b.getProcessCpuTime))
@@ -39,7 +34,7 @@ package object effects {
         }
 
       def memoryUsage: F[MemoryUsage] =
-        Capture[F].capture {
+        Sync[F].delay {
           val b       = ManagementFactory.getMemoryMXBean
           val heap    = b.getHeapMemoryUsage
           val nonHeap = b.getNonHeapMemoryUsage
@@ -64,7 +59,7 @@ package object effects {
         }
 
       def garbageCollectors: F[Seq[GarbageCollector]] =
-        Capture[F].capture {
+        Sync[F].delay {
           ManagementFactory.getGarbageCollectorMXBeans.asScala.map {
             case b: com.sun.management.GarbageCollectorMXBean =>
               val last = Option(b.getLastGcInfo)
@@ -86,7 +81,7 @@ package object effects {
         }
 
       def memoryPools: F[Seq[MemoryPool]] =
-        Capture[F].capture {
+        Sync[F].delay {
           ManagementFactory.getMemoryPoolMXBeans.asScala.map { b =>
             val usage     = b.getUsage
             val peakUsage = b.getPeakUsage
@@ -117,7 +112,7 @@ package object effects {
         }
 
       def threads: F[Threads] =
-        Capture[F].capture {
+        Sync[F].delay {
           val b = ManagementFactory.getThreadMXBean
           Threads(
             threadCount = b.getThreadCount,
@@ -128,7 +123,7 @@ package object effects {
         }
     }
 
-  def nodeCoreMetrics[F[_]: Capture]: NodeMetrics[F] =
+  def nodeCoreMetrics[F[_]: Sync]: NodeMetrics[F] =
     new NodeMetrics[F] {
       private val mbs  = ManagementFactory.getPlatformMBeanServer
       private val name = ObjectName.getInstance(NodeMXBean.Name)
@@ -137,7 +132,7 @@ package object effects {
         map.getOrElse(name, 0)
 
       def metrics: F[NodeCoreMetrics] =
-        Capture[F].capture {
+        Sync[F].delay {
           val map = mbs
             .getAttributes(name, NodeMXBean.Attributes)
             .asList
@@ -225,7 +220,7 @@ package object effects {
               t  <- Sync[F].delay(c.start())
               r0 <- Sync[F].attempt(block)
               _  = t.stop()
-              r  <- r0.fold(Sync[F].raiseError, Sync[F].pure)
+              r  <- r0.fold(Sync[F].raiseError[A], Sync[F].pure)
             } yield r
         }
     }
@@ -241,16 +236,16 @@ package object effects {
         connectionsCell.read.map { ps =>
           Peers(
             ps.map(
-              p => Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))
+              p => Peer(p.host, p.protocolPort, p.id)
             )
           )
         }
 
       def listDiscoveredPeers(request: Empty): Task[Peers] =
-        nodeDiscovery.peers.map { ps =>
+        nodeDiscovery.alivePeersAscendingDistance.map { ps =>
           Peers(
             ps.map(
-              p => Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))
+              p => Peer(p.host, p.protocolPort, p.id)
             )
           )
         }

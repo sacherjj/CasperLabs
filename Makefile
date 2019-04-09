@@ -1,10 +1,11 @@
 DOCKER_USERNAME ?= casperlabs
 DOCKER_PUSH_LATEST ?= false
+DOCKER_LATEST_TAG ?= latest
 # Use the git tag / hash as version. Easy to pinpoint. `git tag` can return more than 1 though. `git rev-parse --short HEAD` would just be the commit.
 $(eval TAGS_OR_SHA = $(shell git tag -l --points-at HEAD | grep -e . || git describe --tags --always --long))
-# Try to use the semantic version with any leading `v` stripped. TODO: MacOS doesn't support -Po
+# Try to use the semantic version with any leading `v` stripped.
 $(eval SEMVER_REGEX = 'v?\K\d+\.\d+(\.\d+)?')
-$(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -Po $(SEMVER_REGEX) | tail -n 1 | grep -e . || echo $(TAGS_OR_SHA)))
+$(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -oE 'v?[0-9]+(\.[0-9]){1,2}$$' | sed 's/^v//' || echo $(TAGS_OR_SHA)))
 
 # All rust related source code. If every Rust module depends on everything then transitive dependencies are not a problem.
 # But with comm/build.rs compiling .proto to .rs every time we build the timestamps are updated as well, so filter those and depend on .proto instead.
@@ -44,17 +45,17 @@ docker-push-all: \
 	docker-push/execution-engine
 
 docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
-docker-build/client: .make/docker-build/universal/client
+docker-build/client: .make/docker-build/universal/client .make/docker-build/test/client
 docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
 docker-push/%: docker-build/%
 	$(eval PROJECT = $*)
-	docker tag $(DOCKER_USERNAME)/$(PROJECT):latest $(DOCKER_USERNAME)/$(PROJECT):$(VER)
+	docker tag $(DOCKER_USERNAME)/$(PROJECT):$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/$(PROJECT):$(VER)
 	docker push $(DOCKER_USERNAME)/$(PROJECT):$(VER)
 	if [ "$(DOCKER_PUSH_LATEST)" = "true" ]; then \
-		docker push $(DOCKER_USERNAME)/$(PROJECT):latest ; \
+		docker push $(DOCKER_USERNAME)/$(PROJECT):$(DOCKER_LATEST_TAG) ; \
 	fi
 
 
@@ -99,7 +100,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	    -exec cp {} $(STAGE)/.docker/layers/1st \;
 	# Use the Dockerfile to build the project. Has to be within the context.
 	cp $(PROJECT)/Dockerfile $(STAGE)/Dockerfile
-	docker build -f $(STAGE)/Dockerfile -t $(DOCKER_USERNAME)/$(PROJECT):latest $(STAGE)
+	docker build -f $(STAGE)/Dockerfile -t $(DOCKER_USERNAME)/$(PROJECT):$(DOCKER_LATEST_TAG) $(STAGE)
 	rm -rf $(STAGE)/.docker $(STAGE)/Dockerfile
 	mkdir -p $(dir $@) && touch $@
 
@@ -107,11 +108,11 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		.make/cargo-docker-packager/execution-engine/comm
+		cargo-native-packager/execution-engine/comm
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/target/debian)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
-	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:latest $(RELEASE)
+	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(RELEASE)
 	rm -rf $(RELEASE)/Dockerfile
 	mkdir -p $(dir $@) && touch $@
 
@@ -125,9 +126,14 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Make a test version for the execution engine as well just so we can swith version easily.
 .make/docker-build/test/execution-engine: \
 		.make/docker-build/execution-engine
-	docker tag $(DOCKER_USERNAME)/execution-engine:latest $(DOCKER_USERNAME)/execution-engine:test
+	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:test
 	mkdir -p $(dir $@) && touch $@
 
+# Make a test tagged version of client so all tags exist for integration-testing
+.make/docker-build/test/client: \
+		.make/docker-build/universal/client
+	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:test
+	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
 .make/sbt-stage/%: $(SCALA_SRC)
@@ -181,7 +187,7 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	@# Going to ignore errors with the rpm build here so that we can get the .deb package for docker.
 	$(eval USERID = $(shell id -u))
 	docker pull $(DOCKER_USERNAME)/buildenv:latest
-	docker run -it --rm --entrypoint sh \
+	docker run --rm --entrypoint sh \
 		-v ${PWD}:/CasperLabs \
 		$(DOCKER_USERNAME)/buildenv:latest \
 		-c "\

@@ -1,17 +1,16 @@
 package io.casperlabs.casper.helper
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.Path
 
-import cats.{Applicative, ApplicativeError, Id, Monad}
 import cats.data.EitherT
+import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import cats.{Applicative, ApplicativeError, Defer, Id, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.catscontrib.ski._
 import io.casperlabs.blockstorage._
-import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper._
+import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
@@ -20,25 +19,27 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerInternal
 }
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
-import io.casperlabs.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import io.casperlabs.catscontrib._
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
+import io.casperlabs.catscontrib.ski._
+import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
-import io.casperlabs.comm.CommError.{CommErrT, ErrorHandler}
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.Connect
 import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.comm.rp.HandleMessages.handle
 import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.ipc
+import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
-import io.casperlabs.shared.{Cell, Log}
 import io.casperlabs.shared.PathOps.RichPath
+import io.casperlabs.shared.{Cell, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
-import io.casperlabs.ipc
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -48,9 +49,10 @@ import scala.util.Random
 
 class HashSetCasperTestNode[F[_]](
     name: String,
-    val local: PeerNode,
+    val local: Node,
     tle: TransportLayerTestImpl[F],
     val genesis: BlockMessage,
+    val transforms: Seq[TransformEntry],
     sk: Array[Byte],
     logicalTime: LogicalTime[F],
     implicit val errorHandlerEff: ErrorHandler[F],
@@ -66,11 +68,8 @@ class HashSetCasperTestNode[F[_]](
     val blockStore: BlockStore[F],
     val blockDagStorage: BlockDagStorage[F],
     val metricEff: Metrics[F],
-    val abF: ToAbstractContext[F],
     val casperState: Cell[F, CasperState]
 ) {
-
-  private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
 
   implicit val logEff             = new LogStub[F]
   implicit val timeEff            = logicalTime
@@ -79,27 +78,25 @@ class HashSetCasperTestNode[F[_]](
   implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
   implicit val rpConfAsk          = createRPConfAsk[F](local)
 
-  val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F]()
-
   val bonds = genesis.body
     .flatMap(_.state.map(_.bonds.map(b => b.validator.toByteArray -> b.stake).toMap))
     .getOrElse(Map.empty)
 
-  val runtimeManager = RuntimeManager(casperSmartContractsApi, bonds)
+  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds)
+
   val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
   val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
 
-  implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
+  implicit val labF =
+    LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
-  implicit val ee = runtimeManager.executionEngineService
   implicit val casperEff = new MultiParentCasperImpl[F](
     Some(validatorId),
     genesis,
-    postGenesisStateHash,
     shardId,
     blockProcessingLock,
     faultToleranceThreshold = faultToleranceThreshold
@@ -116,13 +113,12 @@ class HashSetCasperTestNode[F[_]](
 
   def initialize(): F[Unit] =
     // pre-population removed from internals of Casper
-    blockStore.put(genesis.blockHash, genesis) *>
+    blockStore.put(genesis.blockHash, genesis, Seq.empty) *>
       blockDagStorage.getRepresentation.flatMap { dag =>
-        InterpreterUtil
+        ExecEngineUtil
           .validateBlockCheckpoint[F](
             genesis,
-            dag,
-            runtimeManager
+            dag
           )
           .void
       }
@@ -145,25 +141,21 @@ class HashSetCasperTestNode[F[_]](
 object HashSetCasperTestNode {
   type Effect[A] = EitherT[Task, CommError, A]
 
-  implicit val absF = new ToAbstractContext[Effect] {
-    def fromTask[A](fa: Task[A]): Effect[A] = new MonadOps(fa).liftM[CommErrT]
-  }
-
   def standaloneF[F[_]](
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   )(
       implicit
       errorHandler: ErrorHandler[F],
-      concurrentF: Concurrent[F],
-      absF: ToAbstractContext[F]
+      concurrentF: Concurrent[F]
   ): F[HashSetCasperTestNode[F]] = {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
     val tle =
-      new TransportLayerTestImpl[F](identity, Map.empty[PeerNode, Ref[F, mutable.Queue[Protocol]]])
+      new TransportLayerTestImpl[F](identity, Map.empty[Node, Ref[F, mutable.Queue[Protocol]]])
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
     implicit val log                = new Log.NOPLog[F]()
     implicit val metricEff          = new Metrics.MetricsNOP[F]
@@ -174,13 +166,7 @@ object HashSetCasperTestNode {
     for {
       blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
       blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
-                          BlockDagFileStorage.Config(
-                            blockDagDir.resolve("latest-messages-data"),
-                            blockDagDir.resolve("latest-messages-crc"),
-                            blockDagDir.resolve("block-metadata-data"),
-                            blockDagDir.resolve("block-metadata-crc"),
-                            blockDagDir.resolve("checkpoints")
-                          ),
+                          BlockDagFileStorage.Config(blockDagDir),
                           genesis
                         )(Concurrent[F], Log[F], blockStore)
       blockProcessingLock <- Semaphore[F](1)
@@ -190,6 +176,7 @@ object HashSetCasperTestNode {
         identity,
         tle,
         genesis,
+        transforms,
         sk,
         logicalTime,
         errorHandler,
@@ -203,7 +190,6 @@ object HashSetCasperTestNode {
         blockStore,
         blockDagStorage,
         metricEff,
-        absF,
         casperState
       )
       result <- node.initialize.map(_ => node)
@@ -212,27 +198,27 @@ object HashSetCasperTestNode {
 
   def standaloneEff(
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   )(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
-    standaloneF[Effect](genesis, sk, storageSize, faultToleranceThreshold)(
+    standaloneF[Effect](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
-      Concurrent[Effect],
-      ToAbstractContext[Effect]
+      Concurrent[Effect]
     ).value.unsafeRunSync.right.get
 
   def networkF[F[_]](
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   )(
       implicit errorHandler: ErrorHandler[F],
-      concurrentF: Concurrent[F],
-      absF: ToAbstractContext[F]
+      concurrentF: Concurrent[F]
   ): F[IndexedSeq[HashSetCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
@@ -260,13 +246,7 @@ object HashSetCasperTestNode {
             for {
               blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
               blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
-                                  BlockDagFileStorage.Config(
-                                    blockDagDir.resolve("latest-messages-data"),
-                                    blockDagDir.resolve("latest-messages-crc"),
-                                    blockDagDir.resolve("block-metadata-data"),
-                                    blockDagDir.resolve("block-metadata-crc"),
-                                    blockDagDir.resolve("checkpoints")
-                                  ),
+                                  BlockDagFileStorage.Config(blockDagDir),
                                   genesis
                                 )(Concurrent[F], Log[F], blockStore)
               semaphore <- Semaphore[F](1)
@@ -278,6 +258,7 @@ object HashSetCasperTestNode {
                 p,
                 tle,
                 genesis,
+                transforms,
                 sk,
                 logicalTime,
                 errorHandler,
@@ -291,7 +272,6 @@ object HashSetCasperTestNode {
                 blockStore,
                 blockDagStorage,
                 metricEff,
-                absF,
                 casperState
               )
             } yield node
@@ -323,13 +303,13 @@ object HashSetCasperTestNode {
   def networkEff(
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
+      transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   ): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
-    networkF[Effect](sks, genesis, storageSize, faultToleranceThreshold)(
+    networkF[Effect](sks, genesis, transforms, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
-      Concurrent[Effect],
-      ToAbstractContext[Effect]
+      Concurrent[Effect]
     )
 
   val appErrId = new ApplicativeError[Id, CommError] {
@@ -369,24 +349,31 @@ object HashSetCasperTestNode {
 
   def randomBytes(length: Int): Array[Byte] = Array.fill(length)(Random.nextInt(256).toByte)
 
-  def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
-
-  def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+  def peerNode(name: String, port: Int): Node =
+    Node(ByteString.copyFrom(name.getBytes), "host", port, port)
 
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
-  def simpleEEApi[F[_]: Applicative](): ExecutionEngineService[F] =
+  def simpleEEApi[F[_]: Defer: Applicative](
+      initialBonds: Map[Array[Byte], Long]
+  ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
       import ipc._
-      private val zero          = Array.fill(32)(0.toByte)
-      private val key           = Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFrom(zero))))
-      private val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
-      private val op            = Op(Op.OpInstance.Read(ReadOp()))
-      private val transforEntry = TransformEntry(Some(key), Some(transform))
-      private val opEntry       = OpEntry(Some(key), Some(op))
-      private val ee            = ExecutionEffect(Seq(opEntry), Seq(transforEntry))
+      private val zero  = Array.fill(32)(0.toByte)
+      private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
-      override def emptyStateHash: ByteString = ByteString.copyFrom(zero)
+      private def getExecutionEffect(deploy: Deploy) = {
+        // The real execution engine will get the keys from what the code changes, which will include
+        // changes to the account nonce for example, but not the deploy timestamp. Make sure the `key`
+        // here isn't more specific to a deploy then the real thing would be.
+        val key           = Key(Key.KeyInstance.Hash(KeyHash(deploy.session.fold(ByteString.EMPTY)(_.code))))
+        val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
+        val op            = Op(Op.OpInstance.Read(ReadOp()))
+        val transforEntry = TransformEntry(Some(key), Some(transform))
+        val opEntry       = OpEntry(Some(key), Some(op))
+        ExecutionEffect(Seq(opEntry), Seq(transforEntry))
+      }
+
+      override def emptyStateHash: ByteString = ByteString.EMPTY
 
       override def exec(
           prestate: ByteString,
@@ -396,7 +383,7 @@ object HashSetCasperTestNode {
         //regardless of their wasm code. It pretends to have run all the deploys,
         //but it doesn't really; it just returns the same result no matter what.
         deploys
-          .map(_ => DeployResult(10, DeployResult.Result.Effects(ee)))
+          .map(d => DeployResult(10, DeployResult.Result.Effects(getExecutionEffect(d))))
           .asRight[Throwable]
           .pure[F]
 
@@ -422,8 +409,16 @@ object HashSetCasperTestNode {
         Applicative[F].pure[Either[Throwable, Value]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
-
-      override def close(): F[Unit] = ().pure[F]
+      override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
+        bonds.pure[F]
+      override def setBonds(newBonds: Map[Array[Byte], Long]): F[Unit] =
+        Defer[F].defer(Applicative[F].unit.map { _ =>
+          bonds = newBonds.map {
+            case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)
+          }.toSeq
+        })
+      override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
+        ().asRight[String].pure[F]
     }
 
   private def pad(x: Array[Byte], length: Int): Array[Byte] =

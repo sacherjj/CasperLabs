@@ -10,7 +10,7 @@ import io.casperlabs.casper.helper.HashSetCasperTestNode
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.rholang._
-import io.casperlabs.casper.Estimator.Validator
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.signatures.Ed25519
@@ -20,6 +20,7 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.shared.Time
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
@@ -31,9 +32,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   private implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
   implicit val metrics                      = new Metrics.MetricsNOP[Task]
 
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val bonds                       = createBonds(validators)
-  private val genesis                     = createGenesis(bonds)
+  private val (validatorKeys, validators)                      = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val bonds                                            = createBonds(validators)
+  private val BlockMsgWithTransform(Some(genesis), transforms) = createGenesis(bonds)
 
   "createBlock" should "not allow simultaneous calls" in {
     implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
@@ -43,7 +44,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-    val node   = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val node   = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
     val casper = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
@@ -89,15 +90,14 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   ): F[BlockStatus]                                     = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
   def contains(b: BlockMessage): F[Boolean]             = underlying.contains(b)
   def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
   def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
-  def lastFinalizedBlock: F[BlockMessage]             = underlying.lastFinalizedBlock
-  def storageContents(hash: ByteString): F[String]    = underlying.storageContents(hash)
-  def getRuntimeManager: F[Option[RuntimeManager[F]]] = underlying.getRuntimeManager
-  def fetchDependencies: F[Unit]                      = underlying.fetchDependencies
+  def lastFinalizedBlock: F[BlockMessage]          = underlying.lastFinalizedBlock
+  def storageContents(hash: ByteString): F[String] = underlying.storageContents(hash)
+  def fetchDependencies: F[Unit]                   = underlying.fetchDependencies
 
   override def createBlock: F[CreateBlockStatus] =
     for {

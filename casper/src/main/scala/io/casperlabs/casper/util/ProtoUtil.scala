@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.implicits._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.ipc.{Deploy => EEDeploy}
+import io.casperlabs.ipc
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{Log, Time}
 
@@ -78,7 +78,7 @@ object ProtoUtil {
   // TODO: instead of throwing Exception use MonadError.raiseError
   def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
-      maybeBlock <- BlockStore[F].get(hash)
+      maybeBlock <- BlockStore[F].getBlockMessage(hash)
       block = maybeBlock match {
         case Some(b) => b
         case None =>
@@ -118,7 +118,9 @@ object ProtoUtil {
     maybeCreatorJustificationHash match {
       case Some(creatorJustificationHash) =>
         for {
-          maybeCreatorJustification <- BlockStore[F].get(creatorJustificationHash.latestBlockHash)
+          maybeCreatorJustification <- BlockStore[F].getBlockMessage(
+                                        creatorJustificationHash.latestBlockHash
+                                      )
           maybeCreatorJustificationAsList = maybeCreatorJustification match {
             case Some(creatorJustification) =>
               if (goalFunc(creatorJustification)) {
@@ -195,7 +197,7 @@ object ProtoUtil {
       parentHash <- hdr.parentsHashList.headOption
     } yield parentHash
     maybeParentHash match {
-      case Some(parentHash) => BlockStore[F].get(parentHash)
+      case Some(parentHash) => BlockStore[F].getBlockMessage(parentHash)
       case None             => none[BlockMessage].pure[F]
     }
   }
@@ -241,14 +243,8 @@ object ProtoUtil {
 
   def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
     deploys(b).toStream
-      .flatMap(getDeployData)
+      .flatMap(_.deploy)
       .exists(deployData => deployData.user == user && deployData.timestamp == timestamp)
-
-  private def getDeployData(d: ProcessedDeploy): Option[DeployData] =
-    for {
-      deploy     <- d.deploy
-      deployData <- deploy.raw
-    } yield deployData
 
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
     b.body.fold(Seq.empty[ProcessedDeploy])(_.deploys)
@@ -297,7 +293,7 @@ object ProtoUtil {
                  false.pure[F]
                } else {
                  // Gather for each deploy which blocks it appears in.
-                 def getDeploys(b: BlockMessage): F[Map[Deploy, Set[ByteString]]] =
+                 def getDeploys(b: BlockMessage): F[Map[DeployData, Set[ByteString]]] =
                    for {
                      bAncestors <- DagOperations
                                     .bfTraverseF[F, BlockMessage](List(b))(
@@ -308,7 +304,7 @@ object ProtoUtil {
                      deploys = bAncestors
                        .flatMap { b =>
                          val deploys =
-                           b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
+                           b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[DeployData])
                          deploys.map(_ -> b.blockHash)
                        }
                        .groupBy { case (d, b) => d }
@@ -321,8 +317,8 @@ object ProtoUtil {
                    b2Deploys <- getDeploys(b2)
                    // Find deploys that appear in multiple blocks.
                    conflicts = (b1Deploys.keySet ++ b2Deploys.keySet).filter { d =>
-                     val fromB1 = b1Deploys.get(d).getOrElse(Set.empty)
-                     val fromB2 = b2Deploys.get(d).getOrElse(Set.empty)
+                     val fromB1 = b1Deploys.getOrElse(d, Set.empty)
+                     val fromB2 = b2Deploys.getOrElse(d, Set.empty)
                      (fromB1 union fromB2).size > 1
                    }
                    _ <- if (conflicts.nonEmpty) {
@@ -336,22 +332,25 @@ object ProtoUtil {
     } yield result
 
   def chooseNonConflicting[F[_]: Monad: BlockStore: Log](
-      blocks: Seq[BlockMessage],
+      blockHashes: Seq[BlockHash],
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Seq[BlockMessage]] = {
     def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
       conflicts[F](_, b, genesis, dag).map(b => !b)
 
-    blocks.toList
-      .foldM(List.empty[BlockMessage]) {
-        case (acc, b) =>
-          Monad[F].ifM(acc.forallM(nonConflicting(b)))(
-            (b :: acc).pure[F],
-            acc.pure[F]
-          )
-      }
-      .map(_.reverse)
+    for {
+      blocks <- blockHashes.toList.traverse(hash => ProtoUtil.unsafeGetBlock[F](hash))
+      result <- blocks
+                 .foldM(List.empty[BlockMessage]) {
+                   case (acc, b) =>
+                     Monad[F].ifM(acc.forallM(nonConflicting(b)))(
+                       (b :: acc).pure[F],
+                       acc.pure[F]
+                     )
+                 }
+                 .map(_.reverse)
+    } yield result
   }
 
   def toJustification(
@@ -487,14 +486,15 @@ object ProtoUtil {
         DeployData()
           .withUser(ByteString.EMPTY)
           .withTimestamp(now)
-          .withSessionCode(ByteString.EMPTY)
+          .withSession(DeployCode())
+          .withPayment(DeployCode())
           .withGasLimit(Integer.MAX_VALUE)
     )
 
-  def basicDeploy[F[_]: Monad: Time](id: Int): F[Deploy] =
+  def basicDeploy[F[_]: Monad: Time](id: Int): F[DeployData] =
     for {
       d <- basicDeployData[F](id)
-    } yield Deploy(raw = Some(d))
+    } yield d
 
   //Todo: it is for testing
   def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
@@ -504,39 +504,33 @@ object ProtoUtil {
     DeployData(
       user = ByteString.EMPTY,
       timestamp = timestamp,
-      sessionCode = ByteString.copyFromUtf8(source),
+      session = Some(DeployCode().withCode(ByteString.copyFromUtf8(source))),
+      payment = Some(DeployCode()),
       gasLimit = gasLimit
     )
 
   def compiledSourceDeploy(
       timestamp: Long,
       gasLimit: Long
-  ): Deploy = ???
+  ): DeployData = ???
 
-  def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): Deploy =
-    Deploy(
-      raw = Some(
-        DeployData(
-          user = ByteString.EMPTY,
-          timestamp = timestamp,
-          sessionCode = sessionCode,
-          gasLimit = gasLimit
-        )
-      )
+  def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): DeployData =
+    DeployData(
+      user = ByteString.EMPTY,
+      timestamp = timestamp,
+      session = Some(DeployCode().withCode(sessionCode)),
+      payment = Some(DeployCode()),
+      gasLimit = gasLimit
     )
 
-  def termDeployNow(sessionCode: ByteString): Deploy =
+  def termDeployNow(sessionCode: ByteString): DeployData =
     sourceDeploy(sessionCode, System.currentTimeMillis(), Integer.MAX_VALUE)
 
-  def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
-    raw = Some(dd)
-  )
-
-  def deployDataToEEDeploy(dd: DeployData): EEDeploy = EEDeploy(
+  def deployDataToEEDeploy(dd: DeployData): ipc.Deploy = ipc.Deploy(
     address = dd.address,
     timestamp = dd.timestamp,
-    sessionCode = dd.sessionCode,
-    paymentCode = dd.paymentCode,
+    session = dd.session.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
+    payment = dd.payment.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
     gasLimit = dd.gasLimit,
     gasPrice = dd.gasPrice,
     nonce = dd.nonce

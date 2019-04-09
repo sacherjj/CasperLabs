@@ -1,37 +1,24 @@
-use std::fmt;
-
 use common::bytesrepr;
-use common::key::Key;
-use rkv::error::StoreError;
-use transform::TypeMismatch;
-use wasmi::HostError;
+use lmdb;
+use wasmi;
 
-use TreeRootHash;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct RootNotFound(pub TreeRootHash);
-
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Fail, PartialEq, Eq)]
 pub enum Error {
-    KeyNotFound(Key),
-    TransformTypeMismatch(TypeMismatch),
-    // mateusz.gorski: I think that these errors should revert any changes made
-    // to Global State and most probably kill the node.
-    RkvError(String), //TODO: capture error better
-    BytesRepr(bytesrepr::Error),
+    #[fail(display = "{}", _0)]
+    Lmdb(#[fail(cause)] lmdb::Error),
+
+    #[fail(display = "{}", _0)]
+    BytesRepr(#[fail(cause)] bytesrepr::Error),
+
+    #[fail(display = "Another thread panicked while holding a lock")]
+    PoisonError,
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
+impl wasmi::HostError for Error {}
 
-impl HostError for Error {}
-
-impl From<StoreError> for Error {
-    fn from(e: StoreError) -> Self {
-        Error::RkvError(e.to_string())
+impl From<lmdb::Error> for Error {
+    fn from(e: lmdb::Error) -> Self {
+        Error::Lmdb(e)
     }
 }
 
@@ -41,8 +28,8 @@ impl From<bytesrepr::Error> for Error {
     }
 }
 
-impl From<TypeMismatch> for Error {
-    fn from(tm: TypeMismatch) -> Self {
-        Error::TransformTypeMismatch(tm)
+impl<T> From<std::sync::PoisonError<T>> for Error {
+    fn from(_e: std::sync::PoisonError<T>) -> Self {
+        Error::PoisonError
     }
 }

@@ -5,17 +5,23 @@ import java.nio.file.Path
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.{Applicative, Foldable, Monad}
+import cats.{Applicative, Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.genesis.contracts._
+import io.casperlabs.casper.protocol
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
+import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.Sorting
-import io.casperlabs.casper.util.rholang.RuntimeManager.StateHash
-import io.casperlabs.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.ipc
+import io.casperlabs.ipc.{DeployResult, TransformEntry}
 import io.casperlabs.shared.{Log, LogSource, Time}
+import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -30,47 +36,64 @@ object Genesis {
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String
-  ): List[Deploy] =
+  ): List[DeployData] =
     List()
 
-  def withContracts[F[_]: Concurrent: Log](
+  def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
       initial: BlockMessage,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String,
       startHash: StateHash,
-      runtimeManager: RuntimeManager[F],
       timestamp: Long
-  ): F[BlockMessage] =
+  ): F[BlockMsgWithTransform] =
     withContracts(
       defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
       initial,
-      startHash,
-      runtimeManager
+      startHash
     )
 
-  def withContracts[F[_]: Concurrent: Log](
-      blessedTerms: List[Deploy],
+  def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
+      blessedTerms: List[DeployData],
       initial: BlockMessage,
-      startHash: StateHash,
-      runtimeManager: RuntimeManager[F]
-  ): F[BlockMessage] =
-    runtimeManager
-      .computeState(startHash, Seq.empty)
-      .map {
-        case (stateHash, processedDeploys) =>
-          val stateWithContracts = for {
-            bd <- initial.body
-            ps <- bd.state
-          } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(stateHash)
-          val version   = initial.header.get.version
-          val timestamp = initial.header.get.timestamp
-          val blockDeploys =
-            processedDeploys.filterNot(_.result.isFailed).map(ProcessedDeployUtil.fromInternal)
-          val body   = Body(state = stateWithContracts, deploys = blockDeploys)
-          val header = blockHeader(body, List.empty[ByteString], version, timestamp)
-          unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+      startHash: StateHash
+  ): F[BlockMsgWithTransform] =
+    for {
+      processedDeploys <- MonadError[F, Throwable].rethrow(
+                           ExecutionEngineService[F]
+                             .exec(startHash, blessedTerms.map(deployDataToEEDeploy))
+                         )
+      deployEffects = ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
+
+      // Todo We shouldn't need to do any commutivity checking for the genesis block.
+      // Either we make it a "SEQ" block (which is not a feature that exists yet)
+      // or there should be a single deploy containing all the blessed contracts.
+      commutingEffects = ExecEngineUtil.findCommutingEffects(deployEffects)
+      deploysForBlock = deployEffects.collect {
+        case (deploy, Some((_, cost))) => {
+          protocol.ProcessedDeploy(
+            Some(deploy),
+            cost,
+            false
+          )
+        }
       }
+      transforms = commutingEffects.unzip._1.flatMap(_.transformMap)
+      postStateHash <- MonadError[F, Throwable].rethrow(
+                        ExecutionEngineService[F].commit(startHash, transforms)
+                      )
+      stateWithContracts = for {
+        bd <- initial.body
+        ps <- bd.state
+      } yield
+        ps.withPreStateHash(ExecutionEngineService[F].emptyStateHash)
+          .withPostStateHash(postStateHash)
+      version       = initial.header.get.version
+      timestamp     = initial.header.get.timestamp
+      body          = Body(state = stateWithContracts, deploys = deploysForBlock)
+      header        = blockHeader(body, List.empty[ByteString], version, timestamp)
+      unsignedBlock = unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+    } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
 
   def withoutContracts(
       bonds: Map[Array[Byte], Long],
@@ -97,18 +120,17 @@ object Genesis {
   }
 
   //TODO: Decide on version number and shard identifier
-  def apply[F[_]: Concurrent: Log: Time](
+  def apply[F[_]: Concurrent: Log: Time: ExecutionEngineService](
       walletsPath: Path,
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean,
-      runtimeManager: RuntimeManager[F],
       shardId: String,
       deployTimestamp: Option[Long]
-  ): F[BlockMessage] =
+  ): F[BlockMsgWithTransform] =
     for {
       wallets   <- getWallets[F](walletsPath)
-      bonds     <- runtimeManager.computeBonds(runtimeManager.emptyStateHash)
+      bonds     <- ExecutionEngineService[F].computeBonds(ExecutionEngineService[F].emptyStateHash)
       bondsMap  = bonds.map(b => b.validator.toByteArray -> b.stake).toMap
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       initial = withoutContracts(
@@ -124,8 +146,7 @@ object Genesis {
                     ProofOfStakeParams(minimumBond, maximumBond, validators),
                     wallets,
                     faucetCode,
-                    runtimeManager.emptyStateHash,
-                    runtimeManager,
+                    ExecutionEngineService[F].emptyStateHash,
                     timestamp
                   )
     } yield withContr

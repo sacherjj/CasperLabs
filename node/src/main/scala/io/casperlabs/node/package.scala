@@ -1,13 +1,12 @@
 package io.casperlabs
 
+import cats.Monad
 import cats.data.EitherT
 import cats.syntax.applicative._
-
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.eitherT._
 import io.casperlabs.comm.CommError
-
-import monix.eval.Task
+import monix.eval.{Task, TaskLike}
 
 package object node {
 
@@ -21,4 +20,18 @@ package object node {
   implicit class TaskEffectOps[A](t: Task[A]) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
+
+  implicit def eitherTTaskable[F[_]: Monad: TaskLike, E]: TaskLike[EitherT[F, E, ?]] =
+    new TaskLike[EitherT[F, E, ?]] {
+      case class ToTaskException(e: E) extends RuntimeException
+
+      def toTask[A](fa: EitherT[F, E, A]): Task[A] =
+        TaskLike[F]
+          .toTask(fa.value)
+          .flatMap {
+            case Right(a) => Task.now(a)
+            case Left(e)  => Task.raiseError[A](ToTaskException(e))
+          }
+
+    }
 }

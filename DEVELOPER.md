@@ -3,12 +3,14 @@
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Prerequisites
+
 * [OpenJDK](https://openjdk.java.net) Java Development Kit (JDK), version 11. We recommend using the OpenJDK
 * [sbt](https://www.scala-sbt.org/download.html)
 * [rust](https://www.rust-lang.org/tools/install)
 * [protoc](https://github.com/protocolbuffers/protobuf/releases)
 
 ### CasperLabs Development Environment on Ubuntu and Debian
+
 <details>
   <summary>Click to expand!</summary>
 
@@ -37,6 +39,13 @@ __Note__ Successfully building from source requires attending to all of the prer
   ```
 
   rust:
+
+  Install packages needed for installing and building Rust.
+  ```console
+  dev@dev:~$ sudo apt install build-essential cmake curl -y
+  ```
+
+  Install Rust
   ```console
   dev@dev:~$ curl https://sh.rustup.rs -sSf | sh
   ...
@@ -119,11 +128,16 @@ __Note__ Successfully building from source requires attending to all of the prer
   dev@dev:~$ brew install sbt@1
   ```
 
+  cmake:
+  ```console
+  dev@dev:~$ brew install cmake
+  ```
+
   Rust:
   ```console
   dev@dev:~$ brew install rustup
   ...
-  
+
   dev@dev:~$rustup-init
   Welcome to Rust!
 
@@ -208,6 +222,10 @@ __Note__ Successfully building from source requires attending to all of the prer
   [info] 1.2.8
   ```
 
+  ```console
+  dev@dev:~/CasperLabs$ sudo dnf install cmake
+  ```
+
   rust:
   ```console
   dev@dev:~$ curl https://sh.rustup.rs -sSf | sh
@@ -266,6 +284,7 @@ __Note__ Successfully building from source requires attending to all of the prer
 </details>
 
 ### CasperLabs Development Environment on ArchLinux
+
 You can use `pacaur` or other AUR installer instead of [`trizen`](https://github.com/trizen/trizen).
 ```
 TBD
@@ -274,11 +293,6 @@ TBD
 Once the above prerequistes are installed for your environment, you are ready to build.
 
 ### How to build components
-#### Build proto defitnitions:
-This is required only when the `ipc.proto` file changes (but this is true when you run it for the first time).
-  1. Go to Execution Engine root directory. This is `execution-engine` directory in the node's root dir.
-  2. Go to comm project directory (`cd comm`).
-  3. Run: `cargo run --bin grpc-protoc`
 
 #### Build Wasm contracts:
 Contracts are in a separate github repo: https://github.com/CasperLabs/contract-examples.
@@ -294,23 +308,37 @@ If make fails, contract can be manually built:
   4. If `cargo build --release ...`  doesn't work try `cargo +nightly build ...`
 
 #### Building node:
-  1. Go to node's root directory (it's where `build.sbt` file is located).
+
+  1. Go to the root directory of CasperLabs.
   2. Run `sbt -mem 5000 node/universal:stage`
 
 #### Building node's client:
-  1. Go to node's root directory (it's where `build.sbt` file is located).
+
+  1. Go to the root directory of CasperLabs.
   2. Run `sbt -mem 5000 client/universal:stage`
 
 #### Building Execution Engine:
-  1. Go to Execution Engine root directory. This is `execution-engine` directory in the node's root dir.
-  2. Go to comm project directory (`cd comm`)
-  3. Run `cargo build`
+
+  1. Go to the `execution-engine` directory in the CasperLabs root dir.
+  2. Run `cargo build`
 
 ### Running components
-For ease of use node assumes a default directory that is `~/.casperlabs/` First you have to create a hidden directory.
+
+For ease of use node assumes a default directory that is `~/.casperlabs/`  You must create this hidden directory: `mkdir ~/.casperlabs`.
+
+#### Run the Execution Engine
+
+In the root of the EE (`execution-engine`), run:
+
+```
+cargo run --bin casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
+```
+
+`.caspernode.sock` is default socket file used for IPC communication.
 
 #### Run the node
-In the root of the node (where build.sbt lives).
+
+In the root of CasperLabs.
 
 If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/casperlabs-node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
 
@@ -318,17 +346,9 @@ If you're doing it for the first time you don't have private and public keys. Th
 ./node/target/universal/stage/bin/casperlabs-node run --casper-validator-private-key <private key from <public_key>.sk file> --casper-validator-public-key <public_key> -s
 ```
 
-#### Run the Execution Engine
-In the root of th EE (`execution-engine/comm/`), run:
-
-```
-cargo run --bin casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
-```
-
-.caspernode.sock is default socket file used for IPC communication.
-
 ### Deploying data
-In the root of the node, run:
+
+In the root of CasperLabs, run:
 
 ```
 ./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 deploy --from 00000000000000000000 --gas-limit 100000000 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
@@ -345,11 +365,13 @@ After deploying contract it's not yet executed (its effects are not applied to t
 For the demo purposes we have to propose contracts separately because second contract (`hello-name/call`) won't see the changes (in practice it won't be able to call `hello-name/define` contract) from the previous deploy.
 
 ### Visualising DAG state
+
 In the root of the node, run:
 
 ```
 ./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 vdag --depth 10 --out test.png
 ```
+
 The output will be saved into the `test.png` file.
 
 It's also possible subscribing to DAG changes and view them in the realtime
@@ -360,18 +382,20 @@ It's also possible subscribing to DAG changes and view them in the realtime
 
 The outputs will be saved into the files `test_0.png`, `test_1.png`, etc.
 
-For more information and possible output image formats check the help message 
+For more information and possible output image formats check the help message
+
 ```
 ./client/target/universal/stage/bin/casperlabs-client vdag --help
 ```
 
-
 ## Information for developers
+
 Assure prerequisites shown above are met.
 
 ### Developer Quick-Start
 
 When working in a single project, scope all `sbt` commands to that project. The most effective way is to maintain a running `sbt` instance, invoked from the project root:
+
 ```
 dev@dev:~/CasperLabs$ sbt
 [info] Loading settings for project casperlabs-build from plugins.sbt ...
@@ -386,11 +410,15 @@ sbt:node> stage
 [info] Done packaging.
 [success] Total time: 113 s, completed Jan 22, 2019, 10:53:37 PM
 ```
+
 but single-line commands work, too:
+
 ```
 $ sbt "project node" clean compile test
 ```
+
 or
+
 ```
 $ sbt node/clean node/compile node/test
 ```
@@ -405,12 +433,15 @@ The most up-to-date code is found in the `dev` branch. This brilliant, cutting-e
 
 Please check the prerequistes on your machine if the code generation fails.
 Then build the whole project with all submodules:
+
 ```
 > sbt compile
 ```
 
 #### Packaging
+
 To publish a docker image to your local repo run:
+
 ```
 > sbt node/docker:publishLocal
 [... output snipped ...]
@@ -424,6 +455,7 @@ To publish a docker image to your local repo run:
 ```
 
 Check the local docker repo:
+
 ```
 > docker images
 REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
@@ -433,6 +465,7 @@ openjdk             8u151-jre-alpine    b1bd879ca9b3        4 months ago        
 ```
 
 To deploy a tarball run:
+
 ```
 > sbt node/universal:packageZipTarball
 ```
@@ -440,13 +473,17 @@ To deploy a tarball run:
 The tarball can be found in directory `node/target/universal/`
 
 #### Running
+
 ```
 TBD
 ```
+
 Now after you've done some local changes and want to test them, simply run the last command `tbd` again. It will kill the running app and start a new instance containing latest changes in a completely new forked JVM.
 
 ### Cross-developing for Linux (e.g. Ubuntu) on a Mac
+
 You will need a virtual machine running the appropriate version of Linux.
+
 1. Install [VirtualBox]( https://www.virtualbox.org/wiki/Downloads)
 2. Install the Linux distribution you need (e.g. [Ubuntu](http://releases.ubuntu.com/16.04/ubuntu-16.04.4-server-amd64.iso))
 3. Start VirtualBox and create a new virtual machine in the manager
@@ -454,6 +491,26 @@ You will need a virtual machine running the appropriate version of Linux.
 5. Configure your Linux VM as desired. You may need to install additional tools sucah as g++, g++-multilib, make, git, etc.
 
 For a more convenient experience, you can share a folder on your Mac with the virtual machine. To do this you will need to install the VirtualBox Guest Additions. Unfortunately there are some gotchas with this. You may need to utilize one of these [solutions](https://askubuntu.com/questions/573596/unable-to-install-guest-additions-cd-image-on-virtual-box).
+
+### Running benchmarks
+
+Currently, only `BlockStore` and `DAGStore` benchmarks are done.
+The recommended way to run them is to use `sbt` as follows:
+```
+ sbt "project blockStorage" "jmh:run -i 10 -wi 10 -f2 -t4"
+```
+This tells `sbt` to run `JMH` benchmarks from the `blockStorage` project with the following parameters:
+- 10 warmup iterations
+- 10 measuring iterations
+- 2 forks
+- 4 threads
+
+This procedure requires machine with at least 32GB RAM.
+This is a recommended way to run benchmarks.
+
+There is also a properties file which could be use to configure some values: `block-storage/src/test/resources/block-store-benchmark.properties` 
+
+For more information about JMH, you can visit JMH project page: http://openjdk.java.net/projects/code-tools/jmh/ 
 
 ## Description of subprojects
 
