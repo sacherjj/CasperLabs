@@ -6,10 +6,9 @@ import pytest
 import typing_extensions
 
 from typing import TYPE_CHECKING
-
+from .common import Network, WaitTimeoutError
 if TYPE_CHECKING:
-    from .common import Network, WaitTimeoutError
-    from .casperlabsnode import Node
+    from .casperlabsnode import Node, NonZeroExitCodeError
 
 
 class PredicateProtocol(typing_extensions.Protocol):
@@ -43,9 +42,62 @@ class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
         super().__init__(node, 'Making a transition to ApprovedBlockRecievedHandler state.')
 
 
+class RegexBlockRequest:
+    regex = None
+
+    def __init__(self, node: 'Node', node_name: str) -> None:
+        self.regex = re.compile(self.regex.format(node_name))
+        self.node = node
+
+    def is_satisfied(self) -> bool:
+        match = self.regex.search(self.node.logs())
+        return bool(match)
+
+
+class ReceivedApprovedBlockRequest(RegexBlockRequest):
+    regex = r"Received ApprovedBlockRequest from Node(.*,{},\d+,\d+)"
+
+
+class StreamedPacketRequest(RegexBlockRequest):
+    regex = r"Streamed packet .* to Node(.*,{},\d+,\d+)"
+
+
+class SendingApprovedBlockRequest(RegexBlockRequest):
+    regex = r"Sending ApprovedBlock to Node(.*,{},\d+,\d+)"
+
+
+class ConnectedToOtherNode(RegexBlockRequest):
+    regex = r"Connected to casperlabs:"
+
+
 class ApprovedBlockReceived(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
         super().__init__(node, 'Valid ApprovedBlock received!')
+
+
+class RequestedForkTip(LogsContainMessage):
+    def __init__(self, node: 'Node') -> None:
+        super().__init__(node, 'Requested fork tip from peers')
+
+
+class WaitForGoodBye(LogsContainMessage):
+    def __init__(self, node: 'Node') -> None:
+        super().__init__(node, 'Goodbye.')
+
+
+class MetricsAvailable:
+    def __init__(self, node: 'Node') -> None:
+        self.node = node
+
+    def is_satisfied(self) -> bool:
+        _, data = self.node.get_metrics()
+        received_blocks_pattern = re.compile(r"^casperlabs_casper_packet_handler_blocks_received_total ([1-9][0-9]*).0\s*$", re.MULTILINE | re.DOTALL)
+        received_blocks_again_pattern = re.compile(r"^casperlabs_casper_packet_handler_blocks_received_again_total ([0-9]+).0\s*$", re.MULTILINE | re.DOTALL)
+        blocks = received_blocks_pattern.search(data)
+        duplicate_blocks = received_blocks_again_pattern.search(data)
+        if blocks is None or duplicate_blocks is None:
+            return False
+        return int(blocks.group(1)) - int(duplicate_blocks.group(1)) == 1
 
 
 class HasAtLeastPeers:
@@ -80,6 +132,11 @@ class BlockContainsString:
     def is_satisfied(self) -> bool:
         block = self.node.get_block(self.block_hash)
         return self.expected_string in block
+
+
+class LastFinalisedHash(LogsContainMessage):
+    def __init__(self, node: 'Node', hash_string: str) -> None:
+        super().__init__(node, f'New last finalized block hash is {hash_string}')
 
 
 class BlocksCountAtLeast:
@@ -129,6 +186,11 @@ def wait_for_block_contains(node: 'Node', block_hash: str, expected_string: str,
     wait_on_using_wall_clock_time(predicate, timeout)
 
 
+def wait_for_finalised_hash(node: 'Node', hash_string: str, timeout: int):
+    predicate = LastFinalisedHash(node, hash_string)
+    wait_on_using_wall_clock_time(predicate, timeout)
+
+
 def wait_for_blocks_count_at_least(node: 'Node', expected_blocks_count: int, max_retrieved_blocks: int, timeout: int):
     predicate = BlocksCountAtLeast(node, expected_blocks_count, max_retrieved_blocks)
     wait_on_using_wall_clock_time(predicate, timeout)
@@ -144,16 +206,54 @@ def wait_for_approved_block_received_handler_state(node: 'Node', timeout: int):
     wait_on_using_wall_clock_time(predicate, timeout)
 
 
+def wait_a_minute():
+    time.sleep(60)
+
+
+def wait_for_requested_for_fork_tip(node: 'Node', timeout: int):
+    predicate = RequestedForkTip(node)
+    wait_on_using_wall_clock_time(predicate, timeout)
+
+
+def wait_for_good_bye(node: 'Node', timeout: int):
+    predicate = WaitForGoodBye(node)
+    wait_on_using_wall_clock_time(predicate, timeout)
+
+
+def wait_for_received_approved_block_request(node: 'Node', node_name: str, timeout: int):
+    predicate = ReceivedApprovedBlockRequest(node, node_name)
+    wait_on_using_wall_clock_time(predicate, timeout)
+
+
+def wait_for_sending_approved_block_request(node: 'Node', node_name: str, timeout: int):
+    predicate = SendingApprovedBlockRequest(node, node_name)
+    wait_on_using_wall_clock_time(predicate, timeout)
+
+
+def wait_for_streamed_packet(node: 'Node', node_name: str, timeout: int):
+    predicate = StreamedPacketRequest(node, node_name)
+    wait_on_using_wall_clock_time(predicate, timeout)
+
+
 def wait_for_peers_count_at_least(node: 'Node', npeers: int, timeout: int) -> None:
     predicate = HasAtLeastPeers(node, npeers)
     wait_using_wall_clock_time_or_fail(predicate, timeout)
 
 
+def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout: int) -> None:
+    predicate = MetricsAvailable(node)
+    wait_using_wall_clock_time_or_fail(predicate, timeout)
+
+
 def wait_using_wall_clock_time_or_fail(predicate: PredicateProtocol, timeout: int) -> None:
-    try:
-        wait_using_wall_clock_time(predicate, timeout)
-    except WaitTimeoutError:
-        pytest.fail('Failed to satisfy {} after {}s'.format(predicate, timeout))
+    while True:
+        try:
+            wait_using_wall_clock_time(predicate, timeout)
+            return
+        except WaitTimeoutError:
+            pytest.fail('Failed to satisfy {} after {}s'.format(predicate, timeout))
+        except NonZeroExitCodeError:
+            logging.info("not ready")
 
 
 def wait_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> None:
@@ -186,6 +286,11 @@ def wait_for_approved_block_received(network: 'Network', timeout: int) -> None:
     for peer in network.peers:
         predicate = ApprovedBlockReceived(peer)
         wait_on_using_wall_clock_time(predicate, timeout)
+
+
+def wait_for_connected_to_node(node: 'Node', other_node_name: str, timeout: int) -> None:
+    predicate = ConnectedToOtherNode(node, other_node_name)
+    wait_on_using_wall_clock_time(predicate, timeout)
 
 
 def wait_for_started_network(node_startup_timeout: int, network: 'Network'):

@@ -50,11 +50,12 @@ def make_tempdir(prefix: str) -> str:
 
 
 class Network:
-    def __init__(self, network, bootstrap, peers):
+    def __init__(self, network, bootstrap, peers, engines):
         self.network = network
         self.bootstrap = bootstrap
         self.peers = peers
         self.nodes = [bootstrap] + peers
+        self.engines = engines
 
 
 class WaitTimeoutError(Exception):
