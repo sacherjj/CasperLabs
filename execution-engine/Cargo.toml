@@ -4,7 +4,6 @@ members = [
     "comm",
     "common",
     "engine",
-    "gens",
     "shared",
     "storage",
     "vm",

@@ -96,6 +96,13 @@ pipeline:
       - cd execution-engine/
       - ~/.cargo/bin/cargo test
 
+  try-cargo-publish:
+    <<: *buildenv
+    group: test
+    commands:
+      - cd execution-engine/common
+      - ~/.cargo/bin/cargo publish --dry-run
+
   run-rust-tests-mac:
     image: appleboy/drone-ssh
     group: test

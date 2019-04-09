@@ -11,9 +11,6 @@ extern crate shared;
 extern crate wasmi;
 
 #[cfg(test)]
-extern crate gens;
-
-#[cfg(test)]
 extern crate proptest;
 
 #[cfg(test)]
