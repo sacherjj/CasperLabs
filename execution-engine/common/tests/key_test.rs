@@ -1,9 +1,9 @@
 use casperlabs_contract_ffi::key::AccessRights;
+use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
 use gens::gens::*;
 use proptest::prelude::*;
 use siphasher::sip::SipHasher;
-use core::cmp::Ordering;
 
 proptest! {
     #[test]
