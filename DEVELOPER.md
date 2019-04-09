@@ -128,6 +128,11 @@ __Note__ Successfully building from source requires attending to all of the prer
   dev@dev:~$ brew install sbt@1
   ```
 
+  cmake:
+  ```console
+  dev@dev:~$ brew install cmake
+  ```
+
   Rust:
   ```console
   dev@dev:~$ brew install rustup
@@ -217,6 +222,10 @@ __Note__ Successfully building from source requires attending to all of the prer
   [info] 1.2.8
   ```
 
+  ```console
+  dev@dev:~/CasperLabs$ sudo dnf install cmake
+  ```
+
   rust:
   ```console
   dev@dev:~$ curl https://sh.rustup.rs -sSf | sh
@@ -300,37 +309,36 @@ If make fails, contract can be manually built:
 
 #### Building node:
 
-  1. Go to node's root directory (it's where `build.sbt` file is located).
+  1. Go to the root directory of CasperLabs.
   2. Run `sbt -mem 5000 node/universal:stage`
 
 #### Building node's client:
 
-  1. Go to node's root directory (it's where `build.sbt` file is located).
+  1. Go to the root directory of CasperLabs.
   2. Run `sbt -mem 5000 client/universal:stage`
 
 #### Building Execution Engine:
 
-  1. Go to Execution Engine root directory. This is `execution-engine` directory in the node's root dir.
-  2. Go to comm project directory (`cd comm`)
-  3. Run `cargo build`
+  1. Go to the `execution-engine` directory in the CasperLabs root dir.
+  2. Run `cargo build`
 
 ### Running components
 
-For ease of use node assumes a default directory that is `~/.casperlabs/` First you have to create a hidden directory.
+For ease of use node assumes a default directory that is `~/.casperlabs/`  You must create this hidden directory: `mkdir ~/.casperlabs`.
 
 #### Run the Execution Engine
 
-In the root of th EE (`execution-engine/comm/`), run:
+In the root of the EE (`execution-engine`), run:
 
 ```
 cargo run --bin casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
 
-.caspernode.sock is default socket file used for IPC communication.
+`.caspernode.sock` is default socket file used for IPC communication.
 
 #### Run the node
 
-In the root of the node (where build.sbt lives).
+In the root of CasperLabs.
 
 If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/casperlabs-node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
 
@@ -340,7 +348,7 @@ If you're doing it for the first time you don't have private and public keys. Th
 
 ### Deploying data
 
-In the root of the node, run:
+In the root of CasperLabs, run:
 
 ```
 ./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 deploy --from 00000000000000000000 --gas-limit 100000000 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
