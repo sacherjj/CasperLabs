@@ -328,10 +328,10 @@ impl AsRef<[u8]> for Key {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
+    use crate::gens::*;
     use crate::key::AccessRights::{self, *};
     use core::cmp::Ordering;
     use core::hash::{Hash, Hasher};
-    use crate::gens::*;
     use proptest::prelude::*;
     use siphasher::sip::SipHasher;
 
