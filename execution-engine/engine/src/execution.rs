@@ -5,7 +5,7 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::{Account, Value};
-use storage::gs::{StateReader, ExecutionEffect};
+use storage::global_state::{StateReader, ExecutionEffect};
 use storage::transform::TypeMismatch;
 use trackingcopy::{AddResult, TrackingCopy};
 use wasmi::memory_units::Pages;

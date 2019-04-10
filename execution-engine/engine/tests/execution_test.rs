@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::once;
 use std::iter::IntoIterator;
 use std::rc::Rc;
-use storage::gs::{inmem::*, StateReader};
+use storage::global_state::{inmem::*, StateReader};
 use storage::history::*;
 use storage::transform::Transform;
 use wasm_prep::MAX_MEM_PAGES;

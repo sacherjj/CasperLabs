@@ -3,7 +3,7 @@ use crate::transform::{self, Transform};
 use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::value::Value;
-use gs::*;
+use global_state::*;
 use history::*;
 use shared::newtypes::Blake2bHash;
 use std::collections::{BTreeMap, HashMap};
@@ -119,7 +119,7 @@ impl History for InMemHist<Key, Value> {
 
 #[cfg(test)]
 mod tests {
-    use gs::inmem::*;
+    use global_state::inmem::*;
     use std::sync::Arc;
     use transform::Transform;
 

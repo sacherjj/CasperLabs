@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use common::key::Key;
 use common::value::Value;
-use storage::gs::{StateReader, ExecutionEffect};
+use storage::global_state::{StateReader, ExecutionEffect};
 use storage::op::Op;
 use storage::transform::{self, Transform, TypeMismatch};
 use utils::add;
@@ -206,8 +206,8 @@ mod tests {
     use common::gens::*;
     use common::key::{AccessRights, Key};
     use common::value::{Account, Contract, Value};
-    use storage::gs::inmem::InMemGS;
-    use storage::gs::StateReader;
+    use storage::global_state::inmem::InMemGS;
+    use storage::global_state::StateReader;
     use storage::op::Op;
     use storage::transform::Transform;
 
