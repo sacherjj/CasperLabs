@@ -12,6 +12,7 @@ import monix.execution.Scheduler
 import monix.tail.Iterant
 import org.scalatest._
 import scala.concurrent.duration._
+import scala.concurrent.TimeoutException
 import org.scalacheck.Gen
 import org.scalacheck.Arbitrary.arbitrary
 
@@ -21,14 +22,40 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
 
   "fromGenesis" when {
     "started with a candidate that passes the threshold" should {
-      "immediately trigger the transition" in (pending)
+      "immediately trigger the transition" in {
+        TestFixture.fromGenesis() { approver =>
+          // This would time out if it wasn't triggered already.
+          approver.onApproved.map { blockHash =>
+            blockHash shouldBe genesis.blockHash
+          }
+        }
+      }
     }
     "started with a candidate that doesn't pass the threshold" should {
-      "not trigger the transition" in (pending)
+      "not trigger the transition" in {
+        TestFixture.fromGenesis(
+          environment = new MockEnvironment() {
+            override def canTransition(block: Block, signatories: Set[ByteString]) = false
+          }
+        ) { approver =>
+          approver.onApproved.timeout(50.millis).attempt.map { res =>
+            res.isLeft shouldBe true
+            res.left.get shouldBe a[TimeoutException]
+          }
+        }
+      }
     }
   }
   "fromGenesis" should {
-    "create the candidate with the single approval" in (pending)
+    "create the candidate with the single approval" in {
+      TestFixture.fromGenesis() { approver =>
+        approver.getCandidate.map { res =>
+          res.isRight shouldBe true
+          res.right.get.blockHash shouldBe genesis.blockHash
+          res.right.get.approvals should have size 1
+        }
+      }
+    }
   }
 
   "fromBootstrap" should {
@@ -202,7 +229,6 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
 }
 
 object GenesisApproverSpec extends ArbitraryConsensus {
-
   //implicit val noLog           = new Log.NOPLog[Task]
   implicit val log             = Log.log[Task]
   implicit val consensusConfig = ConsensusConfig()
@@ -212,6 +238,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
   }
 
   val bootstrap = peers.head
+
   val genesis = {
     val block = sample(arbitrary[Block])
     val bonds = sample(Gen.listOfN(5, arbitrary[Bond]))
@@ -225,25 +252,41 @@ object GenesisApproverSpec extends ArbitraryConsensus {
     override def alivePeersAscendingDistance = Task.now(peers)
   }
 
-  class MockGossipService() extends GossipService[Task] {
-    override def newBlocks(request: NewBlocksRequest)                                       = ???
-    override def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
-    override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
-    override def streamBlockSummaries(request: StreamBlockSummariesRequest) =
-      request.blockHashes match {
-        case Seq(genesis.blockHash) =>
-          Iterant.pure(BlockSummary(genesis.blockHash).withHeader(genesis.getHeader))
-        case _ => ???
-      }
-    override def getBlockChunked(request: GetBlockChunkedRequest) = ???
-    override def addApproval(request: AddApprovalRequest)         = ???
-    override def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
-      ???
+  object MockGossipService {
+    trait Base extends GossipService[Task] {
+      override def newBlocks(request: NewBlocksRequest)                                       = ???
+      override def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
+      override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
+      override def streamBlockSummaries(
+          request: StreamBlockSummariesRequest
+      ): Iterant[Task, BlockSummary]                                = ???
+      override def getBlockChunked(request: GetBlockChunkedRequest) = ???
+      override def addApproval(request: AddApprovalRequest)         = ???
+      override def getGenesisCandidate(
+          request: GetGenesisCandidateRequest
+      ): Task[GenesisCandidate] = ???
+    }
+
+    class Bootstrap(getCandidate: () => Task[GenesisCandidate]) extends Base {
+      override def getGenesisCandidate(request: GetGenesisCandidateRequest) =
+        getCandidate()
+
+      override def streamBlockSummaries(request: StreamBlockSummariesRequest) =
+        request.blockHashes match {
+          case Seq(genesis.blockHash) =>
+            Iterant.pure(BlockSummary(genesis.blockHash).withHeader(genesis.getHeader))
+          case _ => ???
+        }
+    }
+
+    class NonBootstrap() extends Base {}
   }
 
   // Default test environment which accepts anything and pretends to download a block.
   class MockEnvironment() extends GenesisApproverImpl.Backend[Task] with DownloadManager[Task] {
+
     @volatile var downloaded = false
+
     override def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) =
       Task.delay {
         downloaded = true
@@ -261,6 +304,8 @@ object GenesisApproverSpec extends ArbitraryConsensus {
   }
 
   object TestFixture {
+    val DefaultTimeout = 5.seconds
+
     def fromBootstrap(
         remoteCandidate: () => Task[GenesisCandidate],
         environment: MockEnvironment = new MockEnvironment(),
@@ -270,19 +315,17 @@ object GenesisApproverSpec extends ArbitraryConsensus {
         test: GenesisApprover[Task] => Task[Unit]
     )(
         implicit scheduler: Scheduler
-    ): Unit = {
-
-      val testing = GenesisApproverImpl
+    ): Unit =
+      GenesisApproverImpl
         .fromBootstrap[Task](
           backend = environment,
           new MockNodeDiscovery(peers),
           connectToGossip = (node: Node) =>
             Task.now {
-              if (node == bootstrap) new MockGossipService() {
-                override def getGenesisCandidate(
-                    request: GetGenesisCandidateRequest
-                ) = remoteCandidate()
-              } else new MockGossipService()
+              if (node == bootstrap)
+                new MockGossipService.Bootstrap(remoteCandidate)
+              else
+                new MockGossipService.NonBootstrap()
             },
           relayFactor,
           bootstrap,
@@ -290,8 +333,27 @@ object GenesisApproverSpec extends ArbitraryConsensus {
           downloadManager = environment
         )
         .use(test)
+        .runSyncUnsafe(DefaultTimeout)
 
-      testing.runSyncUnsafe(5.seconds)
-    }
+    def fromGenesis(
+        environment: MockEnvironment = new MockEnvironment(),
+        relayFactor: Int = 0
+    )(
+        test: GenesisApprover[Task] => Task[Unit]
+    )(
+        implicit scheduler: Scheduler
+    ): Unit =
+      GenesisApproverImpl
+        .fromGenesis[Task](
+          backend = environment,
+          new MockNodeDiscovery(peers),
+          connectToGossip = (node: Node) => Task.now(new MockGossipService.NonBootstrap()),
+          relayFactor,
+          genesis,
+          sample(arbitrary[Approval])
+            .withValidatorPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
+        )
+        .use(test)
+        .runSyncUnsafe(DefaultTimeout)
   }
 }
