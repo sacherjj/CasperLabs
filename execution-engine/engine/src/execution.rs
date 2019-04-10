@@ -163,8 +163,7 @@ impl<'a> RuntimeContext<'a> {
             Key::URef(raw_addr, new_rights) => {
                 self.known_urefs
                     .get(raw_addr) // Check if we `key` is known
-                    .map(|known_rights| known_rights >= new_rights) // are we allowed to use it this way?
-                    .filter(|v| *v) // filter out usages that use different access patterns that it's allowed to
+                    .filter(|known_rights| *known_rights >= new_rights) // are we allowed to use it this way?
                     .map(|_| ()) // at this point we know it's valid to use `key`
                     .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
             }
