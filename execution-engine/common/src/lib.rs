@@ -8,14 +8,7 @@
     maybe_uninit
 )]
 
-// For test targets alloc is imported with `macro_use` which will
-// allow proptest utilities to work properly as they require `vec!`
-// macro to be available internally.
-#[cfg(any(test, feature = "gens"))]
 #[macro_use]
-extern crate alloc;
-
-#[cfg(not(any(test, feature = "gens")))]
 extern crate alloc;
 
 #[macro_use]
