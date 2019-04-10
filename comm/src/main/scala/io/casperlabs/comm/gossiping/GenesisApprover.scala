@@ -57,6 +57,59 @@ object GenesisApproverImpl {
   }
 
   case class Status(candidate: GenesisCandidate, block: Block)
+
+  /** Use by non-standalone nodes while there is no DAG. */
+  def fromBootstrap[F[_]: Concurrent: Log: Timer](
+      backend: GenesisApproverImpl.Backend[F],
+      nodeDiscovery: NodeDiscovery[F],
+      connectToGossip: Node => F[GossipService[F]],
+      relayFactor: Int,
+      bootstrap: Node,
+      pollInterval: FiniteDuration,
+      downloadManager: DownloadManager[F]
+  ): F[GenesisApprover[F]] =
+    for {
+      statusRef          <- Ref.of(none[Status])
+      hasTransitionedRef <- Ref.of(false)
+      onApprovedDeferred <- Deferred[F, ByteString]
+      approver = new GenesisApproverImpl(
+        statusRef,
+        hasTransitionedRef,
+        onApprovedDeferred,
+        backend,
+        nodeDiscovery,
+        connectToGossip,
+        relayFactor
+      )
+      _ <- Concurrent[F].start(approver.pollBootstrap(bootstrap, pollInterval, downloadManager))
+    } yield approver
+
+  /** Use in standalone mode with the pre-constructed Genesis block. */
+  def fromGenesis[F[_]: Concurrent: Log: Timer](
+      backend: GenesisApproverImpl.Backend[F],
+      nodeDiscovery: NodeDiscovery[F],
+      connectToGossip: Node => F[GossipService[F]],
+      relayFactor: Int,
+      genesis: Block,
+      approval: Approval
+  ): F[GenesisApprover[F]] =
+    for {
+      // Start with empty list of approvals and add it to trigger the transition if it has to be.
+      statusRef          <- Ref.of(Status(GenesisCandidate(genesis.blockHash), genesis).some)
+      hasTransitionedRef <- Ref.of(false)
+      onApprovedDeferred <- Deferred[F, ByteString]
+      approver = new GenesisApproverImpl(
+        statusRef,
+        hasTransitionedRef,
+        onApprovedDeferred,
+        backend,
+        nodeDiscovery,
+        connectToGossip,
+        relayFactor
+      )
+      // Gossip, trigger as usual.
+      _ <- approver.addApprovals(genesis.blockHash, List(approval))
+    } yield approver
 }
 
 /** Maintain the state of the Genesis approval and handle gossiping.
@@ -106,6 +159,19 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         }
     }
 
+  /** Validate and add each approval, if possible. Return if transition has happened. */
+  private def addApprovals(blockHash: ByteString, approvals: List[Approval]): F[Boolean] =
+    approvals.traverse {
+      addApproval(blockHash, _) flatMap {
+        case Left(ex) =>
+          Log[F].warn(s"Cannot use approval from bootstrap: $ex") *> false.pure[F]
+        case Right(transitioned) =>
+          transitioned.pure[F]
+      }
+    } map {
+      _ contains true
+    }
+
   /** Get the Genesis candidate from the bootstrap node and keep polling until we can do the transition. */
   private def pollBootstrap(
       bootstrap: Node,
@@ -148,18 +214,6 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
 
         case Some(status) =>
           status.pure[F]
-      }
-
-    def addApprovals(blockHash: ByteString, approvals: List[Approval]): F[Boolean] =
-      approvals.traverse {
-        addApproval(blockHash, _) flatMap {
-          case Left(ex) =>
-            Log[F].warn(s"Cannot use approval from bootstrap: $ex") *> false.pure[F]
-          case Right(transitioned) =>
-            transitioned.pure[F]
-        }
-      } map {
-        _ contains true
       }
 
     def loop(prevApprovals: Set[Approval]): F[Unit] = {
