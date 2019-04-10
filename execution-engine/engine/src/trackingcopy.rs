@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use common::key::Key;
 use common::value::Value;
-use storage::gs::{DbReader, ExecutionEffect};
+use storage::gs::{StateReader, ExecutionEffect};
 use storage::op::Op;
 use storage::transform::{self, Transform, TypeMismatch};
 use utils::add;
@@ -13,7 +13,7 @@ pub enum QueryResult {
     ValueNotFound(String),
 }
 
-pub struct TrackingCopy<R: DbReader> {
+pub struct TrackingCopy<R: StateReader> {
     reader: R,
     cache: HashMap<Key, Value>,
     ops: HashMap<Key, Op>,
@@ -28,7 +28,7 @@ pub enum AddResult {
     Overflow,
 }
 
-impl<R: DbReader> TrackingCopy<R> {
+impl<R: StateReader> TrackingCopy<R> {
     pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
@@ -42,7 +42,7 @@ impl<R: DbReader> TrackingCopy<R> {
         if let Some(value) = self.cache.get(k) {
             return Ok(Some(value.clone()));
         }
-        if let Some(value) = self.reader.get(k)? {
+        if let Some(value) = self.reader.read(k)? {
             self.cache.insert(*k, value.clone());
             Ok(Some(value))
         } else {
@@ -207,7 +207,7 @@ mod tests {
     use common::key::{AccessRights, Key};
     use common::value::{Account, Contract, Value};
     use storage::gs::inmem::InMemGS;
-    use storage::gs::DbReader;
+    use storage::gs::StateReader;
     use storage::op::Op;
     use storage::transform::Transform;
 
@@ -234,9 +234,9 @@ mod tests {
         }
     }
 
-    impl DbReader for CountingDb {
+    impl StateReader for CountingDb {
         type Error = !;
-        fn get(&self, _k: &Key) -> Result<Option<Value>, Self::Error> {
+        fn read(&self, _key: &Key) -> Result<Option<Value>, Self::Error> {
             let count = self.count.get();
             let value = match self.value {
                 Some(ref v) => v.clone(),

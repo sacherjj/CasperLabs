@@ -5,7 +5,7 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::{Account, Value};
-use storage::gs::{DbReader, ExecutionEffect};
+use storage::gs::{StateReader, ExecutionEffect};
 use storage::transform::TypeMismatch;
 use trackingcopy::{AddResult, TrackingCopy};
 use wasmi::memory_units::Pages;
@@ -183,7 +183,7 @@ impl<'a> RuntimeContext<'a> {
     }
 }
 
-pub struct Runtime<'a, R: DbReader> {
+pub struct Runtime<'a, R: StateReader> {
     args: Vec<Vec<u8>>,
     memory: MemoryRef,
     state: &'a mut TrackingCopy<R>,
@@ -212,7 +212,7 @@ pub fn rename_export_to_call(module: &mut Module, name: String) {
     main_export.push_str("call");
 }
 
-impl<'a, R: DbReader> Runtime<'a, R>
+impl<'a, R: StateReader> Runtime<'a, R>
 where
     R::Error: Into<Error>,
 {
@@ -686,7 +686,7 @@ const HAS_UREF_FUNC_INDEX: usize = 14;
 const ADD_UREF_FUNC_INDEX: usize = 15;
 const STORE_FN_INDEX: usize = 16;
 
-impl<'a, R: DbReader> Externals for Runtime<'a, R>
+impl<'a, R: StateReader> Externals for Runtime<'a, R>
 where
     R::Error: Into<Error>,
 {
@@ -1014,7 +1014,7 @@ fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), 
     Ok((instance, memory))
 }
 
-fn sub_call<R: DbReader>(
+fn sub_call<R: StateReader>(
     parity_module: Module,
     args: Vec<Vec<u8>>,
     refs: &mut BTreeMap<String, Key>,
@@ -1106,7 +1106,7 @@ macro_rules! on_fail_charge {
 
 pub trait Executor<A> {
     #[allow(clippy::too_many_arguments)]
-    fn exec<R: DbReader>(
+    fn exec<R: StateReader>(
         &self,
         parity_module: A,
         args: &[u8],
@@ -1123,7 +1123,7 @@ pub trait Executor<A> {
 pub struct WasmiExecutor;
 
 impl Executor<Module> for WasmiExecutor {
-    fn exec<R: DbReader>(
+    fn exec<R: StateReader>(
         &self,
         parity_module: Module,
         args: &[u8],
