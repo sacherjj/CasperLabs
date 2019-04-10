@@ -17,7 +17,7 @@ import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
+import io.casperlabs.blockstorage.util.{fileIO, BlockMessageUtil, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.catscontrib.MonadStateOps._
@@ -665,7 +665,7 @@ object BlockDagFileStorage {
 
   def create[F[_]: Concurrent: Log: BlockStore](
       config: Config
-  ): F[BlockDagFileStorage[F]] = {
+  ): F[BlockDagStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
       lock                  <- Semaphore[F](1)
@@ -808,4 +808,19 @@ object BlockDagFileStorage {
         _
       )
     )
+
+  def apply[F[_]: Sync: Concurrent: Log: RaiseIOError](
+      dataDir: Path,
+      dagStoragePath: Path,
+      blockStore: BlockStore[F]
+  ): Resource[F, BlockDagStorage[F]] = {
+    val res = for {
+      _         <- fileIO.makeDirectory(dagStoragePath)
+      dagConfig = BlockDagFileStorage.Config(dagStoragePath)
+    } yield
+      Resource.make(
+        BlockDagFileStorage.create(dagConfig)(Concurrent[F], Log[F], blockStore)
+      )(_.close())
+    Resource.suspend(res)
+  }
 }

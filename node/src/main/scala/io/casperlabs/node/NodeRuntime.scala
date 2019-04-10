@@ -109,9 +109,11 @@ class NodeRuntime private[node] (
                effects.time,
                diagnostics.effects.metrics
              )
-      } yield (ee, nd)
+        blockStore <- FileLMDBIndexBlockStore[Effect](conf.server.dataDir, blockstorePath)
+        blockDag   <- BlockDagFileStorage[Effect](conf.server.dataDir, dagStoragePath, blockStore)
+      } yield (ee, nd, blockStore, blockDag)
 
-      resources.use { case (ee, nd) => runMain(ee, nd, state) }
+      resources.use { case (ee, nd, bs, dag) => runMain(ee, nd, bs, dag, state) }
     })
   }
 
@@ -119,6 +121,8 @@ class NodeRuntime private[node] (
       implicit
       executionEngineService: ExecutionEngineService[Effect],
       nodeDiscovery: NodeDiscovery[Task],
+      blockStore: BlockStore[Effect],
+      blockDagStorage: BlockDagStorage[Effect],
       rpConfState: MonadState[Task, RPConf]
   ) =
     for {
@@ -142,22 +146,6 @@ class NodeRuntime private[node] (
         conf.server.chunkSize,
         commTmpFolder
       )(grpcScheduler, log, metrics, tcpConnections)
-      _             <- fileIO.makeDirectory[Effect](conf.server.dataDir)
-      _             <- fileIO.makeDirectory[Effect](blockstorePath)
-      _             <- fileIO.makeDirectory[Effect](dagStoragePath)
-      blockstoreEnv = Context.env(blockstorePath, 100L * 1024L * 1024L * 4096L)
-      blockStore <- FileLMDBIndexBlockStore
-                     .create[Effect](blockstoreEnv, blockstorePath)(
-                       Concurrent[Effect],
-                       Log.eitherTLog(Monad[Task], log)
-                     )
-                     .map(_.right.get)
-      dagConfig = BlockDagFileStorage.Config(dagStoragePath)
-      blockDagStorage <- BlockDagFileStorage.create[Effect](dagConfig)(
-                          Concurrent[Effect],
-                          Log.eitherTLog(Monad[Task], log),
-                          blockStore
-                        )
       oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](
@@ -201,7 +189,6 @@ class NodeRuntime private[node] (
         transport,
         nodeDiscovery,
         rpConnections,
-        blockDagStorage,
         blockStore,
         oracle,
         packetHandler,
@@ -267,8 +254,6 @@ class NodeRuntime private[node] (
   )(
       implicit
       transport: TransportLayer[Task],
-      blockStore: BlockStore[Effect],
-      blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: NodeAsk[Task]
   ): Unit =
     (for {
@@ -282,10 +267,6 @@ class NodeRuntime private[node] (
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
-      _   <- log.info("Bringing DagStorage down ...")
-      _   <- blockDagStorage.close().value
-      _   <- log.info("Bringing BlockStore down ...")
-      _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
@@ -293,8 +274,6 @@ class NodeRuntime private[node] (
       servers: Servers
   )(
       implicit transport: TransportLayer[Task],
-      blockStore: BlockStore[Effect],
-      blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: NodeAsk[Task]
   ): Task[Unit] =
     Task.delay(
@@ -315,7 +294,6 @@ class NodeRuntime private[node] (
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
-      blockDagStorage: BlockDagStorage[Effect],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       packetHandler: PacketHandler[Effect],

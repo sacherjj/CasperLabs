@@ -6,7 +6,7 @@ import java.nio.file._
 
 import cats.Monad
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, ExitCase, Sync}
+import cats.effect.{Concurrent, Effect, ExitCase, Resource, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
@@ -15,6 +15,7 @@ import io.casperlabs.shared.Resources.withResource
 import io.casperlabs.blockstorage.FileLMDBIndexBlockStore.Checkpoint
 import io.casperlabs.blockstorage.StorageError.StorageErr
 import io.casperlabs.blockstorage.util.byteOps._
+import io.casperlabs.blockstorage.util.fileIO
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
@@ -23,6 +24,7 @@ import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
+import monix.eval.Task
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 
@@ -341,4 +343,21 @@ object FileLMDBIndexBlockStore {
             }
       result <- create[F](env, config.storagePath, config.checkpointsDirPath)
     } yield result
+
+  def apply[F[_]: Sync: Concurrent: Log: RaiseIOError](
+      dataDir: Path,
+      blockstorePath: Path
+  ): Resource[F, BlockStore[F]] = {
+    val res = for {
+      _             <- fileIO.makeDirectory(dataDir)
+      _             <- fileIO.makeDirectory(blockstorePath)
+      blockstoreEnv = Context.env(blockstorePath, 100L * 1024L * 1024L * 4096L)
+    } yield
+      Resource.make {
+        FileLMDBIndexBlockStore
+          .create(blockstoreEnv, blockstorePath)
+          .map(_.right.get)
+      }(_.close())
+    Resource.suspend(res)
+  }
 }

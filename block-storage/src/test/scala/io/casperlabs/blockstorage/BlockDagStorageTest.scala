@@ -126,7 +126,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def createAtDefaultLocation(
       dagDataDir: Path,
       maxSizeFactor: Int = 10
-  )(implicit blockStore: BlockStore[Task]): Task[BlockDagFileStorage[Task]] = {
+  )(implicit blockStore: BlockStore[Task]): Task[BlockDagStorage[Task]] = {
     implicit val log = new shared.Log.NOPLog[Task]()
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
@@ -357,7 +357,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
                 b =>
                   blockStore.put(b.getBlockMessage.blockHash, b) *> firstStorage.insert(
                     b.getBlockMessage
-                )
+                  )
               )
           _ <- firstStorage.close()
           _ <- Sync[Task].delay {
