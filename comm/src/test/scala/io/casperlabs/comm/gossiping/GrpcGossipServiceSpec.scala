@@ -990,7 +990,7 @@ class GrpcGossipServiceSpec
       override def addApproval(
           blockHash: ByteString,
           approval: Approval
-      ): Task[Either[ServiceError, Unit]] =
+      ): Task[Either[ServiceError, Boolean]] =
         Task.now(Left(Unavailable("Come back later.")))
       override def onApproved = ???
     }
@@ -1054,7 +1054,7 @@ class GrpcGossipServiceSpec
         "return empty" in {
           testWithApprover(new MockGenesisApprover() {
             override def addApproval(blockHash: ByteString, approval: Approval) =
-              Task.now(Right(()))
+              Task.now(Right(true))
           }) { stub =>
             stub.addApproval(AddApprovalRequest()).map { res =>
               res shouldBe Empty()

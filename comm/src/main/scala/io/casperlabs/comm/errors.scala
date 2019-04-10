@@ -100,11 +100,9 @@ object CommError {
 sealed trait ServiceError extends NoStackTrace
 object ServiceError {
 
-  type ServiceException = StatusRuntimeException with ServiceError
-
   /** Factory to create and match gRPC errors. */
   abstract class StatusError(status: Status) {
-    def apply(msg: String): ServiceException =
+    def apply(msg: String): StatusRuntimeException with ServiceError =
       new StatusRuntimeException(status.withDescription(msg)) with ServiceError
 
     def unapply(ex: Throwable): Option[String] = ex match {
@@ -116,10 +114,11 @@ object ServiceError {
   }
 
   object NotFound extends StatusError(Status.NOT_FOUND) {
-    def block(blockHash: ByteString): ServiceException =
+    def block(blockHash: ByteString): ServiceError =
       apply(s"Block ${Base16.encode(blockHash.toByteArray)} could not be found.")
   }
 
+  object Internal         extends StatusError(Status.INTERNAL)
   object InvalidArgument  extends StatusError(Status.INVALID_ARGUMENT)
   object Unauthenticated  extends StatusError(Status.UNAUTHENTICATED)
   object DeadlineExceeded extends StatusError(Status.DEADLINE_EXCEEDED)
