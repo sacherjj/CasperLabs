@@ -83,9 +83,8 @@ pipeline:
   git-status:
     <<: *buildenv
     commands:
-      - >-
-      git status | grep modified ;
-      if [ $? = 0 ]; then exit 1; fi
+      - git status | grep modified 
+      - if [ $? = 0 ]; then exit 1; fi
 
   run-rust-lints:
     <<: *buildenv
