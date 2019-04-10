@@ -17,6 +17,7 @@ extern crate wasmi;
 pub mod argsparser;
 pub mod engine;
 pub mod execution;
+pub mod runtime_context;
 pub mod trackingcopy;
 
 mod utils;
@@ -27,3 +28,5 @@ extern crate matches;
 
 #[cfg(test)]
 extern crate proptest;
+
+type URefAddr = [u8; 32];

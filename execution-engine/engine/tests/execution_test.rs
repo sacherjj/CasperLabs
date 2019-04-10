@@ -13,7 +13,8 @@ extern crate wasmi;
 use common::bytesrepr::{deserialize, FromBytes, ToBytes};
 use common::key::{AccessRights, Key, UREF_SIZE};
 use common::value::{self, Account, Contract, Value};
-use execution_engine::execution::{Runtime, RuntimeContext};
+use execution_engine::execution::Runtime;
+use execution_engine::runtime_context::RuntimeContext;
 use execution_engine::trackingcopy::TrackingCopy;
 use failure::Error;
 use parity_wasm::builder::module;
@@ -222,7 +223,8 @@ fn mock_context<'a>(
     base_key: Key,
 ) -> RuntimeContext<'a> {
     let gas_limit = 1000u64;
-    let mut context = RuntimeContext::new(uref_lookup, account, base_key, gas_limit);
+    let mut context =
+        RuntimeContext::new(uref_lookup, HashMap::new(), account, base_key, gas_limit);
     known_urefs
         .iter()
         .for_each(|key| context.insert_uref(key.clone()));

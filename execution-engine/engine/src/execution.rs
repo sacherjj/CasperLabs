@@ -4,7 +4,7 @@ use self::blake2::digest::{Input, VariableOutput};
 use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
-use common::value::{Account, Value};
+use common::value::Value;
 use storage::global_state::{StateReader, ExecutionEffect};
 use storage::transform::TypeMismatch;
 use trackingcopy::{AddResult, TrackingCopy};
@@ -22,6 +22,9 @@ use rand_chacha::ChaChaRng;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
+
+use super::URefAddr;
+use super::runtime_context::RuntimeContext;
 
 #[derive(Debug)]
 pub enum Error {
@@ -81,107 +84,6 @@ impl From<!> for Error {
 }
 
 impl HostError for Error {}
-
-type URefAddr = [u8; 32];
-
-/// Holds information specific to the deployed contract.
-pub struct RuntimeContext<'a> {
-    // Enables look up of specific uref based on human-readable name
-    uref_lookup: &'a mut BTreeMap<String, Key>,
-    // Used to check uref is known before use (prevents forging urefs)
-    known_urefs: HashMap<URefAddr, AccessRights>,
-    account: &'a Account,
-    // Key pointing to the entity we are currently running
-    //(could point at an account or contract in the global state)
-    base_key: Key,
-    gas_limit: u64,
-}
-
-impl<'a> RuntimeContext<'a> {
-    pub fn new(
-        uref_lookup: &'a mut BTreeMap<String, Key>,
-        account: &'a Account,
-        base_key: Key,
-        gas_limit: u64,
-    ) -> Self {
-        RuntimeContext {
-            uref_lookup,
-            known_urefs: HashMap::new(),
-            account,
-            base_key,
-            gas_limit,
-        }
-    }
-
-    pub fn insert_named_uref(&mut self, name: String, key: Key) {
-        self.insert_uref(key);
-        self.uref_lookup.insert(name, key);
-    }
-
-    pub fn insert_uref(&mut self, key: Key) {
-        if let Key::URef(raw_addr, rights) = key {
-            self.known_urefs.insert(raw_addr, rights);
-        }
-    }
-
-    /// Validates whether keys used in the `value` are not forged.
-    fn validate_keys(&self, value: Value) -> Result<Value, Error> {
-        match value {
-            non_key @ Value::Int32(_)
-            | non_key @ Value::UInt128(_)
-            | non_key @ Value::UInt256(_)
-            | non_key @ Value::UInt512(_)
-            | non_key @ Value::ByteArray(_)
-            | non_key @ Value::ListInt32(_)
-            | non_key @ Value::String(_)
-            | non_key @ Value::ListString(_) => Ok(non_key),
-            Value::NamedKey(name, key) => {
-                self.validate_key(&key).map(|_| Value::NamedKey(name, key))
-            }
-            Value::Account(account) => {
-                // This should never happen as accounts can't be created by contracts.
-                // I am putting this here for the sake of completness.
-                account
-                    .urefs_lookup()
-                    .values()
-                    .try_for_each(|key| self.validate_key(key))
-                    .map(|_| Value::Account(account))
-            }
-            Value::Contract(contract) => contract
-                .urefs_lookup()
-                .values()
-                .try_for_each(|key| self.validate_key(key))
-                .map(|_| Value::Contract(contract)),
-        }
-    }
-
-    /// Validates whether key is not forged (whether it can be found in the `known_urefs`)
-    /// and whether the version of a key that contract wants to use, has access rights
-    /// that are less powerful than access rights' of the key in the `known_urefs`.
-    fn validate_key(&self, key: &Key) -> Result<(), Error> {
-        match key {
-            Key::URef(raw_addr, new_rights) => {
-                self.known_urefs
-                    .get(raw_addr) // Check if we `key` is known
-                    .filter(|known_rights| *known_rights >= new_rights) // are we allowed to use it this way?
-                    .map(|_| ()) // at this point we know it's valid to use `key`
-                    .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
-            }
-            _ => Ok(()),
-        }
-    }
-
-    pub fn deserialize_key(&self, bytes: &[u8]) -> Result<Key, Error> {
-        let key: Key = deserialize(bytes)?;
-        self.validate_key(&key).map(|_| key)
-    }
-
-    pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
-        let keys: Vec<Key> = deserialize(bytes)?;
-        keys.iter().try_for_each(|k| self.validate_key(k))?;
-        Ok(keys)
-    }
-}
 
 pub struct Runtime<'a, R: StateReader<Key, Value>> {
     args: Vec<Vec<u8>>,
@@ -251,7 +153,7 @@ where
         match prev.checked_add(amount) {
             // gas charge overflow protection
             None => false,
-            Some(val) if val > self.context.gas_limit => false,
+            Some(val) if val > self.context.gas_limit() => false,
             Some(val) => {
                 self.gas_counter = val;
                 true
@@ -343,8 +245,7 @@ where
         let name = self.string_from_mem(name_ptr, name_size)?;
         let uref = self
             .context
-            .uref_lookup
-            .get(&name)
+            .get_uref(&name)
             .ok_or_else(|| Error::URefNotFound(name))?;
         let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
 
@@ -355,7 +256,7 @@ where
 
     pub fn has_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
-        if self.context.uref_lookup.contains_key(&name) {
+        if self.context.contains_uref(&name) {
             Ok(0)
         } else {
             Ok(1)
@@ -372,7 +273,7 @@ where
         let name = self.string_from_mem(name_ptr, name_size)?;
         let key = self.key_from_mem(key_ptr, key_size)?;
         self.context.insert_named_uref(name.clone(), key);
-        let base_key = self.context.base_key;
+        let base_key = self.context.base_key();
         self.add_transforms(base_key, Value::NamedKey(name, key))
     }
 
@@ -502,8 +403,8 @@ where
     /// then all function addresses generated within one deploy would have been the same.
     fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
-        pre_hash_bytes.extend_from_slice(self.context.account.pub_key());
-        pre_hash_bytes.append(&mut self.context.account.nonce().to_bytes()?);
+        pre_hash_bytes.extend_from_slice(self.context.account().pub_key());
+        pre_hash_bytes.append(&mut self.context.account().nonce().to_bytes()?);
         pre_hash_bytes.append(&mut self.fn_store_id.to_bytes()?);
 
         self.fn_store_id += 1;
@@ -561,7 +462,7 @@ where
     // For URefs it's valid if the access rights of the URef allow for reading.
     fn is_readable(&self, key: &Key) -> bool {
         match key {
-            Key::Account(_) => &self.context.base_key == key,
+            Key::Account(_) => &self.context.base_key() == key,
             Key::Hash(_) => true,
             Key::URef(_, rights) => rights.is_readable(),
         }
@@ -573,7 +474,7 @@ where
     /// Additions to unforgeable key is valid as long as key itself is addable
     fn is_addable(&self, key: &Key) -> bool {
         match key {
-            Key::Account(_) | Key::Hash(_) => &self.context.base_key == key,
+            Key::Account(_) | Key::Hash(_) => &self.context.base_key() == key,
             Key::URef(_, rights) => rights.is_addable(),
         }
     }
@@ -1045,13 +946,13 @@ where
         host_buf: Vec::new(),
         fn_store_id: 0,
         gas_counter: current_runtime.gas_counter,
-        context: RuntimeContext {
-            uref_lookup: refs,
+        context: RuntimeContext::new(
+            refs,
             known_urefs,
-            account: current_runtime.context.account,
-            base_key: key,
-            gas_limit: current_runtime.context.gas_limit,
-        },
+            current_runtime.context.account(),
+            key,
+            current_runtime.context.gas_limit(),
+        ),
         rng,
     };
 
@@ -1071,7 +972,7 @@ where
                         .map(|e| key_to_tuple(*e))
                         .flatten()
                         .collect();
-                    current_runtime.context.known_urefs.extend(ret_urefs_map);
+                    current_runtime.context.add_urefs(ret_urefs_map);
                     return Ok(runtime.result);
                 }
             }
@@ -1152,13 +1053,13 @@ impl Executor<Module> for WasmiExecutor {
             .map(key_to_tuple)
             .flatten()
             .collect();
-        let context = RuntimeContext {
-            uref_lookup: &mut uref_lookup_local,
+        let context = RuntimeContext::new(
+            &mut uref_lookup_local,
             known_urefs,
-            account: &account,
-            base_key: acct_key,
+            &account,
+            acct_key,
             gas_limit,
-        };
+        );
         let arguments: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
         } else {
