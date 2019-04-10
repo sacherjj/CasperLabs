@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::once;
 use std::iter::IntoIterator;
 use std::rc::Rc;
-use storage::gs::{inmem::*, DbReader};
+use storage::gs::{inmem::*, StateReader};
 use storage::history::*;
 use storage::transform::Transform;
 use wasm_prep::MAX_MEM_PAGES;
@@ -168,7 +168,7 @@ impl WasmMemoryManager {
         self.memory.get(offset, len)
     }
 
-    pub fn new_uref<'a, R: DbReader>(
+    pub fn new_uref<'a, R: StateReader<Key, Value>>(
         &mut self,
         runtime: &mut Runtime<'a, R>,
         value: (u32, usize), //pointer, length tuple
@@ -254,7 +254,7 @@ fn random_uref_key<G: RngCore>(entropy_source: &mut G, rights: AccessRights) -> 
     Key::URef(key, rights)
 }
 
-fn gs_write<'a, R: DbReader>(
+fn gs_write<'a, R: StateReader<Key, Value>>(
     runtime: &mut Runtime<'a, R>,
     key: (u32, usize),
     value: (u32, usize),
@@ -267,7 +267,7 @@ where
 
 /// Reads data from the GlobalState that lives under a key
 /// that can be found in the Wasm memory under `key` (pointer, length) tuple.
-fn gs_read<'a, R: DbReader, T: FromBytes>(
+fn gs_read<'a, R: StateReader<Key, Value>, T: FromBytes>(
     memory: &mut WasmMemoryManager,
     runtime: &mut Runtime<'a, R>,
     key: (u32, usize),
