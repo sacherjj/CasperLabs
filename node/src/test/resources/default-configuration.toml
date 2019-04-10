@@ -16,6 +16,7 @@ max-message-size = 1
 chunk-size = 1
 relay-factor = 1
 relay-saturation = 1
+clean-block-storage = false
 
 [lmdb]
 block-store-size = 1

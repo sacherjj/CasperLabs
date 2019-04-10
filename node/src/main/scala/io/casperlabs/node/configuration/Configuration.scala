@@ -65,7 +65,8 @@ object Configuration extends ParserImplicits {
       maxMessageSize: Int,
       chunkSize: Int,
       relayFactor: Int,
-      relaySaturation: Int
+      relaySaturation: Int,
+      cleanBlockStorage: Boolean
   ) extends SubConfig
   case class GrpcServer(
       host: String,

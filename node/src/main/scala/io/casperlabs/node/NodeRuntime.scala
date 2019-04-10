@@ -9,23 +9,22 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import com.olegpy.meow.effects._
+import io.casperlabs.blockstorage.util.fileIO.IOError
+import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.{
   BlockDagFileStorage,
   BlockDagStorage,
   BlockStore,
-  Context,
-  FileLMDBIndexBlockStore,
-  InMemBlockDagStorage,
-  InMemBlockStore
+  FileLMDBIndexBlockStore
 }
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
 import io.casperlabs.catscontrib._
+import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
@@ -45,11 +44,6 @@ import kamon._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
-import com.olegpy.meow.effects._
-import io.casperlabs.blockstorage.util.fileIO
-import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.concurrent.duration._
 
@@ -136,8 +130,16 @@ class NodeRuntime private[node] (
       multiParentCasperRef <- MultiParentCasperRef.of[Effect]
       lab                  <- LastApprovedBlock.of[Task].toEffect
       labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
-      commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
-      _                    <- commTmpFolder.deleteDirectory[Task]().toEffect
+      _ <- if (conf.server.cleanBlockStorage) {
+            Task.delay {
+              log.info("Cleaning block storage ...")
+              blockStore.clear() *> blockDagStorage.clear()
+            }.toEffect
+          } else {
+            Task.unit.toEffect
+          }
+      commTmpFolder = conf.server.dataDir.resolve("tmp").resolve("comm")
+      _             <- commTmpFolder.deleteDirectory[Task]().toEffect
       transport = effects.tcpTransportLayer(
         port,
         conf.tls.certificate,
