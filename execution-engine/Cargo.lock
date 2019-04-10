@@ -124,7 +124,7 @@ dependencies = [
 
 [[package]]
 name = "casperlabs-engine-grpc-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "casperlabs-contract-ffi 0.4.0",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
