@@ -1,6 +1,6 @@
 use common::key::Key;
 use common::value::Value;
-use gs::StateReader;
+use global_state::StateReader;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use transform::{Transform, TypeMismatch};

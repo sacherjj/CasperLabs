@@ -17,7 +17,7 @@ extern crate proptest;
 extern crate tempfile;
 
 pub mod error;
-pub mod gs;
+pub mod global_state;
 pub mod history;
 pub mod op;
 pub mod transform;

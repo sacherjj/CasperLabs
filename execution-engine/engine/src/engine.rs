@@ -4,7 +4,7 @@ use failure::Fail;
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
-use storage::gs::ExecutionEffect;
+use storage::global_state::ExecutionEffect;
 use storage::history::*;
 use storage::transform::Transform;
 use trackingcopy::TrackingCopy;
