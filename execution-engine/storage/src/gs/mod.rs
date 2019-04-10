@@ -10,12 +10,12 @@ pub mod inmem;
 pub struct ExecutionEffect(pub HashMap<Key, Op>, pub HashMap<Key, Transform>);
 
 /// A reader of state
-pub trait StateReader {
+pub trait StateReader<K, V> {
     /// An error which occurs when reading state
     type Error;
 
     /// Returns the state value from the corresponding key
-    fn read(&self, key: &Key) -> Result<Option<Value>, Self::Error>;
+    fn read(&self, key: &K) -> Result<Option<V>, Self::Error>;
 }
 
 pub fn mocked_account(account_addr: [u8; 20]) -> BTreeMap<Key, Value> {

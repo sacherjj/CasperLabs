@@ -183,7 +183,7 @@ impl<'a> RuntimeContext<'a> {
     }
 }
 
-pub struct Runtime<'a, R: StateReader> {
+pub struct Runtime<'a, R: StateReader<Key, Value>> {
     args: Vec<Vec<u8>>,
     memory: MemoryRef,
     state: &'a mut TrackingCopy<R>,
@@ -212,7 +212,7 @@ pub fn rename_export_to_call(module: &mut Module, name: String) {
     main_export.push_str("call");
 }
 
-impl<'a, R: StateReader> Runtime<'a, R>
+impl<'a, R: StateReader<Key, Value>> Runtime<'a, R>
 where
     R::Error: Into<Error>,
 {
@@ -686,7 +686,7 @@ const HAS_UREF_FUNC_INDEX: usize = 14;
 const ADD_UREF_FUNC_INDEX: usize = 15;
 const STORE_FN_INDEX: usize = 16;
 
-impl<'a, R: StateReader> Externals for Runtime<'a, R>
+impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
 where
     R::Error: Into<Error>,
 {
@@ -1014,7 +1014,7 @@ fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), 
     Ok((instance, memory))
 }
 
-fn sub_call<R: StateReader>(
+fn sub_call<R: StateReader<Key, Value>>(
     parity_module: Module,
     args: Vec<Vec<u8>>,
     refs: &mut BTreeMap<String, Key>,
@@ -1106,7 +1106,7 @@ macro_rules! on_fail_charge {
 
 pub trait Executor<A> {
     #[allow(clippy::too_many_arguments)]
-    fn exec<R: StateReader>(
+    fn exec<R: StateReader<Key, Value>>(
         &self,
         parity_module: A,
         args: &[u8],
@@ -1123,7 +1123,7 @@ pub trait Executor<A> {
 pub struct WasmiExecutor;
 
 impl Executor<Module> for WasmiExecutor {
-    fn exec<R: StateReader>(
+    fn exec<R: StateReader<Key, Value>>(
         &self,
         parity_module: Module,
         args: &[u8],

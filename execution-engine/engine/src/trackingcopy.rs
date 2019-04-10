@@ -13,7 +13,7 @@ pub enum QueryResult {
     ValueNotFound(String),
 }
 
-pub struct TrackingCopy<R: StateReader> {
+pub struct TrackingCopy<R: StateReader<Key, Value>> {
     reader: R,
     cache: HashMap<Key, Value>,
     ops: HashMap<Key, Op>,
@@ -28,7 +28,7 @@ pub enum AddResult {
     Overflow,
 }
 
-impl<R: StateReader> TrackingCopy<R> {
+impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
@@ -234,7 +234,7 @@ mod tests {
         }
     }
 
-    impl StateReader for CountingDb {
+    impl StateReader<Key, Value> for CountingDb {
         type Error = !;
         fn read(&self, _key: &Key) -> Result<Option<Value>, Self::Error> {
             let count = self.count.get();

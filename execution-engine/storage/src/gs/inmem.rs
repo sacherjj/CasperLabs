@@ -22,7 +22,7 @@ impl<K, V> Clone for InMemGS<K, V> {
     }
 }
 
-impl StateReader for InMemGS<Key, Value> {
+impl StateReader<Key, Value> for InMemGS<Key, Value> {
     type Error = StorageError;
     fn read(&self, k: &Key) -> Result<Option<Value>, Self::Error> {
         Ok(self.0.get(k).map(Clone::clone))
