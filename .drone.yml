@@ -73,18 +73,18 @@ pipeline:
     commands:
       - sbt compile test:compile doc
 
+  git-status-post-scala-compile:
+    <<: *buildenv
+    commands:
+      - git status | grep modified 
+      - if [ $? = 1 ]; then exit 1; fi
+
   compile-rust:
     <<: *buildenv
     commands:
       - cd execution-engine/
       - ~/.cargo/bin/cargo update
       - ~/.cargo/bin/cargo build
-
-  git-status:
-    <<: *buildenv
-    commands:
-      - git status | grep modified 
-      - if [ $? = 0 ]; then exit 1; fi
 
   run-rust-lints:
     <<: *buildenv
