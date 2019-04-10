@@ -1,9 +1,9 @@
 use crate::key::*;
 use crate::value::*;
-use proptest::collection::{btree_map, vec};
-use proptest::prelude::*;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
+use proptest::collection::{btree_map, vec};
+use proptest::prelude::*;
 
 pub fn u8_slice_20() -> impl Strategy<Value = [u8; 20]> {
     vec(any::<u8>(), 20).prop_map(|b| {

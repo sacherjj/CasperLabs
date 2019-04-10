@@ -438,9 +438,9 @@ impl ToBytes for str {
 mod proptests {
     // Bring the macros and other important things into scope.
     use crate::gens::*;
+    use crate::test_utils::test_serialization_roundtrip;
     use proptest::collection::vec;
     use proptest::prelude::*;
-    use crate::test_utils::test_serialization_roundtrip;
 
     proptest! {
 

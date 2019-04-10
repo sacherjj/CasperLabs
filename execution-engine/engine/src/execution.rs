@@ -20,7 +20,7 @@ use parity_wasm::elements::{Error as ParityWasmError, Module};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 
 #[derive(Debug)]
@@ -82,12 +82,14 @@ impl From<!> for Error {
 
 impl HostError for Error {}
 
+type URefAddr = [u8; 32];
+
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a> {
     // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
-    known_urefs: HashSet<Key>,
+    known_urefs: HashMap<URefAddr, AccessRights>,
     account: &'a Account,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
@@ -104,7 +106,7 @@ impl<'a> RuntimeContext<'a> {
     ) -> Self {
         RuntimeContext {
             uref_lookup,
-            known_urefs: HashSet::new(),
+            known_urefs: HashMap::new(),
             account,
             base_key,
             gas_limit,
@@ -117,7 +119,9 @@ impl<'a> RuntimeContext<'a> {
     }
 
     pub fn insert_uref(&mut self, key: Key) {
-        self.known_urefs.insert(key);
+        if let Key::URef(raw_addr, rights) = key {
+            self.known_urefs.insert(raw_addr, rights);
+        }
     }
 
     /// Validates whether keys used in the `value` are not forged.
@@ -156,20 +160,12 @@ impl<'a> RuntimeContext<'a> {
     /// that are less powerful than access rights' of the key in the `known_urefs`.
     fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
-            Key::URef(id, access_right) => {
-                // TODO: Use some more efficient encoding of this.
-                // Maybe replace known_urefs Set with Map<[u32; 32], AccessRights>.
-                // https://casperlabs.atlassian.net/browse/EE-210
-                let found = self.known_urefs.iter().find(|entry| match entry {
-                    Key::URef(entry_id, entry_rights) => {
-                        entry_id == id && entry_rights >= access_right
-                    }
-                    _ => false,
-                });
-                match found {
-                    None => Err(Error::ForgedReference(*key)),
-                    Some(_) => Ok(()),
-                }
+            Key::URef(raw_addr, new_rights) => {
+                self.known_urefs
+                    .get(raw_addr) // Check if we `key` is known
+                    .filter(|known_rights| *known_rights >= new_rights) // are we allowed to use it this way?
+                    .map(|_| ()) // at this point we know it's valid to use `key`
+                    .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
             }
             _ => Ok(()),
         }
@@ -1032,7 +1028,13 @@ where
     R::Error: Into<Error>,
 {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
-    let known_urefs = refs.values().cloned().chain(extra_urefs).collect();
+    let known_urefs = refs
+        .values()
+        .cloned()
+        .chain(extra_urefs)
+        .map(key_to_tuple)
+        .flatten()
+        .collect();
     let rng = ChaChaRng::from_rng(&mut current_runtime.rng).map_err(Error::Rng)?;
     let mut runtime = Runtime {
         args,
@@ -1064,7 +1066,12 @@ where
                 // in the Runtime result field.
                 if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
                     //insert extra urefs returned from call
-                    current_runtime.context.known_urefs.extend(ret_urefs);
+                    let ret_urefs_map: HashMap<URefAddr, AccessRights> = ret_urefs
+                        .iter()
+                        .map(|e| key_to_tuple(*e))
+                        .flatten()
+                        .collect();
+                    current_runtime.context.known_urefs.extend(ret_urefs_map);
                     return Ok(runtime.result);
                 }
             }
@@ -1139,7 +1146,12 @@ impl Executor<Module> for WasmiExecutor {
         }, 0 };
         let account = value.as_account();
         let mut uref_lookup_local = account.urefs_lookup().clone();
-        let known_urefs: HashSet<Key> = uref_lookup_local.values().cloned().collect();
+        let known_urefs: HashMap<URefAddr, AccessRights> = uref_lookup_local
+            .values()
+            .cloned()
+            .map(key_to_tuple)
+            .flatten()
+            .collect();
         let context = RuntimeContext {
             uref_lookup: &mut uref_lookup_local,
             known_urefs,
@@ -1170,6 +1182,19 @@ impl Executor<Module> for WasmiExecutor {
         );
 
         (Ok(runtime.effect()), runtime.gas_counter)
+    }
+}
+
+/// Turns `key` into a `([u8; 32], AccessRights)` tuple.
+/// Returns None if `key` is not `Key::URef` as we it wouldn't have
+/// `AccessRights` associated to it.
+/// This is helper function for creating `known_urefs` map which
+/// holds addresses and corresponding `AccessRights`.
+pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
+    match key {
+        Key::URef(raw_addr, rights) => Some((raw_addr, rights)),
+        Key::Account(_) => None,
+        Key::Hash(_) => None,
     }
 }
 

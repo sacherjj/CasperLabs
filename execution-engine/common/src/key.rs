@@ -163,7 +163,8 @@ impl Ord for Key {
     fn cmp(&self, other: &Key) -> Ordering {
         match (self, other) {
             (Account(id_1), Account(id_2)) => id_1.cmp(id_2),
-            (Account(_), _) => Ordering::Less,
+            (Account(_), Hash(_)) => Ordering::Less,
+            (Account(_), URef(_, ..)) => Ordering::Less,
             (Hash(id_1), Hash(id_2)) => id_1.cmp(id_2),
             (Hash(_), URef(_, _)) => Ordering::Less,
             (Hash(_), Account(_)) => Ordering::Greater,
@@ -324,9 +325,15 @@ impl AsRef<[u8]> for Key {
     }
 }
 
+#[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
+    use crate::gens::*;
     use crate::key::AccessRights::{self, *};
+    use core::cmp::Ordering;
+    use core::hash::{Hash, Hasher};
+    use proptest::prelude::*;
+    use siphasher::sip::SipHasher;
 
     fn test_capabilities(right: AccessRights, requires: AccessRights, is_true: bool) {
         assert_eq!(
@@ -416,12 +423,39 @@ mod tests {
         assert_eq!(write != AccessRights::ReadAdd, true);
     }
 
-    use proptest::prelude::*;
     proptest! {
         #[test]
-        fn eqv_access_is_implicit(access_right in crate::gens::access_rights_arb()) {
+        fn eqv_access_is_implicit(access_right in access_rights_arb()) {
             assert_eq!(AccessRights::Eqv <= access_right, true);
         }
-    }
 
+        // According to the Rust documentation:
+        // https://doc.rust-lang.org/std/hash/trait.Hash.html#hash-and-eq
+        // following property must hold:
+        // k1 == k2 -> hash(k1) == hash(k2)
+        #[test]
+        fn test_key_eqv_hash_property(key_a in key_arb(), key_b in key_arb()) {
+            if key_a == key_b {
+                let mut hasher = SipHasher::new();
+                let key_a_hash = {
+                    key_a.hash(&mut hasher);
+                    hasher.finish()
+                };
+                let key_b_hash = {
+                    key_b.hash(&mut hasher);
+                    hasher.finish()
+                };
+                assert!(key_a_hash == key_b_hash);
+            }
+        }
+
+        // According to Rust documentation, following property must hold::
+        // forall a, b: a.cmp(b) == Ordering::Equal iff a == b and Some(a.cmp(b)) == a.partial_cmp(b)
+        #[test]
+        fn test_key_partialeq_partialord_ord_property(key_a in key_arb(), key_b in key_arb()) {
+            if key_a == key_b && Some(key_a.cmp(&key_b)) == key_a.partial_cmp(&key_b) {
+                assert!(key_a.cmp(&key_b) == Ordering::Equal);
+            }
+        }
+    }
 }
