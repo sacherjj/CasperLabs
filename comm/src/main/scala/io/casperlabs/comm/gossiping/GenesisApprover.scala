@@ -67,22 +67,30 @@ object GenesisApproverImpl {
       bootstrap: Node,
       pollInterval: FiniteDuration,
       downloadManager: DownloadManager[F]
-  ): F[GenesisApprover[F]] =
-    for {
-      statusRef          <- Ref.of(none[Status])
-      hasTransitionedRef <- Ref.of(false)
-      onApprovedDeferred <- Deferred[F, ByteString]
-      approver = new GenesisApproverImpl(
-        statusRef,
-        hasTransitionedRef,
-        onApprovedDeferred,
-        backend,
-        nodeDiscovery,
-        connectToGossip,
-        relayFactor
-      )
-      _ <- Concurrent[F].start(approver.pollBootstrap(bootstrap, pollInterval, downloadManager))
-    } yield approver
+  ): Resource[F, GenesisApprover[F]] =
+    Resource.make {
+      for {
+        statusRef          <- Ref.of(none[Status])
+        hasTransitionedRef <- Ref.of(false)
+        onApprovedDeferred <- Deferred[F, ByteString]
+        approver = new GenesisApproverImpl(
+          statusRef,
+          hasTransitionedRef,
+          onApprovedDeferred,
+          backend,
+          nodeDiscovery,
+          connectToGossip,
+          relayFactor
+        )
+        poll <- Concurrent[F].start {
+                 approver.pollBootstrap(bootstrap, pollInterval, downloadManager)
+               }
+      } yield (approver, poll)
+    } {
+      _._2.cancel.attempt.void
+    } map {
+      _._1
+    }
 
   /** Use in standalone mode with the pre-constructed Genesis block. */
   def fromGenesis[F[_]: Concurrent: Log: Timer](
@@ -92,24 +100,26 @@ object GenesisApproverImpl {
       relayFactor: Int,
       genesis: Block,
       approval: Approval
-  ): F[GenesisApprover[F]] =
-    for {
-      // Start with empty list of approvals and add it to trigger the transition if it has to be.
-      statusRef          <- Ref.of(Status(GenesisCandidate(genesis.blockHash), genesis).some)
-      hasTransitionedRef <- Ref.of(false)
-      onApprovedDeferred <- Deferred[F, ByteString]
-      approver = new GenesisApproverImpl(
-        statusRef,
-        hasTransitionedRef,
-        onApprovedDeferred,
-        backend,
-        nodeDiscovery,
-        connectToGossip,
-        relayFactor
-      )
-      // Gossip, trigger as usual.
-      _ <- approver.addApprovals(genesis.blockHash, List(approval))
-    } yield approver
+  ): Resource[F, GenesisApprover[F]] =
+    Resource.liftF {
+      for {
+        // Start with empty list of approvals and add it to trigger the transition if it has to be.
+        statusRef          <- Ref.of(Status(GenesisCandidate(genesis.blockHash), genesis).some)
+        hasTransitionedRef <- Ref.of(false)
+        onApprovedDeferred <- Deferred[F, ByteString]
+        approver = new GenesisApproverImpl(
+          statusRef,
+          hasTransitionedRef,
+          onApprovedDeferred,
+          backend,
+          nodeDiscovery,
+          connectToGossip,
+          relayFactor
+        )
+        // Gossip, trigger as usual.
+        _ <- approver.addApprovals(genesis.blockHash, List(approval))
+      } yield approver
+    }
 }
 
 /** Maintain the state of the Genesis approval and handle gossiping.

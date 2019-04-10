@@ -99,11 +99,13 @@ object CommError {
   * matching one of https://grpc.io/grpc-java/javadoc/io/grpc/Status.html */
 sealed trait ServiceError extends NoStackTrace
 object ServiceError {
+  // Created class so that in logs it's a bit more readable.
+  class Exception(status: Status) extends StatusRuntimeException(status) with ServiceError
 
   /** Factory to create and match gRPC errors. */
   abstract class StatusError(status: Status) {
-    def apply(msg: String): StatusRuntimeException with ServiceError =
-      new StatusRuntimeException(status.withDescription(msg)) with ServiceError
+    def apply(msg: String): Exception =
+      new Exception(status.withDescription(msg))
 
     def unapply(ex: Throwable): Option[String] = ex match {
       case ex: StatusRuntimeException if ex.getStatus.getCode == status.getCode =>
@@ -114,7 +116,7 @@ object ServiceError {
   }
 
   object NotFound extends StatusError(Status.NOT_FOUND) {
-    def block(blockHash: ByteString): ServiceError =
+    def block(blockHash: ByteString) =
       apply(s"Block ${Base16.encode(blockHash.toByteArray)} could not be found.")
   }
 

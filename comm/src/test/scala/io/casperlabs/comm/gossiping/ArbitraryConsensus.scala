@@ -36,7 +36,7 @@ trait ArbitraryConsensus {
     loop(10)
   }
 
-  val genHash = genBytes(20)
+  val genHash = genBytes(32)
   val genKey  = genBytes(32)
 
   implicit val arbNode: Arbitrary[Node] = Arbitrary {
@@ -55,6 +55,20 @@ trait ArbitraryConsensus {
     } yield {
       Signature(alg, sig)
     }
+  }
+
+  implicit val arbApproval: Arbitrary[Approval] = Arbitrary {
+    for {
+      pk  <- genKey
+      sig <- arbitrary[Signature]
+    } yield Approval().withValidatorPublicKey(pk).withSignature(sig)
+  }
+
+  implicit val arbBond: Arbitrary[Bond] = Arbitrary {
+    for {
+      pk    <- genKey
+      stake <- arbitrary[Long]
+    } yield Bond().withValidatorPublicKey(pk).withStake(stake)
   }
 
   implicit def arbBlock(implicit c: ConsensusConfig): Arbitrary[Block] = Arbitrary {
