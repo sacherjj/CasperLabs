@@ -168,7 +168,7 @@ object HashSetCasperTestNode {
       blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                           BlockDagFileStorage.Config(blockDagDir),
                           genesis
-                        )(Concurrent[F], Log[F], blockStore)
+                        )(Concurrent[F], Log[F], blockStore, metricEff)
       blockProcessingLock <- Semaphore[F](1)
       casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       node = new HashSetCasperTestNode[F](
@@ -248,7 +248,7 @@ object HashSetCasperTestNode {
               blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                                   BlockDagFileStorage.Config(blockDagDir),
                                   genesis
-                                )(Concurrent[F], Log[F], blockStore)
+                                )(Concurrent[F], Log[F], blockStore, metricEff)
               semaphore <- Semaphore[F](1)
               casperState <- Cell.mvarCell[F, CasperState](
                               CasperState()

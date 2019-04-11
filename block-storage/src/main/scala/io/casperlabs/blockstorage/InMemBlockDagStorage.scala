@@ -1,21 +1,25 @@
 package io.casperlabs.blockstorage
 
+import cats.Apply
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockDagStorage.MeteredBlockDagStorage
+import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
 import io.casperlabs.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import io.casperlabs.blockstorage.util.TopologicalSortUtil
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.Log
 
 import scala.collection.immutable.HashSet
 
-final class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
+class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
@@ -121,7 +125,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
 }
 
 object InMemBlockDagStorage {
-  def create[F[_]: Concurrent: Log: BlockStore]: F[InMemBlockDagStorage[F]] =
+  def create[F[_]: Concurrent: Log: BlockStore](implicit met: Metrics[F]): F[InMemBlockDagStorage[F]] =
     for {
       lock              <- Semaphore[F](1)
       latestMessagesRef <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)
@@ -135,5 +139,9 @@ object InMemBlockDagStorage {
         childMapRef,
         dataLookupRef,
         topoSortRef
-      )
+      ) with MeteredBlockDagStorage[F] {
+        override implicit val m: Metrics[F] = met
+        override implicit val ms: Source    = Metrics.Source(BlockDagStorageMetricsSource, "in-mem")
+        override implicit val a: Apply[F]   = Concurrent[F]
+      }
 }
