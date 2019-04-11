@@ -27,6 +27,7 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
+import io.casperlabs.shared.PathOps._
 
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
@@ -207,6 +208,10 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
         _ <- withWriteTxn { txn =>
               index.drop(txn)
             }
+        _      <- checkpointsDir.deleteDirectory()
+        _      <- makeDirectory(checkpointsDir)
+        _      <- modifyCheckpoints(_.empty)
+        _      <- modifyCurrentIndex(_ => 0)
         result <- blockMessageRandomAccessFile.setLength(0)
       } yield result
     )

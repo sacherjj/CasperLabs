@@ -378,4 +378,35 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       }
     }
   }
+
+  it should "be able to clear and continue working" in {
+    forAll(blockElementsWithParentsGen, minSize(1), sizeRange(2)) { blockElements =>
+      withDagStorageLocation { (dagDataDir, blockStore) =>
+        for {
+          firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          _ <- blockElements.traverse_(
+                b =>
+                  blockStore.put(b.getBlockMessage.blockHash, b) *> firstStorage.insert(
+                    b.getBlockMessage
+                  )
+              )
+          _             = firstStorage.close()
+          secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          _             <- secondStorage.clear()
+          _             <- blockStore.clear()
+          result        <- lookupElements(blockElements, secondStorage)
+          _             <- secondStorage.close()
+        } yield
+          result match {
+            case (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) => {
+              list.foreach(_ shouldBe ((None, None, None, None, false)))
+              latestMessageHashes shouldBe Map()
+              latestMessages shouldBe Map()
+              topoSort shouldBe Vector()
+              topoSortTail shouldBe Vector()
+            }
+          }
+      }
+    }
+  }
 }
