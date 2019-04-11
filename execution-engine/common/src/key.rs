@@ -4,16 +4,15 @@ use crate::contract_api::pointers::*;
 use core::ops::{BitAnd, BitOr};
 
 #[allow(clippy::derive_hash_xor_eq)]
-#[repr(C)]
+#[repr(u8)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
-
 pub enum AccessRights {
-    Eqv,
-    Read,
-    Write,
-    Add,
-    ReadAdd,
-    ReadWrite,
+    Eqv = 0b0001,
+    Read = 0b0011,
+    Write = 0x05,
+    Add = 0x07,
+    ReadAdd = 0x09,
+    ReadWrite = 0x11,
     AddWrite,
     ReadAddWrite,
 }
@@ -38,7 +37,7 @@ impl BitAnd for AccessRights {
 
 use AccessRights::*;
 impl AccessRights {
-    pub fn bitwise_repr(&self) -> u8 {
+    pub fn bitwise_repr(self) -> u8 {
         match self {
             Eqv => 0b0001,
             Read => 0b0011,

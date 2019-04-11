@@ -125,7 +125,7 @@ impl<'a> RuntimeContext<'a> {
             let entry_rights = self
                 .known_urefs
                 .entry(raw_addr)
-                .or_insert(std::iter::once(AccessRights::Eqv).collect());
+                .or_insert_with(|| std::iter::once(AccessRights::Eqv).collect());
             entry_rights.insert(rights);
         }
     }
@@ -171,9 +171,8 @@ impl<'a> RuntimeContext<'a> {
                     .get(raw_addr) // Check if we `key` is known
                     .map(|known_rights| {
                         known_rights
-                            .into_iter()
-                            .find(|right| **right & *new_rights == *new_rights)
-                            .is_some()
+                            .iter()
+                            .any(|right| *right & *new_rights == *new_rights)
                     }) // are we allowed to use it this way?
                     .map(|_| ()) // at this point we know it's valid to use `key`
                     .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
@@ -1088,9 +1087,9 @@ fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
 ) -> HashMap<URefAddr, HashSet<AccessRights>> {
     input
         .into_iter()
-        .map(|key| key_to_tuple(key))
+        .map(key_to_tuple)
         .flatten()
-        .group_by(|(key, _)| key.clone())
+        .group_by(|(key, _)| *key)
         .into_iter()
         .map(|(key, group)| {
             (
