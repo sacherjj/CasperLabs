@@ -5,7 +5,7 @@ import cats.{Applicative, Apply}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.ipc.TransformEntry
-import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.Metered
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.storage.BlockMsgWithTransform
 
@@ -48,23 +48,20 @@ trait BlockStore[F[_]] {
 }
 
 object BlockStore {
-  trait MeteredBlockStore[F[_]] extends BlockStore[F] {
-    implicit val m: Metrics[F]
-    implicit val ms: Metrics.Source
-    implicit val a: Apply[F]
+  trait MeteredBlockStore[F[_]] extends BlockStore[F] with Metered[F] {
 
     abstract override def get(
         blockHash: BlockHash
     ): F[Option[BlockMsgWithTransform]] =
-      m.incrementCounter("get") *> super.get(blockHash).timer("get-time")
+      incAndMeasure("get", super.get(blockHash))
 
     abstract override def find(
         p: BlockHash => Boolean
     ): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
-      m.incrementCounter("find") *> super.find(p).timer("find-time")
+      incAndMeasure("find", super.find(p))
 
     abstract override def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
-      m.incrementCounter("put") *> super.put(f).timer("put-time")
+      incAndMeasure("put", super.put(f))
 
     abstract override def checkpoint(): F[Unit] =
       super.checkpoint().timer("checkpoint-time")

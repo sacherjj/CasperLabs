@@ -181,7 +181,8 @@ object Init {
       )(
         Concurrent[Task],
         logNop,
-        blockStore
+        blockStore,
+        metricsNop
       )
       .runSyncUnsafe()
 
