@@ -85,7 +85,7 @@ class DownloadManagerSpec
                 Task.pure(Some(block)).delayResult(250.millis)
               case other => Task.pure(other)
             }
-        ),
+          ),
         maxParallelDownloads = consensusConfig.dagSize
       ) {
         case (manager, backend) =>
@@ -119,7 +119,7 @@ class DownloadManagerSpec
                 parallelMax.set(math.max(parallelNow.get, parallelMax.get))
                 chunk
               }
-          ),
+            ),
           backend = MockBackend(validate = _ => Task.delay(parallelNow.decrementAndGet()).void),
           maxParallelDownloads = maxParallelDownloads
         ) {
@@ -145,8 +145,10 @@ class DownloadManagerSpec
         }
       }
 
-      "relay blocks only specified to be relayed" in TestFixture(remote = _ => remote,
-                                                                 relaying = relaying) {
+      "relay blocks only specified to be relayed" in TestFixture(
+        remote = _ => remote,
+        relaying = relaying
+      ) {
         case (manager, _) =>
           for {
             ws <- scheduleAll(manager)
@@ -280,7 +282,7 @@ class DownloadManagerSpec
               )
             )
           case _ => MockGossipService(Seq(block))
-      }
+        }
 
       "try to download the block from a different source" in TestFixture(remote = remote) {
         case (manager, backend) =>
