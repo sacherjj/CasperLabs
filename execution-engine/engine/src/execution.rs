@@ -173,16 +173,16 @@ where
         self.state.effect()
     }
 
+    /// Reads key (defined as `key_ptr` and `key_size` tuple) from Wasm memory.
     fn key_from_mem(&mut self, key_ptr: u32, key_size: u32) -> Result<Key, Error> {
         let bytes = self.memory.get(key_ptr, key_size as usize)?;
-        self.context.deserialize_key(&bytes)
+        deserialize(&bytes).map_err(Into::into)
     }
 
+    /// Reads value (defined as `value_ptr` and `value_size` tuple) from Wasm memory.
     fn value_from_mem(&mut self, value_ptr: u32, value_size: u32) -> Result<Value, Error> {
         let bytes = self.memory.get(value_ptr, value_size as usize)?;
-        deserialize(&bytes)
-            .map_err(Into::into)
-            .and_then(|v| self.context.validate_keys(v))
+        deserialize(&bytes).map_err(Into::into)
     }
 
     fn string_from_mem(&mut self, ptr: u32, size: u32) -> Result<String, Trap> {
@@ -214,18 +214,6 @@ where
         } else {
             Err(Error::FunctionNotFound(name).into())
         }
-    }
-
-    fn kv_from_mem(
-        &mut self,
-        key_ptr: u32,
-        key_size: u32,
-        value_ptr: u32,
-        value_size: u32,
-    ) -> Result<(Key, Value), Error> {
-        let key = self.key_from_mem(key_ptr, key_size)?;
-        let value = self.value_from_mem(value_ptr, value_size)?;
-        Ok((key, value))
     }
 
     /// Load the i-th argument invoked as part of a `sub_call` into
@@ -263,15 +251,9 @@ where
         }
     }
 
-    pub fn add_uref(
-        &mut self,
-        name_ptr: u32,
-        name_size: u32,
-        key_ptr: u32,
-        key_size: u32,
-    ) -> Result<(), Trap> {
-        let name = self.string_from_mem(name_ptr, name_size)?;
-        let key = self.key_from_mem(key_ptr, key_size)?;
+    /// Adds `key` to the map of named keys of current context.
+    pub fn add_uref(&mut self, name: String, key: Key) -> Result<(), Trap> {
+        self.context.validate_key(&key)?;
         self.context.insert_named_uref(name.clone(), key);
         let base_key = self.context.base_key();
         self.add_transforms(base_key, Value::NamedKey(name, key))
@@ -423,36 +405,25 @@ where
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    /// Writes value under a key (specified by their pointer and length properties from the Wasm memory).
-    pub fn write(
-        &mut self,
-        key_ptr: u32,
-        key_size: u32,
-        value_ptr: u32,
-        value_size: u32,
-    ) -> Result<(), Trap> {
-        self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)
-            .and_then(|(key, value)| {
-                if self.is_writeable(&key) {
-                    self.state.write(key, value);
-                    Ok(())
-                } else {
-                    Err(Error::InvalidAccess {
-                        required: AccessRights::Write,
-                    })
-                }
-            })
-            .map_err(Into::into)
+    /// Writes `value` under `key` in GlobalState.
+    pub fn write(&mut self, key: Key, value: Value) -> Result<(), Trap> {
+        self.context.validate_key(&key)?;
+        self.context.validate_keys(&value)?;
+        if self.is_writeable(&key) {
+            self.state.write(key, value);
+            Ok(())
+        } else {
+            Err(Error::InvalidAccess {
+                required: AccessRights::Write,
+            }
+            .into())
+        }
     }
 
-    pub fn add(
-        &mut self,
-        key_ptr: u32,
-        key_size: u32,
-        value_ptr: u32,
-        value_size: u32,
-    ) -> Result<(), Trap> {
-        let (key, value) = self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)?;
+    /// Adds `value` to the cell that `key` points at.
+    pub fn add(&mut self, key: Key, value: Value) -> Result<(), Trap> {
+        self.context.validate_key(&key)?;
+        self.context.validate_keys(&value)?;
         self.add_transforms(key, value)
     }
 
@@ -491,8 +462,8 @@ where
 
     /// Reads value living under a key (found at `key_ptr` and `key_size` in Wasm memory).
     /// Fails if `key` is not "readable", i.e. its access rights are weaker than `AccessRights::Read`.
-    fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
-        let key = self.key_from_mem(key_ptr, key_size)?;
+    pub fn read(&mut self, key: Key) -> Result<Value, Trap> {
+        self.context.validate_key(&key)?;
         if self.is_readable(&key) {
             err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
         } else {
@@ -531,10 +502,9 @@ where
     /// If contract wants to pass data to the host, it has to tell it [the host]
     /// where this data lives in the exported memory (pass its pointer and length).
     pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
-        let value_bytes = {
-            let value = self.value_from_key(key_ptr, key_size)?;
-            value.to_bytes().map_err(Error::BytesRepr)?
-        };
+        let key = self.key_from_mem(key_ptr, key_size)?;
+        let value = self.read(key)?;
+        let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
         self.host_buf = value_bytes;
         Ok(self.host_buf.len())
     }
@@ -619,7 +589,9 @@ where
                 // args(2) = pointer to value
                 // args(3) = size of value
                 let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
-                self.write(key_ptr, key_size, value_ptr, value_size)?;
+                let key = self.key_from_mem(key_ptr, key_size)?;
+                let value = self.value_from_mem(value_ptr, value_size)?;
+                self.write(key, value)?;
                 Ok(None)
             }
 
@@ -629,7 +601,9 @@ where
                 // args(2) = pointer to value
                 // args(3) = size of value
                 let (key_ptr, key_size, value_ptr, value_size) = Args::parse(args)?;
-                self.add(key_ptr, key_size, value_ptr, value_size)?;
+                let key = self.key_from_mem(key_ptr, key_size)?;
+                let value = self.value_from_mem(value_ptr, value_size)?;
+                self.add(key, value)?;
                 Ok(None)
             }
 
@@ -735,7 +709,9 @@ where
                 // args(1) = size of uref name
                 // args(2) = pointer to destination in Wasm memory
                 let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
-                self.add_uref(name_ptr, name_size, key_ptr, key_size)?;
+                let name = self.string_from_mem(name_ptr, name_size)?;
+                let key = self.key_from_mem(key_ptr, key_size)?;
+                self.add_uref(name, key)?;
                 Ok(None)
             }
 
