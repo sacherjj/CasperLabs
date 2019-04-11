@@ -41,8 +41,9 @@ trait GenesisApprover[F[_]] {
 object GenesisApproverImpl {
   trait Backend[F[_]] {
 
-    /** Check that the genesis we retrieved from the bootstrap nodes has the right content. */
-    def validateCandidate(block: Block): F[Either[Throwable, Unit]]
+    /** Check that the genesis we retrieved from the bootstrap nodes has the right content.
+      * If this node is one of the bonded validators then it can add its approval as well. */
+    def validateCandidate(block: Block): F[Either[Throwable, Option[Approval]]]
 
     /** Decide if the the currently accumulated validator public keys are enough to transition to processing blocks. */
     def canTransition(block: Block, signatories: Set[ByteString]): Boolean
@@ -210,7 +211,9 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         _ <- Log[F].info(s"Downloaded Genesis candidate ${hex(blockHash)} from bootstrap.")
       } yield block
 
-    def getOrAddStatus(service: GossipService[F], blockHash: ByteString): F[Status] =
+    // Establish th status by downloading the block if we don't have it yet.
+    // Return our own approval if we can indeed sign it.
+    def maybeDownload(service: GossipService[F], blockHash: ByteString): F[Option[Approval]] =
       statusRef.get.flatMap {
         case None =>
           for {
@@ -218,23 +221,23 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
             block <- maybeBlock.fold(download(service, blockHash))(
                       _.pure[F]
                     )
-            _ <- Sync[F].rethrow(backend.validateCandidate(block))
+            maybeApproval <- Sync[F].rethrow(backend.validateCandidate(block))
             // Add empty candidate so we can verify all approvals one by one.
             status = Status(GenesisCandidate(blockHash), block)
             _      <- statusRef.set(Some(status))
-          } yield status
+          } yield maybeApproval
 
-        case Some(status) =>
-          status.pure[F]
+        case Some(_) =>
+          none.pure[F]
       }
 
     def loop(prevApprovals: Set[Approval]): F[Unit] = {
       val trySync: F[(Set[Approval], Boolean)] = for {
-        service      <- connectToGossip(bootstrap)
-        candidate    <- service.getGenesisCandidate(GetGenesisCandidateRequest())
-        status       <- getOrAddStatus(service, candidate.blockHash)
-        newApprovals = candidate.approvals.toSet -- prevApprovals
-        transitioned <- addApprovals(candidate.blockHash, newApprovals.toList)
+        service       <- connectToGossip(bootstrap)
+        candidate     <- service.getGenesisCandidate(GetGenesisCandidateRequest())
+        maybeApproval <- maybeDownload(service, candidate.blockHash)
+        newApprovals  = candidate.approvals.toSet ++ maybeApproval -- prevApprovals
+        transitioned  <- addApprovals(candidate.blockHash, newApprovals.toList)
       } yield (newApprovals ++ prevApprovals, transitioned)
 
       trySync

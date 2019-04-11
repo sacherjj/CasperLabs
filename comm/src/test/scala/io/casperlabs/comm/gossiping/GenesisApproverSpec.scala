@@ -214,12 +214,31 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
         }
       }
     }
+
+    "gossip own approval for a valid candidate" in {
+      val service = new MockGossipService.GossipCounter()
+
+      TestFixture.fromBootstrap(
+        remoteCandidate = () => Task.delay(GenesisCandidate(genesis.blockHash)),
+        environment = new MockEnvironment() {
+          override def validateCandidate(block: Block) =
+            Task.delay(Right(correctApproval.some))
+        },
+        gossipService = service,
+        relayFactor = 5
+      ) { approver =>
+        for {
+          _ <- Task.sleep(50.millis)
+          r <- approver.getCandidate
+        } yield {
+          r.isRight shouldBe true
+          service.received shouldBe 5
+        }
+      }
+    }
   }
 
   "addApproval" should {
-    val correctApproval = sample(arbitrary[Approval])
-      .withValidatorPublicKey(genesis.getHeader.getState.bonds.last.validatorPublicKey)
-
     "accumulate correct approvals" in {
       TestFixture.fromGenesis() { approver =>
         for {
@@ -415,6 +434,10 @@ object GenesisApproverSpec extends ArbitraryConsensus {
     block.withHeader(block.getHeader.withState(state))
   }
 
+  // Example of an approval that we can use in tests that won't be rejected.
+  val correctApproval = sample(arbitrary[Approval])
+    .withValidatorPublicKey(genesis.getHeader.getState.bonds.last.validatorPublicKey)
+
   class MockNodeDiscovery(peers: List[Node]) extends NodeDiscovery[Task] {
     override def discover                    = ???
     override def lookup(id: NodeIdentifier)  = ???
@@ -468,7 +491,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
         downloaded = true
         Task.unit
       }
-    override def validateCandidate(block: Block)                           = Task.now(Right(()))
+    override def validateCandidate(block: Block)                           = Task.now(Right(none[Approval]))
     override def canTransition(block: Block, signatories: Set[ByteString]) = true
     override def validateSignature(
         blockHash: ByteString,
@@ -528,7 +551,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
           connectToGossip = _ => Task.now(gossipService),
           relayFactor,
           genesis,
-          sample(arbitrary[Approval])
+          approval = sample(arbitrary[Approval])
             .withValidatorPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
         )
         .use(test)
