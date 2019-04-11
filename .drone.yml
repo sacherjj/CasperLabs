@@ -75,10 +75,10 @@ pipeline:
 
   git-status-post-scala-compile:
     <<: *buildenv
-    commands:
-      - git status | grep modified
-      - echo $?
-      - if [ $? = 0 ]; then exit 1; fi
+    commands: |
+      git status | grep modified
+      echo $?
+      if [ $? = 0 ]; then exit 1; fi
 
   compile-rust:
     <<: *buildenv
