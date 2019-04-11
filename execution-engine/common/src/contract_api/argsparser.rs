@@ -11,7 +11,7 @@ macro_rules! impl_argsparser_tuple {
         impl<$name: ToBytes> ArgsParser for $name {
             #[allow(non_snake_case)]
             fn parse(&self) -> Result<Vec<Vec<u8>>, Error> {
-                let ref $name = *self;
+                let $name = self;
                 Ok(vec![ToBytes::to_bytes($name)?])
             }
         }
