@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
-import io.casperlabs.comm.ServiceError, ServiceError.Unavailable
+import io.casperlabs.comm.ServiceError, ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -217,20 +217,189 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
   }
 
   "addApproval" should {
-    "accumulate correct approvals" in (pending)
-    "reject incorrect approvals" in (pending)
-    "return UNAVAILABLE while there is no candidate" in (pending)
-    "return true once the threshold has been passed" in (pending)
-    "gossip new approvals" in (pending)
-    "not gossip old approvals" in (pending)
-    "not stop gossiping if there's an error" in (pending)
-    "trigger onApproved when the threshold is passed" in (pending)
+    val correctApproval = sample(arbitrary[Approval])
+      .withValidatorPublicKey(genesis.getHeader.getState.bonds.last.validatorPublicKey)
+
+    "accumulate correct approvals" in {
+      TestFixture.fromGenesis() { approver =>
+        for {
+          _ <- approver.addApproval(genesis.blockHash, correctApproval)
+          c <- approver.getCandidate
+        } yield {
+          c.right.get.approvals should have size 2
+        }
+      }
+    }
+
+    "reject approvals for a different candidate" in {
+      TestFixture.fromGenesis() { approver =>
+        approver.addApproval(sample(genHash), correctApproval) map {
+          case Left(InvalidArgument(msg)) =>
+            msg should include("block hash doesn't match")
+          case other =>
+            fail(s"Expected InvalidArgument; got $other")
+        }
+      }
+    }
+
+    "reject incorrect validators" in {
+      TestFixture.fromGenesis() { approver =>
+        approver.addApproval(genesis.blockHash, sample(arbitrary[Approval])) map {
+          case Left(InvalidArgument(msg)) =>
+            msg should include("not one of the bonded validators")
+          case other =>
+            fail(s"Expected InvalidArgument; got $other")
+        }
+      }
+    }
+
+    "reject incorrect signatures" in {
+      TestFixture.fromGenesis(
+        environment = new MockEnvironment() {
+          override def validateSignature(
+              blockHash: ByteString,
+              publicKey: ByteString,
+              signature: Signature
+          ) = false
+        }
+      ) { approver =>
+        approver.addApproval(genesis.blockHash, correctApproval) map {
+          case Left(InvalidArgument(msg)) =>
+            msg should include("signature")
+          case other =>
+            fail(s"Expected InvalidArgument; got $other")
+        }
+      }
+    }
+
+    "return UNAVAILABLE while there is no candidate" in {
+      TestFixture.fromBootstrap(
+        remoteCandidate = () => Task.raiseError(Unavailable("Thinking..."))
+      ) { approver =>
+        approver.addApproval(genesis.blockHash, sample(arbitrary[Approval])).map {
+          case Left(Unavailable(msg)) =>
+            msg should include("not yet available")
+          case other =>
+            fail(s"Expected Unavailable; got $other")
+        }
+      }
+    }
+
+    "return true once the threshold has been passed" in {
+      TestFixture.fromGenesis(
+        environment = new MockEnvironment() {
+          override def canTransition(block: Block, signatories: Set[ByteString]) =
+            signatories.size >= 3
+        }
+      ) { approver =>
+        for {
+          r1 <- approver.addApproval(genesis.blockHash, correctApproval)
+          r2 <- approver.addApproval(
+                 genesis.blockHash,
+                 correctApproval.withValidatorPublicKey(
+                   genesis.getHeader.getState.bonds(1).validatorPublicKey
+                 )
+               )
+        } yield {
+          r1.right.get shouldBe false
+          r2.right.get shouldBe true
+        }
+      }
+    }
+
+    "accumulate approvals arriving in parallel" in {
+      TestFixture.fromGenesis() { approver =>
+        val approvals = genesis.getHeader.getState.bonds.tail.map { b =>
+          sample(arbitrary[Approval]).withValidatorPublicKey(b.validatorPublicKey)
+        }
+        for {
+          _ <- Task.gatherUnordered(approvals.map(approver.addApproval(genesis.blockHash, _)))
+          c <- approver.getCandidate
+        } yield {
+          c.right.get.approvals should have size (1L + approvals.size)
+        }
+      }
+    }
+
+    "gossip new approvals" in {
+      val service = new MockGossipService.GossipCounter()
+
+      TestFixture.fromGenesis(
+        relayFactor = 2,
+        gossipService = service
+      ) { approver =>
+        for {
+          _ <- Task.sleep(100.millis)
+          _ = service.received shouldBe 2
+          _ <- approver.addApproval(genesis.blockHash, correctApproval)
+          _ <- Task.sleep(100.millis)
+          _ = service.received shouldBe 4
+        } yield ()
+      }
+    }
+
+    "not gossip old approvals" in {
+      val service = new MockGossipService.GossipCounter()
+
+      TestFixture.fromGenesis(
+        relayFactor = 2,
+        gossipService = service
+      ) { approver =>
+        for {
+          _ <- Task.sleep(100.millis)
+          _ = service.received shouldBe 2
+          c <- approver.getCandidate
+          _ <- approver.addApproval(genesis.blockHash, c.right.get.approvals.head)
+          _ <- Task.sleep(100.millis)
+          _ = service.received shouldBe 2
+        } yield ()
+      }
+    }
+
+    "not stop gossiping if there's an error" in {
+      val service = new MockGossipService.GossipCounter() {
+        override def addApproval(request: AddApprovalRequest) =
+          super.addApproval(request).flatMap { res =>
+            if (received == 1) {
+              Task.raiseError(Unavailable("The first peer wasn't ready!"))
+            } else {
+              Task.now(res)
+            }
+          }
+      }
+
+      TestFixture.fromGenesis(
+        relayFactor = 3,
+        gossipService = service
+      ) { approver =>
+        for {
+          _ <- Task.sleep(100.millis)
+          _ = service.received shouldBe (1 + 3)
+        } yield ()
+      }
+    }
+
+    "trigger onApproved when the threshold is passed" in {
+      TestFixture.fromGenesis(
+        environment = new MockEnvironment() {
+          override def canTransition(block: Block, signatories: Set[ByteString]) =
+            signatories.size > 1
+        }
+      ) { approver =>
+        for {
+          r0 <- approver.onApproved.timeout(Duration.Zero).attempt
+          _  = r0.isLeft shouldBe true
+          _  <- approver.addApproval(genesis.blockHash, correctApproval)
+          r1 <- approver.onApproved
+        } yield ()
+      }
+    }
   }
 }
 
 object GenesisApproverSpec extends ArbitraryConsensus {
-  //implicit val noLog           = new Log.NOPLog[Task]
-  implicit val log             = Log.log[Task]
+  //implicit val log             = Log.log[Task]
+  implicit val noLog           = new Log.NOPLog[Task]
   implicit val consensusConfig = ConsensusConfig()
 
   val peers = sample {
@@ -252,22 +421,21 @@ object GenesisApproverSpec extends ArbitraryConsensus {
     override def alivePeersAscendingDistance = Task.now(peers)
   }
 
+  class MockGossipService extends GossipService[Task] {
+    override def newBlocks(request: NewBlocksRequest)                                       = ???
+    override def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
+    override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
+    override def streamBlockSummaries(
+        request: StreamBlockSummariesRequest
+    ): Iterant[Task, BlockSummary]                                     = ???
+    override def getBlockChunked(request: GetBlockChunkedRequest)      = ???
+    override def addApproval(request: AddApprovalRequest): Task[Empty] = ???
+    override def getGenesisCandidate(
+        request: GetGenesisCandidateRequest
+    ): Task[GenesisCandidate] = ???
+  }
   object MockGossipService {
-    trait Base extends GossipService[Task] {
-      override def newBlocks(request: NewBlocksRequest)                                       = ???
-      override def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
-      override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
-      override def streamBlockSummaries(
-          request: StreamBlockSummariesRequest
-      ): Iterant[Task, BlockSummary]                                = ???
-      override def getBlockChunked(request: GetBlockChunkedRequest) = ???
-      override def addApproval(request: AddApprovalRequest)         = ???
-      override def getGenesisCandidate(
-          request: GetGenesisCandidateRequest
-      ): Task[GenesisCandidate] = ???
-    }
-
-    class Bootstrap(getCandidate: () => Task[GenesisCandidate]) extends Base {
+    class Bootstrap(getCandidate: () => Task[GenesisCandidate]) extends MockGossipService() {
       override def getGenesisCandidate(request: GetGenesisCandidateRequest) =
         getCandidate()
 
@@ -279,7 +447,15 @@ object GenesisApproverSpec extends ArbitraryConsensus {
         }
     }
 
-    class NonBootstrap() extends Base {}
+    class GossipCounter() extends MockGossipService() {
+      @volatile var received = 0
+      override def addApproval(request: AddApprovalRequest) = Task.delay {
+        synchronized {
+          received = received + 1
+          Empty()
+        }
+      }
+    }
   }
 
   // Default test environment which accepts anything and pretends to download a block.
@@ -309,6 +485,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
     def fromBootstrap(
         remoteCandidate: () => Task[GenesisCandidate],
         environment: MockEnvironment = new MockEnvironment(),
+        gossipService: MockGossipService = new MockGossipService(),
         relayFactor: Int = 0,
         pollInterval: FiniteDuration = 100.millis
     )(
@@ -325,7 +502,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
               if (node == bootstrap)
                 new MockGossipService.Bootstrap(remoteCandidate)
               else
-                new MockGossipService.NonBootstrap()
+                gossipService
             },
           relayFactor,
           bootstrap,
@@ -337,6 +514,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
 
     def fromGenesis(
         environment: MockEnvironment = new MockEnvironment(),
+        gossipService: MockGossipService = new MockGossipService(),
         relayFactor: Int = 0
     )(
         test: GenesisApprover[Task] => Task[Unit]
@@ -347,7 +525,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
         .fromGenesis[Task](
           backend = environment,
           new MockNodeDiscovery(peers),
-          connectToGossip = (node: Node) => Task.now(new MockGossipService.NonBootstrap()),
+          connectToGossip = _ => Task.now(gossipService),
           relayFactor,
           genesis,
           sample(arbitrary[Approval])

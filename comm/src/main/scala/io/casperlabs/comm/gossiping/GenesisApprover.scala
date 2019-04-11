@@ -25,15 +25,16 @@ trait GenesisApprover[F[_]] {
   /** Try to get the candidate, if we already have it. */
   def getCandidate: F[Either[ServiceError, GenesisCandidate]]
 
-  /** Try to add the approval, if we already have the candidate and it matches. If successful, relay it as well.
-    * Return whether we have made the transition to processing.*/
+  /** Try to add the approval, if we already have the candidate and it matches.
+    * If successful, relay it as well.
+    * Return whether we have made the transition to processing. */
   def addApproval(
       blockHash: ByteString,
       approval: Approval
   ): F[Either[ServiceError, Boolean]]
 
   /** Trigger once when the Genesis candidate has gathered enough signatures that this node
-	  * can transition to processing blocks and deploys. */
+    * can transition to processing blocks and deploys. */
   def onApproved: F[ByteString]
 }
 
@@ -154,12 +155,6 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
       approval: Approval
   ): F[Either[ServiceError, Boolean]] =
     tryAddApproval(blockHash, approval) flatMap {
-      case Left(ex) =>
-        ex.asLeft[Boolean].pure[F]
-
-      case Right(None) =>
-        false.asRight[ServiceError].pure[F]
-
       case Right(Some(newStatus)) =>
         for {
           transitioned <- tryTransition(newStatus)
@@ -167,9 +162,16 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         } yield {
           Right(transitioned)
         }
+
+      case Right(None) =>
+        false.asRight[ServiceError].pure[F]
+
+      case Left(ex) =>
+        ex.asLeft[Boolean].pure[F]
     }
 
-  /** Validate and add each approval, if possible. Return if transition has happened. */
+  /** Add a batch of approvals, if possible; this can only come from the bootstrap.
+    * Return if transition has happened. */
   private def addApprovals(blockHash: ByteString, approvals: List[Approval]): F[Boolean] =
     approvals.traverse {
       addApproval(blockHash, _) flatMap {
