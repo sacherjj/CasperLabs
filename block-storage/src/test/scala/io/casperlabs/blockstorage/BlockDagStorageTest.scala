@@ -357,7 +357,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
                 b =>
                   blockStore.put(b.getBlockMessage.blockHash, b) *> firstStorage.insert(
                     b.getBlockMessage
-                )
+                  )
               )
           _ <- firstStorage.close()
           _ <- Sync[Task].delay {

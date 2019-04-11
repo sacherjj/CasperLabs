@@ -8,8 +8,24 @@ import cats.Monad
 import cats.effect.Concurrent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.{BlockDagFileStorage, BlockDagStorage, BlockStore, FileLMDBIndexBlockStore, InMemBlockStore, IndexedBlockDagStorage, LMDBBlockStore}
-import io.casperlabs.casper.protocol.{BlockMessage, Body, DeployCode, DeployData, Header, Justification, ProcessedDeploy}
+import io.casperlabs.blockstorage.{
+  BlockDagFileStorage,
+  BlockDagStorage,
+  BlockStore,
+  FileLMDBIndexBlockStore,
+  InMemBlockStore,
+  IndexedBlockDagStorage,
+  LMDBBlockStore
+}
+import io.casperlabs.casper.protocol.{
+  BlockMessage,
+  Body,
+  DeployCode,
+  DeployData,
+  Header,
+  Justification,
+  ProcessedDeploy
+}
 import io.casperlabs.ipc.Key.KeyInstance
 import io.casperlabs.ipc.Transform.TransformInstance
 import io.casperlabs.ipc.{DeployCode => _, _}
@@ -70,11 +86,13 @@ object StoreBenchSuite {
   def randomDeployData: DeployData =
     DeployData()
       .withAddress(randomHexString(32))
-      .withPayment(DeployCode()
-        .withCode(randomHexString(512))
+      .withPayment(
+        DeployCode()
+          .withCode(randomHexString(512))
       )
-      .withSession(DeployCode()
-        .withCode(randomHexString(480))
+      .withSession(
+        DeployCode()
+          .withCode(randomHexString(480))
       )
 
   def randomDeploy: ProcessedDeploy =
