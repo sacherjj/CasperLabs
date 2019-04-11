@@ -27,13 +27,14 @@ pub fn uref_map_arb(depth: usize) -> impl Strategy<Value = BTreeMap<String, Key>
 
 pub fn access_rights_arb() -> impl Strategy<Value = AccessRights> {
     prop_oneof![
-        Just(AccessRights::Eqv),
-        Just(AccessRights::Read),
-        Just(AccessRights::Add),
-        Just(AccessRights::Write),
-        Just(AccessRights::ReadAdd),
-        Just(AccessRights::ReadWrite),
-        Just(AccessRights::AddWrite),
+        Just(AccessRights::EQ),
+        Just(AccessRights::READ),
+        Just(AccessRights::ADD),
+        Just(AccessRights::WRITE),
+        Just(AccessRights::READ_ADD),
+        Just(AccessRights::READ_WRITE),
+        Just(AccessRights::ADD_WRITE),
+        Just(AccessRights::READ_ADD_WRITE),
     ]
 }
 

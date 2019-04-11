@@ -384,7 +384,7 @@ fn forged_uref() {
     // create a forged uref
     let uref = wasm_write(
         &mut test_fixture.memory,
-        random_uref_key(&mut rng, AccessRights::ReadWrite),
+        random_uref_key(&mut rng, AccessRights::READ_WRITE),
     );
 
     // write arbitrary value to wasm memory to allow call to write
@@ -523,7 +523,7 @@ fn store_contract_hash_illegal_urefs() {
     let mut rng = rand::thread_rng();
     let wasm_module = create_wasm_module();
     // Create URef we don't own
-    let uref = random_uref_key(&mut rng, AccessRights::Read);
+    let uref = random_uref_key(&mut rng, AccessRights::READ);
     let urefs = urefs_map(vec![("ForgedURef".to_owned(), uref)]);
 
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
@@ -637,9 +637,9 @@ fn store_contract_uref_known_key() {
     // ---- Test fixtures ----
     let mut rng = rand::thread_rng();
     // URef where we will write contract
-    let contract_uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
+    let contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
     // URef we want to store WITH the contract so that it can use it later
-    let known_uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
+    let known_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
     let urefs = urefs_map(vec![("KnownURef".to_owned(), known_uref)]);
     let known_urefs: HashSet<Key> = once(contract_uref).chain(once(known_uref)).collect();
     let mut test_fixture: TestFixture = {
@@ -693,9 +693,9 @@ fn store_contract_uref_forged_key() {
     // ---- Test fixtures ----
     // URef where we will write contract
     let mut rng = rand::thread_rng();
-    let forged_contract_uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
+    let forged_contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
     // URef we want to store WITH the contract so that it can use it later
-    let known_uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
+    let known_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
     let urefs = urefs_map(vec![("KnownURef".to_owned(), known_uref)]);
     let known_urefs: HashSet<Key> = once(known_uref).collect();
 
@@ -1123,7 +1123,7 @@ fn test_uref_key_readable(init_value: Value, rights: AccessRights) -> Result<Val
 fn uref_key_readable_valid() {
     // Tests that URef key is readable when access rights of the key allows for reading.
     let init_value = Value::Int32(1);
-    let test_result = test_uref_key_readable(init_value.clone(), AccessRights::Read)
+    let test_result = test_uref_key_readable(init_value.clone(), AccessRights::READ)
         .expect("Reading from GS should work.");
     assert_eq!(test_result, init_value);
 }
@@ -1132,7 +1132,7 @@ fn uref_key_readable_valid() {
 fn uref_key_readable_invalid() {
     // Tests that reading URef which is not readable fails.
     let init_value = Value::Int32(1);
-    let test_result = test_uref_key_readable(init_value.clone(), AccessRights::Add);
+    let test_result = test_uref_key_readable(init_value.clone(), AccessRights::ADD);
     assert_invalid_access(test_result);
 }
 
@@ -1183,13 +1183,13 @@ fn test_uref_key_writeable(rights: AccessRights) -> Result<(), wasmi::Trap> {
 #[test]
 fn uref_key_writeable_valid() {
     // Tests that URef key is writeable when access rights of the key allows for writing.
-    test_uref_key_writeable(AccessRights::Write).expect("Writing to writeable URef should work.")
+    test_uref_key_writeable(AccessRights::WRITE).expect("Writing to writeable URef should work.")
 }
 
 #[test]
 fn uref_key_writeable_invalid() {
     // Tests that writing to URef which is not writeable fails.
-    let result = test_uref_key_writeable(AccessRights::Read);
+    let result = test_uref_key_writeable(AccessRights::READ);
     assert_invalid_access(result);
 }
 
@@ -1240,13 +1240,13 @@ fn test_uref_key_addable(rights: AccessRights) -> Result<(), wasmi::Trap> {
 #[test]
 fn uref_key_addable_valid() {
     // Tests that URef key is addable when access rights of the key allows for adding.
-    test_uref_key_addable(AccessRights::Add)
+    test_uref_key_addable(AccessRights::ADD)
         .expect("Adding to URef when it is Addable should work.")
 }
 
 #[test]
 fn uref_key_addable_invalid() {
     // Tests that adding to URef which is not addable fails.
-    let result = test_uref_key_addable(AccessRights::Read);
+    let result = test_uref_key_addable(AccessRights::READ);
     assert_invalid_access(result);
 }

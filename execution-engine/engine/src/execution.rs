@@ -125,7 +125,7 @@ impl<'a> RuntimeContext<'a> {
             let entry_rights = self
                 .known_urefs
                 .entry(raw_addr)
-                .or_insert_with(|| std::iter::once(AccessRights::Eqv).collect());
+                .or_insert_with(|| std::iter::once(AccessRights::EQ).collect());
             entry_rights.insert(rights);
         }
     }
@@ -463,7 +463,7 @@ where
             Ok(self.host_buf.len())
         } else {
             Err(Error::InvalidAccess {
-                required: AccessRights::Read,
+                required: AccessRights::READ,
             })
         }
     }
@@ -547,7 +547,7 @@ where
                     Ok(())
                 } else {
                     Err(Error::InvalidAccess {
-                        required: AccessRights::Write,
+                        required: AccessRights::WRITE,
                     })
                 }
             })
@@ -606,7 +606,7 @@ where
             err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
         } else {
             Err(Error::InvalidAccess {
-                required: AccessRights::Read,
+                required: AccessRights::READ,
             }
             .into())
         }
@@ -629,7 +629,7 @@ where
             }
         } else {
             Err(Error::InvalidAccess {
-                required: AccessRights::Add,
+                required: AccessRights::ADD,
             }
             .into())
         }
@@ -653,7 +653,7 @@ where
         let value = self.value_from_mem(value_ptr, value_size)?; // read initial value from memory
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
-        let key = Key::URef(key, AccessRights::ReadWrite);
+        let key = Key::URef(key, AccessRights::READ_ADD_WRITE);
         self.state.write(key, value); // write initial value to state
         self.context.insert_uref(key);
         self.memory

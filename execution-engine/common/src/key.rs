@@ -1,79 +1,33 @@
 use super::alloc::vec::Vec;
 use super::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
 use crate::contract_api::pointers::*;
-use core::ops::{BitAnd, BitOr};
+use bitflags;
 
-#[allow(clippy::derive_hash_xor_eq)]
-#[repr(u8)]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
-pub enum AccessRights {
-    Eqv = 0b0001,
-    Read = 0b0011,
-    Write = 0x05,
-    Add = 0x07,
-    ReadAdd = 0x09,
-    ReadWrite = 0x11,
-    AddWrite,
-    ReadAddWrite,
-}
-
-impl BitOr for AccessRights {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self {
-        // It's safe to unwrap because we control which bits are set.
-        AccessRights::from_bitwise(self.bitwise_repr() | rhs.bitwise_repr()).unwrap()
+bitflags! {
+    #[allow(clippy::derive_hash_xor_eq)]
+    pub struct AccessRights: u8 {
+        const EQ    = 0b0001;
+        const READ  = 0b0011;
+        const WRITE = 0b0101;
+        const ADD   = 0b1001;
+        const READ_ADD       = Self::READ.bits | Self::ADD.bits;
+        const READ_WRITE     = Self::READ.bits | Self::WRITE.bits;
+        const ADD_WRITE      = Self::ADD.bits  | Self::WRITE.bits;
+        const READ_ADD_WRITE = Self::READ.bits | Self::ADD.bits | Self::WRITE.bits;
     }
 }
 
-impl BitAnd for AccessRights {
-    type Output = Self;
-
-    fn bitand(self, rhs: Self) -> Self {
-        // It's safe to unwrap because we control which bits are set.
-        AccessRights::from_bitwise(self.bitwise_repr() & rhs.bitwise_repr()).unwrap()
-    }
-}
-
-use AccessRights::*;
 impl AccessRights {
-    pub fn bitwise_repr(self) -> u8 {
-        match self {
-            Eqv => 0b0001,
-            Read => 0b0011,
-            Write => 0b0101,
-            Add => 0b1001,
-            ReadAdd => 0b1011,
-            ReadWrite => 0b0111,
-            AddWrite => 0b1101,
-            ReadAddWrite => 0b1111,
-        }
-    }
-
-    pub fn from_bitwise(input: u8) -> Option<AccessRights> {
-        match input {
-            0b0001 => Some(Eqv),
-            0b0011 => Some(Read),
-            0b0101 => Some(Write),
-            0b1001 => Some(Add),
-            0b1011 => Some(ReadAdd),
-            0b0111 => Some(ReadWrite),
-            0b1101 => Some(AddWrite),
-            0b1111 => Some(ReadAddWrite),
-            _ => None,
-        }
-    }
-
     pub fn is_readable(self) -> bool {
-        self & Read == Read
+        self & AccessRights::READ == AccessRights::READ
     }
 
     pub fn is_writeable(self) -> bool {
-        self & Write == Write
+        self & AccessRights::WRITE == AccessRights::WRITE
     }
 
     pub fn is_addable(self) -> bool {
-        self & Add == Add
+        self & AccessRights::ADD == AccessRights::ADD
     }
 }
 
@@ -115,32 +69,16 @@ pub const UREF_SIZE: usize = U32_SIZE + N32 + KEY_ID_SIZE + ACCESS_RIGHTS_SIZE;
 
 impl ToBytes for AccessRights {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        match self {
-            AccessRights::Eqv => 1u8.to_bytes(),
-            AccessRights::Read => 2u8.to_bytes(),
-            AccessRights::Add => 3u8.to_bytes(),
-            AccessRights::Write => 4u8.to_bytes(),
-            AccessRights::ReadAdd => 5u8.to_bytes(),
-            AccessRights::ReadWrite => 6u8.to_bytes(),
-            AccessRights::AddWrite => 7u8.to_bytes(),
-            AccessRights::ReadAddWrite => 8u8.to_bytes(),
-        }
+        self.bits.to_bytes()
     }
 }
 
 impl FromBytes for AccessRights {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let access_rights = match id {
-            1 => Ok(AccessRights::Eqv),
-            2 => Ok(AccessRights::Read),
-            3 => Ok(AccessRights::Add),
-            4 => Ok(AccessRights::Write),
-            5 => Ok(AccessRights::ReadAdd),
-            6 => Ok(AccessRights::ReadWrite),
-            7 => Ok(AccessRights::AddWrite),
-            8 => Ok(AccessRights::ReadAddWrite),
-            _ => Err(Error::FormattingError),
+        let access_rights = match AccessRights::from_bits(id) {
+            Some(rights) => Ok(rights),
+            None => Err(Error::FormattingError),
         };
         access_rights.map(|rights| (rights, rest))
     }
@@ -245,7 +183,7 @@ impl AsRef<[u8]> for Key {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
-    use crate::key::AccessRights::{self, *};
+    use crate::key::AccessRights;
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)
@@ -253,14 +191,14 @@ mod tests {
 
     #[test]
     fn test_is_readable() {
-        test_readable(Read, true);
-        test_readable(ReadAdd, true);
-        test_readable(ReadWrite, true);
-        test_readable(ReadAddWrite, true);
-        test_readable(Add, false);
-        test_readable(AddWrite, false);
-        test_readable(Eqv, false);
-        test_readable(Write, false);
+        test_readable(AccessRights::READ, true);
+        test_readable(AccessRights::READ_ADD, true);
+        test_readable(AccessRights::READ_WRITE, true);
+        test_readable(AccessRights::READ_ADD_WRITE, true);
+        test_readable(AccessRights::ADD, false);
+        test_readable(AccessRights::ADD_WRITE, false);
+        test_readable(AccessRights::EQ, false);
+        test_readable(AccessRights::WRITE, false);
     }
 
     fn test_writable(right: AccessRights, is_true: bool) {
@@ -269,29 +207,29 @@ mod tests {
 
     #[test]
     fn test_is_writable() {
-        test_writable(Write, true);
-        test_writable(ReadWrite, true);
-        test_writable(AddWrite, true);
-        test_writable(Eqv, false);
-        test_writable(Read, false);
-        test_writable(Add, false);
-        test_writable(ReadAdd, false);
-        test_writable(ReadAddWrite, true);
+        test_writable(AccessRights::WRITE, true);
+        test_writable(AccessRights::READ_WRITE, true);
+        test_writable(AccessRights::ADD_WRITE, true);
+        test_writable(AccessRights::EQ, false);
+        test_writable(AccessRights::READ, false);
+        test_writable(AccessRights::ADD, false);
+        test_writable(AccessRights::READ_ADD, false);
+        test_writable(AccessRights::READ_ADD_WRITE, true);
     }
 
     fn test_addable(right: AccessRights, is_true: bool) {
-        assert_eq!(right.is_addable(), is_true, "{:?}", right & Add)
+        assert_eq!(right.is_addable(), is_true)
     }
 
     #[test]
     fn test_is_addable() {
-        test_addable(Add, true);
-        test_addable(ReadAdd, true);
-        test_addable(ReadWrite, false);
-        test_addable(AddWrite, true);
-        test_addable(Eqv, false);
-        test_addable(Read, false);
-        test_addable(Write, false);
-        test_addable(ReadAddWrite, true);
+        test_addable(AccessRights::ADD, true);
+        test_addable(AccessRights::READ_ADD, true);
+        test_addable(AccessRights::READ_WRITE, false);
+        test_addable(AccessRights::ADD_WRITE, true);
+        test_addable(AccessRights::EQ, false);
+        test_addable(AccessRights::READ, false);
+        test_addable(AccessRights::WRITE, false);
+        test_addable(AccessRights::READ_ADD_WRITE, true);
     }
 }
