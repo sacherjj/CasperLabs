@@ -1,11 +1,12 @@
 use super::alloc::vec::Vec;
 use super::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
 use crate::contract_api::pointers::*;
-use core::cmp::Ordering;
+use core::ops::{BitAnd, BitOr};
 
 #[allow(clippy::derive_hash_xor_eq)]
 #[repr(C)]
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
+
 pub enum AccessRights {
     Eqv,
     Read,
@@ -14,139 +15,73 @@ pub enum AccessRights {
     ReadAdd,
     ReadWrite,
     AddWrite,
+    ReadAddWrite,
 }
 
-impl AccessRights {
-    pub fn is_readable(self) -> bool {
-        self >= AccessRights::Read
-    }
+impl BitOr for AccessRights {
+    type Output = Self;
 
-    pub fn is_writeable(self) -> bool {
-        self >= AccessRights::Write
+    fn bitor(self, rhs: Self) -> Self {
+        // It's safe to unwrap because we control which bits are set.
+        AccessRights::from_bitwise(self.bitwise_repr() | rhs.bitwise_repr()).unwrap()
     }
+}
 
-    pub fn is_addable(self) -> bool {
-        self >= AccessRights::Add
+impl BitAnd for AccessRights {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self {
+        // It's safe to unwrap because we control which bits are set.
+        AccessRights::from_bitwise(self.bitwise_repr() & rhs.bitwise_repr()).unwrap()
     }
 }
 
 use AccessRights::*;
-
-/// Partial order of the access rights.
-/// Since there are three distinct types of access rights to a resource
-/// (Read, Write, Add; Eqv is implicit for each one), and various combinations
-/// of them, some of them can be compared to each other.
-///
-/// This ordering is created so that it is possible to do:
-///
-/// ```
-/// use casperlabs_contract_ffi::key::AccessRights;
-///
-/// // Imaginary definition of Key
-/// pub struct Key {
-///   pub access_right: AccessRights,
-/// };
-///
-/// impl Key {
-///   fn new(access_right: AccessRights) -> Key {
-///     Key { access_right }
-///   }
-/// }
-///
-/// // Imaginary definition of resources to which we want restrict access to.
-/// type Resource = u32;
-///
-/// // Imaginary error
-/// type Error = String;
-///
-/// fn read(resource: Resource, key: Key) -> Result<Resource, Error> {
-///   // note that the test is "greater or equal".
-///   // This will pass for Read, ReadWrite, ReadAdd access rights.
-///   if key.access_right >= AccessRights::Read {
-///     Ok(resource)
-///   } else {
-///     Err("Invalid access rights to the resource.".to_owned())
-///   }
-/// }
-///
-/// assert!(read(10u32, Key::new(AccessRights::Read)).is_ok());
-/// assert!(read(10u32, Key::new(AccessRights::ReadAdd)).is_ok());
-/// assert!(read(10u32, Key::new(AccessRights::ReadWrite)).is_ok());
-/// assert!(read(10u32, Key::new(AccessRights::Write)).is_err());
-/// ```
-///
-///
-/// and the tests passes for: Read, ReadAdd and ReadWrite.
-impl PartialOrd for AccessRights {
-    //  !!! Caution !!! Do not reorder
-    fn partial_cmp(&self, other: &AccessRights) -> Option<Ordering> {
-        match (self, other) {
-            (Eqv, Eqv) => Some(Ordering::Equal),
-            (Eqv, _) => Some(Ordering::Less),
-            (_, Eqv) => Some(Ordering::Greater),
-            (Read, Write) => None,
-            (Write, Read) => None,
-            (Read, Add) => None,
-            (Add, Read) => None,
-            (Read, ReadAdd) => Some(Ordering::Less),
-            (ReadAdd, Read) => Some(Ordering::Greater),
-            (Read, ReadWrite) => Some(Ordering::Less),
-            (ReadWrite, Read) => Some(Ordering::Greater),
-            (Write, Add) => None,
-            (Add, Write) => None,
-            (Read, AddWrite) => None,
-            (Add, AddWrite) => Some(Ordering::Less),
-            (Write, AddWrite) => Some(Ordering::Less),
-            (ReadAdd, AddWrite) => None,
-            (ReadWrite, AddWrite) => None,
-            (AddWrite, Read) => None,
-            (AddWrite, Add) => Some(Ordering::Greater),
-            (AddWrite, Write) => Some(Ordering::Greater),
-            (AddWrite, ReadAdd) => None,
-            (AddWrite, ReadWrite) => None,
-            (Write, ReadWrite) => Some(Ordering::Less),
-            (ReadWrite, Write) => Some(Ordering::Greater),
-            (Add, ReadAdd) => Some(Ordering::Less),
-            (ReadAdd, Add) => Some(Ordering::Greater),
-            // Because Read + Write can simulate Add,
-            // and we want to promote the usage of Add,
-            // it is the case that ReadWrite >= Add.
-            (Add, ReadWrite) => Some(Ordering::Less),
-            (ReadWrite, Add) => Some(Ordering::Greater),
-            // In theory Write and ReadAdd should be comparable.
-            // Assuming that we allow for using Add on the selected set of types
-            // (for which there exists a Monoid instace) it should be the case
-            // that Read + Add == Write (reading and modifying should be a write).
-            // Examples:
-            // 1)                  | 2)
-            // init_value = 10     | init_value = 10
-            // Read + Add(2) = 12  | Read + Add(-2) = 8
-            // Write(12)           | Write(8)
-            // The problem is that we haven't yet figured out how to accommodate
-            // for "negative" operations. Especially how to encode entry removal
-            // from a map using an Add.
-            // For the safety and correctness reasons I've chosen to make these
-            // operations incomparable.
-            (Write, ReadAdd) => None,
-            (ReadAdd, Write) => None,
-            (ReadAdd, ReadWrite) => None,
-            (ReadWrite, ReadAdd) => None,
-            (_, _) => {
-                // Every enum variant is equal to itself.
-                if self == other {
-                    Some(Ordering::Equal)
-                } else {
-                    None
-                }
-            }
+impl AccessRights {
+    pub fn bitwise_repr(&self) -> u8 {
+        match self {
+            Eqv => 0b0001,
+            Read => 0b0011,
+            Write => 0b0101,
+            Add => 0b1001,
+            ReadAdd => 0b1011,
+            ReadWrite => 0b0111,
+            AddWrite => 0b1101,
+            ReadAddWrite => 0b1111,
         }
+    }
+
+    pub fn from_bitwise(input: u8) -> Option<AccessRights> {
+        match input {
+            0b0001 => Some(Eqv),
+            0b0011 => Some(Read),
+            0b0101 => Some(Write),
+            0b1001 => Some(Add),
+            0b1011 => Some(ReadAdd),
+            0b0111 => Some(ReadWrite),
+            0b1101 => Some(AddWrite),
+            0b1111 => Some(ReadAddWrite),
+            _ => None,
+        }
+    }
+
+    pub fn is_readable(self) -> bool {
+        self & Read == Read
+    }
+
+    pub fn is_writeable(self) -> bool {
+        self & Write == Write
+    }
+
+    pub fn is_addable(self) -> bool {
+        self & Add == Add
     }
 }
 
 pub const KEY_SIZE: usize = 32;
 
 #[repr(C)]
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
 pub enum Key {
     Account([u8; 20]),
     Hash([u8; 32]),
@@ -154,27 +89,6 @@ pub enum Key {
 }
 
 use Key::*;
-// TODO: I had to remove Ord derived on the Key enum because
-// there is no total ordering of the AccessRights but Ord for the Key
-// is required by the collections (HashMap, BTreeMap) so I decided to
-// implement it by hand by just ignoring the access rights for the URef
-// and falling back to the default Ord for the enum variants (top to bottom).
-impl Ord for Key {
-    fn cmp(&self, other: &Key) -> Ordering {
-        match (self, other) {
-            (Account(id_1), Account(id_2)) => id_1.cmp(id_2),
-            (Account(_), Hash(_)) => Ordering::Less,
-            (Account(_), URef(_, ..)) => Ordering::Less,
-            (Hash(id_1), Hash(id_2)) => id_1.cmp(id_2),
-            (Hash(_), URef(_, _)) => Ordering::Less,
-            (Hash(_), Account(_)) => Ordering::Greater,
-            (URef(id_1, ..), URef(id_2, ..)) => id_1.cmp(id_2),
-            (URef(_, _), Account(_)) => Ordering::Greater,
-            (URef(_, _), Hash(_)) => Ordering::Greater,
-        }
-    }
-}
-
 impl Key {
     pub fn to_u_ptr<T>(self) -> Option<UPointer<T>> {
         if let URef(id, access_right) = self {
@@ -210,6 +124,7 @@ impl ToBytes for AccessRights {
             AccessRights::ReadAdd => 5u8.to_bytes(),
             AccessRights::ReadWrite => 6u8.to_bytes(),
             AccessRights::AddWrite => 7u8.to_bytes(),
+            AccessRights::ReadAddWrite => 8u8.to_bytes(),
         }
     }
 }
@@ -225,6 +140,7 @@ impl FromBytes for AccessRights {
             5 => Ok(AccessRights::ReadAdd),
             6 => Ok(AccessRights::ReadWrite),
             7 => Ok(AccessRights::AddWrite),
+            8 => Ok(AccessRights::ReadAddWrite),
             _ => Err(Error::FormattingError),
         };
         access_rights.map(|rights| (rights, rest))
@@ -257,6 +173,7 @@ impl ToBytes for Key {
         }
     }
 }
+
 impl FromBytes for Key {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
@@ -298,6 +215,7 @@ impl FromBytes for Vec<Key> {
         Ok((result, stream))
     }
 }
+
 impl ToBytes for Vec<Key> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let size = self.len() as u32;
@@ -328,25 +246,10 @@ impl AsRef<[u8]> for Key {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
-    use crate::gens::*;
     use crate::key::AccessRights::{self, *};
-    use core::cmp::Ordering;
-    use core::hash::{Hash, Hasher};
-    use proptest::prelude::*;
-    use siphasher::sip::SipHasher;
-
-    fn test_capabilities(right: AccessRights, requires: AccessRights, is_true: bool) {
-        assert_eq!(
-            right >= requires,
-            is_true,
-            "{:?} isn't enough to perform {:?} operation",
-            right,
-            requires
-        )
-    }
 
     fn test_readable(right: AccessRights, is_true: bool) {
-        test_capabilities(right, AccessRights::Read, is_true)
+        assert_eq!(right.is_readable(), is_true)
     }
 
     #[test]
@@ -354,6 +257,7 @@ mod tests {
         test_readable(Read, true);
         test_readable(ReadAdd, true);
         test_readable(ReadWrite, true);
+        test_readable(ReadAddWrite, true);
         test_readable(Add, false);
         test_readable(AddWrite, false);
         test_readable(Eqv, false);
@@ -361,7 +265,7 @@ mod tests {
     }
 
     fn test_writable(right: AccessRights, is_true: bool) {
-        test_capabilities(right, Write, is_true)
+        assert_eq!(right.is_writeable(), is_true)
     }
 
     #[test]
@@ -373,89 +277,22 @@ mod tests {
         test_writable(Read, false);
         test_writable(Add, false);
         test_writable(ReadAdd, false);
+        test_writable(ReadAddWrite, true);
     }
 
     fn test_addable(right: AccessRights, is_true: bool) {
-        test_capabilities(right, Add, is_true)
+        assert_eq!(right.is_addable(), is_true, "{:?}", right & Add)
     }
 
     #[test]
     fn test_is_addable() {
         test_addable(Add, true);
         test_addable(ReadAdd, true);
-        test_addable(ReadWrite, true);
+        test_addable(ReadWrite, false);
         test_addable(AddWrite, true);
         test_addable(Eqv, false);
         test_addable(Read, false);
         test_addable(Write, false);
-    }
-
-    #[test]
-    fn reads_partial_ordering() {
-        let read = AccessRights::Read;
-        assert_eq!(read == AccessRights::Read, true);
-        assert_eq!(read < AccessRights::ReadAdd, true);
-        assert_eq!(read < AccessRights::ReadWrite, true);
-        assert_eq!(read != AccessRights::AddWrite, true);
-        assert_eq!(read != AccessRights::Add, true);
-        assert_eq!(read != AccessRights::Write, true);
-    }
-
-    #[test]
-    fn adds_partial_ordering() {
-        let add = AccessRights::Add;
-        assert_eq!(add == AccessRights::Add, true);
-        assert_eq!(add < AccessRights::ReadAdd, true);
-        assert_eq!(add < AccessRights::ReadWrite, true);
-        assert_eq!(add < AccessRights::AddWrite, true);
-        assert_eq!(add != AccessRights::Read, true);
-        assert_eq!(add != AccessRights::Write, true);
-    }
-
-    #[test]
-    fn writes_partial_ordering() {
-        let write = AccessRights::Write;
-        assert_eq!(write == AccessRights::Write, true);
-        assert_eq!(write < AccessRights::ReadWrite, true);
-        assert_eq!(write < AccessRights::AddWrite, true);
-        assert_eq!(write != AccessRights::Read, true);
-        assert_eq!(write != AccessRights::Add, true);
-        assert_eq!(write != AccessRights::ReadAdd, true);
-    }
-
-    proptest! {
-        #[test]
-        fn eqv_access_is_implicit(access_right in access_rights_arb()) {
-            assert_eq!(AccessRights::Eqv <= access_right, true);
-        }
-
-        // According to the Rust documentation:
-        // https://doc.rust-lang.org/std/hash/trait.Hash.html#hash-and-eq
-        // following property must hold:
-        // k1 == k2 -> hash(k1) == hash(k2)
-        #[test]
-        fn test_key_eqv_hash_property(key_a in key_arb(), key_b in key_arb()) {
-            if key_a == key_b {
-                let mut hasher = SipHasher::new();
-                let key_a_hash = {
-                    key_a.hash(&mut hasher);
-                    hasher.finish()
-                };
-                let key_b_hash = {
-                    key_b.hash(&mut hasher);
-                    hasher.finish()
-                };
-                assert!(key_a_hash == key_b_hash);
-            }
-        }
-
-        // According to Rust documentation, following property must hold::
-        // forall a, b: a.cmp(b) == Ordering::Equal iff a == b and Some(a.cmp(b)) == a.partial_cmp(b)
-        #[test]
-        fn test_key_partialeq_partialord_ord_property(key_a in key_arb(), key_b in key_arb()) {
-            if key_a == key_b && Some(key_a.cmp(&key_b)) == key_a.partial_cmp(&key_b) {
-                assert!(key_a.cmp(&key_b) == Ordering::Equal);
-            }
-        }
+        test_addable(ReadAddWrite, true);
     }
 }

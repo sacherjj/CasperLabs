@@ -7,7 +7,9 @@ use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFou
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
 use shared::newtypes::Blake2bHash;
-use storage::{global_state, history, history::CommitResult, op, transform, transform::TypeMismatch};
+use storage::{
+    global_state, history, history::CommitResult, op, transform, transform::TypeMismatch,
+};
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {
