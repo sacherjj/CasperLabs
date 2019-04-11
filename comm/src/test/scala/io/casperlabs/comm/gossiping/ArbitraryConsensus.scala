@@ -181,6 +181,7 @@ trait ArbitraryConsensus {
                 validatorPublicKey = j.getHeader.validatorPublicKey
               )
             })
+            .withRank(parents.map(_.getHeader.rank).max + 1)
           block.withHeader(header)
         }
 
