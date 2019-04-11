@@ -10,6 +10,7 @@ from .cl_node.casperlabsnode import (
     create_peer_nodes,
     docker_network_with_started_bootstrap,
     extract_block_hash_from_propose_output,
+    HOST_MOUNT_DIR,
 )
 from .cl_node.common import Network, TestingContext
 from .cl_node.wait import (
@@ -74,7 +75,7 @@ def test_metrics_api_socket(command_line_options_fixture, docker_client_fixture)
 
 
 def deploy_block(node, _contract_name):
-    local_contract_file_path = os.path.join('resources', _contract_name)
+    local_contract_file_path = os.path.join(HOST_MOUNT_DIR, _contract_name)
     shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{_contract_name}")
     deploy_output = node.deploy()
     assert deploy_output.strip() == "Success!"

@@ -30,7 +30,7 @@ TAG = os.environ.get("DRONE_BUILD_NUMBER", None)
 if TAG is None:
     TAG = "test"
 else:
-    TAG = "DRONE-" + TAG
+    TAG = f"DRONE-{TAG}"
 
 DEFAULT_NODE_IMAGE = f"casperlabs/node:{TAG}"
 DEFAULT_ENGINE_IMAGE = f"casperlabs/execution-engine:{TAG}"
@@ -46,9 +46,10 @@ GRPC_SOCKET_FILE = f"{CL_SOCKETS_DIR}/.casper-node.sock"
 EXECUTION_ENGINE_COMMAND = ".casperlabs/sockets/.casper-node.sock"
 CONTRACT_NAME = "helloname.wasm"
 
-HOST_MOUNT_DIR = f"/tmp/{TAG}/resources"
-HOST_GENESIS_DIR = HOST_MOUNT_DIR + "/genesis"
-HOST_BOOTSTRAP_DIR = HOST_MOUNT_DIR + "/bootstrap_certificate"
+HOST_MOUNT_DIR = f"/tmp/resources_{TAG}"
+HOST_GENESIS_DIR = f"{HOST_MOUNT_DIR}/genesis"
+HOST_BOOTSTRAP_DIR = f"{HOST_MOUNT_DIR}/bootstrap_certificate"
+
 
 class InterruptedException(Exception):
     pass
@@ -312,8 +313,7 @@ def make_node(
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
-    deploy_dir = make_tempdir(prefix=f"{TAG}/resources/")
-    # end slash is necessary to create in format /tmp/DRONE-${DRONE_BUILD_NUMBER}/resources/xxxxxxxx
+    deploy_dir = make_tempdir(prefix=f"{HOST_MOUNT_DIR}/")
 
     command = make_container_command(container_command, container_command_options, is_bootstrap)
 
