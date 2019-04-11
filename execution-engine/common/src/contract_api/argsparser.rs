@@ -2,7 +2,8 @@ use crate::bytesrepr;
 use alloc::vec::Vec;
 use bytesrepr::{Error, ToBytes};
 
-/// Parses `Self` into a byte representation.
+/// Parses `Self` into a byte representation that is ABI compliant.
+/// It means that each type of the tuple have to implement `ToBytes`.
 /// Implemented for tuples of various sizes.
 pub trait ArgsParser {
     /// `parse` returns `Vec<Vec<u8>>` because we want to be able to
