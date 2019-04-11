@@ -1,6 +1,6 @@
 mod alloc_util;
-pub mod pointers;
 pub mod argsparser;
+pub mod pointers;
 
 use self::alloc_util::*;
 use self::pointers::*;
