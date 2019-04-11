@@ -76,7 +76,7 @@ pipeline:
   git-status-post-scala-compile:
     <<: *buildenv
     commands: |
-      STATUS_CHECK=`git status | grep modified`
+      STATUS_CHECK=$(git status)
       echo $STATUS_CHECK
       if [[ $STATUS_CHECK == *"modified"* ]]; then exit 1; fi
 
