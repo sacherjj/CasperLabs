@@ -260,12 +260,12 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       for {
         dag       <- blockDag
         tipHashes <- estimator(dag)
-        p         <- chooseNonConflicting[F](tipHashes, genesis, dag)
+        parents   <- chooseNonConflicting[F](tipHashes, genesis, dag)
         _ <- Log[F].info(
-              s"${p.size} parents out of ${tipHashes.size} latest blocks will be used."
+              s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
             )
-        r                <- remainingDeploys(dag, p)
-        bondedValidators = bonds(p.head).map(_.validator).toSet
+        remaining        <- remainingDeploys(dag, parents)
+        bondedValidators = bonds(parents.head).map(_.validator).toSet
         //We ensure that only the justifications given in the block are those
         //which are bonded validators in the chosen parent. This is safe because
         //any latest message not from a bonded validator will not change the
@@ -273,8 +273,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         latestMessages <- dag.latestMessages
         justifications = toJustification(latestMessages)
           .filter(j => bondedValidators.contains(j.validator))
-        proposal <- if (r.nonEmpty || p.length > 1) {
-                     createProposal(dag, p, r, justifications)
+        proposal <- if (remaining.nonEmpty || parents.length > 1) {
+                     createProposal(dag, parents, remaining, justifications)
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
@@ -303,19 +303,15 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     for {
       state <- Cell[F, CasperState].read
       hist  = state.deployBuffer
-      // TODO: Quit traversing when the buffer becomes empty.
-      d <- DagOperations
-            .bfTraverseF[F, BlockMessage](parents.toList)(ProtoUtil.unsafeGetParents[F])
-            .map { b =>
-              b.body
-                .map(_.deploys.flatMap(_.deploy))
-                .toSeq
-                .flatten
-            }
-            .toList
-      deploy = d.flatten.toSet
-      result = (hist.diff(deploy)).toSeq
-    } yield result
+      unprocessed <- DagOperations
+                      .bfTraverseF[F, BlockMessage](parents.toList)(ProtoUtil.unsafeGetParents[F])
+                      .foldWhileLeft(state.deployBuffer) {
+                        case (deployPool, block) =>
+                          val processedDeploys = block.getBody.deploys.flatMap(_.deploy)
+                          val remDeploys       = deployPool -- processedDeploys
+                          if (remDeploys.nonEmpty) Left(remDeploys) else Right(Set.empty)
+                      }
+    } yield unprocessed.toSeq
 
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
@@ -654,11 +650,4 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
             CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
           }
     } yield ()
-}
-
-object MultiParentCasperImpl {
-
-  /** Component purely to validate, execute and store blocks.
-    * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]] {}
 }
