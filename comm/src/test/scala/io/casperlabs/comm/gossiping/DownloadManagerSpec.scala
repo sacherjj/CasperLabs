@@ -568,7 +568,7 @@ object DownloadManagerSpec {
     private val emptyGenesisApprover = new GenesisApprover[Task] {
       def getCandidate                                           = ???
       def addApproval(blockHash: ByteString, approval: Approval) = ???
-      def onApproved                                             = ???
+      def awaitApproval                                          = ???
     }
 
     // Used only as a default argument for when we aren't touching the remote service in a test.

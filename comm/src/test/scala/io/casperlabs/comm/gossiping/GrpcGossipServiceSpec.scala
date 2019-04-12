@@ -992,7 +992,7 @@ class GrpcGossipServiceSpec
           approval: Approval
       ): Task[Either[ServiceError, Boolean]] =
         Task.now(Left(Unavailable("Come back later.")))
-      override def onApproved = ???
+      override def awaitApproval = ???
     }
 
     def testWithApprover(
@@ -1119,7 +1119,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
     private val emptyGenesisApprover = new GenesisApprover[Task] {
       def getCandidate                                           = ???
       def addApproval(blockHash: ByteString, approval: Approval) = ???
-      def onApproved                                             = ???
+      def awaitApproval                                          = ???
     }
 
     private def defaultBackend(testDataRef: AtomicReference[TestData]) =

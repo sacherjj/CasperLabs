@@ -33,9 +33,9 @@ trait GenesisApprover[F[_]] {
       approval: Approval
   ): F[Either[ServiceError, Boolean]]
 
-  /** Trigger once when the Genesis candidate has gathered enough signatures that this node
+  /** Triggered once when the Genesis candidate has gathered enough signatures that this node
     * can transition to processing blocks and deploys. */
-  def onApproved: F[ByteString]
+  def awaitApproval: F[ByteString]
 }
 
 object GenesisApproverImpl {
@@ -74,11 +74,11 @@ object GenesisApproverImpl {
       for {
         statusRef          <- Ref.of(none[Status])
         hasTransitionedRef <- Ref.of(false)
-        onApprovedDeferred <- Deferred[F, ByteString]
+        deferredApproval   <- Deferred[F, ByteString]
         approver = new GenesisApproverImpl(
           statusRef,
           hasTransitionedRef,
-          onApprovedDeferred,
+          deferredApproval,
           backend,
           nodeDiscovery,
           connectToGossip,
@@ -108,11 +108,11 @@ object GenesisApproverImpl {
         // Start with empty list of approvals and add it to trigger the transition if it has to be.
         statusRef          <- Ref.of(Status(GenesisCandidate(genesis.blockHash), genesis).some)
         hasTransitionedRef <- Ref.of(false)
-        onApprovedDeferred <- Deferred[F, ByteString]
+        deferredApproval   <- Deferred[F, ByteString]
         approver = new GenesisApproverImpl(
           statusRef,
           hasTransitionedRef,
-          onApprovedDeferred,
+          deferredApproval,
           backend,
           nodeDiscovery,
           connectToGossip,
@@ -129,7 +129,7 @@ object GenesisApproverImpl {
 class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
     statusRef: Ref[F, Option[GenesisApproverImpl.Status]],
     hasTransitionedRef: Ref[F, Boolean],
-    onApprovedDeferred: Deferred[F, ByteString],
+    deferredApproval: Deferred[F, ByteString],
     backend: GenesisApproverImpl.Backend[F],
     nodeDiscovery: NodeDiscovery[F],
     connectToGossip: Node => F[GossipService[F]],
@@ -141,8 +141,8 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
 
   private def hex(hash: ByteString) = Base16.encode(hash.toByteArray)
 
-  override def onApproved: F[ByteString] =
-    onApprovedDeferred.get
+  override def awaitApproval: F[ByteString] =
+    deferredApproval.get
 
   override def getCandidate: F[Either[ServiceError, GenesisCandidate]] =
     statusRef.get.map {
@@ -351,7 +351,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         }
         .ifM(
           (
-            onApprovedDeferred.complete(status.candidate.blockHash) *>
+            deferredApproval.complete(status.candidate.blockHash) *>
               hasTransitionedRef.set(true) *>
               Log[F].info("Transitioned to approved genesis state.")
           ).attempt *> hasTransitionedRef.get,

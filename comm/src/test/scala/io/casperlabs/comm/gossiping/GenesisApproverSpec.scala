@@ -25,7 +25,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
       "immediately trigger the transition" in {
         TestFixture.fromGenesis() { approver =>
           // This would time out if it wasn't triggered already.
-          approver.onApproved.map { blockHash =>
+          approver.awaitApproval.map { blockHash =>
             blockHash shouldBe genesis.blockHash
           }
         }
@@ -38,7 +38,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
             override def canTransition(block: Block, signatories: Set[ByteString]) = false
           }
         ) { approver =>
-          approver.onApproved.timeout(50.millis).attempt.map { res =>
+          approver.awaitApproval.timeout(50.millis).attempt.map { res =>
             res.isLeft shouldBe true
             res.left.get shouldBe a[TimeoutException]
           }
@@ -398,7 +398,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
       }
     }
 
-    "trigger onApproved when the threshold is passed" in {
+    "trigger awaitApproval when the threshold is passed" in {
       TestFixture.fromGenesis(
         environment = new MockEnvironment() {
           override def canTransition(block: Block, signatories: Set[ByteString]) =
@@ -406,10 +406,10 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
         }
       ) { approver =>
         for {
-          r0 <- approver.onApproved.timeout(Duration.Zero).attempt
+          r0 <- approver.awaitApproval.timeout(Duration.Zero).attempt
           _  = r0.isLeft shouldBe true
           _  <- approver.addApproval(genesis.blockHash, correctApproval)
-          r1 <- approver.onApproved
+          r1 <- approver.awaitApproval
         } yield ()
       }
     }
