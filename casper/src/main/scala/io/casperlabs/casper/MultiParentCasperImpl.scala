@@ -112,7 +112,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
                       else if (!validVersion) (InvalidUnslashableBlock, dag).pure[F]
                       else attemptAdd(block, dag, lastFinalizedBlockHash)
       (attempt, updatedDag) = attemptResult
-      _                     <- removeAdded(List(block.blockHash -> attempt))
+      _                     <- removeAdded(List(block.blockHash -> attempt), canRemove = _ != MissingBlocks)
       _ <- attempt match {
             case MissingBlocks           => ().pure[F]
             case IgnorableEquivocation   => ().pure[F]
@@ -230,7 +230,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
           .pure[F]
     }
 
-  /** Add a deploy to the buvfer, to be executed later. */
+  /** Add a deploy to the buffer, to be executed later. */
   private def addDeploy(deployData: DeployData): F[Unit] =
     Cell[F, CasperState].modify { s =>
       s.copy(deployBuffer = s.deployBuffer + deployData)
@@ -617,17 +617,18 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       (attempts, updatedDag) = dependencyFreeAttempts
       furtherAttempts <- if (attempts.isEmpty) List.empty.pure[F]
                         else {
-                          removeAdded(attempts) *>
+                          removeAdded(attempts, canRemove = _.inDag) *>
                             reAttemptBuffer(updatedDag, lastFinalizedBlockHash)
                         }
     } yield attempts ++ furtherAttempts
 
-  /** Remove a all the bloks that were successfully added from the block buffer and the dependency DAG. */
+  /** Remove all the blocks that were successfully added from the block buffer and the dependency DAG. */
   private def removeAdded(
-      attempts: List[(BlockHash, BlockStatus)]
+      attempts: List[(BlockHash, BlockStatus)],
+      canRemove: BlockStatus => Boolean
   ): F[Unit] = {
     val addedBlockHashes = attempts.collect {
-      case (blockHash, status) if status.inDag => blockHash
+      case (blockHash, status) if canRemove(status) => blockHash
     }.toSet
 
     Cell[F, CasperState].modify { s =>
@@ -651,3 +652,4 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
           }
     } yield ()
 }
+
