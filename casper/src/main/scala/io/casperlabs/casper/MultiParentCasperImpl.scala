@@ -298,14 +298,14 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   /** Get the deploys that are not present in the past of the chosen parents. */
   private def remainingDeploys(
       dag: BlockDagRepresentation[F],
-      p: Seq[BlockMessage]
+      parents: Seq[BlockMessage]
   ): F[Seq[DeployData]] =
     for {
       state <- Cell[F, CasperState].read
       hist  = state.deployHistory
       // TODO: Quit traversing when the buffer becomes empty.
       d <- DagOperations
-            .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
+            .bfTraverseF[F, BlockMessage](parents.toList)(ProtoUtil.unsafeGetParents[F])
             .map { b =>
               b.body
                 .map(_.deploys.flatMap(_.deploy))
@@ -321,18 +321,18 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
   private def createProposal(
       dag: BlockDagRepresentation[F],
-      p: Seq[BlockMessage],
-      r: Seq[DeployData],
+      parents: Seq[BlockMessage],
+      deploys: Seq[DeployData],
       justifications: Seq[Justification]
   ): F[CreateBlockStatus] =
     (for {
       now <- Time[F].currentMillis
       s   <- Cell[F, CasperState].read
       stateResult <- ExecEngineUtil
-                      .computeDeploysCheckpoint(p, r, dag)
+                      .computeDeploysCheckpoint(parents, deploys, dag)
       DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number) = stateResult
       //TODO: compute bonds properly
-      newBonds = ProtoUtil.bonds(p.head)
+      newBonds = ProtoUtil.bonds(parents.head)
       postState = RChainState()
         .withPreStateHash(preStateHash)
         .withPostStateHash(postStateHash)
@@ -342,7 +342,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       body = Body()
         .withState(postState)
         .withDeploys(deploysForBlock)
-      header = blockHeader(body, p.map(_.blockHash), version, now)
+      header = blockHeader(body, parents.map(_.blockHash), version, now)
       block  = unsignedBlockProto(body, header, justifications, shardId)
     } yield CreateBlockStatus.created(block)).handleErrorWith(
       ex =>
