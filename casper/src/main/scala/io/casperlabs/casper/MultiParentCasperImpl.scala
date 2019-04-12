@@ -62,6 +62,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
 
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
+  /** Add a block if it hasn't been added yet. */
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
@@ -92,6 +93,9 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         } yield result
     )(_ => blockProcessingLock.release)
 
+  /** Validate the block, try to execute and store it,
+    * execute any other block that depended on it,
+    * update the finalized block reference. */
   private def internalAddBlock(
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -139,6 +143,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
           )
     } yield attempt
 
+  /** Go from the last finalized block and visit all children that can be finalized now.
+    * Remove all of the deploys that are in any of them as they won't have to be attempted again. */
   private def updateLastFinalizedBlock(
       dag: BlockDagRepresentation[F],
       lastFinalizedBlockHash: BlockHash
@@ -201,17 +207,20 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
           )
     } yield faultTolerance > faultToleranceThreshold
 
+  /** Check that either we have the block already scheduled but missing dependencies, or it's in the store */
   def contains(
       b: BlockMessage
   ): F[Boolean] =
+    // TODO: Check the buffer first.
     for {
       blockStoreContains <- BlockStore[F].contains(b.blockHash)
       state              <- Cell[F, CasperState].read
       bufferContains     = state.blockBuffer.exists(_.blockHash == b.blockHash)
     } yield (blockStoreContains || bufferContains)
 
-  //TODO: verify sig immediately (again, so we fail fast)
+  /** Add a deploy to the buffer, if the code passes basic validation. */
   def deploy(d: DeployData): F[Either[Throwable, Unit]] = (d.session, d.payment) match {
+    //TODO: verify sig immediately (again, so we fail fast)
     case (Some(session), Some(payment)) =>
       val req = ExecutionEngineService[F].verifyWasm(ValidateRequest(session.code, payment.code))
 
@@ -219,23 +228,23 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
         .flatMapF(_ => addDeploy(d) map (_.asRight[Throwable]))
         .value
-
+    // TODO: Genesis doesn't have payment code; does it come here?
     case (None, _) | (_, None) =>
       Either
         .left[Throwable, Unit](
+          // TODO: Use IllegalArgument from comms.
           new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
         )
         .pure[F]
   }
 
-  def addDeploy(deployData: DeployData): F[Unit] =
-    for {
-      _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployHistory = s.deployHistory + deployData)
-          }
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deployData)}")
-    } yield ()
+  /** Add a deploy to the buvfer, to be executed later. */
+  private def addDeploy(deployData: DeployData): F[Unit] =
+    Cell[F, CasperState].modify { s =>
+      s.copy(deployHistory = s.deployHistory + deployData)
+    } *> Log[F].info(s"Received ${PrettyPrinter.buildString(deployData)}")
 
+  /** Return the list of tips. */
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     for {
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
@@ -294,6 +303,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     } yield blockMessage
 
   // TODO: Optimize for large number of deploys accumulated over history
+  /** Get the deploys that are not present in the past of the chosen parents. */
   private def remainingDeploys(
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage]
@@ -301,6 +311,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     for {
       state <- Cell[F, CasperState].read
       hist  = state.deployHistory
+      // TODO: Quit traversing when the buffer becomes empty.
       d <- DagOperations
             .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
             .map { b =>
@@ -315,6 +326,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     } yield result
 
   //TODO: Need to specify SEQ vs PAR type block?
+  /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
   private def createProposal(
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage],
@@ -349,9 +361,11 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
           .map(_ => CreateBlockStatus.internalDeployError(ex))
     )
 
+  // MultiParentCasper Exposes the block DAG to those who need it.
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
 
+  // RChain used ot return the whole database as a String for testing.
   def storageContents(hash: StateHash): F[String] =
     """""".pure[F]
 
@@ -368,9 +382,10 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
 
   implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
 
-  /* We want to catch equivocations only after we confirm that the block completing
-   * the equivocation is otherwise valid.
-   */
+  /* Execute the block to get the effects then do some more validation.
+   * Save the effects if everything checks out.
+   * We want to catch equivocations only after we confirm that the block completing
+   * the equivocation is otherwise valid. */
   private def attemptAdd(
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -426,6 +441,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   }
 
   // TODO: Handle slashing
+  /** Either store the block with its transformation and gossip it,
+    * or add it to the buffer in case the dependencies are missing. */
   private def addEffects(
       status: BlockStatus,
       block: BlockMessage,
@@ -518,12 +535,14 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
           .buildString(block.blockHash)}: ${ex.getMessage}") *> dag.pure[F]
     }
 
+  /** Check if the block has dependencies that we don't have in store of buffer.
+    * Add those to the dependency DAG and ask peers to send it. */
   private def fetchMissingDependencies(
-      b: BlockMessage
+      block: BlockMessage
   ): F[Unit] =
     for {
       dag <- blockDag
-      missingDependencies <- dependenciesHashesOf(b)
+      missingDependencies <- dependenciesHashesOf(block)
                               .filterA(
                                 blockHash =>
                                   dag
@@ -534,22 +553,25 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       missingUnseenDependencies = missingDependencies.filter(
         blockHash => !state.seenBlockHashes.contains(blockHash)
       )
-      _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
+      _ <- missingDependencies.traverse(hash => addMissingDependency(hash, block.blockHash))
       _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
     } yield ()
 
-  private def handleMissingDependency(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
+  /** Keep track of a block depending on another one, so we know when we can start processing. */
+  private def addMissingDependency(ancestorHash: BlockHash, childHash: BlockHash): F[Unit] =
     Cell[F, CasperState].modify(
       s =>
         s.copy(
           dependencyDag = DoublyLinkedDagOperations
-            .add[BlockHash](s.dependencyDag, hash, childBlock.blockHash)
+            .add[BlockHash](s.dependencyDag, ancestorHash, childHash)
         )
     )
 
+  /** Ask all peers to send us a block. */
   private def requestMissingDependency(hash: BlockHash) =
     CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
 
+  /** Remember a block as being invalid, then save it to storage. */
   private def handleInvalidBlockEffect(
       status: BlockStatus,
       block: BlockMessage,
@@ -566,6 +588,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       updateDag <- addToState(block, effects)
     } yield updateDag
 
+  /** Save the block to the block and DAG storage. */
   private def addToState(
       block: BlockMessage,
       effects: Seq[ipc.TransformEntry]
@@ -576,6 +599,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       hash       = block.blockHash
     } yield updatedDag
 
+  /** After a block is executed we can try to execute the other blocks in the buffer that dependend on it. */
   private def reAttemptBuffer(
       dag: BlockDagRepresentation[F],
       lastFinalizedBlockHash: BlockHash
@@ -610,6 +634,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
                         }
     } yield attempts ++ furtherAttempts
 
+  /** Remove a all the bloks that were successfully added from the block buffer and the dependency DAG. */
   private def removeAdded(
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       attempts: List[(BlockHash, BlockStatus)]
@@ -634,6 +659,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     removeFromBlockBuffer *> removeFromBlockBufferDependencyDag
   }
 
+  /** Called periodically from outside to ask all peers again
+    * to send us blocks for which we are missing some dependencies. */
   def fetchDependencies: F[Unit] =
     for {
       s <- Cell[F, CasperState].read
@@ -643,4 +670,9 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     } yield ()
 }
 
-object MultiParentCasperImpl {}
+object MultiParentCasperImpl {
+
+  /** Component purely to validate, execute and store blocks.
+    * Even the Genesis, to create it in the first place. */
+  class StatelessExecutor[F[_]] {}
+}
