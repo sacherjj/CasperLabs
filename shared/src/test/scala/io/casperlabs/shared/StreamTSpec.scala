@@ -5,6 +5,8 @@ import cats.implicits._
 
 import org.scalatest.{FunSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import monix.eval.Task
 import monix.execution.Scheduler
 import scala.util.{Failure, Success, Try}
@@ -120,6 +122,26 @@ class StreamTSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChec
         val stream: StreamT[Id, Int] = StreamT.fromList[Id, Int](list)
 
         stream.foldLeft[Int](0)(_ + _) shouldBe list.sum
+      }
+    }
+
+    it("should foldWhileLeft properly in") {
+      forAll {
+        for {
+          list <- arbitrary[List[Int]]
+          n    <- Gen.choose(0, list.size)
+        } yield (list, n)
+      } {
+        case (list: List[Int], n: Int) =>
+          val stream: StreamT[Id, Int] = StreamT.fromList[Id, Int](list)
+
+          val (sum, _) = stream
+            .foldWhileLeft[(Int, Int)]((0, 0)) {
+              case ((s, i), x) =>
+                if (i < n) Left((s + x, i + 1)) else Right((s, n))
+            }
+
+          sum shouldBe list.take(n).sum
       }
     }
 
