@@ -31,14 +31,14 @@ import io.casperlabs.storage.BlockMsgWithTransform
 
   @param seenBlockHashes - tracks hashes of all blocks seen so far
   @param blockBuffer
-  @param deployHistory
+  @param deployBuffer
   @param invalidBlockTracker
   @param equivocationsTracker: Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
   */
 final case class CasperState(
     seenBlockHashes: Set[BlockHash] = Set.empty[BlockHash],
     blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
-    deployHistory: Set[DeployData] = Set.empty[DeployData],
+    deployBuffer: Set[DeployData] = Set.empty[DeployData],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
@@ -172,12 +172,12 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       block              <- ProtoUtil.unsafeGetBlock[F](blockHash)
       deploysToRemove    = block.body.get.deploys.map(_.deploy.get).toSet
       stateBefore        <- Cell[F, CasperState].read
-      initialHistorySize = stateBefore.deployHistory.size
+      initialHistorySize = stateBefore.deployBuffer.size
       _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployHistory = s.deployHistory.filterNot(deploysToRemove))
+            s.copy(deployBuffer = s.deployBuffer.filterNot(deploysToRemove))
           }
       stateAfter     <- Cell[F, CasperState].read
-      deploysRemoved = initialHistorySize - stateAfter.deployHistory.size
+      deploysRemoved = initialHistorySize - stateAfter.deployBuffer.size
     } yield deploysRemoved
 
   /*
@@ -233,7 +233,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   /** Add a deploy to the buvfer, to be executed later. */
   private def addDeploy(deployData: DeployData): F[Unit] =
     Cell[F, CasperState].modify { s =>
-      s.copy(deployHistory = s.deployHistory + deployData)
+      s.copy(deployBuffer = s.deployBuffer + deployData)
     } *> Log[F].info(s"Received ${PrettyPrinter.buildString(deployData)}")
 
   /** Return the list of tips. */
@@ -302,7 +302,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   ): F[Seq[DeployData]] =
     for {
       state <- Cell[F, CasperState].read
-      hist  = state.deployHistory
+      hist  = state.deployBuffer
       // TODO: Quit traversing when the buffer becomes empty.
       d <- DagOperations
             .bfTraverseF[F, BlockMessage](parents.toList)(ProtoUtil.unsafeGetParents[F])
