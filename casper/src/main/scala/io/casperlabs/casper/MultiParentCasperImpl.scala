@@ -64,31 +64,31 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
 
   /** Add a block if it hasn't been added yet. */
   def addBlock(
-      b: BlockMessage,
+      block: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
   ): F[BlockStatus] =
     Sync[F].bracket(blockProcessingLock.acquire)(
       _ =>
         for {
           dag            <- blockDag
-          blockHash      = b.blockHash
+          blockHash      = block.blockHash
           containsResult <- dag.contains(blockHash)
           s              <- Cell[F, CasperState].read
           result <- if (containsResult || s.seenBlockHashes.contains(blockHash)) {
                      Log[F]
                        .info(
-                         s"Block ${PrettyPrinter.buildString(b.blockHash)} has already been processed by another thread."
+                         s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
                        )
                        .map(_ => BlockStatus.processing)
                    } else {
                      (validatorId match {
                        case Some(ValidatorIdentity(publicKey, _, _)) =>
                          val sender = ByteString.copyFrom(publicKey)
-                         handleDoppelganger(b, sender)
+                         handleDoppelganger(block, sender)
                        case None => ().pure[F]
                      }) *> Cell[F, CasperState].modify { s =>
-                       s.copy(seenBlockHashes = s.seenBlockHashes + b.blockHash)
-                     } *> internalAddBlock(b, dag)
+                       s.copy(seenBlockHashes = s.seenBlockHashes + blockHash)
+                     } *> internalAddBlock(block, dag)
                    }
         } yield result
     )(_ => blockProcessingLock.release)
@@ -97,31 +97,22 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
     * execute any other block that depended on it,
     * update the finalized block reference. */
   private def internalAddBlock(
-      b: BlockMessage,
+      block: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[BlockStatus] =
     for {
-      validFormat            <- Validate.formatOfFields[F](b)
-      validSig               <- Validate.blockSignature[F](b)
-      validSender            <- Validate.blockSender[F](b, genesis, dag)
-      validVersion           <- Validate.version[F](b, version)
+      validFormat            <- Validate.formatOfFields[F](block)
+      validSig               <- Validate.blockSignature[F](block)
+      validSender            <- Validate.blockSender[F](block, genesis, dag)
+      validVersion           <- Validate.version[F](block, version)
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
       attemptResult <- if (!validFormat) (InvalidUnslashableBlock, dag).pure[F]
                       else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]
                       else if (!validSender) (InvalidUnslashableBlock, dag).pure[F]
                       else if (!validVersion) (InvalidUnslashableBlock, dag).pure[F]
-                      else attemptAdd(b, dag, lastFinalizedBlockHash)
+                      else attemptAdd(block, dag, lastFinalizedBlockHash)
       (attempt, updatedDag) = attemptResult
-      _ <- attempt match {
-            case MissingBlocks => ().pure[F]
-            case _ =>
-              Cell[F, CasperState].modify { s =>
-                s.copy(
-                  blockBuffer = s.blockBuffer - b,
-                  dependencyDag = DoublyLinkedDagOperations.remove(s.dependencyDag, b.blockHash)
-                )
-              }
-          }
+      _                     <- removeAdded(List(block.blockHash -> attempt))
       _ <- attempt match {
             case MissingBlocks           => ().pure[F]
             case IgnorableEquivocation   => ().pure[F]
@@ -178,8 +169,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   /** Remove deploys from the history which are included in a just finalised block. */
   private def removeDeploysInBlock(blockHash: BlockHash): F[Int] =
     for {
-      b                  <- ProtoUtil.unsafeGetBlock[F](blockHash)
-      deploysToRemove    = b.body.get.deploys.map(_.deploy.get).toSet
+      block              <- ProtoUtil.unsafeGetBlock[F](blockHash)
+      deploysToRemove    = block.body.get.deploys.map(_.deploy.get).toSet
       stateBefore        <- Cell[F, CasperState].read
       initialHistorySize = stateBefore.deployHistory.size
       _ <- Cell[F, CasperState].modify { s =>
@@ -219,24 +210,25 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       )
 
   /** Add a deploy to the buffer, if the code passes basic validation. */
-  def deploy(d: DeployData): F[Either[Throwable, Unit]] = (d.session, d.payment) match {
-    //TODO: verify sig immediately (again, so we fail fast)
-    case (Some(session), Some(payment)) =>
-      val req = ExecutionEngineService[F].verifyWasm(ValidateRequest(session.code, payment.code))
+  def deploy(deployData: DeployData): F[Either[Throwable, Unit]] =
+    (deployData.session, deployData.payment) match {
+      //TODO: verify sig immediately (again, so we fail fast)
+      case (Some(session), Some(payment)) =>
+        val req = ExecutionEngineService[F].verifyWasm(ValidateRequest(session.code, payment.code))
 
-      EitherT(req)
-        .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
-        .flatMapF(_ => addDeploy(d) map (_.asRight[Throwable]))
-        .value
-    // TODO: Genesis doesn't have payment code; does it come here?
-    case (None, _) | (_, None) =>
-      Either
-        .left[Throwable, Unit](
-          // TODO: Use IllegalArgument from comms.
-          new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
-        )
-        .pure[F]
-  }
+        EitherT(req)
+          .leftMap(c => new IllegalArgumentException(s"Contract verification failed: $c"))
+          .flatMapF(_ => addDeploy(deployData) map (_.asRight[Throwable]))
+          .value
+      // TODO: Genesis doesn't have payment code; does it come here?
+      case (None, _) | (_, None) =>
+        Either
+          .left[Throwable, Unit](
+            // TODO: Use IllegalArgument from comms.
+            new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
+          )
+          .pure[F]
+    }
 
   /** Add a deploy to the buvfer, to be executed later. */
   private def addDeploy(deployData: DeployData): F[Unit] =
@@ -629,34 +621,28 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       (attempts, updatedDag) = dependencyFreeAttempts
       furtherAttempts <- if (attempts.isEmpty) List.empty.pure[F]
                         else {
-                          removeAdded(state.dependencyDag, attempts) *>
+                          removeAdded(attempts) *>
                             reAttemptBuffer(updatedDag, lastFinalizedBlockHash)
                         }
     } yield attempts ++ furtherAttempts
 
   /** Remove a all the bloks that were successfully added from the block buffer and the dependency DAG. */
   private def removeAdded(
-      blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       attempts: List[(BlockHash, BlockStatus)]
   ): F[Unit] = {
     val addedBlockHashes = attempts.collect {
       case (blockHash, status) if status.inDag => blockHash
     }.toSet
 
-    val removeFromBlockBuffer =
-      Cell[F, CasperState].modify { s =>
-        s.copy(blockBuffer = s.blockBuffer.filterNot(addedBlockHashes contains _.blockHash))
-      }
-
-    val removeFromBlockBufferDependencyDag =
-      Cell[F, CasperState].modify { s =>
-        s.copy(dependencyDag = addedBlockHashes.foldLeft(blockBufferDependencyDag) {
+    Cell[F, CasperState].modify { s =>
+      s.copy(
+        blockBuffer = s.blockBuffer.filterNot(addedBlockHashes contains _.blockHash),
+        dependencyDag = addedBlockHashes.foldLeft(s.dependencyDag) {
           case (dag, blockHash) =>
             DoublyLinkedDagOperations.remove(dag, blockHash)
-        })
-      }
-
-    removeFromBlockBuffer *> removeFromBlockBufferDependencyDag
+        }
+      )
+    }
   }
 
   /** Called periodically from outside to ask all peers again
