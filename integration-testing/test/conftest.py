@@ -6,6 +6,7 @@ import random
 import shutil
 import tempfile
 import sys
+from pathlib import Path
 
 from typing import TYPE_CHECKING, Generator, List
 
@@ -14,7 +15,7 @@ import pytest
 
 from .cl_node.common import KeyPair, TestingContext
 from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
-from .cl_node.casperlabsnode import docker_network_with_started_bootstrap, HOST_GENESIS_DIR
+from .cl_node.casperlabsnode import docker_network_with_started_bootstrap, HOST_GENESIS_DIR, HOST_MOUNT_DIR
 
 
 if TYPE_CHECKING:
@@ -49,7 +50,37 @@ def make_timeout(peer_count: int, value: int, base: int, peer_factor: int = 10) 
     return base + peer_count * peer_factor
 
 
-@pytest.yield_fixture(scope='session')
+def get_resources_folder() -> Path:
+    """ This will return the resources folder that is copied into the correct location for testing """
+    cur_path = Path(os.path.realpath(__file__)).parent
+    while cur_path.name != 'integration-testing':
+        cur_path = cur_path.parent
+    return cur_path / 'resources'
+
+
+def setup_testing_environment() -> None:
+    """ Global testing setup in Python rather than run_tests.sh """
+    resources_source_path = get_resources_folder()
+    shutil.copytree(resources_source_path, HOST_MOUNT_DIR)
+
+
+def teardown_testing_environment() -> None:
+    """ Global testing teardown in Python rather than run_tests.sh """
+    shutil.rmtree(HOST_MOUNT_DIR)
+
+
+@pytest.fixture(scope='session', autouse=True)
+def session_testing_environment():
+    """
+    Using a single environment in Python rather than run_test.sh, allows running tests directly from python for debug
+    if needed.
+    """
+    setup_testing_environment()
+    yield None
+    teardown_testing_environment()
+
+
+@pytest.fixture(scope='session')
 def command_line_options_fixture(request):
     peer_count = int(request.config.getoption("--peer-count"))
     start_timeout = int(request.config.getoption("--start-timeout"))
@@ -94,7 +125,7 @@ def create_bonds_file(validator_keys: List[KeyPair]) -> str:
         logging.exception(f"An exception occured: {ex}")
 
 
-@pytest.yield_fixture(scope='session')
+@pytest.fixture(scope='session')
 def docker_client_fixture() -> Generator["DockerClient", None, None]:
     docker_client = docker_py.from_env()
     try:
