@@ -579,68 +579,60 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   private def reAttemptBuffer(
       dag: BlockDagRepresentation[F],
       lastFinalizedBlockHash: BlockHash
-  ): F[Unit] =
+  ): F[List[(BlockHash, BlockStatus)]] =
     for {
       state          <- Cell[F, CasperState].read
       dependencyFree = state.dependencyDag.dependencyFree
       dependencyFreeBlocks = state.blockBuffer
         .filter(block => dependencyFree.contains(block.blockHash))
         .toList
-      attemptsWithDag <- dependencyFreeBlocks.foldM(
-                          (
-                            List.empty[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))],
-                            dag
-                          )
-                        ) {
-                          case ((attempts, updatedDag), b) =>
-                            for {
-                              status <- attemptAdd(b, updatedDag, lastFinalizedBlockHash)
-                            } yield ((b, status) :: attempts, status._2)
+      dependencyFreeAttempts <- dependencyFreeBlocks.foldM(
+                                 (
+                                   List.empty[(BlockHash, BlockStatus)],
+                                   dag
+                                 )
+                               ) {
+                                 case ((attempts, updatedDag), block) =>
+                                   for {
+                                     attempt <- attemptAdd(
+                                                 block,
+                                                 updatedDag,
+                                                 lastFinalizedBlockHash
+                                               )
+                                     (status, updatedDag) = attempt
+                                   } yield ((block.blockHash, status) :: attempts, updatedDag)
+                               }
+      (attempts, updatedDag) = dependencyFreeAttempts
+      furtherAttempts <- if (attempts.isEmpty) List.empty.pure[F]
+                        else {
+                          removeAdded(state.dependencyDag, attempts) *>
+                            reAttemptBuffer(updatedDag, lastFinalizedBlockHash)
                         }
-      (attempts, updatedDag) = attemptsWithDag
-      _ <- if (attempts.isEmpty) {
-            ().pure[F]
-          } else {
-            for {
-              _ <- removeAdded(state.dependencyDag, attempts)
-              _ <- reAttemptBuffer(updatedDag, lastFinalizedBlockHash)
-            } yield ()
-          }
-    } yield ()
+    } yield attempts ++ furtherAttempts
 
   private def removeAdded(
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
-      attempts: List[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))]
-  ): F[Unit] =
-    for {
-      successfulAdds <- attempts
-                         .filter {
-                           case (_, (status, _)) => status.inDag
-                         }
-                         .pure[F]
-      _ <- unsafeRemoveFromBlockBuffer(successfulAdds)
-      _ <- removeFromBlockBufferDependencyDag(blockBufferDependencyDag, successfulAdds)
-    } yield ()
-
-  private def unsafeRemoveFromBlockBuffer(
-      successfulAdds: List[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))]
+      attempts: List[(BlockHash, BlockStatus)]
   ): F[Unit] = {
-    val addedBlocks = successfulAdds.map(_._1)
-    Cell[F, CasperState].modify { s =>
-      s.copy(blockBuffer = s.blockBuffer -- addedBlocks)
-    }
-  }
+    val addedBlockHashes = attempts.collect {
+      case (blockHash, status) if status.inDag => blockHash
+    }.toSet
 
-  private def removeFromBlockBufferDependencyDag(
-      blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
-      successfulAdds: List[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))]
-  ): F[Unit] =
-    Cell[F, CasperState].modify { s =>
-      s.copy(dependencyDag = successfulAdds.foldLeft(blockBufferDependencyDag) {
-        case (acc, successfulAdd) =>
-          DoublyLinkedDagOperations.remove(acc, successfulAdd._1.blockHash)
-      })
-    }
+    val removeFromBlockBuffer =
+      Cell[F, CasperState].modify { s =>
+        s.copy(blockBuffer = s.blockBuffer.filterNot(addedBlockHashes contains _.blockHash))
+      }
+
+    val removeFromBlockBufferDependencyDag =
+      Cell[F, CasperState].modify { s =>
+        s.copy(dependencyDag = addedBlockHashes.foldLeft(blockBufferDependencyDag) {
+          case (dag, blockHash) =>
+            DoublyLinkedDagOperations.remove(dag, blockHash)
+        })
+      }
+
+    removeFromBlockBuffer *> removeFromBlockBufferDependencyDag
+  }
 
   def fetchDependencies: F[Unit] =
     for {
@@ -650,3 +642,5 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
           }
     } yield ()
 }
+
+object MultiParentCasperImpl {}
