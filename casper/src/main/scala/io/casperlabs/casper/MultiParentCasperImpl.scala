@@ -209,14 +209,14 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
 
   /** Check that either we have the block already scheduled but missing dependencies, or it's in the store */
   def contains(
-      b: BlockMessage
+      block: BlockMessage
   ): F[Boolean] =
-    // TODO: Check the buffer first.
-    for {
-      blockStoreContains <- BlockStore[F].contains(b.blockHash)
-      state              <- Cell[F, CasperState].read
-      bufferContains     = state.blockBuffer.exists(_.blockHash == b.blockHash)
-    } yield (blockStoreContains || bufferContains)
+    Cell[F, CasperState].read
+      .map(_.blockBuffer.exists(_.blockHash == block.blockHash))
+      .ifM(
+        true.pure[F],
+        BlockStore[F].contains(block.blockHash)
+      )
 
   /** Add a deploy to the buffer, if the code passes basic validation. */
   def deploy(d: DeployData): F[Either[Throwable, Unit]] = (d.session, d.payment) match {
