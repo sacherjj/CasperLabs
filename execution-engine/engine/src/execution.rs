@@ -5,7 +5,7 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::Value;
-use storage::global_state::{StateReader, ExecutionEffect};
+use storage::global_state::{ExecutionEffect, StateReader};
 use storage::transform::TypeMismatch;
 use trackingcopy::{AddResult, TrackingCopy};
 use wasmi::memory_units::Pages;
@@ -23,8 +23,8 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 
-use super::URefAddr;
 use super::runtime_context::RuntimeContext;
+use super::URefAddr;
 
 #[derive(Debug)]
 pub enum Error {
@@ -509,17 +509,13 @@ where
         Ok(self.host_buf.len())
     }
 
-    /// Generates new unforgable reference and adds it to the context's known_uref set.
-    pub fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
-        let value = self.value_from_mem(value_ptr, value_size)?; // read initial value from memory
+    pub fn new_uref(&mut self, value: Value) -> Result<Vec<u8>, Error> {
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
         let key = Key::URef(key, AccessRights::ReadWrite);
-        self.state.write(key, value); // write initial value to state
+        self.state.write(key, value);
         self.context.insert_uref(key);
-        self.memory
-            .set(key_ptr, &key.to_bytes().map_err(Error::BytesRepr)?)
-            .map_err(|e| Error::Interpreter(e).into())
+        key.to_bytes().map_err(Error::BytesRepr)
     }
 }
 
@@ -612,7 +608,9 @@ where
                 // args(1) = pointer to initial value
                 // args(2) = size of initial value
                 let (key_ptr, value_ptr, value_size) = Args::parse(args)?;
-                self.new_uref(key_ptr, value_ptr, value_size)?;
+                let value = self.value_from_mem(value_ptr, value_size)?;
+                let key = self.new_uref(value)?;
+                self.memory.set(key_ptr, &key).map_err(Error::Interpreter)?;
                 Ok(None)
             }
 

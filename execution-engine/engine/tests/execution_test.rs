@@ -11,7 +11,7 @@ extern crate wasm_prep;
 extern crate wasmi;
 
 use common::bytesrepr::{deserialize, FromBytes, ToBytes};
-use common::key::{AccessRights, Key, UREF_SIZE};
+use common::key::{AccessRights, Key};
 use common::value::{self, Account, Contract, Value};
 use execution_engine::execution::Runtime;
 use execution_engine::runtime_context::RuntimeContext;
@@ -26,7 +26,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::once;
 use std::iter::IntoIterator;
 use std::rc::Rc;
-use storage::global_state::{inmem::*, StateReader};
+use storage::global_state::inmem::*;
 use storage::history::*;
 use storage::transform::Transform;
 use wasm_prep::MAX_MEM_PAGES;
@@ -173,27 +173,6 @@ impl WasmMemoryManager {
         let bytes = self.read_bytes(offset, len)?;
         deserialize(&bytes).map_err(Into::into)
     }
-
-    pub fn new_uref<'a, R: StateReader<Key, Value>>(
-        &mut self,
-        runtime: &mut Runtime<'a, R>,
-        value: (u32, usize), //pointer, length tuple
-    ) -> Result<(u32, usize), wasmi::Trap>
-    where
-        R::Error: Into<execution_engine::execution::Error>,
-    {
-        let ptr = self.offset as u32;
-        let (value_ptr, value_size) = value;
-
-        match runtime.new_uref(ptr, value_ptr, value_size as u32) {
-            Ok(_) => {
-                self.offset += UREF_SIZE;
-                Ok((ptr, UREF_SIZE))
-            }
-
-            Err(e) => Err(e),
-        }
-    }
 }
 
 fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
@@ -300,6 +279,10 @@ impl TestFixture {
             tc,
         }
     }
+
+    fn with_known_urefs(&mut self, new_urefs: HashSet<Key>) {
+        self.env.known_urefs.extend(new_urefs);
+    }
 }
 
 impl Default for TestFixture {
@@ -321,6 +304,9 @@ impl Default for TestFixture {
 fn valid_uref() {
     // Test fixture
     let mut test_fixture: TestFixture = Default::default();
+    let mut rng = rand::thread_rng();
+    let uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
+    test_fixture.with_known_urefs(once(uref).collect());
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
     let mut runtime = test_fixture.env.runtime(
         &mut tc_borrowed,
@@ -329,17 +315,6 @@ fn valid_uref() {
         test_fixture.nonce,
         mock_module(),
     );
-
-    // write arbitrary value to wasm memory to allow call to write
-    let init_value = wasm_write(&mut test_fixture.memory, value::Value::Int32(42));
-
-    // create a valid uref in wasm memory via new_uref
-    let wasm_uref = test_fixture
-        .memory
-        .new_uref(&mut runtime, init_value)
-        .expect("call to new_uref should succeed");
-
-    let uref: Key = wasm_read(&mut test_fixture.memory, wasm_uref).unwrap();
 
     // Use uref as the key to perform an action on the global state.
     // This should succeed because the uref is valid.
@@ -538,6 +513,8 @@ fn store_contract_hash_legal_urefs() {
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
     let mut rng = rand::thread_rng();
+    let uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
+    test_fixture.with_known_urefs(once(uref).collect());
     let wasm_module = create_wasm_module();
     // We need this braces so that the `tc_borrowed` gets dropped
     // and we can borrow it again when we call `effect()`.
@@ -550,30 +527,6 @@ fn store_contract_hash_legal_urefs() {
             test_fixture.nonce,
             wasm_module.module.clone(),
         );
-
-        // Initial value of the uref the in the contract's
-        // known_urefs map.
-        let init_value = wasm_write(&mut test_fixture.memory, value::Value::Int32(42));
-
-        let uref = {
-            // We are generating new URef the "correct" way.
-            // It asks a host to generate a URef which puts it into
-            // `known_urefs` map of the current runtime context.
-            // Thanks to that, subsequent uses of this URef are valid
-            // because they "belong" to the context that uses them.
-            let (uref_ptr, _) = test_fixture
-                .memory
-                .new_uref(&mut runtime, init_value)
-                .expect("URef generation failed");
-            let mut tmp = [1u8; UREF_SIZE];
-            test_fixture
-                .memory
-                .read_raw(uref_ptr, &mut tmp)
-                .expect("Reading URef from wasm memory should work.");
-            let key: Key =
-                common::bytesrepr::deserialize(&tmp).expect("URef deserialization should work.");
-            key
-        };
 
         let urefs = urefs_map(vec![
             ("KnownURef".to_owned(), uref),
