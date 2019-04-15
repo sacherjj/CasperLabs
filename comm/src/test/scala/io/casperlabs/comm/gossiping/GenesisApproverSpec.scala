@@ -24,8 +24,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
     "started with a candidate that passes the threshold" should {
       "immediately trigger the transition" in {
         TestFixture.fromGenesis() { approver =>
-          // This would time out if it wasn't triggered already.
-          approver.awaitApproval.map { blockHash =>
+          approver.awaitApproval.timeout(Duration.Zero).map { blockHash =>
             blockHash shouldBe genesis.blockHash
           }
         }

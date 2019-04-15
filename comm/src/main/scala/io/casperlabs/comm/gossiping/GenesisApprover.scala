@@ -247,8 +247,10 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
               (prevApprovals, false).pure[F]
         }
         .flatMap {
-          case (_, true)                 => ().pure[F]
-          case (checkedApprovals, false) => Timer[F].sleep(pollInterval) *> loop(checkedApprovals)
+          case (_, transitioned) if transitioned =>
+            ().pure[F]
+          case (checkedApprovals, _) =>
+            Timer[F].sleep(pollInterval) *> loop(checkedApprovals)
         }
     }
 
@@ -309,16 +311,18 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
     }
 
   private def relayApproval(blockHash: ByteString, approval: Approval): F[Unit] = {
+    val id = hex(blockHash)
+
     def relayTo(peer: Node): F[Boolean] = {
       val tryRelay = for {
         service <- connectToGossip(peer)
         _       <- service.addApproval(AddApprovalRequest(blockHash).withApproval(approval))
-        _       <- Log[F].debug(s"Relayed an approval for ${hex(blockHash)} to ${peer.show}")
+        _       <- Log[F].debug(s"Relayed an approval for $id to ${peer.show}")
       } yield true
 
       tryRelay.handleErrorWith {
         case NonFatal(ex) =>
-          Log[F].warn(s"Could not relay the approval for ${hex(blockHash)} to ${peer.show}: $ex") *> false
+          Log[F].warn(s"Could not relay the approval for $id to ${peer.show}: $ex") *> false
             .pure[F]
       }
     }
@@ -330,7 +334,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
             loop(peers, relayed + (if (ok) 1 else 0))
           }
         case _ =>
-          ().pure[F]
+          Log[F].debug(s"Relayed an approval for $id to $relayed peers.")
       }
 
     nodeDiscovery.alivePeersAscendingDistance.flatMap { peers =>
