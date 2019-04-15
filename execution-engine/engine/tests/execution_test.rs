@@ -99,41 +99,9 @@ struct WasmMemoryManager {
     offset: usize,
 }
 
-struct StoreContractResult {
-    contract_ptr: u32,
-    contract_len: usize,
-    urefs_ptr: u32,
-    urefs_len: usize,
-    hash_ptr: u32,
-}
-
 impl WasmMemoryManager {
     pub fn new(memory: MemoryRef) -> Self {
         WasmMemoryManager { memory, offset: 0 }
-    }
-
-    /// Writes necessary data to Wasm memory so that host can read it.
-    /// Returns pointers and lengths of respective pieces of data to pass to ffi call.
-    pub fn store_contract(
-        &mut self,
-        name: &str,
-        known_urefs: BTreeMap<String, Key>,
-    ) -> StoreContractResult {
-        let (contract_ptr, contract_len) = self.write(name.to_owned());
-
-        let (urefs_ptr, urefs_len) = self.write(known_urefs);
-
-        let (hash_ptr, _) = self
-            .write_raw([0u8; 32].to_vec())
-            .expect("Allocating place for hash should work");
-
-        StoreContractResult {
-            contract_ptr,
-            contract_len,
-            urefs_ptr,
-            urefs_len,
-            hash_ptr,
-        }
     }
 
     pub fn write<T: ToBytes>(&mut self, t: T) -> (u32, usize) {
@@ -349,7 +317,7 @@ fn forged_uref() {
     // This should fail because the uref was forged
     let trap = runtime.write(uref, Value::Int32(42));
 
-    assert_forged_reference(trap);
+    assert_error_contains(trap, "ForgedReference");
 }
 
 use execution_engine::execution::rename_export_to_call;
@@ -358,19 +326,9 @@ use execution_engine::execution::rename_export_to_call;
 //
 // Renames "name" function to "call" in the passed Wasm module.
 // This is necessary because host runtime will do the same thing prior to saving it.
-fn contract_bytes_from_wat(mut test_module: TestModule, urefs: BTreeMap<String, Key>) -> Value {
+fn contract_bytes_from_wat(mut test_module: TestModule) -> Vec<u8> {
     rename_export_to_call(&mut test_module.module, test_module.func_name);
-    let contract_bytes =
-        parity_wasm::serialize(test_module.module).expect("Failed to serialize Wasm module.");
-    Value::Contract(common::value::Contract::new(contract_bytes, urefs))
-}
-
-fn read_contract_hash(wasm_memory: &WasmMemoryManager, hash_ptr: u32) -> Key {
-    let mut target = [0u8; 32];
-    wasm_memory
-        .read_raw(hash_ptr, &mut target)
-        .expect("Reading hash from raw memory should succed");
-    Key::Hash(target)
+    parity_wasm::serialize(test_module.module).expect("Failed to serialize Wasm module.")
 }
 
 #[derive(Clone)]
@@ -416,7 +374,7 @@ fn store_contract_hash() {
     let wasm_module = create_wasm_module();
     let urefs = urefs_map(vec![("SomeKey".to_owned(), hash)]);
 
-    let contract = contract_bytes_from_wat(wasm_module.clone(), urefs.clone());
+    let fn_bytes = contract_bytes_from_wat(wasm_module.clone());
 
     // We need this braces so that the `tc_borrowed` gets dropped
     // and we can borrow it again when we call `effect()`.
@@ -430,27 +388,17 @@ fn store_contract_hash() {
             wasm_module.module,
         );
 
-        let store_result = test_fixture
-            .memory
-            .store_contract(&wasm_module.func_name, urefs);
-
-        // This is the FFI call that Wasm triggers when it stores a contract in GS.
-        runtime
-            .store_function(
-                store_result.contract_ptr,
-                store_result.contract_len as u32,
-                store_result.urefs_ptr,
-                store_result.urefs_len as u32,
-                store_result.hash_ptr,
-            )
+        let hash = runtime
+            .store_function(fn_bytes.clone(), urefs.clone())
             .expect("store_function should succeed");
 
-        read_contract_hash(&test_fixture.memory, store_result.hash_ptr)
+        Key::Hash(hash)
     };
 
     // Test that Runtime stored contract under expected hash
     let transforms = test_fixture.tc.borrow().effect().1;
     let effect = transforms.get(&hash).unwrap();
+    let contract = Value::Contract(Contract::new(fn_bytes, urefs));
     // Assert contract in the GlobalState is the one we wanted to store.
     assert_eq!(effect, &Transform::Write(contract));
 }
@@ -459,8 +407,11 @@ fn assert_invalid_access<T>(result: Result<T, wasmi::Trap>) {
     assert_error_contains(result, "InvalidAccess")
 }
 
-fn assert_forged_reference<T>(result: Result<T, wasmi::Trap>) {
-    assert_error_contains(result, "ForgedReference")
+fn assert_forged_reference<T>(result: Result<T, execution_engine::execution::Error>) {
+    match result {
+        Err(execution_engine::execution::Error::ForgedReference(_)) => assert!(true),
+        _ => panic!("Error. Test should have failed with ForgedReference error but didn't."),
+    }
 }
 
 fn assert_error_contains<T>(result: Result<T, wasmi::Trap>, msg: &str) {
@@ -487,24 +438,15 @@ fn store_contract_hash_illegal_urefs() {
         test_fixture.addr,
         test_fixture.timestamp,
         test_fixture.nonce,
-        wasm_module.module,
+        wasm_module.module.clone(),
     );
 
-    let store_result = test_fixture
-        .memory
-        .store_contract(&wasm_module.func_name, urefs);
+    let contract = contract_bytes_from_wat(wasm_module.clone());
 
-    // This is the FFI call that Wasm triggers when it stores a contract in GS.
-    let result = runtime.store_function(
-        store_result.contract_ptr,
-        store_result.contract_len as u32,
-        store_result.urefs_ptr,
-        store_result.urefs_len as u32,
-        store_result.hash_ptr,
-    );
+    let store_result = runtime.store_function(contract.to_bytes().unwrap(), urefs);
 
     // Since we don't know the urefs we wanted to store together with the contract
-    assert_forged_reference(result);
+    assert_forged_reference(store_result);
 }
 
 #[test]
@@ -533,26 +475,16 @@ fn store_contract_hash_legal_urefs() {
             ("PublicHash".to_owned(), random_contract_key(&mut rng)),
         ]);
 
-        let contract = contract_bytes_from_wat(wasm_module.clone(), urefs.clone());
-
-        let store_result = test_fixture
-            .memory
-            .store_contract(&wasm_module.func_name, urefs);
+        let fn_bytes = contract_bytes_from_wat(wasm_module.clone());
 
         // This is the FFI call that Wasm triggers when it stores a contract in GS.
-        runtime
-            .store_function(
-                store_result.contract_ptr,
-                store_result.contract_len as u32,
-                store_result.urefs_ptr,
-                store_result.urefs_len as u32,
-                store_result.hash_ptr,
-            )
+        let hash = runtime
+            .store_function(fn_bytes.clone(), urefs.clone())
             .expect("store_function should succeed");
 
         (
-            read_contract_hash(&test_fixture.memory, store_result.hash_ptr),
-            contract,
+            Key::Hash(hash),
+            Value::Contract(Contract::new(fn_bytes, urefs)),
         )
     };
 
@@ -601,7 +533,8 @@ fn store_contract_uref_known_key() {
             wasm_module.module.clone(),
         );
 
-        let contract = contract_bytes_from_wat(wasm_module, urefs.clone());
+        let fn_bytes = contract_bytes_from_wat(wasm_module);
+        let contract = Value::Contract(Contract::new(fn_bytes, urefs.clone()));
 
         // This is the FFI call that Wasm triggers when it stores a contract in GS.
         runtime
@@ -655,11 +588,12 @@ fn store_contract_uref_forged_key() {
         wasm_module.module.clone(),
     );
 
-    let contract = contract_bytes_from_wat(wasm_module, urefs.clone());
+    let fn_bytes = contract_bytes_from_wat(wasm_module);
+    let contract = Value::Contract(Contract::new(fn_bytes, urefs.clone()));
 
     // This is the FFI call that Wasm triggers when it stores a contract in GS.
     let result = runtime.write(forged_contract_uref, contract);
-    assert_forged_reference(result);
+    assert_error_contains(result, "ForgedReference");
 }
 
 #[test]
@@ -847,7 +781,8 @@ fn contract_key_writeable() {
 
     let urefs = urefs_map(std::iter::empty());
 
-    let contract = contract_bytes_from_wat(wasm_module.clone(), urefs.clone());
+    let fn_bytes = contract_bytes_from_wat(wasm_module.clone());
+    let contract = Value::Contract(Contract::new(fn_bytes, urefs.clone()));
 
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
     let mut runtime = test_fixture.env.runtime(

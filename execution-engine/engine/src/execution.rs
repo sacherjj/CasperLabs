@@ -356,26 +356,16 @@ where
     /// `urefs_ptr` and `urefs_size` describe when the additional unforgable references can be found.
     pub fn store_function(
         &mut self,
-        name_ptr: u32,
-        name_size: u32,
-        urefs_ptr: u32,
-        urefs_size: u32,
-        hash_ptr: u32,
-    ) -> Result<(), Trap> {
-        let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
-        let uref_bytes = self
-            .memory
-            .get(urefs_ptr, urefs_size as usize)
-            .map_err(Error::Interpreter)?;
-        let urefs: BTreeMap<String, Key> = deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
+        fn_bytes: Vec<u8>,
+        urefs: BTreeMap<String, Key>,
+    ) -> Result<[u8; 32], Error> {
         urefs
             .iter()
             .try_for_each(|(_, v)| self.context.validate_key(&v))?;
-        let contract = common::value::Contract::new(fn_bytes, urefs);
+        let contract = Value::Contract(common::value::contract::Contract::new(fn_bytes, urefs));
         let new_hash = self.new_function_address()?;
-        self.state
-            .write(Key::Hash(new_hash), Value::Contract(contract));
-        self.function_address(new_hash, hash_ptr)
+        self.state.write(Key::Hash(new_hash), contract);
+        Ok(new_hash)
     }
 
     /// Generates new function address.
@@ -728,7 +718,15 @@ where
                 // args(4) = pointer to a Wasm memory where we will save
                 //           hash of the new function
                 let (name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr) = Args::parse(args)?;
-                self.store_function(name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr)?;
+                let _uref_type: u32 = urefs_size;
+                let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
+                let uref_bytes = self
+                    .memory
+                    .get(urefs_ptr, urefs_size as usize)
+                    .map_err(Error::Interpreter)?;
+                let urefs = deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
+                let contract_hash = self.store_function(fn_bytes, urefs)?;
+                self.function_address(contract_hash, hash_ptr)?;
                 Ok(None)
             }
 
