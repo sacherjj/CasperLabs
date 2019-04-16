@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use common::key::Key;
 use common::value::Value;
-use storage::global_state::{StateReader, ExecutionEffect};
+use storage::global_state::{ExecutionEffect, StateReader};
 use storage::op::Op;
 use storage::transform::{self, Transform, TypeMismatch};
 use utils::add;
@@ -364,8 +364,8 @@ mod tests {
         let db = CountingDb::new_init(Value::Account(account));
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
-        let u1 = Key::URef([1u8; 32], AccessRights::ReadWrite);
-        let u2 = Key::URef([2u8; 32], AccessRights::ReadWrite);
+        let u1 = Key::URef([1u8; 32], AccessRights::READ_WRITE);
+        let u2 = Key::URef([2u8; 32], AccessRights::READ_WRITE);
 
         let named_key = Value::NamedKey("test".to_string(), u1);
         let other_named_key = Value::NamedKey("test2".to_string(), u2);

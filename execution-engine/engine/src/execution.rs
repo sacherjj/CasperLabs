@@ -5,7 +5,7 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::{Account, Value};
-use storage::global_state::{StateReader, ExecutionEffect};
+use storage::global_state::{ExecutionEffect, StateReader};
 use storage::transform::TypeMismatch;
 use trackingcopy::{AddResult, TrackingCopy};
 use wasmi::memory_units::Pages;
@@ -16,12 +16,14 @@ use wasmi::{
 };
 
 use argsparser::Args;
+use itertools::Itertools;
 use parity_wasm::elements::{Error as ParityWasmError, Module};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
+use std::iter::IntoIterator;
 
 #[derive(Debug)]
 pub enum Error {
@@ -89,7 +91,7 @@ pub struct RuntimeContext<'a> {
     // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
-    known_urefs: HashMap<URefAddr, AccessRights>,
+    known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
     account: &'a Account,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
@@ -120,7 +122,11 @@ impl<'a> RuntimeContext<'a> {
 
     pub fn insert_uref(&mut self, key: Key) {
         if let Key::URef(raw_addr, rights) = key {
-            self.known_urefs.insert(raw_addr, rights);
+            let entry_rights = self
+                .known_urefs
+                .entry(raw_addr)
+                .or_insert_with(|| std::iter::empty().collect());
+            entry_rights.insert(rights);
         }
     }
 
@@ -163,7 +169,11 @@ impl<'a> RuntimeContext<'a> {
             Key::URef(raw_addr, new_rights) => {
                 self.known_urefs
                     .get(raw_addr) // Check if we `key` is known
-                    .filter(|known_rights| *known_rights >= new_rights) // are we allowed to use it this way?
+                    .map(|known_rights| {
+                        known_rights
+                            .iter()
+                            .any(|right| *right & *new_rights == *new_rights)
+                    }) // are we allowed to use it this way?
                     .map(|_| ()) // at this point we know it's valid to use `key`
                     .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
             }
@@ -453,7 +463,7 @@ where
             Ok(self.host_buf.len())
         } else {
             Err(Error::InvalidAccess {
-                required: AccessRights::Read,
+                required: AccessRights::READ,
             })
         }
     }
@@ -537,7 +547,7 @@ where
                     Ok(())
                 } else {
                     Err(Error::InvalidAccess {
-                        required: AccessRights::Write,
+                        required: AccessRights::WRITE,
                     })
                 }
             })
@@ -596,7 +606,7 @@ where
             err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
         } else {
             Err(Error::InvalidAccess {
-                required: AccessRights::Read,
+                required: AccessRights::READ,
             }
             .into())
         }
@@ -619,7 +629,7 @@ where
             }
         } else {
             Err(Error::InvalidAccess {
-                required: AccessRights::Add,
+                required: AccessRights::ADD,
             }
             .into())
         }
@@ -643,7 +653,7 @@ where
         let value = self.value_from_mem(value_ptr, value_size)?; // read initial value from memory
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
-        let key = Key::URef(key, AccessRights::ReadWrite);
+        let key = Key::URef(key, AccessRights::READ_ADD_WRITE);
         self.state.write(key, value); // write initial value to state
         self.context.insert_uref(key);
         self.memory
@@ -1028,13 +1038,7 @@ where
     R::Error: Into<Error>,
 {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
-    let known_urefs = refs
-        .values()
-        .cloned()
-        .chain(extra_urefs)
-        .map(key_to_tuple)
-        .flatten()
-        .collect();
+    let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
     let rng = ChaChaRng::from_rng(&mut current_runtime.rng).map_err(Error::Rng)?;
     let mut runtime = Runtime {
         args,
@@ -1066,11 +1070,8 @@ where
                 // in the Runtime result field.
                 if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
                     //insert extra urefs returned from call
-                    let ret_urefs_map: HashMap<URefAddr, AccessRights> = ret_urefs
-                        .iter()
-                        .map(|e| key_to_tuple(*e))
-                        .flatten()
-                        .collect();
+                    let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
+                        vec_key_rights_to_map(ret_urefs.clone());
                     current_runtime.context.known_urefs.extend(ret_urefs_map);
                     return Ok(runtime.result);
                 }
@@ -1078,6 +1079,25 @@ where
             Err(Error::Interpreter(e))
         }
     }
+}
+
+/// Groups vector of keys by their address and accumulates access rights per key.
+fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
+    input: I,
+) -> HashMap<URefAddr, HashSet<AccessRights>> {
+    input
+        .into_iter()
+        .map(key_to_tuple)
+        .flatten()
+        .group_by(|(key, _)| *key)
+        .into_iter()
+        .map(|(key, group)| {
+            (
+                key,
+                group.map(|(_, x)| x).collect::<HashSet<AccessRights>>(),
+            )
+        })
+        .collect()
 }
 
 fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng {
@@ -1146,12 +1166,8 @@ impl Executor<Module> for WasmiExecutor {
         }, 0 };
         let account = value.as_account();
         let mut uref_lookup_local = account.urefs_lookup().clone();
-        let known_urefs: HashMap<URefAddr, AccessRights> = uref_lookup_local
-            .values()
-            .cloned()
-            .map(key_to_tuple)
-            .flatten()
-            .collect();
+        let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
+            vec_key_rights_to_map(uref_lookup_local.values().cloned());
         let context = RuntimeContext {
             uref_lookup: &mut uref_lookup_local,
             known_urefs,
