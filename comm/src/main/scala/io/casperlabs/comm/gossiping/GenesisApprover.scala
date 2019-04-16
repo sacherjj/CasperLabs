@@ -64,7 +64,7 @@ object GenesisApproverImpl {
   def fromBootstrap[F[_]: Concurrent: Log: Timer](
       backend: GenesisApproverImpl.Backend[F],
       nodeDiscovery: NodeDiscovery[F],
-      connectToGossip: Node => F[GossipService[F]],
+      connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
       bootstrap: Node,
       pollInterval: FiniteDuration,
@@ -98,7 +98,7 @@ object GenesisApproverImpl {
   def fromGenesis[F[_]: Concurrent: Log: Timer](
       backend: GenesisApproverImpl.Backend[F],
       nodeDiscovery: NodeDiscovery[F],
-      connectToGossip: Node => F[GossipService[F]],
+      connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
       genesis: Block,
       approval: Approval
@@ -132,7 +132,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
     deferredApproval: Deferred[F, ByteString],
     backend: GenesisApproverImpl.Backend[F],
     nodeDiscovery: NodeDiscovery[F],
-    connectToGossip: Node => F[GossipService[F]],
+    connectToGossip: GossipService.Connector[F],
     relayFactor: Int
 ) extends GenesisApprover[F] {
   import GenesisApproverImpl.Status

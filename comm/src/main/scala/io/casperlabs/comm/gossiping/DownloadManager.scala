@@ -77,7 +77,7 @@ object DownloadManagerImpl {
   /** Start the download manager. */
   def apply[F[_]: Concurrent: Log](
       maxParallelDownloads: Int,
-      connectToGossip: Node => F[GossipService[F]],
+      connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
       relaying: Relaying[F]
   ): Resource[F, DownloadManager[F]] =
@@ -132,7 +132,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
     // Single item control signals for the manager loop.
     signal: MVar[F, DownloadManagerImpl.Signal[F]],
     // Establish gRPC connection to another node.
-    connectToGossip: Node => F[GossipService[F]],
+    connectToGossip: GossipService.Connector[F],
     backend: DownloadManagerImpl.Backend[F],
     relaying: Relaying[F]
 ) extends DownloadManager[F] {

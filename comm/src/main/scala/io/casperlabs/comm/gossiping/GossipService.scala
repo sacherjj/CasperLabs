@@ -26,3 +26,7 @@ trait GossipService[F[_]] {
 
   def addApproval(request: AddApprovalRequest): F[Empty]
 }
+
+object GossipService {
+  type Connector[F[_]] = io.casperlabs.comm.discovery.Node => F[GossipService[F]]
+}
