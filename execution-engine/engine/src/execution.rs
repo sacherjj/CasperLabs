@@ -125,7 +125,7 @@ impl<'a> RuntimeContext<'a> {
             let entry_rights = self
                 .known_urefs
                 .entry(raw_addr)
-                .or_insert_with(|| std::iter::once(AccessRights::EQ).collect());
+                .or_insert_with(|| std::iter::empty().collect());
             entry_rights.insert(rights);
         }
     }

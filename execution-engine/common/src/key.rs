@@ -6,10 +6,9 @@ use bitflags;
 bitflags! {
     #[allow(clippy::derive_hash_xor_eq)]
     pub struct AccessRights: u8 {
-        const EQ    = 0b0001;
-        const READ  = 0b0011;
-        const WRITE = 0b0101;
-        const ADD   = 0b1001;
+        const READ  = 0b001;
+        const WRITE = 0b010;
+        const ADD   = 0b100;
         const READ_ADD       = Self::READ.bits | Self::ADD.bits;
         const READ_WRITE     = Self::READ.bits | Self::WRITE.bits;
         const ADD_WRITE      = Self::ADD.bits  | Self::WRITE.bits;
@@ -197,7 +196,6 @@ mod tests {
         test_readable(AccessRights::READ_ADD_WRITE, true);
         test_readable(AccessRights::ADD, false);
         test_readable(AccessRights::ADD_WRITE, false);
-        test_readable(AccessRights::EQ, false);
         test_readable(AccessRights::WRITE, false);
     }
 
@@ -210,7 +208,6 @@ mod tests {
         test_writable(AccessRights::WRITE, true);
         test_writable(AccessRights::READ_WRITE, true);
         test_writable(AccessRights::ADD_WRITE, true);
-        test_writable(AccessRights::EQ, false);
         test_writable(AccessRights::READ, false);
         test_writable(AccessRights::ADD, false);
         test_writable(AccessRights::READ_ADD, false);
@@ -227,7 +224,6 @@ mod tests {
         test_addable(AccessRights::READ_ADD, true);
         test_addable(AccessRights::READ_WRITE, false);
         test_addable(AccessRights::ADD_WRITE, true);
-        test_addable(AccessRights::EQ, false);
         test_addable(AccessRights::READ, false);
         test_addable(AccessRights::WRITE, false);
         test_addable(AccessRights::READ_ADD_WRITE, true);
