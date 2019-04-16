@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.metrics.{Metered, Metrics}
 import io.casperlabs.models.BlockMetadata
 
 trait BlockDagStorage[F[_]] {
@@ -15,6 +16,18 @@ trait BlockDagStorage[F[_]] {
 }
 
 object BlockDagStorage {
+  trait MeteredBlockDagStorage[F[_]] extends BlockDagStorage[F] with Metered[F] {
+
+    abstract override def getRepresentation: F[BlockDagRepresentation[F]] =
+      incAndMeasure("representation", super.getRepresentation)
+
+    abstract override def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+      incAndMeasure("insert", super.insert(block))
+
+    abstract override def checkpoint(): F[Unit] =
+      incAndMeasure("checkpoint", super.checkpoint())
+  }
+
   def apply[F[_]](implicit B: BlockDagStorage[F]): BlockDagStorage[F] = B
 }
 

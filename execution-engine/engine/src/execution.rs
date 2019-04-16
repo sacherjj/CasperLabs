@@ -16,12 +16,14 @@ use wasmi::{
 };
 
 use argsparser::Args;
+use itertools::Itertools;
 use parity_wasm::elements::{Error as ParityWasmError, Module};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
+use std::iter::IntoIterator;
 
 use super::runtime_context::RuntimeContext;
 use super::URefAddr;
@@ -336,7 +338,7 @@ where
             Ok(self.host_buf.len())
         } else {
             Err(Error::InvalidAccess {
-                required: AccessRights::Read,
+                required: AccessRights::READ,
             })
         }
     }
@@ -404,7 +406,7 @@ where
             Ok(())
         } else {
             Err(Error::InvalidAccess {
-                required: AccessRights::Write,
+                required: AccessRights::WRITE,
             }
             .into())
         }
@@ -458,7 +460,7 @@ where
             err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
         } else {
             Err(Error::InvalidAccess {
-                required: AccessRights::Read,
+                required: AccessRights::READ,
             }
             .into())
         }
@@ -481,7 +483,7 @@ where
             }
         } else {
             Err(Error::InvalidAccess {
-                required: AccessRights::Add,
+                required: AccessRights::ADD,
             }
             .into())
         }
@@ -502,7 +504,7 @@ where
     pub fn new_uref(&mut self, value: Value) -> Result<Vec<u8>, Error> {
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
-        let key = Key::URef(key, AccessRights::ReadWrite);
+        let key = Key::URef(key, AccessRights::READ_ADD_WRITE);
         self.state.write(key, value);
         self.context.insert_uref(key);
         key.to_bytes().map_err(Error::BytesRepr)
@@ -901,13 +903,7 @@ where
     R::Error: Into<Error>,
 {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
-    let known_urefs = refs
-        .values()
-        .cloned()
-        .chain(extra_urefs)
-        .map(key_to_tuple)
-        .flatten()
-        .collect();
+    let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
     let rng = ChaChaRng::from_rng(&mut current_runtime.rng).map_err(Error::Rng)?;
     let mut runtime = Runtime {
         args,
@@ -939,11 +935,8 @@ where
                 // in the Runtime result field.
                 if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
                     //insert extra urefs returned from call
-                    let ret_urefs_map: HashMap<URefAddr, AccessRights> = ret_urefs
-                        .iter()
-                        .map(|e| key_to_tuple(*e))
-                        .flatten()
-                        .collect();
+                    let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
+                        vec_key_rights_to_map(ret_urefs.clone());
                     current_runtime.context.add_urefs(ret_urefs_map);
                     return Ok(runtime.result);
                 }
@@ -951,6 +944,25 @@ where
             Err(Error::Interpreter(e))
         }
     }
+}
+
+/// Groups vector of keys by their address and accumulates access rights per key.
+fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
+    input: I,
+) -> HashMap<URefAddr, HashSet<AccessRights>> {
+    input
+        .into_iter()
+        .map(key_to_tuple)
+        .flatten()
+        .group_by(|(key, _)| *key)
+        .into_iter()
+        .map(|(key, group)| {
+            (
+                key,
+                group.map(|(_, x)| x).collect::<HashSet<AccessRights>>(),
+            )
+        })
+        .collect()
 }
 
 fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng {
@@ -1019,12 +1031,8 @@ impl Executor<Module> for WasmiExecutor {
         }, 0 };
         let account = value.as_account();
         let mut uref_lookup_local = account.urefs_lookup().clone();
-        let known_urefs: HashMap<URefAddr, AccessRights> = uref_lookup_local
-            .values()
-            .cloned()
-            .map(key_to_tuple)
-            .flatten()
-            .collect();
+        let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
+            vec_key_rights_to_map(uref_lookup_local.values().cloned());
         let context = RuntimeContext::new(
             &mut uref_lookup_local,
             known_urefs,

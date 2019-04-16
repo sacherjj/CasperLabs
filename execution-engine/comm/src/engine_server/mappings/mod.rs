@@ -291,7 +291,7 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
             // TODO: What to do about access rights here?
             Ok(common::key::Key::URef(
                 arr,
-                common::key::AccessRights::ReadWrite,
+                common::key::AccessRights::READ_ADD_WRITE,
             ))
         } else {
             parse_error(format!(

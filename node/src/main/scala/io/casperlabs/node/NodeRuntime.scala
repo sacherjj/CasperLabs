@@ -133,15 +133,17 @@ class NodeRuntime private[node] (
       blockMap <- Ref.of[Effect, Map[BlockHash, BlockMsgWithTransform]](
                    Map.empty[BlockHash, BlockMsgWithTransform]
                  )
+      metricsT = Metrics.eitherT[CommError, Task](Monad[Task], metrics)
       blockStore = InMemBlockStore.create[Effect](
         syncEffect,
         blockMap,
-        Metrics.eitherT(Monad[Task], metrics)
+        metricsT
       )
       blockDagStorage <- InMemBlockDagStorage.create[Effect](
                           Concurrent[Effect],
                           Log.eitherTLog(Monad[Task], log),
-                          blockStore
+                          blockStore,
+                          metricsT
                         )
       _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
       oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
@@ -153,7 +155,7 @@ class NodeRuntime private[node] (
                                 _.value
                               )(
                                 labEff,
-                                Metrics.eitherT(Monad[Task], metrics),
+                                metricsT,
                                 blockStore,
                                 Cell.eitherTCell(Monad[Task], rpConnections),
                                 NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
