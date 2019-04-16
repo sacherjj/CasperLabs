@@ -71,7 +71,7 @@ object DownloadManagerImpl {
       isError: Boolean = false,
       watchers: List[Feedback[F]]
   ) {
-    def canStart = !isDownloading && dependencies.isEmpty
+    val canStart = !isDownloading && dependencies.isEmpty
   }
 
   /** Start the download manager. */
@@ -254,17 +254,14 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
   /** Check that we either have all dependencies already downloaded or scheduled. */
   private def ensureNoMissingDependencies(summary: BlockSummary): F[Unit] =
     dependencies(summary).toList.traverse { hash =>
-      isScheduled(hash) flatMap {
-        case true  => Sync[F].pure(hash           -> true)
-        case false => isDownloaded(hash).map(hash -> _)
-      }
+      isScheduled(hash).ifM((hash -> true).pure[F], isDownloaded(hash).map(hash -> _))
     } map {
       _.filterNot(_._2).map(_._1)
     } flatMap {
-      case missing if missing.nonEmpty =>
-        Sync[F].raiseError(GossipError.MissingDependencies(summary.blockHash, missing))
-      case _ =>
+      case Nil =>
         Sync[F].unit
+      case missing =>
+        Sync[F].raiseError(GossipError.MissingDependencies(summary.blockHash, missing))
     }
 
   private def isScheduled(hash: ByteString): F[Boolean] =
@@ -295,7 +292,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
         // This could arguably be done by `storeBlock` but this way it's explicit,
         // so we don't forget to talk to both kind of storages.
         _ <- backend.storeBlockSummary(summary)
-        _ <- if (relay) relaying.relay(List(summary.blockHash)) else ().pure[F]
+        _ <- relaying.relay(List(summary.blockHash)).whenA(relay)
         _ <- success
       } yield ()
 
