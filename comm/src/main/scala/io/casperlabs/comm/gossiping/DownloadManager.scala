@@ -13,6 +13,7 @@ import io.casperlabs.comm.GossipError
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.{Compression, Log, LogSource}
 import scala.util.control.NonFatal
+import shapeless.tag, tag.@@
 
 /** Manage the download, validation, storing and gossiping of blocks. */
 trait DownloadManager[F[_]] {
@@ -33,6 +34,10 @@ trait DownloadManager[F[_]] {
 object DownloadManagerImpl {
 
   type Feedback[F[_]] = Deferred[F, Either[Throwable, Unit]]
+  sealed trait DownloadTag
+  sealed trait ScheduleTag
+  type DownloadFeedback[F[_]] = Feedback[F] @@ DownloadTag
+  type ScheduleFeedback[F[_]] = Feedback[F] @@ ScheduleTag
 
   /** Interface to the local backend dependencies. */
   trait Backend[F[_]] {
@@ -50,9 +55,9 @@ object DownloadManagerImpl {
         source: Node,
         relay: Boolean,
         // Feedback about whether the scheduling itself succeeded.
-        scheduleFeedback: Feedback[F],
+        scheduleFeedback: ScheduleFeedback[F],
         // Feedback about whether the download eventually succeeded.
-        downloadFeedback: Feedback[F]
+        downloadFeedback: DownloadFeedback[F]
     ) extends Signal[F]
     case class DownloadSuccess[F[_]](blockHash: ByteString)                extends Signal[F]
     case class DownloadFailure[F[_]](blockHash: ByteString, ex: Throwable) extends Signal[F]
@@ -69,7 +74,7 @@ object DownloadManagerImpl {
       dependencies: Set[ByteString],
       isDownloading: Boolean = false,
       isError: Boolean = false,
-      watchers: List[Feedback[F]]
+      watchers: List[DownloadFeedback[F]]
   ) {
     val canStart = !isDownloading && dependencies.isEmpty
   }
@@ -151,8 +156,8 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
       // Fail rather than block forever.
       _ <- ensureNotShutdown
       // Feedback about whether we successfully scheduled the item.
-      sr <- Deferred[F, Either[Throwable, Unit]]
-      dr <- Deferred[F, Either[Throwable, Unit]]
+      sr <- Deferred[F, Either[Throwable, Unit]].map(tag[ScheduleTag][Feedback[F]](_))
+      dr <- Deferred[F, Either[Throwable, Unit]].map(tag[DownloadTag][Feedback[F]](_))
       _  <- signal.put(Signal.Download(summary, source, relay, sr, dr))
       _  <- Sync[F].rethrow(sr.get)
     } yield Sync[F].rethrow(dr.get)
@@ -224,7 +229,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
       summary: BlockSummary,
       source: Node,
       relay: Boolean,
-      downloadFeedback: Feedback[F]
+      downloadFeedback: DownloadFeedback[F]
   ): F[Item[F]] =
     items.get(summary.blockHash) map { existing =>
       Sync[F].pure {
