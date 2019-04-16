@@ -77,7 +77,7 @@ pipeline:
     <<: *buildenv
     commands: |
       STATUS_CHECK=$(git status)
-      if echo $STATUS_CHECK | grep -q "modified" ; then echo "$STATUS_CHECK; exit 1; fi
+      if echo $STATUS_CHECK | grep -q "modified" ; then echo "$STATUS_CHECK"; exit 1; fi
 
   compile-rust:
     <<: *buildenv
