@@ -4,14 +4,14 @@ use common::key::{AccessRights, Key};
 use common::value::account::Account;
 use common::value::Value;
 use execution::Error;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a> {
     // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
-    known_urefs: HashMap<URefAddr, AccessRights>,
+    known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
     account: &'a Account,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
@@ -22,7 +22,7 @@ pub struct RuntimeContext<'a> {
 impl<'a> RuntimeContext<'a> {
     pub fn new(
         uref_lookup: &'a mut BTreeMap<String, Key>,
-        known_urefs: HashMap<URefAddr, AccessRights>,
+        known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         account: &'a Account,
         base_key: Key,
         gas_limit: u64,
@@ -44,7 +44,7 @@ impl<'a> RuntimeContext<'a> {
         self.uref_lookup.contains_key(name)
     }
 
-    pub fn add_urefs(&mut self, urefs_map: HashMap<URefAddr, AccessRights>) {
+    pub fn add_urefs(&mut self, urefs_map: HashMap<URefAddr, HashSet<AccessRights>>) {
         self.known_urefs.extend(urefs_map);
     }
 
@@ -68,7 +68,11 @@ impl<'a> RuntimeContext<'a> {
 
     pub fn insert_uref(&mut self, key: Key) {
         if let Key::URef(raw_addr, rights) = key {
-            self.known_urefs.insert(raw_addr, rights);
+            let entry_rights = self
+                .known_urefs
+                .entry(raw_addr)
+                .or_insert_with(|| std::iter::empty().collect());
+            entry_rights.insert(rights);
         }
     }
 
@@ -107,7 +111,11 @@ impl<'a> RuntimeContext<'a> {
             Key::URef(raw_addr, new_rights) => {
                 self.known_urefs
                     .get(raw_addr) // Check if we `key` is known
-                    .filter(|known_rights| *known_rights >= new_rights) // are we allowed to use it this way?
+                    .map(|known_rights| {
+                        known_rights
+                            .iter()
+                            .any(|right| *right & *new_rights == *new_rights)
+                    }) // are we allowed to use it this way?
                     .map(|_| ()) // at this point we know it's valid to use `key`
                     .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
             }

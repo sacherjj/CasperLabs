@@ -273,7 +273,7 @@ fn valid_uref() {
     // Test fixture
     let mut test_fixture: TestFixture = Default::default();
     let mut rng = rand::thread_rng();
-    let uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
+    let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
     test_fixture.with_known_urefs(once(uref).collect());
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
     let mut runtime = test_fixture.env.runtime(
@@ -455,7 +455,7 @@ fn store_contract_hash_legal_urefs() {
     // Test fixtures
     let mut test_fixture: TestFixture = Default::default();
     let mut rng = rand::thread_rng();
-    let uref = random_uref_key(&mut rng, AccessRights::ReadWrite);
+    let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
     test_fixture.with_known_urefs(once(uref).collect());
     let wasm_module = create_wasm_module();
     // We need this braces so that the `tc_borrowed` gets dropped
