@@ -197,17 +197,17 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         maybeSummary <- service
                          .streamBlockSummaries(StreamBlockSummariesRequest(Seq(blockHash)))
                          .headOptionL
-        summary <- maybeSummary.fold(
+        summary <- maybeSummary.toOptionT[F].getOrElseF {
                     Sync[F].raiseError[BlockSummary](
                       NotFound("Cannot get Genesis summary from bootstrap.")
                     )
-                  )(_.pure[F])
+                  }
         watch      <- downloadManager.scheduleDownload(summary, bootstrap, relay = false)
         _          <- watch
         maybeBlock <- backend.getBlock(blockHash)
-        block <- maybeBlock.fold(
+        block <- maybeBlock.toOptionT[F].getOrElseF {
                   Sync[F].raiseError[Block](Internal("Cannot retrieve downloaded block."))
-                )(_.pure[F])
+                }
         _ <- Log[F].info(s"Downloaded Genesis candidate ${hex(blockHash)} from bootstrap.")
       } yield block
 
@@ -218,9 +218,9 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         case None =>
           for {
             maybeBlock <- backend.getBlock(blockHash)
-            block <- maybeBlock.fold(download(service, blockHash))(
-                      _.pure[F]
-                    )
+            block <- maybeBlock.toOptionT[F].getOrElseF {
+                      download(service, blockHash)
+                    }
             maybeApproval <- Sync[F].rethrow(backend.validateCandidate(block))
             // Add empty candidate so we can verify all approvals one by one.
             status = Status(GenesisCandidate(blockHash), block)
@@ -250,7 +250,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
           case (_, transitioned) if transitioned =>
             ().pure[F]
           case (checkedApprovals, _) =>
-            Timer[F].sleep(pollInterval) *> loop(checkedApprovals)
+            Timer[F].sleep(pollInterval) >> loop(checkedApprovals)
         }
     }
 

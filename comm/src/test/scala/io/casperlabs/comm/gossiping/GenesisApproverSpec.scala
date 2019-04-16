@@ -416,7 +416,6 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
 }
 
 object GenesisApproverSpec extends ArbitraryConsensus {
-  //implicit val log             = Log.log[Task]
   implicit val noLog           = new Log.NOPLog[Task]
   implicit val consensusConfig = ConsensusConfig()
 

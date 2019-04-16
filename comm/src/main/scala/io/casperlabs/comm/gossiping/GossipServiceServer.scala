@@ -181,7 +181,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
 
   // MonadError isn't covariant in the error type.
   private def rethrow[E <: Throwable, A](value: F[Either[E, A]]): F[A] =
-    Sync[F].rethrow(value.map(_.leftMap(ex => ex.asInstanceOf[Throwable])))
+    Sync[F].rethrow(value.widen)
 }
 
 object GossipServiceServer {
