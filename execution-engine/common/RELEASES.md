@@ -1,3 +1,7 @@
+Version 0.5.0 (2019-04-10)
+==========================
+* API method `call_contract` has been simplified. Instead of requiring arguments passed in the binary form it now accepts tuples up to 8 elements. It is required that for every type in the tuple there exists an instance of `ToBytes` trait.
+
 Version 0.4.0 (2019-04-03)
 ==========================
 
