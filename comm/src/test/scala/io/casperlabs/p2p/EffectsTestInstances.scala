@@ -116,7 +116,7 @@ object EffectsTestInstances {
     // To be able to reconstruct the timeline.
     var all: Vector[String] = Vector.empty[String]
 
-    def reset(): Unit = {
+    def reset(): Unit = synchronized {
       debugs = Vector.empty[String]
       infos = Vector.empty[String]
       warns = Vector.empty[String]
