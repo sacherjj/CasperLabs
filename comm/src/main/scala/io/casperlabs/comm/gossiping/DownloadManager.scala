@@ -3,13 +3,20 @@ package io.casperlabs.comm.gossiping
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
+import eu.timepit.refined._
+import eu.timepit.refined.auto._
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.numeric._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.GossipError
+import io.casperlabs.comm.discovery.NodeUtils.showNode
+import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.{Compression, Log}
 
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
 import shapeless.tag, tag.@@
 
@@ -77,12 +84,19 @@ object DownloadManagerImpl {
     val canStart: Boolean = !isDownloading && dependencies.isEmpty
   }
 
+  final case class RetriesConf(
+      maxRetries: Int Refined NonNegative,
+      initialBackoffPeriod: FiniteDuration,
+      backoffFactor: Double Refined GreaterEqual[W.`1.0`.T]
+  )
+
   /** Start the download manager. */
-  def apply[F[_]: Concurrent: Log](
+  def apply[F[_]: Concurrent: Log: Timer](
       maxParallelDownloads: Int,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
-      relaying: Relaying[F]
+      relaying: Relaying[F],
+      retriesConf: RetriesConf
   ): Resource[F, DownloadManager[F]] =
     Resource.make {
       for {
@@ -99,7 +113,8 @@ object DownloadManagerImpl {
           signal,
           connectToGossip,
           backend,
-          relaying
+          relaying,
+          retriesConf
         )
         managerLoop <- Concurrent[F].start(manager.run)
       } yield (isShutdown, workersRef, managerLoop, manager)
@@ -124,7 +139,7 @@ object DownloadManagerImpl {
     Base16.encode(blockHash.toByteArray)
 }
 
-class DownloadManagerImpl[F[_]: Concurrent: Log](
+class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
     isShutdown: Ref[F, Boolean],
     // Keep track of active downloads and dependencies.
     itemsRef: Ref[F, Map[ByteString, DownloadManagerImpl.Item[F]]],
@@ -137,7 +152,8 @@ class DownloadManagerImpl[F[_]: Concurrent: Log](
     // Establish gRPC connection to another node.
     connectToGossip: GossipService.Connector[F],
     backend: DownloadManagerImpl.Backend[F],
-    relaying: Relaying[F]
+    relaying: Relaying[F],
+    retriesConf: RetriesConf
 ) extends DownloadManager[F] {
 
   import DownloadManagerImpl._
@@ -299,19 +315,54 @@ class DownloadManagerImpl[F[_]: Concurrent: Log](
         _ <- success
       } yield ()
 
+    def downloadWithRetries(summary: BlockSummary, source: Node, relay: Boolean): F[Unit] = {
+      val downloadEffect = tryDownload(summary, source, relay)
+
+      def encode(byteString: ByteString): String = Base16.encode(byteString.toByteArray)
+
+      def loop(counter: Int, errors: List[Throwable]): F[Unit] =
+        if (counter == retriesConf.maxRetries.toInt) {
+          Sync[F].raiseError[Unit](errors.head)
+        } else {
+          downloadEffect.handleErrorWith { e =>
+            val duration = retriesConf.initialBackoffPeriod *
+              math.pow(retriesConf.backoffFactor, counter.toDouble)
+            duration match {
+              case delay: FiniteDuration =>
+                Log[F].warn(
+                  s"Retrying downloading of block ${encode(summary.blockHash)}, source: ${source.show}, attempt: ${counter + 1}"
+                ) >>
+                  Timer[F].sleep(delay) >> loop(counter + 1, e :: errors)
+              // Normally, should never happen due to refinement types
+              case _: Duration.Infinite =>
+                Sync[F].raiseError[Unit](
+                  new RuntimeException(
+                    s"Failed to retry downloading block ${encode(summary.blockHash)}, source: ${source.show}, got Infinite backoff delay"
+                  )
+                )
+            }
+          }
+        }
+
+      if (retriesConf.maxRetries.toInt == 0) {
+        downloadEffect
+      } else {
+        loop(counter = 0, errors = Nil)
+      }
+    }
+
     // Try to download until we succeed or give up.
     def loop(tried: Set[Node], errors: List[Throwable]): F[Unit] =
       // Get the latest sources.
       itemsRef.get.map(_(blockHash)).flatMap { item =>
         (item.sources -- tried).headOption match {
           case Some(source) =>
-            tryDownload(item.summary, source, item.relay).recoverWith {
+            downloadWithRetries(item.summary, source, item.relay).recoverWith {
               case NonFatal(ex) =>
                 // TODO: Exponential backoff, pick another node, try to store again, etc.
                 Log[F].error(s"Failed to download block $id from ${source.host}", ex) *>
                   loop(tried + source, ex :: errors)
             }
-
           case None =>
             Log[F].error(
               s"Could not download block $id from any of the sources; tried ${tried.size}."
