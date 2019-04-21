@@ -1,17 +1,15 @@
 package io.casperlabs.comm.gossiping
 
-import cats._
-import cats.syntax._
-import cats.implicits._
 import cats.effect._
-import cats.effect.syntax._
 import cats.effect.concurrent._
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.GossipError
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.shared.{Compression, Log, LogSource}
+import io.casperlabs.shared.{Compression, Log}
+
 import scala.util.control.NonFatal
 import shapeless.tag, tag.@@
 
@@ -48,9 +46,9 @@ object DownloadManagerImpl {
   }
 
   /** Messages the Download Manager uses inside its scheduler "queue". */
-  sealed trait Signal[F[_]]
+  sealed trait Signal[F[_]] extends Product with Serializable
   object Signal {
-    case class Download[F[_]](
+    final case class Download[F[_]](
         summary: BlockSummary,
         source: Node,
         relay: Boolean,
@@ -59,12 +57,12 @@ object DownloadManagerImpl {
         // Feedback about whether the download eventually succeeded.
         downloadFeedback: DownloadFeedback[F]
     ) extends Signal[F]
-    case class DownloadSuccess[F[_]](blockHash: ByteString)                extends Signal[F]
-    case class DownloadFailure[F[_]](blockHash: ByteString, ex: Throwable) extends Signal[F]
+    final case class DownloadSuccess[F[_]](blockHash: ByteString)                extends Signal[F]
+    final case class DownloadFailure[F[_]](blockHash: ByteString, ex: Throwable) extends Signal[F]
   }
 
   /** Keep track of download items. */
-  case class Item[F[_]](
+  final case class Item[F[_]](
       summary: BlockSummary,
       // Any node that told us it has this block.
       sources: Set[Node],
@@ -76,7 +74,7 @@ object DownloadManagerImpl {
       isError: Boolean = false,
       watchers: List[DownloadFeedback[F]]
   ) {
-    val canStart = !isDownloading && dependencies.isEmpty
+    val canStart: Boolean = !isDownloading && dependencies.isEmpty
   }
 
   /** Start the download manager. */
@@ -126,7 +124,7 @@ object DownloadManagerImpl {
     Base16.encode(blockHash.toByteArray)
 }
 
-class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
+class DownloadManagerImpl[F[_]: Concurrent: Log](
     isShutdown: Ref[F, Boolean],
     // Keep track of active downloads and dependencies.
     itemsRef: Ref[F, Map[ByteString, DownloadManagerImpl.Item[F]]],
@@ -180,7 +178,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
             }
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.
-        start.attempt.flatMap(scheduleFeedback.complete(_)) *> run
+        start.attempt.flatMap(scheduleFeedback.complete) *> run
 
       case Signal.DownloadSuccess(blockHash) =>
         val finish = for {
@@ -199,7 +197,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
                  }
           (watchers, startables) = next
           _                      <- watchers.traverse(_.complete(Right(())).attempt.void)
-          _                      <- startables.traverse(startWorker(_))
+          _                      <- startables.traverse(startWorker)
         } yield ()
 
         finish.attempt *> run
@@ -335,15 +333,15 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
     // Keep track of how much we have downloaded so far and cancel the stream if it goes over the promised size.
     case class Acc(
         header: Option[Chunk.Header],
-        totalSizeSofar: Int,
+        totalSizeSoFar: Int,
         chunks: List[ByteString],
         error: Option[GossipError]
     ) {
-      def invalid(msg: String) =
+      def invalid(msg: String): Acc =
         copy(error = Some(GossipError.InvalidChunks(msg, source)))
 
-      def append(data: ByteString) =
-        copy(totalSizeSofar = totalSizeSofar + data.size, chunks = data :: chunks)
+      def append(data: ByteString): Acc =
+        copy(totalSizeSoFar = totalSizeSoFar + data.size, chunks = data :: chunks)
     }
 
     semaphore.withPermit {
@@ -376,7 +374,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
                   Right(acc.invalid("Block chunks contained empty data frame."))
 
                 case (acc, chunk)
-                    if acc.totalSizeSofar + chunk.getData.size > acc.header.get.contentLength =>
+                    if acc.totalSizeSoFar + chunk.getData.size > acc.header.get.contentLength =>
                   Right(acc.invalid("Block chunks are exceeding the promised content length."))
 
                 case (acc, chunk) =>
@@ -384,9 +382,9 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
               }
 
         content <- if (acc.error.nonEmpty) {
-                    Sync[F].raiseError(acc.error.get)
+                    Sync[F].raiseError[Array[Byte]](acc.error.get)
                   } else if (acc.header.isEmpty) {
-                    Sync[F].raiseError(invalid("Did not receive a header."))
+                    Sync[F].raiseError[Array[Byte]](invalid("Did not receive a header."))
                   } else {
                     val header  = acc.header.get
                     val content = acc.chunks.toArray.reverse.flatMap(_.toByteArray)
