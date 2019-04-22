@@ -130,14 +130,13 @@ class NodeRuntime private[node] (
       multiParentCasperRef <- MultiParentCasperRef.of[Effect]
       lab                  <- LastApprovedBlock.of[Task].toEffect
       labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
-      _ <- if (conf.server.cleanBlockStorage) {
-            Task.delay {
+      _ <- Task
+            .delay {
               log.info("Cleaning block storage ...")
               blockStore.clear() *> blockDagStorage.clear()
-            }.toEffect
-          } else {
-            Task.unit.toEffect
-          }
+            }
+            .whenA(conf.server.cleanBlockStorage)
+            .toEffect
       commTmpFolder = conf.server.dataDir.resolve("tmp").resolve("comm")
       _             <- commTmpFolder.deleteDirectory[Task]().toEffect
       transport = effects.tcpTransportLayer(
