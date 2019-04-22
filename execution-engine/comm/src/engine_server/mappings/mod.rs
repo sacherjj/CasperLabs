@@ -7,7 +7,7 @@ use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFou
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
 use shared::newtypes::Blake2bHash;
-use storage::{gs, history, history::CommitResult, op, transform, transform::TypeMismatch};
+use storage::{global_state, history, history::CommitResult, op, transform, transform::TypeMismatch};
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {
@@ -331,8 +331,8 @@ impl TryFrom<&super::ipc::TransformEntry> for (common::key::Key, transform::Tran
     }
 }
 
-impl From<gs::ExecutionEffect> for super::ipc::ExecutionEffect {
-    fn from(ee: gs::ExecutionEffect) -> super::ipc::ExecutionEffect {
+impl From<global_state::ExecutionEffect> for super::ipc::ExecutionEffect {
+    fn from(ee: global_state::ExecutionEffect) -> super::ipc::ExecutionEffect {
         let mut eff = super::ipc::ExecutionEffect::new();
         let ipc_ops: Vec<super::ipc::OpEntry> =
             ee.0.iter()
@@ -510,7 +510,7 @@ mod tests {
     use shared::newtypes::Blake2bHash;
     use std::collections::HashMap;
     use std::convert::TryInto;
-    use storage::gs::ExecutionEffect;
+    use storage::global_state::ExecutionEffect;
     use storage::transform::Transform;
 
     // Test that wasm_error function actually returns DeployResult with result set to WasmError

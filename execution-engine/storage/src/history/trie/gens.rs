@@ -1,7 +1,7 @@
 use super::{Pointer, PointerBlock, Trie};
+use common::gens::{key_arb, value_arb};
 use common::key::Key;
 use common::value::Value;
-use gens::gens::{key_arb, value_arb};
 use proptest::collection::vec;
 use proptest::option;
 use proptest::prelude::*;

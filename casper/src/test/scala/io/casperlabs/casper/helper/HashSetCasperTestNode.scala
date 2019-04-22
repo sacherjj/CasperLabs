@@ -168,7 +168,7 @@ object HashSetCasperTestNode {
       blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                           BlockDagFileStorage.Config(blockDagDir),
                           genesis
-                        )(Concurrent[F], Log[F], blockStore)
+                        )(Concurrent[F], Log[F], blockStore, metricEff)
       blockProcessingLock <- Semaphore[F](1)
       casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       node = new HashSetCasperTestNode[F](
@@ -248,7 +248,7 @@ object HashSetCasperTestNode {
               blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                                   BlockDagFileStorage.Config(blockDagDir),
                                   genesis
-                                )(Concurrent[F], Log[F], blockStore)
+                                )(Concurrent[F], Log[F], blockStore, metricEff)
               semaphore <- Semaphore[F](1)
               casperState <- Cell.mvarCell[F, CasperState](
                               CasperState()
@@ -365,7 +365,7 @@ object HashSetCasperTestNode {
         // The real execution engine will get the keys from what the code changes, which will include
         // changes to the account nonce for example, but not the deploy timestamp. Make sure the `key`
         // here isn't more specific to a deploy then the real thing would be.
-        val key           = Key(Key.KeyInstance.Hash(KeyHash(deploy.sessionCode)))
+        val key           = Key(Key.KeyInstance.Hash(KeyHash(deploy.session.fold(ByteString.EMPTY)(_.code))))
         val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
         val op            = Op(Op.OpInstance.Read(ReadOp()))
         val transforEntry = TransformEntry(Some(key), Some(transform))

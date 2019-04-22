@@ -80,12 +80,28 @@ pipeline:
       - ~/.cargo/bin/cargo update
       - ~/.cargo/bin/cargo build
 
+  run-rust-lints:
+    <<: *buildenv
+    group: test
+    commands:
+      - cd execution-engine
+      - ~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)
+      - ~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy
+      - ~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
+
   run-rust-tests:
     <<: *buildenv
     group: test
     commands:
       - cd execution-engine/
       - ~/.cargo/bin/cargo test
+
+  try-cargo-publish:
+    <<: *buildenv
+    group: test
+    commands:
+      - cd execution-engine/common
+      - ~/.cargo/bin/cargo publish --dry-run
 
   run-rust-tests-mac:
     image: appleboy/drone-ssh
@@ -97,15 +113,6 @@ pipeline:
       export PATH=$PATH:/usr/local/bin
       cd execution-engine/
       ~/.cargo/bin/cargo test
-
-  run-rust-lints:
-    <<: *buildenv
-    group: test
-    commands:
-      - cd execution-engine
-      - ~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)
-      - ~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy
-      - ~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints
 
   run-unit-tests:
     <<: *sbtenv
@@ -291,6 +298,15 @@ pipeline:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     secrets: [ docker_username, docker_password ]
+    when:
+      event: [ push, tag ]
+
+  contract-examples:
+    image: plugins/downstream
+    secrets: [ downstream_token, downstream_server ]
+    fork: true
+    repositories:
+      - CasperLabs/contract-examples@master
     when:
       event: [ push, tag ]
 

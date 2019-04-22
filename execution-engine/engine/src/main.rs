@@ -14,7 +14,7 @@ use clap::{App, Arg};
 use execution_engine::engine::{EngineState, ExecutionResult, RootNotFound};
 use execution_engine::execution::WasmiExecutor;
 use shared::newtypes::Blake2bHash;
-use storage::gs::inmem::InMemHist;
+use storage::global_state::inmem::InMemHist;
 use storage::history::CommitResult;
 use wasm_prep::WasmiPreprocessor;
 
@@ -95,10 +95,10 @@ fn main() {
 
     // let path = std::path::Path::new("./tmp/");
     // TODO: Better error handling?
-    //    let gs = LmdbGs::new(&path).unwrap();
-    let init_state = storage::gs::mocked_account(account_addr);
-    let gs = InMemHist::new_initialized(&state_hash, init_state);
-    let engine_state = EngineState::new(gs);
+    //    let global_state = LmdbGs::new(&path).unwrap();
+    let init_state = storage::global_state::mocked_account(account_addr);
+    let global_state = InMemHist::new_initialized(&state_hash, init_state);
+    let engine_state = EngineState::new(global_state);
 
     let wasmi_executor = WasmiExecutor;
     let wasmi_preprocessor = WasmiPreprocessor;
@@ -107,6 +107,7 @@ fn main() {
         println!("Pre state hash: {:?}", state_hash);
         let result = engine_state.run_deploy(
             &wasm_bytes.bytes,
+            &[], // TODO: consume args from CLI
             account_addr,
             timestamp,
             nonce,

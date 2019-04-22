@@ -2,11 +2,16 @@ syntax = "proto3";
 
 package io.casperlabs.ipc;
 
+message DeployCode {
+  bytes code = 1; // wasm byte code
+  bytes args = 2; // ABI-encoded arguments
+}
+
 message Deploy {
     bytes address = 1; // length 20 bytes
     uint64 timestamp = 2;
-    bytes session_code = 3;
-    bytes payment_code = 4;
+    DeployCode session = 3;
+    DeployCode payment = 4;
     uint64 gas_limit = 5;
     uint64 gas_price = 6;
     uint64 nonce = 7;

@@ -191,7 +191,9 @@ where
     deploys
         .iter()
         .map(|deploy| {
-            let module_bytes = &deploy.session_code;
+            let session_contract = deploy.get_session();
+            let module_bytes = &session_contract.code;
+            let args = &session_contract.args;
             let address: [u8; 20] = {
                 let mut tmp = [0u8; 20];
                 tmp.copy_from_slice(&deploy.address);
@@ -203,6 +205,7 @@ where
             engine_state
                 .run_deploy(
                     module_bytes,
+                    args,
                     address,
                     timestamp,
                     nonce,

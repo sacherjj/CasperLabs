@@ -1,5 +1,6 @@
 use common::key::Key;
-use gs::DbReader;
+use common::value::Value;
+use global_state::StateReader;
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use transform::{Transform, TypeMismatch};
@@ -18,7 +19,7 @@ pub enum CommitResult {
 
 pub trait History {
     type Error;
-    type Reader: DbReader<Error = Self::Error>;
+    type Reader: StateReader<Key, Value, Error = Self::Error>;
 
     /// Checkouts to the post state of a specific block.
     fn checkout(&self, prestate_hash: Blake2bHash) -> Result<Option<Self::Reader>, Self::Error>;

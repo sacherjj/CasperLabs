@@ -5,7 +5,7 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::{Account, Value};
-use storage::gs::{DbReader, ExecutionEffect};
+use storage::global_state::{StateReader, ExecutionEffect};
 use storage::transform::TypeMismatch;
 use trackingcopy::{AddResult, TrackingCopy};
 use wasmi::memory_units::Pages;
@@ -20,7 +20,7 @@ use parity_wasm::elements::{Error as ParityWasmError, Module};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 
 #[derive(Debug)]
@@ -82,12 +82,14 @@ impl From<!> for Error {
 
 impl HostError for Error {}
 
+type URefAddr = [u8; 32];
+
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a> {
     // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
-    known_urefs: HashSet<Key>,
+    known_urefs: HashMap<URefAddr, AccessRights>,
     account: &'a Account,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
@@ -104,7 +106,7 @@ impl<'a> RuntimeContext<'a> {
     ) -> Self {
         RuntimeContext {
             uref_lookup,
-            known_urefs: HashSet::new(),
+            known_urefs: HashMap::new(),
             account,
             base_key,
             gas_limit,
@@ -117,7 +119,9 @@ impl<'a> RuntimeContext<'a> {
     }
 
     pub fn insert_uref(&mut self, key: Key) {
-        self.known_urefs.insert(key);
+        if let Key::URef(raw_addr, rights) = key {
+            self.known_urefs.insert(raw_addr, rights);
+        }
     }
 
     /// Validates whether keys used in the `value` are not forged.
@@ -156,20 +160,12 @@ impl<'a> RuntimeContext<'a> {
     /// that are less powerful than access rights' of the key in the `known_urefs`.
     fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
-            Key::URef(id, access_right) => {
-                // TODO: Use some more efficient encoding of this.
-                // Maybe replace known_urefs Set with Map<[u32; 32], AccessRights>.
-                // https://casperlabs.atlassian.net/browse/EE-210
-                let found = self.known_urefs.iter().find(|entry| match entry {
-                    Key::URef(entry_id, entry_rights) => {
-                        entry_id == id && entry_rights >= access_right
-                    }
-                    _ => false,
-                });
-                match found {
-                    None => Err(Error::ForgedReference(*key)),
-                    Some(_) => Ok(()),
-                }
+            Key::URef(raw_addr, new_rights) => {
+                self.known_urefs
+                    .get(raw_addr) // Check if we `key` is known
+                    .filter(|known_rights| *known_rights >= new_rights) // are we allowed to use it this way?
+                    .map(|_| ()) // at this point we know it's valid to use `key`
+                    .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
             }
             _ => Ok(()),
         }
@@ -187,7 +183,7 @@ impl<'a> RuntimeContext<'a> {
     }
 }
 
-pub struct Runtime<'a, R: DbReader> {
+pub struct Runtime<'a, R: StateReader<Key, Value>> {
     args: Vec<Vec<u8>>,
     memory: MemoryRef,
     state: &'a mut TrackingCopy<R>,
@@ -216,12 +212,13 @@ pub fn rename_export_to_call(module: &mut Module, name: String) {
     main_export.push_str("call");
 }
 
-impl<'a, R: DbReader> Runtime<'a, R>
+impl<'a, R: StateReader<Key, Value>> Runtime<'a, R>
 where
     R::Error: Into<Error>,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        args: Vec<Vec<u8>>,
         memory: MemoryRef,
         state: &'a mut TrackingCopy<R>,
         module: Module,
@@ -232,7 +229,7 @@ where
     ) -> Self {
         let rng = create_rng(&account_addr, timestamp, nonce);
         Runtime {
-            args: Vec::new(),
+            args,
             memory,
             state,
             module,
@@ -416,7 +413,7 @@ where
         }
     }
 
-    fn call_contract(
+    pub fn call_contract(
         &mut self,
         key_ptr: u32,
         key_size: usize,
@@ -430,7 +427,7 @@ where
         let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
 
         let key = self.context.deserialize_key(&key_bytes)?;
-        if key.is_readable() {
+        if self.is_readable(&key) {
             let (args, module, mut refs) = {
                 match self.state.read(key).map_err(Into::into)? {
                     None => Err(Error::KeyNotFound(key)),
@@ -535,7 +532,7 @@ where
     ) -> Result<(), Trap> {
         self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)
             .and_then(|(key, value)| {
-                if key.is_writable() {
+                if self.is_writeable(&key) {
                     self.state.write(key, value);
                     Ok(())
                 } else {
@@ -558,11 +555,44 @@ where
         self.add_transforms(key, value)
     }
 
+    // Tests whether reading from the `key` is valid.
+    // For Accounts it's valid to read when the operation is done on the current context's key.
+    // For Contracts it's always valid.
+    // For URefs it's valid if the access rights of the URef allow for reading.
+    fn is_readable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) => &self.context.base_key == key,
+            Key::Hash(_) => true,
+            Key::URef(_, rights) => rights.is_readable(),
+        }
+    }
+
+    /// Tests whether addition to `key` is valid.
+    /// Addition to account key is valid iff it is being made from the context of the account.
+    /// Addition to contract key is valid iff it is being made from the context of the contract.
+    /// Additions to unforgeable key is valid as long as key itself is addable
+    fn is_addable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) | Key::Hash(_) => &self.context.base_key == key,
+            Key::URef(_, rights) => rights.is_addable(),
+        }
+    }
+
+    // Test whether writing to `kay` is valid.
+    // For Accounts and Hashes it's always invalid.
+    // For URefs it depends on the access rights that uref has.
+    fn is_writeable(&self, key: &Key) -> bool {
+        match key {
+            Key::Account(_) | Key::Hash(_) => false,
+            Key::URef(_, rights) => rights.is_writeable(),
+        }
+    }
+
     /// Reads value living under a key (found at `key_ptr` and `key_size` in Wasm memory).
     /// Fails if `key` is not "readable", i.e. its access rights are weaker than `AccessRights::Read`.
     fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        if key.is_readable() {
+        if self.is_readable(&key) {
             err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
         } else {
             Err(Error::InvalidAccess {
@@ -577,7 +607,7 @@ where
     /// either because they're not a Monoid or if the value stored under `key` has different type,
     /// then `TypeMismatch` errors is returned. Addition can also fail when `key` is not "addable".
     fn add_transforms(&mut self, key: Key, value: Value) -> Result<(), Trap> {
-        if key.is_addable() {
+        if self.is_addable(&key) {
             match self.state.add(key, value) {
                 Err(storage_error) => Err(storage_error.into().into()),
                 Ok(AddResult::Success) => Ok(()),
@@ -656,7 +686,7 @@ const HAS_UREF_FUNC_INDEX: usize = 14;
 const ADD_UREF_FUNC_INDEX: usize = 15;
 const STORE_FN_INDEX: usize = 16;
 
-impl<'a, R: DbReader> Externals for Runtime<'a, R>
+impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
 where
     R::Error: Into<Error>,
 {
@@ -892,7 +922,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 ADD_FUNC_INDEX,
             ),
             "new_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
+                Signature::new(&[ValueType::I32; 3][..], None),
                 NEW_FUNC_INDEX,
             ),
             "load_arg" => FuncInstance::alloc_host(
@@ -984,7 +1014,7 @@ fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), 
     Ok((instance, memory))
 }
 
-fn sub_call<R: DbReader>(
+fn sub_call<R: StateReader<Key, Value>>(
     parity_module: Module,
     args: Vec<Vec<u8>>,
     refs: &mut BTreeMap<String, Key>,
@@ -998,7 +1028,13 @@ where
     R::Error: Into<Error>,
 {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
-    let known_urefs = refs.values().cloned().chain(extra_urefs).collect();
+    let known_urefs = refs
+        .values()
+        .cloned()
+        .chain(extra_urefs)
+        .map(key_to_tuple)
+        .flatten()
+        .collect();
     let rng = ChaChaRng::from_rng(&mut current_runtime.rng).map_err(Error::Rng)?;
     let mut runtime = Runtime {
         args,
@@ -1030,7 +1066,12 @@ where
                 // in the Runtime result field.
                 if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
                     //insert extra urefs returned from call
-                    current_runtime.context.known_urefs.extend(ret_urefs);
+                    let ret_urefs_map: HashMap<URefAddr, AccessRights> = ret_urefs
+                        .iter()
+                        .map(|e| key_to_tuple(*e))
+                        .flatten()
+                        .collect();
+                    current_runtime.context.known_urefs.extend(ret_urefs_map);
                     return Ok(runtime.result);
                 }
             }
@@ -1064,9 +1105,11 @@ macro_rules! on_fail_charge {
 }
 
 pub trait Executor<A> {
-    fn exec<R: DbReader>(
+    #[allow(clippy::too_many_arguments)]
+    fn exec<R: StateReader<Key, Value>>(
         &self,
         parity_module: A,
+        args: &[u8],
         account_addr: [u8; 20],
         timestamp: u64,
         nonce: u64,
@@ -1080,9 +1123,10 @@ pub trait Executor<A> {
 pub struct WasmiExecutor;
 
 impl Executor<Module> for WasmiExecutor {
-    fn exec<R: DbReader>(
+    fn exec<R: StateReader<Key, Value>>(
         &self,
         parity_module: Module,
+        args: &[u8],
         account_addr: [u8; 20],
         timestamp: u64,
         nonce: u64,
@@ -1102,7 +1146,12 @@ impl Executor<Module> for WasmiExecutor {
         }, 0 };
         let account = value.as_account();
         let mut uref_lookup_local = account.urefs_lookup().clone();
-        let known_urefs: HashSet<Key> = uref_lookup_local.values().cloned().collect();
+        let known_urefs: HashMap<URefAddr, AccessRights> = uref_lookup_local
+            .values()
+            .cloned()
+            .map(key_to_tuple)
+            .flatten()
+            .collect();
         let context = RuntimeContext {
             uref_lookup: &mut uref_lookup_local,
             known_urefs,
@@ -1110,7 +1159,15 @@ impl Executor<Module> for WasmiExecutor {
             base_key: acct_key,
             gas_limit,
         };
+        let arguments: Vec<Vec<u8>> = if args.is_empty() {
+            Vec::new()
+        } else {
+            // TODO: figure out how this works with the cost model
+            // https://casperlabs.atlassian.net/browse/EE-239
+            on_fail_charge!(deserialize(args), 0)
+        };
         let mut runtime = Runtime::new(
+            arguments,
             memory,
             tc,
             parity_module,
@@ -1125,6 +1182,19 @@ impl Executor<Module> for WasmiExecutor {
         );
 
         (Ok(runtime.effect()), runtime.gas_counter)
+    }
+}
+
+/// Turns `key` into a `([u8; 32], AccessRights)` tuple.
+/// Returns None if `key` is not `Key::URef` as we it wouldn't have
+/// `AccessRights` associated to it.
+/// This is helper function for creating `known_urefs` map which
+/// holds addresses and corresponding `AccessRights`.
+pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
+    match key {
+        Key::URef(raw_addr, rights) => Some((raw_addr, rights)),
+        Key::Account(_) => None,
+        Key::Hash(_) => None,
     }
 }
 

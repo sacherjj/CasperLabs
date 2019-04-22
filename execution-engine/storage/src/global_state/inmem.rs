@@ -3,7 +3,7 @@ use crate::transform::{self, Transform};
 use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::value::Value;
-use gs::*;
+use global_state::*;
 use history::*;
 use shared::newtypes::Blake2bHash;
 use std::collections::{BTreeMap, HashMap};
@@ -22,9 +22,9 @@ impl<K, V> Clone for InMemGS<K, V> {
     }
 }
 
-impl DbReader for InMemGS<Key, Value> {
+impl StateReader<Key, Value> for InMemGS<Key, Value> {
     type Error = StorageError;
-    fn get(&self, k: &Key) -> Result<Option<Value>, Self::Error> {
+    fn read(&self, k: &Key) -> Result<Option<Value>, Self::Error> {
         Ok(self.0.get(k).map(Clone::clone))
     }
 }
@@ -119,7 +119,7 @@ impl History for InMemHist<Key, Value> {
 
 #[cfg(test)]
 mod tests {
-    use gs::inmem::*;
+    use global_state::inmem::*;
     use std::sync::Arc;
     use transform::Transform;
 
@@ -174,8 +174,8 @@ mod tests {
         let empty_root_hash = [0u8; 32].into();
         let hist = prepopulated_hist();
         let tc = checkout(&hist, empty_root_hash);
-        assert_eq!(tc.get(&KEY1).unwrap().unwrap(), VALUE1);
-        assert_eq!(tc.get(&KEY2).unwrap().unwrap(), VALUE2);
+        assert_eq!(tc.read(&KEY1).unwrap().unwrap(), VALUE1);
+        assert_eq!(tc.read(&KEY2).unwrap().unwrap(), VALUE2);
     }
 
     #[test]
@@ -207,8 +207,8 @@ mod tests {
         let hash_res = commit(&mut hist, empty_root_hash, effects);
         // checkout to the new hash
         let tc_2 = checkout(&hist, hash_res);
-        assert_eq!(tc_2.get(&KEY1).unwrap().unwrap(), v1);
-        assert_eq!(tc_2.get(&KEY2).unwrap().unwrap(), v2);
+        assert_eq!(tc_2.read(&KEY1).unwrap().unwrap(), v1);
+        assert_eq!(tc_2.read(&KEY2).unwrap().unwrap(), v2);
     }
 
     #[test]
@@ -235,9 +235,9 @@ mod tests {
         let _ = commit(&mut gs, empty_root_hash, effects);
         // checkout to the empty root hash
         let tc_2 = checkout(&gs, empty_root_hash);
-        assert_eq!(tc_2.get(&KEY1).unwrap().unwrap(), VALUE1);
-        assert_eq!(tc_2.get(&KEY2).unwrap().unwrap(), VALUE2);
+        assert_eq!(tc_2.read(&KEY1).unwrap().unwrap(), VALUE1);
+        assert_eq!(tc_2.read(&KEY2).unwrap().unwrap(), VALUE2);
         // test that value inserted later are not visible in the past commits.
-        assert_eq!(tc_2.get(&key3).unwrap(), None);
+        assert_eq!(tc_2.read(&key3).unwrap(), None);
     }
 }

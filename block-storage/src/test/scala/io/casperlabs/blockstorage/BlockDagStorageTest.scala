@@ -11,6 +11,7 @@ import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.blockstorage.blockImplicits._
+import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
@@ -119,6 +120,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
     implicit val log = new Log.NOPLog[Task]()
+    implicit val met = new MetricsNOP[Task]
     val env          = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
     FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir).map(_.right.get)
   }
@@ -128,6 +130,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       maxSizeFactor: Int = 10
   )(implicit blockStore: BlockStore[Task]): Task[BlockDagStorage[Task]] = {
     implicit val log = new shared.Log.NOPLog[Task]()
+    implicit val met = new MetricsNOP[Task]
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
         dagDataDir,

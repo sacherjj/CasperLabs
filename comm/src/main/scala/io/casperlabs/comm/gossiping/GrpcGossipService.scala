@@ -4,12 +4,13 @@ import cats.effect._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.auth.Principal
 import io.casperlabs.comm.grpc.ContextKeys
-import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
+import io.casperlabs.comm.ServiceError.{DeadlineExceeded, NotFound, Unauthenticated}
 import io.casperlabs.shared.ObservableOps._
 import monix.eval.{Task, TaskLift, TaskLike}
 import monix.reactive.Observable
 import monix.tail.Iterant
 import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.TimeoutException
 
 /** Adapt the GossipService to Monix generated interfaces. */
 object GrpcGossipService {
@@ -59,7 +60,14 @@ object GrpcGossipService {
         service.streamBlockSummaries(request).toObservable
 
       def getBlockChunked(request: GetBlockChunkedRequest): Observable[Chunk] =
-        service.getBlockChunked(request).toObservable.withConsumerTimeout(blockChunkConsumerTimeout)
+        service
+          .getBlockChunked(request)
+          .toObservable
+          .withConsumerTimeout(blockChunkConsumerTimeout)
+          .onErrorRecoverWith {
+            case ex: TimeoutException =>
+              Observable.raiseError(DeadlineExceeded(ex.getMessage))
+          }
     }
 
   /** Create the internal interface from the Monix specific instance,

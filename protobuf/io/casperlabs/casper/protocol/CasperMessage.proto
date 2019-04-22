@@ -47,11 +47,16 @@ message QueryStateResponse {
     string result = 1;
 }
 
+message DeployCode {
+    bytes code = 1; // wasm byte code
+    bytes args = 2; // ABI-encoded arguments
+}
+
 message DeployData {
     bytes address = 1; // length 20 bytes
     int64 timestamp = 2;
-    bytes session_code = 3;
-    bytes payment_code = 4;
+    DeployCode session = 3;
+    DeployCode payment = 4;
     int64 gas_limit = 5;
     int64 gas_price = 6;
     int64 nonce = 7;

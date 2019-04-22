@@ -16,6 +16,20 @@ pub enum AccessRights {
     AddWrite,
 }
 
+impl AccessRights {
+    pub fn is_readable(self) -> bool {
+        self >= AccessRights::Read
+    }
+
+    pub fn is_writeable(self) -> bool {
+        self >= AccessRights::Write
+    }
+
+    pub fn is_addable(self) -> bool {
+        self >= AccessRights::Add
+    }
+}
+
 use AccessRights::*;
 
 /// Partial order of the access rights.
@@ -139,31 +153,6 @@ pub enum Key {
     URef([u8; 32], AccessRights), //TODO: more bytes?
 }
 
-impl Key {
-    pub fn is_readable(&self) -> bool {
-        match self {
-            Key::URef(.., access_right) => *access_right >= AccessRights::Read,
-            _ => true,
-        }
-    }
-
-    pub fn is_writable(&self) -> bool {
-        match self {
-            Key::URef(.., access_right) => *access_right >= AccessRights::Write,
-            _ => false,
-        }
-    }
-
-    pub fn is_addable(&self) -> bool {
-        match self {
-            Key::URef(.., access_right) => *access_right >= AccessRights::Add,
-            // From within the body of a contract/account adding
-            // to its state should be possible (only allows for adding new URefs).
-            _ => true,
-        }
-    }
-}
-
 use Key::*;
 // TODO: I had to remove Ord derived on the Key enum because
 // there is no total ordering of the AccessRights but Ord for the Key
@@ -174,7 +163,8 @@ impl Ord for Key {
     fn cmp(&self, other: &Key) -> Ordering {
         match (self, other) {
             (Account(id_1), Account(id_2)) => id_1.cmp(id_2),
-            (Account(_), _) => Ordering::Less,
+            (Account(_), Hash(_)) => Ordering::Less,
+            (Account(_), URef(_, ..)) => Ordering::Less,
             (Hash(id_1), Hash(id_2)) => id_1.cmp(id_2),
             (Hash(_), URef(_, _)) => Ordering::Less,
             (Hash(_), Account(_)) => Ordering::Greater,
@@ -335,22 +325,19 @@ impl AsRef<[u8]> for Key {
     }
 }
 
+#[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
+    use crate::gens::*;
     use crate::key::AccessRights::{self, *};
-    use crate::key::Key;
+    use core::cmp::Ordering;
+    use core::hash::{Hash, Hasher};
+    use proptest::prelude::*;
+    use siphasher::sip::SipHasher;
 
-    fn test_key_capabilities<F>(
-        right: AccessRights,
-        requires: AccessRights,
-        is_true: bool,
-        predicate: F,
-    ) where
-        F: Fn(Key) -> bool,
-    {
-        let key = Key::URef([0u8; 32], right);
+    fn test_capabilities(right: AccessRights, requires: AccessRights, is_true: bool) {
         assert_eq!(
-            predicate(key),
+            right >= requires,
             is_true,
             "{:?} isn't enough to perform {:?} operation",
             right,
@@ -359,7 +346,7 @@ mod tests {
     }
 
     fn test_readable(right: AccessRights, is_true: bool) {
-        test_key_capabilities(right, Read, is_true, |key| key.is_readable())
+        test_capabilities(right, AccessRights::Read, is_true)
     }
 
     #[test]
@@ -374,7 +361,7 @@ mod tests {
     }
 
     fn test_writable(right: AccessRights, is_true: bool) {
-        test_key_capabilities(right, Write, is_true, |key| key.is_writable())
+        test_capabilities(right, Write, is_true)
     }
 
     #[test]
@@ -389,7 +376,7 @@ mod tests {
     }
 
     fn test_addable(right: AccessRights, is_true: bool) {
-        test_key_capabilities(right, Add, is_true, |key| key.is_addable())
+        test_capabilities(right, Add, is_true)
     }
 
     #[test]
@@ -401,5 +388,74 @@ mod tests {
         test_addable(Eqv, false);
         test_addable(Read, false);
         test_addable(Write, false);
+    }
+
+    #[test]
+    fn reads_partial_ordering() {
+        let read = AccessRights::Read;
+        assert_eq!(read == AccessRights::Read, true);
+        assert_eq!(read < AccessRights::ReadAdd, true);
+        assert_eq!(read < AccessRights::ReadWrite, true);
+        assert_eq!(read != AccessRights::AddWrite, true);
+        assert_eq!(read != AccessRights::Add, true);
+        assert_eq!(read != AccessRights::Write, true);
+    }
+
+    #[test]
+    fn adds_partial_ordering() {
+        let add = AccessRights::Add;
+        assert_eq!(add == AccessRights::Add, true);
+        assert_eq!(add < AccessRights::ReadAdd, true);
+        assert_eq!(add < AccessRights::ReadWrite, true);
+        assert_eq!(add < AccessRights::AddWrite, true);
+        assert_eq!(add != AccessRights::Read, true);
+        assert_eq!(add != AccessRights::Write, true);
+    }
+
+    #[test]
+    fn writes_partial_ordering() {
+        let write = AccessRights::Write;
+        assert_eq!(write == AccessRights::Write, true);
+        assert_eq!(write < AccessRights::ReadWrite, true);
+        assert_eq!(write < AccessRights::AddWrite, true);
+        assert_eq!(write != AccessRights::Read, true);
+        assert_eq!(write != AccessRights::Add, true);
+        assert_eq!(write != AccessRights::ReadAdd, true);
+    }
+
+    proptest! {
+        #[test]
+        fn eqv_access_is_implicit(access_right in access_rights_arb()) {
+            assert_eq!(AccessRights::Eqv <= access_right, true);
+        }
+
+        // According to the Rust documentation:
+        // https://doc.rust-lang.org/std/hash/trait.Hash.html#hash-and-eq
+        // following property must hold:
+        // k1 == k2 -> hash(k1) == hash(k2)
+        #[test]
+        fn test_key_eqv_hash_property(key_a in key_arb(), key_b in key_arb()) {
+            if key_a == key_b {
+                let mut hasher = SipHasher::new();
+                let key_a_hash = {
+                    key_a.hash(&mut hasher);
+                    hasher.finish()
+                };
+                let key_b_hash = {
+                    key_b.hash(&mut hasher);
+                    hasher.finish()
+                };
+                assert!(key_a_hash == key_b_hash);
+            }
+        }
+
+        // According to Rust documentation, following property must hold::
+        // forall a, b: a.cmp(b) == Ordering::Equal iff a == b and Some(a.cmp(b)) == a.partial_cmp(b)
+        #[test]
+        fn test_key_partialeq_partialord_ord_property(key_a in key_arb(), key_b in key_arb()) {
+            if key_a == key_b && Some(key_a.cmp(&key_b)) == key_a.partial_cmp(&key_b) {
+                assert!(key_a.cmp(&key_b) == Ordering::Equal);
+            }
+        }
     }
 }

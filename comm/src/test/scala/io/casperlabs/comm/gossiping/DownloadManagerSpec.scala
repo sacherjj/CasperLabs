@@ -32,16 +32,6 @@ class DownloadManagerSpec
   override def beforeEach() =
     log.reset()
 
-  // A generators .sample.get can sometimes return None, but these examples have no reason to not generate a result,
-  // so defend against that and retry if it does happen.
-  def sample[T](g: Gen[T]): T = {
-    def loop(i: Int): T = {
-      assert(i > 0, "Should be able to generate a sample.")
-      g.sample.fold(loop(i - 1))(identity)
-    }
-    loop(10)
-  }
-
   // Create a random Node so I don't have to repeat this in all tests.
   val source = sample(arbitrary[Node])
 
@@ -58,13 +48,18 @@ class DownloadManagerSpec
             (blocks(1).getHeader.parentHashes.toSet & blocks(2).getHeader.parentHashes.toSet).nonEmpty
           }
       )
+      val relayed = sample(for {
+        n  <- Gen.choose(1, dag.size)
+        bs <- Gen.pick(n, dag)
+      } yield bs.toSet)
       val blockMap = toBlockMap(dag)
       val remote   = MockGossipService(dag)
+      val relaying = MockRelaying.default
 
       def scheduleAll(manager: DownloadManager[Task]): Task[List[Task[Unit]]] =
         // Add them in the natural topological order they were generated with.
         dag.toList.traverse { block =>
-          manager.scheduleDownload(summaryOf(block), source, relay = false)
+          manager.scheduleDownload(summaryOf(block), source, relay = relayed(block))
         }
 
       def awaitAll(watches: List[Task[Unit]]): Task[Unit] =
@@ -149,6 +144,19 @@ class DownloadManagerSpec
           _ shouldBe 1
         }
       }
+
+      "relay blocks only specified to be relayed" in TestFixture(
+        remote = _ => remote,
+        relaying = relaying
+      ) {
+        case (manager, _) =>
+          for {
+            ws <- scheduleAll(manager)
+            _  <- awaitAll(ws)
+          } yield {
+            relaying.relayed should contain theSameElementsAs relayed.map(_.blockHash)
+          }
+      }
     }
 
     "scheduled to download a block with missing dependencies" should {
@@ -222,7 +230,8 @@ class DownloadManagerSpec
           alloc <- DownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
                     connectToGossip = _ => remote,
-                    backend = backend
+                    backend = backend,
+                    relaying = MockRelaying.default
                   ).allocated
           (manager, release) = alloc
           _                  <- manager.scheduleDownload(summaryOf(block), source, relay = false)
@@ -243,7 +252,8 @@ class DownloadManagerSpec
           alloc <- DownloadManagerImpl[Task](
                     maxParallelDownloads = 1,
                     connectToGossip = _ => MockGossipService(),
-                    backend = MockBackend()
+                    backend = MockBackend(),
+                    relaying = MockRelaying.default
                   ).allocated
           (manager, release) = alloc
           _                  <- release
@@ -316,8 +326,6 @@ class DownloadManagerSpec
       "store the block summary" in TestFixture(backend, _ => remote) {
         check(_.summaries should contain(block.blockHash))
       }
-
-      "gossip to other nodes" in (pending)
     }
 
     "cannot validate a block" should {
@@ -483,7 +491,8 @@ object DownloadManagerSpec {
     def apply(
         backend: MockBackend = MockBackend.default,
         remote: Node => Task[GossipService[Task]] = _ => MockGossipService.default,
-        maxParallelDownloads: Int = 1
+        maxParallelDownloads: Int = 1,
+        relaying: MockRelaying = MockRelaying.default
     )(
         test: TestArgs => Task[Unit]
     )(implicit scheduler: Scheduler, log: Log[Task]): Unit = {
@@ -491,7 +500,8 @@ object DownloadManagerSpec {
       val managerR = DownloadManagerImpl[Task](
         maxParallelDownloads = maxParallelDownloads,
         connectToGossip = remote(_),
-        backend = backend
+        backend = backend,
+        relaying = relaying
       )
 
       val runTest = managerR.use { manager =>
@@ -530,6 +540,18 @@ object DownloadManagerSpec {
     def apply(validate: Block => Task[Unit] = _ => Task.unit) = new MockBackend(validate)
   }
 
+  class MockRelaying extends Relaying[Task] {
+    @volatile var relayed = Vector.empty[ByteString]
+
+    override def relay(hashes: List[ByteString]): Task[Unit] = Task.delay {
+      synchronized { relayed = relayed ++ hashes }
+    }
+  }
+  object MockRelaying {
+    def default: MockRelaying = apply()
+    def apply(): MockRelaying = new MockRelaying()
+  }
+
   /** Test implementation of the remote GossipService to download the blocks from. */
   object MockGossipService {
     private val emptySynchronizer = new Synchronizer[Task] {
@@ -541,6 +563,7 @@ object DownloadManagerSpec {
     private val emptyConsensus = new GossipServiceServer.Consensus[Task] {
       def onPending(dag: Vector[BlockSummary]) = ???
       def onDownloaded(blockHash: ByteString)  = ???
+      def listTips                             = ???
     }
 
     // Used only as a default argument for when we aren't touching the remote service in a test.

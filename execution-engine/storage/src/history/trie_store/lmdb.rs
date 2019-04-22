@@ -214,6 +214,11 @@ impl LmdbTrieStore {
         let db = env.env.create_db(name, flags)?;
         Ok(LmdbTrieStore { db })
     }
+
+    pub fn open(env: &LmdbEnvironment, name: Option<&str>) -> Result<Self, error::Error> {
+        let db = env.env.open_db(name)?;
+        Ok(LmdbTrieStore { db })
+    }
 }
 
 impl<K: ToBytes + FromBytes, V: ToBytes + FromBytes> TrieStore<K, V> for LmdbTrieStore {

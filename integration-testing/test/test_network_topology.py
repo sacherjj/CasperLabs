@@ -4,15 +4,16 @@ import os
 import shutil
 from typing import TYPE_CHECKING, Generator
 
-import conftest
-from casperlabsnode_testing.casperlabsnode import (
-    contract_name as CONTRACT_NAME,
+from . import conftest
+from .cl_node.casperlabsnode import (
+    CONTRACT_NAME,
     create_peer_nodes,
     docker_network_with_started_bootstrap,
     extract_block_hash_from_propose_output,
+    HOST_MOUNT_DIR,
 )
-from casperlabsnode_testing.common import Network, TestingContext
-from casperlabsnode_testing.wait import (
+from .cl_node.common import Network, TestingContext
+from .cl_node.wait import (
     wait_for_approved_block_received,
     wait_for_approved_block_received_handler_state,
     wait_for_block_contains,
@@ -22,7 +23,7 @@ from casperlabsnode_testing.wait import (
 
 
 if TYPE_CHECKING:
-    from casperlabsnode_testing.casperlabsnode import Node
+    from .cl_node.casperlabsnode import Node
 
 
 @contextlib.contextmanager
@@ -31,6 +32,7 @@ def start_network(*, context: TestingContext, bootstrap: 'Node', allowed_peers=N
         docker_client=context.docker,
         bootstrap=bootstrap,
         network=bootstrap.network,
+        bonds_file=context.bonds_file,
         key_pairs=context.peers_keypairs,
         command_timeout=context.command_timeout,
         allowed_peers=allowed_peers,
@@ -73,7 +75,7 @@ def test_metrics_api_socket(command_line_options_fixture, docker_client_fixture)
 
 
 def deploy_block(node, _contract_name):
-    local_contract_file_path = os.path.join('resources', _contract_name)
+    local_contract_file_path = os.path.join(HOST_MOUNT_DIR, _contract_name)
     shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{_contract_name}")
     deploy_output = node.deploy()
     assert deploy_output.strip() == "Success!"

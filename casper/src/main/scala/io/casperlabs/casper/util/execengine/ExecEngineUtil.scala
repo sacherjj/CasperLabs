@@ -26,31 +26,6 @@ case class DeploysCheckpoint(
 object ExecEngineUtil {
   type StateHash = ByteString
 
-  def deploy2deploy(d: DeployData): Deploy =
-    d match {
-      case DeployData(
-          addr,
-          time,
-          sCode,
-          pCode,
-          gasLimit,
-          gasPrice,
-          nonce,
-          _,
-          _,
-          _
-          ) =>
-        Deploy(
-          addr,
-          time,
-          sCode,
-          pCode,
-          gasLimit,
-          gasPrice,
-          nonce
-        )
-    }
-
   implicit def functorRaiseInvalidBlock[F[_]: Sync] = Validate.raiseValidateErrorThroughSync[F]
 
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
@@ -112,7 +87,7 @@ object ExecEngineUtil {
   ): F[(StateHash, Seq[DeployResult])] =
     for {
       prestate <- computePrestate[F](parents.toList, dag)
-      ds       = deploys.map(deploy2deploy)
+      ds       = deploys.map(ProtoUtil.deployDataToEEDeploy)
       result   <- MonadError[F, Throwable].rethrow(ExecutionEngineService[F].exec(prestate, ds))
     } yield (prestate, result)
 

@@ -147,7 +147,8 @@ class NodeRuntime private[node] (
         conf.server.chunkSize,
         commTmpFolder
       )(grpcScheduler, log, metrics, tcpConnections)
-      oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
+      metricsT = Metrics.eitherT[CommError, Task](Monad[Task], metrics)
+      oracle   = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](
                                 conf.casper,
@@ -156,7 +157,7 @@ class NodeRuntime private[node] (
                                 _.value
                               )(
                                 labEff,
-                                Metrics.eitherT(Monad[Task], metrics),
+                                metricsT,
                                 blockStore,
                                 Cell.eitherTCell(Monad[Task], rpConnections),
                                 NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
