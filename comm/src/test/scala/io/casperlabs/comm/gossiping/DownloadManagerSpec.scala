@@ -94,7 +94,7 @@ class DownloadManagerSpec
                 Task.pure(Some(block)).delayResult(250.millis)
               case other => Task.pure(other)
             }
-        ),
+          ),
         maxParallelDownloads = consensusConfig.dagSize
       ) {
         case (manager, backend) =>
@@ -128,7 +128,7 @@ class DownloadManagerSpec
                 parallelMax.set(math.max(parallelNow.get, parallelMax.get))
                 chunk
               }
-          ),
+            ),
           backend = MockBackend(validate = _ => Task.delay(parallelNow.decrementAndGet()).void),
           maxParallelDownloads = maxParallelDownloads
         ) {
@@ -293,7 +293,7 @@ class DownloadManagerSpec
               )
             )
           case _ => MockGossipService(Seq(block))
-      }
+        }
 
       "try to download the block from a different source" in TestFixture(remote = remote) {
         case (manager, backend) =>
@@ -401,7 +401,8 @@ class DownloadManagerSpec
         TestFixture(
           remote = _ => Task.raiseError(io.grpc.Status.UNAVAILABLE.asRuntimeException()),
           // * -> 1 second -> * -> 2 seconds -> * -> 4 seconds -> fail
-          retriesConf = RetriesConf(3, 1.second, 2.0)
+          retriesConf = RetriesConf(3, 1.second, 2.0),
+          timeout = 10.seconds
         ) {
           case (manager, _) =>
             for {
@@ -541,7 +542,8 @@ object DownloadManagerSpec {
         remote: Node => Task[GossipService[Task]] = _ => MockGossipService.default,
         maxParallelDownloads: Int = 1,
         relaying: MockRelaying = MockRelaying.default,
-        retriesConf: RetriesConf = defaultNoRetriesConf
+        retriesConf: RetriesConf = defaultNoRetriesConf,
+        timeout: FiniteDuration = 5.seconds
     )(
         test: TestArgs => Task[Unit]
     )(implicit scheduler: Scheduler, log: Log[Task]): Unit = {
@@ -558,7 +560,7 @@ object DownloadManagerSpec {
         test(manager, backend)
       }
 
-      runTest.runSyncUnsafe(10.seconds)
+      runTest.runSyncUnsafe(timeout)
     }
   }
 

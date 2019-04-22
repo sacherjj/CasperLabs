@@ -318,8 +318,6 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
     def downloadWithRetries(summary: BlockSummary, source: Node, relay: Boolean): F[Unit] = {
       val downloadEffect = tryDownload(summary, source, relay)
 
-      def encode(byteString: ByteString): String = Base16.encode(byteString.toByteArray)
-
       def loop(counter: Int, errors: List[Throwable]): F[Unit] =
         if (counter == retriesConf.maxRetries.toInt) {
           Sync[F].raiseError[Unit](errors.head)
@@ -330,14 +328,13 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
             duration match {
               case delay: FiniteDuration =>
                 Log[F].warn(
-                  s"Retrying downloading of block ${encode(summary.blockHash)}, source: ${source.show}, attempt: ${counter + 1}"
+                  s"Retrying downloading of block $id, source: ${source.show}, attempt: ${counter + 1}, delay: $delay, error: $e"
                 ) >>
                   Timer[F].sleep(delay) >> loop(counter + 1, e :: errors)
-              // Normally, should never happen due to refinement types
               case _: Duration.Infinite =>
                 Sync[F].raiseError[Unit](
                   new RuntimeException(
-                    s"Failed to retry downloading block ${encode(summary.blockHash)}, source: ${source.show}, got Infinite backoff delay"
+                    s"Failed to retry downloading block $id, source: ${source.show}, got Infinite backoff delay"
                   )
                 )
             }
