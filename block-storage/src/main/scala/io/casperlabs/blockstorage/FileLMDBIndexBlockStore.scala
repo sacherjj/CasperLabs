@@ -350,7 +350,7 @@ object FileLMDBIndexBlockStore {
       result <- create[F](env, config.storagePath, config.checkpointsDirPath)
     } yield result
 
-  def apply[F[_]: Sync: Concurrent: Log: RaiseIOError](
+  def apply[F[_]: Sync: Concurrent: Log: RaiseIOError: Metrics](
       dataDir: Path,
       blockstorePath: Path
   ): Resource[F, BlockStore[F]] = {

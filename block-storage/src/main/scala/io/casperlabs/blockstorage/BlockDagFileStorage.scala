@@ -816,7 +816,7 @@ object BlockDagFileStorage {
       }
     )
 
-  def apply[F[_]: Sync: Concurrent: Log: RaiseIOError](
+  def apply[F[_]: Sync: Concurrent: Log: RaiseIOError: Metrics](
       dataDir: Path,
       dagStoragePath: Path,
       blockStore: BlockStore[F]
@@ -826,7 +826,7 @@ object BlockDagFileStorage {
       dagConfig = BlockDagFileStorage.Config(dagStoragePath)
     } yield
       Resource.make(
-        BlockDagFileStorage.create(dagConfig)(Concurrent[F], Log[F], blockStore)
+        BlockDagFileStorage.create(dagConfig)(Concurrent[F], Log[F], blockStore, Metrics[F])
       )(_.close())
     Resource.suspend(res)
   }

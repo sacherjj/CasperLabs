@@ -73,6 +73,11 @@ class NodeRuntime private[node] (
   private val dagStoragePath = conf.server.dataDir.resolve("dagstorage")
   private val defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
+  private val metrics = diagnostics.effects.metrics[Task]
+
+  implicit val metricsT: Metrics[EitherT[Task, CommError, ?]] =
+    Metrics.eitherT[CommError, Task](Monad[Task], metrics)
+
   case class Servers(
       grpcServerExternal: GrpcServer,
       grpcServerInternal: GrpcServer,
@@ -101,7 +106,7 @@ class NodeRuntime private[node] (
                effects.peerNodeAsk,
                log,
                effects.time,
-               diagnostics.effects.metrics
+               metrics
              )
         blockStore <- FileLMDBIndexBlockStore[Effect](conf.server.dataDir, blockstorePath)
         blockDag   <- BlockDagFileStorage[Effect](conf.server.dataDir, dagStoragePath, blockStore)
@@ -124,7 +129,6 @@ class NodeRuntime private[node] (
       defaultTimeout       = conf.server.defaultTimeout.millis
       rpConfAsk            = effects.rpConfAsk
       peerNodeAsk          = effects.peerNodeAsk
-      metrics              = diagnostics.effects.metrics[Task]
       tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
       time                 = effects.time
       multiParentCasperRef <- MultiParentCasperRef.of[Effect]
@@ -147,8 +151,7 @@ class NodeRuntime private[node] (
         conf.server.chunkSize,
         commTmpFolder
       )(grpcScheduler, log, metrics, tcpConnections)
-      metricsT = Metrics.eitherT[CommError, Task](Monad[Task], metrics)
-      oracle   = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
+      oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](
                                 conf.casper,
@@ -207,7 +210,6 @@ class NodeRuntime private[node] (
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       multiParentCasperRef: MultiParentCasperRef[Effect],
-      metrics: Metrics[Task],
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
