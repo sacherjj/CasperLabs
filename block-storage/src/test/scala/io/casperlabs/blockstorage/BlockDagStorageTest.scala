@@ -392,10 +392,15 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
               )
           _             = firstStorage.close()
           secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
-          _             <- secondStorage.clear()
-          _             <- blockStore.clear()
-          result        <- lookupElements(blockElements, secondStorage)
-          _             <- secondStorage.close()
+          elements      <- lookupElements(blockElements, secondStorage)
+          _ = testLookupElementsResult(
+            elements,
+            blockElements.flatMap(_.blockMessage)
+          )
+          _      <- secondStorage.clear()
+          _      <- blockStore.clear()
+          result <- lookupElements(blockElements, secondStorage)
+          _      <- secondStorage.close()
         } yield
           result match {
             case (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) => {
