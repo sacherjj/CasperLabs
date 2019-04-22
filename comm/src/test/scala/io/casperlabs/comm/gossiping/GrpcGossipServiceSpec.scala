@@ -4,10 +4,10 @@ import cats.Id
 import cats.implicits._
 import cats.effect._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
-import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
+import io.casperlabs.comm.ServiceError, ServiceError.{NotFound, Unauthenticated, Unavailable}
 import io.casperlabs.comm.TestRuntime
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
@@ -65,7 +65,8 @@ class GrpcGossipServiceSpec
     StreamBlockSummariesSpec,
     StreamAncestorBlockSummariesSpec,
     StreamDagTipBlockSummariesSpec,
-    NewBlocksSpec
+    NewBlocksSpec,
+    GenesisApprovalSpec
   )
 
   object GetBlockChunkedSpec extends WordSpecLike {
@@ -979,6 +980,90 @@ class GrpcGossipServiceSpec
       }
     }
   }
+
+  object GenesisApprovalSpec extends WordSpecLike {
+    implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
+
+    class MockGenesisApprover() extends GenesisApprover[Task] {
+      override def getCandidate: Task[Either[ServiceError, GenesisCandidate]] =
+        Task.now(Left(Unavailable("Come back later.")))
+      override def addApproval(
+          blockHash: ByteString,
+          approval: Approval
+      ): Task[Either[ServiceError, Boolean]] =
+        Task.now(Left(Unavailable("Come back later.")))
+      override def awaitApproval = ???
+    }
+
+    def testWithApprover(
+        genesisApprover: GenesisApprover[Task]
+    )(f: GossipingGrpcMonix.GossipServiceStub => Task[Unit]) =
+      runTestUnsafe(TestData()) {
+        TestEnvironment(testDataRef, genesisApprover = genesisApprover).use(f(_))
+      }
+
+    def expectUnavailable(msg: String)(call: Task[_]) =
+      call.attempt.map {
+        case Left(ex) =>
+          ex shouldBe an[io.grpc.StatusRuntimeException]
+          ex.asInstanceOf[io.grpc.StatusRuntimeException]
+            .getStatus
+            .getCode shouldBe io.grpc.Status.Code.UNAVAILABLE
+          ex.getMessage should include(msg)
+        case other =>
+          fail(s"Expected Unavailable; got $other")
+      } map (_ => ())
+
+    "getGenesisCandidate" when {
+      "there is no candidate yet" should {
+        "return the error from the approver" in {
+          testWithApprover(new MockGenesisApprover()) { stub =>
+            expectUnavailable("Come back later.") {
+              stub.getGenesisCandidate(GetGenesisCandidateRequest())
+            }
+          }
+        }
+      }
+      "there is a candidate available" should {
+        "return the candidate from the approver" in {
+          val candidate = GenesisCandidate()
+            .withBlockHash(sample(arbitrary[ByteString]))
+
+          testWithApprover(new MockGenesisApprover() {
+            override def getCandidate = Task.now(Right(candidate))
+          }) { stub =>
+            stub.getGenesisCandidate(GetGenesisCandidateRequest()) map { res =>
+              res shouldBe candidate
+            }
+          }
+        }
+      }
+    }
+
+    "addApproval" when {
+      "the approver rejects the approval" should {
+        "return the error from the approver" in {
+          testWithApprover(new MockGenesisApprover()) { stub =>
+            expectUnavailable("Come back later.") {
+              stub.getGenesisCandidate(GetGenesisCandidateRequest())
+            }
+          }
+        }
+      }
+      "the approver accepts the approval" should {
+        "return empty" in {
+          testWithApprover(new MockGenesisApprover() {
+            override def addApproval(blockHash: ByteString, approval: Approval) =
+              Task.now(Right(true))
+          }) { stub =>
+            stub.addApproval(AddApprovalRequest()).map { res =>
+              res shouldBe Empty()
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 object GrpcGossipServiceSpec extends TestRuntime {
@@ -1031,6 +1116,11 @@ object GrpcGossipServiceSpec extends TestRuntime {
       def onDownloaded(blockHash: ByteString)  = ???
       def listTips                             = ???
     }
+    private val emptyGenesisApprover = new GenesisApprover[Task] {
+      def getCandidate                                           = ???
+      def addApproval(blockHash: ByteString, approval: Approval) = ???
+      def awaitApproval                                          = ???
+    }
 
     private def defaultBackend(testDataRef: AtomicReference[TestData]) =
       new GossipServiceServer.Backend[Task] {
@@ -1051,6 +1141,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
         synchronizer: Synchronizer[Task] = emptySynchronizer,
         downloadManager: DownloadManager[Task] = emptyDownloadManager,
         consensus: GossipServiceServer.Consensus[Task] = emptyConsensus,
+        genesisApprover: GenesisApprover[Task] = emptyGenesisApprover,
         mkBackend: AtomicReference[TestData] => GossipServiceServer.Backend[Task] = defaultBackend
     )(
         implicit
@@ -1071,6 +1162,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
               synchronizer = synchronizer,
               downloadManager = downloadManager,
               consensus = consensus,
+              genesisApprover = genesisApprover,
               maxChunkSize = DefaultMaxChunkSize,
               maxParallelBlockDownloads = maxParallelBlockDownloads
             ) map { gss =>

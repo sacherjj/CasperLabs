@@ -21,7 +21,7 @@ trait Relaying[F[_]] {
 object RelayingImpl {
   def apply[F[_]: Sync: Par: Log: NodeAsk](
       nd: NodeDiscovery[F],
-      connectToGossip: Node => F[GossipService[F]],
+      connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
       relaySaturation: Int
   ): Relaying[F] = {
