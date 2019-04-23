@@ -1447,6 +1447,7 @@ mod runtime_tests {
         assert_error_contains(result, "InvalidAccess")
     }
 
+    #[allow(clippy::assertions_on_constants)]
     fn assert_forged_reference<T>(result: Result<T, ExecutionError>) {
         match result {
             Err(ExecutionError::ForgedReference(_)) => assert!(true),
