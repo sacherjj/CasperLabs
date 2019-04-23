@@ -16,6 +16,7 @@ use common::value::{self, Account, Contract, Value};
 use execution_engine::execution::Runtime;
 use execution_engine::runtime_context::RuntimeContext;
 use execution_engine::trackingcopy::TrackingCopy;
+use execution_engine::Validated;
 use failure::Error;
 use parity_wasm::builder::module;
 use parity_wasm::elements::Module;
@@ -644,7 +645,7 @@ fn test_account_key_readable(
     } else {
         Key::Account(test_fixture.addr)
     };
-    tc_borrowed.write(account_key, init_value);
+    tc_borrowed.write(Validated(account_key), Validated(init_value));
     let mut runtime = test_fixture.env.runtime(
         &mut tc_borrowed,
         test_fixture.addr,
@@ -696,8 +697,8 @@ fn account_key_addable_valid() {
         let mut tc_borrowed = test_fixture.tc.borrow_mut();
         // Write an account under current context's key
         tc_borrowed.write(
-            Key::Account(test_fixture.addr),
-            Value::Account(account.clone()),
+            Validated(Key::Account(test_fixture.addr)),
+            Validated(Value::Account(account.clone())),
         );
 
         let mut runtime = test_fixture.env.runtime(
@@ -721,7 +722,7 @@ fn account_key_addable_valid() {
         Account::new([1u8; 32], account.nonce(), additional_key_map)
     };
     let tc_account: Value = tc
-        .get(&Key::Account(test_fixture.addr))
+        .get(&Validated(Key::Account(test_fixture.addr)))
         .expect("Reading from TrackingCopy should work")
         .unwrap();
 
@@ -750,7 +751,10 @@ fn account_key_addable_invalid() {
     // We will try to add keys to an account that is not current context.
     let mut tc_borrowed = test_fixture.tc.borrow_mut();
     // Write an account under current context's key
-    tc_borrowed.write(some_other_account, Value::Account(account.clone()));
+    tc_borrowed.write(
+        Validated(some_other_account),
+        Validated(Value::Account(account.clone())),
+    );
 
     let mut runtime = test_fixture.env.runtime(
         &mut tc_borrowed,
@@ -858,7 +862,10 @@ fn test_contract_key_addable(base_key: Key, add_to_key: Key) -> Result<(), wasmi
         // the contract is executing.
         let env = MockEnv::new(base_key, uref_lookup, known_urefs, account, gas_limit);
 
-        tc.write(base_key, Value::Contract(init_contract.clone()));
+        tc.write(
+            Validated(base_key),
+            Validated(Value::Contract(init_contract.clone())),
+        );
 
         let memory = env.memory_manager();
         TestFixture::new(
@@ -928,7 +935,7 @@ fn test_uref_key_readable(init_value: Value, rights: AccessRights) -> Result<Val
         let memory = env.memory_manager();
         let mut init_tc = mock_tc(key, &account);
         // We're putting some data under uref so that we can read it later.
-        init_tc.write(uref, init_value.clone());
+        init_tc.write(Validated(uref), Validated(init_value.clone()));
         let tc = Rc::new(RefCell::new(init_tc));
         TestFixture::new(
             default.addr,
@@ -986,7 +993,7 @@ fn test_uref_key_writeable(rights: AccessRights) -> Result<(), wasmi::Trap> {
         let env = MockEnv::new(key, empty_uref_map, known_urefs, account.clone(), 0);
         let memory = env.memory_manager();
         let mut init_tc = mock_tc(key, &account);
-        init_tc.write(uref, init_value.clone());
+        init_tc.write(Validated(uref), Validated(init_value.clone()));
         let tc = Rc::new(RefCell::new(init_tc));
         TestFixture::new(
             default.addr,
@@ -1037,7 +1044,7 @@ fn test_uref_key_addable(rights: AccessRights) -> Result<(), wasmi::Trap> {
         let env = MockEnv::new(key, empty_uref_map, known_urefs, account.clone(), 0);
         let memory = env.memory_manager();
         let mut init_tc = mock_tc(key, &account);
-        init_tc.write(uref, init_value.clone());
+        init_tc.write(Validated(uref), Validated(init_value.clone()));
         let tc = Rc::new(RefCell::new(init_tc));
         TestFixture::new(
             default.addr,

@@ -31,3 +31,7 @@ extern crate matches;
 extern crate proptest;
 
 type URefAddr = [u8; 32];
+
+/// Newtype used for differentiating between plain T and validated T.
+/// What validation means is left purposefully vague as it may depend on the context.
+pub struct Validated<T>(pub T);

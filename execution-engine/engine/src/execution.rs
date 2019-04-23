@@ -27,6 +27,7 @@ use std::iter::IntoIterator;
 
 use super::runtime_context::RuntimeContext;
 use super::URefAddr;
+use super::Validated;
 
 #[derive(Debug)]
 pub enum Error {
@@ -258,7 +259,14 @@ where
         self.context.validate_key(&key)?;
         self.context.insert_named_uref(name.clone(), key);
         let base_key = self.context.base_key();
-        self.add_transforms(base_key, Value::NamedKey(name, key))
+        if self.is_addable(&base_key) {
+            self.add_transforms(Validated(base_key), Validated(Value::NamedKey(name, key)))
+        } else {
+            Err(Error::InvalidAccess {
+                required: AccessRights::ADD,
+            }
+            .into())
+        }
     }
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
@@ -314,7 +322,7 @@ where
         let key = self.context.deserialize_key(&key_bytes)?;
         if self.is_readable(&key) {
             let (args, module, mut refs) = {
-                match self.state.read(key).map_err(Into::into)? {
+                match self.state.read(&Validated(key)).map_err(Into::into)? {
                     None => Err(Error::KeyNotFound(key)),
                     Some(value) => {
                         if let Value::Contract(contract) = value {
@@ -349,13 +357,8 @@ where
         Ok(self.host_buf.len())
     }
 
-    /// Tries to store a function, located in the Wasm memory, into the GlobalState
+    /// Tries to store a function, represented as bytes from the Wasm memory, into the GlobalState
     /// and writes back a function's hash at `hash_ptr` in the Wasm memory.
-    ///
-    /// `name_ptr` and `name_size` tell the host where to look for a function's name.
-    /// Once it knows the name it can search for this exported function in the Wasm module.
-    /// Note that functions that contract wants to store have to be marked with `export` keyword.
-    /// `urefs_ptr` and `urefs_size` describe when the additional unforgable references can be found.
     pub fn store_function(
         &mut self,
         fn_bytes: Vec<u8>,
@@ -366,7 +369,8 @@ where
             .try_for_each(|(_, v)| self.context.validate_key(&v))?;
         let contract = Value::Contract(common::value::contract::Contract::new(fn_bytes, urefs));
         let new_hash = self.new_function_address()?;
-        self.state.write(Key::Hash(new_hash), contract);
+        self.state
+            .write(Validated(Key::Hash(new_hash)), Validated(contract));
         Ok(new_hash)
     }
 
@@ -402,7 +406,7 @@ where
         self.context.validate_key(&key)?;
         self.context.validate_keys(&value)?;
         if self.is_writeable(&key) {
-            self.state.write(key, value);
+            self.state.write(Validated(key), Validated(value));
             Ok(())
         } else {
             Err(Error::InvalidAccess {
@@ -416,7 +420,14 @@ where
     pub fn add(&mut self, key: Key, value: Value) -> Result<(), Trap> {
         self.context.validate_key(&key)?;
         self.context.validate_keys(&value)?;
-        self.add_transforms(key, value)
+        if self.is_addable(&key) {
+            self.add_transforms(Validated(key), Validated(value))
+        } else {
+            Err(Error::InvalidAccess {
+                required: AccessRights::ADD,
+            }
+            .into())
+        }
     }
 
     // Tests whether reading from the `key` is valid.
@@ -449,7 +460,7 @@ where
     pub fn read(&mut self, key: Key) -> Result<Value, Trap> {
         self.context.validate_key(&key)?;
         if self.is_readable(&key) {
-            err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
+            err_on_missing_key(key, self.state.read(&Validated(key))).map_err(Into::into)
         } else {
             Err(Error::InvalidAccess {
                 required: AccessRights::READ,
@@ -461,23 +472,16 @@ where
     /// Adds `value` to the `key`. The premise for being able to `add` value is that
     /// the type of it [value] can be added (is a Monoid). If the values can't be added,
     /// either because they're not a Monoid or if the value stored under `key` has different type,
-    /// then `TypeMismatch` errors is returned. Addition can also fail when `key` is not "addable".
-    fn add_transforms(&mut self, key: Key, value: Value) -> Result<(), Trap> {
-        if self.is_addable(&key) {
-            match self.state.add(key, value) {
-                Err(storage_error) => Err(storage_error.into().into()),
-                Ok(AddResult::Success) => Ok(()),
-                Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key).into()),
-                Ok(AddResult::TypeMismatch(type_mismatch)) => {
-                    Err(Error::TypeMismatch(type_mismatch).into())
-                }
-                Ok(AddResult::Overflow) => Err(Error::Overflow.into()),
+    /// then `TypeMismatch` errors is returned.
+    fn add_transforms(&mut self, key: Validated<Key>, value: Validated<Value>) -> Result<(), Trap> {
+        match self.state.add(key, value) {
+            Err(storage_error) => Err(storage_error.into().into()),
+            Ok(AddResult::Success) => Ok(()),
+            Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key).into()),
+            Ok(AddResult::TypeMismatch(type_mismatch)) => {
+                Err(Error::TypeMismatch(type_mismatch).into())
             }
-        } else {
-            Err(Error::InvalidAccess {
-                required: AccessRights::ADD,
-            }
-            .into())
+            Ok(AddResult::Overflow) => Err(Error::Overflow.into()),
         }
     }
 
@@ -497,7 +501,8 @@ where
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
         let key = Key::URef(key, AccessRights::READ_ADD_WRITE);
-        self.state.write(key, value);
+        self.context.validate_keys(&value)?;
+        self.state.write(Validated(key), Validated(value));
         self.context.insert_uref(key);
         key.to_bytes().map_err(Error::BytesRepr)
     }
@@ -1016,7 +1021,7 @@ impl Executor<Module> for WasmiExecutor {
         let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
         let acct_key = Key::Account(account_addr);
         let value = on_fail_charge! {
-        match tc.get(&acct_key) {
+        match tc.get(&Validated(acct_key)) {
             Ok(None) => Err(Error::KeyNotFound(acct_key)),
             Err(error) => Err(error.into()),
             Ok(Some(value)) => Ok(value)
