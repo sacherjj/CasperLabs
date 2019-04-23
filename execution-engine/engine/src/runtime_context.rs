@@ -123,11 +123,6 @@ impl<'a> RuntimeContext<'a> {
         }
     }
 
-    pub fn deserialize_key(&self, bytes: &[u8]) -> Result<Key, Error> {
-        let key: Key = deserialize(bytes)?;
-        self.validate_key(&key).map(|_| key)
-    }
-
     pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
         let keys: Vec<Key> = deserialize(bytes)?;
         keys.iter().try_for_each(|k| self.validate_key(k))?;
