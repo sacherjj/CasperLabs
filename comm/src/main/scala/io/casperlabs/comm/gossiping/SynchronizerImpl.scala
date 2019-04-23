@@ -54,7 +54,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
               _.asLeft[Vector[BlockSummary]].pure[F], { syncState =>
                 missingDependencies(syncState.dag).map { missing =>
                   if (missing.isEmpty) {
-                    topologicalSort(syncState, targetBlockHashes).asRight[SyncError]
+                    topologicalSort(syncState).asRight[SyncError]
                   } else {
                     MissingDependencies(missing.toSet).asLeft[Vector[BlockSummary]]
                   }
@@ -104,28 +104,8 @@ class SynchronizerImpl[F[_]: Sync: Log](
     allParents.diff(allChildren)
   }
 
-  private def topologicalSort(
-      syncState: SyncState,
-      targetBlockHashes: Set[ByteString]
-  ): Vector[BlockSummary] = {
-    val allChildren = syncState.dag.values.foldLeft(Set.empty[ByteString]) {
-      case (acc, next) => acc ++ next
-    }
-    val initialParents = (syncState.dag.keySet diff allChildren).toList
-    val queue          = Queue(initialParents: _*)
-    @annotation.tailrec
-    def loop(acc: Vector[BlockSummary], q: Queue[ByteString]): Vector[BlockSummary] =
-      if (q.isEmpty) {
-        acc
-      } else {
-        val (next, nextQ) = q.dequeue
-        val children      = syncState.dag.getOrElse(next, Set.empty)
-        val updatedQueue  = nextQ.enqueue(children)
-        //If empty then we already had it before in our DAG
-        loop(acc ++ syncState.summaries.get(next), updatedQueue)
-      }
-    loop(Vector.empty, queue)
-  }
+  private def topologicalSort(syncState: SyncState): Vector[BlockSummary] =
+    syncState.summaries.values.toVector.sortBy(_.getHeader.rank)
 
   private def traverse(
       service: GossipService[F],
