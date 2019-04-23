@@ -7,7 +7,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
-import io.casperlabs.comm.ServiceError, ServiceError.{NotFound, Unauthenticated, Unavailable}
+import io.casperlabs.comm.ServiceError
+import ServiceError.{NotFound, Unauthenticated, Unavailable}
 import io.casperlabs.comm.TestRuntime
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
@@ -15,6 +16,7 @@ import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+
 import monix.eval.Task
 import monix.execution.{ExecutionModel, Scheduler}
 import monix.reactive.Observable
@@ -22,7 +24,10 @@ import monix.tail.Iterant
 import org.scalatest._
 import org.scalatest.concurrent._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
-import org.scalacheck.{Arbitrary, Gen}, Arbitrary.arbitrary
+import org.scalacheck.{Arbitrary, Gen}
+import Arbitrary.arbitrary
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+
 import scala.concurrent.duration._
 
 class GrpcGossipServiceSpec
@@ -919,7 +924,7 @@ class GrpcGossipServiceSpec
                       val dag = unknownBlocks.map(summaryOf(_))
                       // Delay the return of the DAG a little bit so we can assert that the call
                       // to `newBlocks` returns before all the syncing and downloading is finished.
-                      Task.now(dag).delayResult(250.millis)
+                      Task.now(dag.asRight[SyncError]).delayResult(250.millis)
                     }
                   }
 

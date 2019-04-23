@@ -1,52 +1,70 @@
 package io.casperlabs.comm.gossiping
 
+import cats.data._
 import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
+import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.comm.discovery.NodeUtils.showNode
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError.{
+  MissingDependencies,
+  TooDeep,
+  TooWide,
+  Unreachable,
+  ValidationError
+}
 import io.casperlabs.shared.Log
 
 import scala.collection.immutable.Queue
-import scala.util.control.NoStackTrace
+import scala.util.control.NonFatal
 
 // TODO: Optimise to heap-safe
 class SynchronizerImpl[F[_]: Sync: Log](
     connectToGossip: Node => F[GossipService[F]],
-    backend: Synchronizer.Backend[F],
+    backend: SynchronizerImpl.Backend[F],
     maxPossibleDepth: Int Refined Positive,
     maxPossibleWidth: Int Refined Positive,
     maxDepthAncestorsRequest: Int Refined Positive
 ) extends Synchronizer[F] {
+  type Effect[A] = EitherT[F, SyncError, A]
+
   import io.casperlabs.comm.gossiping.SynchronizerImpl._
 
   override def syncDag(
       source: Node,
       targetBlockHashes: Set[ByteString]
-  ): F[Vector[BlockSummary]] = {
-    val sync = for {
+  ): F[Either[SyncError, Vector[BlockSummary]]] = {
+    val effect = for {
       service        <- connectToGossip(source)
       tips           <- backend.tips
       justifications <- backend.justifications
-      syncState      <- loop(service, targetBlockHashes.toList, tips ::: justifications, SyncState.empty)
-      missing        <- missingDependencies(syncState.dag)
-      newDagInTopologicalOrder <- if (missing.isEmpty)
-                                   topologicalSort(syncState, targetBlockHashes).pure[F]
-                                 else
-                                   Log[F]
-                                     .warn(s"Streamed DAG contains missing dependencies: ${missing
-                                       .map(h => Base16.encode(h.toByteArray).take(6))}")
-                                     .map(_ => Vector.empty[BlockSummary])
-    } yield newDagInTopologicalOrder
-
-    sync.handleErrorWith { error =>
-      Log[F]
-        .error(s"Failed to stream ancestor block summaries, ${error.getMessage}", error)
-        .map(_ => Vector.empty[BlockSummary])
+      syncStateOrError <- loop(
+                           service,
+                           targetBlockHashes.toList,
+                           tips ::: justifications,
+                           SyncState.empty
+                         )
+      res <- syncStateOrError.fold(
+              _.asLeft[Vector[BlockSummary]].pure[F], { syncState =>
+                missingDependencies(syncState.dag).map { missing =>
+                  if (missing.isEmpty) {
+                    topologicalSort(syncState, targetBlockHashes).asRight[SyncError]
+                  } else {
+                    MissingDependencies(missing.toSet).asLeft[Vector[BlockSummary]]
+                  }
+                }
+              }
+            )
+    } yield res
+    effect.onError {
+      case NonFatal(e) =>
+        Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e)
     }
   }
 
@@ -55,25 +73,26 @@ class SynchronizerImpl[F[_]: Sync: Log](
       targetBlockHashes: List[ByteString],
       knownBlockHashes: List[ByteString],
       prevSyncState: SyncState
-  ): F[SyncState] =
+  ): F[Either[SyncError, SyncState]] =
     if (targetBlockHashes.isEmpty) {
-      prevSyncState.pure[F]
+      prevSyncState.asRight[SyncError].pure[F]
     } else {
       traverse(
         service,
         targetBlockHashes,
         knownBlockHashes,
         prevSyncState
-      ).flatMap(
-        newSyncState =>
+      ).flatMap {
+        case left @ Left(_) => (left: Either[SyncError, SyncState]).pure[F]
+        case Right(newSyncState) =>
           missingDependencies(newSyncState.dag)
             .flatMap(
               missing =>
                 if (prevSyncState.summaries == newSyncState.summaries)
-                  prevSyncState.pure[F]
+                  prevSyncState.asRight[SyncError].pure[F]
                 else loop(service, missing, knownBlockHashes, newSyncState)
             )
-      )
+      }
     }
 
   private def missingDependencies(dag: Map[ByteString, Set[ByteString]]): F[List[ByteString]] =
@@ -113,65 +132,68 @@ class SynchronizerImpl[F[_]: Sync: Log](
       targetBlockHashes: List[ByteString],
       knownBlockHashes: List[ByteString],
       prevSyncState: SyncState
-  ): F[SyncState] =
-    for {
-      roundResults <- service
-                       .streamAncestorBlockSummaries(
-                         StreamAncestorBlockSummariesRequest(
-                           targetBlockHashes = targetBlockHashes,
-                           knownBlockHashes = knownBlockHashes,
-                           maxDepth = maxDepthAncestorsRequest
-                         )
-                       )
-                       .foldWhileLeftEvalL(prevSyncState.pure[F]) {
-                         case (syncState, summary) =>
-                           for {
-                             _ <- ensure(
-                                   notTooDeep(syncState.dag, targetBlockHashes.toSet),
-                                   SyncError.TooDeep()
-                                 )
-                             _ <- ensure(notTooWide(syncState.dag), SyncError.TooWide())
-                             _ <- ensure(
-                                   reachable(
-                                     syncState.dag,
-                                     summary.blockHash,
-                                     targetBlockHashes.toSet
-                                   ),
-                                   SyncError.NotReachable()
-                                 )
-                             _ <- backend.validate(summary)
-                           } yield syncState.append(summary).asLeft[SyncState]
-                       }
-    } yield roundResults
-
-  private def ensure(exp: => Boolean, error: => SyncError): F[Unit] =
-    if (exp) {
-      Sync[F].unit
-    } else {
-      Sync[F].raiseError[Unit](error)
-    }
+  ): F[Either[SyncError, SyncState]] =
+    service
+      .streamAncestorBlockSummaries(
+        StreamAncestorBlockSummariesRequest(
+          targetBlockHashes = targetBlockHashes,
+          knownBlockHashes = knownBlockHashes,
+          maxDepth = maxDepthAncestorsRequest
+        )
+      )
+      .foldWhileLeftEvalL(prevSyncState.asRight[SyncError].pure[F]) {
+        case (Right(syncState), summary) =>
+          val effect = for {
+            _ <- notTooDeep(syncState, targetBlockHashes.toSet)
+            _ <- notTooWide(syncState.dag)
+            _ <- reachable(
+                  syncState,
+                  summary,
+                  targetBlockHashes.toSet
+                )
+            _ <- EitherT(
+                  backend
+                    .validate(summary)
+                    .as(().asRight[SyncError])
+                    .handleError(e => ValidationError(summary, e).asLeft[Unit])
+                )
+          } yield syncState.append(summary)
+          effect.value.map {
+            case x @ Left(_) =>
+              (x: Either[SyncError, SyncState])
+                .asRight[Either[SyncError, SyncState]]
+            case x @ Right(_) =>
+              (x: Either[SyncError, SyncState])
+                .asLeft[Either[SyncError, SyncState]]
+          }
+        // Never happens
+        case _ => Sync[F].raiseError(new RuntimeException)
+      }
 
   private def notTooDeep(
-      dag: Map[ByteString, Set[ByteString]],
+      syncState: SyncState,
       targetBlockHashes: Set[ByteString]
-  ): Boolean = {
+  ): EitherT[F, SyncError, Unit] = {
     @annotation.tailrec
     def loop(
-        children: Set[ByteString],
         parents: Set[ByteString],
         counter: Int
-    ): Boolean =
+    ): EitherT[F, SyncError, Unit] =
       if (counter === maxPossibleDepth) {
-        false
+        EitherT(
+          (TooDeep(parents, maxPossibleDepth): SyncError)
+            .asLeft[Unit]
+            .pure[F]
+        )
       } else {
-        val grandparents = parents.flatMap(dependenciesFromDag(dag, _))
+        val grandparents = parents.flatMap(dependenciesFromDag(syncState.dag, _))
         if (grandparents.isEmpty) {
-          true
+          EitherT(().asRight[SyncError].pure[F])
         } else {
-          loop(parents, grandparents, counter + 1)
+          loop(grandparents, counter + 1)
         }
       }
-    loop(targetBlockHashes, targetBlockHashes.flatMap(dependenciesFromDag(dag, _)), 1)
+    loop(targetBlockHashes.flatMap(dependenciesFromDag(syncState.dag, _)), 1)
   }
 
   private def dependenciesFromDag(
@@ -182,44 +204,42 @@ class SynchronizerImpl[F[_]: Sync: Log](
       case (_, children) => children(hash)
     }.keySet
 
-  private def notTooWide(dag: Map[ByteString, Set[ByteString]]): Boolean = {
+  private def notTooWide(dag: Map[ByteString, Set[ByteString]]): EitherT[F, SyncError, Unit] = {
     val maxWidth = dag.values.foldLeft(0) { case (acc, children) => math.max(acc, children.size) }
-    maxWidth < maxPossibleWidth
+    if (maxWidth < maxPossibleWidth) {
+      EitherT(().asRight[SyncError].pure[F])
+    } else {
+      EitherT((TooWide(): SyncError).asLeft[Unit].pure[F])
+    }
   }
-  def f(byteString: ByteString): String = Base16.encode(byteString.toByteArray).take(4)
+
   private def reachable(
-      dag: Map[ByteString, Set[ByteString]],
-      toCheck: ByteString,
+      syncState: SyncState,
+      toCheck: BlockSummary,
       targetBlockHashes: Set[ByteString]
-  ): Boolean = {
+  ): EitherT[F, SyncError, Unit] = {
     @annotation.tailrec
-    def loop(children: Set[ByteString], counter: Int): Boolean =
+    def loop(children: Set[ByteString], counter: Int): EitherT[F, SyncError, Unit] =
       if (counter <= maxDepthAncestorsRequest && children.nonEmpty) {
-        if (children(toCheck)) {
-          true
+        if (children(toCheck.blockHash)) {
+          EitherT(().asRight[SyncError].pure[F])
         } else {
-          val parents = children.flatMap(dependenciesFromDag(dag, _))
+          val parents = children.flatMap(dependenciesFromDag(syncState.dag, _))
           loop(parents, counter + 1)
         }
       } else {
-        false
+        EitherT((Unreachable(toCheck, maxDepthAncestorsRequest): SyncError).asLeft[Unit].pure[F])
       }
     loop(targetBlockHashes, 1)
   }
 }
 
 object SynchronizerImpl {
-  sealed trait SyncError extends NoStackTrace
-  object SyncError {
-    final case class TooWide() extends SyncError {
-      override def getMessage: String = "Returned DAG is too wide"
-    }
-    final case class NotReachable() extends SyncError {
-      override def getMessage: String = "Returned DAG is not reachable to target block hashes"
-    }
-    final case class TooDeep() extends SyncError {
-      override def getMessage: String = "Returned DAG is too deep"
-    }
+  trait Backend[F[_]] {
+    def tips: F[List[ByteString]]
+    def justifications: F[List[ByteString]]
+    def validate(blockSummary: BlockSummary): F[Unit]
+    def notInDag(blockHash: ByteString): F[Boolean]
   }
 
   final case class SyncState(

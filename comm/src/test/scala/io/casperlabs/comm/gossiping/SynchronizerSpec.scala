@@ -6,9 +6,10 @@ import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
-import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.gossiping.SynchronizerImpl.SyncError
+import io.casperlabs.comm.gossiping
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -16,6 +17,7 @@ import monix.execution.atomic.AtomicInt
 import monix.execution.schedulers.CanBlock.permit
 import monix.tail.Iterant
 import org.scalacheck.Gen
+import org.scalactic.{Equality, TolerantNumerics}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
 
@@ -37,104 +39,99 @@ class SynchronizerSpec
 
   "Synchronizer" when {
     "streamed DAG is too deep" should {
-      "log error and return empty DAG" in forAll(
+      "return SyncError.TooDeep" in forAll(
         genPartialDagFromTips,
         Gen.choose(1, consensusConfig.dagDepth - 1).map(i => refineV[Positive](i).right.get)
       ) { (dag, n) =>
         log.reset()
         TestFixture(dag)(maxPossibleDepth = n) { (synchronizer, _, _) =>
-          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { d =>
-            d shouldBe empty
-            log.causes should have size 1
-            log.causes.head shouldBe SyncError.TooDeep()
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+            dagOrError.isLeft shouldBe true
+            dagOrError.left.get shouldBe an[SyncError.TooDeep]
           }
         }
       }
     }
     "streamed DAG is abnormally wide" should {
-      "log error and return empty DAG" in forAll(
+      "return SyncError.TooWide" in forAll(
         genPartialDagFromTips,
         Gen.choose(1, consensusConfig.dagWidth - 1).map(i => refineV[Positive](i).right.get)
       ) { (dag, n) =>
         log.reset()
         TestFixture(dag)(maxPossibleWidth = n) { (synchronizer, _, _) =>
-          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { d =>
-            d shouldBe empty
-            log.causes should have size 1
-            log.causes.head shouldBe SyncError.TooWide()
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+            dagOrError.isLeft shouldBe true
+            dagOrError.left.get shouldBe an[SyncError.TooWide]
           }
         }
       }
     }
     "streamed summary can not be connected to initial block hashes" should {
-      "log error and return empty DAG" in forAll(
+      "return SyncError.Unreachable" in forAll(
         genPartialDagFromTips,
         arbBlockSummary.arbitrary
       ) { (dag, arbitraryBlock) =>
         log.reset()
         TestFixture(dag :+ arbitraryBlock)() { (synchronizer, _, _) =>
-          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { d =>
-            d shouldBe empty
-            log.causes should have size 1
-            log.causes.head shouldBe SyncError.NotReachable()
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+            dagOrError.isLeft shouldBe true
+            dagOrError.left.get shouldBe an[SyncError.Unreachable]
           }
         }
       }
     }
     "streamed summary is too far away from initial block hashes" should {
-      "log error and return empty DAG" in forAll(
+      "return SyncError.Unreachable" in forAll(
         genPartialDagFromTips,
         Gen.choose(1, consensusConfig.dagDepth - 2).map(i => refineV[Positive](i).right.get)
       ) { (dag, n) =>
         log.reset()
         TestFixture(dag)(maxDepthAncestorsRequest = n) { (synchronizer, _, _) =>
-          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { d =>
-            d shouldBe empty
-            log.causes should have size 1
-            log.causes.head shouldBe SyncError.NotReachable()
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+            dagOrError.isLeft shouldBe true
+            dagOrError.left.get shouldBe an[SyncError.Unreachable]
           }
         }
       }
     }
     "streamed block summary can not be validated" should {
-      "log error and return empty DAG" in forAll(
+      "return SyncError.ValidationError" in forAll(
         genPartialDagFromTips
       ) { dag =>
         log.reset()
         val e = new RuntimeException("Boom!")
         TestFixture(dag)(validate = _ => Task.raiseError[Unit](e)) { (synchronizer, _, _) =>
-          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { d =>
-            d shouldBe empty
-            log.causes should have size 1
-            log.causes.head shouldBe e
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+            dagOrError.isLeft shouldBe true
+            dagOrError.left.get shouldBe an[SyncError.ValidationError]
+            dagOrError.left.get.asInstanceOf[SyncError.ValidationError].reason shouldBe e
           }
         }
       }
     }
     "returned new part of DAG can not be connected to our DAG" should {
-      "log warning and return empty DAG" in forAll(
+      "return SyncError.MissingDependencies" in forAll(
         genPartialDagFromTips
       ) { dag =>
         log.reset()
         TestFixture(dag)(notInDag = _ => Task.now(true)) { (synchronizer, _, _) =>
-          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { d =>
-            d shouldBe empty
-            Inspectors.forAtLeast(1, log.warns) { w =>
-              w should include("missing dependencies")
-            }
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+            dagOrError.isLeft shouldBe true
+            dagOrError.left.get shouldBe an[SyncError.MissingDependencies]
           }
         }
       }
     }
     "streaming is halted with error" should {
-      "log warning and return empty DAG" in forAll(
+      "log error and return empty DAG" in forAll(
         genPartialDagFromTips
       ) { dag =>
         log.reset()
         val e = new RuntimeException("Boom!")
         TestFixture(dag)(error = e.some) { (synchronizer, _, _) =>
-          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { d =>
-            d shouldBe empty
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).attempt.foreachL { dagOrError =>
+            dagOrError.isLeft shouldBe true
+            dagOrError.left.get shouldBe e
             log.causes should have size 1
             log.causes.head shouldBe e
           }
@@ -172,7 +169,9 @@ class SynchronizerSpec
           maxDepthAncestorsRequest = ancestorsDepthRequest,
           notInDag = bs => Task.now(!finalParents(bs))
         ) { (synchronizer, requestsCount, _) =>
-          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { d =>
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+            dagOrError.isRight shouldBe true
+            val d = dagOrError.right.get
             d should contain allElementsOf dag.dropRight(consensusConfig.dagWidth)
             requestsCount
               .get() shouldBe (grouped.size.toDouble / ancestorsDepthRequest).ceil.toInt
@@ -204,7 +203,9 @@ class SynchronizerSpec
         }
 
         TestFixture(dag)() { (synchronizer, _, _) =>
-          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { d =>
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+            dagOrError.isRight shouldBe true
+            val d = dagOrError.right.get
             val hashToIndex =
               d.zipWithIndex.map { case (s, i) => (s.blockHash, i) }.toMap.withDefaultValue(-1)
             d should not be empty
@@ -229,8 +230,8 @@ object SynchronizerSpec {
         mockJustifications: List[ByteString],
         mockNotInDag: ByteString => Task[Boolean],
         mockValidate: BlockSummary => Task[Unit]
-    ): Synchronizer.Backend[Task] =
-      new Synchronizer.Backend[Task] {
+    ): gossiping.SynchronizerImpl.Backend[Task] =
+      new gossiping.SynchronizerImpl.Backend[Task] {
         def tips: Task[List[ByteString]]                     = Task.now(mockTips)
         def justifications: Task[List[ByteString]]           = Task.now(mockJustifications)
         def validate(blockSummary: BlockSummary): Task[Unit] = mockValidate(blockSummary)
@@ -266,8 +267,10 @@ object SynchronizerSpec {
           ): Iterant[Task, BlockSummary] = ???
           def streamBlockSummaries(
               request: StreamBlockSummariesRequest
-          ): Iterant[Task, BlockSummary]                                             = ???
-          def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] = ???
+          ): Iterant[Task, BlockSummary]                                                       = ???
+          def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk]           = ???
+          def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] = ???
+          def addApproval(request: AddApprovalRequest): Task[Empty]                            = ???
         }
       }
   }
