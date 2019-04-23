@@ -17,7 +17,6 @@ import monix.execution.atomic.AtomicInt
 import monix.execution.schedulers.CanBlock.permit
 import monix.tail.Iterant
 import org.scalacheck.Gen
-import org.scalactic.{Equality, TolerantNumerics}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
 
@@ -40,6 +39,9 @@ class SynchronizerSpec
   def genPositiveInt(min: Int, max: Int): Gen[Int Refined Positive] =
     Gen.choose(min, max).map(i => refineV[Positive](i).right.get)
 
+  def genDoubleGreaterEqualOf1(max: Double): Gen[Double Refined GreaterEqual[W.`1.0`.T]] =
+    Gen.choose(1.0, max).map(i => refineV[GreaterEqual[W.`1.0`.T]](i).right.get)
+
   "Synchronizer" when {
     "streamed DAG is too deep" should {
       "return SyncError.TooDeep" in forAll(
@@ -58,10 +60,10 @@ class SynchronizerSpec
     "streamed DAG is abnormally wide" should {
       "return SyncError.TooWide" in forAll(
         genPartialDagFromTips,
-        genPositiveInt(1, consensusConfig.dagWidth - 1)
+        genDoubleGreaterEqualOf1(consensusConfig.dagWidth - 1.0)
       ) { (dag, n) =>
         log.reset()
-        TestFixture(dag)(maxPossibleWidth = n) { (synchronizer, _, _) =>
+        TestFixture(dag)(maxBranchingFactor = n) { (synchronizer, _, _) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
             dagOrError.isLeft shouldBe true
             dagOrError.left.get shouldBe an[SyncError.TooWide]
@@ -281,7 +283,7 @@ object SynchronizerSpec {
   object TestFixture {
     def apply(dags: Vector[BlockSummary]*)(
         maxPossibleDepth: Int Refined Positive = Int.MaxValue,
-        maxPossibleWidth: Int Refined Positive = Int.MaxValue,
+        maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T] = Double.MaxValue,
         maxDepthAncestorsRequest: Int Refined Positive = Int.MaxValue,
         validate: BlockSummary => Task[Unit] = _ => Task.unit,
         notInDag: ByteString => Task[Boolean] = _ => Task.now(false),
@@ -296,7 +298,7 @@ object SynchronizerSpec {
         connectToGossip = _ => MockGossipService(requestsCounter, error, knownHashes, dags: _*),
         backend = MockBackend(tips, justifications, notInDag, validate),
         maxPossibleDepth = maxPossibleDepth,
-        maxPossibleWidth = maxPossibleWidth,
+        maxBranchingFactor = maxBranchingFactor,
         maxDepthAncestorsRequest = maxDepthAncestorsRequest
       )
       test(synchronizer, requestsCounter, knownHashes).runSyncUnsafe(5.seconds)

@@ -290,7 +290,10 @@ trait ArbitraryConsensus {
                         _.map(
                           s =>
                             s.withHeader(
-                              s.getHeader.withParentHashes(Seq.empty).withJustifications(Seq.empty)
+                              s.getHeader
+                                .withParentHashes(Seq.empty)
+                                .withJustifications(Seq.empty)
+                                .withRank(c.dagDepth - depth)
                             )
                         )
                       )
@@ -302,7 +305,18 @@ trait ArbitraryConsensus {
       }
 
     arbitrary[BlockSummary].flatMap { newest =>
-      loop(Vector.empty, Vector(newest), 1)
+      loop(
+        Vector.empty,
+        Vector(
+          newest.withHeader(
+            newest.getHeader
+              .withParentHashes(Seq.empty)
+              .withJustifications(Seq.empty)
+              .withRank(c.dagDepth)
+          )
+        ),
+        1
+      )
     }
   }
 

@@ -60,19 +60,17 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
           s"Failed to sync DAG, source ${source.show}. Returned DAG is too deep, limit: $limit, exceeded hashes: ${summaries
             .map(b16)}"
         )
-      case SyncError.TooWide() =>
+      case SyncError.TooWide(branchingFactor, limit) =>
         Log[F].warn(
-          s"Failed to sync DAG, source ${source.show}. Returned dag is too wide."
+          s"Failed to sync DAG, source ${source.show}. Returned dag is too wide, exceeded branching factor: $branchingFactor, limit: $limit."
         )
       case SyncError.Unreachable(summary, requestedDepth) =>
         Log[F].warn(
-          s"Failed to sync DAG, source ${source.show}. During streaming source returned unreachable block summary: ${b16(
-            summary)}, requested depth: $requestedDepth"
+          s"Failed to sync DAG, source ${source.show}. During streaming source returned unreachable block summary: ${b16(summary)}, requested depth: $requestedDepth"
         )
       case SyncError.ValidationError(summary, e) =>
         Log[F].warn(
-          s"Failed to sync DAG, source ${source.show}. Failed to validated the block summary: ${b16(
-            summary)}, reason: $e"
+          s"Failed to sync DAG, source ${source.show}. Failed to validated the block summary: ${b16(summary)}, reason: $e"
         )
       case SyncError.MissingDependencies(hashes) =>
         Log[F].warn(

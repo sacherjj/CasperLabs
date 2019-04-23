@@ -29,7 +29,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
     connectToGossip: Node => F[GossipService[F]],
     backend: SynchronizerImpl.Backend[F],
     maxPossibleDepth: Int Refined Positive,
-    maxPossibleWidth: Int Refined Positive,
+    maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
     maxDepthAncestorsRequest: Int Refined Positive
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
@@ -145,7 +145,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
         case (Right(syncState), summary) =>
           val effect = for {
             _ <- notTooDeep(syncState, targetBlockHashes.toSet)
-            _ <- notTooWide(syncState.dag)
+            _ <- notTooWide(syncState)
             _ <- reachable(
                   syncState,
                   summary,
@@ -204,12 +204,26 @@ class SynchronizerImpl[F[_]: Sync: Log](
       case (_, children) => children(hash)
     }.keySet
 
-  private def notTooWide(dag: Map[ByteString, Set[ByteString]]): EitherT[F, SyncError, Unit] = {
-    val maxWidth = dag.values.foldLeft(0) { case (acc, children) => math.max(acc, children.size) }
-    if (maxWidth < maxPossibleWidth) {
-      EitherT(().asRight[SyncError].pure[F])
-    } else {
-      EitherT((TooWide(): SyncError).asLeft[Unit].pure[F])
+  private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
+    val summariesPerRankByAscendingRank =
+      syncState.summaries.values
+        .map(_.getHeader.rank)
+        .groupBy(identity)
+        .mapValues(_.size.toDouble)
+        .toList
+        .sortBy(_._1)
+
+    val maybeBranchingFactor = summariesPerRankByAscendingRank
+      .sliding(2)
+      .collect {
+        case (_, prev) :: (_, next) :: Nil if next / prev > maxBranchingFactor.toDouble =>
+          next / prev
+      }
+      .toStream
+      .headOption
+
+    maybeBranchingFactor.fold(EitherT(().asRight[SyncError].pure[F])) { branchingFactor =>
+      EitherT((TooWide(branchingFactor, maxBranchingFactor): SyncError).asLeft[Unit].pure[F])
     }
   }
 
