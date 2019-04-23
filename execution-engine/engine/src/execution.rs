@@ -307,20 +307,14 @@ where
         }
     }
 
+    /// Calls contract living under a `key`, with supplied `args` and extra `urefs`.
     pub fn call_contract(
         &mut self,
-        key_ptr: u32,
-        key_size: usize,
-        args_ptr: u32,
-        args_size: usize,
-        extra_urefs_ptr: u32,
-        extra_urefs_size: usize,
+        key: Key,
+        args_bytes: Vec<u8>,
+        urefs_bytes: Vec<u8>,
     ) -> Result<usize, Error> {
-        let key_bytes = self.bytes_from_mem(key_ptr, key_size)?;
-        let args_bytes = self.bytes_from_mem(args_ptr, args_size)?;
-        let urefs_bytes = self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size)?;
-
-        let key = self.context.deserialize_key(&key_bytes)?;
+        self.context.validate_key(&key)?;
         if self.is_readable(&key) {
             let (args, module, mut refs) = {
                 match self.state.read(&Validated(key)).map_err(Into::into)? {
@@ -657,14 +651,16 @@ where
                 let (key_ptr, key_size, args_ptr, args_size, extra_urefs_ptr, extra_urefs_size) =
                     Args::parse(args)?;
 
-                let size = self.call_contract(
-                    key_ptr,
-                    as_usize(key_size),
-                    args_ptr,
-                    as_usize(args_size),
-                    extra_urefs_ptr,
-                    as_usize(extra_urefs_size),
-                )?;
+                // We have to explicitly tell rustc what type we expect as it cannot infer it otherwise.
+                let _args_size_u32: u32 = args_size;
+                let _extra_urefs_size_u32: u32 = extra_urefs_size;
+
+                let key_contract: Key = self.key_from_mem(key_ptr, key_size)?;
+                let args_bytes: Vec<u8> = self.bytes_from_mem(args_ptr, args_size as usize)?;
+                let urefs_bytes =
+                    self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size as usize)?;
+
+                let size = self.call_contract(key_contract, args_bytes, urefs_bytes)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
