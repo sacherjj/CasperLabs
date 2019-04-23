@@ -37,11 +37,14 @@ class SynchronizerSpec
 
   implicit val consensusConfig: ConsensusConfig = ConsensusConfig(dagDepth = 5, dagWidth = 5)
 
+  def genPositiveInt(min: Int, max: Int): Gen[Int Refined Positive] =
+    Gen.choose(min, max).map(i => refineV[Positive](i).right.get)
+
   "Synchronizer" when {
     "streamed DAG is too deep" should {
       "return SyncError.TooDeep" in forAll(
         genPartialDagFromTips,
-        Gen.choose(1, consensusConfig.dagDepth - 1).map(i => refineV[Positive](i).right.get)
+        genPositiveInt(1, consensusConfig.dagDepth - 1)
       ) { (dag, n) =>
         log.reset()
         TestFixture(dag)(maxPossibleDepth = n) { (synchronizer, _, _) =>
@@ -55,7 +58,7 @@ class SynchronizerSpec
     "streamed DAG is abnormally wide" should {
       "return SyncError.TooWide" in forAll(
         genPartialDagFromTips,
-        Gen.choose(1, consensusConfig.dagWidth - 1).map(i => refineV[Positive](i).right.get)
+        genPositiveInt(1, consensusConfig.dagWidth - 1)
       ) { (dag, n) =>
         log.reset()
         TestFixture(dag)(maxPossibleWidth = n) { (synchronizer, _, _) =>
@@ -83,7 +86,7 @@ class SynchronizerSpec
     "streamed summary is too far away from initial block hashes" should {
       "return SyncError.Unreachable" in forAll(
         genPartialDagFromTips,
-        Gen.choose(1, consensusConfig.dagDepth - 2).map(i => refineV[Positive](i).right.get)
+        genPositiveInt(1, consensusConfig.dagDepth - 2)
       ) { (dag, n) =>
         log.reset()
         TestFixture(dag)(maxDepthAncestorsRequest = n) { (synchronizer, _, _) =>
