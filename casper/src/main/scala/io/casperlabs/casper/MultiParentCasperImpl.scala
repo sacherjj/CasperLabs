@@ -353,7 +353,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
 
-  // RChain used ot return the whole database as a String for testing.
+  // RChain used to return the whole database as a String for testing.
   def storageContents(hash: StateHash): F[String] =
     """""".pure[F]
 
@@ -652,4 +652,3 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
           }
     } yield ()
 }
-

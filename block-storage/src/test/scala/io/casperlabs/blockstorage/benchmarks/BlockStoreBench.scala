@@ -33,9 +33,11 @@ abstract class BlockStoreBench {
 
   @Benchmark
   def put(): Unit =
-    blockStore.put(
-      StoreBenchSuite.blocksIter.next()
-    ).runSyncUnsafe()
+    blockStore
+      .put(
+        StoreBenchSuite.blocksIter.next()
+      )
+      .runSyncUnsafe()
 
   @Benchmark
   def getRandom() =
