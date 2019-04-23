@@ -176,23 +176,24 @@ where
         self.state.effect()
     }
 
+    fn bytes_from_mem(&self, ptr: u32, size: usize) -> Result<Vec<u8>, wasmi::Error> {
+        self.memory.get(ptr, size)
+    }
+
     /// Reads key (defined as `key_ptr` and `key_size` tuple) from Wasm memory.
     fn key_from_mem(&mut self, key_ptr: u32, key_size: u32) -> Result<Key, Error> {
-        let bytes = self.memory.get(key_ptr, key_size as usize)?;
+        let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
         deserialize(&bytes).map_err(Into::into)
     }
 
     /// Reads value (defined as `value_ptr` and `value_size` tuple) from Wasm memory.
     fn value_from_mem(&mut self, value_ptr: u32, value_size: u32) -> Result<Value, Error> {
-        let bytes = self.memory.get(value_ptr, value_size as usize)?;
+        let bytes = self.bytes_from_mem(value_ptr, value_size as usize)?;
         deserialize(&bytes).map_err(Into::into)
     }
 
     fn string_from_mem(&mut self, ptr: u32, size: u32) -> Result<String, Trap> {
-        let bytes = self
-            .memory
-            .get(ptr, size as usize)
-            .map_err(Error::Interpreter)?;
+        let bytes = self.bytes_from_mem(ptr, size as usize).map_err(Error::Interpreter)?;
         deserialize(&bytes).map_err(|e| Error::BytesRepr(e).into())
     }
 
@@ -290,7 +291,7 @@ where
             .get(value_ptr, value_size)
             .map_err(Error::Interpreter)
             .and_then(|x| {
-                let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
+                let urefs_bytes = self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size)?;
                 let urefs = self.context.deserialize_keys(&urefs_bytes)?;
                 Ok((x, urefs))
             });
@@ -315,9 +316,9 @@ where
         extra_urefs_ptr: u32,
         extra_urefs_size: usize,
     ) -> Result<usize, Error> {
-        let key_bytes = self.memory.get(key_ptr, key_size)?;
-        let args_bytes = self.memory.get(args_ptr, args_size)?;
-        let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
+        let key_bytes = self.bytes_from_mem(key_ptr, key_size)?;
+        let args_bytes = self.bytes_from_mem(args_ptr, args_size)?;
+        let urefs_bytes = self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size)?;
 
         let key = self.context.deserialize_key(&key_bytes)?;
         if self.is_readable(&key) {
