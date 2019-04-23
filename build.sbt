@@ -147,7 +147,8 @@ lazy val comm = (project in file("comm"))
       catsCore,
       catsMtl,
       monix,
-      guava
+      guava,
+      refinement
     ),
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(

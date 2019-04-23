@@ -84,6 +84,7 @@ object Dependencies {
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java          = "com.github.rchain"          % "secp256k1-java"                  % "0.1"
   val tomlScala              = "tech.sparse"                %% "toml-scala"                     % "0.1.1"
+  val refinement             = "eu.timepit"                 %% "refined"                        % "0.9.5"
   // format: on
 
   val overrides = Seq(
@@ -133,27 +134,27 @@ object Dependencies {
     logging ++ testing :+ kindProjector :+ macroParadise
 
   val gatlingDependencies: Seq[ModuleID] = Seq(
-      gatlingFramework,
-      gatlingGrpc,
-      gatlingHighcharts,
-      scalapbRuntime,
-      scalapbRuntimegGrpc,
-      grpcNetty
-    )
+    gatlingFramework,
+    gatlingGrpc,
+    gatlingHighcharts,
+    scalapbRuntime,
+    scalapbRuntimegGrpc,
+    grpcNetty
+  )
 
   //needed because Gatling transitively bring binary incompatible dependencies
   val gatlingOverrides: Seq[ModuleID] = Seq(
-    "com.thesamet.scalapb" %% "compilerplugin" % "0.8.2",
-    "com.thesamet.scalapb" %% "scalapb-runtime"                % "0.8.2",
-    "com.thesamet.scalapb" %% "scalapb-runtime-grpc"           % "0.8.2",
-    "io.grpc"              % "grpc-netty"                      % "1.15.1",
-    "io.netty" % "netty-buffer" % "4.1.33.Final",
-    "io.netty" % "netty-handler" % "4.1.33.Final",
-    "io.netty" % "netty-handler-proxy" % "4.1.33.Final",
-    "io.netty" % "netty-codec" % "4.1.33.Final",
-    "io.netty" % "netty-codec-http" % "4.1.33.Final",
-    "io.netty" % "netty-codec-http2" % "4.1.33.Final",
-    "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
-    "com.google.protobuf" % "protobuf-java" % "3.6.1"
+    "com.thesamet.scalapb"       %% "compilerplugin"       % "0.8.2",
+    "com.thesamet.scalapb"       %% "scalapb-runtime"      % "0.8.2",
+    "com.thesamet.scalapb"       %% "scalapb-runtime-grpc" % "0.8.2",
+    "io.grpc"                    % "grpc-netty"            % "1.15.1",
+    "io.netty"                   % "netty-buffer"          % "4.1.33.Final",
+    "io.netty"                   % "netty-handler"         % "4.1.33.Final",
+    "io.netty"                   % "netty-handler-proxy"   % "4.1.33.Final",
+    "io.netty"                   % "netty-codec"           % "4.1.33.Final",
+    "io.netty"                   % "netty-codec-http"      % "4.1.33.Final",
+    "io.netty"                   % "netty-codec-http2"     % "4.1.33.Final",
+    "com.typesafe.scala-logging" %% "scala-logging"        % "3.9.2",
+    "com.google.protobuf"        % "protobuf-java"         % "3.6.1"
   )
 }

@@ -1,17 +1,22 @@
 package io.casperlabs.comm.gossiping
 
-import cats._
-import cats.syntax._
-import cats.implicits._
 import cats.effect._
-import cats.effect.syntax._
 import cats.effect.concurrent._
+import cats.implicits._
+import eu.timepit.refined._
+import eu.timepit.refined.auto._
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.numeric._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.GossipError
+import io.casperlabs.comm.discovery.NodeUtils.showNode
+import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.shared.{Compression, Log, LogSource}
+import io.casperlabs.shared.{Compression, Log}
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
 import shapeless.tag, tag.@@
 
@@ -48,9 +53,9 @@ object DownloadManagerImpl {
   }
 
   /** Messages the Download Manager uses inside its scheduler "queue". */
-  sealed trait Signal[F[_]]
+  sealed trait Signal[F[_]] extends Product with Serializable
   object Signal {
-    case class Download[F[_]](
+    final case class Download[F[_]](
         summary: BlockSummary,
         source: Node,
         relay: Boolean,
@@ -59,12 +64,16 @@ object DownloadManagerImpl {
         // Feedback about whether the download eventually succeeded.
         downloadFeedback: DownloadFeedback[F]
     ) extends Signal[F]
-    case class DownloadSuccess[F[_]](blockHash: ByteString)                extends Signal[F]
-    case class DownloadFailure[F[_]](blockHash: ByteString, ex: Throwable) extends Signal[F]
+    final case class DownloadSuccess[F[_]](blockHash: ByteString)                extends Signal[F]
+    final case class DownloadFailure[F[_]](blockHash: ByteString, ex: Throwable) extends Signal[F]
+  }
+
+  final case class RetriesFailure(e: Throwable) extends Throwable {
+    override def getCause: Throwable = e
   }
 
   /** Keep track of download items. */
-  case class Item[F[_]](
+  final case class Item[F[_]](
       summary: BlockSummary,
       // Any node that told us it has this block.
       sources: Set[Node],
@@ -76,15 +85,22 @@ object DownloadManagerImpl {
       isError: Boolean = false,
       watchers: List[DownloadFeedback[F]]
   ) {
-    val canStart = !isDownloading && dependencies.isEmpty
+    val canStart: Boolean = !isDownloading && dependencies.isEmpty
   }
 
+  final case class RetriesConf(
+      maxRetries: Int Refined NonNegative,
+      initialBackoffPeriod: FiniteDuration,
+      backoffFactor: Double Refined GreaterEqual[W.`1.0`.T]
+  )
+
   /** Start the download manager. */
-  def apply[F[_]: Concurrent: Log](
+  def apply[F[_]: Concurrent: Log: Timer](
       maxParallelDownloads: Int,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
-      relaying: Relaying[F]
+      relaying: Relaying[F],
+      retriesConf: RetriesConf
   ): Resource[F, DownloadManager[F]] =
     Resource.make {
       for {
@@ -101,7 +117,8 @@ object DownloadManagerImpl {
           signal,
           connectToGossip,
           backend,
-          relaying
+          relaying,
+          retriesConf
         )
         managerLoop <- Concurrent[F].start(manager.run)
       } yield (isShutdown, workersRef, managerLoop, manager)
@@ -126,7 +143,7 @@ object DownloadManagerImpl {
     Base16.encode(blockHash.toByteArray)
 }
 
-class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
+class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
     isShutdown: Ref[F, Boolean],
     // Keep track of active downloads and dependencies.
     itemsRef: Ref[F, Map[ByteString, DownloadManagerImpl.Item[F]]],
@@ -139,7 +156,8 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
     // Establish gRPC connection to another node.
     connectToGossip: GossipService.Connector[F],
     backend: DownloadManagerImpl.Backend[F],
-    relaying: Relaying[F]
+    relaying: Relaying[F],
+    retriesConf: RetriesConf
 ) extends DownloadManager[F] {
 
   import DownloadManagerImpl._
@@ -180,7 +198,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
             }
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.
-        start.attempt.flatMap(scheduleFeedback.complete(_)) *> run
+        start.attempt.flatMap(scheduleFeedback.complete) *> run
 
       case Signal.DownloadSuccess(blockHash) =>
         val finish = for {
@@ -199,7 +217,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
                  }
           (watchers, startables) = next
           _                      <- watchers.traverse(_.complete(Right(())).attempt.void)
-          _                      <- startables.traverse(startWorker(_))
+          _                      <- startables.traverse(startWorker)
         } yield ()
 
         finish.attempt *> run
@@ -301,19 +319,51 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
         _ <- success
       } yield ()
 
+    def downloadWithRetries(summary: BlockSummary, source: Node, relay: Boolean): F[Unit] = {
+      val downloadEffect = tryDownload(summary, source, relay)
+
+      def loop(counter: Int, error: Option[Throwable]): F[Unit] =
+        if (counter == retriesConf.maxRetries.toInt) {
+          Sync[F].raiseError[Unit](RetriesFailure(error.head))
+        } else {
+          downloadEffect.handleErrorWith { e =>
+            val duration = retriesConf.initialBackoffPeriod *
+              math.pow(retriesConf.backoffFactor, counter.toDouble)
+            val nextCounter = counter + 1
+            duration match {
+              case delay: FiniteDuration =>
+                Log[F].warn(
+                  s"Retrying downloading of block $id, source: ${source.show}, attempt: $nextCounter, delay: $delay, error: $e"
+                ) >>
+                  Timer[F].sleep(delay) >> loop(nextCounter, e.some)
+              case _: Duration.Infinite =>
+                Sync[F].raiseError[Unit](
+                  new RuntimeException(
+                    s"Failed to retry downloading block $id, source: ${source.show}, got Infinite backoff delay"
+                  )
+                )
+            }
+          }
+        }
+
+      if (retriesConf.maxRetries.toInt == 0) {
+        downloadEffect
+      } else {
+        loop(counter = 0, error = None)
+      }
+    }
+
     // Try to download until we succeed or give up.
     def loop(tried: Set[Node], errors: List[Throwable]): F[Unit] =
       // Get the latest sources.
       itemsRef.get.map(_(blockHash)).flatMap { item =>
         (item.sources -- tried).headOption match {
           case Some(source) =>
-            tryDownload(item.summary, source, item.relay).recoverWith {
+            downloadWithRetries(item.summary, source, item.relay).recoverWith {
               case NonFatal(ex) =>
-                // TODO: Exponential backoff, pick another node, try to store again, etc.
                 Log[F].error(s"Failed to download block $id from ${source.host}", ex) *>
                   loop(tried + source, ex :: errors)
             }
-
           case None =>
             Log[F].error(
               s"Could not download block $id from any of the sources; tried ${tried.size}."
@@ -335,15 +385,15 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
     // Keep track of how much we have downloaded so far and cancel the stream if it goes over the promised size.
     case class Acc(
         header: Option[Chunk.Header],
-        totalSizeSofar: Int,
+        totalSizeSoFar: Int,
         chunks: List[ByteString],
         error: Option[GossipError]
     ) {
-      def invalid(msg: String) =
+      def invalid(msg: String): Acc =
         copy(error = Some(GossipError.InvalidChunks(msg, source)))
 
-      def append(data: ByteString) =
-        copy(totalSizeSofar = totalSizeSofar + data.size, chunks = data :: chunks)
+      def append(data: ByteString): Acc =
+        copy(totalSizeSoFar = totalSizeSoFar + data.size, chunks = data :: chunks)
     }
 
     semaphore.withPermit {
@@ -376,7 +426,7 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
                   Right(acc.invalid("Block chunks contained empty data frame."))
 
                 case (acc, chunk)
-                    if acc.totalSizeSofar + chunk.getData.size > acc.header.get.contentLength =>
+                    if acc.totalSizeSoFar + chunk.getData.size > acc.header.get.contentLength =>
                   Right(acc.invalid("Block chunks are exceeding the promised content length."))
 
                 case (acc, chunk) =>
@@ -384,9 +434,9 @@ class DownloadManagerImpl[F[_]: Sync: Concurrent: Log](
               }
 
         content <- if (acc.error.nonEmpty) {
-                    Sync[F].raiseError(acc.error.get)
+                    Sync[F].raiseError[Array[Byte]](acc.error.get)
                   } else if (acc.header.isEmpty) {
-                    Sync[F].raiseError(invalid("Did not receive a header."))
+                    Sync[F].raiseError[Array[Byte]](invalid("Did not receive a header."))
                   } else {
                     val header  = acc.header.get
                     val content = acc.chunks.toArray.reverse.flatMap(_.toByteArray)
