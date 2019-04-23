@@ -668,7 +668,7 @@ object BlockDagFileStorage {
 
   def create[F[_]: Concurrent: Log: BlockStore: Metrics](
       config: Config
-  ): F[BlockDagStorage[F]] = {
+  ): F[BlockDagFileStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
       lock                  <- Semaphore[F](1)
@@ -820,14 +820,19 @@ object BlockDagFileStorage {
       dataDir: Path,
       dagStoragePath: Path,
       blockStore: BlockStore[F]
-  ): Resource[F, BlockDagStorage[F]] = {
-    val res = for {
-      _         <- fileIO.makeDirectory(dagStoragePath)
-      dagConfig = BlockDagFileStorage.Config(dagStoragePath)
-    } yield
-      Resource.make(
-        BlockDagFileStorage.create(dagConfig)(Concurrent[F], Log[F], blockStore, Metrics[F])
-      )(_.close())
-    Resource.suspend(res)
-  }
+  ): Resource[F, BlockDagStorage[F]] =
+    Resource
+      .make {
+        for {
+          _         <- fileIO.makeDirectory(dagStoragePath)
+          dagConfig = BlockDagFileStorage.Config(dagStoragePath)
+          storage <- BlockDagFileStorage.create(dagConfig)(
+                      Concurrent[F],
+                      Log[F],
+                      blockStore,
+                      Metrics[F]
+                    )
+        } yield storage
+      }(_.close())
+      .map(_.asInstanceOf[BlockDagStorage[F]])
 }

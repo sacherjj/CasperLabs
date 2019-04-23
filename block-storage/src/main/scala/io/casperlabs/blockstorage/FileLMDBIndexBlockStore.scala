@@ -353,17 +353,15 @@ object FileLMDBIndexBlockStore {
   def apply[F[_]: Concurrent: Log: RaiseIOError: Metrics](
       dataDir: Path,
       blockstorePath: Path
-  ): Resource[F, BlockStore[F]] = {
-    val res = for {
-      _             <- fileIO.makeDirectory(dataDir)
-      _             <- fileIO.makeDirectory(blockstorePath)
-      blockstoreEnv = Context.env(blockstorePath, 100L * 1024L * 1024L * 4096L)
-    } yield
-      Resource.make {
-        FileLMDBIndexBlockStore
-          .create(blockstoreEnv, blockstorePath)
-          .map(_.right.get)
-      }(_.close())
-    Resource.suspend(res)
-  }
+  ): Resource[F, BlockStore[F]] =
+    Resource.make {
+      for {
+        _             <- fileIO.makeDirectory(dataDir)
+        _             <- fileIO.makeDirectory(blockstorePath)
+        blockstoreEnv = Context.env(blockstorePath, 100L * 1024L * 1024L * 4096L)
+        storage <- FileLMDBIndexBlockStore
+                    .create(blockstoreEnv, blockstorePath)
+                    .map(_.right.get)
+      } yield storage
+    }(_.close())
 }
