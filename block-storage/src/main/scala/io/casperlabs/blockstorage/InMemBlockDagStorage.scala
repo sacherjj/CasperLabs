@@ -125,7 +125,9 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
 }
 
 object InMemBlockDagStorage {
-  def create[F[_]: Concurrent: Log: BlockStore](implicit met: Metrics[F]): F[InMemBlockDagStorage[F]] =
+  def create[F[_]: Concurrent: Log: BlockStore](
+      implicit met: Metrics[F]
+  ): F[InMemBlockDagStorage[F]] =
     for {
       lock              <- Semaphore[F](1)
       latestMessagesRef <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)

@@ -1,7 +1,7 @@
 package io.casperlabs.comm.gossiping
 
 import cats.effect._
-import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.auth.Principal
 import io.casperlabs.comm.grpc.ContextKeys
 import io.casperlabs.comm.ServiceError.{DeadlineExceeded, NotFound, Unauthenticated}
@@ -68,6 +68,12 @@ object GrpcGossipService {
             case ex: TimeoutException =>
               Observable.raiseError(DeadlineExceeded(ex.getMessage))
           }
+
+      def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
+        TaskLike[F].toTask(service.getGenesisCandidate(request))
+
+      def addApproval(request: AddApprovalRequest): Task[Empty] =
+        TaskLike[F].toTask(service.addApproval(request))
     }
 
   /** Create the internal interface from the Monix specific instance,
@@ -98,5 +104,11 @@ object GrpcGossipService {
 
       def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
         stub.getBlockChunked(request).toIterant
+
+      def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
+        stub.getGenesisCandidate(request).to[F]
+
+      def addApproval(request: AddApprovalRequest): F[Empty] =
+        stub.addApproval(request).to[F]
     }
 }

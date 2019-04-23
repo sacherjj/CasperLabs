@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "casperlabs-contract-ffi"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -127,7 +127,7 @@ dependencies = [
 name = "casperlabs-engine-grpc-server"
 version = "0.2.0"
 dependencies = [
- "casperlabs-contract-ffi 0.4.0",
+ "casperlabs-contract-ffi 0.5.0",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "execution-engine 0.1.0",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -252,7 +252,7 @@ name = "execution-engine"
 version = "0.1.0"
 dependencies = [
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "casperlabs-contract-ffi 0.4.0",
+ "casperlabs-contract-ffi 0.5.0",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -996,7 +996,7 @@ name = "shared"
 version = "0.1.0"
 dependencies = [
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "casperlabs-contract-ffi 0.4.0",
+ "casperlabs-contract-ffi 0.5.0",
 ]
 
 [[package]]
@@ -1028,7 +1028,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "storage"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.4.0",
+ "casperlabs-contract-ffi 0.5.0",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lmdb 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",

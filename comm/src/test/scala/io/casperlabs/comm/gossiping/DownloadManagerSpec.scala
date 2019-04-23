@@ -3,7 +3,7 @@ package io.casperlabs.comm.gossiping
 import cats.implicits._
 import cats.effect.concurrent.Semaphore
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.GossipError
 import io.casperlabs.shared.Log
@@ -565,6 +565,11 @@ object DownloadManagerSpec {
       def onDownloaded(blockHash: ByteString)  = ???
       def listTips                             = ???
     }
+    private val emptyGenesisApprover = new GenesisApprover[Task] {
+      def getCandidate                                           = ???
+      def addApproval(blockHash: ByteString, approval: Approval) = ???
+      def awaitApproval                                          = ???
+    }
 
     // Used only as a default argument for when we aren't touching the remote service in a test.
     val default = {
@@ -578,6 +583,7 @@ object DownloadManagerSpec {
         synchronizer = emptySynchronizer,
         downloadManager = emptyDownloadManager,
         consensus = emptyConsensus,
+        genesisApprover = emptyGenesisApprover,
         maxChunkSize = 100 * 1024,
         maxParallelBlockDownloads = 100
       )
@@ -604,6 +610,7 @@ object DownloadManagerSpec {
           synchronizer = emptySynchronizer,
           downloadManager = emptyDownloadManager,
           consensus = emptyConsensus,
+          genesisApprover = emptyGenesisApprover,
           maxChunkSize = 100 * 1024,
           blockDownloadSemaphore = semaphore
         ) {

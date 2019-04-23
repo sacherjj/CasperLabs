@@ -420,7 +420,7 @@ where
     }
 }
 
-impl ToBytes for str {
+impl ToBytes for &str {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         if self.len() >= u32::max_value() as usize - U32_SIZE {
             return Err(Error::OutOfMemoryError);

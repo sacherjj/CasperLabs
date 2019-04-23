@@ -7,9 +7,9 @@ import cats.effect.concurrent._
 import cats.temp.par._
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.shared.{Compression, Log, LogSource}
-import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.comm.ServiceError, ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
 import monix.tail.Iterant
 import scala.collection.immutable.Queue
@@ -21,6 +21,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
     synchronizer: Synchronizer[F],
     downloadManager: DownloadManager[F],
     consensus: GossipServiceServer.Consensus[F],
+    genesisApprover: GenesisApprover[F],
     maxChunkSize: Int,
     blockDownloadSemaphore: Semaphore[F]
 ) extends GossipService[F] {
@@ -168,9 +169,19 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
         }
     }
 
-  def effectiveChunkSize(chunkSize: Int): Int =
+  override def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
+    rethrow(genesisApprover.getCandidate)
+
+  override def addApproval(request: AddApprovalRequest): F[Empty] =
+    rethrow(genesisApprover.addApproval(request.blockHash, request.getApproval)) *> Empty().pure[F]
+
+  private def effectiveChunkSize(chunkSize: Int): Int =
     if (0 < chunkSize && chunkSize < maxChunkSize) chunkSize
     else maxChunkSize
+
+  // MonadError isn't covariant in the error type.
+  private def rethrow[E <: Throwable, A](value: F[Either[E, A]]): F[A] =
+    Sync[F].rethrow(value.widen)
 }
 
 object GossipServiceServer {
@@ -233,6 +244,7 @@ object GossipServiceServer {
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
       consensus: Consensus[F],
+      genesisApprover: GenesisApprover[F],
       maxChunkSize: Int,
       maxParallelBlockDownloads: Int
   ): F[GossipServiceServer[F]] =
@@ -242,6 +254,7 @@ object GossipServiceServer {
         synchronizer,
         downloadManager,
         consensus,
+        genesisApprover,
         maxChunkSize,
         blockDownloadSemaphore
       )
