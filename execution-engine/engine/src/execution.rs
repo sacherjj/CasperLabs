@@ -420,9 +420,6 @@ where
     }
 
     // Tests whether reading from the `key` is valid.
-    // For Accounts it's valid to read when the operation is done on the current context's key.
-    // For Contracts it's always valid.
-    // For URefs it's valid if the access rights of the URef allow for reading.
     fn is_readable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) => &self.context.base_key() == key,
@@ -432,9 +429,6 @@ where
     }
 
     /// Tests whether addition to `key` is valid.
-    /// Addition to account key is valid iff it is being made from the context of the account.
-    /// Addition to contract key is valid iff it is being made from the context of the contract.
-    /// Additions to unforgeable key is valid as long as key itself is addable
     fn is_addable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) | Key::Hash(_) => &self.context.base_key() == key,
@@ -443,8 +437,6 @@ where
     }
 
     // Test whether writing to `kay` is valid.
-    // For Accounts and Hashes it's always invalid.
-    // For URefs it depends on the access rights that uref has.
     fn is_writeable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) | Key::Hash(_) => false,
