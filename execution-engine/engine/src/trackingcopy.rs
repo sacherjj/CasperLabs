@@ -41,11 +41,11 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     }
 
     pub fn get(&mut self, k: &Validated<Key>) -> Result<Option<Value>, R::Error> {
-        if let Some(value) = self.cache.get(&(k.0)) {
+        if let Some(value) = self.cache.get(&**k) {
             return Ok(Some(value.clone()));
         }
-        if let Some(value) = self.reader.read(&(k.0))? {
-            self.cache.insert(k.0, value.clone());
+        if let Some(value) = self.reader.read(&**k)? {
+            self.cache.insert(**k, value.clone());
             Ok(Some(value))
         } else {
             Ok(None)
@@ -54,7 +54,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
 
     pub fn read(&mut self, k: &Validated<Key>) -> Result<Option<Value>, R::Error> {
         if let Some(value) = self.get(k)? {
-            add(&mut self.ops, k.0, Op::Read);
+            add(&mut self.ops, **k, Op::Read);
             Ok(Some(value))
         } else {
             Ok(None)
@@ -62,9 +62,9 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     }
 
     pub fn write(&mut self, k: Validated<Key>, v: Validated<Value>) {
-        let _ = self.cache.insert(k.0, v.0.clone());
-        add(&mut self.ops, k.0, Op::Write);
-        add(&mut self.fns, k.0, Transform::Write(v.0));
+        let _ = self.cache.insert(*k, (*v).clone());
+        add(&mut self.ops, *k, Op::Write);
+        add(&mut self.fns, *k, Transform::Write(v.0));
     }
 
     /// Ok(None) represents missing key to which we want to "add" some value.
@@ -72,7 +72,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     /// Err(error) is reserved for unexpected errors when accessing global state.
     pub fn add(&mut self, k: Validated<Key>, v: Validated<Value>) -> Result<AddResult, R::Error> {
         match self.get(&k)? {
-            None => Ok(AddResult::KeyNotFound(k.0)),
+            None => Ok(AddResult::KeyNotFound(*k)),
             Some(curr) => {
                 let t = match v.0 {
                     Value::Int32(i) => Transform::AddInt32(i),
@@ -93,9 +93,9 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                 };
                 match t.clone().apply(curr) {
                     Ok(new_value) => {
-                        let _ = self.cache.insert(k.0, new_value);
-                        add(&mut self.ops, k.0, Op::Add);
-                        add(&mut self.fns, k.0, t);
+                        let _ = self.cache.insert(*k, new_value);
+                        add(&mut self.ops, *k, Op::Add);
+                        add(&mut self.fns, *k, t);
                         Ok(AddResult::Success)
                     }
                     Err(transform::Error::TypeMismatch(type_mismatch)) => {
@@ -172,7 +172,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
             // continue recursing
             Ok(Some(value)) => Ok(value),
             // key not found in the global state; stop recursing
-            Ok(None) => Err(Ok((i, format!("Name {:?} not found: ", key.0)))),
+            Ok(None) => Err(Ok((i, format!("Name {:?} not found: ", *key)))),
             // global state access error; stop recursing
             Err(error) => Err(Err(error)),
         }
