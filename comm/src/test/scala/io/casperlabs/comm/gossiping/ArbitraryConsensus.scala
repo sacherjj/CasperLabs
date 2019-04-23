@@ -280,7 +280,7 @@ trait ArbitraryConsensus {
         children: Vector[BlockSummary],
         depth: Int
     ): Gen[Vector[BlockSummary]] =
-      if (depth == c.dagDepth) {
+      if (depth > c.dagDepth) {
         Gen.const(acc ++ children)
       } else {
         for {

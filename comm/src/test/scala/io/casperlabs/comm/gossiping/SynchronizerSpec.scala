@@ -179,7 +179,7 @@ class SynchronizerSpec
             val d = dagOrError.right.get
             d should contain allElementsOf dag.dropRight(consensusConfig.dagWidth)
             requestsCount
-              .get() shouldBe (grouped.size.toDouble / ancestorsDepthRequest).ceil.toInt
+              .get() shouldBe (grouped.size.toDouble / ancestorsDepthRequest).ceil.toInt + 1
           }
         }
       }

@@ -143,11 +143,12 @@ class SynchronizerImpl[F[_]: Sync: Log](
       )
       .foldWhileLeftEvalL(prevSyncState.asRight[SyncError].pure[F]) {
         case (Right(syncState), summary) =>
+          val newSyncState = syncState.append(summary)
           val effect = for {
-            _ <- notTooDeep(syncState, targetBlockHashes.toSet)
-            _ <- notTooWide(syncState)
+            _ <- notTooDeep(newSyncState, targetBlockHashes.toSet)
+            _ <- notTooWide(newSyncState)
             _ <- reachable(
-                  syncState,
+                  newSyncState,
                   summary,
                   targetBlockHashes.toSet
                 )
@@ -157,7 +158,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
                     .as(().asRight[SyncError])
                     .handleError(e => ValidationError(summary, e).asLeft[Unit])
                 )
-          } yield syncState.append(summary)
+          } yield newSyncState
           effect.value.map {
             case x @ Left(_) =>
               (x: Either[SyncError, SyncState])
@@ -174,26 +175,22 @@ class SynchronizerImpl[F[_]: Sync: Log](
       syncState: SyncState,
       targetBlockHashes: Set[ByteString]
   ): EitherT[F, SyncError, Unit] = {
-    @annotation.tailrec
-    def loop(
-        parents: Set[ByteString],
-        counter: Int
-    ): EitherT[F, SyncError, Unit] =
-      if (counter === maxPossibleDepth) {
-        EitherT(
-          (TooDeep(parents, maxPossibleDepth): SyncError)
-            .asLeft[Unit]
-            .pure[F]
-        )
+    val ranks = syncState.summaries.values.map(_.getHeader.rank).toSet
+    if (ranks.isEmpty) {
+      EitherT(().asRight[SyncError].pure[F])
+    } else {
+      val minRank = ranks.min
+      val maxRank = ranks.max
+      val depth   = maxRank - minRank
+      if (depth > maxPossibleDepth) {
+        val hashes = syncState.summaries.collect {
+          case (hash, summary) if summary.getHeader.rank < maxRank - maxPossibleDepth => hash
+        }.toSet
+        EitherT((TooDeep(hashes, maxPossibleDepth): SyncError).asLeft[Unit].pure[F])
       } else {
-        val grandparents = parents.flatMap(dependenciesFromDag(syncState.dag, _))
-        if (grandparents.isEmpty) {
-          EitherT(().asRight[SyncError].pure[F])
-        } else {
-          loop(grandparents, counter + 1)
-        }
+        EitherT(().asRight[SyncError].pure[F])
       }
-    loop(targetBlockHashes.flatMap(dependenciesFromDag(syncState.dag, _)), 1)
+    }
   }
 
   private def dependenciesFromDag(
