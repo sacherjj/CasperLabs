@@ -816,7 +816,7 @@ object BlockDagFileStorage {
       }
     )
 
-  def apply[F[_]: Sync: Concurrent: Log: RaiseIOError: Metrics](
+  def apply[F[_]: Concurrent: Log: RaiseIOError: Metrics](
       dataDir: Path,
       dagStoragePath: Path,
       blockStore: BlockStore[F]
