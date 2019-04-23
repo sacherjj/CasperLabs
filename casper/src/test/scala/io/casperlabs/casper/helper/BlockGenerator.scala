@@ -9,6 +9,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.DeploysCheckpoint
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
@@ -80,10 +81,13 @@ object BlockGenerator {
         "Received a different genesis block."
       )
 
+      merged                             <- ExecEngineUtil.merge[F](parents, dag)
+      (combinedEffect, commutingParents) = merged
+
       result <- computeDeploysCheckpoint[F](
-                 parents,
+                 commutingParents,
                  deploys,
-                 dag
+                 combinedEffect
                )
     } yield result
 

@@ -258,9 +258,11 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
-        dag       <- blockDag
-        tipHashes <- estimator(dag)
-        parents   <- chooseNonConflicting[F](tipHashes, genesis, dag)
+        dag                       <- blockDag
+        tipHashes                 <- estimator(dag).map(_.toVector)
+        tips                      <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
+        merged                    <- ExecEngineUtil.merge[F](tips, dag)
+        (prestateEffect, parents) = merged
         _ <- Log[F].info(
               s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
             )
@@ -274,7 +276,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         justifications = toJustification(latestMessages)
           .filter(j => bondedValidators.contains(j.validator))
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
-                     createProposal(dag, parents, remaining, justifications)
+                     createProposal(dag, parents, prestateEffect, remaining, justifications)
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
@@ -318,6 +320,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
   private def createProposal(
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMessage],
+      prestateEffect: ExecEngineUtil.TransformMap,
       deploys: Seq[DeployData],
       justifications: Seq[Justification]
   ): F[CreateBlockStatus] =
@@ -325,7 +328,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       now <- Time[F].currentMillis
       s   <- Cell[F, CasperState].read
       stateResult <- ExecEngineUtil
-                      .computeDeploysCheckpoint(parents, deploys, dag)
+                      .computeDeploysCheckpoint[F](parents, deploys, prestateEffect)
       DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number) = stateResult
       //TODO: compute bonds properly
       newBonds = ProtoUtil.bonds(parents.head)
@@ -384,8 +387,11 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       postValidationStatus <- Validate
                                .blockSummary[F](b, genesis, dag, shardId, lastFinalizedBlockHash)
       s <- Cell[F, CasperState].read
+      // Confirm the parents are correct (including checking they commute) and catpure
+      // the effect needed to compute the correct pre-state as well.
+      parentsEffect <- Validate.parents[F](b, genesis, lastFinalizedBlockHash, dag)
       processedHash <- ExecEngineUtil
-                        .effectsForBlock(b, dag)
+                        .effectsForBlock[F](b, parentsEffect, dag)
                         .recoverWith {
                           case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                         }

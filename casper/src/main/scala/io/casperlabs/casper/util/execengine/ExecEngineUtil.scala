@@ -16,6 +16,8 @@ import io.casperlabs.models.{DeployResult => _, _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
+import scala.collection.immutable.BitSet
+
 case class DeploysCheckpoint(
     preStateHash: StateHash,
     postStateHash: StateHash,
@@ -33,7 +35,10 @@ object ExecEngineUtil {
       dag: BlockDagRepresentation[F]
   ): F[Either[Throwable, StateHash]] =
     (for {
-      processedHash           <- ExecEngineUtil.effectsForBlock(b, dag)
+      parents                 <- ProtoUtil.unsafeGetParents[F](b)
+      merged                  <- merge[F](parents, dag)
+      (combinedEffect, _)     = merged
+      processedHash           <- ExecEngineUtil.effectsForBlock[F](b, combinedEffect, dag)
       (preStateHash, effects) = processedHash
       _                       <- Validate.transactions[F](b, dag, preStateHash, effects)
     } yield ProtoUtil.postStateHash(b)).attempt
@@ -41,12 +46,12 @@ object ExecEngineUtil {
   def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
-      dag: BlockDagRepresentation[F]
+      combinedEffect: TransformMap // effect used to obtain combined post-state of all parents
   ): F[DeploysCheckpoint] =
     for {
-      processedHash <- processDeploys(
+      processedHash <- processDeploys[F](
                         parents,
-                        dag,
+                        combinedEffect,
                         deploys
                       )
       (preStateHash, processedDeploys) = processedHash
@@ -82,11 +87,11 @@ object ExecEngineUtil {
 
   def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       parents: Seq[BlockMessage],
-      dag: BlockDagRepresentation[F],
+      combinedEffect: TransformMap, // effect used to obtain combined post-state of all parents
       deploys: Seq[DeployData]
   ): F[(StateHash, Seq[DeployResult])] =
     for {
-      prestate <- computePrestate[F](parents.toList, dag)
+      prestate <- computePrestate[F](parents.toList, combinedEffect)
       ds       = deploys.map(ProtoUtil.deployDataToEEDeploy)
       result   <- MonadError[F, Throwable].rethrow(ExecutionEngineService[F].exec(prestate, ds))
     } yield (prestate, result)
@@ -115,14 +120,15 @@ object ExecEngineUtil {
 
   def effectsForBlock[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       block: BlockMessage,
+      combinedEffect: TransformMap,
       dag: BlockDagRepresentation[F]
   ): F[(StateHash, Seq[TransformEntry])] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](block)
       deploys = ProtoUtil.deploys(block)
-      processedHash <- processDeploys(
+      processedHash <- processDeploys[F](
                         parents,
-                        dag,
+                        combinedEffect,
                         deploys.flatMap(_.deploy)
                       )
       (prestate, processedDeploys) = processedHash
@@ -130,51 +136,111 @@ object ExecEngineUtil {
       transformMap                 = findCommutingEffects(deployEffects).unzip._1.flatMap(_.transformMap)
     } yield (prestate, transformMap)
 
-  private def computePrestate[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
+  private def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
       parents: List[BlockMessage],
-      dag: BlockDagRepresentation[F]
+      combinedEffect: TransformMap // effect used to obtain combined post-state of all parents
   ): F[StateHash] = parents match {
     case Nil => ExecutionEngineService[F].emptyStateHash.pure[F] //no parents
     case soleParent :: Nil =>
       ProtoUtil.postStateHash(soleParent).pure[F] //single parent
     case initParent :: _ => //multiple parents
-      for {
-        bs <- blocksToApply[F](parents, dag)
-        diffs <- bs
-                  .traverse(
-                    b =>
-                      BlockStore[F]
-                        .getTransforms(b.blockHash)
-                        .map(_.getOrElse(Seq.empty[TransformEntry]))
-                  )
-                  .map(_.flatten)
-        prestate = ProtoUtil.postStateHash(initParent)
-        result <- MonadError[F, Throwable].rethrow(
-                   ExecutionEngineService[F].commit(prestate, diffs)
-                 )
-      } yield result
+      val prestate = ProtoUtil.postStateHash(initParent)
+      MonadError[F, Throwable].rethrow(
+        ExecutionEngineService[F].commit(prestate, combinedEffect)
+      )
   }
 
-  private[execengine] def blocksToApply[F[_]: Monad](
-      parents: Seq[BlockMessage],
+  type TransformMap = Seq[TransformEntry]
+
+  /**
+    * Compute the combined effect of two effects applied one after the other
+    * (first `x` then `y`).
+    */
+  def sum(x: TransformMap, y: TransformMap): TransformMap = x ++ y // FIXME
+
+  /**
+    * Checks is effects `x` and `y` commute with each other.
+    */
+  def commutes(x: TransformMap, y: TransformMap): Boolean = true // FIXME
+
+  /** Computes the largest commuting sub-set of blocks from the `candidateParents` along with an effect which
+    * can be used to find the combined post-state of those commuting blocks.
+    * @param candidateParents blocks to attempt to merge
+    * @return a tuple of two elements. The first element is the net effect for all commuting blocks (including ancestors)
+    *         except the first block (i.e. this effect will give the combined post state for all chosen commuting
+    *         blocks when applied to the post-state of the first chosen block). The second element is the chosen
+    *         list of blocks, which all commute with each other.
+    *
+    */
+  def merge[F[_]: Monad: BlockStore](
+      candidateParentBlocks: Seq[BlockMessage],
       dag: BlockDagRepresentation[F]
-  ): F[Vector[BlockMetadata]] =
-    for {
-      parentsMetadata <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
-      ordering        <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
-      blockHashesToApply <- {
-        implicit val o: Ordering[BlockMetadata] = ordering
-        for {
-          uncommonAncestors          <- DagOperations.uncommonAncestors[F](parentsMetadata.toVector, dag)
-          ancestorsOfInitParentIndex = 0
-          // Filter out blocks that already included by starting from the chosen initial parent
-          // as otherwise we will be applying the initial parent's ancestor's twice.
-          result = uncommonAncestors
-            .filterNot { case (_, set) => set.contains(ancestorsOfInitParentIndex) }
-            .keys
-            .toVector
-            .sorted // Ensure blocks to apply is topologically sorted to maintain any causal dependencies
-        } yield result
-      }
-    } yield blockHashesToApply
+  ): F[(TransformMap, Vector[BlockMessage])] = {
+    val candidateParents = candidateParentBlocks.map(BlockMetadata.fromBlock).toVector
+    val n                = candidateParents.length
+
+    def computeUncommonAncestors(
+        implicit o: Ordering[BlockMetadata]
+    ): F[Map[BlockMetadata, BitSet]] =
+      DagOperations.uncommonAncestors[F](candidateParents, dag)
+
+    def netEffect(blocks: Vector[BlockMetadata]): F[TransformMap] =
+      blocks
+        .traverse(block => BlockStore[F].getTransforms(block.blockHash))
+        .map(_.flatten.reduce(sum(_, _)))
+
+    if (n <= 1) {
+      // no parents or single parent, nothing to merge
+      for {
+        blocks <- candidateParents.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
+      } yield (Seq.empty[TransformEntry] -> blocks)
+    } else
+      for {
+        ordering          <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
+        uncommonAncestors <- computeUncommonAncestors(ordering)
+
+        // collect uncommon ancestors based on which candidate they are an ancestor of
+        groups = uncommonAncestors
+          .foldLeft(Vector.fill(n)(Vector.empty[BlockMetadata]).zipWithIndex) {
+            case (acc, (block, ancestry)) =>
+              acc.map {
+                case (group, index) =>
+                  val newGroup = if (ancestry.contains(index)) group :+ block else group
+                  newGroup -> index
+              }
+          } // sort in topological order to combine effects in the right order
+          .map { case (group, _) => group.sorted(ordering) }
+
+        // always choose the first parent
+        initChosen       = Vector(0)
+        initChosenEffect <- netEffect(groups(0))
+
+        chosen <- (1 until n).toList
+                   .foldM[F, (Vector[Int], TransformMap)](initChosen -> initChosenEffect) {
+                     case (unchanged @ (chosenSet, chosenEffect), candiate) =>
+                       val candidateEffectF = netEffect(
+                         groups(candiate)
+                           .filterNot { // remove ancestors already included in the chosenSet
+                             block =>
+                               val ancestry = uncommonAncestors(block)
+                               chosenSet.exists(i => ancestry.contains(i))
+                           }
+                       )
+
+                       // if candidate commutes with chosen set, then included, otherwise do not include it
+                       candidateEffectF.map(
+                         candidateEffect =>
+                           if (commutes(chosenEffect, candidateEffect))
+                             (chosenSet :+ candiate, sum(chosenEffect, candidateEffect))
+                           else
+                             unchanged
+                       )
+                   }
+                   .map(_._1)
+        // The effect we return is the one which would be applied onto the first parent's
+        // post-state, so we do not include the first parent in the effect.
+        effect <- netEffect(chosen.tail.flatMap(groups.apply))
+        blocks <- chosen.traverse(i => ProtoUtil.unsafeGetBlock[F](candidateParents(i).blockHash))
+      } yield (effect, blocks)
+  }
 }

@@ -13,6 +13,7 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.MonadTrans
@@ -582,11 +583,15 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       isValid <- Validate.approvedBlock[F](b, validators)
       casper <- if (isValid) {
                  for {
-                   _            <- Log[F].info("Valid ApprovedBlock received!")
-                   blockMessage = b.candidate.flatMap(_.block).get
-                   dag          <- BlockDagStorage[F].getRepresentation
+                   _                   <- Log[F].info("Valid ApprovedBlock received!")
+                   blockMessage        = b.candidate.flatMap(_.block).get
+                   dag                 <- BlockDagStorage[F].getRepresentation
+                   parents             <- ProtoUtil.unsafeGetParents[F](blockMessage)
+                   merged              <- ExecEngineUtil.merge[F](parents, dag)
+                   (combinedEffect, _) = merged
                    effects <- ExecEngineUtil.effectsForBlock[F](
                                blockMessage,
+                               combinedEffect,
                                dag
                              )
                    (_, transforms) = effects

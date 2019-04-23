@@ -9,6 +9,7 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage, Bond, Justification}
 import io.casperlabs.casper.util.ProtoUtil.bonds
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.crypto.hash.Blake2b256
@@ -200,7 +201,6 @@ object Validate {
       _ <- Validate.repeatDeploy[F](block, dag)
       _ <- Validate.blockNumber[F](block)
       _ <- Validate.justificationFollows[F](block, genesis, dag)
-      _ <- Validate.parents[F](block, genesis, lastFinalizedBlockHash, dag)
       - <- Validate.sequenceNumber[F](block, dag)
       - <- Validate.justificationRegressions[F](block, genesis, dag)
       _ <- Validate.shardIdentifier[F](block, shardId)
@@ -427,7 +427,7 @@ object Validate {
       genesis: BlockMessage,
       lastFinalizedBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
-  ): F[Unit] = {
+  ): F[ExecEngineUtil.TransformMap] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
       case hashes if hashes.isEmpty => Seq(lastFinalizedBlockHash)
@@ -438,11 +438,13 @@ object Validate {
       hashes.map(PrettyPrinter.buildString(_)).mkString("[", ", ", "]")
 
     for {
-      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
-      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](tipHashes, genesis, dag)
-      computedParentHashes = computedParents.map(_.blockHash)
+      latestMessagesHashes      <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
+      tipHashes                 <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
+      _                         <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
+      tips                      <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
+      merged                    <- ExecEngineUtil.merge[F](tips, dag)
+      (effect, computedParents) = merged
+      computedParentHashes      = computedParents.map(_.blockHash).toSeq
       _ <- if (parentHashes == computedParentHashes)
             Applicative[F].unit
           else {
@@ -465,7 +467,7 @@ object Validate {
               _ <- RaiseValidationError[F].raise[Unit](InvalidParents)
             } yield ()
           }
-    } yield ()
+    } yield effect
   }
 
   /*

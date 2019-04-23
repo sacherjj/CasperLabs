@@ -328,7 +328,7 @@ class ExecEngineUtilTest
                         .computeDeploysCheckpoint[Task](
                           Seq.empty,
                           deploy,
-                          dag
+                          Nil
                         )
       DeploysCheckpoint(_, _, result, _) = computeResult
     } yield result
@@ -380,10 +380,10 @@ class ExecEngineUtilTest
         }
         for {
           dag <- blockDagStorage.getRepresentation
-          checkpoint <- ExecEngineUtil.computeDeploysCheckpoint(
+          checkpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                          parents = Seq.empty,
                          deploys = deploys,
-                         dag = dag
+                         combinedEffect = Nil
                        )
         } yield {
           val processedDeploys = checkpoint.deploysForBlock.map(_.getDeploy)
@@ -451,7 +451,7 @@ class ExecEngineUtilTest
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               Seq.empty,
                               deploys,
-                              dag1
+                              Nil
                             )
         DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _) = deploysCheckpoint
         block <- createBlock[Task](
@@ -468,58 +468,6 @@ class ExecEngineUtilTest
                          )
         Right(postStateHash) = validateResult
       } yield postStateHash should be(computedPostStateHash)
-  }
-
-  "findMultiParentsBlockHashesForReplay" should "filter out duplicate ancestors of main parent block" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1L)
-      val b1DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
-      val b2DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
-      val b3DeploysWithCost      = prepareDeploys(Vector(ByteString.EMPTY), 1L)
-
-      /*
-       * DAG Looks like this:
-       *
-       *           b3
-       *          /  \
-       *        b1    b2
-       *         \    /
-       *         genesis
-       */
-
-      def step(index: Int, genesis: BlockMessage) =
-        for {
-          b1  <- blockDagStorage.lookupByIdUnsafe(index)
-          dag <- blockDagStorage.getRepresentation
-          computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                           b1,
-                                           genesis,
-                                           dag
-                                         )
-          (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
-          result <- injectPostStateHash[Task](
-                     index,
-                     b1,
-                     postB1StateHash,
-                     postB1ProcessedDeploys
-                   )
-        } yield result
-      for {
-        genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
-        b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-        b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-        b3      <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
-        _       <- step(0, genesis)
-        _       <- step(1, genesis)
-        _       <- step(2, genesis)
-        dag     <- blockDagStorage.getRepresentation
-        blockHashes <- ExecEngineUtil.blocksToApply(
-                        Seq(b1, b2),
-                        dag
-                      )
-        _ = withClue("Main parent hasn't been filtered out: ") { blockHashes.size shouldBe (1) }
-
-      } yield ()
   }
 
   "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
