@@ -428,7 +428,10 @@ class DownloadManagerSpec
                     log.warns should have size 3
                     log.warns.last should include("attempt: 3")
                     log.causes should have size 1
-                    log.causes.head shouldBe an[io.grpc.StatusRuntimeException]
+                    log.causes.head shouldBe an[DownloadManagerImpl.RetriesFailure]
+                    log.causes.head
+                      .asInstanceOf[DownloadManagerImpl.RetriesFailure]
+                      .getCause shouldBe an[io.grpc.StatusRuntimeException]
                   }
               _ <- w.attempt
             } yield ()

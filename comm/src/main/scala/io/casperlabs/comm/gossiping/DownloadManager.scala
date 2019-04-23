@@ -68,6 +68,10 @@ object DownloadManagerImpl {
     final case class DownloadFailure[F[_]](blockHash: ByteString, ex: Throwable) extends Signal[F]
   }
 
+  final case class RetriesFailure(e: Throwable) extends Throwable {
+    override def getCause: Throwable = e
+  }
+
   /** Keep track of download items. */
   final case class Item[F[_]](
       summary: BlockSummary,
@@ -318,19 +322,20 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
     def downloadWithRetries(summary: BlockSummary, source: Node, relay: Boolean): F[Unit] = {
       val downloadEffect = tryDownload(summary, source, relay)
 
-      def loop(counter: Int, errors: List[Throwable]): F[Unit] =
+      def loop(counter: Int, error: Option[Throwable]): F[Unit] =
         if (counter == retriesConf.maxRetries.toInt) {
-          Sync[F].raiseError[Unit](errors.head)
+          Sync[F].raiseError[Unit](RetriesFailure(error.head))
         } else {
           downloadEffect.handleErrorWith { e =>
             val duration = retriesConf.initialBackoffPeriod *
               math.pow(retriesConf.backoffFactor, counter.toDouble)
+            val nextCounter = counter + 1
             duration match {
               case delay: FiniteDuration =>
                 Log[F].warn(
-                  s"Retrying downloading of block $id, source: ${source.show}, attempt: ${counter + 1}, delay: $delay, error: $e"
+                  s"Retrying downloading of block $id, source: ${source.show}, attempt: $nextCounter, delay: $delay, error: $e"
                 ) >>
-                  Timer[F].sleep(delay) >> loop(counter + 1, e :: errors)
+                  Timer[F].sleep(delay) >> loop(nextCounter, e.some)
               case _: Duration.Infinite =>
                 Sync[F].raiseError[Unit](
                   new RuntimeException(
@@ -344,7 +349,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
       if (retriesConf.maxRetries.toInt == 0) {
         downloadEffect
       } else {
-        loop(counter = 0, errors = Nil)
+        loop(counter = 0, error = None)
       }
     }
 
@@ -356,7 +361,6 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
           case Some(source) =>
             downloadWithRetries(item.summary, source, item.relay).recoverWith {
               case NonFatal(ex) =>
-                // TODO: Exponential backoff, pick another node, try to store again, etc.
                 Log[F].error(s"Failed to download block $id from ${source.host}", ex) *>
                   loop(tried + source, ex :: errors)
             }
