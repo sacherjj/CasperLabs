@@ -1117,7 +1117,7 @@ macro_rules! on_fail_charge {
         match $fn {
             Ok(res) => res,
             Err(er) => {
-                let lambda = || $cost;
+                let mut lambda = || $cost;
                 return (Err(er.into()), lambda());
             }
         }
@@ -1215,41 +1215,52 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
 }
 
 #[cfg(test)]
-mod tests {
-    // Need intermediate method b/c when on_fail_charge macro is inlined
-    // for the error case it will call return which would exit the test.
-    fn indirect_fn(r: Result<u32, String>, f: u32) -> (Result<u32, String>, u32) {
-        let res = on_fail_charge!(r, f);
-        (Ok(res), 1111) // 1111 for easy discrimination
+mod on_fail_charge_macro_tests {
+    struct Counter {
+        pub counter: u32,
     }
 
-    #[test]
-    fn on_fail_charge_ok() {
-        let counter = 0;
-        let ok: Result<u32, String> = Ok(10);
-        let res: (Result<u32, String>, u32) = indirect_fn(ok, counter);
-        assert!(res.0.is_ok());
-        assert_eq!(res.0.ok().unwrap(), 10);
-        assert_eq!(res.1, 1111);
-        assert_eq!(counter, 0); // test that lambda was not executed for the Ok-case
-    }
-
-    #[test]
-    fn on_fail_charge_laziness() {
-        // Need this indirection b/c otherwise compiler complains
-        // about borrowing counter.counter after it was moved in the `fail` call.
-        struct Counter {
-            pub counter: u32,
-        };
-        impl Counter {
-            fn fail(&mut self) -> Result<u32, String> {
-                self.counter += 10;
-                Err("Err".to_owned())
-            }
+    impl Counter {
+        fn count(&mut self, count: u32) -> u32 {
+            self.counter += count;
+            count
         }
-        let mut counter = Counter { counter: 1 };
-        let res: (Result<u32, String>, u32) = indirect_fn(counter.fail(), counter.counter);
-        assert!(res.0.is_err());
-        assert_eq!(res.1, 11); // test that counter value was fetched lazily
+    }
+
+    fn on_fail_charge_test_helper(
+        counter: &mut Counter,
+        inc_value: u32,
+        input: Result<u32, String>,
+        fallback_value: u32,
+    ) -> (Result<u32, String>, u32) {
+        let res: u32 = on_fail_charge!(input, counter.count(inc_value));
+        (Ok(res), fallback_value)
+    }
+
+    #[test]
+    fn on_fail_charge_ok_test() {
+        let mut cntr = Counter { counter: 0 };
+        let fallback_value = 9999;
+        let inc_value = 10;
+        let ok_value = Ok(13);
+        let res: (Result<u32, String>, u32) =
+            on_fail_charge_test_helper(&mut cntr, inc_value, ok_value.clone(), fallback_value);
+        assert_eq!(res.0, ok_value);
+        assert_eq!(res.1, fallback_value);
+        assert_eq!(cntr.counter, 0); // test that lambda was NOT executed for the Ok-case
+    }
+
+    #[test]
+    fn on_fail_charge_err_laziness_test() {
+        let mut cntr = Counter { counter: 1 };
+        let fallback_value = 9999;
+        let inc_value = 10;
+        let expected_value = cntr.counter + inc_value;
+        let err = Err("BOOM".to_owned());
+        let res: (Result<u32, String>, u32) =
+            on_fail_charge_test_helper(&mut cntr, inc_value, err.clone(), fallback_value);
+        assert_eq!(res.0, err);
+        assert_eq!(res.1, inc_value);
+        assert_eq!(cntr.counter, expected_value) // test that lambda executed
     }
 }
