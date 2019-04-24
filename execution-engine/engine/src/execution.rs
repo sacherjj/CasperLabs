@@ -192,7 +192,7 @@ where
         deserialize(&bytes).map_err(Into::into)
     }
 
-    fn string_from_mem(&mut self, ptr: u32, size: u32) -> Result<String, Trap> {
+    fn string_from_mem(&self, ptr: u32, size: u32) -> Result<String, Trap> {
         let bytes = self.bytes_from_mem(ptr, size as usize)?;
         deserialize(&bytes).map_err(|e| Error::BytesRepr(e).into())
     }
@@ -233,17 +233,10 @@ where
     }
 
     /// Load the uref known by the given name into the Wasm memory
-    pub fn get_uref(&mut self, name_ptr: u32, name_size: u32, dest_ptr: u32) -> Result<(), Trap> {
-        let name = self.string_from_mem(name_ptr, name_size)?;
-        let uref = self
-            .context
+    pub fn get_uref(&self, name: String) -> Result<&Key, Error> {
+        self.context
             .get_uref(&name)
-            .ok_or_else(|| Error::URefNotFound(name))?;
-        let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
-
-        self.memory
-            .set(dest_ptr, &uref_bytes)
-            .map_err(|e| Error::Interpreter(e).into())
+            .ok_or_else(|| Error::URefNotFound(name))
     }
 
     pub fn has_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
@@ -258,9 +251,9 @@ where
     /// Adds `key` to the map of named keys of current context.
     pub fn add_uref(&mut self, name: String, key: Key) -> Result<(), Trap> {
         self.context.validate_key(&key)?;
-        self.context.insert_named_uref(name.clone(), key);
         let base_key = self.context.base_key();
         if self.is_addable(&base_key) {
+            self.context.insert_named_uref(name.clone(), Validated(key));
             self.add_transforms(Validated(base_key), Validated(Value::NamedKey(name, key)))
         } else {
             Err(Error::InvalidAccess {
@@ -497,8 +490,9 @@ where
         self.rng.fill_bytes(&mut key);
         let key = Key::URef(key, AccessRights::READ_ADD_WRITE);
         self.context.validate_keys(&value)?;
-        self.state.write(Validated(key), Validated(value));
-        self.context.insert_uref(key);
+        let validated_key = Validated(key);
+        self.state.write(validated_key.clone(), Validated(value));
+        self.context.insert_uref(validated_key);
         key.to_bytes().map_err(Error::BytesRepr)
     }
 }
@@ -676,7 +670,17 @@ where
                 // args(1) = size of uref name
                 // args(2) = pointer to destination in Wasm memory
                 let (name_ptr, name_size, dest_ptr) = Args::parse(args)?;
-                self.get_uref(name_ptr, name_size, dest_ptr)?;
+
+                let uref_name = self.string_from_mem(name_ptr, name_size)?;
+
+                let uref = self.get_uref(uref_name)?;
+
+                let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
+
+                let res: Result<(), Trap> = self.memory
+                    .set(dest_ptr, &uref_bytes)
+                    .map_err(|e| Error::Interpreter(e).into());
+                res?;
                 Ok(None)
             }
 

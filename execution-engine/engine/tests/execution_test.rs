@@ -126,7 +126,7 @@ fn mock_context<'a>(
         RuntimeContext::new(uref_lookup, HashMap::new(), account, base_key, gas_limit);
     known_urefs
         .iter()
-        .for_each(|key| context.insert_uref(key.clone()));
+        .for_each(|key| context.insert_uref(Validated(*key)));
     context
 }
 

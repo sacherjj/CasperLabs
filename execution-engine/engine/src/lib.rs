@@ -36,9 +36,10 @@ type URefAddr = [u8; 32];
 
 /// Newtype used for differentiating between plain T and validated T.
 /// What validation means is left purposefully vague as it may depend on the context.
-pub struct Validated<T>(pub T);
+#[derive(Clone)]
+pub struct Validated<T: Clone>(pub T);
 
-impl<T> Deref for Validated<T> {
+impl<T: Clone> Deref for Validated<T> {
     type Target = T;
     fn deref(&self) -> &T {
         &self.0

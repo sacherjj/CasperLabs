@@ -1,4 +1,4 @@
-use super::URefAddr;
+use super::{URefAddr, Validated};
 use common::bytesrepr::deserialize;
 use common::key::{AccessRights, Key};
 use common::value::account::Account;
@@ -61,13 +61,13 @@ impl<'a> RuntimeContext<'a> {
     }
 
     // TODO: Accept `Validated<Key>` instead of plain `Key` type.
-    pub fn insert_named_uref(&mut self, name: String, key: Key) {
-        self.insert_uref(key);
-        self.uref_lookup.insert(name, key);
+    pub fn insert_named_uref(&mut self, name: String, key: Validated<Key>) {
+        self.insert_uref(key.clone());
+        self.uref_lookup.insert(name, *key);
     }
 
-    pub fn insert_uref(&mut self, key: Key) {
-        if let Key::URef(raw_addr, rights) = key {
+    pub fn insert_uref(&mut self, key: Validated<Key>) {
+        if let Key::URef(raw_addr, rights) = *key {
             let entry_rights = self
                 .known_urefs
                 .entry(raw_addr)
