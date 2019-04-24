@@ -1,5 +1,7 @@
 package io.casperlabs.comm.gossiping
 
+import cats._
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import io.casperlabs.comm.discovery.Node
@@ -11,9 +13,23 @@ object ArbitraryConsensus extends ArbitraryConsensus
 trait ArbitraryConsensus {
   import Arbitrary.arbitrary
 
+  /**
+    * Needed for traversing collections like {{{(xs: List[Int]).traverse(_ => Gen.choose(1, 10))}}}
+    */
+  implicit val applicativeGen: Applicative[Gen] = new Applicative[Gen] {
+    override def pure[A](x: A): Gen[A] = Gen.const(x)
+
+    override def ap[A, B](ff: Gen[A => B])(fa: Gen[A]): Gen[B] =
+      fa.flatMap(a => ff.map(f => f(a)))
+  }
+
   case class ConsensusConfig(
       // Number of blocks in the DAG. 0 means no limit.
       dagSize: Int = 0,
+      // Max depth of DAG. 0 means no limit.
+      dagDepth: Int = 0,
+      // Number of parents in each generation. 0 means choose random.
+      dagWidth: Int = 1,
       // Maximum size of code in blocks. Slow to generate.
       maxSessionCodeBytes: Int = 500 * 1024,
       maxPaymentCodeBytes: Int = 100 * 1024,
@@ -175,7 +191,7 @@ trait ArbitraryConsensus {
     }
 
   /** Grow a DAG by adding layers on top of the tips. */
-  def genDag(implicit c: ConsensusConfig): Gen[Vector[BlockSummary]] = {
+  def genDagFromGenesis(implicit c: ConsensusConfig): Gen[Vector[BlockSummary]] = {
     def loop(
         acc: Vector[BlockSummary],
         tips: Set[BlockSummary]
@@ -230,11 +246,79 @@ trait ArbitraryConsensus {
     }
   }
 
-  def genBlockDag(implicit c: ConsensusConfig): Gen[Vector[Block]] =
+  def genBlockDagFromGenesis(implicit c: ConsensusConfig): Gen[Vector[Block]] =
     for {
-      summaries <- genDag
+      summaries <- genDagFromGenesis
       blocks    <- Gen.sequence(summaries.map(genBlockFromSummary))
     } yield blocks.asScala.toVector
+
+  /**
+    * Generates partial (no genesis) DAG starting from newest element.
+    * Possible example:
+    *          *  (newest)
+    *         * *
+    *         * *
+    *         * *
+    *         * * (oldest)
+    */
+  def genPartialDagFromTips(implicit c: ConsensusConfig): Gen[Vector[BlockSummary]] = {
+
+    def pair(child: BlockSummary, parents: Seq[BlockSummary]): BlockSummary =
+      child.withHeader(
+        child.getHeader
+          .withParentHashes(parents.map(_.blockHash))
+          .withJustifications(parents.map { j =>
+            Block.Justification(
+              latestBlockHash = j.blockHash,
+              validatorPublicKey = j.getHeader.validatorPublicKey
+            )
+          })
+      )
+
+    def loop(
+        acc: Vector[BlockSummary],
+        children: Vector[BlockSummary],
+        depth: Int
+    ): Gen[Vector[BlockSummary]] =
+      if (depth > c.dagDepth) {
+        Gen.const(acc ++ children)
+      } else {
+        for {
+          parents <- Gen
+                      .listOfN(c.dagWidth, arbitrary[BlockSummary])
+                      .map(
+                        _.map(
+                          s =>
+                            s.withHeader(
+                              s.getHeader
+                                .withParentHashes(Seq.empty)
+                                .withJustifications(Seq.empty)
+                                .withRank(c.dagDepth - depth)
+                            )
+                        )
+                      )
+          updatedChildren = children.map { child =>
+            pair(child, parents)
+          }
+          res <- loop(acc ++ updatedChildren, parents.toVector, depth + 1)
+        } yield res
+      }
+
+    arbitrary[BlockSummary].flatMap { newest =>
+      loop(
+        Vector.empty,
+        Vector(
+          newest.withHeader(
+            newest.getHeader
+              .withParentHashes(Seq.empty)
+              .withJustifications(Seq.empty)
+              .withRank(c.dagDepth)
+          )
+        ),
+        1
+      )
+    }
+  }
 
   // It doesn't make sense to shrink DAGs because the default shrink
   // will most likely get rid of parents, and make any derived selections

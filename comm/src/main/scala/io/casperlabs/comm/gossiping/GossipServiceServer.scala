@@ -9,9 +9,13 @@ import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.shared.{Compression, Log, LogSource}
-import io.casperlabs.comm.ServiceError, ServiceError.NotFound
+import io.casperlabs.comm.ServiceError
+import ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils.showNode
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 import monix.tail.Iterant
+
 import scala.collection.immutable.Queue
 import scala.util.control.NonFatal
 
@@ -48,36 +52,66 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
 
   /** Synchronize and download any missing blocks to get to the new ones. */
   private def sync(source: Node, newBlockHashes: Set[ByteString]): F[Unit] = {
-    val peer = s"${Base16.encode(source.id.toByteArray)}@${source.host}"
+
+    //TODO: Define handling strategies
+    def handleSyncError(syncError: SyncError): F[Unit] = syncError match {
+      case SyncError.TooDeep(summaries, limit) =>
+        Log[F].warn(
+          s"Failed to sync DAG, source ${source.show}. Returned DAG is too deep, limit: $limit, exceeded hashes: ${summaries
+            .map(b16)}"
+        )
+      case SyncError.TooWide(branchingFactor, limit) =>
+        Log[F].warn(
+          s"Failed to sync DAG, source ${source.show}. Returned dag is too wide, exceeded branching factor: $branchingFactor, limit: $limit."
+        )
+      case SyncError.Unreachable(summary, requestedDepth) =>
+        Log[F].warn(
+          s"Failed to sync DAG, source ${source.show}. During streaming source returned unreachable block summary: ${b16(summary)}, requested depth: $requestedDepth"
+        )
+      case SyncError.ValidationError(summary, e) =>
+        Log[F].warn(
+          s"Failed to sync DAG, source ${source.show}. Failed to validated the block summary: ${b16(summary)}, reason: $e"
+        )
+      case SyncError.MissingDependencies(hashes) =>
+        Log[F].warn(
+          s"Failed to sync DAG, source ${source.show}. Missing dependencies: ${hashes.map(b16)}"
+        )
+    }
 
     val trySync = for {
-      _ <- Log[F].info(s"Notified about ${newBlockHashes.size} new blocks by ${peer}.")
-      dag <- synchronizer.syncDag(
-              source = source,
-              targetBlockHashes = newBlockHashes
-            )
-      _ <- consensus.onPending(dag)
-      watches <- dag.traverse { summary =>
-                  downloadManager.scheduleDownload(
-                    summary,
-                    source = source,
-                    relay = newBlockHashes(summary.blockHash)
-                  )
-                }
-      _ <- (dag zip watches).parTraverse {
-            case (summary, watch) =>
-              // TODO: Called from here the consensus engine can be notified multiple times.
-              // The pending and final notifications should most likely be moved
-              // to the DownloadManager. We'll see this clearer when we integrate
-              // the new gossiping machinery with Casper and the Block Strategy.
-              watch *> consensus.onDownloaded(summary.blockHash)
-          }
-      _ <- Log[F].info(s"Synced ${dag.size} blocks with ${peer}.")
+      _ <- Log[F].info(s"Notified about ${newBlockHashes.size} new blocks by ${source.show}.")
+      dagOrError <- synchronizer.syncDag(
+                     source = source,
+                     targetBlockHashes = newBlockHashes
+                   )
+      _ <- dagOrError.fold(
+            syncError => handleSyncError(syncError), { dag =>
+              for {
+                _ <- consensus.onPending(dag)
+                watches <- dag.traverse { summary =>
+                            downloadManager.scheduleDownload(
+                              summary,
+                              source = source,
+                              relay = newBlockHashes(summary.blockHash)
+                            )
+                          }
+                _ <- (dag zip watches).parTraverse {
+                      case (summary, watch) =>
+                        // TODO: Called from here the consensus engine can be notified multiple times.
+                        // The pending and final notifications should most likely be moved
+                        // to the DownloadManager. We'll see this clearer when we integrate
+                        // the new gossiping machinery with Casper and the Block Strategy.
+                        watch *> consensus.onDownloaded(summary.blockHash)
+                    }
+                _ <- Log[F].info(s"Synced ${dag.size} blocks with ${source.show}.")
+              } yield ()
+            }
+          )
     } yield ()
 
     trySync.onError {
       case NonFatal(ex) =>
-        Log[F].error(s"Could not sync new blocks with ${peer}.", ex)
+        Log[F].error(s"Could not sync new blocks with ${source.show}.", ex)
     }
   }
 
@@ -190,6 +224,10 @@ object GossipServiceServer {
   val compressors: Map[String, Compressor] = Map(
     "lz4" -> Compression.compress
   )
+
+  def b16(summary: BlockSummary): String = Base16.encode(summary.blockHash.toByteArray)
+
+  def b16(hash: ByteString): String = Base16.encode(hash.toByteArray)
 
   def chunkIt(
       data: Array[Byte],
