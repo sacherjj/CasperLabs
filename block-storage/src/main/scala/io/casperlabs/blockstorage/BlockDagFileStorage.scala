@@ -821,18 +821,16 @@ object BlockDagFileStorage {
       dagStoragePath: Path,
       blockStore: BlockStore[F]
   ): Resource[F, BlockDagStorage[F]] =
-    Resource
-      .make {
-        for {
-          _         <- fileIO.makeDirectory(dagStoragePath)
-          dagConfig = BlockDagFileStorage.Config(dagStoragePath)
-          storage <- BlockDagFileStorage.create(dagConfig)(
-                      Concurrent[F],
-                      Log[F],
-                      blockStore,
-                      Metrics[F]
-                    )
-        } yield storage
-      }(_.close())
-      .map(_.asInstanceOf[BlockDagStorage[F]])
+    Resource.make {
+      for {
+        _         <- fileIO.makeDirectory(dagStoragePath)
+        dagConfig = BlockDagFileStorage.Config(dagStoragePath)
+        storage <- BlockDagFileStorage.create(dagConfig)(
+                    Concurrent[F],
+                    Log[F],
+                    blockStore,
+                    Metrics[F]
+                  )
+      } yield storage
+    }(_.close()).widen
 }
