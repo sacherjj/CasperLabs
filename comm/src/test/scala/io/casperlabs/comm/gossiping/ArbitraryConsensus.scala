@@ -28,8 +28,10 @@ trait ArbitraryConsensus {
       dagSize: Int = 0,
       // Max depth of DAG. 0 means no limit.
       dagDepth: Int = 0,
-      // Number of parents in each generation. 0 means choose random.
+      // Number of parents in each generation.
       dagWidth: Int = 1,
+      // How much parents should have each children.
+      dagBranchingFactor: Int = 5,
       // Maximum size of code in blocks. Slow to generate.
       maxSessionCodeBytes: Int = 500 * 1024,
       maxPaymentCodeBytes: Int = 100 * 1024,
@@ -285,7 +287,13 @@ trait ArbitraryConsensus {
       } else {
         for {
           parents <- Gen
-                      .listOfN(c.dagWidth, arbitrary[BlockSummary])
+                      .listOfN(
+                        math.min(
+                          c.dagWidth,
+                          math.pow(c.dagBranchingFactor.toDouble, depth.toDouble).toInt
+                        ),
+                        arbitrary[BlockSummary]
+                      )
                       .map(
                         _.map(
                           s =>

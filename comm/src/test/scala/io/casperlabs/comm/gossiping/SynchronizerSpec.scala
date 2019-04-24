@@ -91,15 +91,18 @@ class SynchronizerSpec
     }
     "streamed DAG is abnormally wide" should {
       "return SyncError.TooWide" in forAll(
-        genPartialDagFromTips,
-        genDoubleGreaterEqualOf1(consensusConfig.dagWidth - 1.0)
+        genPartialDagFromTips(
+          ConsensusConfig(dagDepth = 5, dagBranchingFactor = 4, dagWidth = Int.MaxValue)
+        ),
+        genDoubleGreaterEqualOf1(3)
       ) { (dag, n) =>
         log.reset()
-        TestFixture(dag)(maxBranchingFactor = n) { (synchronizer, _, _) =>
-          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
-            dagOrError.isLeft shouldBe true
-            dagOrError.left.get shouldBe an[SyncError.TooWide]
-          }
+        TestFixture(dag)(maxBranchingFactor = n, startingDepthToCheckBranchingFactor = 0) {
+          (synchronizer, _, _) =>
+            synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+              dagOrError.isLeft shouldBe true
+              dagOrError.left.get shouldBe an[SyncError.TooWide]
+            }
         }
       }
     }
@@ -176,6 +179,22 @@ class SynchronizerSpec
       }
     }
     "asked to sync DAG" should {
+      "ignore branching factor checks until specified depth-threshold is reached" in forAll(
+        genPartialDagFromTips(
+          ConsensusConfig(dagDepth = 3, dagBranchingFactor = 3, dagWidth = Int.MaxValue)
+        ),
+        genDoubleGreaterEqualOf1(2)
+      ) { (dag, n) =>
+        log.reset()
+        TestFixture(dag)(maxBranchingFactor = n, startingDepthToCheckBranchingFactor = Int.MaxValue) {
+          (synchronizer, _, _) =>
+            synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+              dagOrError.isRight shouldBe true
+              dagOrError.right.get should contain allElementsOf dag
+            }
+        }
+      }
+
       "include tips and justifications as known hashes" in forAll(
         genPartialDagFromTips,
         genHash,
@@ -317,6 +336,7 @@ object SynchronizerSpec {
         maxPossibleDepth: Int Refined Positive = Int.MaxValue,
         maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T] = Double.MaxValue,
         maxDepthAncestorsRequest: Int Refined Positive = Int.MaxValue,
+        startingDepthToCheckBranchingFactor: Int Refined NonNegative = Int.MaxValue,
         validate: BlockSummary => Task[Unit] = _ => Task.unit,
         notInDag: ByteString => Task[Boolean] = _ => Task.now(false),
         error: Option[RuntimeException] = None,
@@ -330,6 +350,7 @@ object SynchronizerSpec {
         connectToGossip = _ => MockGossipService(requestsCounter, error, knownHashes, dags: _*),
         backend = MockBackend(tips, justifications, notInDag, validate),
         maxPossibleDepth = maxPossibleDepth,
+        startingDepthToCheckBranchingFactor = startingDepthToCheckBranchingFactor,
         maxBranchingFactor = maxBranchingFactor,
         maxDepthAncestorsRequest = maxDepthAncestorsRequest
       )
