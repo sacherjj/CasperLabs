@@ -1,5 +1,6 @@
 #![feature(result_map_or_else)]
 #![feature(never_type)]
+extern crate blake2;
 extern crate common;
 extern crate core;
 extern crate failure;

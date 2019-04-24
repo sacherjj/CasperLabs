@@ -3,7 +3,9 @@ use execution::{self, Executor};
 use failure::Fail;
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use storage::global_state::ExecutionEffect;
 use storage::history::*;
 use storage::transform::Transform;
@@ -145,9 +147,16 @@ where
                 Ok(checkout_result) => match checkout_result {
                     None => Err(RootNotFound(prestate_hash)),
                     Some(mut tc) => {
-                        match executor
-                            .exec(module, args, address, timestamp, nonce, gas_limit, &mut tc)
-                        {
+                        let rc_tc = Rc::new(RefCell::new(tc));
+                        match executor.exec(
+                            module,
+                            args,
+                            address,
+                            timestamp,
+                            nonce,
+                            gas_limit,
+                            rc_tc.clone(),
+                        ) {
                             (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
                             (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),
                         }
