@@ -13,13 +13,16 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError.{
+  Cycle,
   MissingDependencies,
   TooDeep,
   TooWide,
   Unreachable,
   ValidationError
 }
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.Log
+
 import scala.util.control.NonFatal
 
 // TODO: Optimise to heap-safe
@@ -121,10 +124,11 @@ class SynchronizerImpl[F[_]: Sync: Log](
       )
       .foldWhileLeftEvalL(prevSyncState.asRight[SyncError].pure[F]) {
         case (Right(syncState), summary) =>
-          val newSyncState = syncState.append(summary)
           val effect = for {
-            _ <- notTooDeep(newSyncState)
-            _ <- notTooWide(newSyncState)
+            _            <- noCycles(syncState, summary)
+            newSyncState = syncState.append(summary)
+            _            <- notTooDeep(newSyncState)
+            _            <- notTooWide(newSyncState)
             _ <- reachable(
                   newSyncState,
                   summary,
@@ -148,6 +152,31 @@ class SynchronizerImpl[F[_]: Sync: Log](
         // Never happens
         case _ => Sync[F].raiseError(new RuntimeException)
       }
+
+  private def noCycles(syncState: SyncState, summary: BlockSummary): EitherT[F, SyncError, Unit] = {
+    def loop(current: Set[ByteString]): EitherT[F, SyncError, Unit] =
+      if (current.isEmpty) {
+        EitherT(().asRight[SyncError].pure[F])
+      } else {
+        if (current(summary.blockHash)) {
+          EitherT((Cycle(summary): SyncError).asLeft[Unit].pure[F])
+        } else {
+          val next = current.flatMap(dependenciesFromDag(syncState.dag, _))
+          loop(next)
+        }
+      }
+
+    val dependencies = summary.getHeader.parentHashes.toSet ++ summary.getHeader.justifications
+      .map(_.latestBlockHash)
+      .toSet
+
+    val existingDeps = syncState.summaries.keySet intersect dependencies
+    if (existingDeps.nonEmpty) {
+      loop(existingDeps)
+    } else {
+      EitherT(().asRight[SyncError].pure[F])
+    }
+  }
 
   private def notTooDeep(syncState: SyncState): EitherT[F, SyncError, Unit] =
     (for {

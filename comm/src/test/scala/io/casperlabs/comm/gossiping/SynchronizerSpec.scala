@@ -6,6 +6,7 @@ import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping
@@ -43,6 +44,37 @@ class SynchronizerSpec
     Gen.choose(1.0, max).map(i => refineV[GreaterEqual[W.`1.0`.T]](i).right.get)
 
   "Synchronizer" when {
+    "streamed DAG contains cycle" should {
+      "return SyncError.Cycle" in forAll(genPartialDagFromTips) { dag =>
+        log.reset()
+        val withCycleInParents =
+          dag.updated(
+            dag.size - 1,
+            dag.last.withHeader(dag.last.getHeader.withParentHashes(Seq(dag.head.blockHash)))
+          )
+        val withCycleInJustifications =
+          dag.updated(
+            dag.size - 1,
+            dag.last.withHeader(
+              dag.last.getHeader
+                .withJustifications(Seq(Justification(ByteString.EMPTY, dag.head.blockHash)))
+            )
+          )
+
+        def test(cycledDag: Vector[BlockSummary]): Unit = TestFixture(cycledDag)() {
+          (synchronizer, _, _) =>
+            synchronizer.syncDag(Node(), Set(dag.head.blockHash)) foreachL { dagOrError =>
+              dagOrError.isLeft shouldBe true
+              dagOrError.left.get shouldBe an[SyncError.Cycle]
+              dagOrError.left.get
+                .asInstanceOf[SyncError.Cycle]
+                .summary shouldBe cycledDag.last
+            }
+        }
+        test(withCycleInParents)
+        test(withCycleInJustifications)
+      }
+    }
     "streamed DAG is too deep" should {
       "return SyncError.TooDeep" in forAll(
         genPartialDagFromTips,

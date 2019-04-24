@@ -29,5 +29,6 @@ object Synchronizer {
     final case class TooDeep(hashes: Set[ByteString], limit: Int Refined Positive) extends SyncError
     final case class ValidationError(summary: BlockSummary, reason: Throwable)     extends SyncError
     final case class MissingDependencies(missing: Set[ByteString])                 extends SyncError
+    final case class Cycle(summary: BlockSummary)                                  extends SyncError
   }
 }
