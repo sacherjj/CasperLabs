@@ -7,27 +7,40 @@ import cats.temp.par._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 
 class StashingSynchronizer[F[_]: Concurrent: Par](
     underlying: Synchronizer[F],
-    stashedRequestsRef: Ref[F, Map[Node, (Deferred[F, Vector[BlockSummary]], Set[ByteString])]],
+    stashedRequestsRef: Ref[F, Map[
+      Node,
+      (Deferred[F, Either[Throwable, Either[SyncError, Vector[BlockSummary]]]], Set[ByteString])
+    ]],
     transitionedRef: Ref[F, Boolean]
 ) extends Synchronizer[F] {
 
-  override def syncDag(source: Node, targetBlockHashes: Set[ByteString]): F[Vector[BlockSummary]] =
+  override def syncDag(
+      source: Node,
+      targetBlockHashes: Set[ByteString]
+  ): F[Either[SyncError, Vector[BlockSummary]]] =
     for {
       transitioned <- transitionedRef.get
       dag <- if (transitioned) {
               underlying.syncDag(source, targetBlockHashes)
             } else {
               for {
-                maybeInitialDeferred <- Deferred[F, Vector[BlockSummary]]
+                maybeInitialDeferred <- Deferred[F, Either[Throwable, Either[SyncError, Vector[
+                                         BlockSummary
+                                       ]]]]
                 deferred <- stashedRequestsRef.modify { stashedRequests =>
                              val (d, hashes) =
                                stashedRequests.getOrElse(source, (maybeInitialDeferred, Set.empty))
                              (stashedRequests.updated(source, (d, hashes ++ targetBlockHashes)), d)
                            }
-                res <- deferred.get
+                either <- deferred.get
+                res <- either.fold(
+                        Sync[F].raiseError[Either[SyncError, Vector[BlockSummary]]],
+                        Sync[F].pure
+                      )
               } yield res
             }
     } yield dag
@@ -38,7 +51,7 @@ class StashingSynchronizer[F[_]: Concurrent: Par](
       stashedRequests <- stashedRequestsRef.get
       _ <- stashedRequests.toList.parTraverse {
             case (source, (deferred, hashes)) =>
-              underlying.syncDag(source, hashes) >>= deferred.complete
+              underlying.syncDag(source, hashes).attempt >>= deferred.complete
           }
     } yield ()
 }
@@ -53,7 +66,13 @@ object StashingSynchronizer {
       stashedRequestsRef <- Ref
                              .of[F, Map[
                                Node,
-                               (Deferred[F, Vector[BlockSummary]], Set[ByteString])
+                               (
+                                   Deferred[
+                                     F,
+                                     Either[Throwable, Either[SyncError, Vector[BlockSummary]]]
+                                   ],
+                                   Set[ByteString]
+                               )
                              ]](Map.empty)
       transitionedRef <- Ref.of[F, Boolean](false)
       s <- Sync[F].delay(
