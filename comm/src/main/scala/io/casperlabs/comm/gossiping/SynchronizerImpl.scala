@@ -125,7 +125,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
         case (Right(syncState), summary) =>
           val newSyncState = syncState.append(summary)
           val effect = for {
-            _ <- notTooDeep(newSyncState, targetBlockHashes.toSet)
+            _ <- notTooDeep(newSyncState)
             _ <- notTooWide(newSyncState)
             _ <- reachable(
                   newSyncState,
@@ -151,10 +151,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
         case _ => Sync[F].raiseError(new RuntimeException)
       }
 
-  private def notTooDeep(
-      syncState: SyncState,
-      targetBlockHashes: Set[ByteString]
-  ): EitherT[F, SyncError, Unit] = {
+  private def notTooDeep(syncState: SyncState): EitherT[F, SyncError, Unit] = {
     val ranks = syncState.summaries.values.map(_.getHeader.rank).toSet
     if (ranks.isEmpty) {
       EitherT(().asRight[SyncError].pure[F])
@@ -192,12 +189,10 @@ class SynchronizerImpl[F[_]: Sync: Log](
 
     val maybeBranchingFactor = summariesPerRankByAscendingRank
       .sliding(2)
-      .collect {
+      .collectFirst {
         case (_, prev) :: (_, next) :: Nil if next / prev > maxBranchingFactor.toDouble =>
           next / prev
       }
-      .toStream
-      .headOption
 
     maybeBranchingFactor.fold(EitherT(().asRight[SyncError].pure[F])) { branchingFactor =>
       EitherT((TooWide(branchingFactor, maxBranchingFactor): SyncError).asLeft[Unit].pure[F])
