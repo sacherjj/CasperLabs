@@ -20,8 +20,6 @@ import io.casperlabs.comm.gossiping.Synchronizer.SyncError.{
   ValidationError
 }
 import io.casperlabs.shared.Log
-
-import scala.collection.immutable.Queue
 import scala.util.control.NonFatal
 
 // TODO: Optimise to heap-safe
@@ -151,14 +149,12 @@ class SynchronizerImpl[F[_]: Sync: Log](
         case _ => Sync[F].raiseError(new RuntimeException)
       }
 
-  private def notTooDeep(syncState: SyncState): EitherT[F, SyncError, Unit] = {
-    val ranks = syncState.summaries.values.map(_.getHeader.rank).toSet
-    if (ranks.isEmpty) {
-      EitherT(().asRight[SyncError].pure[F])
-    } else {
-      val minRank = ranks.min
-      val maxRank = ranks.max
-      val depth   = maxRank - minRank
+  private def notTooDeep(syncState: SyncState): EitherT[F, SyncError, Unit] =
+    (for {
+      minRank <- syncState.minRank
+      maxRank <- syncState.maxRank
+      depth   = maxRank - minRank
+    } yield {
       if (depth > maxPossibleDepth) {
         val hashes = syncState.summaries.collect {
           case (hash, summary) if summary.getHeader.rank < maxRank - maxPossibleDepth => hash
@@ -167,8 +163,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
       } else {
         EitherT(().asRight[SyncError].pure[F])
       }
-    }
-  }
+    }).getOrElse(EitherT(().asRight[SyncError].pure[F]))
 
   private def dependenciesFromDag(
       dag: Map[ByteString, Set[ByteString]],
@@ -230,7 +225,9 @@ object SynchronizerImpl {
 
   final case class SyncState(
       summaries: Map[ByteString, BlockSummary],
-      dag: Map[ByteString, Set[ByteString]]
+      dag: Map[ByteString, Set[ByteString]],
+      minRank: Option[Int],
+      maxRank: Option[Int]
   ) {
     def append(summary: BlockSummary): SyncState =
       SyncState(
@@ -239,15 +236,16 @@ object SynchronizerImpl {
           case (acc, dependency) =>
             acc + (dependency -> (acc
               .getOrElse(dependency, Set.empty[ByteString]) + summary.blockHash))
-        }
+        },
+        minRank.fold(summary.getHeader.rank)(math.min(_, summary.getHeader.rank)).some,
+        maxRank.fold(summary.getHeader.rank)(math.max(_, summary.getHeader.rank)).some
       )
-
   }
 
   private def dependencies(summary: BlockSummary): List[ByteString] =
     (summary.getHeader.justifications.map(_.latestBlockHash) ++ summary.getHeader.parentHashes).toList
 
   object SyncState {
-    val empty = SyncState(Map.empty, Map.empty)
+    val empty = SyncState(Map.empty, Map.empty, None, None)
   }
 }
