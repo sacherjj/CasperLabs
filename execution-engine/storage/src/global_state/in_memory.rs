@@ -1,16 +1,22 @@
+use common::bytesrepr::{FromBytes, ToBytes};
 use common::key::Key;
 use common::value::Value;
+use global_state::StateReader;
 use history::trie::operations::create_hashed_empty_trie;
-use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
+use history::trie_store::in_memory::{
+    self, InMemoryEnvironment, InMemoryReadTransaction, InMemoryTrieStore,
+};
+use history::trie_store::operations::{read, ReadResult};
 use history::trie_store::{Transaction, TransactionSource, TrieStore};
 use shared::newtypes::Blake2bHash;
+use std::ops::Deref;
 use std::sync::Arc;
 
 /// Represents a "view" of global state at a particular root hash.
 pub struct InMemoryGlobalState {
-    environment: Arc<InMemoryEnvironment>,
-    store: Arc<InMemoryTrieStore>,
-    root_hash: Blake2bHash,
+    pub environment: Arc<InMemoryEnvironment>,
+    pub store: Arc<InMemoryTrieStore>,
+    pub root_hash: Blake2bHash,
 }
 
 impl InMemoryGlobalState {
@@ -41,5 +47,29 @@ impl InMemoryGlobalState {
             store,
             root_hash,
         }
+    }
+}
+
+impl<K, V> StateReader<K, V> for InMemoryGlobalState
+where
+    K: ToBytes + FromBytes + Eq + std::fmt::Debug,
+    V: ToBytes + FromBytes,
+{
+    type Error = in_memory::Error;
+
+    fn read(&self, key: &K) -> Result<Option<V>, Self::Error> {
+        let txn = self.environment.create_read_txn()?;
+        let ret = match read::<K, V, InMemoryReadTransaction, InMemoryTrieStore, Self::Error>(
+            &txn,
+            self.store.deref(),
+            &self.root_hash,
+            key,
+        )? {
+            ReadResult::Found(value) => Some(value),
+            ReadResult::NotFound => None,
+            ReadResult::RootNotFound => panic!("InMemoryGlobalState has invalid root"),
+        };
+        txn.commit()?;
+        Ok(ret)
     }
 }
