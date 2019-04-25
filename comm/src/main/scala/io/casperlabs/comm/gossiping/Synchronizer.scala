@@ -20,6 +20,11 @@ trait Synchronizer[F[_]] {
 }
 
 object Synchronizer {
+  //TODO: Reconsider according to the consensus
+  // We can't just stop importing at a certain depth threshold,
+  // because then an attacker could probably create blocks in such a way that
+  // half the honest nodes would import them and half of them would reject them?
+  // Logic may be changed depending on the consensus algorithm.
   sealed trait SyncError extends Product with Serializable
   object SyncError {
     final case class TooWide(
