@@ -13,7 +13,7 @@ Check our public repositories with prebuilt binaries:
 
 ## Installing from debian repository
 ```
-echo "deb https://dl.bintray.com/casperlabs/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
+echo "deb https://dl.bintray.com/casperlabs/debian /" | sudo tee -a /etc/apt/sources.list.d/casperlabs.list
 curl -o casperlabs-public.key.asc https://bintray.com/user/downloadSubjectPublicKey?username=casperlabs
 sudo apt-key add casperlabs-public.key.asc
 sudo apt update
