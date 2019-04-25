@@ -199,10 +199,17 @@ object ExecEngineUtil {
         // always choose the first parent
         initChosen       = Vector(0)
         initChosenEffect <- netEffect(groups(0))
+        // effects chosen apart from the first parent
+        initNonFirstEffect = Seq.empty[TransformEntry]
 
         chosen <- (1 until n).toList
-                   .foldM[F, (Vector[Int], TransformMap)](initChosen -> initChosenEffect) {
-                     case (unchanged @ (chosenSet, chosenEffect), candidate) =>
+                   .foldM[F, (Vector[Int], TransformMap, TransformMap)](
+                     (initChosen, initChosenEffect, initNonFirstEffect)
+                   ) {
+                     case (
+                         unchanged @ (chosenSet, chosenEffect, chosenNonFirstEffect),
+                         candidate
+                         ) =>
                        val candidateEffectF = netEffect(
                          groups(candidate)
                            .filterNot { // remove ancestors already included in the chosenSet
@@ -216,16 +223,21 @@ object ExecEngineUtil {
                        candidateEffectF.map(
                          candidateEffect =>
                            if (commutes(chosenEffect, candidateEffect))
-                             (chosenSet :+ candidate, sum(chosenEffect, candidateEffect))
+                             (
+                               chosenSet :+ candidate,
+                               sum(chosenEffect, candidateEffect),
+                               sum(chosenNonFirstEffect, candidateEffect)
+                             )
                            else
                              unchanged
                        )
                    }
-                   .map(_._1)
         // The effect we return is the one which would be applied onto the first parent's
         // post-state, so we do not include the first parent in the effect.
-        effect <- netEffect(chosen.tail.flatMap(groups.apply))
-        blocks <- chosen.traverse(i => ProtoUtil.unsafeGetBlock[F](candidateParents(i).blockHash))
-      } yield (effect, blocks)
+        (chosenParents, _, nonFirstEffect) = chosen
+        blocks <- chosenParents.traverse(
+                   i => ProtoUtil.unsafeGetBlock[F](candidateParents(i).blockHash)
+                 )
+      } yield (nonFirstEffect, blocks)
   }
 }
