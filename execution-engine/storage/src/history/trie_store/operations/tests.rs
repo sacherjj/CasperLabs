@@ -4,8 +4,8 @@ use history::trie_store::in_memory::{
     self, InMemoryEnvironment, InMemoryReadWriteTransaction, InMemoryTrieStore,
 };
 use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use history::trie_store::operations::{write, WriteResult};
-use history::trie_store::{Transaction, TransactionSource, TrieStore};
+use history::trie_store::operations::{read, write, ReadResult, WriteResult};
+use history::trie_store::{Readable, Transaction, TransactionSource, TrieStore};
 use lmdb::DatabaseFlags;
 use shared::newtypes::Blake2bHash;
 use tempfile::{tempdir, TempDir};
@@ -457,6 +457,61 @@ impl InMemoryTestContext {
     }
 }
 
+fn check_leaves_exist<T, S, E>(
+    txn: &T,
+    store: &S,
+    root: &Blake2bHash,
+    leaves: &[TestTrie],
+) -> Result<Vec<bool>, E>
+where
+    T: Readable<Handle = S::Handle>,
+    S: TrieStore<TestKey, TestValue>,
+    S::Error: From<T::Error>,
+    E: From<S::Error> + From<common::bytesrepr::Error>,
+{
+    let mut ret = Vec::new();
+
+    for leaf in leaves {
+        if let Trie::Leaf { key, value } = leaf {
+            let maybe_value: ReadResult<TestValue> =
+                read::<TestKey, TestValue, T, S, E>(&txn, store, root, key)?;
+            ret.push(ReadResult::Found(*value) == maybe_value)
+        } else {
+            panic!("leaves should only contain leaves")
+        }
+    }
+    Ok(ret)
+}
+
+fn check_leaves<'a, R, S, E>(
+    environment: &'a R,
+    store: &S,
+    root: &Blake2bHash,
+    present: &[TestTrie],
+    absent: &[TestTrie],
+) -> Result<(), E>
+where
+    R: TransactionSource<'a, Handle = S::Handle>,
+    S: TrieStore<TestKey, TestValue>,
+    S::Error: From<R::Error>,
+    E: From<R::Error> + From<S::Error> + From<common::bytesrepr::Error>,
+{
+    let txn: R::ReadTransaction = environment.create_read_txn()?;
+
+    assert!(
+        check_leaves_exist::<R::ReadTransaction, S, E>(&txn, store, root, present)?
+            .iter()
+            .all(|b| *b)
+    );
+    assert!(
+        check_leaves_exist::<R::ReadTransaction, S, E>(&txn, store, root, absent)?
+            .iter()
+            .all(|b| !*b)
+    );
+    txn.commit()?;
+    Ok(())
+}
+
 mod read {
     //! This module contains tests for [`StateReader::read`].
     //!
@@ -470,55 +525,7 @@ mod read {
 
     use super::*;
     use error;
-    use history::trie_store::operations::{read, ReadResult};
-    use history::trie_store::{in_memory, TransactionSource, TrieStore};
-    use shared::newtypes::Blake2bHash;
-
-    fn check_leaves<'a, R, S, E>(
-        environment: &'a R,
-        store: &S,
-        root: &Blake2bHash,
-        num_leaves: usize,
-    ) -> Result<(), E>
-    where
-        R: TransactionSource<'a, Handle = S::Handle>,
-        S: TrieStore<TestKey, TestValue>,
-        S::Error: From<R::Error>,
-        E: From<R::Error> + From<S::Error> + From<common::bytesrepr::Error>,
-    {
-        let txn: R::ReadTransaction = environment.create_read_txn()?;
-        let test_leaves = TEST_LEAVES;
-        let (used, unused) = test_leaves.split_at(num_leaves);
-
-        for leaf in used.iter() {
-            match leaf {
-                Trie::Leaf { key, value } => {
-                    let maybe_value: ReadResult<TestValue> =
-                        read::<TestKey, TestValue, R::ReadTransaction, S, E>(
-                            &txn, store, root, key,
-                        )?;
-                    assert_eq!(ReadResult::Found(*value), maybe_value);
-                }
-                _ => panic!("TEST_LEAVES should only contain leaves"),
-            }
-        }
-
-        for leaf in unused.iter() {
-            match leaf {
-                Trie::Leaf { key, .. } => {
-                    let maybe_value: ReadResult<TestValue> =
-                        read::<TestKey, TestValue, R::ReadTransaction, S, E>(
-                            &txn, store, root, key,
-                        )?;
-                    assert_eq!(ReadResult::NotFound, maybe_value);
-                }
-                _ => panic!("TEST_LEAVES should only contain leaves"),
-            }
-        }
-
-        txn.commit()?;
-        Ok(())
-    }
+    use history::trie_store::in_memory;
 
     mod partial_tries {
         //! Here we construct 6 separate "partial" tries, increasing in size
@@ -533,11 +540,14 @@ mod read {
             for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
                 let (root_hash, tries) = generator().unwrap();
                 let context = LmdbTestContext::new(root_hash, &tries).unwrap();
+                let test_leaves = TEST_LEAVES;
+                let (used, unused) = test_leaves.split_at(num_leaves);
                 check_leaves::<LmdbEnvironment, LmdbTrieStore, error::Error>(
                     &context.environment,
                     &context.store,
                     &context.states[0],
-                    num_leaves,
+                    used,
+                    unused,
                 )
                 .unwrap();
             }
@@ -548,11 +558,14 @@ mod read {
             for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
                 let (root_hash, tries) = generator().unwrap();
                 let context = InMemoryTestContext::new(root_hash, &tries).unwrap();
+                let test_leaves = TEST_LEAVES;
+                let (used, unused) = test_leaves.split_at(num_leaves);
                 check_leaves::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
                     &context.environment,
                     &context.store,
                     &context.states[0],
-                    num_leaves,
+                    used,
+                    unused,
                 )
                 .unwrap();
             }
@@ -578,11 +591,14 @@ mod read {
                 context.push(root_hash, &tries).unwrap();
 
                 for (num_leaves, state) in context.states[0..state_index].iter().enumerate() {
+                    let test_leaves = TEST_LEAVES;
+                    let (used, unused) = test_leaves.split_at(num_leaves);
                     check_leaves::<LmdbEnvironment, LmdbTrieStore, error::Error>(
                         &context.environment,
                         &context.store,
                         state,
-                        num_leaves,
+                        used,
+                        unused,
                     )
                     .unwrap();
                 }
@@ -598,11 +614,14 @@ mod read {
                 context.push(root_hash, &tries).unwrap();
 
                 for (num_leaves, state) in context.states[0..state_index].iter().enumerate() {
+                    let test_leaves = TEST_LEAVES;
+                    let (used, unused) = test_leaves.split_at(num_leaves);
                     check_leaves::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
                         &context.environment,
                         &context.store,
                         state,
-                        num_leaves,
+                        used,
+                        unused,
                     )
                     .unwrap();
                 }
