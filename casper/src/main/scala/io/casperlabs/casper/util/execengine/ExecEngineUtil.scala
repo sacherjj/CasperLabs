@@ -187,13 +187,13 @@ object ExecEngineUtil {
     def netEffect(blocks: Vector[BlockMetadata]): F[TransformMap] =
       blocks
         .traverse(block => BlockStore[F].getTransforms(block.blockHash))
-        .map(_.flatten.reduce(sum(_, _)))
+        .map(_.flatten.foldLeft[TransformMap](Nil)(sum(_, _)))
 
     if (n <= 1) {
       // no parents or single parent, nothing to merge
-      for {
-        blocks <- candidateParents.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
-      } yield (Seq.empty[TransformEntry] -> blocks)
+      candidateParents.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash)).map { blocks =>
+        Seq.empty[TransformEntry] -> blocks
+      }
     } else
       for {
         ordering          <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
