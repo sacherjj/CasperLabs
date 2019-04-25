@@ -1,22 +1,26 @@
 package io.casperlabs.comm.gossiping
 
 import cats._
-import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
+import cats.effect.implicits._
+import cats.implicits._
 import cats.temp.par._
 import com.google.protobuf.ByteString
-import io.casperlabs.crypto.codec.Base16
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
-import io.casperlabs.shared.{Compression, Log, LogSource}
-import io.casperlabs.comm.ServiceError
-import ServiceError.NotFound
-import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.shared.{Compression, Log}
 import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
+import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
@@ -36,6 +40,16 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
     // reply about those that we are going to download and relay them,
     // then asynchronously sync the DAG, schedule the downloads,
     // and finally notify the consensus engine.
+    newBlocks(request, (node, hashes) => sync(node, hashes).start)
+
+  /* Same as 'newBlocks' but with synchronous semantics, needed for bootstrapping */
+  protected def newBlocksSynchronous(request: NewBlocksRequest): F[NewBlocksResponse] =
+    newBlocks(request, (node, hashes) => sync(node, hashes))
+
+  private def newBlocks(
+      request: NewBlocksRequest,
+      sync: (Node, Set[ByteString]) => F[_]
+  ): F[NewBlocksResponse] =
     request.blockHashes.distinct.toList
       .filterA { blockHash =>
         backend.hasBlock(blockHash).map(!_)
@@ -44,9 +58,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
         if (newBlockHashes.isEmpty) {
           Applicative[F].pure(NewBlocksResponse(isNew = false))
         } else {
-          Concurrent[F]
-            .start(sync(request.getSender, newBlockHashes.toSet))
-            .as(NewBlocksResponse(isNew = true))
+          sync(request.getSender, newBlockHashes.toSet).as(NewBlocksResponse(isNew = true))
         }
       }
 
@@ -233,6 +245,73 @@ object GossipServiceServer {
   def b16(summary: BlockSummary): String = Base16.encode(summary.blockHash.toByteArray)
 
   def b16(hash: ByteString): String = Base16.encode(hash.toByteArray)
+
+  /**
+    * Synchronises the node on startup with the last tips
+    * @return Handle which will be resolved when node is fully synced
+    */
+  def initialSync[F[_]: Concurrent: Log: Timer: Par](
+      nd: NodeDiscovery[F],
+      selfGossipService: GossipServiceServer[F],
+      connect: Node => GossipService[F],
+      parallelism: Long Refined Positive,
+      roundPeriod: FiniteDuration
+  ): F[F[Unit]] = {
+    /* True if tip were new and we need to retry loop */
+    def sync(hash: ByteString, nodes: List[Node]): F[Boolean] =
+      nodes.headOption match {
+        case Some(n) =>
+          selfGossipService
+            .newBlocksSynchronous(
+              NewBlocksRequest(
+                sender = n.some,
+                blockHashes = List(hash)
+              )
+            )
+            .map(_.isNew)
+            .handleErrorWith { e =>
+              Log[F].warn(
+                s"Failed to sync tip ${Base16.encode(hash.toByteArray)} from source: ${n.show}, ${e.getMessage}, trying next source"
+              ) >> sync(hash, nodes.tail)
+            }
+        case None => true.pure[F]
+      }
+
+    val retrieveTips = nd.alivePeersAscendingDistance.flatMap { peers =>
+      peers
+        .traverse { node =>
+          val service = connect(node)
+          service.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL.map {
+            tips =>
+              tips.distinct.map(t => (t.blockHash, Set(node))).toMap
+          }
+        }
+        .map { tipsToNodes =>
+          tipsToNodes.foldLeft(Monoid[Map[ByteString, Set[Node]]].empty) {
+            case (a, b) => a |+| b
+          }
+        }
+    }
+
+    def loop(semaphore: Semaphore[F]): F[Unit] = retrieveTips >>= { tipsToNodes =>
+      tipsToNodes.toList
+        .parTraverse {
+          case (tip, nodes) => semaphore.withPermit(sync(tip, nodes.toList))
+        }
+        .flatMap { areNew =>
+          if (areNew.exists(identity)) {
+            Timer[F].sleep(roundPeriod) >> loop(semaphore)
+          } else {
+            Log[F].info("Node is synced with latest state, can propose blocks now")
+          }
+        }
+    }
+
+    for {
+      semaphore <- Semaphore[F](parallelism)
+      fiber     <- loop(semaphore).start
+    } yield fiber.join
+  }
 
   def chunkIt(
       data: Array[Byte],
