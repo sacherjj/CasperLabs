@@ -22,8 +22,11 @@ trait Synchronizer[F[_]] {
 object Synchronizer {
   sealed trait SyncError extends Product with Serializable
   object SyncError {
-    final case class TooWide(branchingFactor: Double, limit: Double Refined GreaterEqual[W.`1.0`.T])
-        extends SyncError
+    final case class TooWide(
+        maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
+        maxTotal: Int,
+        total: Int
+    ) extends SyncError
     final case class Unreachable(summary: BlockSummary, requestedDepth: Int Refined Positive)
         extends SyncError
     final case class TooDeep(hashes: Set[ByteString], limit: Int Refined Positive) extends SyncError

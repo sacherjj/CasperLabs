@@ -206,33 +206,19 @@ class SynchronizerImpl[F[_]: Sync: Log](
     val hashesToCheckWidth = syncState.distanceFromOriginalTarget.filter {
       case (_, distance) => distance >= startingDepthToCheckBranchingFactor
     }
-
     if (hashesToCheckWidth.isEmpty) {
       EitherT(().asRight[SyncError].pure[F])
     } else {
-      val maybeExceededBranchingFactor =
-        hashesToCheckWidth
-          .foldLeft(Map.empty[Int, Int].withDefault(_ => 0)) {
-            case (acc, (_, distance)) => acc.updated(distance, acc(distance) + 1)
-          }
-          .toList
-          .sortBy {
-            case (distance, _) => distance
-          }
-          .map {
-            case (_, numberOfElements) => numberOfElements
-          }
-          .sliding(2)
-          .collectFirst {
-            case List(prev, next) if next.toDouble / prev.toDouble > maxBranchingFactor =>
-              next.toDouble / prev.toDouble
-          }
+      val maybeDepth = syncState.distanceFromOriginalTarget.values.toList.maximumOption
+      maybeDepth.fold(EitherT(().asRight[SyncError].pure[F])) { depth =>
+        val total    = syncState.summaries.size
+        val maxTotal = math.pow(maxBranchingFactor, depth.toDouble).ceil.toInt
 
-      maybeExceededBranchingFactor.fold(EitherT(().asRight[SyncError].pure[F])) {
-        exceededBranchingFactor =>
-          EitherT(
-            (TooWide(exceededBranchingFactor, maxBranchingFactor): SyncError).asLeft[Unit].pure[F]
-          )
+        if (total > maxTotal) {
+          EitherT((TooWide(maxBranchingFactor, maxTotal, total): SyncError).asLeft[Unit].pure[F])
+        } else {
+          EitherT(().asRight[SyncError].pure[F])
+        }
       }
     }
   }

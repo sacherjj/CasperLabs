@@ -62,9 +62,9 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
             s"$prefix Returned DAG is too deep, limit: $limit, exceeded hashes: ${summaries
               .map(b16)}"
           )
-        case SyncError.TooWide(branchingFactor, limit) =>
+        case SyncError.TooWide(maxBranchingFactor, maxTotal, total) =>
           Log[F].warn(
-            s"$prefix Returned dag seems to be exponentially wide, branching factor: $branchingFactor, limit: $limit"
+            s"$prefix Returned dag seems to be exponentially wide, max branching factor: $maxBranchingFactor, max total summaries: $maxTotal, total returned: $total"
           )
         case SyncError.Unreachable(summary, requestedDepth) =>
           Log[F].warn(
