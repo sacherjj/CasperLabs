@@ -159,7 +159,7 @@ object ExecEngineUtil {
   def sum(x: TransformMap, y: TransformMap): TransformMap = x ++ y // FIXME
 
   /**
-    * Checks is effects `x` and `y` commute with each other.
+    * Checks if effects `x` and `y` commute with each other.
     */
   def commutes(x: TransformMap, y: TransformMap): Boolean = true // FIXME
 
@@ -217,9 +217,9 @@ object ExecEngineUtil {
 
         chosen <- (1 until n).toList
                    .foldM[F, (Vector[Int], TransformMap)](initChosen -> initChosenEffect) {
-                     case (unchanged @ (chosenSet, chosenEffect), candiate) =>
+                     case (unchanged @ (chosenSet, chosenEffect), candidate) =>
                        val candidateEffectF = netEffect(
-                         groups(candiate)
+                         groups(candidate)
                            .filterNot { // remove ancestors already included in the chosenSet
                              block =>
                                val ancestry = uncommonAncestors(block)
@@ -231,7 +231,7 @@ object ExecEngineUtil {
                        candidateEffectF.map(
                          candidateEffect =>
                            if (commutes(chosenEffect, candidateEffect))
-                             (chosenSet :+ candiate, sum(chosenEffect, candidateEffect))
+                             (chosenSet :+ candidate, sum(chosenEffect, candidateEffect))
                            else
                              unchanged
                        )

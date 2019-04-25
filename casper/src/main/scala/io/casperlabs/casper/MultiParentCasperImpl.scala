@@ -387,7 +387,7 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       postValidationStatus <- Validate
                                .blockSummary[F](b, genesis, dag, shardId, lastFinalizedBlockHash)
       s <- Cell[F, CasperState].read
-      // Confirm the parents are correct (including checking they commute) and catpure
+      // Confirm the parents are correct (including checking they commute) and capture
       // the effect needed to compute the correct pre-state as well.
       parentsEffect <- Validate.parents[F](b, genesis, lastFinalizedBlockHash, dag)
       processedHash <- ExecEngineUtil
