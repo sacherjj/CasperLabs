@@ -203,14 +203,10 @@ class SynchronizerImpl[F[_]: Sync: Log](
     }.keySet
 
   private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
-    val hashesToCheckWidth = syncState.distanceFromOriginalTarget.filter {
-      case (_, distance) => distance >= startingDepthToCheckBranchingFactor
-    }
-    if (hashesToCheckWidth.isEmpty) {
-      EitherT(().asRight[SyncError].pure[F])
-    } else {
-      val maybeDepth = syncState.distanceFromOriginalTarget.values.toList.maximumOption
-      maybeDepth.fold(EitherT(().asRight[SyncError].pure[F])) { depth =>
+    val maybeDepth = syncState.distanceFromOriginalTarget.values.toList.maximumOption
+    maybeDepth
+      .filter(_ >= startingDepthToCheckBranchingFactor)
+      .fold(EitherT(().asRight[SyncError].pure[F])) { depth =>
         val total    = syncState.summaries.size
         val maxTotal = math.pow(maxBranchingFactor, depth.toDouble).ceil.toInt
 
@@ -220,7 +216,6 @@ class SynchronizerImpl[F[_]: Sync: Log](
           EitherT(().asRight[SyncError].pure[F])
         }
       }
-    }
   }
 
   private def reachable(
