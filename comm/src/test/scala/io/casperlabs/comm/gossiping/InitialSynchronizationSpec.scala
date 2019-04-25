@@ -4,7 +4,7 @@ import cats.effect.concurrent.Semaphore
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Approval, BlockSummary}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
-import io.casperlabs.comm.gossiping.InitialSyncSpec.TestFixture
+import io.casperlabs.comm.gossiping.InitialSynchronizationSpec.TestFixture
 import io.casperlabs.shared.Log.NOPLog
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -17,7 +17,7 @@ import org.scalatest.{BeforeAndAfterEach, FunSuiteLike, Matchers}
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
-class InitialSyncSpec
+class InitialSynchronizationSpec
     extends FunSuiteLike
     with Matchers
     with BeforeAndAfterEach
@@ -83,7 +83,7 @@ class InitialSyncSpec
   }
 }
 
-object InitialSyncSpec extends ArbitraryConsensus {
+object InitialSynchronizationSpec extends ArbitraryConsensus {
   implicit val logNoOp = new NOPLog[Task]
 
   class MockNodeDiscovery(nodes: List[Node]) extends NodeDiscovery[Task] {
