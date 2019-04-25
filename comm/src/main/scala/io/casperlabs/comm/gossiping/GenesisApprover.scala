@@ -1,20 +1,20 @@
 package io.casperlabs.comm.gossiping
 
-import cats._
-import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
+import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate, Signature}
-import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
-import io.casperlabs.comm.discovery.NodeUtils._
+import io.casperlabs.casper.consensus._
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError.{Internal, InvalidArgument, NotFound, Unavailable}
+import io.casperlabs.comm.discovery.NodeUtils._
+import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
+import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.shared.Log
-import scala.util.control.NonFatal
-import scala.util.Random
+
 import scala.concurrent.duration.FiniteDuration
+import scala.util.Random
+import scala.util.control.NonFatal
 
 /** Accumulate approvals for the Genesis block. When enough of them is
   * present to pass a threshold which is the preorgative of this node,
@@ -138,8 +138,6 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
   import GenesisApproverImpl.Status
 
   val unavailable = Unavailable("The Genesis candidate is not yet available.")
-
-  private def hex(hash: ByteString) = Base16.encode(hash.toByteArray)
 
   override def awaitApproval: F[ByteString] =
     deferredApproval.get
