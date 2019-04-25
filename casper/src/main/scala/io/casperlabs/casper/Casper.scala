@@ -59,17 +59,17 @@ sealed abstract class MultiParentCasperInstances {
   def hashSetCasper[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
+      genesisPreState: StateHash,
+      genesisEffects: ExecEngineUtil.TransformMap,
       shardId: String
   ): F[MultiParentCasper[F]] =
     for {
       // Initialize DAG storage with genesis block in case it is empty
-      _                       <- BlockDagStorage[F].insert(genesis)
-      dag                     <- BlockDagStorage[F].getRepresentation
-      processedHash           <- ExecEngineUtil.effectsForBlock[F](genesis, Nil, dag)
-      (preStateHash, effects) = processedHash
+      _   <- BlockDagStorage[F].insert(genesis)
+      dag <- BlockDagStorage[F].getRepresentation
       _ <- {
         implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
-        Validate.transactions[F](genesis, dag, preStateHash, effects)
+        Validate.transactions[F](genesis, dag, genesisPreState, genesisEffects)
       }
       blockProcessingLock <- Semaphore[F](1)
       casperState <- Cell.mvarCell[F, CasperState](

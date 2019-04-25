@@ -293,6 +293,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      casper <- MultiParentCasper.hashSetCasper[F](
                                 validatorId,
                                 blockMessage,
+                                ProtoUtil.preStateHash(blockMessage),
+                                transforms,
                                 shardId
                               )
                      _   <- MultiParentCasperRef[F].set(casper)
@@ -594,7 +596,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                                combinedEffect,
                                dag
                              )
-                   (_, transforms) = effects
+                   (prestate, transforms) = effects
                    _ <- BlockStore[F].put(
                          blockMessage.blockHash,
                          blockMessage,
@@ -605,6 +607,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                               .hashSetCasper[F](
                                 validatorId,
                                 blockMessage,
+                                prestate,
+                                transforms,
                                 shardId
                               )
                  } yield Option(casper)
