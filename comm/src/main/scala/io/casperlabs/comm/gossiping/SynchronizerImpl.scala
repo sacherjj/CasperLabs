@@ -241,70 +241,58 @@ class SynchronizerImpl[F[_]: Sync: Log](
       syncState: SyncState,
       toCheck: BlockSummary,
       targetBlockHashes: Set[ByteString]
-  ): EitherT[F, SyncError, Int] =
-//    if (syncState.originalTargets(toCheck.blockHash)) {
-//      EitherT(0.asRight[SyncError].pure[F])
-//    } else {
-//      val maybeChildren = syncState.dag.get(toCheck.blockHash)
-//      maybeChildren.fold(
-//        EitherT((Unreachable(toCheck, maxDepthAncestorsRequest): SyncError).asLeft[Int].pure[F])
-//      ) { children =>
-//        val targetDistance = targetBlockHashes.collect {
-//          case hash if syncState.distanceFromOriginalTarget.contains(hash) =>
-//            syncState.distanceFromOriginalTarget(hash)
-//        }.max
-//
-//        val distance = children.map(syncState.distanceFromOriginalTarget).min + 1
-//        if (distance)
-//          EitherT(
-//            (children.map(syncState.distanceFromOriginalTarget).min + 1).asRight[SyncError].pure[F])
-//      }
-//    }
-    {
-      /* Returns child-to-parents map */
-      def getParents(hashes: List[ByteString]): Map[ByteString, Set[ByteString]] =
-        hashes
-          .map(hash => hash -> dependenciesFromDag(syncState.dag, hash))
-          .foldLeft(Monoid.empty[Map[ByteString, Set[ByteString]]]) { case (a, b) => a |+| Map(b) }
+  ): EitherT[F, SyncError, Int] = {
+    /* Returns child-to-parents map */
+    def getParents(hashes: List[ByteString]): Map[ByteString, Set[ByteString]] =
+      hashes
+        .map(hash => hash -> dependenciesFromDag(syncState.dag, hash))
+        .foldLeft(Monoid.empty[Map[ByteString, Set[ByteString]]]) { case (a, b) => a |+| Map(b) }
 
-      @annotation.tailrec
-      def loop(
-          childrenToParents: Map[ByteString, Set[ByteString]],
-          counter: Int
-      ): EitherT[F, SyncError, Int] =
-        if (counter <= maxDepthAncestorsRequest && childrenToParents.nonEmpty) {
-          val maybeChild = childrenToParents.collectFirst {
-            case (child, parents) if parents(toCheck.blockHash) => child
-          }
+    @annotation.tailrec
+    def loop(
+        childrenToParents: Map[ByteString, Set[ByteString]],
+        counter: Int
+    ): EitherT[F, SyncError, Int] =
+      if (counter <= maxDepthAncestorsRequest && childrenToParents.nonEmpty) {
+        val maybeChildDistance = {
+          val childrenDistances = childrenToParents.collect {
+            case (child, parents) if parents(toCheck.blockHash) =>
+              syncState.distanceFromOriginalTarget(child)
+          }.toList
 
-          if (maybeChild.nonEmpty) {
-            EitherT(
-              (counter + syncState
-                .distanceFromOriginalTarget(maybeChild.get)).asRight[SyncError].pure[F]
-            )
+          if (childrenDistances.nonEmpty) {
+            childrenDistances.min.some
           } else {
-            loop(getParents(childrenToParents.values.toSet.flatten.toList), counter + 1)
+            None
           }
-        } else {
-          EitherT((Unreachable(toCheck, maxDepthAncestorsRequest): SyncError).asLeft[Int].pure[F])
         }
 
-      if (syncState.originalTargets(toCheck.blockHash)) {
-        EitherT(0.asRight[SyncError].pure[F])
+        // Not using .fold because it won't be tail-recursive
+        if (maybeChildDistance.nonEmpty) {
+          EitherT((counter + maybeChildDistance.get).asRight[SyncError].pure[F])
+        } else {
+          loop(getParents(childrenToParents.values.toSet.flatten.toList), counter + 1)
+        }
       } else {
-        loop(
-          getParents(targetBlockHashes.toList) ++ syncState.dag
-            .collect {
-              case (parent, children) if targetBlockHashes(parent) =>
-                children.map(child => child -> Set(parent)).toMap
-            }
-            .foldLeft(Monoid.empty[Map[ByteString, Set[ByteString]]]) {
-              case (a, b) => a |+| b
-            },
-          1
-        )
+        EitherT((Unreachable(toCheck, maxDepthAncestorsRequest): SyncError).asLeft[Int].pure[F])
       }
+
+    if (syncState.originalTargets(toCheck.blockHash)) {
+      EitherT(0.asRight[SyncError].pure[F])
+    } else {
+      loop(
+        getParents(targetBlockHashes.toList) ++ syncState.dag
+          .collect {
+            case (parent, children) if targetBlockHashes(parent) =>
+              children.map(child => child -> Set(parent)).toMap
+          }
+          .foldLeft(Monoid.empty[Map[ByteString, Set[ByteString]]]) {
+            case (a, b) => a |+| b
+          },
+        1
+      )
     }
+  }
 }
 
 object SynchronizerImpl {
