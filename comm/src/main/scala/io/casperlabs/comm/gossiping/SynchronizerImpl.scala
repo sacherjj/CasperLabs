@@ -3,6 +3,7 @@ package io.casperlabs.comm.gossiping
 import cats.data._
 import cats.effect._
 import cats.implicits._
+import cats.kernel.Monoid
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
@@ -20,7 +21,6 @@ import io.casperlabs.comm.gossiping.Synchronizer.SyncError.{
   Unreachable,
   ValidationError
 }
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.Log
 
 import scala.util.control.NonFatal
@@ -30,6 +30,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
     connectToGossip: Node => F[GossipService[F]],
     backend: SynchronizerImpl.Backend[F],
     maxPossibleDepth: Int Refined Positive,
+    startingDepthToCheckBranchingFactor: Int Refined NonNegative,
     maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
     maxDepthAncestorsRequest: Int Refined Positive
 ) extends Synchronizer[F] {
@@ -49,7 +50,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
                            service,
                            targetBlockHashes.toList,
                            tips ::: justifications,
-                           SyncState.empty
+                           SyncState.initial(targetBlockHashes)
                          )
       res <- syncStateOrError.fold(
               _.asLeft[Vector[BlockSummary]].pure[F], { syncState =>
@@ -125,15 +126,16 @@ class SynchronizerImpl[F[_]: Sync: Log](
       .foldWhileLeftEvalL(prevSyncState.asRight[SyncError].pure[F]) {
         case (Right(syncState), summary) =>
           val effect = for {
-            _            <- noCycles(syncState, summary)
-            newSyncState = syncState.append(summary)
+            _ <- noCycles(syncState, summary)
+            distance <- reachable(
+                         syncState,
+                         summary,
+                         targetBlockHashes.toSet
+                       )
+            newSyncState = syncState.append(summary, distance)
             _            <- notTooDeep(newSyncState)
             _            <- notTooWide(newSyncState)
-            _ <- reachable(
-                  newSyncState,
-                  summary,
-                  targetBlockHashes.toSet
-                )
+
             _ <- EitherT(
                   backend
                     .validate(summary)
@@ -179,20 +181,18 @@ class SynchronizerImpl[F[_]: Sync: Log](
   }
 
   private def notTooDeep(syncState: SyncState): EitherT[F, SyncError, Unit] =
-    (for {
-      minRank <- syncState.minRank
-      maxRank <- syncState.maxRank
-      depth   = maxRank - minRank
-    } yield {
-      if (depth > maxPossibleDepth) {
-        val hashes = syncState.summaries.collect {
-          case (hash, summary) if summary.getHeader.rank < maxRank - maxPossibleDepth => hash
-        }.toSet
-        EitherT((TooDeep(hashes, maxPossibleDepth): SyncError).asLeft[Unit].pure[F])
-      } else {
+    if (syncState.distanceFromOriginalTarget.isEmpty) {
+      EitherT(().asRight[SyncError].pure[F])
+    } else {
+      val exceeded = syncState.distanceFromOriginalTarget.collect {
+        case (hash, distance) if distance > maxPossibleDepth => hash
+      }.toSet
+      if (exceeded.isEmpty) {
         EitherT(().asRight[SyncError].pure[F])
+      } else {
+        EitherT((TooDeep(exceeded, maxPossibleDepth): SyncError).asLeft[Unit].pure[F])
       }
-    }).getOrElse(EitherT(().asRight[SyncError].pure[F]))
+    }
 
   private def dependenciesFromDag(
       dag: Map[ByteString, Set[ByteString]],
@@ -203,44 +203,76 @@ class SynchronizerImpl[F[_]: Sync: Log](
     }.keySet
 
   private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
-    val summariesPerRankByAscendingRank =
-      syncState.summaries.values
-        .map(_.getHeader.rank)
-        .groupBy(identity)
-        .mapValues(_.size.toDouble)
-        .toList
-        .sortBy(_._1)
+    val maybeDepth = syncState.distanceFromOriginalTarget.values.toList.maximumOption
+    maybeDepth
+      .filter(_ >= startingDepthToCheckBranchingFactor)
+      .fold(EitherT(().asRight[SyncError].pure[F])) { depth =>
+        val total    = syncState.summaries.size
+        val maxTotal = math.pow(maxBranchingFactor, depth.toDouble).ceil.toInt
 
-    val maybeBranchingFactor = summariesPerRankByAscendingRank
-      .sliding(2)
-      .collectFirst {
-        case (_, prev) :: (_, next) :: Nil if next / prev > maxBranchingFactor.toDouble =>
-          next / prev
+        if (total > maxTotal) {
+          EitherT((TooWide(maxBranchingFactor, maxTotal, total): SyncError).asLeft[Unit].pure[F])
+        } else {
+          EitherT(().asRight[SyncError].pure[F])
+        }
       }
-
-    maybeBranchingFactor.fold(EitherT(().asRight[SyncError].pure[F])) { branchingFactor =>
-      EitherT((TooWide(branchingFactor, maxBranchingFactor): SyncError).asLeft[Unit].pure[F])
-    }
   }
 
   private def reachable(
       syncState: SyncState,
       toCheck: BlockSummary,
       targetBlockHashes: Set[ByteString]
-  ): EitherT[F, SyncError, Unit] = {
+  ): EitherT[F, SyncError, Int] = {
+    /* Returns child-to-parents map */
+    def getParents(hashes: List[ByteString]): Map[ByteString, Set[ByteString]] =
+      hashes
+        .map(hash => hash -> dependenciesFromDag(syncState.dag, hash))
+        .foldLeft(Monoid.empty[Map[ByteString, Set[ByteString]]]) { case (a, b) => a |+| Map(b) }
+
     @annotation.tailrec
-    def loop(children: Set[ByteString], counter: Int): EitherT[F, SyncError, Unit] =
-      if (counter <= maxDepthAncestorsRequest && children.nonEmpty) {
-        if (children(toCheck.blockHash)) {
-          EitherT(().asRight[SyncError].pure[F])
+    def loop(
+        childrenToParents: Map[ByteString, Set[ByteString]],
+        counter: Int
+    ): EitherT[F, SyncError, Int] =
+      if (counter <= maxDepthAncestorsRequest && childrenToParents.nonEmpty) {
+        val maybeChildDistance = {
+          val childrenDistances = childrenToParents.collect {
+            case (child, parents) if parents(toCheck.blockHash) =>
+              syncState.distanceFromOriginalTarget(child)
+          }.toList
+
+          if (childrenDistances.nonEmpty) {
+            childrenDistances.min.some
+          } else {
+            None
+          }
+        }
+
+        // Not using .fold because it won't be tail-recursive
+        if (maybeChildDistance.nonEmpty) {
+          EitherT((counter + maybeChildDistance.get).asRight[SyncError].pure[F])
         } else {
-          val parents = children.flatMap(dependenciesFromDag(syncState.dag, _))
-          loop(parents, counter + 1)
+          loop(getParents(childrenToParents.values.toSet.flatten.toList), counter + 1)
         }
       } else {
-        EitherT((Unreachable(toCheck, maxDepthAncestorsRequest): SyncError).asLeft[Unit].pure[F])
+        EitherT((Unreachable(toCheck, maxDepthAncestorsRequest): SyncError).asLeft[Int].pure[F])
       }
-    loop(targetBlockHashes, 1)
+
+    if (syncState.originalTargets(toCheck.blockHash)) {
+      EitherT(0.asRight[SyncError].pure[F])
+    } else {
+      loop(
+        getParents(targetBlockHashes.toList) ++ syncState.dag
+          .collect {
+            case (parent, children) if targetBlockHashes(parent) =>
+              children.map(child => child -> Set(parent)).toMap
+          }
+          .foldLeft(Monoid.empty[Map[ByteString, Set[ByteString]]]) {
+            case (a, b) => a |+| b
+          },
+        1
+      )
+    }
   }
 }
 
@@ -253,21 +285,21 @@ object SynchronizerImpl {
   }
 
   final case class SyncState(
+      originalTargets: Set[ByteString],
       summaries: Map[ByteString, BlockSummary],
       dag: Map[ByteString, Set[ByteString]],
-      minRank: Option[Int],
-      maxRank: Option[Int]
+      distanceFromOriginalTarget: Map[ByteString, Int]
   ) {
-    def append(summary: BlockSummary): SyncState =
+    def append(summary: BlockSummary, distance: Int): SyncState =
       SyncState(
+        originalTargets,
         summaries + (summary.blockHash -> summary),
         dependencies(summary).foldLeft(dag) {
           case (acc, dependency) =>
             acc + (dependency -> (acc
               .getOrElse(dependency, Set.empty[ByteString]) + summary.blockHash))
         },
-        minRank.fold(summary.getHeader.rank)(math.min(_, summary.getHeader.rank)).some,
-        maxRank.fold(summary.getHeader.rank)(math.max(_, summary.getHeader.rank)).some
+        distanceFromOriginalTarget.updated(summary.blockHash, distance)
       )
   }
 
@@ -275,6 +307,7 @@ object SynchronizerImpl {
     (summary.getHeader.justifications.map(_.latestBlockHash) ++ summary.getHeader.parentHashes).toList
 
   object SyncState {
-    val empty = SyncState(Map.empty, Map.empty, None, None)
+    def initial(originalTargets: Set[ByteString]) =
+      SyncState(originalTargets, Map.empty, Map.empty, Map.empty)
   }
 }

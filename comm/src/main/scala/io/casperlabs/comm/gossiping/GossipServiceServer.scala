@@ -54,28 +54,33 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
   private def sync(source: Node, newBlockHashes: Set[ByteString]): F[Unit] = {
 
     //TODO: Define handling strategies
-    def handleSyncError(syncError: SyncError): F[Unit] = syncError match {
-      case SyncError.TooDeep(summaries, limit) =>
-        Log[F].warn(
-          s"Failed to sync DAG, source ${source.show}. Returned DAG is too deep, limit: $limit, exceeded hashes: ${summaries
-            .map(b16)}"
-        )
-      case SyncError.TooWide(branchingFactor, limit) =>
-        Log[F].warn(
-          s"Failed to sync DAG, source ${source.show}. Returned dag is too wide, exceeded branching factor: $branchingFactor, limit: $limit."
-        )
-      case SyncError.Unreachable(summary, requestedDepth) =>
-        Log[F].warn(
-          s"Failed to sync DAG, source ${source.show}. During streaming source returned unreachable block summary: ${b16(summary)}, requested depth: $requestedDepth"
-        )
-      case SyncError.ValidationError(summary, e) =>
-        Log[F].warn(
-          s"Failed to sync DAG, source ${source.show}. Failed to validated the block summary: ${b16(summary)}, reason: $e"
-        )
-      case SyncError.MissingDependencies(hashes) =>
-        Log[F].warn(
-          s"Failed to sync DAG, source ${source.show}. Missing dependencies: ${hashes.map(b16)}"
-        )
+    def handleSyncError(syncError: SyncError): F[Unit] = {
+      val prefix = s"Failed to sync DAG, source: ${source.show}."
+      syncError match {
+        case SyncError.TooDeep(summaries, limit) =>
+          Log[F].warn(
+            s"$prefix Returned DAG is too deep, limit: $limit, exceeded hashes: ${summaries
+              .map(b16)}"
+          )
+        case SyncError.TooWide(maxBranchingFactor, maxTotal, total) =>
+          Log[F].warn(
+            s"$prefix Returned dag seems to be exponentially wide, max branching factor: $maxBranchingFactor, max total summaries: $maxTotal, total returned: $total"
+          )
+        case SyncError.Unreachable(summary, requestedDepth) =>
+          Log[F].warn(
+            s"$prefix During streaming source returned unreachable block summary: ${b16(summary)}, requested depth: $requestedDepth"
+          )
+        case SyncError.ValidationError(summary, e) =>
+          Log[F].warn(
+            s"$prefix Failed to validated the block summary: ${b16(summary)}, reason: $e"
+          )
+        case SyncError.MissingDependencies(hashes) =>
+          Log[F].warn(
+            s"$prefix Missing dependencies: ${hashes.map(b16)}"
+          )
+        case SyncError.Cycle(summary) =>
+          Log[F].warn(s"$prefix Detected cycle: ${b16(summary)}")
+      }
     }
 
     val trySync = for {
