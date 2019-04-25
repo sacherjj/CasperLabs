@@ -16,6 +16,8 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
+import ExecEngineUtilTest._
+
 class ExecEngineUtilTest
     extends FlatSpec
     with Matchers
@@ -175,16 +177,6 @@ class ExecEngineUtilTest
       } yield true
   }
 
-  val registry = """ """.stripMargin
-
-  val other = """ """.stripMargin
-
-  def prepareDeploys(v: Vector[ByteString], c: Long) = {
-    val genesisDeploys =
-      v.map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
-    genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
-  }
-
   it should "merge histories in case of multiple parents with complex contract" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val contract = ByteString.copyFromUtf8(registry)
@@ -230,7 +222,7 @@ class ExecEngineUtilTest
         _       <- step(1, genesis)
         _       <- step(2, genesis)
         dag     <- blockDagStorage.getRepresentation
-        postState <- ExecEngineUtil.validateBlockCheckpoint[Task](
+        postState <- ExecutionEngineServiceStub.validateBlockCheckpoint[Task](
                       b3,
                       dag
                     )
@@ -309,7 +301,7 @@ class ExecEngineUtilTest
         _                                           <- step(4, genesis)
 
         dag2 <- blockDagStorage.getRepresentation
-        postState <- ExecEngineUtil.validateBlockCheckpoint[Task](
+        postState <- ExecutionEngineServiceStub.validateBlockCheckpoint[Task](
                       b5,
                       dag2
                     )
@@ -389,85 +381,6 @@ class ExecEngineUtilTest
           val processedDeploys = checkpoint.deploysForBlock.map(_.getDeploy)
           processedDeploys should contain theSameElementsInOrderAs deploys
       }
-  }
-
-  "validateBlockCheckpoint" should "return InvalidPreStateHash when preStateHash of block is not correct" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      val contract = ByteString.copyFromUtf8(registry)
-
-      val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1)
-      val b1DeploysWithCost      = prepareDeploys(Vector(contract), 2)
-      val b2DeploysWithCost      = prepareDeploys(Vector(contract), 1)
-      val b3DeploysWithCost      = prepareDeploys(Vector.empty, 5)
-      val invalidHash            = ByteString.copyFromUtf8("invalid")
-
-      for {
-        genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
-        b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-        b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-        // set wrong preStateHash for b3
-        b3 <- createBlock[Task](
-               Seq(b1.blockHash, b2.blockHash),
-               deploys = b3DeploysWithCost,
-               preStateHash = invalidHash
-             )
-        dag <- blockDagStorage.getRepresentation
-        postState <- ExecEngineUtil.validateBlockCheckpoint[Task](
-                      b3,
-                      dag
-                    )
-      } yield postState shouldBe Left(Validate.ValidateErrorWrapper(InvalidPreStateHash))
-  }
-
-  "validateBlockCheckpoint" should "return InvalidPostStateHash when postStateHash of block is not correct" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      val deploys = Vector(ByteString.EMPTY)
-        .map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
-      val processedDeploys = deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
-      val invalidHash      = ByteString.copyFromUtf8("invalid")
-      for {
-        genesis <- createBlock[Task](
-                    Seq.empty,
-                    deploys = processedDeploys,
-                    postStateHash = invalidHash
-                  )
-        dag <- blockDagStorage.getRepresentation
-        validateResult <- ExecEngineUtil.validateBlockCheckpoint[Task](
-                           genesis,
-                           dag
-                         )
-      } yield validateResult shouldBe Left(Validate.ValidateErrorWrapper(InvalidPostStateHash))
-  }
-
-  it should "return a checkpoint with the right hash for a valid block" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      val deploys =
-        Vector(
-          ByteString.EMPTY
-        ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
-
-      for {
-        dag1 <- blockDagStorage.getRepresentation
-        deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
-                              Seq.empty,
-                              deploys,
-                              Nil
-                            )
-        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _) = deploysCheckpoint
-        block <- createBlock[Task](
-                  Seq.empty,
-                  deploys = processedDeploys,
-                  postStateHash = computedPostStateHash,
-                  preStateHash = preStateHash
-                )
-        dag2 <- blockDagStorage.getRepresentation
-
-        validateResult <- ExecEngineUtil.validateBlockCheckpoint[Task](
-                           block,
-                           dag2
-                         )
-        Right(postStateHash) = validateResult
-      } yield postStateHash should be(computedPostStateHash)
   }
 
   "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
@@ -565,4 +478,16 @@ class ExecEngineUtilTest
       } yield ()
   }
 
+}
+
+object ExecEngineUtilTest {
+  val registry = """ """.stripMargin
+
+  val other = """ """.stripMargin
+
+  def prepareDeploys(v: Vector[ByteString], c: Long) = {
+    val genesisDeploys =
+      v.map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+    genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
+  }
 }

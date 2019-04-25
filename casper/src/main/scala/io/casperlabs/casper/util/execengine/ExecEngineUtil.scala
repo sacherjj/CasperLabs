@@ -28,21 +28,6 @@ case class DeploysCheckpoint(
 object ExecEngineUtil {
   type StateHash = ByteString
 
-  implicit def functorRaiseInvalidBlock[F[_]: Sync] = Validate.raiseValidateErrorThroughSync[F]
-
-  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
-      b: BlockMessage,
-      dag: BlockDagRepresentation[F]
-  ): F[Either[Throwable, StateHash]] =
-    (for {
-      parents                 <- ProtoUtil.unsafeGetParents[F](b)
-      merged                  <- merge[F](parents, dag)
-      (combinedEffect, _)     = merged
-      processedHash           <- ExecEngineUtil.effectsForBlock[F](b, combinedEffect, dag)
-      (preStateHash, effects) = processedHash
-      _                       <- Validate.transactions[F](b, dag, preStateHash, effects)
-    } yield ProtoUtil.postStateHash(b)).attempt
-
   def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
