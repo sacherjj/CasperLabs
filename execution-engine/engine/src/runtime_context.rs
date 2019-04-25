@@ -475,7 +475,7 @@ mod tests {
 
         let contract = Value::Contract(Contract::new(
             Vec::new(),
-            once(("ValidURef".to_owned(), uref.clone())).collect(),
+            once(("ValidURef".to_owned(), uref)).collect(),
         ));
 
         let query_result = test(known_urefs, |mut rc| {
@@ -499,7 +499,7 @@ mod tests {
         let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
         let contract = Value::Contract(Contract::new(
             Vec::new(),
-            once(("ForgedURef".to_owned(), uref.clone())).collect(),
+            once(("ForgedURef".to_owned(), uref)).collect(),
         ));
 
         let query_result = test(HashMap::new(), |mut rc| rc.store_contract(contract.clone()));
@@ -515,11 +515,11 @@ mod tests {
         let known_urefs = vec_key_rights_to_map(vec![contract_uref]);
         let contract = Value::Contract(Contract::new(
             Vec::new(),
-            once(("ValidURef".to_owned(), contract_uref.clone())).collect(),
+            once(("ValidURef".to_owned(), contract_uref)).collect(),
         ));
 
         let query_result = test(known_urefs, |mut rc| {
-            rc.write_gs(contract_uref.clone(), contract.clone())
+            rc.write_gs(contract_uref, contract.clone())
                 .expect("Storing contract under known and writeable URef should work.");
             rc.read_gs(&contract_uref)
         });
@@ -539,7 +539,7 @@ mod tests {
         let contract = Value::Contract(Contract::new(Vec::new(), BTreeMap::new()));
 
         let query_result = test(HashMap::new(), |mut rc| {
-            rc.write_gs(contract_uref.clone(), contract.clone())
+            rc.write_gs(contract_uref, contract.clone())
         });
 
         assert_forged_reference(query_result);
@@ -554,7 +554,7 @@ mod tests {
         let contract = Value::Contract(Contract::new(Vec::new(), BTreeMap::new()));
 
         let query_result = test(known_urefs, |mut rc| {
-            rc.write_gs(contract_uref.clone(), contract.clone())
+            rc.write_gs(contract_uref, contract.clone())
         });
 
         assert_invalid_access(query_result, AccessRights::WRITE);
@@ -605,17 +605,17 @@ mod tests {
         // Account key is addable if it is a "base" key - current context of the execution.
         let mut rng = rand::thread_rng();
         let uref = random_uref_key(&mut rng, AccessRights::READ);
-        let known_urefs = vec_key_rights_to_map(vec![uref.clone()]);
+        let known_urefs = vec_key_rights_to_map(vec![uref]);
         let query_result = test(known_urefs, |mut rc| {
             let base_key = rc.base_key();
             let uref_name = "NewURef".to_owned();
-            let named_key = Value::NamedKey(uref_name.clone(), uref.clone());
+            let named_key = Value::NamedKey(uref_name.clone(), uref);
 
-            rc.add_gs(base_key.clone(), named_key)
+            rc.add_gs(base_key, named_key)
                 .expect("Adding should work.");
 
             let named_key_transform =
-                Transform::AddKeys(once((uref_name.clone(), uref.clone())).collect());
+                Transform::AddKeys(once((uref_name.clone(), uref)).collect());
 
             assert_eq!(*rc.effect().1.get(&base_key).unwrap(), named_key_transform);
             Ok(())
@@ -670,18 +670,18 @@ mod tests {
         let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut()
-            .write(Validated(contract_key.clone()), Validated(contract.clone()));
+            .write(Validated(contract_key), Validated(contract.clone()));
 
         let mut uref_map = BTreeMap::new();
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref.clone()]);
+        let known_urefs = vec_key_rights_to_map(vec![uref]);
         let chacha_rng = create_rng(&base_acc_addr, 0, 0);
         let mut runtime_context = RuntimeContext::new(
             Rc::clone(&tc),
             &mut uref_map,
             known_urefs,
             &account,
-            contract_key.clone(),
+            contract_key,
             0,
             0,
             0,
@@ -689,7 +689,7 @@ mod tests {
         );
 
         let uref_name = "NewURef".to_owned();
-        let named_key = Value::NamedKey(uref_name.clone(), uref.clone());
+        let named_key = Value::NamedKey(uref_name.clone(), uref);
 
         runtime_context
             .add_gs(contract_key, named_key)
@@ -697,7 +697,7 @@ mod tests {
 
         let updated_contract = Value::Contract(Contract::new(
             Vec::new(),
-            once((uref_name, uref.clone())).collect(),
+            once((uref_name, uref)).collect(),
         ));
 
         assert_eq!(
@@ -718,18 +718,18 @@ mod tests {
         let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut()
-            .write(Validated(contract_key.clone()), Validated(contract.clone()));
+            .write(Validated(contract_key), Validated(contract.clone()));
 
         let mut uref_map = BTreeMap::new();
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref.clone()]);
+        let known_urefs = vec_key_rights_to_map(vec![uref]);
         let chacha_rng = create_rng(&base_acc_addr, 0, 0);
         let mut runtime_context = RuntimeContext::new(
             Rc::clone(&tc),
             &mut uref_map,
             known_urefs,
             &account,
-            other_contract_key.clone(),
+            other_contract_key,
             0,
             0,
             0,
@@ -737,7 +737,7 @@ mod tests {
         );
 
         let uref_name = "NewURef".to_owned();
-        let named_key = Value::NamedKey(uref_name.clone(), uref.clone());
+        let named_key = Value::NamedKey(uref_name.clone(), uref);
 
         let result = runtime_context.add_gs(contract_key, named_key);
 
@@ -748,7 +748,7 @@ mod tests {
     fn uref_key_readable_valid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::READ);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key.clone()]);
+        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.read_gs(&uref_key));
         assert!(query_result.is_ok());
     }
@@ -757,7 +757,7 @@ mod tests {
     fn uref_key_readable_invalid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key.clone()]);
+        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.read_gs(&uref_key));
         assert_invalid_access(query_result, AccessRights::READ);
     }
@@ -766,7 +766,7 @@ mod tests {
     fn uref_key_writeable_valid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key.clone()]);
+        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.write_gs(uref_key, Value::Int32(1)));
         assert!(query_result.is_ok());
     }
@@ -775,7 +775,7 @@ mod tests {
     fn uref_key_writeable_invalid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::READ);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key.clone()]);
+        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.write_gs(uref_key, Value::Int32(1)));
         assert_invalid_access(query_result, AccessRights::WRITE);
     }
@@ -784,9 +784,9 @@ mod tests {
     fn uref_key_addable_valid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::ADD_WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key.clone()]);
+        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| {
-            rc.write_gs(uref_key.clone(), Value::Int32(10))
+            rc.write_gs(uref_key, Value::Int32(10))
                 .expect("Writing to the GlobalState should work.");
             rc.add_gs(uref_key, Value::Int32(1))
         });
@@ -797,7 +797,7 @@ mod tests {
     fn uref_key_addable_invalid() {
         let mut rng = rand::thread_rng();
         let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
-        let known_urefs = vec_key_rights_to_map(vec![uref_key.clone()]);
+        let known_urefs = vec_key_rights_to_map(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.add_gs(uref_key, Value::Int32(1)));
         assert_invalid_access(query_result, AccessRights::ADD);
     }
