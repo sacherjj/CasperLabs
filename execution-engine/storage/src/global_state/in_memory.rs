@@ -1,7 +1,6 @@
-use common::bytesrepr::ToBytes;
 use common::key::Key;
 use common::value::Value;
-use history::trie::Trie;
+use history::trie::operations::create_hashed_empty_trie;
 use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
 use history::trie_store::{Transaction, TransactionSource, TrieStore};
 use shared::newtypes::Blake2bHash;
@@ -21,13 +20,9 @@ impl InMemoryGlobalState {
         store: Arc<InMemoryTrieStore>,
     ) -> Result<Self, in_memory::Error> {
         let root_hash: Blake2bHash = {
-            let root: Trie<Key, Value> = Trie::Node {
-                pointer_block: Default::default(),
-            };
-            let root_bytes: Vec<u8> = root.to_bytes()?;
-            let root_hash = Blake2bHash::new(&root_bytes);
+            let (root_hash, root) = create_hashed_empty_trie::<Key, Value>()?;
             let mut txn = environment.create_read_write_txn()?;
-            store.put(&mut txn, &root_hash, &root).unwrap();
+            store.put(&mut txn, &root_hash, &root)?;
             txn.commit()?;
             root_hash
         };
