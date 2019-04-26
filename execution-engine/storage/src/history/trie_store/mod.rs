@@ -9,7 +9,7 @@ use shared::newtypes::Blake2bHash;
 pub mod lmdb;
 
 #[cfg(test)]
-mod in_memory;
+pub(crate) mod in_memory;
 
 #[cfg(test)]
 mod tests;

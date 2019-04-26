@@ -225,3 +225,20 @@ impl<K: FromBytes, V: FromBytes> FromBytes for Trie<K, V> {
         }
     }
 }
+
+pub(crate) mod operations {
+    use common::bytesrepr::{self, ToBytes};
+    use history::trie::Trie;
+    use shared::newtypes::Blake2bHash;
+
+    /// Creates a tuple containing an empty root hash and an empty root (a node
+    /// with an empty pointer block)
+    pub fn create_hashed_empty_trie<K: ToBytes, V: ToBytes>(
+    ) -> Result<(Blake2bHash, Trie<K, V>), bytesrepr::Error> {
+        let root: Trie<K, V> = Trie::Node {
+            pointer_block: Default::default(),
+        };
+        let root_bytes: Vec<u8> = root.to_bytes()?;
+        Ok((Blake2bHash::new(&root_bytes), root))
+    }
+}
