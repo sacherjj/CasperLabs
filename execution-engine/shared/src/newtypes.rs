@@ -5,6 +5,7 @@ use blake2::VarBlake2b;
 use common::bytesrepr::{self, FromBytes, ToBytes};
 use core::array::TryFromSliceError;
 use std::convert::TryFrom;
+use std::ops::Deref;
 
 const BLAKE2B_DIGEST_LENGTH: usize = 32;
 
@@ -26,6 +27,47 @@ impl Blake2bHash {
     /// Converts the underlying BLAKE2b hash digest array to a `Vec`
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
+    }
+}
+
+/// Newtype used for differentiating between plain T and validated T.
+/// What validation means is left purposefully vague as it may depend on the context.
+pub struct Validated<T>(T);
+
+impl<T> Validated<T> {
+    pub fn new<E, F>(v: T, guard: F) -> Result<Validated<T>, E>
+    where
+        F: Fn(&T) -> Result<(), E>,
+    {
+        guard(&v).map(|_| Validated(v))
+    }
+
+    /// Smart constructor for creating instances of `Validated` type.
+    /// There are situations when we want to create an instance
+    /// without doing any checks on the input value. We could use
+    /// `Validated::new` like this `Validated::new(input, |_| Ok())`.
+    /// There is one problem though - what about the error type?
+    /// We know this can never fail but we are forced to choose type
+    /// for Error.
+    pub fn valid(v: T) -> Validated<T> {
+        Validated(v)
+    }
+
+    pub fn into_raw(self) -> T {
+        self.0
+    }
+}
+
+impl<T: Clone> Clone for Validated<T> {
+    fn clone(&self) -> Self {
+        Validated(self.0.clone())
+    }
+}
+
+impl<T: Clone> Deref for Validated<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.0
     }
 }
 

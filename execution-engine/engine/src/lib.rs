@@ -22,8 +22,6 @@ pub mod execution;
 pub mod runtime_context;
 pub mod trackingcopy;
 
-use std::ops::Deref;
-
 mod utils;
 
 #[cfg(test)]
@@ -34,20 +32,3 @@ extern crate matches;
 extern crate proptest;
 
 type URefAddr = [u8; 32];
-
-/// Newtype used for differentiating between plain T and validated T.
-/// What validation means is left purposefully vague as it may depend on the context.
-pub struct Validated<T>(pub T);
-
-impl<T: Clone> Clone for Validated<T> {
-    fn clone(&self) -> Self {
-        Validated(self.0.clone())
-    }
-}
-
-impl<T: Clone> Deref for Validated<T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        &self.0
-    }
-}

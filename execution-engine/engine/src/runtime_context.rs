@@ -1,4 +1,4 @@
-use super::{URefAddr, Validated};
+use super::URefAddr;
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, ToBytes};
@@ -8,6 +8,7 @@ use common::value::Value;
 use execution::Error;
 use rand::RngCore;
 use rand_chacha::ChaChaRng;
+use shared::newtypes::Validated;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
@@ -132,7 +133,8 @@ where
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
         let key = Key::URef(key, AccessRights::READ_ADD_WRITE);
-        self.insert_uref(Validated(key));
+        let validated_key = Validated::valid(key.clone());
+        self.insert_uref(validated_key);
         self.write_gs(key, value)?;
         Ok(key)
     }
@@ -141,45 +143,39 @@ where
     pub fn add_uref(&mut self, name: String, key: Key) -> Result<(), Error> {
         let base_key = self.base_key();
         self.add_gs(base_key, Value::NamedKey(name.clone(), key))?;
-        self.insert_named_uref(name, Validated(key));
+        let validated_key = Validated::valid(key);
+        self.insert_named_uref(name, validated_key);
         Ok(())
     }
 
     pub fn read_gs(&mut self, key: &Key) -> Result<Option<Value>, Error> {
-        if self.is_readable(key) {
-            self.validate_key(key)?;
-            self.state
-                .borrow_mut()
-                .read(&Validated(*key))
-                .map_err(Into::into)
-        } else {
-            Err(Error::InvalidAccess {
-                required: AccessRights::READ,
-            })
-        }
+        let validated_key = Validated::new(*key, |key| {
+            self.validate_readable(&key).and(self.validate_key(&key))
+        })?;
+        self.state
+            .borrow_mut()
+            .read(&validated_key)
+            .map_err(Into::into)
     }
 
     pub fn write_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
-        self.validate_key(&key)?;
-        self.validate_keys(&value)?;
-        if self.is_writeable(&key) {
-            self.state
-                .borrow_mut()
-                .write(Validated(key), Validated(value));
-            Ok(())
-        } else {
-            Err(Error::InvalidAccess {
-                required: AccessRights::WRITE,
-            })
-        }
+        let validated_key: Validated<Key> = Validated::new(key, |key| {
+            self.validated_writeable(&key).and(self.validate_key(&key))
+        })?;
+        let validated_value = Validated::new(value, |value| self.validate_keys(&value))?;
+        self.state
+            .borrow_mut()
+            .write(validated_key, validated_value);
+        Ok(())
     }
 
     pub fn store_contract(&mut self, contract: Value) -> Result<[u8; 32], Error> {
-        self.validate_keys(&contract)?;
         let new_hash = self.new_function_address()?;
+        let validated_value = Validated::new(contract, |cntr| self.validate_keys(&cntr))?;
+        let validated_key = Validated::valid(Key::Hash(new_hash));
         self.state
             .borrow_mut()
-            .write(Validated(Key::Hash(new_hash)), Validated(contract));
+            .write(validated_key, validated_value);
         Ok(new_hash)
     }
 
@@ -255,6 +251,36 @@ where
         Ok(keys)
     }
 
+    fn validate_readable(&self, key: &Key) -> Result<(), Error> {
+        if self.is_readable(&key) {
+            Ok(())
+        } else {
+            Err(Error::InvalidAccess {
+                required: AccessRights::READ,
+            })
+        }
+    }
+
+    fn validated_addable(&self, key: &Key) -> Result<(), Error> {
+        if self.is_addable(&key) {
+            Ok(())
+        } else {
+            Err(Error::InvalidAccess {
+                required: AccessRights::ADD,
+            })
+        }
+    }
+
+    fn validated_writeable(&self, key: &Key) -> Result<(), Error> {
+        if self.is_writeable(&key) {
+            Ok(())
+        } else {
+            Err(Error::InvalidAccess {
+                required: AccessRights::WRITE,
+            })
+        }
+    }
+
     // Tests whether reading from the `key` is valid.
     pub fn is_readable(&self, key: &Key) -> bool {
         match key {
@@ -285,26 +311,16 @@ where
     /// either because they're not a Monoid or if the value stored under `key` has different type,
     /// then `TypeMismatch` errors is returned.
     pub fn add_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
-        self.validate_key(&key)?;
-        self.validate_keys(&value)?;
-        if self.is_addable(&key) {
-            match self
-                .state
-                .borrow_mut()
-                .add(Validated(key), Validated(value))
-            {
-                Err(storage_error) => Err(storage_error.into()),
-                Ok(AddResult::Success) => Ok(()),
-                Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
-                Ok(AddResult::TypeMismatch(type_mismatch)) => {
-                    Err(Error::TypeMismatch(type_mismatch))
-                }
-                Ok(AddResult::Overflow) => Err(Error::Overflow),
-            }
-        } else {
-            Err(Error::InvalidAccess {
-                required: AccessRights::ADD,
-            })
+        let validated_key = Validated::new(key, |k| {
+            self.validated_addable(&k).and(self.validate_key(&k))
+        })?;
+        let validated_value = Validated::new(value, |v| self.validate_keys(&v))?;
+        match self.state.borrow_mut().add(validated_key, validated_value) {
+            Err(storage_error) => Err(storage_error.into()),
+            Ok(AddResult::Success) => Ok(()),
+            Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
+            Ok(AddResult::TypeMismatch(type_mismatch)) => Err(Error::TypeMismatch(type_mismatch)),
+            Ok(AddResult::Overflow) => Err(Error::Overflow),
         }
     }
 }
@@ -611,11 +627,9 @@ mod tests {
             let uref_name = "NewURef".to_owned();
             let named_key = Value::NamedKey(uref_name.clone(), uref);
 
-            rc.add_gs(base_key, named_key)
-                .expect("Adding should work.");
+            rc.add_gs(base_key, named_key).expect("Adding should work.");
 
-            let named_key_transform =
-                Transform::AddKeys(once((uref_name.clone(), uref)).collect());
+            let named_key_transform = Transform::AddKeys(once((uref_name.clone(), uref)).collect());
 
             assert_eq!(*rc.effect().1.get(&base_key).unwrap(), named_key_transform);
             Ok(())
@@ -670,7 +684,7 @@ mod tests {
         let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut()
-            .write(Validated(contract_key), Validated(contract.clone()));
+            .write(Validated::valid(contract_key), Validated::valid(contract.clone()));
 
         let mut uref_map = BTreeMap::new();
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);
@@ -695,10 +709,8 @@ mod tests {
             .add_gs(contract_key, named_key)
             .expect("Adding should work.");
 
-        let updated_contract = Value::Contract(Contract::new(
-            Vec::new(),
-            once((uref_name, uref)).collect(),
-        ));
+        let updated_contract =
+            Value::Contract(Contract::new(Vec::new(), once((uref_name, uref)).collect()));
 
         assert_eq!(
             *tc.borrow().effect().1.get(&contract_key).unwrap(),
@@ -718,7 +730,7 @@ mod tests {
         let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut()
-            .write(Validated(contract_key), Validated(contract.clone()));
+            .write(Validated::valid(contract_key), Validated::valid(contract.clone()));
 
         let mut uref_map = BTreeMap::new();
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);

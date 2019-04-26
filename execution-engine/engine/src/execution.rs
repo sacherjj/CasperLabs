@@ -5,6 +5,7 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::Value;
+use shared::newtypes::Validated;
 use storage::global_state::{ExecutionEffect, StateReader};
 use storage::transform::TypeMismatch;
 use trackingcopy::TrackingCopy;
@@ -28,7 +29,6 @@ use std::rc::Rc;
 
 use super::runtime_context::RuntimeContext;
 use super::URefAddr;
-use super::Validated;
 
 #[derive(Debug)]
 pub enum Error {
@@ -295,7 +295,7 @@ where
         urefs_bytes: Vec<u8>,
     ) -> Result<usize, Error> {
         let (args, module, mut refs) = {
-            match self.context.read_gs(&Validated(key))? {
+            match self.context.read_gs(&key)? {
                 None => Err(Error::KeyNotFound(key)),
                 Some(value) => {
                     if let Value::Contract(contract) = value {
@@ -903,8 +903,9 @@ impl Executor<Module> for WasmiExecutor {
     {
         let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
         let acct_key = Key::Account(account_addr);
+        let validated_acc_key = Validated::valid(acct_key);
         let value = on_fail_charge! {
-        match tc.borrow_mut().get(&Validated(acct_key)) {
+        match tc.borrow_mut().get(&validated_acc_key) {
             Ok(None) => Err(Error::KeyNotFound(acct_key)),
             Err(error) => Err(error.into()),
             Ok(Some(value)) => Ok(value)
