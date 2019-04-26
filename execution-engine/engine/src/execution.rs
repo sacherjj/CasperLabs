@@ -779,12 +779,7 @@ where
 {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
-    let rng = current_runtime.context.rng().clone();
-    let tc = current_runtime.context.state();
-    let account = current_runtime.context.account();
-    let gas_limit = current_runtime.context.gas_limit();
-    let gas_counter = current_runtime.context.gas_counter();
-    let fn_store_id = current_runtime.context.fn_store_id();
+    let rng = ChaChaRng::from_rng(current_runtime.context.rng().clone()).map_err(Error::Rng)?;
     let mut runtime = Runtime {
         args,
         memory,
@@ -792,14 +787,14 @@ where
         result: Vec::new(),
         host_buf: Vec::new(),
         context: RuntimeContext::new(
-            tc,
+            current_runtime.context.state(),
             refs,
             known_urefs,
-            account,
+            current_runtime.context.account(),
             key,
-            gas_limit,
-            gas_counter,
-            fn_store_id,
+            current_runtime.context.gas_limit(),
+            current_runtime.context.gas_counter(),
+            current_runtime.context.fn_store_id(),
             rng,
         ),
     };

@@ -133,7 +133,7 @@ where
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
         let key = Key::URef(key, AccessRights::READ_ADD_WRITE);
-        let validated_key = Validated::valid(key.clone());
+        let validated_key = Validated::valid(key);
         self.insert_uref(validated_key);
         self.write_gs(key, value)?;
         Ok(key)
@@ -683,8 +683,10 @@ mod tests {
         let contract = Value::Contract(Contract::new(Vec::new(), BTreeMap::new()));
         let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
         // Store contract in the GlobalState so that we can mainpulate it later.
-        tc.borrow_mut()
-            .write(Validated::valid(contract_key), Validated::valid(contract.clone()));
+        tc.borrow_mut().write(
+            Validated::valid(contract_key),
+            Validated::valid(contract.clone()),
+        );
 
         let mut uref_map = BTreeMap::new();
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);
@@ -729,8 +731,10 @@ mod tests {
         let contract = Value::Contract(Contract::new(Vec::new(), BTreeMap::new()));
         let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
         // Store contract in the GlobalState so that we can mainpulate it later.
-        tc.borrow_mut()
-            .write(Validated::valid(contract_key), Validated::valid(contract.clone()));
+        tc.borrow_mut().write(
+            Validated::valid(contract_key),
+            Validated::valid(contract.clone()),
+        );
 
         let mut uref_map = BTreeMap::new();
         let uref = random_uref_key(&mut rng, AccessRights::WRITE);
