@@ -23,6 +23,7 @@ pub struct RuntimeContext<'a, R: StateReader<Key, Value>> {
     // Used to check uref is known before use (prevents forging urefs)
     known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
     account: &'a Account,
+    args: Vec<Vec<u8>>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
@@ -41,6 +42,7 @@ where
         state: Rc<RefCell<TrackingCopy<R>>>,
         uref_lookup: &'a mut BTreeMap<String, Key>,
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
+        args: Vec<Vec<u8>>,
         account: &'a Account,
         base_key: Key,
         gas_limit: u64,
@@ -52,6 +54,7 @@ where
             state,
             uref_lookup,
             known_urefs,
+            args,
             account,
             base_key,
             gas_limit,
@@ -79,6 +82,10 @@ where
 
     pub fn account(&self) -> &'a Account {
         self.account
+    }
+
+    pub fn args(&self) -> &Vec<Vec<u8>> {
+        &self.args
     }
 
     pub fn rng(&self) -> &ChaChaRng {
@@ -413,6 +420,7 @@ mod tests {
             Rc::new(RefCell::new(tc)),
             uref_map,
             known_urefs,
+            Vec::new(),
             &account,
             base_key,
             0,
@@ -696,6 +704,7 @@ mod tests {
             Rc::clone(&tc),
             &mut uref_map,
             known_urefs,
+            Vec::new(),
             &account,
             contract_key,
             0,
@@ -744,6 +753,7 @@ mod tests {
             Rc::clone(&tc),
             &mut uref_map,
             known_urefs,
+            Vec::new(),
             &account,
             other_contract_key,
             0,

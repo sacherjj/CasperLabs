@@ -90,7 +90,6 @@ impl From<!> for Error {
 impl HostError for Error {}
 
 pub struct Runtime<'a, R: StateReader<Key, Value>> {
-    args: Vec<Vec<u8>>,
     memory: MemoryRef,
     module: Module,
     result: Vec<u8>,
@@ -119,14 +118,8 @@ where
     R::Error: Into<Error>,
 {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        args: Vec<Vec<u8>>,
-        memory: MemoryRef,
-        module: Module,
-        context: RuntimeContext<'a, R>,
-    ) -> Self {
+    pub fn new(memory: MemoryRef, module: Module, context: RuntimeContext<'a, R>) -> Self {
         Runtime {
-            args,
             memory,
             module,
             result: Vec::new(),
@@ -208,8 +201,8 @@ where
     /// the runtime buffer so that a subsequent `get_arg` can return it
     /// to the caller.
     pub fn load_arg(&mut self, i: usize) -> Result<usize, Trap> {
-        if i < self.args.len() {
-            self.host_buf = self.args[i].clone();
+        if i < self.context.args().len() {
+            self.host_buf = self.context.args()[i].clone();
             Ok(self.host_buf.len())
         } else {
             Err(Error::ArgIndexOutOfBounds(i).into())
@@ -781,7 +774,6 @@ where
     let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
     let rng = ChaChaRng::from_rng(current_runtime.context.rng().clone()).map_err(Error::Rng)?;
     let mut runtime = Runtime {
-        args,
         memory,
         module: parity_module,
         result: Vec::new(),
@@ -790,6 +782,7 @@ where
             current_runtime.context.state(),
             refs,
             known_urefs,
+            args,
             current_runtime.context.account(),
             key,
             current_runtime.context.gas_limit(),
@@ -912,17 +905,6 @@ impl Executor<Module> for WasmiExecutor {
         let rng = create_rng(&account_addr, timestamp, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
-        let context = RuntimeContext::new(
-            tc,
-            &mut uref_lookup_local,
-            known_urefs,
-            &account,
-            acct_key,
-            gas_limit,
-            gas_counter,
-            fn_store_id,
-            rng,
-        );
         let arguments: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
         } else {
@@ -930,7 +912,19 @@ impl Executor<Module> for WasmiExecutor {
             // https://casperlabs.atlassian.net/browse/EE-239
             on_fail_charge!(deserialize(args), 0)
         };
-        let mut runtime = Runtime::new(arguments, memory, parity_module, context);
+        let context = RuntimeContext::new(
+            tc,
+            &mut uref_lookup_local,
+            known_urefs,
+            arguments,
+            &account,
+            acct_key,
+            gas_limit,
+            gas_counter,
+            fn_store_id,
+            rng,
+        );
+        let mut runtime = Runtime::new(memory, parity_module, context);
         on_fail_charge!(
             instance.invoke_export("call", &[], &mut runtime),
             runtime.context.gas_counter()
