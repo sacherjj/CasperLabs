@@ -27,11 +27,7 @@ impl LmdbGlobalState {
             txn.commit()?;
             root_hash
         };
-        Ok(LmdbGlobalState {
-            environment,
-            store,
-            root_hash,
-        })
+        Ok(LmdbGlobalState::new(environment, store, root_hash))
     }
 
     /// Creates a state from an existing environment, store, and root_hash.

@@ -26,11 +26,7 @@ impl InMemoryGlobalState {
             txn.commit()?;
             root_hash
         };
-        Ok(InMemoryGlobalState {
-            environment,
-            store,
-            root_hash,
-        })
+        Ok(InMemoryGlobalState::new(environment, store, root_hash))
     }
 
     /// Creates a state from an existing environment, store, and root_hash.
