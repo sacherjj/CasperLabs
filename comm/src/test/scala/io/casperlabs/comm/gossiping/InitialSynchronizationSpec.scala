@@ -1,9 +1,16 @@
 package io.casperlabs.comm.gossiping
 
+import java.util.concurrent.TimeoutException
+
 import cats.effect.concurrent.Semaphore
 import com.google.protobuf.ByteString
+import eu.timepit.refined._
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.{Approval, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
+import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.{Bootstrap, SynchronizationError}
 import io.casperlabs.comm.gossiping.InitialSynchronizationSpec.TestFixture
 import io.casperlabs.shared.Log.NOPLog
 import monix.eval.Task
@@ -12,13 +19,12 @@ import monix.execution.atomic.Atomic
 import monix.tail.Iterant
 import org.scalacheck.{Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalatest.{BeforeAndAfterEach, FunSuiteLike, Matchers}
+import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
 
-import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
 class InitialSynchronizationSpec
-    extends FunSuiteLike
+    extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
     with ArbitraryConsensus
@@ -28,55 +34,140 @@ class InitialSynchronizationSpec
   def genNodes(min: Int = 1, max: Int = 10) =
     Gen.choose(min, max).flatMap(n => Gen.listOfN(n, arbNode.arbitrary))
 
-  def genTips(n: Int) = Gen.listOfN(n, arbBlockSummary.arbitrary)
+  def genTips(n: Int = 10) = Gen.listOfN(n, arbBlockSummary.arbitrary)
 
-  test("should propagate errors to invoker") {
-    forAll(genNodes(), arbBlockSummary.arbitrary) { (nodes, tip) =>
-      val e = new RuntimeException("Boom!")
-      TestFixture(
-        InitialSynchronizationImpl.Bootstrap(nodes.head),
-        nodes,
-        (_, _) => nodes,
-        _ => List(tip),
-        (_, _) => Task.raiseError(e)
-      ) { (sync, _) =>
-        for {
-          w <- sync
-          r <- w.attempt
-        } yield {
-          r.isLeft shouldBe true
-          r.left.get shouldBe e
-        }
+  def pos(n: Int): Int Refined Positive = refineV[Positive](n).right.get
+
+  "syncOnStartup" when {
+    "specified to memoize nodes between rounds" should {
+      def test(skipFailedNodesInNextRound: Boolean): Unit = forAll(genNodes(), genTips()) {
+        (nodes, tips) =>
+          val counter = Atomic(0)
+
+          TestFixture(
+            nodes,
+            tips,
+            memoizeNodes = true,
+            selectNodes = { (bootstrap, nodes) =>
+              counter.increment()
+              bootstrap :: nodes
+            },
+            minSuccessful = pos(nodes.size),
+            sync = (_, _) => Task.raiseError(new RuntimeException),
+            skipFailedNodesInNextRounds = skipFailedNodesInNextRound
+          ) { (initialSynchronizer, _) =>
+            for {
+              w <- initialSynchronizer.sync()
+              _ <- w.timeout(75.millis).attempt
+            } yield {
+              counter.get() shouldBe 1
+            }
+          }
+      }
+
+      "not apply selectNodes function more than once if skipFailingNodesInNextRound is true" in {
+        test(skipFailedNodesInNextRound = true)
+      }
+      "not apply selectNodes function more than once if skipFailingNodesInNextRound is false" in {
+        test(skipFailedNodesInNextRound = false)
       }
     }
-  }
+    "specified to skip nodes failed to response" should {
+      def test(memoize: Boolean): Unit =
+        forAll(genNodes().map(_.toSet), genNodes().map(_.toSet), genTips()) {
+          (successfulNodes, failingNodes, tips) =>
+            TestFixture(
+              (successfulNodes ++ failingNodes).toList,
+              tips,
+              memoizeNodes = memoize,
+              sync = { (node, _) =>
+                if (successfulNodes(node))
+                  Task(true)
+                else
+                  Task.raiseError(new RuntimeException)
+              },
+              skipFailedNodesInNextRounds = true
+            ) { (initialSynchronizer, mockGossipServiceServer) =>
+              for {
+                w <- initialSynchronizer.sync()
+                _ <- w.timeout(75.millis).attempt
+              } yield {
+                val asked = mockGossipServiceServer.asked.get()
+                Inspectors.forAll(failingNodes) { node =>
+                  asked.count(n => n == node) shouldBe 1
+                }
+                Inspectors.forAll(successfulNodes) { node =>
+                  asked.count(n => n == node) should be >= 1
+                }
+              }
+            }
+        }
 
-  test("should resolve handle when there are no new tips and ask all specified nodes") {
-    forAll(genNodes(), arbBlockSummary.arbitrary) { (nodes, tip) =>
-      val atomicBoolean = Atomic(true)
-      val selectedNodes = sample(Gen.choose(1, nodes.size).flatMap(i => Gen.pick(i, nodes)))
-      TestFixture(
-        InitialSynchronizationImpl.Bootstrap(nodes.head),
-        nodes,
-        (_, _) => selectedNodes.toList,
-        _ => List(tip),
-        (_, _) => Task.delay(atomicBoolean.get())
-      ) { (sync, mock) =>
-        for {
-          w1 <- sync
-          r1 <- w1.timeout(200.millis).attempt
-          _ <- Task {
-                r1.isLeft shouldBe true
-                r1.left.get shouldBe an[TimeoutException]
-              }
-          w2 <- sync
-          _ <- Task {
-                atomicBoolean.set(false)
-              }
-          r2 <- w2.attempt
-        } yield {
-          r2.isRight shouldBe true
-          mock.asked.get() should contain allElementsOf selectedNodes
+      """
+        |invoke successful nodes multiple times and
+        |not include failed nodes in next rounds
+        |if memoization is true
+      """.stripMargin in {
+        test(memoize = true)
+      }
+      """
+        |invoke successful nodes multiple times and
+        |not include failed nodes in next rounds
+        |if memoization is false
+      """.stripMargin in {
+        test(memoize = false)
+      }
+
+      "fails with error if all nodes responds with error" in forAll(genNodes(), genTips()) {
+        (nodes, tips) =>
+          TestFixture(
+            nodes,
+            tips,
+            sync = (_, _) => Task.raiseError(new RuntimeException),
+            skipFailedNodesInNextRounds = true
+          ) { (initialSynchronizer, _) =>
+            for {
+              w <- initialSynchronizer.sync()
+              r <- w.attempt
+            } yield {
+              r.isLeft shouldBe true
+              r.left.get shouldBe an[SynchronizationError]
+            }
+          }
+      }
+    }
+
+    "reaches minSuccessful amount of successful syncs" should {
+      "resolve the handle" in forAll(genNodes(), genTips()) { (nodes, tips) =>
+        val flag = Atomic(false)
+        TestFixture(
+          nodes,
+          tips,
+          sync = { (_, _) =>
+            if (flag.get()) {
+              Task(true)
+            } else {
+              Task.raiseError(new RuntimeException)
+            }
+          },
+          minSuccessful = pos(nodes.size)
+        ) { (initialSynchronizer, _) =>
+          for {
+            w1 <- initialSynchronizer.sync()
+            r1 <- w1.timeout(75.millis).attempt
+            _ <- Task {
+                  r1.isLeft shouldBe true
+                  r1.left.get shouldBe an[TimeoutException]
+                }
+            _ <- Task {
+                  flag.set(true)
+                }
+            w2 <- initialSynchronizer.sync()
+            r2 <- w2.attempt
+            _ <- Task {
+                  r2.isRight shouldBe true
+                }
+          } yield ()
         }
       }
     }
@@ -140,41 +231,49 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
     }
   }
 
+  class MockGossipService(tips: List[BlockSummary]) extends GossipService[Task] {
+    def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] = ???
+    def streamAncestorBlockSummaries(
+        request: StreamAncestorBlockSummariesRequest
+    ): Iterant[Task, BlockSummary] = ???
+    def streamDagTipBlockSummaries(
+        request: StreamDagTipBlockSummariesRequest
+    ): Iterant[Task, BlockSummary] =
+      Iterant.fromList[Task, BlockSummary](tips)
+    def streamBlockSummaries(request: StreamBlockSummariesRequest): Iterant[Task, BlockSummary] =
+      ???
+    def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] = ???
+    def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
+      ???
+    def addApproval(request: AddApprovalRequest): Task[Empty] = ???
+  }
+
   object TestFixture {
     def apply(
-        bootstrap: InitialSynchronizationImpl.Bootstrap,
         nodes: List[Node],
-        selectNodes: (InitialSynchronizationImpl.Bootstrap, List[Node]) => List[Node],
-        tips: Node => List[BlockSummary],
-        sync: (Node, Seq[ByteString]) => Task[Boolean]
-    )(test: (Task[Task[Unit]], MockGossipServiceServer) => Task[Unit]): Unit = {
-      val mockGossipServiceServer = new MockGossipServiceServer(sync)
+        tips: List[BlockSummary],
+        sync: (Node, Seq[ByteString]) => Task[Boolean] = (_, _) => Task(true),
+        selectNodes: (InitialSynchronizationImpl.Bootstrap, List[Node]) => List[Node] = (b, ns) =>
+          (ns.toSet + b).toList,
+        memoizeNodes: Boolean = false,
+        minSuccessful: Int Refined Positive = Int.MaxValue,
+        skipFailedNodesInNextRounds: Boolean = false,
+        roundPeriod: FiniteDuration = 25.millis
+    )(test: (InitialSynchronization[Task], MockGossipServiceServer) => Task[Unit]): Unit = {
+      val mockGossipServiceServer                = new MockGossipServiceServer(sync)
+      val mockGossipService: GossipService[Task] = new MockGossipService(tips)
       val effect = new InitialSynchronizationImpl(
-        new MockNodeDiscovery(nodes),
+        nodeDiscovery = new MockNodeDiscovery(nodes),
         mockGossipServiceServer,
-        bootstrap,
-        selectNodes, { node: Node =>
-          Task.now(new GossipService[Task] {
-            def streamDagTipBlockSummaries(
-                request: StreamDagTipBlockSummariesRequest
-            ): Iterant[Task, BlockSummary] =
-              Iterant.fromList[Task, BlockSummary](tips(node))
-            def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] = ???
-            def streamAncestorBlockSummaries(
-                request: StreamAncestorBlockSummariesRequest
-            ): Iterant[Task, BlockSummary] = ???
-            def streamBlockSummaries(
-                request: StreamBlockSummariesRequest
-            ): Iterant[Task, BlockSummary] = ???
-            def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] =
-              ???
-            def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
-              ???
-            def addApproval(request: AddApprovalRequest): Task[Empty] = ???
-          })
-        }
+        Bootstrap(nodes.head),
+        selectNodes,
+        memoizeNodes,
+        _ => Task(mockGossipService),
+        minSuccessful,
+        skipFailedNodesInNextRounds,
+        roundPeriod
       )
-      test(effect.syncOnStartup(100.millis), mockGossipServiceServer).runSyncUnsafe(5.seconds)
+      test(effect, mockGossipServiceServer).runSyncUnsafe(5.seconds)
     }
   }
 }
