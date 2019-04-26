@@ -2,7 +2,7 @@ package io.casperlabs.comm.gossiping
 
 import cats.effect.concurrent.Semaphore
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Approval, BlockSummary}
+import io.casperlabs.casper.consensus.{Approval, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping.InitialSynchronizationSpec.TestFixture
 import io.casperlabs.shared.Log.NOPLog
@@ -153,17 +153,25 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
         new MockNodeDiscovery(nodes),
         mockGossipServiceServer,
         bootstrap,
-        selectNodes, { node =>
-          new GossipService[Task] {
-            def newBlocks(request: NewBlocksRequest)                                       = ???
-            def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
-            def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest) =
+        selectNodes, { node: Node =>
+          Task.now(new GossipService[Task] {
+            def streamDagTipBlockSummaries(
+                request: StreamDagTipBlockSummariesRequest
+            ): Iterant[Task, BlockSummary] =
               Iterant.fromList[Task, BlockSummary](tips(node))
-            def streamBlockSummaries(request: StreamBlockSummariesRequest) = ???
-            def getBlockChunked(request: GetBlockChunkedRequest)           = ???
-            def getGenesisCandidate(request: GetGenesisCandidateRequest)   = ???
-            def addApproval(request: AddApprovalRequest)                   = ???
-          }
+            def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] = ???
+            def streamAncestorBlockSummaries(
+                request: StreamAncestorBlockSummariesRequest
+            ): Iterant[Task, BlockSummary] = ???
+            def streamBlockSummaries(
+                request: StreamBlockSummariesRequest
+            ): Iterant[Task, BlockSummary] = ???
+            def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] =
+              ???
+            def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
+              ???
+            def addApproval(request: AddApprovalRequest): Task[Empty] = ???
+          })
         }
       )
       test(effect.syncOnStartup(100.millis), mockGossipServiceServer).runSyncUnsafe(5.seconds)

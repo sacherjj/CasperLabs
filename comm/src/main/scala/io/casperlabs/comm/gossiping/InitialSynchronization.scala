@@ -25,14 +25,14 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
     // Filter function to select nodes (with memoization) to synchronize with
     // Second arg is a list of all known peer nodes excluding bootstrap
     selectNodes: (InitialSynchronizationImpl.Bootstrap, List[Node]) => List[Node],
-    connect: Node => GossipService[F]
+    connector: GossipService.Connector[F]
 ) extends InitialSynchronization[F] {
   override def syncOnStartup(roundPeriod: FiniteDuration): F[F[Unit]] = {
     /* True if tips were new and we need to retry a loop */
     def sync(node: Node): F[Boolean] = {
-      val service = connect(node)
       val retrieveTips =
-        service.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL
+        connector(node) >>= (_.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL)
+
       retrieveTips >>= { tips =>
         self
           .newBlocksSynchronous(
