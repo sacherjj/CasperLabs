@@ -8,6 +8,7 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
+import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.SynchronizationError
 import io.casperlabs.shared.Log
 
@@ -48,6 +49,7 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
     def sync(node: Node): F[Unit] =
       for {
         service <- connector(node)
+        _       <- Log[F].debug(s"Syncing with a node: ${node.show}")
         tips    <- service.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL
         _ <- selfGossipService.newBlocksSynchronous(
               NewBlocksRequest(
@@ -59,36 +61,43 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
 
     def loop(nodes: List[Node], failed: Set[Node]): F[Unit] =
       if (nodes.isEmpty) {
-        Sync[F].raiseError(SynchronizationError())
+        Log[F].error("Failed to run initial sync - no more nodes to try") >>
+          Sync[F].raiseError(SynchronizationError())
       } else {
-        nodes
-          .traverse(node => sync(node).attempt.map(result => node -> result))
-          .flatMap { results =>
-            val (successfulE, failedE) = results.partition(_._2.isRight)
-            val successful             = successfulE.map(_._1)
-            val newFailed              = failed ++ failedE.map(_._1)
+        Log[F].debug(s"Next round of syncing with nodes: ${nodes.map(_.show)}") >>
+          nodes
+            .traverse(node => sync(node).attempt.map(result => node -> result))
+            .flatMap { results =>
+              val (successfulE, failedE) = results.partition(_._2.isRight)
+              val successful             = successfulE.map(_._1)
+              val newFailed              = failed ++ failedE.map(_._1)
 
-            if (successful.size >= minSuccessful) {
-              ().pure[F]
-            } else {
-              val nextRoundNodes =
-                if (memoizeNodes) {
-                  (if (skipFailedNodesInNextRounds) successful else nodes).pure[F]
-                } else {
-                  nodeDiscovery.alivePeersAscendingDistance.map { peers =>
-                    val nodes = selectNodes(bootstrap, peers.filterNot(_ == bootstrap))
-                    if (skipFailedNodesInNextRounds) {
-                      nodes.filterNot(newFailed)
-                    } else {
-                      nodes
+              if (successful.size >= minSuccessful) {
+                Log[F].debug(
+                  s"Successfully synced with ${successful.size} nodes, required: $minSuccessful"
+                )
+              } else {
+                val nextRoundNodes =
+                  if (memoizeNodes) {
+                    (if (skipFailedNodesInNextRounds) successful else nodes).pure[F]
+                  } else {
+                    nodeDiscovery.alivePeersAscendingDistance.map { peers =>
+                      val nodes = selectNodes(bootstrap, peers.filterNot(_ == bootstrap))
+                      if (skipFailedNodesInNextRounds) {
+                        nodes.filterNot(newFailed)
+                      } else {
+                        nodes
+                      }
                     }
                   }
+                Log[F].debug(
+                  s"Haven't reached required $minSuccessful amount of nodes, retrying in $roundPeriod"
+                ) >>
+                  Timer[F].sleep(roundPeriod) >> nextRoundNodes >>= { ns =>
+                  loop(ns, newFailed)
                 }
-              Timer[F].sleep(roundPeriod) >> nextRoundNodes >>= { ns =>
-                loop(ns, newFailed)
               }
             }
-          }
       }
 
     nodeDiscovery.alivePeersAscendingDistance
@@ -105,6 +114,7 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
 object InitialSynchronizationImpl {
 
   import shapeless.tag.@@
+  import shapeless.tag
 
   sealed trait BootstrapTag
 
