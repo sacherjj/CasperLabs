@@ -1,19 +1,19 @@
 package io.casperlabs.comm.gossiping
 
 import cats._
-import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
+import cats.effect.implicits._
+import cats.implicits._
 import cats.temp.par._
 import com.google.protobuf.ByteString
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
-import io.casperlabs.shared.{Compression, Log, LogSource}
-import io.casperlabs.comm.ServiceError
-import ServiceError.NotFound
+import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.Utils._
+import io.casperlabs.shared.{Compression, Log}
 import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
@@ -36,6 +36,16 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
     // reply about those that we are going to download and relay them,
     // then asynchronously sync the DAG, schedule the downloads,
     // and finally notify the consensus engine.
+    newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying = false).start)
+
+  /* Same as 'newBlocks' but with synchronous semantics, needed for bootstrapping */
+  protected[gossiping] def newBlocksSynchronous(request: NewBlocksRequest): F[NewBlocksResponse] =
+    newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying = true))
+
+  private def newBlocks(
+      request: NewBlocksRequest,
+      sync: (Node, Set[ByteString]) => F[_]
+  ): F[NewBlocksResponse] =
     request.blockHashes.distinct.toList
       .filterA { blockHash =>
         backend.hasBlock(blockHash).map(!_)
@@ -44,15 +54,16 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
         if (newBlockHashes.isEmpty) {
           Applicative[F].pure(NewBlocksResponse(isNew = false))
         } else {
-          Concurrent[F]
-            .start(sync(request.getSender, newBlockHashes.toSet))
-            .as(NewBlocksResponse(isNew = true))
+          sync(request.getSender, newBlockHashes.toSet).as(NewBlocksResponse(isNew = true))
         }
       }
 
   /** Synchronize and download any missing blocks to get to the new ones. */
-  private def sync(source: Node, newBlockHashes: Set[ByteString]): F[Unit] = {
-
+  private def sync(
+      source: Node,
+      newBlockHashes: Set[ByteString],
+      skipRelaying: Boolean
+  ): F[Unit] = {
     //TODO: Define handling strategies
     def handleSyncError(syncError: SyncError): F[Unit] = {
       val prefix = s"Failed to sync DAG, source: ${source.show}."
@@ -60,7 +71,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
         case SyncError.TooDeep(summaries, limit) =>
           Log[F].warn(
             s"$prefix Returned DAG is too deep, limit: $limit, exceeded hashes: ${summaries
-              .map(b16)}"
+              .map(hex)}"
           )
         case SyncError.TooWide(maxBranchingFactor, maxTotal, total) =>
           Log[F].warn(
@@ -68,18 +79,18 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
           )
         case SyncError.Unreachable(summary, requestedDepth) =>
           Log[F].warn(
-            s"$prefix During streaming source returned unreachable block summary: ${b16(summary)}, requested depth: $requestedDepth"
+            s"$prefix During streaming source returned unreachable block summary: ${hex(summary)}, requested depth: $requestedDepth"
           )
         case SyncError.ValidationError(summary, e) =>
           Log[F].warn(
-            s"$prefix Failed to validated the block summary: ${b16(summary)}, reason: $e"
+            s"$prefix Failed to validated the block summary: ${hex(summary)}, reason: $e"
           )
         case SyncError.MissingDependencies(hashes) =>
           Log[F].warn(
-            s"$prefix Missing dependencies: ${hashes.map(b16)}"
+            s"$prefix Missing dependencies: ${hashes.map(hex)}"
           )
         case SyncError.Cycle(summary) =>
-          Log[F].warn(s"$prefix Detected cycle: ${b16(summary)}")
+          Log[F].warn(s"$prefix Detected cycle: ${hex(summary)}")
       }
     }
 
@@ -97,7 +108,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
                             downloadManager.scheduleDownload(
                               summary,
                               source = source,
-                              relay = newBlockHashes(summary.blockHash)
+                              relay = !skipRelaying && newBlockHashes(summary.blockHash)
                             )
                           }
                 _ <- (dag zip watches).parTraverse {
@@ -229,10 +240,6 @@ object GossipServiceServer {
   val compressors: Map[String, Compressor] = Map(
     "lz4" -> Compression.compress
   )
-
-  def b16(summary: BlockSummary): String = Base16.encode(summary.blockHash.toByteArray)
-
-  def b16(hash: ByteString): String = Base16.encode(hash.toByteArray)
 
   def chunkIt(
       data: Array[Byte],

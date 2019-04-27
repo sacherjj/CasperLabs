@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.shared.Log
 import simulacrum.typeclass
 
@@ -69,15 +69,13 @@ class RelayingImpl[F[_]: Sync: Par: Log: NodeAsk](
       local    <- NodeAsk[F].ask
       response <- service.newBlocks(NewBlocksRequest(sender = local.some, blockHashes = List(hash)))
       msg = if (response.isNew)
-        s"${peer.show} accepted block for downloading ${toStr(hash)}"
+        s"${peer.show} accepted block for downloading ${hex(hash)}"
       else
-        s"${peer.show} rejected block ${toStr(hash)}"
+        s"${peer.show} rejected block ${hex(hash)}"
       _ <- Log[F].debug(msg)
     } yield response.isNew).handleErrorWith { e =>
       for {
         _ <- Log[F].debug(s"NewBlocks request failed ${peer.show}, $e")
       } yield false
     }
-
-  private def toStr(hash: ByteString): String = Base16.encode(hash.toByteArray)
 }
