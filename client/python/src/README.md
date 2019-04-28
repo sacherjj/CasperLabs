@@ -1,5 +1,10 @@
 # CasperLabs Python Client API library and command line tool
 
+CasperLabs Python client is a library that can be used to issue requests
+to CasperLabs node's gRPC Deploy API. 
+
+It also provides command line interface with syntax compatible with the Scala client.
+
 ## Typical usage of the API
 
 ```python
@@ -20,6 +25,11 @@ if response.success:
 
 ```
 
+`casper_client` defined in the module `casper_client.py` is a default instance of `CasperClient`.
+Methods of the `CasperClient` class define the API and correspond to requests defined in 
+[CasperMessage.proto](../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto).
+
+
 User can instantiate several instances of `CasperClient` and configure them to
 communicate with nodes running on different machines:
 
@@ -29,6 +39,24 @@ from casper_client import CasperClient
 client1 = CasperClient('node1host', 40401)
 client2 = CasperClient('node2host', 40401)
 ```
+
+### Return values
+
+Return values of the API functions defined in the `CasperClient` are generally deserialized gRPC reponse objects 
+of the corresponding requests defined in the node's Deploy service, see 
+[CasperMessage.proto](../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto).
+
+### Error handling
+
+Some requests' response objects (see their definitions in 
+[CasperMessage.proto](../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto)
+) have fields indicating success.
+
+In general, the API calls should not throw exceptions. 
+In case of an internal error, for example node's gRPC service not catching a Scala exception
+(e.g. [NODE-451](https://casperlabs.atlassian.net/browse/NODE-451),
+the Python client will throw `InternalError`. 
+`InternalError` is the only exception that user code can expect to be thrown by the API.
 
 ## Command Line Interface
 
