@@ -394,7 +394,7 @@ object ProtoUtil {
   def blockHeader(
       body: Body,
       parentHashes: Seq[ByteString],
-      version: Long,
+      protocolVersion: Long,
       timestamp: Long
   ): Header =
     Header()
@@ -402,7 +402,7 @@ object ProtoUtil {
       .withPostStateHash(protoHash(body.state.get))
       .withDeploysHash(protoSeqHash(body.deploys))
       .withDeployCount(body.deploys.size)
-      .withVersion(version)
+      .withProtocolVersion(protocolVersion)
       .withTimestamp(timestamp)
 
   def unsignedBlockProto(

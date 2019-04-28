@@ -36,7 +36,7 @@ trait BlockStoreTest
 
   private[this] def toBlockMessage(bh: BlockHash, v: Long, ts: Long): BlockMessage =
     BlockMessage(blockHash = bh)
-      .withHeader(Header().withVersion(v).withTimestamp(ts))
+      .withHeader(Header().withProtocolVersion(v).withTimestamp(ts))
 
   def withStore[R](f: BlockStore[Task] => Task[R]): R
 

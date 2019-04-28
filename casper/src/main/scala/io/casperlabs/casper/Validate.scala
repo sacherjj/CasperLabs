@@ -169,7 +169,7 @@ object Validate {
     }
 
   def version[F[_]: Applicative: Log](b: BlockMessage, version: Long): F[Boolean] = {
-    val blockVersion = b.header.get.version
+    val blockVersion = b.header.get.protocolVersion
     if (blockVersion == version) {
       true.pure[F]
     } else {

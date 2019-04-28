@@ -37,7 +37,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
         .withHeader(
           Header()
             .withParentsHashList(parentsHashList)
-            .withVersion(version)
+            .withProtocolVersion(version)
             .withTimestamp(timestamp)
         )
 
