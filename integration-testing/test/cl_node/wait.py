@@ -20,21 +20,22 @@ class PredicateProtocol(typing_extensions.Protocol):
 
 
 class LogsContainMessage:
-    def __init__(self, node: 'Node', message: str) -> None:
+    def __init__(self, node: 'Node', message: str, times: int = 1) -> None:
         self.node = node
         self.message = message
+        self.times = times
 
     def __str__(self) -> str:
         args = ', '.join(repr(a) for a in (self.node.name, self.message))
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        return self.message in self.node.logs()
+        return self.node.logs().count(self.message) >= self.times
 
 
 class NodeStarted(LogsContainMessage):
-    def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabs')
+    def __init__(self, node: 'Node', times: int) -> None:
+        super().__init__(node, 'io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabs', times)
 
 
 class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
@@ -69,6 +70,14 @@ class SendingApprovedBlockRequest(RegexBlockRequest):
 class ConnectedToOtherNode(RegexBlockRequest):
     regex = r"Connected to casperlabs:"
 
+    def __init__(self, node: 'Node', node_name: str, times: int) -> None:
+        self.times = times
+        super().__init__(node, node_name)
+
+    def is_satisfied(self) -> bool:
+        match = self.regex.findall(self.node.logs())
+        return len(match) >= self.times
+
 
 class ApprovedBlockReceived(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
@@ -76,8 +85,8 @@ class ApprovedBlockReceived(LogsContainMessage):
 
 
 class RequestedForkTip(LogsContainMessage):
-    def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'Requested fork tip from peers')
+    def __init__(self, node: 'Node', times: int) -> None:
+        super().__init__(node, 'Requested fork tip from peers', times)
 
 
 class WaitForGoodBye(LogsContainMessage):
@@ -196,8 +205,8 @@ def wait_for_blocks_count_at_least(node: 'Node', expected_blocks_count: int, max
     wait_on_using_wall_clock_time(predicate, timeout)
 
 
-def wait_for_node_started(node: 'Node', startup_timeout: int):
-    predicate = NodeStarted(node)
+def wait_for_node_started(node: 'Node', startup_timeout: int, times: int = 1):
+    predicate = NodeStarted(node, times)
     wait_on_using_wall_clock_time(predicate, startup_timeout)
 
 
@@ -206,8 +215,8 @@ def wait_for_approved_block_received_handler_state(node: 'Node', timeout: int):
     wait_on_using_wall_clock_time(predicate, timeout)
 
 
-def wait_for_requested_for_fork_tip(node: 'Node', timeout: int):
-    predicate = RequestedForkTip(node)
+def wait_for_requested_for_fork_tip(node: 'Node', timeout: int, times: int = 1):
+    predicate = RequestedForkTip(node, times)
     wait_on_using_wall_clock_time(predicate, timeout)
 
 
@@ -284,8 +293,8 @@ def wait_for_approved_block_received(network: 'Network', timeout: int) -> None:
         wait_on_using_wall_clock_time(predicate, timeout)
 
 
-def wait_for_connected_to_node(node: 'Node', other_node_name: str, timeout: int) -> None:
-    predicate = ConnectedToOtherNode(node, other_node_name)
+def wait_for_connected_to_node(node: 'Node', other_node_name: str, timeout: int, times: int = 1) -> None:
+    predicate = ConnectedToOtherNode(node, other_node_name, times)
     wait_on_using_wall_clock_time(predicate, timeout)
 
 
