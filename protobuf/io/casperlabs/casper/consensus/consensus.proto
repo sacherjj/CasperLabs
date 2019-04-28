@@ -75,7 +75,7 @@ message Block {
         // Hash of the body structure as a whole.
         bytes body_hash = 4;
         uint64 timestamp = 5;
-        uint64 version = 6;
+        uint64 protocolVersion = 6;
         uint32 deploy_count = 7;
         string chain_id = 8;
         uint32 validator_block_seq_num = 9;

@@ -88,11 +88,11 @@ object Genesis {
       } yield
         ps.withPreStateHash(ExecutionEngineService[F].emptyStateHash)
           .withPostStateHash(postStateHash)
-      version       = initial.header.get.version
-      timestamp     = initial.header.get.timestamp
-      body          = Body(state = stateWithContracts, deploys = deploysForBlock)
-      header        = blockHeader(body, List.empty[ByteString], version, timestamp)
-      unsignedBlock = unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+      protocolVersion = initial.header.get.protocolVersion
+      timestamp       = initial.header.get.timestamp
+      body            = Body(state = stateWithContracts, deploys = deploysForBlock)
+      header          = blockHeader(body, List.empty[ByteString], protocolVersion, timestamp)
+      unsignedBlock   = unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
     } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
 
   def withoutContracts(

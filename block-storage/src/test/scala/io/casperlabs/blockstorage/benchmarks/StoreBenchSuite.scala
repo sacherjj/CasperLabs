@@ -118,7 +118,7 @@ object StoreBenchSuite {
       .withHeader(
         Header()
           .withParentsHashList(parents)
-          .withVersion(version)
+          .withProtocolVersion(version)
           .withTimestamp(timestamp)
       )
       .withSender(validator)

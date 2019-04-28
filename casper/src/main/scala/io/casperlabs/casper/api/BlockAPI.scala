@@ -293,7 +293,7 @@ object BlockAPI {
     for {
       dag                      <- MultiParentCasper[F].blockDag
       header                   = block.header.getOrElse(Header.defaultInstance)
-      version                  = header.version
+      protocolVersion          = header.protocolVersion
       deployCount              = header.deployCount
       postStateHash            = ProtoUtil.postStateHash(block)
       timestamp                = header.timestamp
@@ -303,7 +303,7 @@ object BlockAPI {
       initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
       blockInfo <- constructor(
                     block,
-                    version,
+                    protocolVersion,
                     deployCount,
                     postStateHash,
                     timestamp,
@@ -324,7 +324,7 @@ object BlockAPI {
 
   private def constructBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,
-      version: Long,
+      protocolVersion: Long,
       deployCount: Int,
       postStateHash: BlockHash,
       timestamp: Long,
@@ -340,7 +340,7 @@ object BlockAPI {
         blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
         blockSize = block.serializedSize.toString,
         blockNumber = ProtoUtil.blockNumber(block),
-        version = version,
+        protocolVersion = protocolVersion,
         deployCount = deployCount,
         tupleSpaceHash = PrettyPrinter.buildStringNoLimit(postStateHash),
         tupleSpaceDump = tsDesc,
@@ -354,7 +354,7 @@ object BlockAPI {
 
   private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,
-      version: Long,
+      protocolVersion: Long,
       deployCount: Int,
       postStateHash: BlockHash,
       timestamp: Long,
@@ -367,7 +367,7 @@ object BlockAPI {
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
       blockSize = block.serializedSize.toString,
       blockNumber = ProtoUtil.blockNumber(block),
-      version = version,
+      protocolVersion = protocolVersion,
       deployCount = deployCount,
       tupleSpaceHash = PrettyPrinter.buildStringNoLimit(postStateHash),
       timestamp = timestamp,
