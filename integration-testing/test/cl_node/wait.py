@@ -206,10 +206,6 @@ def wait_for_approved_block_received_handler_state(node: 'Node', timeout: int):
     wait_on_using_wall_clock_time(predicate, timeout)
 
 
-def wait_a_minute():
-    time.sleep(60)
-
-
 def wait_for_requested_for_fork_tip(node: 'Node', timeout: int):
     predicate = RequestedForkTip(node)
     wait_on_using_wall_clock_time(predicate, timeout)
