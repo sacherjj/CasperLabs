@@ -13,7 +13,6 @@ from .cl_node.wait import (
     wait_for_connected_to_node,
     wait_for_requested_for_fork_tip,
     wait_for_good_bye,
-    wait_a_minute,
     wait_for_finalised_hash,
 )
 
