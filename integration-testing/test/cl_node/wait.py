@@ -97,7 +97,7 @@ class MetricsAvailable:
         duplicate_blocks = received_blocks_again_pattern.search(data)
         if blocks is None or duplicate_blocks is None:
             return False
-        return int(blocks.group(1)) - int(duplicate_blocks.group(1)) == 1
+        return int(blocks.group(1)) - int(duplicate_blocks.group(1)) == 2
 
 
 class HasAtLeastPeers:
