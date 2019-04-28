@@ -97,14 +97,14 @@ class MetricsAvailable:
         duplicate_blocks = received_blocks_again_pattern.search(data)
         if blocks is None or duplicate_blocks is None:
             return False
-        return int(blocks.group(1)) - int(duplicate_blocks.group(1)) == 2
+        return int(blocks.group(1)) - int(duplicate_blocks.group(1)) == 1
 
 
 class HasAtLeastPeers:
     def __init__(self, node: 'Node', minimum_peers_number: int) -> None:
         self.node = node
         self.minimum_peers_number = minimum_peers_number
-        self.metric_regex = re.compile(r"^casperlabs_comm_discovery_kademlia_peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+        self.metric_regex = re.compile(r"^casperlabs_comm_rp_connect_peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
 
     def __str__(self) -> str:
         args = ', '.join(repr(a) for a in (self.node.name, self.minimum_peers_number))
