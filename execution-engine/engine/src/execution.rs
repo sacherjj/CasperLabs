@@ -889,15 +889,18 @@ impl Executor<Module> for WasmiExecutor {
     where
         R::Error: Into<Error>,
     {
-        let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
         let acct_key = Key::Account(account_addr);
-        let validated_acc_key = Validated::valid(acct_key);
+        let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
+        #[allow(unreachable_code)]
+        let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid), 0);
         let value = on_fail_charge! {
-        match tc.borrow_mut().get(&validated_acc_key) {
-            Ok(None) => Err(Error::KeyNotFound(acct_key)),
-            Err(error) => Err(error.into()),
-            Ok(Some(value)) => Ok(value)
-        }, 0 };
+            match tc.borrow_mut().get(&validated_key) {
+                Ok(None) => Err(Error::KeyNotFound(acct_key)),
+                Err(error) => Err(error.into()),
+                Ok(Some(value)) => Ok(value)
+            },
+            0
+        };
         let account = value.as_account();
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =

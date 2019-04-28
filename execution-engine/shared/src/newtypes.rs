@@ -49,8 +49,8 @@ impl<T> Validated<T> {
     /// There is one problem though - what about the error type?
     /// We know this can never fail but we are forced to choose type
     /// for Error.
-    pub fn valid(v: T) -> Validated<T> {
-        Validated(v)
+    pub fn valid(_v: &T) -> Result<(), !> {
+        Ok(())
     }
 
     pub fn into_raw(self) -> T {

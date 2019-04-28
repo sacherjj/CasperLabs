@@ -140,7 +140,7 @@ where
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
         let key = Key::URef(key, AccessRights::READ_ADD_WRITE);
-        let validated_key = Validated::valid(key);
+        let validated_key = Validated::new(key, Validated::valid)?;
         self.insert_uref(validated_key);
         self.write_gs(key, value)?;
         Ok(key)
@@ -150,7 +150,7 @@ where
     pub fn add_uref(&mut self, name: String, key: Key) -> Result<(), Error> {
         let base_key = self.base_key();
         self.add_gs(base_key, Value::NamedKey(name.clone(), key))?;
-        let validated_key = Validated::valid(key);
+        let validated_key = Validated::new(key, Validated::valid)?;
         self.insert_named_uref(name, validated_key);
         Ok(())
     }
@@ -179,7 +179,7 @@ where
     pub fn store_contract(&mut self, contract: Value) -> Result<[u8; 32], Error> {
         let new_hash = self.new_function_address()?;
         let validated_value = Validated::new(contract, |cntr| self.validate_keys(&cntr))?;
-        let validated_key = Validated::valid(Key::Hash(new_hash));
+        let validated_key = Validated::new(Key::Hash(new_hash), Validated::valid)?;
         self.state
             .borrow_mut()
             .write(validated_key, validated_value);
@@ -692,8 +692,8 @@ mod tests {
         let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut().write(
-            Validated::valid(contract_key),
-            Validated::valid(contract.clone()),
+            Validated::new(contract_key, Validated::valid).unwrap(),
+            Validated::new(contract.clone(), Validated::valid).unwrap(),
         );
 
         let mut uref_map = BTreeMap::new();
@@ -741,8 +741,8 @@ mod tests {
         let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut().write(
-            Validated::valid(contract_key),
-            Validated::valid(contract.clone()),
+            Validated::new(contract_key, Validated::valid).unwrap(),
+            Validated::new(contract.clone(), Validated::valid).unwrap(),
         );
 
         let mut uref_map = BTreeMap::new();
