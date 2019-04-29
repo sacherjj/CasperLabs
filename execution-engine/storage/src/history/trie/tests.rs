@@ -10,6 +10,12 @@ fn radix_is_256() {
 mod pointer_block {
     use crate::history::trie::*;
 
+    /// A defense against changes to [`RADIX`](history::trie::RADIX).
+    #[test]
+    fn debug_formatter_succeeds() {
+        let _ = format!("{:?}", PointerBlock::new());
+    }
+
     #[test]
     fn assignment_and_indexing() {
         let test_hash = Blake2bHash::new(b"TrieTrieAgain");
