@@ -95,8 +95,9 @@ class WaitForGoodBye(LogsContainMessage):
 
 
 class MetricsAvailable:
-    def __init__(self, node: 'Node') -> None:
+    def __init__(self, node: 'Node', number_of_blocks: int) -> None:
         self.node = node
+        self.number_of_blocks = number_of_blocks
 
     def is_satisfied(self) -> bool:
         _, data = self.node.get_metrics()
@@ -106,7 +107,7 @@ class MetricsAvailable:
         duplicate_blocks = received_blocks_again_pattern.search(data)
         if blocks is None or duplicate_blocks is None:
             return False
-        return int(blocks.group(1)) - int(duplicate_blocks.group(1)) == 3
+        return int(blocks.group(1)) - int(duplicate_blocks.group(1)) == self.number_of_blocks
 
 
 class HasAtLeastPeers:
@@ -245,8 +246,8 @@ def wait_for_peers_count_at_least(node: 'Node', npeers: int, timeout: int) -> No
     wait_using_wall_clock_time_or_fail(predicate, timeout)
 
 
-def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout: int) -> None:
-    predicate = MetricsAvailable(node)
+def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout: int, number_of_blocks) -> None:
+    predicate = MetricsAvailable(node, number_of_blocks)
     wait_using_wall_clock_time_or_fail(predicate, timeout)
 
 

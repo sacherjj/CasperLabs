@@ -42,4 +42,5 @@ def test_persistent_dag_store(command_line_options_fixture, docker_client_fixtur
             wait_for_streamed_packet(network.bootstrap, network.peers[0].name, context.node_startup_timeout)
             wait_for_finalised_hash(network.bootstrap, hash_string, context.node_startup_timeout * 3)
             wait_for_finalised_hash(network.peers[0], '', context.node_startup_timeout * 3)
-            wait_for_metrics_and_assert_blocks_avaialable(network.peers[0], context.node_startup_timeout * 3)
+            number_of_blocks = 3
+            wait_for_metrics_and_assert_blocks_avaialable(network.peers[0], context.node_startup_timeout * 3, number_of_blocks)
