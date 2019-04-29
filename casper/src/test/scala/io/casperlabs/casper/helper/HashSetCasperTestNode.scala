@@ -13,11 +13,7 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.comm.CasperPacketHandler.{
-  ApprovedBlockReceivedHandler,
-  CasperPacketHandlerImpl,
-  CasperPacketHandlerInternal
-}
+import io.casperlabs.casper.util.comm.CasperPacketHandler.{ApprovedBlockReceivedHandler, CasperPacketHandlerImpl, CasperPacketHandlerInternal}
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.TaskContrib._
@@ -377,7 +373,8 @@ object HashSetCasperTestNode {
 
       override def exec(
           prestate: ByteString,
-          deploys: Seq[Deploy]
+          deploys: Seq[Deploy],
+          protocolVersion: ipc.ProtocolVersion
       ): F[Either[Throwable, Seq[DeployResult]]] =
         //This function returns the same `DeployResult` for all deploys,
         //regardless of their wasm code. It pretends to have run all the deploys,

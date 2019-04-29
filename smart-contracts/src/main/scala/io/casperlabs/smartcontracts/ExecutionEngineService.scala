@@ -3,7 +3,6 @@ package io.casperlabs.smartcontracts
 import java.nio.file.Path
 
 import cats.effect.{Resource, Sync}
-import cats.syntax._
 import cats.implicits._
 import cats.{Applicative, Defer}
 import com.google.protobuf.ByteString
@@ -23,7 +22,8 @@ import scala.util.Either
   def emptyStateHash: ByteString
   def exec(
       prestate: ByteString,
-      deploys: Seq[Deploy]
+      deploys: Seq[Deploy],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
   def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
@@ -58,9 +58,10 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
 
   override def exec(
       prestate: ByteString,
-      deploys: Seq[Deploy]
+      deploys: Seq[Deploy],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]] =
-    sendMessage(ExecRequest(prestate, deploys), _.exec) {
+    sendMessage(ExecRequest(prestate, deploys, Some(protocolVersion)), _.exec) {
       _.result match {
         case ExecResponse.Result.Success(ExecResult(deployResults)) =>
           Right(deployResults)

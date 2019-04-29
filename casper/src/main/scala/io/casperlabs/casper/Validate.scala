@@ -9,6 +9,7 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage, Bond, Justification}
 import io.casperlabs.casper.util.ProtoUtil.bonds
+import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.crypto.hash.Blake2b256
@@ -168,17 +169,29 @@ object Validate {
       true.pure[F]
     }
 
-  def version[F[_]: Applicative: Log](b: BlockMessage, version: Long): F[Boolean] = {
+  // Validates whether block was built using correct protocol version.
+  def version[F[_]: Applicative: Log](
+      b: BlockMessage,
+      m: BlockThreshold => Option[ipc.ProtocolVersion]
+  ): F[Boolean] = {
     val blockVersion = b.header.get.protocolVersion
-    if (blockVersion == version) {
-      true.pure[F]
-    } else {
-      Log[F].warn(
-        ignore(
-          b,
-          s"received block version $blockVersion is the expected version $version."
-        )
-      ) *> false.pure[F]
+    val blockHeight  = b.body.get.state.get.blockNumber
+    m(BlockThreshold(blockHeight)) match {
+      case Some(ipc.ProtocolVersion(v)) =>
+        if (blockVersion == v) {
+          true.pure[F]
+        } else {
+          Log[F].warn(
+            ignore(
+              b,
+              s"Received block version $blockVersion, expected version $v."
+            )
+          ) *> false.pure[F]
+        }
+      case None =>
+        Log[F].warn(
+          ignore(b, s"Protocol version required for block height $blockHeight not found.")
+        ) *> false.pure[F]
     }
   }
 

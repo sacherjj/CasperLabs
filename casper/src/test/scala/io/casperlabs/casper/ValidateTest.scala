@@ -7,23 +7,20 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, BlockUtil}
 import io.casperlabs.casper.helper.BlockGenerator._
+import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
+import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ExecutionEngineServiceStub}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
-import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ExecutionEngineServiceStub}
-import io.casperlabs.ipc.TransformEntry
-import io.casperlabs.models.BlockMetadata
-import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
@@ -670,8 +667,14 @@ class ValidateTest
     for {
       dag     <- blockDagStorage.getRepresentation
       genesis <- ProtoUtil.signBlock(block, dag, pk, sk, "ed25519", "casperlabs")
-      _       <- Validate.version[Task](genesis, -1) shouldBeF false
-      result  <- Validate.version[Task](genesis, 1) shouldBeF true
+      _ <- Validate.version[Task](
+            genesis,
+            Map(BlockThreshold(-1) -> io.casperlabs.ipc.ProtocolVersion(0)).get
+          ) shouldBeF false
+      result <- Validate.version[Task](
+                 genesis,
+                 Map(BlockThreshold(0) -> io.casperlabs.ipc.ProtocolVersion(1)).get
+               ) shouldBeF true
     } yield result
   }
 }
