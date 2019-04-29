@@ -92,6 +92,7 @@ fn main() {
     // TODO: move to arg parser
     let timestamp: u64 = 100_000;
     let nonce: u64 = 1;
+    let protocol_version: u64 = 1;
 
     // let path = std::path::Path::new("./tmp/");
     // TODO: Better error handling?
@@ -113,6 +114,7 @@ fn main() {
             nonce,
             state_hash,
             gas_limit,
+            protocol_version,
             &wasmi_executor,
             &wasmi_preprocessor,
         );

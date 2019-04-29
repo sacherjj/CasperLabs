@@ -135,6 +135,7 @@ where
         nonce: u64,
         prestate_hash: Blake2bHash,
         gas_limit: u64,
+        protocol_version: u64,
         executor: &E,
         preprocessor: &P,
     ) -> Result<ExecutionResult, RootNotFound> {
@@ -146,7 +147,7 @@ where
                     None => Err(RootNotFound(prestate_hash)),
                     Some(mut tc) => {
                         match executor
-                            .exec(module, args, address, timestamp, nonce, gas_limit, &mut tc)
+                            .exec(module, args, address, timestamp, nonce, gas_limit, protocol_version, &mut tc)
                         {
                             (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
                             (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),

@@ -1134,6 +1134,7 @@ pub trait Executor<A> {
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
+        protocol_version: u64,
         tc: &mut TrackingCopy<R>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
@@ -1151,6 +1152,7 @@ impl Executor<Module> for WasmiExecutor {
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
+        protocol_version: u64,
         tc: &mut TrackingCopy<R>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where

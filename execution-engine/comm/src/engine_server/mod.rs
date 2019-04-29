@@ -202,6 +202,7 @@ where
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
+            let protocol_version = deploy.protocol_version as u64;
             engine_state
                 .run_deploy(
                     module_bytes,
@@ -211,6 +212,7 @@ where
                     nonce,
                     prestate_hash,
                     gas_limit,
+                    protocol_version,
                     executor,
                     preprocessor,
                 )
