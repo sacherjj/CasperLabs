@@ -193,16 +193,26 @@ object Validate {
       lastFinalizedBlockHash: BlockHash
   ): F[Unit] =
     for {
+      _ <- Validate.blockSummaryPreGenesis(block, dag, shardId)
+      _ <- Validate.justificationFollows[F](block, genesis, dag)
+      _ <- Validate.parents[F](block, genesis, lastFinalizedBlockHash, dag)
+      _ <- Validate.justificationRegressions[F](block, genesis, dag)
+    } yield ()
+
+  /** Validations we can run even without an approved Genesis, i.e. on Genesis itself. */
+  def blockSummaryPreGenesis[F[_]: Monad: Log: Time: BlockStore: RaiseValidationError](
+      block: BlockMessage,
+      dag: BlockDagRepresentation[F],
+      shardId: String
+  ): F[Unit] =
+    for {
       _ <- Validate.blockHash[F](block)
       _ <- Validate.deployCount[F](block)
       _ <- Validate.missingBlocks[F](block, dag)
       _ <- Validate.timestamp[F](block, dag)
       _ <- Validate.repeatDeploy[F](block, dag)
       _ <- Validate.blockNumber[F](block)
-      _ <- Validate.justificationFollows[F](block, genesis, dag)
-      _ <- Validate.parents[F](block, genesis, lastFinalizedBlockHash, dag)
-      - <- Validate.sequenceNumber[F](block, dag)
-      - <- Validate.justificationRegressions[F](block, genesis, dag)
+      _ <- Validate.sequenceNumber[F](block, dag)
       _ <- Validate.shardIdentifier[F](block, shardId)
     } yield ()
 
