@@ -8,10 +8,9 @@ import io.casperlabs.casper.ValidatorIdentity
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
-import io.casperlabs.casper.util.{ProtoUtil, ProtocolVersions}
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil, ProtocolVersions}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.Node
@@ -146,7 +145,10 @@ object BlockApproverProtocol {
       (blockDeploys, postState) = result
       deploys                   = blockDeploys.map(_.deploy)
       protocolVersion <- EitherT.fromOption[F](
-                          ProtocolVersions(BlockThreshold(postState.blockNumber)),
+                          ProtocolVersions.at(
+                            postState.blockNumber,
+                            CasperLabsProtocolVersions.thresholdsVersionMap
+                          ),
                           "Protocol version for Candidate not found."
                         )
       processedDeploys <- EitherT(

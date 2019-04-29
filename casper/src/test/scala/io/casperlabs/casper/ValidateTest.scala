@@ -13,10 +13,10 @@ import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
 import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ExecutionEngineServiceStub}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.ipc.ProtocolVersion
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -664,16 +664,21 @@ class ValidateTest
   "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
     val (sk, pk)                              = Ed25519.newKeyPair
     val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    // Genesis' block version is 1.  `missingProtocolVersionForBlock` will fail ProtocolVersion lookup
+    // while `protocolVersionForGenesisBlock` returns proper one (version=1)
+    val missingProtocolVersionForBlock: Long => Option[ProtocolVersion] = _ => None
+    val protocolVersionForGenesisBlock: Long => Option[ProtocolVersion] =
+      _ => Some(ProtocolVersion(1))
     for {
       dag     <- blockDagStorage.getRepresentation
       genesis <- ProtoUtil.signBlock(block, dag, pk, sk, "ed25519", "casperlabs")
       _ <- Validate.version[Task](
             genesis,
-            Map(BlockThreshold(-1) -> io.casperlabs.ipc.ProtocolVersion(0)).get
+            missingProtocolVersionForBlock
           ) shouldBeF false
       result <- Validate.version[Task](
                  genesis,
-                 Map(BlockThreshold(0) -> io.casperlabs.ipc.ProtocolVersion(1)).get
+                 protocolVersionForGenesisBlock
                ) shouldBeF true
     } yield result
   }

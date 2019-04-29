@@ -9,7 +9,7 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil, ProtocolVersions}
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil, ProtocolVersions}
 import io.casperlabs.ipc._
 import io.casperlabs.models.{DeployResult => _, _}
 import io.casperlabs.shared.Log
@@ -123,9 +123,11 @@ object ExecEngineUtil {
       dag: BlockDagRepresentation[F]
   ): F[(StateHash, Seq[TransformEntry])] =
     for {
-      parents         <- ProtoUtil.unsafeGetParents[F](block)
-      deploys         = ProtoUtil.deploys(block)
-      protocolVersion = ProtocolVersions.fromBlockMessage(block).get
+      parents <- ProtoUtil.unsafeGetParents[F](block)
+      deploys = ProtoUtil.deploys(block)
+      protocolVersion = ProtocolVersions
+        .fromBlockMessage(block, CasperLabsProtocolVersions.thresholdsVersionMap)
+        .get
       processedHash <- processDeploys(
                         parents,
                         dag,

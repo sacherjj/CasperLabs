@@ -13,7 +13,7 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{ProtocolVersions, Sorting}
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtocolVersions, Sorting}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.ipc
@@ -58,8 +58,11 @@ object Genesis {
   ): F[BlockMsgWithTransform] =
     for {
       protocolVersion <- MonadError[F, Throwable].fromOption[ipc.ProtocolVersion](
-                          ProtocolVersions.fromBlockMessage(initial),
-                          new Exception("Protocol version for Genesis not found.")
+                          ProtocolVersions.fromBlockMessage(
+                            initial,
+                            CasperLabsProtocolVersions.thresholdsVersionMap
+                          ),
+                          new Throwable("Protocol version for Genesis not found.")
                         )
       processedDeploys <- MonadError[F, Throwable].rethrow(
                            ExecutionEngineService[F]

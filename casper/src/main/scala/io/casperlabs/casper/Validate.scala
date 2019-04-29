@@ -9,7 +9,6 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage, Bond, Justification}
 import io.casperlabs.casper.util.ProtoUtil.bonds
-import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.crypto.hash.Blake2b256
@@ -21,9 +20,10 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import scala.util.{Success, Try}
 
 object Validate {
-  type PublicKey = Array[Byte]
-  type Data      = Array[Byte]
-  type Signature = Array[Byte]
+  type PublicKey   = Array[Byte]
+  type Data        = Array[Byte]
+  type Signature   = Array[Byte]
+  type BlockHeight = Long
 
   type RaiseValidationError[F[_]] = FunctorRaise[F, InvalidBlock]
   object RaiseValidationError {
@@ -172,11 +172,11 @@ object Validate {
   // Validates whether block was built using correct protocol version.
   def version[F[_]: Applicative: Log](
       b: BlockMessage,
-      m: BlockThreshold => Option[ipc.ProtocolVersion]
+      m: BlockHeight => Option[ipc.ProtocolVersion]
   ): F[Boolean] = {
     val blockVersion = b.header.get.protocolVersion
     val blockHeight  = b.body.get.state.get.blockNumber
-    m(BlockThreshold(blockHeight)) match {
+    m(blockHeight) match {
       case Some(ipc.ProtocolVersion(v)) =>
         if (blockVersion == v) {
           true.pure[F]

@@ -12,7 +12,6 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.Validate.ValidateErrorWrapper
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil._
-import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -100,10 +99,13 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
       dag: BlockDagRepresentation[F]
   ): F[BlockStatus] =
     for {
-      validFormat            <- Validate.formatOfFields[F](block)
-      validSig               <- Validate.blockSignature[F](block)
-      validSender            <- Validate.blockSender[F](block, genesis, dag)
-      validVersion           <- Validate.version[F](block, ProtocolVersions.apply)
+      validFormat <- Validate.formatOfFields[F](block)
+      validSig    <- Validate.blockSignature[F](block)
+      validSender <- Validate.blockSender[F](block, genesis, dag)
+      validVersion <- Validate.version[F](
+                       block,
+                       ProtocolVersions.at(_, CasperLabsProtocolVersions.thresholdsVersionMap)
+                     )
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
       attemptResult <- if (!validFormat) (InvalidUnslashableBlock, dag).pure[F]
                       else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]
@@ -277,7 +279,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         }
         number = maxBlockNumber + 1
         protocolVersion <- MonadError[F, Throwable].fromOption(
-                            ProtocolVersions.apply(BlockThreshold(number)),
+                            ProtocolVersions
+                              .at(number, CasperLabsProtocolVersions.thresholdsVersionMap),
                             new Throwable(s"Protocol Version for block height $number not found.")
                           )
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
