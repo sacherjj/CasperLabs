@@ -1,3 +1,12 @@
+#[test]
+fn radix_is_256() {
+    assert_eq!(
+        super::RADIX,
+        256,
+        "Changing RADIX alone might cause things to break"
+    );
+}
+
 mod pointer_block {
     use crate::history::trie::*;
 
