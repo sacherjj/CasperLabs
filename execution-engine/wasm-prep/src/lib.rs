@@ -43,39 +43,42 @@ pub enum PreprocessingError {
 use PreprocessingError::*;
 
 pub trait Preprocessor<A> {
-    fn preprocess(
-        &self,
-        module_bytes: &[u8],
-    ) -> Result<A, PreprocessingError>;
+    fn preprocess(&self, module_bytes: &[u8]) -> Result<A, PreprocessingError>;
 }
 
 // TODO(mateusz.gorski): Add `protocol_version` field.
-pub struct WasmiPreprocessor { wasm_costs: WasmCosts }
+pub struct WasmiPreprocessor {
+    wasm_costs: WasmCosts,
+    // Number of memory pages.
+    mem_pages: u32,
+    max_mem_pages: u32,
+}
 
 impl WasmiPreprocessor {
     // TODO(mateusz.gorski): Add from_protocol_version method,
     // for creating WasmiPreprocessor based on it.
-    pub fn new(wasm_costs: WasmCosts) -> WasmiPreprocessor {
-        WasmiPreprocessor { wasm_costs }
+    pub fn new(wasm_costs: WasmCosts, mem_pages: u32, max_mem_pages: u32) -> WasmiPreprocessor {
+        WasmiPreprocessor {
+            wasm_costs,
+            mem_pages,
+            max_mem_pages,
+        }
     }
 }
 
 impl Default for WasmiPreprocessor {
     fn default() -> WasmiPreprocessor {
-        WasmiPreprocessor::new(Default::default())
+        WasmiPreprocessor::new(Default::default(), MEM_PAGES, MAX_MEM_PAGES)
     }
 }
 
 impl Preprocessor<Module> for WasmiPreprocessor {
-    fn preprocess(
-        &self,
-        module_bytes: &[u8],
-    ) -> Result<Module, PreprocessingError> {
+    fn preprocess(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
         let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
         let deserialized_module = deserialize_buffer(module_bytes).map_err(from_parity_err)?;
-        let mut ext_mod = externalize_mem(deserialized_module, None, MEM_PAGES);
+        let mut ext_mod = externalize_mem(deserialized_module, None, self.mem_pages);
         remove_memory_export(&mut ext_mod)?;
-        validate_imports(&ext_mod)?;
+        validate_imports(&ext_mod, self.max_mem_pages)?;
         let gas_mod = inject_gas_counters(ext_mod, &self.wasm_costs)?;
         let module =
             pwasm_utils::stack_height::inject_limiter(gas_mod, self.wasm_costs.max_stack_height)
@@ -125,7 +128,7 @@ fn invalid_imports_error<T, E: AsRef<str>>(s: E) -> Result<T, PreprocessingError
     Err(invalid_imports(s))
 }
 
-fn validate_imports(module: &Module) -> Result<(), PreprocessingError> {
+fn validate_imports(module: &Module, max_mem_pages: u32) -> Result<(), PreprocessingError> {
     module
         .import_section()
         .ok_or(NoImportSection)?
@@ -152,7 +155,7 @@ fn validate_imports(module: &Module) -> Result<(), PreprocessingError> {
                             "There is a limit to Wasm memory. This program does not limit memory",
                         )
                     })?;
-                    if max > MAX_MEM_PAGES {
+                    if max > max_mem_pages {
                         return invalid_imports_error::<bool, String>(format!(
                             "Wasm runtime has 10Mb limit (305 pages each 64KiB) on \
                              max contract memory. This program specific {}",
