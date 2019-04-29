@@ -102,12 +102,10 @@ class MetricsAvailable:
     def is_satisfied(self) -> bool:
         _, data = self.node.get_metrics()
         received_blocks_pattern = re.compile(r"^casperlabs_casper_packet_handler_blocks_received_total ([1-9][0-9]*).0\s*$", re.MULTILINE | re.DOTALL)
-        received_blocks_again_pattern = re.compile(r"^casperlabs_casper_packet_handler_blocks_received_again_total ([0-9]+).0\s*$", re.MULTILINE | re.DOTALL)
         blocks = received_blocks_pattern.search(data)
-        duplicate_blocks = received_blocks_again_pattern.search(data)
-        if blocks is None or duplicate_blocks is None:
+        if blocks is None:
             return False
-        return int(blocks.group(1)) - int(duplicate_blocks.group(1)) == self.number_of_blocks
+        return int(blocks.group(1)) == self.number_of_blocks
 
 
 class HasAtLeastPeers:
@@ -246,7 +244,7 @@ def wait_for_peers_count_at_least(node: 'Node', npeers: int, timeout: int) -> No
     wait_using_wall_clock_time_or_fail(predicate, timeout)
 
 
-def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout: int, number_of_blocks) -> None:
+def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout: int, number_of_blocks: int) -> None:
     predicate = MetricsAvailable(node, number_of_blocks)
     wait_using_wall_clock_time_or_fail(predicate, timeout)
 
