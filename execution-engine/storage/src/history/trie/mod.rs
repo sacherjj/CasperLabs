@@ -127,6 +127,7 @@ impl ::std::ops::IndexMut<usize> for PointerBlock {
 }
 
 impl ::std::fmt::Debug for PointerBlock {
+    #[allow(clippy::assertions_on_constants)]
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         assert!(RADIX > 1, "RADIX must be > 1");
         write!(f, "{}(", stringify!(PointerBlock))?;
