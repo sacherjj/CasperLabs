@@ -60,13 +60,16 @@ def get_resources_folder() -> Path:
 
 def setup_testing_environment() -> None:
     """ Global testing setup in Python rather than run_tests.sh """
+    if os.path.exists(HOST_MOUNT_DIR):
+        shutil.rmtree(HOST_MOUNT_DIR)
     resources_source_path = get_resources_folder()
     shutil.copytree(resources_source_path, HOST_MOUNT_DIR)
 
 
 def teardown_testing_environment() -> None:
     """ Global testing teardown in Python rather than run_tests.sh """
-    shutil.rmtree(HOST_MOUNT_DIR)
+    if os.path.exists(HOST_MOUNT_DIR):
+        shutil.rmtree(HOST_MOUNT_DIR)
 
 
 @pytest.fixture(scope='session', autouse=True)
@@ -76,7 +79,7 @@ def session_testing_environment():
     if needed.
     """
     setup_testing_environment()
-    yield None
+    yield
     teardown_testing_environment()
 
 
