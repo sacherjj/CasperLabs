@@ -1,11 +1,13 @@
 //! Some newtypes.
 
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
-use common::bytesrepr::{self, FromBytes, ToBytes};
 use core::array::TryFromSliceError;
 use std::convert::TryFrom;
 use std::ops::Deref;
+
+use blake2::digest::{Input, VariableOutput};
+use blake2::VarBlake2b;
+
+use common::bytesrepr::{self, FromBytes, ToBytes};
 
 const BLAKE2B_DIGEST_LENGTH: usize = 32;
 
@@ -42,13 +44,6 @@ impl<T> Validated<T> {
         guard(&v).map(|_| Validated(v))
     }
 
-    /// Smart constructor for creating instances of `Validated` type.
-    /// There are situations when we want to create an instance
-    /// without doing any checks on the input value. We could use
-    /// `Validated::new` like this `Validated::new(input, |_| Ok())`.
-    /// There is one problem though - what about the error type?
-    /// We know this can never fail but we are forced to choose type
-    /// for Error.
     pub fn valid(_v: &T) -> Result<(), !> {
         Ok(())
     }
