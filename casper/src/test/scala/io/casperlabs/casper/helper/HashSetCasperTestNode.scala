@@ -13,7 +13,11 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.comm.CasperPacketHandler.{ApprovedBlockReceivedHandler, CasperPacketHandlerImpl, CasperPacketHandlerInternal}
+import io.casperlabs.casper.util.comm.CasperPacketHandler.{
+  ApprovedBlockReceivedHandler,
+  CasperPacketHandlerImpl,
+  CasperPacketHandlerInternal
+}
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.TaskContrib._

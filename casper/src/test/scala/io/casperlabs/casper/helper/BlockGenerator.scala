@@ -9,7 +9,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.DeploysCheckpoint
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.{StateHash, computeDeploysCheckpoint}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.ipc.ProtocolVersion
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
