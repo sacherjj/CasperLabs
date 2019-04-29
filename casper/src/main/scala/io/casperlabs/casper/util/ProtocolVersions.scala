@@ -1,16 +1,15 @@
 package io.casperlabs.casper.util
 
-import cats.data.NonEmptyList
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
 import io.casperlabs.ipc
 
-class ProtocolVersions private (l: NonEmptyList[BlockThreshold]) {
+class ProtocolVersions private (l: List[BlockThreshold]) {
   def versionAt(blockHeight: Long): ipc.ProtocolVersion =
-    l.collect {
+    l.collectFirst {
       case BlockThreshold(blockHeightMin, protocolVersion) if blockHeightMin <= blockHeight =>
         protocolVersion
-    }.head // This cannot throw because we validate in `apply` that list is never empty.
+    }.get // This cannot throw because we validate in `apply` that list is never empty.
 }
 
 object ProtocolVersions {
@@ -53,7 +52,7 @@ object ProtocolVersions {
         (rangeMinAcc + currThreshold.blockHeightMin, protocolVersionsSeen :+ currThreshold.version)
     }
 
-    new ProtocolVersions(NonEmptyList.fromListUnsafe(sortedList))
+    new ProtocolVersions(sortedList)
   }
 
 }
