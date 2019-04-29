@@ -281,7 +281,9 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
         protocolVersion <- MonadError[F, Throwable].fromOption(
                             ProtocolVersions
                               .at(number, CasperLabsProtocolVersions.thresholdsVersionMap),
-                            new RuntimeException(s"Protocol Version for block height $number not found.")
+                            new RuntimeException(
+                              s"Protocol Version for block height $number not found."
+                            )
                           )
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
                      createProposal(dag, parents, remaining, justifications, protocolVersion)
