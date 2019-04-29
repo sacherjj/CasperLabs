@@ -15,12 +15,16 @@ message Deploy {
     uint64 gas_limit = 5;
     uint64 gas_price = 6;
     uint64 nonce = 7;
-    uint64 protocol_version = 8;
+}
+
+message ProtocolVersion  {
+    uint64 version = 1;
 }
 
 message ExecRequest {
     bytes parent_state_hash = 1;
     repeated Deploy deploys = 2;
+    ProtocolVersion protocol_version = 3;
 }
 
 message ExecResponse {
