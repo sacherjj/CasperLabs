@@ -46,7 +46,7 @@ pub trait Preprocessor<A> {
     fn preprocess(&self, module_bytes: &[u8]) -> Result<A, PreprocessingError>;
 }
 
-// TODO(mateusz.gorski): Add `protocol_version` field.
+// TODO(mateusz.gorski): Add `protocol_version` field (EE-285).
 pub struct WasmiPreprocessor {
     wasm_costs: WasmCosts,
     // Number of memory pages.
@@ -83,7 +83,7 @@ impl Preprocessor<Module> for WasmiPreprocessor {
         let module =
             pwasm_utils::stack_height::inject_limiter(gas_mod, self.wasm_costs.max_stack_height)
                 .map_err(|_| StackLimiterError)?;
-        // TODO(mateusz.gorski): Inject global constant that specifies PROTOCOL_VERSION
+        // TODO(mateusz.gorski): Inject global constant that specifies PROTOCOL_VERSION (EE-285)
         Ok(module)
     }
 }
