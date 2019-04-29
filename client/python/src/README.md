@@ -8,12 +8,13 @@ It also provides command line interface with syntax compatible with the Scala cl
 ## Typical usage of the API
 
 ```python
-from casper_client import casper_client as client
+from casper_client import CasperClient
 
 # By default the client will communicate with node running on
-# localhost and listening on port 40401, this can be changed:
-client.host = 'node1'
-client.port = 40402
+# localhost and listening on port 40401, both parameters of the
+# CasperClient constructor are optional.
+
+client = CasperClient('node1', 40402)
 
 response = client.deploy(from_=b"00000000000000000000",
                          gas_limit=100000000,
@@ -25,8 +26,7 @@ if response.success:
 
 ```
 
-`casper_client` defined in the module `casper_client.py` is a default instance of `CasperClient`.
-Methods of the `CasperClient` class define the API and correspond to requests defined in 
+Methods of the `CasperClient` class define the Python API and correspond to requests defined in 
 [CasperMessage.proto](../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto).
 
 
@@ -47,11 +47,11 @@ of the corresponding requests defined in the node's Deploy service, see
 [CasperMessage.proto](../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto).
 
 Response to requests like `showBlocks` or `showMainChain` is a stream of objects (blocks).
-Corresponding Python API functions return generator objects.
+Corresponding Python API functions return generator objects:
 
 ```python
-    for block in client.showBlocks(depth=10):
-        print (block.blockHash)
+for block in client.showBlocks(depth=10):
+    print (block.blockHash)
 ```
 
 ### Error handling

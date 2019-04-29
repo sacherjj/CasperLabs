@@ -251,9 +251,6 @@ class CasperClient:
         return self.node.findBlockWithDeploy(q)
 
 
-casper_client = CasperClient()
-
-
 def guarded_command(function):
     """
     Decorator of functions that implement CLI commands.
@@ -296,7 +293,7 @@ def _show_block(response):
     print(response)
 
 @guarded_command
-def deploy_command(args):
+def deploy_command(casper_client, args):
     response = casper_client.deploy(getattr(args,'from'), args.gas_limit, args.gas_price, 
                                     args.payment, args.session, args.nonce)
     print (response.message)
@@ -304,39 +301,39 @@ def deploy_command(args):
         return 1
 
 @guarded_command
-def propose_command(args):
+def propose_command(casper_client, args):
     response = casper_client.propose()
     print(response.message)
     if not response.success:
         return 1
 
 @guarded_command
-def show_block_command(args):
+def show_block_command(casper_client, args):
     response = casper_client.showBlock(args.hash)
     return _show_block(response)
 
 @guarded_command
-def show_blocks_command(args):
+def show_blocks_command(casper_client, args):
     response = casper_client.showBlocks(args.depth)
     _show_blocks(response)
 
 @guarded_command
-def vdag_command(args):
+def vdag_command(casper_client, args):
     response = casper_client.visualizeDag(args.depth)
     print (response.content)
 
 @guarded_command
-def query_state_command(args):
+def query_state_command(casper_client, args):
     response = casper_client.queryState(args.block_hash, args.key, args.path, getattr(args, 'type'))
     print(response.result)
 
 @guarded_command
-def show_main_chain_command(args):
+def show_main_chain_command(casper_client, args):
     response = casper_client.showMainChain(args.depth)
     _show_blocks(response)
 
 @guarded_command
-def find_block_with_deploy_command(args):
+def find_block_with_deploy_command(casper_client, args):
     response = casper_client.findBlockWithDeploy(args.user, args.timestamp)
     return _show_block(response)
 
@@ -417,13 +414,12 @@ def command_line_tool():
     find_block_with_deploy_parser.set_defaults(function=find_block_with_deploy_command)
 
 
-    args = parser.parse_args()
-    casper_client.host = args.host
-    casper_client.port = args.port
     if len(sys.argv) < 2:
         parser.print_usage()
         sys.exit(1)
-    sys.exit(args.function(args))
+
+    args = parser.parse_args()
+    sys.exit(args.function(CasperClient(args.host, args.port), args))
 
 
 if __name__ == '__main__':

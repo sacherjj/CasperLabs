@@ -8,7 +8,7 @@ correct objects are sent to the server.
 
 import os
 from concurrent import futures
-from casper_client import casper_client as client
+from casper_client import CasperClient
 import grpc
 import CasperMessage_pb2
 import CasperMessage_pb2_grpc
@@ -23,6 +23,7 @@ SESSION = os.path.join(RESOURCES_PATH, "session.wasm")
 
 HASH = 'd9d087fe5d22dbfa1bacb57d6da8d509f7191a216cee6a971de32463ff0f284f'
 
+client = CasperClient()
 client.port = mock_server.CL_GRPC_PORT_EXTERNAL
 
 @pytest.fixture()
