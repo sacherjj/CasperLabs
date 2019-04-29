@@ -172,26 +172,20 @@ object Validate {
   // Validates whether block was built using correct protocol version.
   def version[F[_]: Applicative: Log](
       b: BlockMessage,
-      m: BlockHeight => Option[ipc.ProtocolVersion]
+      m: BlockHeight => ipc.ProtocolVersion
   ): F[Boolean] = {
     val blockVersion = b.header.get.protocolVersion
     val blockHeight  = b.body.get.state.get.blockNumber
-    m(blockHeight) match {
-      case Some(ipc.ProtocolVersion(v)) =>
-        if (blockVersion == v) {
-          true.pure[F]
-        } else {
-          Log[F].warn(
-            ignore(
-              b,
-              s"Received block version $blockVersion, expected version $v."
-            )
-          ) *> false.pure[F]
-        }
-      case None =>
-        Log[F].warn(
-          ignore(b, s"Protocol version required for block height $blockHeight not found.")
-        ) *> false.pure[F]
+    val version      = m(blockHeight).version
+    if (blockVersion == version) {
+      true.pure[F]
+    } else {
+      Log[F].warn(
+        ignore(
+          b,
+          s"Received block version $blockVersion, expected version $version."
+        )
+      ) *> false.pure[F]
     }
   }
 

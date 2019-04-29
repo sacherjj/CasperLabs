@@ -666,9 +666,8 @@ class ValidateTest
     val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
     // Genesis' block version is 1.  `missingProtocolVersionForBlock` will fail ProtocolVersion lookup
     // while `protocolVersionForGenesisBlock` returns proper one (version=1)
-    val missingProtocolVersionForBlock: Long => Option[ProtocolVersion] = _ => None
-    val protocolVersionForGenesisBlock: Long => Option[ProtocolVersion] =
-      _ => Some(ProtocolVersion(1))
+    val missingProtocolVersionForBlock: Long => ProtocolVersion = _ => ProtocolVersion(-1)
+    val protocolVersionForGenesisBlock: Long => ProtocolVersion = _ => ProtocolVersion(1)
     for {
       dag     <- blockDagStorage.getRepresentation
       genesis <- ProtoUtil.signBlock(block, dag, pk, sk, "ed25519", "casperlabs")

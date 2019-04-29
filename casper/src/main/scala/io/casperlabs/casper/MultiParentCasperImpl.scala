@@ -1,6 +1,5 @@
 package io.casperlabs.casper
 
-import cats.MonadError
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
@@ -278,13 +277,8 @@ class MultiParentCasperImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Ti
           case (acc, b) => math.max(acc, blockNumber(b))
         }
         number = maxBlockNumber + 1
-        protocolVersion <- MonadError[F, Throwable].fromOption(
-                            ProtocolVersions
-                              .at(number, CasperLabsProtocolVersions.thresholdsVersionMap),
-                            new RuntimeException(
-                              s"Protocol Version for block height $number not found."
-                            )
-                          )
+        protocolVersion = ProtocolVersions
+          .at(number, CasperLabsProtocolVersions.thresholdsVersionMap)
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
                      createProposal(dag, parents, remaining, justifications, protocolVersion)
                    } else {

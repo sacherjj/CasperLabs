@@ -127,7 +127,6 @@ object ExecEngineUtil {
       deploys = ProtoUtil.deploys(block)
       protocolVersion = ProtocolVersions
         .fromBlockMessage(block, CasperLabsProtocolVersions.thresholdsVersionMap)
-        .get
       processedHash <- processDeploys(
                         parents,
                         dag,

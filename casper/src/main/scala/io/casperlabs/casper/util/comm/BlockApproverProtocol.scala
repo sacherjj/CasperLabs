@@ -144,13 +144,10 @@ object BlockApproverProtocol {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
       deploys                   = blockDeploys.map(_.deploy)
-      protocolVersion <- EitherT.fromOption[F](
-                          ProtocolVersions.at(
-                            postState.blockNumber,
-                            CasperLabsProtocolVersions.thresholdsVersionMap
-                          ),
-                          "Protocol version for Candidate not found."
-                        )
+      protocolVersion = ProtocolVersions.at(
+        postState.blockNumber,
+        CasperLabsProtocolVersions.thresholdsVersionMap
+      )
       processedDeploys <- EitherT(
                            ExecutionEngineService[F].exec(
                              ExecutionEngineService[F].emptyStateHash,

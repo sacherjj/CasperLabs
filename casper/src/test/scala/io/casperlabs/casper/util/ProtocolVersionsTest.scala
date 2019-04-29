@@ -10,6 +10,14 @@ class ProtocolVersionsTest extends WordSpec with Matchers {
     error.getMessage should equal("assertion failed: " + expected)
 
   "ProtocolVersion" when {
+    "created from empty list" should {
+      "throw an assertion error" in {
+        val thrown = the[java.lang.AssertionError] thrownBy {
+          ProtocolVersions(List())
+        }
+        compareErrorMessages(thrown, "List cannot be empty.")
+      }
+    }
     "created with lower bound different than 0" should {
       "throw an assertion error" in {
         val thrown = the[java.lang.AssertionError] thrownBy {
@@ -57,10 +65,10 @@ class ProtocolVersionsTest extends WordSpec with Matchers {
             BlockThreshold(21, ProtocolVersion(3))
           )
         )
-        assert(map.versionAt(5).get == ProtocolVersion(1))
-        assert(map.versionAt(10).get == ProtocolVersion(1))
-        assert(map.versionAt(11).get == ProtocolVersion(2))
-        assert(map.versionAt(31).get == ProtocolVersion(3))
+        assert(map.versionAt(5) == ProtocolVersion(1))
+        assert(map.versionAt(10) == ProtocolVersion(1))
+        assert(map.versionAt(11) == ProtocolVersion(2))
+        assert(map.versionAt(31) == ProtocolVersion(3))
       }
     }
   }

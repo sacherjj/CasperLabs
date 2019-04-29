@@ -16,7 +16,6 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtocolVersions, Sorting}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
-import io.casperlabs.ipc
 import io.casperlabs.shared.{Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -57,19 +56,15 @@ object Genesis {
       startHash: StateHash
   ): F[BlockMsgWithTransform] =
     for {
-      protocolVersion <- MonadError[F, Throwable].fromOption[ipc.ProtocolVersion](
-                          ProtocolVersions.fromBlockMessage(
-                            initial,
-                            CasperLabsProtocolVersions.thresholdsVersionMap
-                          ),
-                          new Throwable("Protocol version for Genesis not found.")
-                        )
       processedDeploys <- MonadError[F, Throwable].rethrow(
                            ExecutionEngineService[F]
                              .exec(
                                startHash,
                                blessedTerms.map(deployDataToEEDeploy),
-                               protocolVersion
+                               ProtocolVersions.fromBlockMessage(
+                                 initial,
+                                 CasperLabsProtocolVersions.thresholdsVersionMap
+                               )
                              )
                          )
       deployEffects = ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)

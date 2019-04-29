@@ -1,14 +1,16 @@
 package io.casperlabs.casper.util
 
+import cats.data.NonEmptyList
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
 import io.casperlabs.ipc
 
-class ProtocolVersions private (l: List[BlockThreshold]) {
-  def versionAt(blockHeight: Long): Option[ipc.ProtocolVersion] = l.collectFirst {
-    case BlockThreshold(blockHeightMin, protocolVersion) if blockHeightMin <= blockHeight =>
-      protocolVersion
-  }
+class ProtocolVersions private (l: NonEmptyList[BlockThreshold]) {
+  def versionAt(blockHeight: Long): ipc.ProtocolVersion =
+    l.collect {
+      case BlockThreshold(blockHeightMin, protocolVersion) if blockHeightMin <= blockHeight =>
+        protocolVersion
+    }.head // This cannot throw because we validate in `apply` that list is never empty.
 }
 
 object ProtocolVersions {
@@ -18,18 +20,19 @@ object ProtocolVersions {
   def fromBlockMessage(
       b: BlockMessage,
       map: ProtocolVersions
-  ): Option[ipc.ProtocolVersion] =
+  ): ipc.ProtocolVersion =
     map.versionAt(b.getBody.getState.blockNumber)
 
   private implicit val blockThresholdOrdering: Ordering[BlockThreshold] =
     Ordering.by[BlockThreshold, Long](_.blockHeightMin).reverse
 
-  def at(blockHeight: Long, m: ProtocolVersions): Option[ipc.ProtocolVersion] =
+  def at(blockHeight: Long, m: ProtocolVersions): ipc.ProtocolVersion =
     m.versionAt(blockHeight)
 
   def apply(l: List[BlockThreshold]): ProtocolVersions = {
     val sortedList = l.sorted(blockThresholdOrdering)
 
+    assert(sortedList.size >= 1, "List cannot be empty.")
     assert(
       sortedList.last.blockHeightMin == 0,
       "Lowest block threshold MUST have 0 as lower bound."
@@ -50,7 +53,7 @@ object ProtocolVersions {
         (rangeMinAcc + currThreshold.blockHeightMin, protocolVersionsSeen :+ currThreshold.version)
     }
 
-    new ProtocolVersions(sortedList)
+    new ProtocolVersions(NonEmptyList.fromListUnsafe(sortedList))
   }
 
 }
