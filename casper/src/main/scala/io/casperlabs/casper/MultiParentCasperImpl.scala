@@ -587,7 +587,9 @@ object MultiParentCasperImpl {
         case MissingBlocks =>
           Cell[F, CasperState].modify { s =>
             s.copy(blockBuffer = s.blockBuffer + block)
-          } *> dag.pure[F]
+          } *>
+            addMissingDependencies(block, dag) *>
+            dag.pure[F]
 
         case AdmissibleEquivocation =>
           val baseEquivocationBlockSeqNum = block.seqNum - 1
@@ -667,6 +669,36 @@ object MultiParentCasperImpl {
         updatedDag <- BlockDagStorage[F].insert(block)
         hash       = block.blockHash
       } yield updatedDag
+
+    /** Check if the block has dependencies that we don't have in store.
+      * Add those to the dependency DAG. */
+    private def addMissingDependencies(
+        block: BlockMessage,
+        dag: BlockDagRepresentation[F]
+    )(implicit state: Cell[F, CasperState]): F[Unit] =
+      for {
+        missingDependencies <- dependenciesHashesOf(block)
+                                .filterA(
+                                  blockHash =>
+                                    dag
+                                      .lookup(blockHash)
+                                      .map(_.isEmpty)
+                                )
+        _ <- missingDependencies.traverse(hash => addMissingDependency(hash, block.blockHash))
+      } yield ()
+
+    /** Keep track of a block depending on another one, so we know when we can start processing. */
+    private def addMissingDependency(
+        ancestorHash: BlockHash,
+        childHash: BlockHash
+    )(implicit state: Cell[F, CasperState]): F[Unit] =
+      Cell[F, CasperState].modify(
+        s =>
+          s.copy(
+            dependencyDag = DoublyLinkedDagOperations
+              .add[BlockHash](s.dependencyDag, ancestorHash, childHash)
+          )
+      )
   }
 
   object StatelessExecutor {
@@ -675,11 +707,11 @@ object MultiParentCasperImpl {
 
   // Temporary class to encapsulate the gossiping effects. Later should be completely farmed out to the
   // thing calling the MultiParentCasper methods.
-  class Broadcaster[F[_]: Monad: ConnectionsCell: TransportLayer: BlockDagStorage: Log: Time: ErrorHandler: RPConfAsk]() {
+  class Broadcaster[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk]() {
 
     /** Gossip the created block, or ask for dependencies. */
     def networkEffects(
-        block: BlockMessage, // not just BlockHash because if the status MissingBlocks it's not in store yet
+        block: BlockMessage, // Not just BlockHash because if the status MissingBlocks it's not in store yet; although we should be able to get it from CasperState.
         status: BlockStatus
     )(implicit state: Cell[F, CasperState]): F[Unit] =
       status match {
@@ -714,33 +746,15 @@ object MultiParentCasperImpl {
         block: BlockMessage
     )(implicit state: Cell[F, CasperState]): F[Unit] =
       for {
-        dag <- BlockDagStorage[F].getRepresentation
-        missingDependencies <- dependenciesHashesOf(block)
-                                .filterA(
-                                  blockHash =>
-                                    dag
-                                      .lookup(blockHash)
-                                      .map(_.isEmpty)
-                                )
         casperState <- Cell[F, CasperState].read
+        missingDependencies = casperState.dependencyDag
+          .childToParentAdjacencyList(block.blockHash)
+          .toList
         missingUnseenDependencies = missingDependencies.filter(
           blockHash => !casperState.seenBlockHashes.contains(blockHash)
         )
-        _ <- missingDependencies.traverse(hash => addMissingDependency(hash, block.blockHash))
         _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
       } yield ()
 
-    /** Keep track of a block depending on another one, so we know when we can start processing. */
-    private def addMissingDependency(
-        ancestorHash: BlockHash,
-        childHash: BlockHash
-    )(implicit state: Cell[F, CasperState]): F[Unit] =
-      Cell[F, CasperState].modify(
-        s =>
-          s.copy(
-            dependencyDag = DoublyLinkedDagOperations
-              .add[BlockHash](s.dependencyDag, ancestorHash, childHash)
-          )
-      )
   }
 }
