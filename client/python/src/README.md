@@ -46,6 +46,14 @@ Return values of the API functions defined in the `CasperClient` are generally d
 of the corresponding requests defined in the node's Deploy service, see 
 [CasperMessage.proto](../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto).
 
+Response to requests like `showBlocks` or `showMainChain` is a stream of objects (blocks).
+Corresponding Python API functions return generator objects.
+
+```python
+    for block in client.showBlocks(depth=10):
+        print (block.blockHash)
+```
+
 ### Error handling
 
 Some requests' response objects (see their definitions in 
@@ -54,7 +62,7 @@ Some requests' response objects (see their definitions in
 
 In general, the API calls should not throw exceptions. 
 In case of an internal error, for example node's gRPC service not catching a Scala exception
-(e.g. [NODE-451](https://casperlabs.atlassian.net/browse/NODE-451),
+(e.g. [NODE-451](https://casperlabs.atlassian.net/browse/NODE-451)),
 the Python client will throw `InternalError`. 
 `InternalError` is the only exception that user code can expect to be thrown by the API.
 
@@ -130,6 +138,10 @@ optional arguments:
 $ ./casper_client.py deploy --from 00000000000000000000 --gas-limit 100000000 --gas-price 1 --session session.wasm --payment payment.wasm 
 Success!
 ```
+
+CLI indicates successful execution of a request by returning `0`.
+In case of an error the tool will return a positive error code.
+This can useful in shell scripting.
 
 See also [Usage of the CasperLabs system](https://github.com/CasperLabs/CasperLabs/blob/dev/USAGE.md).
 
