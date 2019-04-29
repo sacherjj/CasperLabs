@@ -98,8 +98,14 @@ where
         let prestate_hash: Blake2bHash = p.get_parent_state_hash().try_into().unwrap();
         let deploys = p.get_deploys();
         let protocol_version = p.get_protocol_version();
-        let deploys_result: Result<Vec<DeployResult>, RootNotFound> =
-            run_deploys(&self, &executor, &preprocessor, prestate_hash, deploys, protocol_version);
+        let deploys_result: Result<Vec<DeployResult>, RootNotFound> = run_deploys(
+            &self,
+            &executor,
+            &preprocessor,
+            prestate_hash,
+            deploys,
+            protocol_version,
+        );
         match deploys_result {
             Ok(deploy_results) => {
                 let mut exec_response = ipc::ExecResponse::new();
