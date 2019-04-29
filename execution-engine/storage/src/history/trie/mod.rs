@@ -129,8 +129,9 @@ impl ::std::ops::IndexMut<usize> for PointerBlock {
 impl ::std::fmt::Debug for PointerBlock {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         write!(f, "{}(", stringify!(PointerBlock))?;
-        for item in self.0[..].iter() {
-            write!(f, "{:?}", item)?;
+        write!(f, "{:?}", self.0[0])?;
+        for item in self.0[1..].iter() {
+            write!(f, ", {:?}", item)?;
         }
         write!(f, ")")
     }
