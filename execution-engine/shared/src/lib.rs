@@ -1,3 +1,4 @@
+#![feature(never_type)]
 extern crate blake2;
 extern crate common;
 
