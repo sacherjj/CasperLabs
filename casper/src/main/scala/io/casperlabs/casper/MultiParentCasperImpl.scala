@@ -81,25 +81,39 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
           blockHash      = block.blockHash
           containsResult <- dag.contains(blockHash)
           casperState    <- Cell[F, CasperState].read
-          attempts <- if (containsResult || casperState.seenBlockHashes.contains(blockHash)) {
+          attempts <- if (containsResult || casperState.seenBlockHashes
+                            .contains(blockHash)) {
                        Log[F]
                          .info(
                            s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
                          )
-                         .map(_ => List(block.blockHash -> BlockStatus.processing))
+                         .map(
+                           _ =>
+                             List(
+                               block -> BlockStatus.processing
+                             )
+                         )
                      } else {
                        (validatorId match {
-                         case Some(ValidatorIdentity(publicKey, _, _)) =>
-                           val sender = ByteString.copyFrom(publicKey)
+                         case Some(
+                             ValidatorIdentity(publicKey, _, _)
+                             ) =>
+                           val sender =
+                             ByteString.copyFrom(publicKey)
                            handleDoppelganger(block, sender)
                          case None => ().pure[F]
                        }) *> Cell[F, CasperState].modify { s =>
-                         s.copy(seenBlockHashes = s.seenBlockHashes + blockHash)
+                         s.copy(
+                           seenBlockHashes = s.seenBlockHashes + blockHash
+                         )
                        } *> internalAddBlock(block, dag)
                      }
+          // TODO: Ideally this method would just return the block hashes it created,
+          // but for now it does gossiping as well. The methods return the full blocks
+          // because for missing blocks it's not yet saved to the database.
           _ <- attempts.traverse {
-                case (blockHash, status) =>
-                  broadcaster.networkEffects(blockHash, status)
+                case (attemptedBlock, status) =>
+                  broadcaster.networkEffects(attemptedBlock, status)
               }
         } yield attempts.head._2
     )(_ => blockProcessingLock.release)
@@ -110,7 +124,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   private def internalAddBlock(
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[List[(BlockHash, BlockStatus)]] =
+  ): F[List[(BlockMessage, BlockStatus)]] =
     for {
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
       attemptResult <- statelessExecutor.validateAndAddBlock(
@@ -119,7 +133,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                         block
                       )
       (status, updatedDag) = attemptResult
-      _                    <- removeAdded(List(block.blockHash -> status), canRemove = _ != MissingBlocks)
+      _                    <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       furtherAttempts <- status match {
                           case MissingBlocks           => List.empty.pure[F]
                           case IgnorableEquivocation   => List.empty.pure[F]
@@ -139,7 +153,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       _ <- Log[F].info(
             s"New last finalized block hash is ${PrettyPrinter.buildString(updatedLastFinalizedBlockHash)}."
           )
-    } yield (block.blockHash, status) :: furtherAttempts
+    } yield (block, status) :: furtherAttempts
 
   /** Go from the last finalized block and visit all children that can be finalized now.
     * Remove all of the deploys that are in any of them as they won't have to be attempted again. */
@@ -379,7 +393,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   private def reAttemptBuffer(
       dag: BlockDagRepresentation[F],
       lastFinalizedBlockHash: BlockHash
-  ): F[List[(BlockHash, BlockStatus)]] =
+  ): F[List[(BlockMessage, BlockStatus)]] =
     for {
       casperState    <- Cell[F, CasperState].read
       dependencyFree = casperState.dependencyDag.dependencyFree
@@ -388,7 +402,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
         .toList
       dependencyFreeAttempts <- dependencyFreeBlocks.foldM(
                                  (
-                                   List.empty[(BlockHash, BlockStatus)],
+                                   List.empty[(BlockMessage, BlockStatus)],
                                    dag
                                  )
                                ) {
@@ -402,7 +416,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                                                  block
                                                )
                                      (status, updatedDag) = attempt
-                                   } yield ((block.blockHash, status) :: attempts, updatedDag)
+                                   } yield ((block, status) :: attempts, updatedDag)
                                }
       (attempts, updatedDag) = dependencyFreeAttempts
       furtherAttempts <- if (attempts.isEmpty) List.empty.pure[F]
@@ -414,11 +428,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
   /** Remove all the blocks that were successfully added from the block buffer and the dependency DAG. */
   private def removeAdded(
-      attempts: List[(BlockHash, BlockStatus)],
+      attempts: List[(BlockMessage, BlockStatus)],
       canRemove: BlockStatus => Boolean
   ): F[Unit] = {
     val addedBlockHashes = attempts.collect {
-      case (blockHash, status) if canRemove(status) => blockHash
+      case (block, status) if canRemove(status) => block.blockHash
     }.toSet
 
     Cell[F, CasperState].modify { s =>
@@ -661,23 +675,24 @@ object MultiParentCasperImpl {
 
   // Temporary class to encapsulate the gossiping effects. Later should be completely farmed out to the
   // thing calling the MultiParentCasper methods.
-  class Broadcaster[F[_]: Monad: ConnectionsCell: TransportLayer: BlockStore: BlockDagStorage: Log: Time: ErrorHandler: RPConfAsk]() {
+  class Broadcaster[F[_]: Monad: ConnectionsCell: TransportLayer: BlockDagStorage: Log: Time: ErrorHandler: RPConfAsk]() {
 
     /** Gossip the created block, or ask for dependencies. */
     def networkEffects(
-        blockHash: BlockHash,
+        block: BlockMessage, // not just BlockHash because if the status MissingBlocks it's not in store yet
         status: BlockStatus
     )(implicit state: Cell[F, CasperState]): F[Unit] =
       status match {
         //Add successful! Send block to peers, log success, try to add other blocks
         case Valid =>
-          getBlock(blockHash) >>= CommUtil.sendBlock[F]
+          CommUtil.sendBlock[F](block)
 
         case MissingBlocks =>
-          getBlock(blockHash) >>= fetchMissingDependencies
+          // In the future this won't happen because the DownloadManager won't try to add blocks with missing dependencies.
+          fetchMissingDependencies(block)
 
         case AdmissibleEquivocation =>
-          getBlock(blockHash) >>= CommUtil.sendBlock[F]
+          CommUtil.sendBlock[F](block)
 
         case IgnorableEquivocation | InvalidUnslashableBlock | InvalidFollows | InvalidBlockNumber |
             InvalidParents | JustificationRegression | InvalidSequenceNumber |
@@ -688,9 +703,6 @@ object MultiParentCasperImpl {
 
         case BlockException(_) => ().pure[F]
       }
-
-    private def getBlock(blockHash: BlockHash): F[BlockMessage] =
-      BlockStore[F].get(blockHash).map(_.get.getBlockMessage)
 
     /** Ask all peers to send us a block. */
     def requestMissingDependency(blockHash: BlockHash) =
