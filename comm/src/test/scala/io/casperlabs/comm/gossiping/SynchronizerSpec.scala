@@ -97,7 +97,7 @@ class SynchronizerSpec
         genDoubleGreaterEqualOf1(3)
       ) { (dag, n) =>
         log.reset()
-        TestFixture(dag)(maxBranchingFactor = n, startingDepthToCheckBranchingFactor = 0) {
+        TestFixture(dag)(maxBranchingFactor = n, minBlockCountToCheckBranchingFactor = 0) {
           (synchronizer, _, _) =>
             synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
               dagOrError.isLeft shouldBe true
@@ -179,14 +179,14 @@ class SynchronizerSpec
       }
     }
     "asked to sync DAG" should {
-      "ignore branching factor checks until specified depth-threshold is reached" in forAll(
+      "ignore branching factor checks until specified count-threshold is reached" in forAll(
         genPartialDagFromTips(
           ConsensusConfig(dagDepth = 3, dagBranchingFactor = 3, dagWidth = Int.MaxValue)
         ),
         genDoubleGreaterEqualOf1(2)
       ) { (dag, n) =>
         log.reset()
-        TestFixture(dag)(maxBranchingFactor = n, startingDepthToCheckBranchingFactor = Int.MaxValue) {
+        TestFixture(dag)(maxBranchingFactor = n, minBlockCountToCheckBranchingFactor = Int.MaxValue) {
           (synchronizer, _, _) =>
             synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
               dagOrError.isRight shouldBe true
@@ -336,7 +336,7 @@ object SynchronizerSpec {
         maxPossibleDepth: Int Refined Positive = Int.MaxValue,
         maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T] = Double.MaxValue,
         maxDepthAncestorsRequest: Int Refined Positive = Int.MaxValue,
-        startingDepthToCheckBranchingFactor: Int Refined NonNegative = Int.MaxValue,
+        minBlockCountToCheckBranchingFactor: Int Refined NonNegative = Int.MaxValue,
         validate: BlockSummary => Task[Unit] = _ => Task.unit,
         notInDag: ByteString => Task[Boolean] = _ => Task.now(false),
         error: Option[RuntimeException] = None,
@@ -350,7 +350,7 @@ object SynchronizerSpec {
         connectToGossip = _ => MockGossipService(requestsCounter, error, knownHashes, dags: _*),
         backend = MockBackend(tips, justifications, notInDag, validate),
         maxPossibleDepth = maxPossibleDepth,
-        startingDepthToCheckBranchingFactor = startingDepthToCheckBranchingFactor,
+        minBlockCountToCheckBranchingFactor = minBlockCountToCheckBranchingFactor,
         maxBranchingFactor = maxBranchingFactor,
         maxDepthAncestorsRequest = maxDepthAncestorsRequest
       )

@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import shutil
 import os
 import re
 import threading
@@ -12,12 +13,16 @@ from docker.errors import ContainerError
 
 from .common import (
     TestingContext,
+    Network,
     make_tempdir,
     random_string,
 )
 from .wait import (
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,
+    wait_for_started_network,
+    wait_for_approved_block_received,
+    wait_for_converged_network
 )
 
 if TYPE_CHECKING:
@@ -152,8 +157,11 @@ class Node:
         return output
 
     def get_metrics_strict(self):
-        output = self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
-        return output
+        try:
+            output = self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
+            return output
+        except NonZeroExitCodeError:
+            return ""
 
     def cleanup(self) -> None:
         self.container.remove(force=True, v=True)
@@ -642,17 +650,9 @@ def create_peer_nodes(
     key_pairs: List["KeyPair"],
     command_timeout: int,
     bonds_file: str,
-    allowed_peers: Optional[List[str]] = None,
-    allowed_engines: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
 ):
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
-
-    if allowed_peers is None:
-        allowed_peers = [bootstrap.name] + [make_peer_name(network, i) for i in range(0, len(key_pairs))]
-
-    if allowed_engines is None:
-        allowed_engines = [f"enginebootstrap.{network}"] + [make_engine_name(network, i) for i in range(0, len(key_pairs))]
 
     result = []
     execution_engines = []
@@ -752,3 +752,46 @@ def docker_network_with_started_bootstrap(context, *, container_name=None):
                                         socket_volume=volume,
                                         container_name=container_name) as node:
                 yield node
+
+
+@contextlib.contextmanager
+def start_network(*, context: TestingContext, bootstrap: 'Node') -> Generator[Network, None, None]:
+    peers, engines = create_peer_nodes(
+        docker_client=context.docker,
+        bootstrap=bootstrap,
+        network=bootstrap.network,
+        key_pairs=context.peers_keypairs,
+        bonds_file=context.bonds_file,
+        command_timeout=context.command_timeout,
+    )
+    try:
+        yield Network(network=bootstrap.network, bootstrap=bootstrap, peers=peers, engines=engines)
+    finally:
+        for peer in peers:
+            peer.cleanup()
+        for engine in engines:
+            engine.remove(force=True, v=True)
+
+
+@contextlib.contextmanager
+def complete_network(context: TestingContext) -> Generator[Network, None, None]:
+    with docker_network_with_started_bootstrap(context) as bootstrap_node:
+        wait_for_approved_block_received_handler_state(bootstrap_node, context.node_startup_timeout)
+        with start_network(context=context, bootstrap=bootstrap_node) as network:
+            wait_for_started_network(context.node_startup_timeout, network)
+            wait_for_converged_network(context.network_converge_timeout, network, len(network.peers))
+            wait_for_approved_block_received(network, context.node_startup_timeout)
+            yield network
+
+
+def deploy_and_propose(node, _contract_name):
+    local_contract_file_path = os.path.join('resources', _contract_name)
+    shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{_contract_name}")
+    deploy_output = node.deploy()
+    assert deploy_output.strip() == "Success!"
+    logging.info(f"The deployed output is : {deploy_output}")
+    block_hash_output_string = node.propose()
+    block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
+    assert block_hash is not None
+    logging.info(f"The block hash: {block_hash} generated for {node.container.name} for {_contract_name}")
+    return block_hash

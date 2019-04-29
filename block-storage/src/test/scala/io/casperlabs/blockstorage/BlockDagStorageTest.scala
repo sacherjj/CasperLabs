@@ -4,6 +4,7 @@ import java.nio.file.StandardOpenOption
 
 import cats.effect.Sync
 import cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
@@ -120,6 +121,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
     implicit val log = new Log.NOPLog[Task]()
+    implicit val met = new MetricsNOP[Task]
     val env          = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
     FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir).map(_.right.get)
   }
@@ -188,7 +190,11 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     val (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) = lookupResult
     val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, BlockMetadata]) {
       case (lm, b) =>
-        lm.updated(b.sender, BlockMetadata.fromBlock(b))
+        // Ignore empty sender for genesis block
+        if (b.sender != ByteString.EMPTY)
+          lm.updated(b.sender, BlockMetadata.fromBlock(b))
+        else
+          lm
     }
     list.zip(blockElements).foreach {
       case ((blockMetadata, latestMessageHash, latestMessage, children, contains), b) =>
@@ -204,8 +210,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           )
         contains shouldBe true
     }
-    latestMessageHashes shouldBe blockElements.map(b => b.sender -> b.blockHash).toMap
-    latestMessages shouldBe blockElements.map(b => b.sender      -> BlockMetadata.fromBlock(b)).toMap
+    latestMessageHashes shouldBe realLatestMessages.mapValues(_.blockHash)
+    latestMessages shouldBe realLatestMessages
 
     def normalize(topoSort: Vector[Vector[BlockHash]]): Vector[Vector[BlockHash]] =
       if (topoSort.size == 1 && topoSort.head.isEmpty)
@@ -229,6 +235,28 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           result        <- lookupElements(blockElements, secondStorage)
           _             <- secondStorage.close()
         } yield testLookupElementsResult(result, blockElements.flatMap(_.blockMessage))
+      }
+    }
+  }
+
+  it should "be able to restore latest messages with genesis with empty sender field" in {
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
+      val blockElementsWithGenesis = blockElements match {
+        case x :: xs =>
+          val genesis = x.update(_.blockMessage.sender := ByteString.EMPTY)
+          genesis :: xs
+        case Nil =>
+          Nil
+      }
+      withDagStorageLocation { (dagDataDir, blockStore) =>
+        for {
+          firstStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
+          _             <- blockElementsWithGenesis.traverse_(b => firstStorage.insert(b.getBlockMessage))
+          _             <- firstStorage.close()
+          secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          result        <- lookupElements(blockElementsWithGenesis, secondStorage)
+          _             <- secondStorage.close()
+        } yield testLookupElementsResult(result, blockElementsWithGenesis.flatMap(_.blockMessage))
       }
     }
   }
