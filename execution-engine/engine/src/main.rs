@@ -102,7 +102,8 @@ fn main() {
     let engine_state = EngineState::new(global_state);
 
     let wasmi_executor = WasmiExecutor;
-    let wasmi_preprocessor = WasmiPreprocessor;
+    // TODO(mateusz.gorski): Use `protocol_version` and `WasmiPreprocessor::from_protocol_version`.
+    let wasmi_preprocessor: WasmiPreprocessor = Default::default();
 
     for wasm_bytes in wasm_files.iter() {
         println!("Pre state hash: {:?}", state_hash);

@@ -46,29 +46,41 @@ pub trait Preprocessor<A> {
     fn preprocess(
         &self,
         module_bytes: &[u8],
-        wasm_costs: &WasmCosts,
     ) -> Result<A, PreprocessingError>;
 }
 
-pub struct WasmiPreprocessor;
+// TODO(mateusz.gorski): Add `protocol_version` field.
+pub struct WasmiPreprocessor { wasm_costs: WasmCosts }
+
+impl WasmiPreprocessor {
+    // TODO(mateusz.gorski): Add from_protocol_version method,
+    // for creating WasmiPreprocessor based on it.
+    pub fn new(wasm_costs: WasmCosts) -> WasmiPreprocessor {
+        WasmiPreprocessor { wasm_costs }
+    }
+}
+
+impl Default for WasmiPreprocessor {
+    fn default() -> WasmiPreprocessor {
+        WasmiPreprocessor::new(Default::default())
+    }
+}
 
 impl Preprocessor<Module> for WasmiPreprocessor {
-    // TODO: inject gas counter, limit stack size etc
     fn preprocess(
         &self,
         module_bytes: &[u8],
-        wasm_costs: &WasmCosts,
     ) -> Result<Module, PreprocessingError> {
-        // type annotation in closure needed
         let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
         let deserialized_module = deserialize_buffer(module_bytes).map_err(from_parity_err)?;
         let mut ext_mod = externalize_mem(deserialized_module, None, MEM_PAGES);
         remove_memory_export(&mut ext_mod)?;
         validate_imports(&ext_mod)?;
-        let gas_mod = inject_gas_counters(ext_mod, wasm_costs)?;
+        let gas_mod = inject_gas_counters(ext_mod, &self.wasm_costs)?;
         let module =
-            pwasm_utils::stack_height::inject_limiter(gas_mod, wasm_costs.max_stack_height)
+            pwasm_utils::stack_height::inject_limiter(gas_mod, self.wasm_costs.max_stack_height)
                 .map_err(|_| StackLimiterError)?;
+        // TODO(mateusz.gorski): Inject global constant that specifies PROTOCOL_VERSION
         Ok(module)
     }
 }
