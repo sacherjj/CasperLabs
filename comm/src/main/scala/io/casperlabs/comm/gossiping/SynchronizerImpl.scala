@@ -30,7 +30,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
     connectToGossip: Node => F[GossipService[F]],
     backend: SynchronizerImpl.Backend[F],
     maxPossibleDepth: Int Refined Positive,
-    startingDepthToCheckBranchingFactor: Int Refined NonNegative,
+    minBlockCountToCheckBranchingFactor: Int Refined NonNegative,
     maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
     maxDepthAncestorsRequest: Int Refined Positive
 ) extends Synchronizer[F] {
@@ -203,19 +203,16 @@ class SynchronizerImpl[F[_]: Sync: Log](
     }.keySet
 
   private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
-    val maybeDepth = syncState.distanceFromOriginalTarget.values.toList.maximumOption
-    maybeDepth
-      .filter(_ >= startingDepthToCheckBranchingFactor)
-      .fold(EitherT(().asRight[SyncError].pure[F])) { depth =>
-        val total    = syncState.summaries.size
-        val maxTotal = math.pow(maxBranchingFactor, depth.toDouble).ceil.toInt
-
-        if (total > maxTotal) {
-          EitherT((TooWide(maxBranchingFactor, maxTotal, total): SyncError).asLeft[Unit].pure[F])
-        } else {
-          EitherT(().asRight[SyncError].pure[F])
-        }
-      }
+    val depth    = syncState.distanceFromOriginalTarget.values.toList.maximumOption.getOrElse(0)
+    val maxTotal = math.pow(maxBranchingFactor, depth.toDouble).ceil.toInt
+    val total    = syncState.summaries.size
+    if (total > minBlockCountToCheckBranchingFactor &&
+        total > syncState.originalTargets.size &&
+        total > maxTotal) {
+      EitherT((TooWide(maxBranchingFactor, maxTotal, total): SyncError).asLeft[Unit].pure[F])
+    } else {
+      EitherT(().asRight[SyncError].pure[F])
+    }
   }
 
   private def reachable(
