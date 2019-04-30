@@ -6,7 +6,11 @@ import cats.data.EitherT
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import io.casperlabs.casper._
-import io.casperlabs.casper.helper.HashSetCasperTestNode
+import io.casperlabs.casper.helper.{
+  HashSetCasperTestNode,
+  TransportLayerCasperTestNode,
+  TransportLayerCasperTestNodeFactory
+}, HashSetCasperTestNode.Effect
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.rholang._
@@ -24,7 +28,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
-class CreateBlockAPITest extends FlatSpec with Matchers {
+class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCasperTestNodeFactory {
   import HashSetCasperTest._
   import HashSetCasperTestNode.Effect
 
@@ -43,7 +47,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-    val node   = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
+    val node   = standaloneEff(genesis, transforms, validatorKeys.head)
     val casper = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
