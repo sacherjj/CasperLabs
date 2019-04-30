@@ -20,9 +20,10 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import scala.util.{Success, Try}
 
 object Validate {
-  type PublicKey = Array[Byte]
-  type Data      = Array[Byte]
-  type Signature = Array[Byte]
+  type PublicKey   = Array[Byte]
+  type Data        = Array[Byte]
+  type Signature   = Array[Byte]
+  type BlockHeight = Long
 
   type RaiseValidationError[F[_]] = FunctorRaise[F, InvalidBlock]
   object RaiseValidationError {
@@ -168,15 +169,21 @@ object Validate {
       true.pure[F]
     }
 
-  def version[F[_]: Applicative: Log](b: BlockMessage, version: Long): F[Boolean] = {
+  // Validates whether block was built using correct protocol version.
+  def version[F[_]: Applicative: Log](
+      b: BlockMessage,
+      m: BlockHeight => ipc.ProtocolVersion
+  ): F[Boolean] = {
     val blockVersion = b.header.get.protocolVersion
+    val blockHeight  = b.body.get.state.get.blockNumber
+    val version      = m(blockHeight).version
     if (blockVersion == version) {
       true.pure[F]
     } else {
       Log[F].warn(
         ignore(
           b,
-          s"received block version $blockVersion is the expected version $version."
+          s"Received block version $blockVersion, expected version $version."
         )
       ) *> false.pure[F]
     }

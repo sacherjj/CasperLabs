@@ -318,7 +318,8 @@ class ExecEngineUtilTest
 
   def computeSingleProcessedDeploy(
       dag: BlockDagRepresentation[Task],
-      deploy: DeployData*
+      deploy: Seq[DeployData],
+      protocolVersion: ProtocolVersion = ProtocolVersion(1)
   )(
       implicit blockStore: BlockStore[Task],
       executionEngineService: ExecutionEngineService[Task]
@@ -328,9 +329,10 @@ class ExecEngineUtilTest
                         .computeDeploysCheckpoint[Task](
                           Seq.empty,
                           deploy,
-                          dag
+                          dag,
+                          protocolVersion
                         )
-      DeploysCheckpoint(_, _, result, _) = computeResult
+      DeploysCheckpoint(_, _, result, _, _) = computeResult
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
@@ -357,12 +359,12 @@ class ExecEngineUtilTest
           )
         for {
           dag           <- blockDagStorage.getRepresentation
-          proc1         <- computeSingleProcessedDeploy(dag, deploy1)
-          proc2         <- computeSingleProcessedDeploy(dag, deploy2)
-          proc3         <- computeSingleProcessedDeploy(dag, deploy3)
+          proc1         <- computeSingleProcessedDeploy(dag, Seq(deploy1))
+          proc2         <- computeSingleProcessedDeploy(dag, Seq(deploy2))
+          proc3         <- computeSingleProcessedDeploy(dag, Seq(deploy3))
           singleResults = proc1 ++ proc2 ++ proc3
           batchDeploy   = Seq(deploy1, deploy2, deploy3)
-          batchResult   <- computeSingleProcessedDeploy(dag, batchDeploy: _*)
+          batchResult   <- computeSingleProcessedDeploy(dag, batchDeploy)
         } yield batchResult should contain theSameElementsAs singleResults
   }
 
@@ -383,7 +385,8 @@ class ExecEngineUtilTest
           checkpoint <- ExecEngineUtil.computeDeploysCheckpoint(
                          parents = Seq.empty,
                          deploys = deploys,
-                         dag = dag
+                         dag = dag,
+                         ProtocolVersion(1)
                        )
         } yield {
           val processedDeploys = checkpoint.deploysForBlock.map(_.getDeploy)
@@ -451,9 +454,10 @@ class ExecEngineUtilTest
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               Seq.empty,
                               deploys,
-                              dag1
+                              dag1,
+                              ProtocolVersion(1)
                             )
-        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _) = deploysCheckpoint
+        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq.empty,
                   deploys = processedDeploys,
@@ -526,7 +530,7 @@ class ExecEngineUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
-          (_, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
+          (_, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
           (_, _, _) => new SmartContractEngineError("unimplemented").asLeft.pure[Task],
           _ => Seq.empty[Bond].pure[Task],
@@ -536,7 +540,7 @@ class ExecEngineUtilTest
 
       val failedCommitEEService: ExecutionEngineService[Task] =
         mock[Task](
-          (_, deploys) =>
+          (_, deploys, _) =>
             Task.now {
               def getExecutionEffect(deploy: Deploy) = {
                 val key =

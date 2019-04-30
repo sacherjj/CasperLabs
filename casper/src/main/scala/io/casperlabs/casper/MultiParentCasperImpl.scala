@@ -22,7 +22,7 @@ import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
-import io.casperlabs.ipc.ValidateRequest
+import io.casperlabs.ipc.{ProtocolVersion, ValidateRequest}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -63,9 +63,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
 
   type Validator = ByteString
-
-  //TODO: Extract hardcoded version
-  // private val version = 1L
 
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
@@ -294,8 +291,13 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
         latestMessages <- dag.latestMessages
         justifications = toJustification(latestMessages)
           .filter(j => bondedValidators.contains(j.validator))
+        maxBlockNumber = parents.foldLeft(-1L) {
+          case (acc, b) => math.max(acc, blockNumber(b))
+        }
+        number          = maxBlockNumber + 1
+        protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(number)
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
-                     createProposal(dag, parents, remaining, justifications)
+                     createProposal(dag, parents, remaining, justifications, protocolVersion)
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
@@ -340,14 +342,15 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
-      justifications: Seq[Justification]
+      justifications: Seq[Justification],
+      protocolVersion: ProtocolVersion
   ): F[CreateBlockStatus] =
     (for {
       now <- Time[F].currentMillis
       s   <- Cell[F, CasperState].read
       stateResult <- ExecEngineUtil
-                      .computeDeploysCheckpoint(parents, deploys, dag)
-      DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number) = stateResult
+                      .computeDeploysCheckpoint(parents, deploys, dag, protocolVersion)
+      DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number, protocolVersion) = stateResult
       //TODO: compute bonds properly
       newBonds = ProtoUtil.bonds(parents.head)
       postState = RChainState()
@@ -359,7 +362,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       body = Body()
         .withState(postState)
         .withDeploys(deploysForBlock)
-      header = blockHeader(body, parents.map(_.blockHash), version, now)
+      header = blockHeader(body, parents.map(_.blockHash), protocolVersion.version, now)
       block  = unsignedBlockProto(body, header, justifications, shardId)
     } yield CreateBlockStatus.created(block)).handleErrorWith(
       ex =>
@@ -484,7 +487,10 @@ object MultiParentCasperImpl {
         validSender <- maybeContext.map { ctx =>
                         Validate.blockSender[F](block, ctx.genesis, dag)
                       } getOrElse isGenesisLike(block).pure[F]
-        validVersion <- Validate.version[F](block, version)
+        validVersion <- Validate.version[F](
+                         block,
+                         CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
+                       )
         attemptResult <- if (!validFormat) (InvalidUnslashableBlock, dag).pure[F]
                         else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]
                         else if (!validSender) (InvalidUnslashableBlock, dag).pure[F]

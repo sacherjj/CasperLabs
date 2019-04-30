@@ -867,6 +867,7 @@ pub trait Executor<A> {
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
+        protocol_version: u64,
         tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
@@ -884,6 +885,7 @@ impl Executor<Module> for WasmiExecutor {
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
+        _protocol_version: u64,
         tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
@@ -938,10 +940,8 @@ impl Executor<Module> for WasmiExecutor {
 }
 
 /// Turns `key` into a `([u8; 32], AccessRights)` tuple.
-/// Returns None if `key` is not `Key::URef` as we it wouldn't have
-/// `AccessRights` associated to it.
-/// This is helper function for creating `known_urefs` map which
-/// holds addresses and corresponding `AccessRights`.
+/// Returns None if `key` is not `Key::URef` as it wouldn't have `AccessRights` associated with it.
+/// Helper function for creating `known_urefs` associating addresses and corresponding `AccessRights`.
 pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
     match key {
         Key::URef(raw_addr, rights) => Some((raw_addr, rights)),

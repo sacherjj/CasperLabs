@@ -17,9 +17,14 @@ message Deploy {
     uint64 nonce = 7;
 }
 
+message ProtocolVersion  {
+    uint64 version = 1;
+}
+
 message ExecRequest {
     bytes parent_state_hash = 1;
     repeated Deploy deploys = 2;
+    ProtocolVersion protocol_version = 3;
 }
 
 message ExecResponse {

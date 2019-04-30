@@ -11,14 +11,11 @@ import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
-import io.casperlabs.casper.util.Sorting
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, Sorting}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
-import io.casperlabs.ipc
-import io.casperlabs.ipc.{DeployResult, TransformEntry}
 import io.casperlabs.shared.{Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -61,7 +58,13 @@ object Genesis {
     for {
       processedDeploys <- MonadError[F, Throwable].rethrow(
                            ExecutionEngineService[F]
-                             .exec(startHash, blessedTerms.map(deployDataToEEDeploy))
+                             .exec(
+                               startHash,
+                               blessedTerms.map(deployDataToEEDeploy),
+                               CasperLabsProtocolVersions.thresholdsVersionMap.fromBlockMessage(
+                                 initial
+                               )
+                             )
                          )
       deployEffects = ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
 

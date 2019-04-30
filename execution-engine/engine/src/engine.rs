@@ -10,7 +10,6 @@ use storage::global_state::ExecutionEffect;
 use storage::history::*;
 use storage::transform::Transform;
 use trackingcopy::TrackingCopy;
-use vm::wasm_costs::WasmCosts;
 use wasm_prep::Preprocessor;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -23,7 +22,6 @@ where
     // Tracks the "state" of the blockchain (or is an interface to it).
     // I think it should be constrained with a lifetime parameter.
     state: Mutex<H>,
-    wasm_costs: WasmCosts,
 }
 
 pub struct ExecutionResult {
@@ -111,7 +109,6 @@ where
     pub fn new(state: H) -> EngineState<H> {
         EngineState {
             state: Mutex::new(state),
-            wasm_costs: WasmCosts::new(),
         }
     }
 
@@ -137,10 +134,11 @@ where
         nonce: u64,
         prestate_hash: Blake2bHash,
         gas_limit: u64,
+        protocol_version: u64,
         executor: &E,
         preprocessor: &P,
     ) -> Result<ExecutionResult, RootNotFound> {
-        match preprocessor.preprocess(module_bytes, &self.wasm_costs) {
+        match preprocessor.preprocess(module_bytes) {
             Err(error) => Ok(ExecutionResult::failure(error.into(), 0)),
             Ok(module) => match self.tracking_copy(prestate_hash) {
                 Err(error) => Ok(ExecutionResult::failure(error, 0)),
@@ -149,7 +147,7 @@ where
                     Some(mut tc) => {
                         let rc_tc = Rc::new(RefCell::new(tc));
                         match executor
-                            .exec(module, args, address, timestamp, nonce, gas_limit, rc_tc)
+                            .exec(module, args, address, timestamp, nonce, gas_limit, protocol_version, rc_tc)
                         {
                             (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
                             (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),

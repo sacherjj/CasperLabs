@@ -379,7 +379,8 @@ object HashSetCasperTestNode {
 
       override def exec(
           prestate: ByteString,
-          deploys: Seq[Deploy]
+          deploys: Seq[Deploy],
+          protocolVersion: ipc.ProtocolVersion
       ): F[Either[Throwable, Seq[DeployResult]]] =
         //This function returns the same `DeployResult` for all deploys,
         //regardless of their wasm code. It pretends to have run all the deploys,
