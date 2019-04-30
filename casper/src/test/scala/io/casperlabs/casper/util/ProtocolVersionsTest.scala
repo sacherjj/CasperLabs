@@ -12,18 +12,20 @@ class ProtocolVersionsTest extends WordSpec with Matchers {
   "ProtocolVersion" when {
     "created from empty list" should {
       "throw an assertion error" in {
-        val thrown = the[java.lang.AssertionError] thrownBy {
+        val thrown = the[java.lang.IllegalArgumentException] thrownBy {
           ProtocolVersions(List())
         }
-        compareErrorMessages(thrown, "List cannot be empty.")
+        thrown.getMessage should equal("requirement failed: List cannot be empty.")
       }
     }
     "created with lower bound different than 0" should {
       "throw an assertion error" in {
-        val thrown = the[java.lang.AssertionError] thrownBy {
+        val thrown = the[java.lang.IllegalArgumentException] thrownBy {
           ProtocolVersions(List(BlockThreshold(1, ProtocolVersion(1))))
         }
-        compareErrorMessages(thrown, "Lowest block threshold MUST have 0 as lower bound.")
+        thrown.getMessage should equal(
+          "requirement failed: Lowest block threshold MUST have 0 as lower bound."
+        )
       }
     }
 

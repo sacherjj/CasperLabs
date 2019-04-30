@@ -27,8 +27,8 @@ object ProtocolVersions {
   def apply(l: List[BlockThreshold]): ProtocolVersions = {
     val sortedList = l.sorted(blockThresholdOrdering)
 
-    assert(sortedList.size >= 1, "List cannot be empty.")
-    assert(
+    require(sortedList.size >= 1, "List cannot be empty.")
+    require(
       sortedList.last.blockHeightMin == 0,
       "Lowest block threshold MUST have 0 as lower bound."
     )
