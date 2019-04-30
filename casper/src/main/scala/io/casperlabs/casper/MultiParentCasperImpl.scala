@@ -68,8 +68,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
   /** Add a block if it hasn't been added yet. */
   def addBlock(
-      block: BlockMessage,
-      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
+      block: BlockMessage
   ): F[BlockStatus] =
     Sync[F].bracket(blockProcessingLock.acquire)(
       _ =>
@@ -91,15 +90,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                              )
                          )
                      } else {
-                       (validatorId match {
-                         case Some(
-                             ValidatorIdentity(publicKey, _, _)
-                             ) =>
-                           val sender =
-                             ByteString.copyFrom(publicKey)
-                           handleDoppelganger(block, sender)
-                         case None => ().pure[F]
-                       }) *> Cell[F, CasperState].modify { s =>
+                       Cell[F, CasperState].modify { s =>
                          s.copy(
                            seenBlockHashes = s.seenBlockHashes + blockHash
                          )
