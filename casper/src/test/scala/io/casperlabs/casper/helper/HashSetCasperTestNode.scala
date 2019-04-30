@@ -96,7 +96,7 @@ class HashSetCasperTestNode[F[_]](
 
   implicit val casperEff = new MultiParentCasperImpl[F](
     new MultiParentCasperImpl.StatelessExecutor(shardId),
-    new MultiParentCasperImpl.Broadcaster(),
+    MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
     Some(validatorId),
     genesis,
     shardId,

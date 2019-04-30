@@ -1,6 +1,6 @@
 package io.casperlabs.casper
 
-import cats.Monad
+import cats.{Applicative, Monad}
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
@@ -20,6 +20,7 @@ import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
+import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc.{ProtocolVersion, ValidateRequest}
@@ -702,56 +703,116 @@ object MultiParentCasperImpl {
     case class Context(genesis: BlockMessage, lastFinalizedBlockHash: BlockHash)
   }
 
-  // Temporary class to encapsulate the gossiping effects. Later should be completely farmed out to the
-  // thing calling the MultiParentCasper methods.
-  class Broadcaster[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk]() {
-
-    /** Gossip the created block, or ask for dependencies. */
+  /** Encapsulating all methods that might use peer-to-peer communication. */
+  trait Broadcaster[F[_]] {
     def networkEffects(
-        block: BlockMessage, // Not just BlockHash because if the status MissingBlocks it's not in store yet; although we should be able to get it from CasperState.
+        block: BlockMessage,
         status: BlockStatus
-    )(implicit state: Cell[F, CasperState]): F[Unit] =
-      status match {
-        //Add successful! Send block to peers, log success, try to add other blocks
-        case Valid =>
-          CommUtil.sendBlock[F](block)
+    ): F[Unit]
 
-        case MissingBlocks =>
-          // In the future this won't happen because the DownloadManager won't try to add blocks with missing dependencies.
-          fetchMissingDependencies(block)
+    def requestMissingDependency(blockHash: BlockHash): F[Unit]
+  }
 
-        case AdmissibleEquivocation =>
-          CommUtil.sendBlock[F](block)
+  object Broadcaster {
+    def fromTransportLayer[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk]()(
+        implicit state: Cell[F, CasperState]
+    ) =
+      new Broadcaster[F] {
 
-        case IgnorableEquivocation | InvalidUnslashableBlock | InvalidFollows | InvalidBlockNumber |
-            InvalidParents | JustificationRegression | InvalidSequenceNumber |
-            NeglectedInvalidBlock | NeglectedEquivocation | InvalidTransaction | InvalidBondsCache |
-            InvalidRepeatDeploy | InvalidShardId | InvalidBlockHash | InvalidDeployCount |
-            InvalidPreStateHash | InvalidPostStateHash | Processing =>
-          ().pure[F]
+        /** Gossip the created block, or ask for dependencies. */
+        def networkEffects(
+            block: BlockMessage, // Not just BlockHash because if the status MissingBlocks it's not in store yet; although we should be able to get it from CasperState.
+            status: BlockStatus
+        ): F[Unit] =
+          status match {
+            //Add successful! Send block to peers, log success, try to add other blocks
+            case Valid | AdmissibleEquivocation =>
+              CommUtil.sendBlock[F](block)
 
-        case BlockException(_) => ().pure[F]
+            case MissingBlocks =>
+              // In the future this won't happen because the DownloadManager won't try to add blocks with missing dependencies.
+              fetchMissingDependencies(block)
+
+            case IgnorableEquivocation | InvalidUnslashableBlock | InvalidFollows |
+                InvalidBlockNumber | InvalidParents | JustificationRegression |
+                InvalidSequenceNumber | NeglectedInvalidBlock | NeglectedEquivocation |
+                InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidShardId |
+                InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash |
+                Processing =>
+              ().pure[F]
+
+            case BlockException(_) =>
+              ().pure[F]
+          }
+
+        /** Ask all peers to send us a block. */
+        def requestMissingDependency(blockHash: BlockHash) =
+          CommUtil.sendBlockRequest[F](
+            BlockRequest(Base16.encode(blockHash.toByteArray), blockHash)
+          )
+
+        /** Check if the block has dependencies that we don't have in store of buffer.
+          * Add those to the dependency DAG and ask peers to send it. */
+        private def fetchMissingDependencies(
+            block: BlockMessage
+        )(implicit state: Cell[F, CasperState]): F[Unit] =
+          for {
+            casperState <- Cell[F, CasperState].read
+            missingDependencies = casperState.dependencyDag
+              .childToParentAdjacencyList(block.blockHash)
+              .toList
+            missingUnseenDependencies = missingDependencies.filter(
+              blockHash => !casperState.seenBlockHashes.contains(blockHash)
+            )
+            _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
+          } yield ()
       }
 
-    /** Ask all peers to send us a block. */
-    def requestMissingDependency(blockHash: BlockHash) =
-      CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(blockHash.toByteArray), blockHash))
+    /** Network access using the new RPC style gossiping. */
+    def fromGossipServices[F[_]: Applicative](
+        validatorId: Option[ValidatorIdentity],
+        relaying: gossiping.Relaying[F]
+    ) = new Broadcaster[F] {
 
-    /** Check if the block has dependencies that we don't have in store of buffer.
-      * Add those to the dependency DAG and ask peers to send it. */
-    private def fetchMissingDependencies(
-        block: BlockMessage
-    )(implicit state: Cell[F, CasperState]): F[Unit] =
-      for {
-        casperState <- Cell[F, CasperState].read
-        missingDependencies = casperState.dependencyDag
-          .childToParentAdjacencyList(block.blockHash)
-          .toList
-        missingUnseenDependencies = missingDependencies.filter(
-          blockHash => !casperState.seenBlockHashes.contains(blockHash)
-        )
-        _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
-      } yield ()
+      val maybeOwnPublickKey = validatorId map {
+        case ValidatorIdentity(publicKey, _, _) =>
+          ByteString.copyFrom(publicKey)
+      }
 
+      private def throwMissingDependencies[T]: T = throw new RuntimeException(
+        "Impossible! The DownloadManager should not tell Casper about blocks with missing dependencies!"
+      )
+
+      def networkEffects(
+          block: BlockMessage,
+          status: BlockStatus
+      ): F[Unit] =
+        status match {
+          case Valid | AdmissibleEquivocation =>
+            maybeOwnPublickKey match {
+              case Some(key) if key == block.sender =>
+                relaying.relay(List(block.blockHash))
+              case _ =>
+                // We were adding somebody else's block. The DownloadManager did the gossiping.
+                ().pure[F]
+            }
+
+          case MissingBlocks =>
+            throwMissingDependencies
+
+          case IgnorableEquivocation | InvalidUnslashableBlock | InvalidFollows |
+              InvalidBlockNumber | InvalidParents | JustificationRegression |
+              InvalidSequenceNumber | NeglectedInvalidBlock | NeglectedEquivocation |
+              InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidShardId |
+              InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash |
+              Processing =>
+            ().pure[F]
+
+          case BlockException(_) => ().pure[F]
+        }
+
+      def requestMissingDependency(blockHash: BlockHash): F[Unit] =
+        throwMissingDependencies
+    }
   }
 }
