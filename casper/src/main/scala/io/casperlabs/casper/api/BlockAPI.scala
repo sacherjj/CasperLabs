@@ -10,7 +10,6 @@ import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol._
@@ -82,7 +81,7 @@ object BlockAPI {
                          case Created(block) =>
                            Metrics[F].incrementCounter("create-blocks-success") *>
                              casper
-                               .addBlock(block, ignoreDoppelgangerCheck[F])
+                               .addBlock(block)
                                .map(addResponse(_, block))
                        }
             } yield result

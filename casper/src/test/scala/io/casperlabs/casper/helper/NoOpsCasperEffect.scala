@@ -6,7 +6,7 @@ import cats.implicits._
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData}
-import io.casperlabs.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
+import io.casperlabs.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper, ValidatorIdentity}
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.storage.BlockMsgWithTransform
 
@@ -19,10 +19,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
 
   def store: Map[BlockHash, BlockMsgWithTransform] = blockStore.toMap
 
-  def addBlock(
-      b: BlockMessage,
-      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus] =
+  def addBlock(b: BlockMessage): F[BlockStatus] =
     for {
       _ <- Sync[F].delay(
             blockStore
@@ -35,6 +32,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     estimatorFunc.pure[F]
   def createBlock: F[CreateBlockStatus]                               = CreateBlockStatus.noNewDeploys.pure[F]
+  def validatorId: Option[ValidatorIdentity]                          = None
   def blockDag: F[BlockDagRepresentation[F]]                          = BlockDagStorage[F].getRepresentation
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] = 0f.pure[F]
   def lastFinalizedBlock: F[BlockMessage]                             = BlockMessage().pure[F]

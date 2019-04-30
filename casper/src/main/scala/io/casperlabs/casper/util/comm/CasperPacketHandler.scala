@@ -385,7 +385,11 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
             } else {
               for {
                 _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-                _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger[F](peer, _, _))
+                _ <- MultiParentCasper[F].validatorId.fold(().pure[F]) {
+                      case ValidatorIdentity(publicKey, _, _) =>
+                        handleDoppelganger[F](peer, b, ByteString.copyFrom(publicKey))
+                    }
+                _ <- MultiParentCasper[F].addBlock(b)
               } yield ()
             }
       } yield ()
