@@ -294,9 +294,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
         maxBlockNumber = parents.foldLeft(-1L) {
           case (acc, b) => math.max(acc, blockNumber(b))
         }
-        number = maxBlockNumber + 1
-        protocolVersion = ProtocolVersions
-          .at(number, CasperLabsProtocolVersions.thresholdsVersionMap)
+        number          = maxBlockNumber + 1
+        protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(number)
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
                      createProposal(dag, parents, remaining, justifications, protocolVersion)
                    } else {
@@ -490,7 +489,7 @@ object MultiParentCasperImpl {
                       } getOrElse isGenesisLike(block).pure[F]
         validVersion <- Validate.version[F](
                          block,
-                         ProtocolVersions.at(_, CasperLabsProtocolVersions.thresholdsVersionMap)
+                         CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
                        )
         attemptResult <- if (!validFormat) (InvalidUnslashableBlock, dag).pure[F]
                         else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]

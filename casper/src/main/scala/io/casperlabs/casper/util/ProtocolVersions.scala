@@ -10,23 +10,19 @@ class ProtocolVersions private (l: List[BlockThreshold]) {
       case BlockThreshold(blockHeightMin, protocolVersion) if blockHeightMin <= blockHeight =>
         protocolVersion
     }.get // This cannot throw because we validate in `apply` that list is never empty.
+
+  def fromBlockMessage(
+      b: BlockMessage
+  ): ipc.ProtocolVersion =
+    versionAt(b.getBody.getState.blockNumber)
 }
 
 object ProtocolVersions {
 
   final case class BlockThreshold(blockHeightMin: Long, version: ipc.ProtocolVersion)
 
-  def fromBlockMessage(
-      b: BlockMessage,
-      map: ProtocolVersions
-  ): ipc.ProtocolVersion =
-    map.versionAt(b.getBody.getState.blockNumber)
-
   private implicit val blockThresholdOrdering: Ordering[BlockThreshold] =
     Ordering.by[BlockThreshold, Long](_.blockHeightMin).reverse
-
-  def at(blockHeight: Long, m: ProtocolVersions): ipc.ProtocolVersion =
-    m.versionAt(blockHeight)
 
   def apply(l: List[BlockThreshold]): ProtocolVersions = {
     val sortedList = l.sorted(blockThresholdOrdering)

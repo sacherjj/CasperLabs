@@ -13,7 +13,7 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtocolVersions, Sorting}
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, Sorting}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.shared.{Log, LogSource, Time}
@@ -61,9 +61,8 @@ object Genesis {
                              .exec(
                                startHash,
                                blessedTerms.map(deployDataToEEDeploy),
-                               ProtocolVersions.fromBlockMessage(
-                                 initial,
-                                 CasperLabsProtocolVersions.thresholdsVersionMap
+                               CasperLabsProtocolVersions.thresholdsVersionMap.fromBlockMessage(
+                                 initial
                                )
                              )
                          )

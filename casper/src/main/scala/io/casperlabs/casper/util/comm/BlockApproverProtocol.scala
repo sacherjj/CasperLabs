@@ -10,7 +10,7 @@ import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil, ProtocolVersions}
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.Node
@@ -144,9 +144,8 @@ object BlockApproverProtocol {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
       deploys                   = blockDeploys.map(_.deploy)
-      protocolVersion = ProtocolVersions.at(
-        postState.blockNumber,
-        CasperLabsProtocolVersions.thresholdsVersionMap
+      protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
+        postState.blockNumber
       )
       processedDeploys <- EitherT(
                            ExecutionEngineService[F].exec(
