@@ -24,9 +24,9 @@ pub struct TrackingCopyCache {
 }
 
 impl TrackingCopyCache {
-    pub fn new() -> TrackingCopyCache {
+    pub fn new(capacity: usize) -> TrackingCopyCache {
         TrackingCopyCache {
-            reads_cached: LruCache::new(32),
+            reads_cached: LruCache::new(capacity),
             muts_cached: HashMap::new(),
         }
     }
@@ -76,7 +76,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
-            cache: TrackingCopyCache::new(),
+            cache: TrackingCopyCache::new(32),
             ops: HashMap::new(),
             fns: HashMap::new(),
         }
@@ -105,7 +105,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
 
     pub fn write(&mut self, k: Validated<Key>, v: Validated<Value>) {
         let v_local = v.into_raw();
-        let _ = self.cache.insert_write(*k, v_local.clone());
+        self.cache.insert_write(*k, v_local.clone());
         add(&mut self.ops, *k, Op::Write);
         add(&mut self.fns, *k, Transform::Write(v_local));
     }
@@ -136,7 +136,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                 };
                 match t.clone().apply(curr) {
                     Ok(new_value) => {
-                        let _ = self.cache.insert_write(*k, new_value);
+                        self.cache.insert_write(*k, new_value);
                         add(&mut self.ops, *k, Op::Add);
                         add(&mut self.fns, *k, t);
                         Ok(AddResult::Success)
