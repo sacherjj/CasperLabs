@@ -67,6 +67,8 @@ impl HashedTestTrie {
     }
 }
 
+/// Keys have been chosen deliberately and the `create_` functions below depend
+/// on these exact definitions.  Values are arbitrary.
 const TEST_LEAVES: [TestTrie; 5] = [
     Trie::Leaf {
         key: TestKey([0u8, 0, 0, 0]),

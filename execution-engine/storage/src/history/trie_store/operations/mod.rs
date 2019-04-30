@@ -42,13 +42,14 @@ where
                 key: leaf_key,
                 value: leaf_value,
             } => {
-                return Ok(if *key == leaf_key {
+                let result = if *key == leaf_key {
                     ReadResult::Found(leaf_value)
                 } else {
                     // Keys may not match in the case of a compressed path from
                     // a Node directly to a Leaf
                     ReadResult::NotFound
-                });
+                };
+                return Ok(result);
             }
             Trie::Node { pointer_block } => {
                 let index: usize = {
