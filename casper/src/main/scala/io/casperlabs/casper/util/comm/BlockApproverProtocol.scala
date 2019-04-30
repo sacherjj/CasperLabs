@@ -193,6 +193,7 @@ object BlockApproverProtocol {
         x.signature == y.signature &&
         x.sigAlgorithm === y.sigAlgorithm &&
         x.address == y.address &&
+        x.gasPrice === y.gasPrice &&
         x.gasLimit === y.gasLimit &&
         x.nonce === y.nonce
   }

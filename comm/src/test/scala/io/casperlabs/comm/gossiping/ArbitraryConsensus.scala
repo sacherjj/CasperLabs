@@ -151,6 +151,7 @@ trait ArbitraryConsensus {
             .withAccountPublicKey(accountPublicKey)
             .withNonce(nonce)
             .withTimestamp(timestamp)
+            .withGasPrice(gasPrice)
             .withBodyHash(bodyHash)
         )
         .withBody(

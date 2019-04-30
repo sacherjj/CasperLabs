@@ -11,6 +11,7 @@ final case class Deploy(
     host: String,
     from: String,
     gasLimit: Long,
+    gasPrice: Long,
     nonce: Long,
     sessionCode: File,
     paymentCode: File
@@ -54,6 +55,7 @@ object Configuration {
           options.host(),
           options.deploy.from(),
           options.deploy.gasLimit(),
+          options.deploy.gasPrice(),
           options.deploy.nonce(),
           options.deploy.session(),
           options.deploy.payment()
