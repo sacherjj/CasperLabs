@@ -82,7 +82,6 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
-  def validatorId                                       = underlying.validatorId
   def addBlock(b: BlockMessage): F[BlockStatus]         = underlying.addBlock(b)
   def contains(b: BlockMessage): F[Boolean]             = underlying.contains(b)
   def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)

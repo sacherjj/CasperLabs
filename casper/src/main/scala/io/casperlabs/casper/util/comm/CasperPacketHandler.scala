@@ -82,7 +82,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                  bap
                )
              )
-      } yield new CasperPacketHandlerImpl[F](gv)
+      } yield new CasperPacketHandlerImpl[F](gv, validatorId)
     } else if (conf.standalone) {
       for {
         _     <- Log[F].info("Starting in create genesis mode")
@@ -127,7 +127,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
               ).forkAndForget.runToFuture
               ().pure[F]
             }
-      } yield new CasperPacketHandlerImpl[F](standalone)
+      } yield new CasperPacketHandlerImpl[F](standalone, validatorId)
     } else {
       for {
         _ <- Log[F].info("Starting in default mode")
@@ -143,7 +143,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                         validators
                       )
                     )
-        casperPacketHandler = new CasperPacketHandlerImpl[F](bootstrap)
+        casperPacketHandler = new CasperPacketHandlerImpl[F](bootstrap, validatorId)
         _ <- Sync[F].delay {
               implicit val ph: PacketHandler[F] = PacketHandler.pf[F](casperPacketHandler.handle)
               val rb                            = CommUtil.requestApprovedBlock[F](delay)
@@ -296,7 +296,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                               )
                      _   <- MultiParentCasperRef[F].set(casper)
                      _   <- Log[F].info("Making a transition to ApprovedBlockRecievedHandler state.")
-                     abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
+                     abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock, validatorId)
                      _   <- capserHandlerInternal.set(abh)
                      _   <- CommUtil.sendForkChoiceTipRequest[F]
                    } yield ()
@@ -353,7 +353,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     **/
   class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler](
       private val casper: MultiParentCasper[F],
-      approvedBlock: ApprovedBlock
+      approvedBlock: ApprovedBlock,
+      validatorId: Option[ValidatorIdentity]
   ) extends CasperPacketHandlerInternal[F] {
 
     implicit val _casper = casper
@@ -385,7 +386,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
             } else {
               for {
                 _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-                _ <- MultiParentCasper[F].validatorId.fold(().pure[F]) {
+                _ <- validatorId.fold(().pure[F]) {
                       case ValidatorIdentity(publicKey, _, _) =>
                         handleDoppelganger[F](peer, b, ByteString.copyFrom(publicKey))
                     }
@@ -441,7 +442,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   }
 
   class CasperPacketHandlerImpl[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef](
-      private val cphI: Ref[F, CasperPacketHandlerInternal[F]]
+      private val cphI: Ref[F, CasperPacketHandlerInternal[F]],
+      validatorId: Option[ValidatorIdentity]
   ) extends CasperPacketHandler[F] {
 
     override def handle(peer: Node): PartialFunction[Packet, F[Unit]] =
@@ -482,7 +484,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                         _ <- Log[F].info(
                               "Making a transition to ApprovedBlockRecievedHandler state."
                             )
-                        abr = new ApprovedBlockReceivedHandler(casperInstance, ab)
+                        abr = new ApprovedBlockReceivedHandler(casperInstance, ab, validatorId)
                         _   <- cphI.set(abr)
                         _   <- CommUtil.sendForkChoiceTipRequest[F]
                       } yield ()

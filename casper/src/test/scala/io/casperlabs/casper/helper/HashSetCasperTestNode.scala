@@ -106,9 +106,13 @@ class HashSetCasperTestNode[F[_]](
 
   implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[F](Some(casperEff))
 
-  val handlerInternal = new ApprovedBlockReceivedHandler(casperEff, approvedBlock)
+  val handlerInternal =
+    new ApprovedBlockReceivedHandler(casperEff, approvedBlock, Some(validatorId))
   val casperPacketHandler =
-    new CasperPacketHandlerImpl[F](Ref.unsafe[F, CasperPacketHandlerInternal[F]](handlerInternal))
+    new CasperPacketHandlerImpl[F](
+      Ref.unsafe[F, CasperPacketHandlerInternal[F]](handlerInternal),
+      Some(validatorId)
+    )
   implicit val packetHandlerEff = PacketHandler.pf[F](
     casperPacketHandler.handle
   )
