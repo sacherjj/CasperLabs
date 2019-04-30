@@ -1,12 +1,12 @@
 use common::bytesrepr::{self, FromBytes, ToBytes};
-use failure;
 use history::trie::{Pointer, Trie};
-use history::trie_store::in_memory::{InMemoryEnvironment, InMemoryTrieStore};
+use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
 use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 use history::trie_store::{Transaction, TransactionSource, TrieStore};
 use lmdb::DatabaseFlags;
 use shared::newtypes::Blake2bHash;
 use tempfile::{tempdir, TempDir};
+use {error, failure};
 
 const TEST_KEY_LENGTH: usize = 4;
 
@@ -302,6 +302,21 @@ fn create_5_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
     Ok((root_hash, tries))
 }
 
+fn put_tries<'a, R, S, E>(environment: &'a R, store: &S, tries: &[HashedTestTrie]) -> Result<(), E>
+where
+    R: TransactionSource<'a, Handle = S::Handle>,
+    S: TrieStore<TestKey, TestValue>,
+    S::Error: From<R::Error>,
+    E: From<R::Error> + From<S::Error> + From<common::bytesrepr::Error>,
+{
+    let mut txn = environment.create_read_write_txn()?;
+    for HashedTestTrie { hash, trie } in tries.iter() {
+        store.put(&mut txn, hash, trie)?;
+    }
+    txn.commit()?;
+    Ok(())
+}
+
 // A context for holding lmdb-based test resources
 struct LmdbTestContext {
     _temp_dir: TempDir,
@@ -315,13 +330,7 @@ impl LmdbTestContext {
         let _temp_dir = tempdir()?;
         let environment = LmdbEnvironment::new(&_temp_dir.path().to_path_buf())?;
         let store = LmdbTrieStore::new(&environment, None, DatabaseFlags::empty())?;
-        {
-            let mut txn = environment.create_read_write_txn()?;
-            for HashedTestTrie { hash, trie } in tries.iter() {
-                store.put(&mut txn, hash, trie)?;
-            }
-            txn.commit()?;
-        }
+        put_tries::<LmdbEnvironment, LmdbTrieStore, error::Error>(&environment, &store, tries)?;
         let states = vec![root_hash];
         Ok(LmdbTestContext {
             _temp_dir,
@@ -343,23 +352,13 @@ impl LmdbTestContext {
         root_hash: Blake2bHash,
         tries: &[HashedTestTrie],
     ) -> Result<(), failure::Error> {
-        if let Some(last_root) = self.states.pop() {
-            let new_root = {
-                {
-                    let mut txn = self.environment.create_read_write_txn()?;
-                    for HashedTestTrie { hash, trie } in tries.iter() {
-                        self.store.put(&mut txn, hash, trie)?;
-                    }
-                    txn.commit()?;
-                }
-                root_hash
-            };
-            self.states.push(last_root);
-            self.states.push(new_root);
-            Ok(())
-        } else {
-            panic!("LmdbTestContext was not constructed properly")
-        }
+        put_tries::<LmdbEnvironment, LmdbTrieStore, error::Error>(
+            &self.environment,
+            &self.store,
+            tries,
+        )?;
+        self.states.push(root_hash);
+        Ok(())
     }
 }
 
@@ -374,13 +373,11 @@ impl InMemoryTestContext {
     fn new(root_hash: Blake2bHash, tries: &[HashedTestTrie]) -> Result<Self, failure::Error> {
         let environment = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&environment);
-        {
-            let mut txn = environment.create_read_write_txn()?;
-            for HashedTestTrie { hash, trie } in tries.iter() {
-                store.put(&mut txn, hash, trie)?;
-            }
-            txn.commit()?;
-        }
+        put_tries::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
+            &environment,
+            &store,
+            tries,
+        )?;
         let states = vec![root_hash];
         Ok(InMemoryTestContext {
             environment,
@@ -401,23 +398,13 @@ impl InMemoryTestContext {
         root_hash: Blake2bHash,
         tries: &[HashedTestTrie],
     ) -> Result<(), failure::Error> {
-        if let Some(last_root) = self.states.pop() {
-            let new_root = {
-                {
-                    let mut txn = self.environment.create_read_write_txn()?;
-                    for HashedTestTrie { hash, trie } in tries.iter() {
-                        self.store.put(&mut txn, hash, trie)?;
-                    }
-                    txn.commit()?;
-                }
-                root_hash
-            };
-            self.states.push(last_root);
-            self.states.push(new_root);
-            Ok(())
-        } else {
-            panic!("InMemoryTestContext was not constructed properly")
-        }
+        put_tries::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
+            &self.environment,
+            &self.store,
+            tries,
+        )?;
+        self.states.push(root_hash);
+        Ok(())
     }
 }
 
