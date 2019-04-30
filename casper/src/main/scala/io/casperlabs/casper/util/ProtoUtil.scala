@@ -475,8 +475,6 @@ object ProtoUtil {
     } yield signedBlock
   }
 
-  def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
-
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
@@ -509,11 +507,6 @@ object ProtoUtil {
       gasLimit = gasLimit
     )
 
-  def compiledSourceDeploy(
-      timestamp: Long,
-      gasLimit: Long
-  ): DeployData = ???
-
   def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): DeployData =
     DeployData(
       user = ByteString.EMPTY,
@@ -522,9 +515,6 @@ object ProtoUtil {
       payment = Some(DeployCode()),
       gasLimit = gasLimit
     )
-
-  def termDeployNow(sessionCode: ByteString): DeployData =
-    sourceDeploy(sessionCode, System.currentTimeMillis(), Integer.MAX_VALUE)
 
   // https://casperlabs.atlassian.net/browse/EE-283
   // We are hardcoding exchange rate for DEV NET at 10:1
