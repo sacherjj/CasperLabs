@@ -7,12 +7,16 @@ It also provides command line interface with syntax compatible with the Scala cl
 
 ## Typical usage of the API
 
+Instantiate `CasperClient` and issue a requests.
+`CasperClient` constructor accepts hostname or IP of node on which gRPC service is running on 
+and the service's port.
+
+Both parameters of the CasperClient constructor are optional.
+By default the client will communicate with node running on
+localhost and listening on port 40401. 
+
 ```python
 from casper_client import CasperClient
-
-# By default the client will communicate with node running on
-# localhost and listening on port 40401, both parameters of the
-# CasperClient constructor are optional.
 
 client = CasperClient('node1', 40402)
 

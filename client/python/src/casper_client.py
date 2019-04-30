@@ -91,6 +91,12 @@ class CasperClient:
     """
 
     def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
+        """
+        CasperLabs client's constructor.
+
+        :param host:  Hostname or IP of node on which gRPC service is running
+        :param port:  Port used for external gRPC API
+        """
         self.host = host
         self.port = port
         self.node = Node(self)
