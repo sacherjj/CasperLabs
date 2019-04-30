@@ -103,7 +103,6 @@ object DeployRuntime {
   def deployFileProgram[F[_]: Sync: DeployService](
       from: String,
       gasLimit: Long,
-      gasPrice: Long,
       nonce: Long,
       sessionCode: File,
       paymentCode: File
@@ -126,7 +125,6 @@ object DeployRuntime {
               .withPayment(DeployCode().withCode(payment))
               .withAddress(ByteString.copyFromUtf8(from))
               .withGasLimit(gasLimit)
-              .withGasPrice(gasPrice)
               .withNonce(nonce)
         }
         .flatMap(DeployService[F].deploy)
