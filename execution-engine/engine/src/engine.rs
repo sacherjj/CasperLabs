@@ -146,9 +146,16 @@ where
                     None => Err(RootNotFound(prestate_hash)),
                     Some(mut tc) => {
                         let rc_tc = Rc::new(RefCell::new(tc));
-                        match executor
-                            .exec(module, args, address, timestamp, nonce, gas_limit, protocol_version, rc_tc)
-                        {
+                        match executor.exec(
+                            module,
+                            args,
+                            address,
+                            timestamp,
+                            nonce,
+                            gas_limit,
+                            protocol_version,
+                            rc_tc,
+                        ) {
                             (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
                             (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),
                         }

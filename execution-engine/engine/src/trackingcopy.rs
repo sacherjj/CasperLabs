@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use common::key::Key;
 use common::value::Value;
+use lru_cache::LruCache;
 use shared::newtypes::Validated;
 use storage::global_state::{ExecutionEffect, StateReader};
 use storage::op::Op;
@@ -18,14 +19,14 @@ pub enum QueryResult {
 /// We deliberately separate cached Reads from cached mutations
 /// because we want to invalidate Reads' cache so it doesn't grow too fast.
 pub struct TrackingCopyCache {
-    reads_cached: HashMap<Key, Value>,
+    reads_cached: LruCache<Key, Value>,
     muts_cached: HashMap<Key, Value>,
 }
 
 impl TrackingCopyCache {
     pub fn new() -> TrackingCopyCache {
         TrackingCopyCache {
-            reads_cached: HashMap::new(),
+            reads_cached: LruCache::new(32),
             muts_cached: HashMap::new(),
         }
     }
@@ -41,8 +42,14 @@ impl TrackingCopyCache {
     }
 
     /// Gets value from `key` in the cache.
-    pub fn get(&self, key: &Key) -> Option<&Value> {
-        self.reads_cached.get(key).or_else(|| self.muts_cached.get(key))
+    pub fn get(&mut self, key: &Key) -> Option<&Value> {
+        let reads_cache = self.reads_cached.get_mut(key).map(|v| {
+            // a hack to downgrade &mut Value to &Value
+            let v_imm: &Value = v;
+            v_imm
+        });
+        let writes_cache = self.muts_cached.get(key);
+        reads_cache.or(writes_cache)
     }
 
     pub fn is_empty(&self) -> bool {
