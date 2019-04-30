@@ -14,9 +14,45 @@ pub enum QueryResult {
     ValueNotFound(String),
 }
 
+/// Keeps track of already accessed keys.
+/// We deliberately separate cached Reads from cached mutations
+/// because we want to invalidate Reads' cache so it doesn't grow too fast.
+pub struct TrackingCopyCache {
+    reads_cached: HashMap<Key, Value>,
+    muts_cached: HashMap<Key, Value>,
+}
+
+impl TrackingCopyCache {
+    pub fn new() -> TrackingCopyCache {
+        TrackingCopyCache {
+            reads_cached: HashMap::new(),
+            muts_cached: HashMap::new(),
+        }
+    }
+
+    /// Inserts `key` and `value` pair to Read cache.
+    pub fn insert_read(&mut self, key: Key, value: Value) {
+        self.reads_cached.insert(key, value);
+    }
+
+    /// Inserts `key` and `value` pair to Write/Add cache.
+    pub fn insert_write(&mut self, key: Key, value: Value) {
+        self.muts_cached.insert(key, value);
+    }
+
+    /// Gets value from `key` in the cache.
+    pub fn get(&self, key: &Key) -> Option<&Value> {
+        self.reads_cached.get(key).or_else(|| self.muts_cached.get(key))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.reads_cached.is_empty() && self.muts_cached.is_empty()
+    }
+}
+
 pub struct TrackingCopy<R: StateReader<Key, Value>> {
     reader: R,
-    cache: HashMap<Key, Value>,
+    cache: TrackingCopyCache,
     ops: HashMap<Key, Op>,
     fns: HashMap<Key, Transform>,
 }
@@ -33,7 +69,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
-            cache: HashMap::new(),
+            cache: TrackingCopyCache::new(),
             ops: HashMap::new(),
             fns: HashMap::new(),
         }
@@ -44,7 +80,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
             return Ok(Some(value.clone()));
         }
         if let Some(value) = self.reader.read(&**k)? {
-            self.cache.insert(**k, value.clone());
+            self.cache.insert_read(**k, value.clone());
             Ok(Some(value))
         } else {
             Ok(None)
@@ -62,7 +98,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
 
     pub fn write(&mut self, k: Validated<Key>, v: Validated<Value>) {
         let v_local = v.into_raw();
-        let _ = self.cache.insert(*k, v_local.clone());
+        let _ = self.cache.insert_write(*k, v_local.clone());
         add(&mut self.ops, *k, Op::Write);
         add(&mut self.fns, *k, Transform::Write(v_local));
     }
@@ -93,7 +129,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                 };
                 match t.clone().apply(curr) {
                     Ok(new_value) => {
-                        let _ = self.cache.insert(*k, new_value);
+                        let _ = self.cache.insert_write(*k, new_value);
                         add(&mut self.ops, *k, Op::Add);
                         add(&mut self.fns, *k, t);
                         Ok(AddResult::Success)
