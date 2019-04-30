@@ -489,9 +489,9 @@ object MultiParentCasperImpl {
                         Validate.blockSender[F](block, ctx.genesis, dag)
                       } getOrElse isGenesisLike(block).pure[F]
         validVersion <- Validate.version[F](
-          block,
-          ProtocolVersions.at(_, CasperLabsProtocolVersions.thresholdsVersionMap)
-        )
+                         block,
+                         ProtocolVersions.at(_, CasperLabsProtocolVersions.thresholdsVersionMap)
+                       )
         attemptResult <- if (!validFormat) (InvalidUnslashableBlock, dag).pure[F]
                         else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]
                         else if (!validSender) (InvalidUnslashableBlock, dag).pure[F]
