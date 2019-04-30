@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import io.casperlabs.comm.discovery.Node
 import org.scalacheck.{Arbitrary, Gen, Shrink}
+
 import scala.collection.JavaConverters._
 
 object ArbitraryConsensus extends ArbitraryConsensus
@@ -150,7 +151,6 @@ trait ArbitraryConsensus {
             .withAccountPublicKey(accountPublicKey)
             .withNonce(nonce)
             .withTimestamp(timestamp)
-            .withGasPrice(gasPrice)
             .withBodyHash(bodyHash)
         )
         .withBody(

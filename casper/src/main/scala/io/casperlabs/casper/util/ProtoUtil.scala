@@ -10,8 +10,8 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.protocol.{DeployData, _}
 import io.casperlabs.casper.util.implicits._
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.catscontrib.ski.id
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.ipc
 import io.casperlabs.models.BlockMetadata
@@ -526,13 +526,19 @@ object ProtoUtil {
   def termDeployNow(sessionCode: ByteString): DeployData =
     sourceDeploy(sessionCode, System.currentTimeMillis(), Integer.MAX_VALUE)
 
+  // https://casperlabs.atlassian.net/browse/EE-283
+  // We are hardcoding exchange rate for DEV NET at 10:1
+  // (1 token buys you 10 units of gas).
+  // Later, post DEV NET, conversion rate will be part of a deploy.
+  val GAS_PRICE = 10
+
   def deployDataToEEDeploy(dd: DeployData): ipc.Deploy = ipc.Deploy(
     address = dd.address,
     timestamp = dd.timestamp,
     session = dd.session.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
     payment = dd.payment.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
     gasLimit = dd.gasLimit,
-    gasPrice = dd.gasPrice,
+    gasPrice = GAS_PRICE,
     nonce = dd.nonce
   )
 

@@ -1,11 +1,10 @@
 package io.casperlabs.casper.util.comm
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Concurrent
 import cats.implicits._
-import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.{protocol, ValidatorIdentity}
+import io.casperlabs.casper.ValidatorIdentity
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
@@ -17,20 +16,13 @@ import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.RPConfAsk
-import io.casperlabs.comm.transport.{Blob, TransportLayer}
-import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.ipc
-import io.casperlabs.ipc.{DeployResult, TransformEntry}
 import io.casperlabs.models.InternalProcessedDeploy
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import monix.eval.Task
-import monix.execution.Scheduler
 
-import scala.concurrent.duration.Duration
 import scala.util.Try
 
 /**
@@ -201,7 +193,6 @@ object BlockApproverProtocol {
         x.signature == y.signature &&
         x.sigAlgorithm === y.sigAlgorithm &&
         x.address == y.address &&
-        x.gasPrice === y.gasPrice &&
         x.gasLimit === y.gasLimit &&
         x.nonce === y.nonce
   }

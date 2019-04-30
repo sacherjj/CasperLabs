@@ -36,10 +36,10 @@ message Deploy {
         uint64 nonce = 2;
         // Current time milliseconds.
         uint64 timestamp = 3;
-        // Conversion rate between the cost of Wasm opcodes and the tokens sent by the `payment_code`.
-        uint64 gas_price = 4;
         // Hash of the body structure as a whole.
-        bytes body_hash = 5;
+        bytes body_hash = 4;
+        // Conversion rate between the cost of Wasm opcodes and the tokens sent by the `payment_code`.
+        // uint64 gas_price = 5;
     }
 
     message Body {
