@@ -15,6 +15,8 @@ pub const RADIX: usize = 256;
 
 const U32_SIZE: usize = size_of::<u32>();
 
+pub type Parents<K, V> = Vec<(usize, Trie<K, V>)>;
+
 /// Represents a pointer to the next object in a Merkle Trie
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Pointer {

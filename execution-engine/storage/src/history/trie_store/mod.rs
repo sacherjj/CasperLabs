@@ -11,6 +11,8 @@ pub mod lmdb;
 #[cfg(test)]
 pub(crate) mod in_memory;
 
+// TODO: remove this annotation
+#[allow(dead_code)]
 pub(crate) mod operations;
 
 #[cfg(test)]
