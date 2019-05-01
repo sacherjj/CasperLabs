@@ -31,14 +31,12 @@ import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.Connect
 import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.comm.rp.HandleMessages.handle
-import io.casperlabs.crypto.signatures.Ed25519
-import io.casperlabs.ipc
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.PathOps.RichPath
-import io.casperlabs.shared.{Cell, Log}
+import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -47,16 +45,12 @@ import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
 
-import HashSetCasperTestNode.Effect
-
 class TransportLayerCasperTestNode[F[_]](
     local: Node,
     tle: TransportLayerTestImpl[F],
     genesis: BlockMessage,
     transforms: Seq[TransformEntry],
     sk: Array[Byte],
-    logicalTime: LogicalTime[F],
-    storageSize: Long,
     blockDagDir: Path,
     blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
@@ -67,9 +61,10 @@ class TransportLayerCasperTestNode[F[_]](
     concurrentF: Concurrent[F],
     blockStore: BlockStore[F],
     blockDagStorage: BlockDagStorage[F],
+    val errorHandlerEff: ErrorHandler[F],
+    val timeEff: Time[F],
     metricEff: Metrics[F],
-    casperState: Cell[F, CasperState],
-    val errorHandlerEff: ErrorHandler[F]
+    casperState: Cell[F, CasperState]
 ) extends HashSetCasperTestNode[F](
       local,
       sk,
@@ -78,7 +73,6 @@ class TransportLayerCasperTestNode[F[_]](
       blockStoreDir
     )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
 
-  implicit val timeEff            = logicalTime
   implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
   implicit val transportLayerEff  = tle
   implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
@@ -90,7 +84,6 @@ class TransportLayerCasperTestNode[F[_]](
 
   implicit val labF =
     LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
-  val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
   implicit val casperEff: MultiParentCasperImpl[F] = new MultiParentCasperImpl[F](
     new MultiParentCasperImpl.StatelessExecutor(shardId),
@@ -163,8 +156,6 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
         genesis,
         transforms,
         sk,
-        logicalTime,
-        storageSize,
         blockDagDir,
         blockStoreDir,
         blockProcessingLock,
@@ -173,9 +164,10 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
         concurrentF,
         blockStore,
         blockDagStorage,
+        errorHandler,
+        logicalTime,
         metricEff,
-        casperState,
-        errorHandler
+        casperState
       )
       result <- node.initialize.map(_ => node)
     } yield result
@@ -229,8 +221,6 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 genesis,
                 transforms,
                 sk,
-                logicalTime,
-                storageSize,
                 blockDagDir,
                 blockStoreDir,
                 semaphore,
@@ -239,9 +229,10 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 concurrentF,
                 blockStore,
                 blockDagStorage,
+                errorHandler,
+                logicalTime,
                 metricEff,
-                casperState,
-                errorHandler
+                casperState
               )
             } yield node
         }
