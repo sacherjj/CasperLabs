@@ -52,11 +52,9 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
-      validatorId: Option[ValidatorIdentity],
-      genesis: BlockMessage,
-      shardId: String
-  ): F[MultiParentCasper[F]] =
+  private def init[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: ExecutionEngineService](
+      genesis: BlockMessage
+  ) =
     for {
       // Initialize DAG storage with genesis block in case it is empty
       _                   <- BlockDagStorage[F].insert(genesis)
@@ -67,16 +65,24 @@ sealed abstract class MultiParentCasperInstances {
                       CasperState()
                     )
 
-    } yield {
-      implicit val state = casperState
-      new MultiParentCasperImpl[F](
-        new MultiParentCasperImpl.StatelessExecutor(shardId),
-        MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
-        validatorId,
-        genesis,
-        shardId,
-        blockProcessingLock
-      )
+    } yield (dag, blockProcessingLock, casperState)
+
+  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
+      validatorId: Option[ValidatorIdentity],
+      genesis: BlockMessage,
+      shardId: String
+  ): F[MultiParentCasper[F]] =
+    init(genesis) map {
+      case (dag, blockProcessingLock, casperState) =>
+        implicit val state = casperState
+        new MultiParentCasperImpl[F](
+          new MultiParentCasperImpl.StatelessExecutor(shardId),
+          MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
+          validatorId,
+          genesis,
+          shardId,
+          blockProcessingLock
+        )
     }
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
@@ -87,25 +93,16 @@ sealed abstract class MultiParentCasperInstances {
   )(
       relaying: gossiping.Relaying[F]
   ): F[MultiParentCasper[F]] =
-    for {
-      // Initialize DAG storage with genesis block in case it is empty
-      _                   <- BlockDagStorage[F].insert(genesis)
-      dag                 <- BlockDagStorage[F].getRepresentation
-      _                   <- Sync[F].rethrow(ExecEngineUtil.validateBlockCheckpoint[F](genesis, dag))
-      blockProcessingLock <- Semaphore[F](1)
-      casperState <- Cell.mvarCell[F, CasperState](
-                      CasperState()
-                    )
-
-    } yield {
-      implicit val state = casperState
-      new MultiParentCasperImpl[F](
-        new MultiParentCasperImpl.StatelessExecutor(shardId),
-        MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
-        validatorId,
-        genesis,
-        shardId,
-        blockProcessingLock
-      )
+    init(genesis) map {
+      case (dag, blockProcessingLock, casperState) =>
+        implicit val state = casperState
+        new MultiParentCasperImpl[F](
+          new MultiParentCasperImpl.StatelessExecutor(shardId),
+          MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
+          validatorId,
+          genesis,
+          shardId,
+          blockProcessingLock
+        )
     }
 }
