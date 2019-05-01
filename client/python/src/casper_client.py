@@ -121,28 +121,22 @@ class CasperClient:
 #                             transactions that use the same nonce.
         :return:              deserialized DeployServiceResponse object
         """
-        data = CasperMessage_pb2.DeployData()
-        #bytes address = 1; // length 20 bytes
-        data.address = from_
-        #int64 timestamp = 2;
-        data.timestamp = int(time.time())
-        #DeployCode session = 3;
-        data.session.CopyFrom(read_deploy_code(session))
-        #DeployCode payment = 4;
-        data.payment.CopyFrom(read_deploy_code(payment))
-        #int64 gas_limit = 5;
-        data.gas_limit = gas_limit
-        #int64 gas_price = 6;
-        data.gas_price = gas_price
-        #int64 nonce = 7;
-        data.nonce = nonce
+        data = CasperMessage_pb2.DeployData(
+            address = from_,
+            timestamp = int(time.time()),
+            session = read_deploy_code(session),
+            payment = read_deploy_code(payment),
+            gas_limit = gas_limit,
+            gas_price = gas_price,
+            nonce = nonce,
 
-        # TODO: Scala client does not set attributes below
-        #string sig_algorithm = 8; // name of the algorithm used for signing
-        #bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
+            # TODO: Scala client does not set attributes below
+            #string sig_algorithm = 8; // name of the algorithm used for signing
+            #bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
 
-        # TODO: allow user to specify their public key [comment copied from Scala client source]
-        #bytes user = 10; //public key
+            # TODO: allow user to specify their public key [comment copied from Scala client source]
+            #bytes user = 10; //public key
+        )
         return self.node.DoDeploy(data)
 
     @guarded
@@ -153,9 +147,7 @@ class CasperClient:
         :param depth: lists blocks to the given depth in terms of block height
         :return: generator of blocks
         """
-        q = CasperMessage_pb2.BlocksQuery()
-        q.depth = depth
-        yield from self.node.showBlocks_(q)
+        yield from self.node.showBlocks_(CasperMessage_pb2.BlocksQuery(depth=depth))
 
     @guarded
     def showBlock(self, hash):
@@ -165,9 +157,7 @@ class CasperClient:
         :param hash:  hash of the block to be retrieved
         :return:      object representing the retrieved block
         """
-        q = CasperMessage_pb2.BlockQuery()
-        q.hash = hash
-        return self.node.showBlock(q)
+        return self.node.showBlock(CasperMessage_pb2.BlockQuery(hash=hash))
 
     @guarded
     def propose(self):
@@ -194,10 +184,7 @@ class CasperClient:
         :return:                          VisualizeBlocksResponse object
         """
         # TODO: handle stream parameter
-        q = CasperMessage_pb2.VisualizeDagQuery()
-        q.depth = depth
-        q.showJustificationLines = show_justification_lines
-        return self.node.visualizeDag(q)
+        return self.node.visualizeDag(CasperMessage_pb2.VisualizeDagQuery(depth=depth, showJustificationLines=show_justification_lines))
 
     @guarded
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
@@ -212,12 +199,7 @@ class CasperClient:
                                   'address'.
         :return:                  QueryStateResponse object
         """
-        q = CasperMessage_pb2.QueryStateRequest()
-        q.block_hash = blockHash
-        q.key_bytes = key
-        q.key_variant = keyType
-        q.path = path
-        return self.node.queryState(q)
+        return self.node.queryState(CasperMessage_pb2.QueryStateRequest(block_hash=blockHash, key_bytes=key, key_variant=keyType, path=path))
 
 
     @guarded
@@ -230,10 +212,7 @@ class CasperClient:
         :param depth:
         :return:
         """
-
-        q = CasperMessage_pb2.BlocksQuery()
-        q.depth = depth
-        yield from self.node.showMainChain_(q)
+        yield from self.node.showMainChain_(CasperMessage_pb2.BlocksQuery(depth=depth))
 
 
     @guarded
@@ -252,10 +231,7 @@ class CasperClient:
         :param timestamp:
         :return:
         """
-        q = CasperMessage_pb2.FindDeployInBlockQuery()
-        q.user = user
-        q.timestamp = timestamp
-        return self.node.findBlockWithDeploy(q)
+        return self.node.findBlockWithDeploy(CasperMessage_pb2.FindDeployInBlockQuery(user=user, timestamp=timestamp))
 
 
 def guarded_command(function):
