@@ -64,26 +64,6 @@ def guarded(function):
     return wrapper
 
 
-class Node:
-    """
-    Helper class that is used by CasperClient implementation to reduce boilerplate code.
-    """
-    def __init__(self, client):
-        self.client = client
-
-    def __getattr__(self, name):
-        address = self.client.host + ':' + str(self.client.port)
-
-        def f(*args):
-            with grpc.insecure_channel(address) as channel:
-                return getattr(DeployServiceStub(channel), name)(*args)
-
-        def g(*args):
-            with grpc.insecure_channel(address) as channel:
-                yield from getattr(DeployServiceStub(channel), name[:-1])(*args)
-
-        return name.endswith('_') and g or f
-
 
 class CasperClient:
     """
@@ -99,7 +79,28 @@ class CasperClient:
         """
         self.host = host
         self.port = port
-        self.node = Node(self)
+
+        client = self
+
+        class Node:
+            """
+            Helper class that is used by CasperClient implementation to reduce boilerplate code.
+            """
+
+            def __getattr__(self, name):
+                address = client.host + ':' + str(client.port)
+
+                def f(*args):
+                    with grpc.insecure_channel(address) as channel:
+                        return getattr(DeployServiceStub(channel), name)(*args)
+
+                def g(*args):
+                    with grpc.insecure_channel(address) as channel:
+                        yield from getattr(DeployServiceStub(channel), name[:-1])(*args)
+
+                return name.endswith('_') and g or f
+
+        self.node = Node()
 
 
     @guarded
