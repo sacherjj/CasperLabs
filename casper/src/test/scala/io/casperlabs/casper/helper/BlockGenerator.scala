@@ -11,6 +11,7 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.DeploysCheckpoint
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.ipc.ProtocolVersion
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -83,7 +84,8 @@ object BlockGenerator {
       result <- computeDeploysCheckpoint[F](
                  parents,
                  deploys,
-                 dag
+                 dag,
+                 ProtocolVersion(1)
                )
     } yield result
 

@@ -73,6 +73,12 @@ pipeline:
     commands:
       - sbt compile test:compile doc
 
+  git-status-post-scala-compile:
+    <<: *buildenv
+    commands: |
+      STATUS_CHECK=$(git status)
+      if echo $STATUS_CHECK | grep -q "modified" ; then echo "$STATUS_CHECK"; exit 1; fi
+
   compile-rust:
     <<: *buildenv
     commands:
@@ -102,6 +108,13 @@ pipeline:
     commands:
       - cd execution-engine/common
       - ~/.cargo/bin/cargo publish --dry-run
+
+  run-rust-benchmarks:
+    <<: *buildenv
+    group: test
+    commands:
+      - cd execution-engine/
+      - ~/.cargo/bin/cargo bench
 
   run-rust-tests-mac:
     image: appleboy/drone-ssh

@@ -132,31 +132,6 @@ object RelayingSpec {
 
   private val noOpLog: Log[Task] = new NOPLog[Task]
 
-  def summaryOf(block: Block): BlockSummary =
-    BlockSummary()
-      .withBlockHash(block.blockHash)
-      .withHeader(block.getHeader)
-      .withSignature(block.getSignature)
-
-  class GossipServiceMock extends GossipService[Task] {
-    override def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] = ???
-
-    override def streamAncestorBlockSummaries(
-        request: StreamAncestorBlockSummariesRequest
-    ): Iterant[Task, BlockSummary] = ???
-
-    override def streamDagTipBlockSummaries(
-        request: StreamDagTipBlockSummariesRequest
-    ): Iterant[Task, BlockSummary] = ???
-
-    override def streamBlockSummaries(
-        request: StreamBlockSummariesRequest
-    ): Iterant[Task, BlockSummary] = ???
-
-    /** Get a full block in chunks, optionally compressed, so that it can be transferred over the wire. */
-    override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] = ???
-  }
-
   object TestFixture {
     def apply(
         relayFactor: Int,
@@ -195,19 +170,13 @@ object RelayingSpec {
 
             override def streamAncestorBlockSummaries(
                 request: StreamAncestorBlockSummariesRequest
-            ): Iterant[Task, BlockSummary] = ???
-
-            override def streamDagTipBlockSummaries(
-                request: StreamDagTipBlockSummariesRequest
-            ): Iterant[Task, BlockSummary] = ???
-
-            override def streamBlockSummaries(
-                request: StreamBlockSummariesRequest
-            ): Iterant[Task, BlockSummary] = ???
-
-            /** Get a full block in chunks, optionally compressed, so that it can be transferred over the wire. */
-            override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] =
+            ) = ???
+            override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest) =
               ???
+            override def streamBlockSummaries(request: StreamBlockSummariesRequest) = ???
+            override def getBlockChunked(request: GetBlockChunkedRequest)           = ???
+            override def addApproval(request: AddApprovalRequest)                   = ???
+            override def getGenesisCandidate(request: GetGenesisCandidateRequest)   = ???
           }
 
       val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)(

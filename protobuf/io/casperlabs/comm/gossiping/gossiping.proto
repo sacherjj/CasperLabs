@@ -21,6 +21,16 @@ service GossipService {
 
     // Retrieve an arbitrarily sized block as a stream of chunks, with optionally compressed content.
     rpc GetBlockChunked(GetBlockChunkedRequest) returns (stream Chunk);
+
+    // Retrieve the Genesis candidate supported by this node. Every node should either produce one from specification,
+    // get one from its bootstrap, or have it persisted from earlier runs.
+    // While the node is initializing and it hasn't obtained the candidate yet it will return UNAVAILABLE.
+    // Once the node is serving a candidate identity, it should also be prepared to serve the full block on request.
+    rpc GetGenesisCandidate(GetGenesisCandidateRequest) returns (io.casperlabs.casper.consensus.GenesisCandidate);
+
+    // Add a signature to the list of approvals of a given candidate. If the block hash in the request doesn't match
+    // the callee's candidate it will return INVALID_ARGUMENT, otherwise add the signature and forward it to its peers.
+    rpc AddApproval(AddApprovalRequest) returns (Empty);
 }
 
 message NewBlocksRequest {
@@ -56,13 +66,20 @@ message StreamAncestorBlockSummariesRequest {
     uint32 max_depth = 3;
 }
 
-message StreamDagTipBlockSummariesRequest {
-}
+message StreamDagTipBlockSummariesRequest {}
 
 message GetBlockChunkedRequest {
     bytes block_hash = 1;
     uint32 chunk_size = 2;
     repeated string accepted_compression_algorithms = 3;
+}
+
+message GetGenesisCandidateRequest {}
+
+message AddApprovalRequest {
+    // Hash of the candidate the caller supports.
+    bytes block_hash = 1;
+    io.casperlabs.casper.consensus.Approval approval = 2;
 }
 
 // Generic message for transferring a stream of data that wouldn't fit into single gRPC messages.
@@ -82,3 +99,6 @@ message Chunk {
         uint32 original_content_length = 3;
     }
 }
+
+// Message equivalent to `google.protobuf.Empty`, but saves pulling in all the dependencies.
+message Empty {}

@@ -92,6 +92,7 @@ fn main() {
     // TODO: move to arg parser
     let timestamp: u64 = 100_000;
     let nonce: u64 = 1;
+    let protocol_version: u64 = 1;
 
     // let path = std::path::Path::new("./tmp/");
     // TODO: Better error handling?
@@ -101,7 +102,8 @@ fn main() {
     let engine_state = EngineState::new(global_state);
 
     let wasmi_executor = WasmiExecutor;
-    let wasmi_preprocessor = WasmiPreprocessor;
+    // TODO(mateusz.gorski): Use `protocol_version` and `WasmiPreprocessor::from_protocol_version`.
+    let wasmi_preprocessor: WasmiPreprocessor = Default::default();
 
     for wasm_bytes in wasm_files.iter() {
         println!("Pre state hash: {:?}", state_hash);
@@ -113,6 +115,7 @@ fn main() {
             nonce,
             state_hash,
             gas_limit,
+            protocol_version,
             &wasmi_executor,
             &wasmi_preprocessor,
         );

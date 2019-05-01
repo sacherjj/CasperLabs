@@ -1,11 +1,9 @@
 package io.casperlabs.client
 
 import cats.effect.{Sync, Timer}
-import cats.syntax.functor._
-import cats.syntax.flatMap._
-import io.casperlabs.client.configuration._
 import io.casperlabs.casper.protocol
-import io.casperlabs.shared.{Log, LogSource, UncaughtExceptionLogger}
+import io.casperlabs.client.configuration._
+import io.casperlabs.shared.{Log, UncaughtExceptionLogger}
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -42,8 +40,8 @@ object Main {
     configuration match {
       case ShowBlock(_, _, hash)   => DeployRuntime.showBlock(hash)
       case ShowBlocks(_, _, depth) => DeployRuntime.showBlocks(depth)
-      case Deploy(_, _, from, gasLimit, gasPrice, nonce, sessionCode, paymentCode) =>
-        DeployRuntime.deployFileProgram(from, gasLimit, gasPrice, nonce, sessionCode, paymentCode)
+      case Deploy(_, _, from, gasLimit, nonce, sessionCode, paymentCode) =>
+        DeployRuntime.deployFileProgram(from, gasLimit, nonce, sessionCode, paymentCode)
       case _: Propose =>
         DeployRuntime.propose()
       case VisualizeDag(_, _, depth, showJustificationLines, out, streaming) =>

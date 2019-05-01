@@ -19,12 +19,9 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 trait Casper[F[_], A] {
-  def addBlock(
-      b: BlockMessage,
-      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus]
-  def contains(b: BlockMessage): F[Boolean]
-  def deploy(d: DeployData): F[Either[Throwable, Unit]]
+  def addBlock(block: BlockMessage): F[BlockStatus]
+  def contains(block: BlockMessage): F[Boolean]
+  def deploy(deployData: DeployData): F[Either[Throwable, Unit]]
   def estimator(dag: BlockDagRepresentation[F]): F[A]
   def createBlock: F[CreateBlockStatus]
 }
@@ -42,8 +39,6 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
 
 object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
-  def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
-    kp2(().pure[F])
 
   def forkChoiceTip[F[_]: MultiParentCasper: Monad: BlockStore]: F[BlockMessage] =
     for {
@@ -74,6 +69,8 @@ sealed abstract class MultiParentCasperInstances {
     } yield {
       implicit val state = casperState
       new MultiParentCasperImpl[F](
+        new MultiParentCasperImpl.StatelessExecutor(shardId),
+        new MultiParentCasperImpl.Broadcaster(),
         validatorId,
         genesis,
         shardId,

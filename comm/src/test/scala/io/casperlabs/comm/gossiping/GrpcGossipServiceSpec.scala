@@ -4,10 +4,11 @@ import cats.Id
 import cats.implicits._
 import cats.effect._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
-import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated}
+import io.casperlabs.comm.ServiceError
+import ServiceError.{NotFound, Unauthenticated, Unavailable}
 import io.casperlabs.comm.TestRuntime
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
@@ -15,6 +16,7 @@ import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+
 import monix.eval.Task
 import monix.execution.{ExecutionModel, Scheduler}
 import monix.reactive.Observable
@@ -22,7 +24,10 @@ import monix.tail.Iterant
 import org.scalatest._
 import org.scalatest.concurrent._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
-import org.scalacheck.{Arbitrary, Gen}, Arbitrary.arbitrary
+import org.scalacheck.{Arbitrary, Gen}
+import Arbitrary.arbitrary
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+
 import scala.concurrent.duration._
 
 class GrpcGossipServiceSpec
@@ -65,7 +70,8 @@ class GrpcGossipServiceSpec
     StreamBlockSummariesSpec,
     StreamAncestorBlockSummariesSpec,
     StreamDagTipBlockSummariesSpec,
-    NewBlocksSpec
+    NewBlocksSpec,
+    GenesisApprovalSpec
   )
 
   object GetBlockChunkedSpec extends WordSpecLike {
@@ -495,7 +501,7 @@ class GrpcGossipServiceSpec
     "streamAncestorBlockSummaries" when {
       "called with unknown target hashes" should {
         "return an empty stream" in {
-          forAll(genDag, arbitrary[List[ByteString]]) { (dag, targets) =>
+          forAll(genDagFromGenesis, arbitrary[List[ByteString]]) { (dag, targets) =>
             runTestUnsafe(TestData(summaries = dag)) {
               val req = StreamAncestorBlockSummariesRequest(targetBlockHashes = targets)
 
@@ -509,7 +515,7 @@ class GrpcGossipServiceSpec
 
       "called with a (default) depth of 0" should {
         val genTestCase = for {
-          dag     <- genDag
+          dag     <- genDagFromGenesis
           targets <- Gen.someOf(dag)
           req     = StreamAncestorBlockSummariesRequest(targetBlockHashes = targets.map(_.blockHash))
         } yield TestCase(dag, req)
@@ -524,7 +530,7 @@ class GrpcGossipServiceSpec
 
       "called with a depth of 1" should {
         val genTestCase = for {
-          dag     <- genDag
+          dag     <- genDagFromGenesis
           targets <- Gen.someOf(dag)
           req = StreamAncestorBlockSummariesRequest(
             targetBlockHashes = targets.map(_.blockHash),
@@ -549,7 +555,7 @@ class GrpcGossipServiceSpec
 
       "called with a depth of -1" should {
         val genTestCase = for {
-          dag     <- genDag
+          dag     <- genDagFromGenesis
           targets <- Gen.choose(1, dag.size).flatMap(Gen.pick(_, dag))
           req = StreamAncestorBlockSummariesRequest(
             targetBlockHashes = targets.map(_.blockHash),
@@ -567,7 +573,7 @@ class GrpcGossipServiceSpec
 
       "called with a single target and a given maximum depth value" should {
         val genTestCase = for {
-          dag    <- genDag
+          dag    <- genDagFromGenesis
           target <- Gen.oneOf(dag)
           depth  <- Gen.choose(0, dag.size)
           req = StreamAncestorBlockSummariesRequest(
@@ -604,7 +610,7 @@ class GrpcGossipServiceSpec
 
       "called with many targets and maximum depth" should {
         val genTestCase = for {
-          dag      <- genDag
+          dag      <- genDagFromGenesis
           targets  <- Gen.someOf(dag)
           maxDepth <- Gen.choose(0, dag.size)
           req = StreamAncestorBlockSummariesRequest(
@@ -669,7 +675,7 @@ class GrpcGossipServiceSpec
 
       "called with some known hashes" should {
         val genTestCase = for {
-          dag      <- genDag
+          dag      <- genDagFromGenesis
           targets  <- Gen.someOf(dag)
           knowns   <- Gen.someOf(dag)
           maxDepth <- Gen.choose(0, dag.size)
@@ -743,7 +749,7 @@ class GrpcGossipServiceSpec
 
     "streamDagTipBlockSummaries" should {
       "return the tips from the consensus" in {
-        forAll(genDag) { dag =>
+        forAll(genDagFromGenesis) { dag =>
           // Tips are the ones without children.
           val tips = dag.filterNot { parent =>
             dag.exists { child =>
@@ -867,7 +873,7 @@ class GrpcGossipServiceSpec
             }
 
             val genTestCase = for {
-              dag  <- genBlockDag
+              dag  <- genBlockDagFromGenesis
               node <- arbitrary[Node].map(_.withId(stubCert.keyHash))
               n    <- Gen.choose(0, dag.size)
             } yield (dag, node, n)
@@ -891,7 +897,7 @@ class GrpcGossipServiceSpec
         "receives new blocks" should {
           "download the new ones" in {
             val genTestCase = for {
-              dag  <- genBlockDag
+              dag  <- genBlockDagFromGenesis
               node <- arbitrary[Node].map(_.withId(stubCert.keyHash))
               k    <- Gen.choose(1, dag.size / 2)
               n    <- Gen.choose(1, k)
@@ -918,7 +924,7 @@ class GrpcGossipServiceSpec
                       val dag = unknownBlocks.map(summaryOf(_))
                       // Delay the return of the DAG a little bit so we can assert that the call
                       // to `newBlocks` returns before all the syncing and downloading is finished.
-                      Task.now(dag).delayResult(250.millis)
+                      Task.now(dag.asRight[SyncError]).delayResult(250.millis)
                     }
                   }
 
@@ -979,6 +985,90 @@ class GrpcGossipServiceSpec
       }
     }
   }
+
+  object GenesisApprovalSpec extends WordSpecLike {
+    implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
+
+    class MockGenesisApprover() extends GenesisApprover[Task] {
+      override def getCandidate: Task[Either[ServiceError, GenesisCandidate]] =
+        Task.now(Left(Unavailable("Come back later.")))
+      override def addApproval(
+          blockHash: ByteString,
+          approval: Approval
+      ): Task[Either[ServiceError, Boolean]] =
+        Task.now(Left(Unavailable("Come back later.")))
+      override def awaitApproval = ???
+    }
+
+    def testWithApprover(
+        genesisApprover: GenesisApprover[Task]
+    )(f: GossipingGrpcMonix.GossipServiceStub => Task[Unit]) =
+      runTestUnsafe(TestData()) {
+        TestEnvironment(testDataRef, genesisApprover = genesisApprover).use(f(_))
+      }
+
+    def expectUnavailable(msg: String)(call: Task[_]) =
+      call.attempt.map {
+        case Left(ex) =>
+          ex shouldBe an[io.grpc.StatusRuntimeException]
+          ex.asInstanceOf[io.grpc.StatusRuntimeException]
+            .getStatus
+            .getCode shouldBe io.grpc.Status.Code.UNAVAILABLE
+          ex.getMessage should include(msg)
+        case other =>
+          fail(s"Expected Unavailable; got $other")
+      } map (_ => ())
+
+    "getGenesisCandidate" when {
+      "there is no candidate yet" should {
+        "return the error from the approver" in {
+          testWithApprover(new MockGenesisApprover()) { stub =>
+            expectUnavailable("Come back later.") {
+              stub.getGenesisCandidate(GetGenesisCandidateRequest())
+            }
+          }
+        }
+      }
+      "there is a candidate available" should {
+        "return the candidate from the approver" in {
+          val candidate = GenesisCandidate()
+            .withBlockHash(sample(arbitrary[ByteString]))
+
+          testWithApprover(new MockGenesisApprover() {
+            override def getCandidate = Task.now(Right(candidate))
+          }) { stub =>
+            stub.getGenesisCandidate(GetGenesisCandidateRequest()) map { res =>
+              res shouldBe candidate
+            }
+          }
+        }
+      }
+    }
+
+    "addApproval" when {
+      "the approver rejects the approval" should {
+        "return the error from the approver" in {
+          testWithApprover(new MockGenesisApprover()) { stub =>
+            expectUnavailable("Come back later.") {
+              stub.getGenesisCandidate(GetGenesisCandidateRequest())
+            }
+          }
+        }
+      }
+      "the approver accepts the approval" should {
+        "return empty" in {
+          testWithApprover(new MockGenesisApprover() {
+            override def addApproval(blockHash: ByteString, approval: Approval) =
+              Task.now(Right(true))
+          }) { stub =>
+            stub.addApproval(AddApprovalRequest()).map { res =>
+              res shouldBe Empty()
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 object GrpcGossipServiceSpec extends TestRuntime {
@@ -1031,6 +1121,11 @@ object GrpcGossipServiceSpec extends TestRuntime {
       def onDownloaded(blockHash: ByteString)  = ???
       def listTips                             = ???
     }
+    private val emptyGenesisApprover = new GenesisApprover[Task] {
+      def getCandidate                                           = ???
+      def addApproval(blockHash: ByteString, approval: Approval) = ???
+      def awaitApproval                                          = ???
+    }
 
     private def defaultBackend(testDataRef: AtomicReference[TestData]) =
       new GossipServiceServer.Backend[Task] {
@@ -1051,6 +1146,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
         synchronizer: Synchronizer[Task] = emptySynchronizer,
         downloadManager: DownloadManager[Task] = emptyDownloadManager,
         consensus: GossipServiceServer.Consensus[Task] = emptyConsensus,
+        genesisApprover: GenesisApprover[Task] = emptyGenesisApprover,
         mkBackend: AtomicReference[TestData] => GossipServiceServer.Backend[Task] = defaultBackend
     )(
         implicit
@@ -1071,6 +1167,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
               synchronizer = synchronizer,
               downloadManager = downloadManager,
               consensus = consensus,
+              genesisApprover = genesisApprover,
               maxChunkSize = DefaultMaxChunkSize,
               maxParallelBlockDownloads = maxParallelBlockDownloads
             ) map { gss =>

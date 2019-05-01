@@ -1,13 +1,14 @@
 extern crate blake2;
 
-use self::blake2::digest::{Input, VariableOutput};
+use self::blake2::digest::VariableOutput;
 use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
-use common::value::{Account, Value};
-use storage::global_state::{StateReader, ExecutionEffect};
+use common::value::Value;
+use shared::newtypes::Validated;
+use storage::global_state::{ExecutionEffect, StateReader};
 use storage::transform::TypeMismatch;
-use trackingcopy::{AddResult, TrackingCopy};
+use trackingcopy::TrackingCopy;
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
@@ -16,12 +17,18 @@ use wasmi::{
 };
 
 use argsparser::Args;
+use itertools::Itertools;
 use parity_wasm::elements::{Error as ParityWasmError, Module};
-use rand::{RngCore, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
+use std::iter::IntoIterator;
+use std::rc::Rc;
+
+use super::runtime_context::RuntimeContext;
+use super::URefAddr;
 
 #[derive(Debug)]
 pub enum Error {
@@ -82,118 +89,12 @@ impl From<!> for Error {
 
 impl HostError for Error {}
 
-type URefAddr = [u8; 32];
-
-/// Holds information specific to the deployed contract.
-pub struct RuntimeContext<'a> {
-    // Enables look up of specific uref based on human-readable name
-    uref_lookup: &'a mut BTreeMap<String, Key>,
-    // Used to check uref is known before use (prevents forging urefs)
-    known_urefs: HashMap<URefAddr, AccessRights>,
-    account: &'a Account,
-    // Key pointing to the entity we are currently running
-    //(could point at an account or contract in the global state)
-    base_key: Key,
-    gas_limit: u64,
-}
-
-impl<'a> RuntimeContext<'a> {
-    pub fn new(
-        uref_lookup: &'a mut BTreeMap<String, Key>,
-        account: &'a Account,
-        base_key: Key,
-        gas_limit: u64,
-    ) -> Self {
-        RuntimeContext {
-            uref_lookup,
-            known_urefs: HashMap::new(),
-            account,
-            base_key,
-            gas_limit,
-        }
-    }
-
-    pub fn insert_named_uref(&mut self, name: String, key: Key) {
-        self.insert_uref(key);
-        self.uref_lookup.insert(name, key);
-    }
-
-    pub fn insert_uref(&mut self, key: Key) {
-        if let Key::URef(raw_addr, rights) = key {
-            self.known_urefs.insert(raw_addr, rights);
-        }
-    }
-
-    /// Validates whether keys used in the `value` are not forged.
-    fn validate_keys(&self, value: Value) -> Result<Value, Error> {
-        match value {
-            non_key @ Value::Int32(_)
-            | non_key @ Value::UInt128(_)
-            | non_key @ Value::UInt256(_)
-            | non_key @ Value::UInt512(_)
-            | non_key @ Value::ByteArray(_)
-            | non_key @ Value::ListInt32(_)
-            | non_key @ Value::String(_)
-            | non_key @ Value::ListString(_) => Ok(non_key),
-            Value::NamedKey(name, key) => {
-                self.validate_key(&key).map(|_| Value::NamedKey(name, key))
-            }
-            Value::Account(account) => {
-                // This should never happen as accounts can't be created by contracts.
-                // I am putting this here for the sake of completness.
-                account
-                    .urefs_lookup()
-                    .values()
-                    .try_for_each(|key| self.validate_key(key))
-                    .map(|_| Value::Account(account))
-            }
-            Value::Contract(contract) => contract
-                .urefs_lookup()
-                .values()
-                .try_for_each(|key| self.validate_key(key))
-                .map(|_| Value::Contract(contract)),
-        }
-    }
-
-    /// Validates whether key is not forged (whether it can be found in the `known_urefs`)
-    /// and whether the version of a key that contract wants to use, has access rights
-    /// that are less powerful than access rights' of the key in the `known_urefs`.
-    fn validate_key(&self, key: &Key) -> Result<(), Error> {
-        match key {
-            Key::URef(raw_addr, new_rights) => {
-                self.known_urefs
-                    .get(raw_addr) // Check if we `key` is known
-                    .filter(|known_rights| *known_rights >= new_rights) // are we allowed to use it this way?
-                    .map(|_| ()) // at this point we know it's valid to use `key`
-                    .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
-            }
-            _ => Ok(()),
-        }
-    }
-
-    pub fn deserialize_key(&self, bytes: &[u8]) -> Result<Key, Error> {
-        let key: Key = deserialize(bytes)?;
-        self.validate_key(&key).map(|_| key)
-    }
-
-    pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
-        let keys: Vec<Key> = deserialize(bytes)?;
-        keys.iter().try_for_each(|k| self.validate_key(k))?;
-        Ok(keys)
-    }
-}
-
 pub struct Runtime<'a, R: StateReader<Key, Value>> {
-    args: Vec<Vec<u8>>,
     memory: MemoryRef,
-    state: &'a mut TrackingCopy<R>,
     module: Module,
     result: Vec<u8>,
     host_buf: Vec<u8>,
-    fn_store_id: u32,
-    gas_counter: u64,
-    context: RuntimeContext<'a>,
-    rng: ChaChaRng,
+    context: RuntimeContext<'a, R>,
 }
 
 /// Rename function called `name` in the `module` to `call`.
@@ -217,28 +118,13 @@ where
     R::Error: Into<Error>,
 {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        args: Vec<Vec<u8>>,
-        memory: MemoryRef,
-        state: &'a mut TrackingCopy<R>,
-        module: Module,
-        account_addr: [u8; 20],
-        nonce: u64,
-        timestamp: u64,
-        context: RuntimeContext<'a>,
-    ) -> Self {
-        let rng = create_rng(&account_addr, timestamp, nonce);
+    pub fn new(memory: MemoryRef, module: Module, context: RuntimeContext<'a, R>) -> Self {
         Runtime {
-            args,
             memory,
-            state,
             module,
             result: Vec::new(),
             host_buf: Vec::new(),
-            fn_store_id: 0,
-            gas_counter: 0,
             context,
-            rng,
         }
     }
 
@@ -247,13 +133,13 @@ where
     /// Returns false if gas limit exceeded and true if not.
     /// Intuition about the return value sense is to aswer the question 'are we allowed to continue?'
     fn charge_gas(&mut self, amount: u64) -> bool {
-        let prev = self.gas_counter;
+        let prev = self.context.gas_counter();
         match prev.checked_add(amount) {
             // gas charge overflow protection
             None => false,
-            Some(val) if val > self.context.gas_limit => false,
+            Some(val) if val > self.context.gas_limit() => false,
             Some(val) => {
-                self.gas_counter = val;
+                self.context.set_gas_counter(val);
                 true
             }
         }
@@ -267,27 +153,24 @@ where
         }
     }
 
-    fn effect(&self) -> ExecutionEffect {
-        self.state.effect()
+    fn bytes_from_mem(&self, ptr: u32, size: usize) -> Result<Vec<u8>, Error> {
+        self.memory.get(ptr, size).map_err(Into::into)
     }
 
+    /// Reads key (defined as `key_ptr` and `key_size` tuple) from Wasm memory.
     fn key_from_mem(&mut self, key_ptr: u32, key_size: u32) -> Result<Key, Error> {
-        let bytes = self.memory.get(key_ptr, key_size as usize)?;
-        self.context.deserialize_key(&bytes)
+        let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
+        deserialize(&bytes).map_err(Into::into)
     }
 
+    /// Reads value (defined as `value_ptr` and `value_size` tuple) from Wasm memory.
     fn value_from_mem(&mut self, value_ptr: u32, value_size: u32) -> Result<Value, Error> {
-        let bytes = self.memory.get(value_ptr, value_size as usize)?;
-        deserialize(&bytes)
-            .map_err(Into::into)
-            .and_then(|v| self.context.validate_keys(v))
+        let bytes = self.bytes_from_mem(value_ptr, value_size as usize)?;
+        deserialize(&bytes).map_err(Into::into)
     }
 
-    fn string_from_mem(&mut self, ptr: u32, size: u32) -> Result<String, Trap> {
-        let bytes = self
-            .memory
-            .get(ptr, size as usize)
-            .map_err(Error::Interpreter)?;
+    fn string_from_mem(&self, ptr: u32, size: u32) -> Result<String, Trap> {
+        let bytes = self.bytes_from_mem(ptr, size as usize)?;
         deserialize(&bytes).map_err(|e| Error::BytesRepr(e).into())
     }
 
@@ -314,24 +197,12 @@ where
         }
     }
 
-    fn kv_from_mem(
-        &mut self,
-        key_ptr: u32,
-        key_size: u32,
-        value_ptr: u32,
-        value_size: u32,
-    ) -> Result<(Key, Value), Error> {
-        let key = self.key_from_mem(key_ptr, key_size)?;
-        let value = self.value_from_mem(value_ptr, value_size)?;
-        Ok((key, value))
-    }
-
     /// Load the i-th argument invoked as part of a `sub_call` into
     /// the runtime buffer so that a subsequent `get_arg` can return it
     /// to the caller.
     pub fn load_arg(&mut self, i: usize) -> Result<usize, Trap> {
-        if i < self.args.len() {
-            self.host_buf = self.args[i].clone();
+        if i < self.context.args().len() {
+            self.host_buf = self.context.args()[i].clone();
             Ok(self.host_buf.len())
         } else {
             Err(Error::ArgIndexOutOfBounds(i).into())
@@ -343,11 +214,9 @@ where
         let name = self.string_from_mem(name_ptr, name_size)?;
         let uref = self
             .context
-            .uref_lookup
-            .get(&name)
+            .get_uref(&name)
             .ok_or_else(|| Error::URefNotFound(name))?;
         let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
-
         self.memory
             .set(dest_ptr, &uref_bytes)
             .map_err(|e| Error::Interpreter(e).into())
@@ -355,7 +224,7 @@ where
 
     pub fn has_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
-        if self.context.uref_lookup.contains_key(&name) {
+        if self.context.contains_uref(&name) {
             Ok(0)
         } else {
             Ok(1)
@@ -371,9 +240,7 @@ where
     ) -> Result<(), Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let key = self.key_from_mem(key_ptr, key_size)?;
-        self.context.insert_named_uref(name.clone(), key);
-        let base_key = self.context.base_key;
-        self.add_transforms(base_key, Value::NamedKey(name, key))
+        self.context.add_uref(name, key).map_err(Into::into)
     }
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
@@ -397,7 +264,7 @@ where
             .get(value_ptr, value_size)
             .map_err(Error::Interpreter)
             .and_then(|x| {
-                let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
+                let urefs_bytes = self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size)?;
                 let urefs = self.context.deserialize_keys(&urefs_bytes)?;
                 Ok((x, urefs))
             });
@@ -413,49 +280,36 @@ where
         }
     }
 
+    /// Calls contract living under a `key`, with supplied `args` and extra `urefs`.
     pub fn call_contract(
         &mut self,
-        key_ptr: u32,
-        key_size: usize,
-        args_ptr: u32,
-        args_size: usize,
-        extra_urefs_ptr: u32,
-        extra_urefs_size: usize,
+        key: Key,
+        args_bytes: Vec<u8>,
+        urefs_bytes: Vec<u8>,
     ) -> Result<usize, Error> {
-        let key_bytes = self.memory.get(key_ptr, key_size)?;
-        let args_bytes = self.memory.get(args_ptr, args_size)?;
-        let urefs_bytes = self.memory.get(extra_urefs_ptr, extra_urefs_size)?;
+        let (args, module, mut refs) = {
+            match self.context.read_gs(&key)? {
+                None => Err(Error::KeyNotFound(key)),
+                Some(value) => {
+                    if let Value::Contract(contract) = value {
+                        let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
+                        let module = parity_wasm::deserialize_buffer(contract.bytes())?;
 
-        let key = self.context.deserialize_key(&key_bytes)?;
-        if self.is_readable(&key) {
-            let (args, module, mut refs) = {
-                match self.state.read(key).map_err(Into::into)? {
-                    None => Err(Error::KeyNotFound(key)),
-                    Some(value) => {
-                        if let Value::Contract(contract) = value {
-                            let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
-                            let module = parity_wasm::deserialize_buffer(contract.bytes())?;
-
-                            Ok((args, module, contract.urefs_lookup().clone()))
-                        } else {
-                            Err(Error::FunctionNotFound(format!(
-                                "Value at {:?} is not a contract",
-                                key
-                            )))
-                        }
+                        Ok((args, module, contract.urefs_lookup().clone()))
+                    } else {
+                        Err(Error::FunctionNotFound(format!(
+                            "Value at {:?} is not a contract",
+                            key
+                        )))
                     }
                 }
-            }?;
+            }
+        }?;
 
-            let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
-            let result = sub_call(module, args, &mut refs, key, self, extra_urefs)?;
-            self.host_buf = result;
-            Ok(self.host_buf.len())
-        } else {
-            Err(Error::InvalidAccess {
-                required: AccessRights::Read,
-            })
-        }
+        let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
+        let result = sub_call(module, args, &mut refs, key, self, extra_urefs)?;
+        self.host_buf = result;
+        Ok(self.host_buf.len())
     }
 
     pub fn serialize_function(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
@@ -464,55 +318,16 @@ where
         Ok(self.host_buf.len())
     }
 
-    /// Tries to store a function, located in the Wasm memory, into the GlobalState
+    /// Tries to store a function, represented as bytes from the Wasm memory, into the GlobalState
     /// and writes back a function's hash at `hash_ptr` in the Wasm memory.
-    ///
-    /// `name_ptr` and `name_size` tell the host where to look for a function's name.
-    /// Once it knows the name it can search for this exported function in the Wasm module.
-    /// Note that functions that contract wants to store have to be marked with `export` keyword.
-    /// `urefs_ptr` and `urefs_size` describe when the additional unforgable references can be found.
     pub fn store_function(
         &mut self,
-        name_ptr: u32,
-        name_size: u32,
-        urefs_ptr: u32,
-        urefs_size: u32,
-        hash_ptr: u32,
-    ) -> Result<(), Trap> {
-        let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
-        let uref_bytes = self
-            .memory
-            .get(urefs_ptr, urefs_size as usize)
-            .map_err(Error::Interpreter)?;
-        let urefs: BTreeMap<String, Key> = deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
-        urefs
-            .iter()
-            .try_for_each(|(_, v)| self.context.validate_key(&v))?;
-        let contract = common::value::Contract::new(fn_bytes, urefs);
-        let new_hash = self.new_function_address()?;
-        self.state
-            .write(Key::Hash(new_hash), Value::Contract(contract));
-        self.function_address(new_hash, hash_ptr)
-    }
-
-    /// Generates new function address.
-    /// Function address is deterministic. It is a hash of public key, nonce and `fn_store_id`,
-    /// which is a counter that is being incremented after every function generation.
-    /// If function address was based only on account's public key and deploy's nonce,
-    /// then all function addresses generated within one deploy would have been the same.
-    fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
-        let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
-        pre_hash_bytes.extend_from_slice(self.context.account.pub_key());
-        pre_hash_bytes.append(&mut self.context.account.nonce().to_bytes()?);
-        pre_hash_bytes.append(&mut self.fn_store_id.to_bytes()?);
-
-        self.fn_store_id += 1;
-
-        let mut hasher = VarBlake2b::new(32).unwrap();
-        hasher.input(&pre_hash_bytes);
-        let mut hash_bytes = [0; 32];
-        hasher.variable_result(|hash| hash_bytes.clone_from_slice(hash));
-        Ok(hash_bytes)
+        fn_bytes: Vec<u8>,
+        urefs: BTreeMap<String, Key>,
+    ) -> Result<[u8; 32], Error> {
+        let contract = Value::Contract(common::value::contract::Contract::new(fn_bytes, urefs));
+        let new_hash = self.context.store_contract(contract)?;
+        Ok(new_hash)
     }
 
     /// Writes function address (`hash_bytes`) into the Wasm memory (at `dest_ptr` pointer).
@@ -522,7 +337,16 @@ where
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    /// Writes value under a key (specified by their pointer and length properties from the Wasm memory).
+    /// Generates new unforgable reference and adds it to the context's known_uref set.
+    pub fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
+        let value = self.value_from_mem(value_ptr, value_size)?; // read initial value from memory
+        let key = self.context.new_uref(value)?;
+        self.memory
+            .set(key_ptr, &key.to_bytes().map_err(Error::BytesRepr)?)
+            .map_err(|e| Error::Interpreter(e).into())
+    }
+
+    /// Writes `value` under `key` in GlobalState.
     pub fn write(
         &mut self,
         key_ptr: u32,
@@ -530,20 +354,12 @@ where
         value_ptr: u32,
         value_size: u32,
     ) -> Result<(), Trap> {
-        self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)
-            .and_then(|(key, value)| {
-                if self.is_writeable(&key) {
-                    self.state.write(key, value);
-                    Ok(())
-                } else {
-                    Err(Error::InvalidAccess {
-                        required: AccessRights::Write,
-                    })
-                }
-            })
-            .map_err(Into::into)
+        let key = self.key_from_mem(key_ptr, key_size)?;
+        let value = self.value_from_mem(value_ptr, value_size)?;
+        self.context.write_gs(key, value).map_err(Into::into)
     }
 
+    /// Adds `value` to the cell that `key` points at.
     pub fn add(
         &mut self,
         key_ptr: u32,
@@ -551,104 +367,21 @@ where
         value_ptr: u32,
         value_size: u32,
     ) -> Result<(), Trap> {
-        let (key, value) = self.kv_from_mem(key_ptr, key_size, value_ptr, value_size)?;
-        self.add_transforms(key, value)
-    }
-
-    // Tests whether reading from the `key` is valid.
-    // For Accounts it's valid to read when the operation is done on the current context's key.
-    // For Contracts it's always valid.
-    // For URefs it's valid if the access rights of the URef allow for reading.
-    fn is_readable(&self, key: &Key) -> bool {
-        match key {
-            Key::Account(_) => &self.context.base_key == key,
-            Key::Hash(_) => true,
-            Key::URef(_, rights) => rights.is_readable(),
-        }
-    }
-
-    /// Tests whether addition to `key` is valid.
-    /// Addition to account key is valid iff it is being made from the context of the account.
-    /// Addition to contract key is valid iff it is being made from the context of the contract.
-    /// Additions to unforgeable key is valid as long as key itself is addable
-    fn is_addable(&self, key: &Key) -> bool {
-        match key {
-            Key::Account(_) | Key::Hash(_) => &self.context.base_key == key,
-            Key::URef(_, rights) => rights.is_addable(),
-        }
-    }
-
-    // Test whether writing to `kay` is valid.
-    // For Accounts and Hashes it's always invalid.
-    // For URefs it depends on the access rights that uref has.
-    fn is_writeable(&self, key: &Key) -> bool {
-        match key {
-            Key::Account(_) | Key::Hash(_) => false,
-            Key::URef(_, rights) => rights.is_writeable(),
-        }
-    }
-
-    /// Reads value living under a key (found at `key_ptr` and `key_size` in Wasm memory).
-    /// Fails if `key` is not "readable", i.e. its access rights are weaker than `AccessRights::Read`.
-    fn value_from_key(&mut self, key_ptr: u32, key_size: u32) -> Result<Value, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        if self.is_readable(&key) {
-            err_on_missing_key(key, self.state.read(key)).map_err(Into::into)
-        } else {
-            Err(Error::InvalidAccess {
-                required: AccessRights::Read,
-            }
-            .into())
-        }
-    }
-
-    /// Adds `value` to the `key`. The premise for being able to `add` value is that
-    /// the type of it [value] can be added (is a Monoid). If the values can't be added,
-    /// either because they're not a Monoid or if the value stored under `key` has different type,
-    /// then `TypeMismatch` errors is returned. Addition can also fail when `key` is not "addable".
-    fn add_transforms(&mut self, key: Key, value: Value) -> Result<(), Trap> {
-        if self.is_addable(&key) {
-            match self.state.add(key, value) {
-                Err(storage_error) => Err(storage_error.into().into()),
-                Ok(AddResult::Success) => Ok(()),
-                Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key).into()),
-                Ok(AddResult::TypeMismatch(type_mismatch)) => {
-                    Err(Error::TypeMismatch(type_mismatch).into())
-                }
-                Ok(AddResult::Overflow) => Err(Error::Overflow.into()),
-            }
-        } else {
-            Err(Error::InvalidAccess {
-                required: AccessRights::Add,
-            }
-            .into())
-        }
+        let value = self.value_from_mem(value_ptr, value_size)?;
+        self.context.add_gs(key, value).map_err(Into::into)
     }
 
     /// Reads value from the GS living under key specified by `key_ptr` and `key_size`.
     /// Wasm and host communicate through memory that Wasm module exports.
     /// If contract wants to pass data to the host, it has to tell it [the host]
     /// where this data lives in the exported memory (pass its pointer and length).
-    pub fn read_value(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
-        let value_bytes = {
-            let value = self.value_from_key(key_ptr, key_size)?;
-            value.to_bytes().map_err(Error::BytesRepr)?
-        };
+    pub fn read(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
+        let key = self.key_from_mem(key_ptr, key_size)?;
+        let value = err_on_missing_key(key, self.context.read_gs(&key))?;
+        let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
         self.host_buf = value_bytes;
         Ok(self.host_buf.len())
-    }
-
-    /// Generates new unforgable reference and adds it to the context's known_uref set.
-    pub fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
-        let value = self.value_from_mem(value_ptr, value_size)?; // read initial value from memory
-        let mut key = [0u8; 32];
-        self.rng.fill_bytes(&mut key);
-        let key = Key::URef(key, AccessRights::ReadWrite);
-        self.state.write(key, value); // write initial value to state
-        self.context.insert_uref(key);
-        self.memory
-            .set(key_ptr, &key.to_bytes().map_err(Error::BytesRepr)?)
-            .map_err(|e| Error::Interpreter(e).into())
     }
 }
 
@@ -700,7 +433,7 @@ where
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key in Wasm memory
                 let (key_ptr, key_size) = Args::parse(args)?;
-                let size = self.read_value(key_ptr, key_size)?;
+                let size = self.read(key_ptr, key_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -794,14 +527,16 @@ where
                 let (key_ptr, key_size, args_ptr, args_size, extra_urefs_ptr, extra_urefs_size) =
                     Args::parse(args)?;
 
-                let size = self.call_contract(
-                    key_ptr,
-                    as_usize(key_size),
-                    args_ptr,
-                    as_usize(args_size),
-                    extra_urefs_ptr,
-                    as_usize(extra_urefs_size),
-                )?;
+                // We have to explicitly tell rustc what type we expect as it cannot infer it otherwise.
+                let _args_size_u32: u32 = args_size;
+                let _extra_urefs_size_u32: u32 = extra_urefs_size;
+
+                let key_contract: Key = self.key_from_mem(key_ptr, key_size)?;
+                let args_bytes: Vec<u8> = self.bytes_from_mem(args_ptr, args_size as usize)?;
+                let urefs_bytes =
+                    self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size as usize)?;
+
+                let size = self.call_contract(key_contract, args_bytes, urefs_bytes)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -853,7 +588,15 @@ where
                 // args(4) = pointer to a Wasm memory where we will save
                 //           hash of the new function
                 let (name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr) = Args::parse(args)?;
-                self.store_function(name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr)?;
+                let _uref_type: u32 = urefs_size;
+                let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
+                let uref_bytes = self
+                    .memory
+                    .get(urefs_ptr, urefs_size as usize)
+                    .map_err(Error::Interpreter)?;
+                let urefs = deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
+                let contract_hash = self.store_function(fn_bytes, urefs)?;
+                self.function_address(contract_hash, hash_ptr)?;
                 Ok(None)
             }
 
@@ -1028,31 +771,25 @@ where
     R::Error: Into<Error>,
 {
     let (instance, memory) = instance_and_memory(parity_module.clone())?;
-    let known_urefs = refs
-        .values()
-        .cloned()
-        .chain(extra_urefs)
-        .map(key_to_tuple)
-        .flatten()
-        .collect();
-    let rng = ChaChaRng::from_rng(&mut current_runtime.rng).map_err(Error::Rng)?;
+    let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
+    let rng = ChaChaRng::from_rng(current_runtime.context.rng().clone()).map_err(Error::Rng)?;
     let mut runtime = Runtime {
-        args,
         memory,
-        state: current_runtime.state,
         module: parity_module,
         result: Vec::new(),
         host_buf: Vec::new(),
-        fn_store_id: 0,
-        gas_counter: current_runtime.gas_counter,
-        context: RuntimeContext {
-            uref_lookup: refs,
+        context: RuntimeContext::new(
+            current_runtime.context.state(),
+            refs,
             known_urefs,
-            account: current_runtime.context.account,
-            base_key: key,
-            gas_limit: current_runtime.context.gas_limit,
-        },
-        rng,
+            args,
+            current_runtime.context.account(),
+            key,
+            current_runtime.context.gas_limit(),
+            current_runtime.context.gas_counter(),
+            current_runtime.context.fn_store_id(),
+            rng,
+        ),
     };
 
     let result = instance.invoke_export("call", &[], &mut runtime);
@@ -1066,12 +803,9 @@ where
                 // in the Runtime result field.
                 if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
                     //insert extra urefs returned from call
-                    let ret_urefs_map: HashMap<URefAddr, AccessRights> = ret_urefs
-                        .iter()
-                        .map(|e| key_to_tuple(*e))
-                        .flatten()
-                        .collect();
-                    current_runtime.context.known_urefs.extend(ret_urefs_map);
+                    let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
+                        vec_key_rights_to_map(ret_urefs.clone());
+                    current_runtime.context.add_urefs(ret_urefs_map);
                     return Ok(runtime.result);
                 }
             }
@@ -1080,7 +814,26 @@ where
     }
 }
 
-fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng {
+/// Groups vector of keys by their address and accumulates access rights per key.
+pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
+    input: I,
+) -> HashMap<URefAddr, HashSet<AccessRights>> {
+    input
+        .into_iter()
+        .map(key_to_tuple)
+        .flatten()
+        .group_by(|(key, _)| *key)
+        .into_iter()
+        .map(|(key, group)| {
+            (
+                key,
+                group.map(|(_, x)| x).collect::<HashSet<AccessRights>>(),
+            )
+        })
+        .collect()
+}
+
+pub fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let hasher = VarBlake2b::new(32).unwrap();
@@ -1097,7 +850,7 @@ macro_rules! on_fail_charge {
         match $fn {
             Ok(res) => res,
             Err(er) => {
-                let lambda = || $cost;
+                let mut lambda = || $cost;
                 return (Err(er.into()), lambda());
             }
         }
@@ -1114,7 +867,8 @@ pub trait Executor<A> {
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
-        tc: &mut TrackingCopy<R>,
+        protocol_version: u64,
+        tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
         R::Error: Into<Error>;
@@ -1131,34 +885,31 @@ impl Executor<Module> for WasmiExecutor {
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
-        tc: &mut TrackingCopy<R>,
+        _protocol_version: u64,
+        tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
         R::Error: Into<Error>,
     {
-        let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
         let acct_key = Key::Account(account_addr);
+        let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
+        #[allow(unreachable_code)]
+        let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid), 0);
         let value = on_fail_charge! {
-        match tc.get(&acct_key) {
-            Ok(None) => Err(Error::KeyNotFound(acct_key)),
-            Err(error) => Err(error.into()),
-            Ok(Some(value)) => Ok(value)
-        }, 0 };
+            match tc.borrow_mut().get(&validated_key) {
+                Ok(None) => Err(Error::KeyNotFound(acct_key)),
+                Err(error) => Err(error.into()),
+                Ok(Some(value)) => Ok(value)
+            },
+            0
+        };
         let account = value.as_account();
         let mut uref_lookup_local = account.urefs_lookup().clone();
-        let known_urefs: HashMap<URefAddr, AccessRights> = uref_lookup_local
-            .values()
-            .cloned()
-            .map(key_to_tuple)
-            .flatten()
-            .collect();
-        let context = RuntimeContext {
-            uref_lookup: &mut uref_lookup_local,
-            known_urefs,
-            account: &account,
-            base_key: acct_key,
-            gas_limit,
-        };
+        let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
+            vec_key_rights_to_map(uref_lookup_local.values().cloned());
+        let rng = create_rng(&account_addr, timestamp, nonce);
+        let gas_counter = 0u64;
+        let fn_store_id = 0u32;
         let arguments: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
         } else {
@@ -1166,30 +917,31 @@ impl Executor<Module> for WasmiExecutor {
             // https://casperlabs.atlassian.net/browse/EE-239
             on_fail_charge!(deserialize(args), 0)
         };
-        let mut runtime = Runtime::new(
-            arguments,
-            memory,
+        let context = RuntimeContext::new(
             tc,
-            parity_module,
-            account_addr,
-            nonce,
-            timestamp,
-            context,
+            &mut uref_lookup_local,
+            known_urefs,
+            arguments,
+            &account,
+            acct_key,
+            gas_limit,
+            gas_counter,
+            fn_store_id,
+            rng,
         );
-        let _ = on_fail_charge!(
+        let mut runtime = Runtime::new(memory, parity_module, context);
+        on_fail_charge!(
             instance.invoke_export("call", &[], &mut runtime),
-            runtime.gas_counter
+            runtime.context.gas_counter()
         );
 
-        (Ok(runtime.effect()), runtime.gas_counter)
+        (Ok(runtime.context.effect()), runtime.context.gas_counter())
     }
 }
 
 /// Turns `key` into a `([u8; 32], AccessRights)` tuple.
-/// Returns None if `key` is not `Key::URef` as we it wouldn't have
-/// `AccessRights` associated to it.
-/// This is helper function for creating `known_urefs` map which
-/// holds addresses and corresponding `AccessRights`.
+/// Returns None if `key` is not `Key::URef` as it wouldn't have `AccessRights` associated with it.
+/// Helper function for creating `known_urefs` associating addresses and corresponding `AccessRights`.
 pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
     match key {
         Key::URef(raw_addr, rights) => Some((raw_addr, rights)),
@@ -1199,41 +951,52 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
 }
 
 #[cfg(test)]
-mod tests {
-    // Need intermediate method b/c when on_fail_charge macro is inlined
-    // for the error case it will call return which would exit the test.
-    fn indirect_fn(r: Result<u32, String>, f: u32) -> (Result<u32, String>, u32) {
-        let res = on_fail_charge!(r, f);
-        (Ok(res), 1111) // 1111 for easy discrimination
+mod on_fail_charge_macro_tests {
+    struct Counter {
+        pub counter: u32,
     }
 
-    #[test]
-    fn on_fail_charge_ok() {
-        let counter = 0;
-        let ok: Result<u32, String> = Ok(10);
-        let res: (Result<u32, String>, u32) = indirect_fn(ok, counter);
-        assert!(res.0.is_ok());
-        assert_eq!(res.0.ok().unwrap(), 10);
-        assert_eq!(res.1, 1111);
-        assert_eq!(counter, 0); // test that lambda was not executed for the Ok-case
-    }
-
-    #[test]
-    fn on_fail_charge_laziness() {
-        // Need this indirection b/c otherwise compiler complains
-        // about borrowing counter.counter after it was moved in the `fail` call.
-        struct Counter {
-            pub counter: u32,
-        };
-        impl Counter {
-            fn fail(&mut self) -> Result<u32, String> {
-                self.counter += 10;
-                Err("Err".to_owned())
-            }
+    impl Counter {
+        fn count(&mut self, count: u32) -> u32 {
+            self.counter += count;
+            count
         }
-        let mut counter = Counter { counter: 1 };
-        let res: (Result<u32, String>, u32) = indirect_fn(counter.fail(), counter.counter);
-        assert!(res.0.is_err());
-        assert_eq!(res.1, 11); // test that counter value was fetched lazily
+    }
+
+    fn on_fail_charge_test_helper(
+        counter: &mut Counter,
+        inc_value: u32,
+        input: Result<u32, String>,
+        fallback_value: u32,
+    ) -> (Result<u32, String>, u32) {
+        let res: u32 = on_fail_charge!(input, counter.count(inc_value));
+        (Ok(res), fallback_value)
+    }
+
+    #[test]
+    fn on_fail_charge_ok_test() {
+        let mut cntr = Counter { counter: 0 };
+        let fallback_value = 9999;
+        let inc_value = 10;
+        let ok_value = Ok(13);
+        let res: (Result<u32, String>, u32) =
+            on_fail_charge_test_helper(&mut cntr, inc_value, ok_value.clone(), fallback_value);
+        assert_eq!(res.0, ok_value);
+        assert_eq!(res.1, fallback_value);
+        assert_eq!(cntr.counter, 0); // test that lambda was NOT executed for the Ok-case
+    }
+
+    #[test]
+    fn on_fail_charge_err_laziness_test() {
+        let mut cntr = Counter { counter: 1 };
+        let fallback_value = 9999;
+        let inc_value = 10;
+        let expected_value = cntr.counter + inc_value;
+        let err = Err("BOOM".to_owned());
+        let res: (Result<u32, String>, u32) =
+            on_fail_charge_test_helper(&mut cntr, inc_value, err.clone(), fallback_value);
+        assert_eq!(res.0, err);
+        assert_eq!(res.1, inc_value);
+        assert_eq!(cntr.counter, expected_value) // test that lambda executed
     }
 }

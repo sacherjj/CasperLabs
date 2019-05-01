@@ -1,4 +1,5 @@
 mod alloc_util;
+pub mod argsparser;
 pub mod pointers;
 
 use self::alloc_util::*;
@@ -10,6 +11,7 @@ use crate::value::{Contract, Value};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use argsparser::ArgsParser;
 use core::convert::{TryFrom, TryInto};
 
 /// Read value under the key in the global state
@@ -200,14 +202,14 @@ pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<Key>) -> ! {
 /// execution. The value returned from the contract call (see `ret` above) is
 /// returned from this function.
 #[allow(clippy::ptr_arg)]
-pub fn call_contract<T: FromBytes>(
+pub fn call_contract<A: ArgsParser, T: FromBytes>(
     c_ptr: ContractPointer,
-    args: &Vec<Vec<u8>>,
+    args: &A,
     extra_urefs: &Vec<Key>,
 ) -> T {
     let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = to_ptr(&contract_key);
-    let (args_ptr, args_size, _bytes2) = to_ptr(args);
+    let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args).map(|args| to_ptr(&args)).unwrap();
     let (urefs_ptr, urefs_size, _bytes3) = to_ptr(extra_urefs);
     let res_size = unsafe {
         ext_ffi::call_contract(

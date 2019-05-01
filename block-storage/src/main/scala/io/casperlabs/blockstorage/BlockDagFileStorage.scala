@@ -364,7 +364,7 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
             }
           }
       _ <- updateLatestMessagesFile(
-            (newValidators + block.sender).toList,
+            newValidatorsWithSender.toList,
             block.blockHash
           )
       _ <- updateDataLookupFile(blockMetadata)

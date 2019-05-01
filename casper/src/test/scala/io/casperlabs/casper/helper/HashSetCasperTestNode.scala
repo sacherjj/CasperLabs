@@ -95,6 +95,8 @@ class HashSetCasperTestNode[F[_]](
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
   implicit val casperEff = new MultiParentCasperImpl[F](
+    new MultiParentCasperImpl.StatelessExecutor(shardId),
+    new MultiParentCasperImpl.Broadcaster(),
     Some(validatorId),
     genesis,
     shardId,
@@ -104,9 +106,13 @@ class HashSetCasperTestNode[F[_]](
 
   implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[F](Some(casperEff))
 
-  val handlerInternal = new ApprovedBlockReceivedHandler(casperEff, approvedBlock)
+  val handlerInternal =
+    new ApprovedBlockReceivedHandler(casperEff, approvedBlock, Some(validatorId))
   val casperPacketHandler =
-    new CasperPacketHandlerImpl[F](Ref.unsafe[F, CasperPacketHandlerInternal[F]](handlerInternal))
+    new CasperPacketHandlerImpl[F](
+      Ref.unsafe[F, CasperPacketHandlerInternal[F]](handlerInternal),
+      Some(validatorId)
+    )
   implicit val packetHandlerEff = PacketHandler.pf[F](
     casperPacketHandler.handle
   )
@@ -377,7 +383,8 @@ object HashSetCasperTestNode {
 
       override def exec(
           prestate: ByteString,
-          deploys: Seq[Deploy]
+          deploys: Seq[Deploy],
+          protocolVersion: ipc.ProtocolVersion
       ): F[Either[Throwable, Seq[DeployResult]]] =
         //This function returns the same `DeployResult` for all deploys,
         //regardless of their wasm code. It pretends to have run all the deploys,
