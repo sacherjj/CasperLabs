@@ -129,8 +129,7 @@ fn create_0_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 }
 
 fn create_1_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error> {
-    let leaves = hash_test_tries(&TEST_LEAVES)?;
-    let leaves = (&leaves[0..1]).to_vec();
+    let leaves = hash_test_tries(&TEST_LEAVES[0..1])?;
 
     let root = HashedTestTrie::new(Trie::node(&[(0, Pointer::LeafPointer(leaves[0].hash))]))?;
 
@@ -149,8 +148,7 @@ fn create_1_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 }
 
 fn create_2_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error> {
-    let leaves = hash_test_tries(&TEST_LEAVES)?;
-    let leaves = (&leaves[0..2]).to_vec();
+    let leaves = hash_test_tries(&TEST_LEAVES[0..2])?;
 
     let node_1 = HashedTestTrie::new(Trie::node(&[
         (0, Pointer::LeafPointer(leaves[0].hash)),
@@ -179,8 +177,7 @@ fn create_2_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 }
 
 fn create_3_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error> {
-    let leaves = hash_test_tries(&TEST_LEAVES)?;
-    let leaves = (&leaves[0..3]).to_vec();
+    let leaves = hash_test_tries(&TEST_LEAVES[0..3])?;
 
     let node_1 = HashedTestTrie::new(Trie::node(&[
         (0, Pointer::LeafPointer(leaves[0].hash)),
@@ -212,8 +209,7 @@ fn create_3_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 }
 
 fn create_4_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error> {
-    let leaves = hash_test_tries(&TEST_LEAVES)?;
-    let leaves = (&leaves[0..4]).to_vec();
+    let leaves = hash_test_tries(&TEST_LEAVES[0..4])?;
 
     let node_1 = HashedTestTrie::new(Trie::node(&[
         (0, Pointer::LeafPointer(leaves[0].hash)),
