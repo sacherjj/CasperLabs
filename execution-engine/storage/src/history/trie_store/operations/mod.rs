@@ -152,47 +152,47 @@ where
                     assert!(index < trie::RADIX, "index must be < {}", trie::RADIX);
                     pointer_block[index]
                 };
-                match maybe_pointer {
-                    Some(pointer) => match store.get(txn, pointer.hash())? {
-                        Some(next) => {
-                            current = next;
-                            depth += 1;
-                            acc.push((index, Trie::Node { pointer_block }))
-                        }
-                        None => {
-                            panic!(
-                                "No trie value at key: {:?} (reading from path: {:?})",
-                                pointer.hash(),
-                                path
-                            );
-                        }
-                    },
+                let pointer = match maybe_pointer {
+                    Some(pointer) => pointer,
                     None => return Ok(TrieScan::new(Trie::Node { pointer_block }, acc)),
+                };
+                match store.get(txn, pointer.hash())? {
+                    Some(next) => {
+                        current = next;
+                        depth += 1;
+                        acc.push((index, Trie::Node { pointer_block }))
+                    }
+                    None => {
+                        panic!(
+                            "No trie value at key: {:?} (reading from path: {:?})",
+                            pointer.hash(),
+                            path
+                        );
+                    }
                 }
             }
             Trie::Extension { affix, pointer } => {
                 let sub_path = &path[depth..depth + affix.len()];
-                if sub_path == affix.as_slice() {
-                    match store.get(txn, pointer.hash())? {
-                        Some(next) => {
-                            let index: usize = {
-                                assert!(depth < path.len(), "depth must be < {}", path.len());
-                                path[depth].into()
-                            };
-                            current = next;
-                            depth += affix.len();
-                            acc.push((index, Trie::Extension { affix, pointer }))
-                        }
-                        None => {
-                            panic!(
-                                "No trie value at key: {:?} (reading from path: {:?})",
-                                pointer.hash(),
-                                path
-                            );
-                        }
-                    }
-                } else {
+                if sub_path != affix.as_slice() {
                     return Ok(TrieScan::new(Trie::Extension { affix, pointer }, acc));
+                }
+                match store.get(txn, pointer.hash())? {
+                    Some(next) => {
+                        let index: usize = {
+                            assert!(depth < path.len(), "depth must be < {}", path.len());
+                            path[depth].into()
+                        };
+                        current = next;
+                        depth += affix.len();
+                        acc.push((index, Trie::Extension { affix, pointer }))
+                    }
+                    None => {
+                        panic!(
+                            "No trie value at key: {:?} (reading from path: {:?})",
+                            pointer.hash(),
+                            path
+                        );
+                    }
                 }
             }
         }
