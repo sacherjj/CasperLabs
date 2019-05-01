@@ -725,7 +725,7 @@ object MultiParentCasperImpl {
             status: BlockStatus
         ): F[Unit] =
           status match {
-            //Add successful! Send block to peers, log success, try to add other blocks
+            //Add successful! Send block to peers.
             case Valid | AdmissibleEquivocation =>
               CommUtil.sendBlock[F](block)
 
