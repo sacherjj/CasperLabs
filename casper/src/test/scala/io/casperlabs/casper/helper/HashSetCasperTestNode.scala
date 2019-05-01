@@ -3,7 +3,7 @@ package io.casperlabs.casper.helper
 import java.nio.file.Path
 
 import cats.data.EitherT
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Timer}
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
@@ -124,7 +124,8 @@ trait HashSetCasperTestNodeFactory {
       implicit
       errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
-      parF: Par[F]
+      parF: Par[F],
+      timerF: Timer[F]
   ): F[TestNode[F]]
 
   def standaloneEff(
@@ -139,7 +140,8 @@ trait HashSetCasperTestNodeFactory {
     standaloneF[Effect](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
-      Par[Effect]
+      Par[Effect],
+      Timer[Effect]
     ).value.unsafeRunSync.right.get
 
   def networkF[F[_]](
@@ -151,7 +153,8 @@ trait HashSetCasperTestNodeFactory {
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
-      parF: Par[F]
+      parF: Par[F],
+      timerF: Timer[F]
   ): F[IndexedSeq[TestNode[F]]]
 
   def networkEff(
@@ -164,8 +167,22 @@ trait HashSetCasperTestNodeFactory {
     networkF[Effect](sks, genesis, transforms, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
-      Par[Effect]
+      Par[Effect],
+      Timer[Effect]
     )
+
+  protected def initStorage[F[_]: Concurrent: Log: Metrics](genesis: BlockMessage) = {
+    val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
+    val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
+    val env           = Context.env(blockStoreDir, BlockDagStorageTestFixture.mapSize)
+    for {
+      blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
+      blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
+                          BlockDagFileStorage.Config(blockDagDir),
+                          genesis
+                        )(Concurrent[F], Log[F], blockStore, Metrics[F])
+    } yield (blockDagDir, blockStoreDir, blockDagStorage, blockStore)
+  }
 }
 
 object HashSetCasperTestNode {

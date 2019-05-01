@@ -3,7 +3,7 @@ package io.casperlabs.casper.helper
 import java.nio.file.Path
 
 import cats.data.EitherT
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Timer}
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import cats.{Applicative, ApplicativeError, Defer, Id, Monad}
@@ -130,7 +130,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       implicit
       errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
-      parF: Par[F]
+      parF: Par[F],
+      timerF: Timer[F]
   ): F[TransportLayerCasperTestNode[F]] = {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
@@ -140,38 +141,33 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     implicit val log       = new Log.NOPLog[F]()
     implicit val metricEff = new Metrics.MetricsNOP[F]
 
-    val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
-    val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
-    val env           = Context.env(blockStoreDir, BlockDagStorageTestFixture.mapSize)
-    for {
-      blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
-      blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
-                          BlockDagFileStorage.Config(blockDagDir),
-                          genesis
-                        )(concurrentF, log, blockStore, metricEff)
-      blockProcessingLock <- Semaphore[F](1)
-      casperState         <- Cell.mvarCell[F, CasperState](CasperState())
-      node = new TransportLayerCasperTestNode[F](
-        identity,
-        tle,
-        genesis,
-        transforms,
-        sk,
-        blockDagDir,
-        blockStoreDir,
-        blockProcessingLock,
-        faultToleranceThreshold
-      )(
-        concurrentF,
-        blockStore,
-        blockDagStorage,
-        errorHandler,
-        logicalTime,
-        metricEff,
-        casperState
-      )
-      _ <- node.initialize
-    } yield node
+    initStorage(genesis) flatMap {
+      case (blockDagDir, blockStoreDir, blockDagStorage, blockStore) =>
+        for {
+          blockProcessingLock <- Semaphore[F](1)
+          casperState         <- Cell.mvarCell[F, CasperState](CasperState())
+          node = new TransportLayerCasperTestNode[F](
+            identity,
+            tle,
+            genesis,
+            transforms,
+            sk,
+            blockDagDir,
+            blockStoreDir,
+            blockProcessingLock,
+            faultToleranceThreshold
+          )(
+            concurrentF,
+            blockStore,
+            blockDagStorage,
+            errorHandler,
+            logicalTime,
+            metricEff,
+            casperState
+          )
+          _ <- node.initialize
+        } yield node
+    }
   }
 
   def networkF[F[_]](
@@ -183,7 +179,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
-      parF: Par[F]
+      parF: Par[F],
+      timerF: Timer[F]
   ): F[IndexedSeq[TransportLayerCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
@@ -192,52 +189,46 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       .map(_ -> new mutable.Queue[Protocol]())
       .toMap
       .mapValues(Ref.unsafe[F, mutable.Queue[Protocol]])
-    val logicalTime: LogicalTime[F] = new LogicalTime[F]
 
     val nodesF =
       peers
         .zip(sks)
         .toList
         .traverse {
-          case (p, sk) =>
-            val tle                = new TransportLayerTestImpl[F](p, msgQueues)
+          case (peer, sk) =>
+            val tle                = new TransportLayerTestImpl[F](peer, msgQueues)
             val logicalTime        = new LogicalTime[F]
             implicit val log       = new Log.NOPLog[F]()
             implicit val metricEff = new Metrics.MetricsNOP[F]
 
-            val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
-            val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
-            val env           = Context.env(blockStoreDir, BlockDagStorageTestFixture.mapSize)
-            for {
-              blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
-              blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
-                                  BlockDagFileStorage.Config(blockDagDir),
-                                  genesis
-                                )(concurrentF, log, blockStore, metricEff)
-              semaphore <- Semaphore[F](1)
-              casperState <- Cell.mvarCell[F, CasperState](
-                              CasperState()
-                            )
-              node = new TransportLayerCasperTestNode[F](
-                p,
-                tle,
-                genesis,
-                transforms,
-                sk,
-                blockDagDir,
-                blockStoreDir,
-                semaphore,
-                faultToleranceThreshold
-              )(
-                concurrentF,
-                blockStore,
-                blockDagStorage,
-                errorHandler,
-                logicalTime,
-                metricEff,
-                casperState
-              )
-            } yield node
+            initStorage(genesis) flatMap {
+              case (blockDagDir, blockStoreDir, blockDagStorage, blockStore) =>
+                for {
+                  semaphore <- Semaphore[F](1)
+                  casperState <- Cell.mvarCell[F, CasperState](
+                                  CasperState()
+                                )
+                  node = new TransportLayerCasperTestNode[F](
+                    peer,
+                    tle,
+                    genesis,
+                    transforms,
+                    sk,
+                    blockDagDir,
+                    blockStoreDir,
+                    semaphore,
+                    faultToleranceThreshold
+                  )(
+                    concurrentF,
+                    blockStore,
+                    blockDagStorage,
+                    errorHandler,
+                    logicalTime,
+                    metricEff,
+                    casperState
+                  )
+                } yield node
+            }
         }
         .map(_.toVector)
 
