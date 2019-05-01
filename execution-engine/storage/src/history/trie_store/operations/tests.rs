@@ -52,7 +52,7 @@ impl FromBytes for TestValue {
 
 type TestTrie = Trie<TestKey, TestValue>;
 
-/// A pairing of a trie element and it's hash.
+/// A pairing of a trie element and its hash.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct HashedTestTrie {
     hash: Blake2bHash,
@@ -480,10 +480,9 @@ mod read {
         use super::*;
 
         #[test]
-        #[allow(clippy::needless_range_loop)]
         fn lmdb_reads_from_n_leaf_partial_trie_had_expected_results() {
-            for num_leaves in 0..TEST_TRIE_GENERATORS_LENGTH {
-                let (root_hash, tries) = TEST_TRIE_GENERATORS[num_leaves]().unwrap();
+            for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
+                let (root_hash, tries) = generator().unwrap();
                 let context = LmdbTestContext::new(root_hash, &tries).unwrap();
                 check_leaves::<LmdbEnvironment, LmdbTrieStore, error::Error>(
                     &context.environment,
@@ -496,10 +495,9 @@ mod read {
         }
 
         #[test]
-        #[allow(clippy::needless_range_loop)]
         fn in_memory_reads_from_n_leaf_partial_trie_had_expected_results() {
-            for num_leaves in 0..TEST_TRIE_GENERATORS_LENGTH {
-                let (root_hash, tries) = TEST_TRIE_GENERATORS[num_leaves]().unwrap();
+            for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
+                let (root_hash, tries) = generator().unwrap();
                 let context = InMemoryTestContext::new(root_hash, &tries).unwrap();
                 check_leaves::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
                     &context.environment,
@@ -523,20 +521,19 @@ mod read {
         use super::*;
 
         #[test]
-        #[allow(clippy::needless_range_loop)]
         fn lmdb_reads_from_n_leaf_full_trie_had_expected_results() {
             let mut context = LmdbTestContext::empty().unwrap();
 
-            for i in 1..TEST_TRIE_GENERATORS_LENGTH {
-                let (root_hash, tries) = TEST_TRIE_GENERATORS[i]().unwrap();
+            for (state_index, generator) in TEST_TRIE_GENERATORS[1..].iter().enumerate() {
+                let (root_hash, tries) = generator().unwrap();
                 context.push(root_hash, &tries).unwrap();
 
-                for j in 0..i {
+                for (num_leaves, state) in context.states[0..state_index].iter().enumerate() {
                     check_leaves::<LmdbEnvironment, LmdbTrieStore, error::Error>(
                         &context.environment,
                         &context.store,
-                        &context.states[j],
-                        j,
+                        state,
+                        num_leaves,
                     )
                     .unwrap();
                 }
@@ -544,20 +541,19 @@ mod read {
         }
 
         #[test]
-        #[allow(clippy::needless_range_loop)]
         fn in_memory_reads_from_n_leaf_full_trie_had_expected_results() {
             let mut context = InMemoryTestContext::empty().unwrap();
 
-            for i in 1..TEST_TRIE_GENERATORS_LENGTH {
-                let (root_hash, tries) = TEST_TRIE_GENERATORS[i]().unwrap();
+            for (state_index, generator) in TEST_TRIE_GENERATORS[1..].iter().enumerate() {
+                let (root_hash, tries) = generator().unwrap();
                 context.push(root_hash, &tries).unwrap();
 
-                for j in 0..i {
+                for (num_leaves, state) in context.states[0..state_index].iter().enumerate() {
                     check_leaves::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
                         &context.environment,
                         &context.store,
-                        &context.states[j],
-                        j,
+                        state,
+                        num_leaves,
                     )
                     .unwrap();
                 }

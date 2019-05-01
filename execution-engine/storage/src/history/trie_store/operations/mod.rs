@@ -79,19 +79,26 @@ where
                     }
                 }
             }
-            Trie::Extension { affix, pointer } => match store.get(txn, pointer.hash())? {
-                Some(next) => {
-                    depth += affix.len();
-                    current = next;
+            Trie::Extension { affix, pointer } => {
+                let sub_path = &path[depth..depth + affix.len()];
+                if sub_path == affix.as_slice() {
+                    match store.get(txn, pointer.hash())? {
+                        Some(next) => {
+                            depth += affix.len();
+                            current = next;
+                        }
+                        None => {
+                            panic!(
+                                "No trie value at key: {:?} (reading from key: {:?})",
+                                pointer.hash(),
+                                key
+                            );
+                        }
+                    }
+                } else {
+                    return Ok(ReadResult::NotFound);
                 }
-                None => {
-                    panic!(
-                        "No trie value at key: {:?} (reading from key: {:?})",
-                        pointer.hash(),
-                        key
-                    );
-                }
-            },
+            }
         }
     }
 }
