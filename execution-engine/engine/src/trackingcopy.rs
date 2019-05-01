@@ -38,7 +38,8 @@ impl TrackingCopyCache {
 
     /// Inserts `key` and `value` pair to Write/Add cache.
     pub fn insert_write(&mut self, key: Key, value: Value) {
-        self.muts_cached.insert(key, value);
+        self.muts_cached.insert(key, value.clone());
+        self.reads_cached.insert(key, value);
     }
 
     /// Gets value from `key` in the cache.
@@ -49,7 +50,7 @@ impl TrackingCopyCache {
             v_imm
         });
         let writes_cache = self.muts_cached.get(key);
-        reads_cache.or(writes_cache)
+        reads_cache.or_else(||writes_cache)
     }
 
     pub fn is_empty(&self) -> bool {
