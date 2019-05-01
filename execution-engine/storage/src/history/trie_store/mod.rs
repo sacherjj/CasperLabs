@@ -11,6 +11,8 @@ pub mod lmdb;
 #[cfg(test)]
 pub(crate) mod in_memory;
 
+pub(crate) mod operations;
+
 #[cfg(test)]
 mod tests;
 

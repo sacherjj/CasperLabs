@@ -11,7 +11,7 @@ pub(crate) mod gens;
 #[cfg(test)]
 mod tests;
 
-const RADIX: usize = 256;
+pub const RADIX: usize = 256;
 
 const U32_SIZE: usize = size_of::<u32>();
 
@@ -23,7 +23,7 @@ pub enum Pointer {
 }
 
 impl Pointer {
-    fn hash(&self) -> &Blake2bHash {
+    pub fn hash(&self) -> &Blake2bHash {
         match self {
             Pointer::LeafPointer(hash) => hash,
             Pointer::NodePointer(hash) => hash,
@@ -72,6 +72,14 @@ pub struct PointerBlock([Option<Pointer>; RADIX]);
 impl PointerBlock {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn from_indexed_pointers(indexed_pointers: &[(usize, Pointer)]) -> Self {
+        let mut ret = PointerBlock::new();
+        for (idx, ptr) in indexed_pointers.iter() {
+            ret[*idx] = Some(*ptr);
+        }
+        ret
     }
 }
 
@@ -154,6 +162,23 @@ impl<K, V> Trie<K, V> {
             Trie::Node { .. } => 1,
             Trie::Extension { .. } => 2,
         }
+    }
+
+    /// Constructs a [`Trie::Leaf`] from a given key and value.
+    pub fn leaf(key: K, value: V) -> Self {
+        Trie::Leaf { key, value }
+    }
+
+    /// Constructs a [`Trie::Node`] from a given slice of indexed pointers.
+    pub fn node(indexed_pointers: &[(usize, Pointer)]) -> Self {
+        let pointer_block = PointerBlock::from_indexed_pointers(indexed_pointers);
+        let pointer_block = Box::new(pointer_block);
+        Trie::Node { pointer_block }
+    }
+
+    /// Constructs a [`Trie::Extension`] from a given affix and pointer.
+    pub fn extension(affix: Vec<u8>, pointer: Pointer) -> Self {
+        Trie::Extension { affix, pointer }
     }
 }
 
