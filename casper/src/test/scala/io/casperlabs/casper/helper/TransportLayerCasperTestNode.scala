@@ -7,10 +7,10 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import cats.{Applicative, ApplicativeError, Defer, Id, Monad}
+import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
-import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
@@ -129,25 +129,26 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   )(
       implicit
       errorHandler: ErrorHandler[F],
-      concurrentF: Concurrent[F]
+      concurrentF: Concurrent[F],
+      parF: Par[F]
   ): F[TransportLayerCasperTestNode[F]] = {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
     val tle =
       new TransportLayerTestImpl[F](identity, Map.empty[Node, Ref[F, mutable.Queue[Protocol]]])
-    val logicalTime: LogicalTime[F] = new LogicalTime[F]
-    implicit val log                = new Log.NOPLog[F]()
-    implicit val metricEff          = new Metrics.MetricsNOP[F]
+    val logicalTime        = new LogicalTime[F]
+    implicit val log       = new Log.NOPLog[F]()
+    implicit val metricEff = new Metrics.MetricsNOP[F]
 
     val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
     val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
-    val env           = Context.env(blockStoreDir, mapSize)
+    val env           = Context.env(blockStoreDir, BlockDagStorageTestFixture.mapSize)
     for {
       blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
       blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                           BlockDagFileStorage.Config(blockDagDir),
                           genesis
-                        )(Concurrent[F], Log[F], blockStore, metricEff)
+                        )(concurrentF, log, blockStore, metricEff)
       blockProcessingLock <- Semaphore[F](1)
       casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       node = new TransportLayerCasperTestNode[F](
@@ -169,8 +170,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
         metricEff,
         casperState
       )
-      result <- node.initialize.map(_ => node)
-    } yield result
+      _ <- node.initialize
+    } yield node
   }
 
   def networkF[F[_]](
@@ -181,7 +182,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f
   )(
       implicit errorHandler: ErrorHandler[F],
-      concurrentF: Concurrent[F]
+      concurrentF: Concurrent[F],
+      parF: Par[F]
   ): F[IndexedSeq[TransportLayerCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
@@ -199,18 +201,19 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
         .traverse {
           case (p, sk) =>
             val tle                = new TransportLayerTestImpl[F](p, msgQueues)
+            val logicalTime        = new LogicalTime[F]
             implicit val log       = new Log.NOPLog[F]()
             implicit val metricEff = new Metrics.MetricsNOP[F]
 
             val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
             val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
-            val env           = Context.env(blockStoreDir, mapSize)
+            val env           = Context.env(blockStoreDir, BlockDagStorageTestFixture.mapSize)
             for {
               blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
               blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                                   BlockDagFileStorage.Config(blockDagDir),
                                   genesis
-                                )(Concurrent[F], Log[F], blockStore, metricEff)
+                                )(concurrentF, log, blockStore, metricEff)
               semaphore <- Semaphore[F](1)
               casperState <- Cell.mvarCell[F, CasperState](
                               CasperState()
