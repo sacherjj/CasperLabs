@@ -43,13 +43,15 @@ impl TrackingCopyCache {
 
     /// Gets value from `key` in the cache.
     pub fn get(&mut self, key: &Key) -> Option<&Value> {
-        let reads_cache = self.reads_cached.get_mut(key).map(|v| {
+        if let Some(value) = self.muts_cached.get(&key) {
+            return Some(value)
+        };
+
+        self.reads_cached.get_mut(key).map(|v| {
             // a hack to downgrade &mut Value to &Value
             let v_imm: &Value = v;
             v_imm
-        });
-        let writes_cache = self.muts_cached.get(key);
-        writes_cache.or_else(||reads_cache)
+        })
     }
 
     pub fn is_empty(&self) -> bool {
