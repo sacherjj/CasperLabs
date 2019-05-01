@@ -50,45 +50,41 @@ import scala.util.Random
 import HashSetCasperTestNode.Effect
 
 class TransportLayerCasperTestNode[F[_]](
-    name: String,
-    val local: Node,
+    local: Node,
     tle: TransportLayerTestImpl[F],
-    val genesis: BlockMessage,
-    val transforms: Seq[TransformEntry],
+    genesis: BlockMessage,
+    transforms: Seq[TransformEntry],
     sk: Array[Byte],
     logicalTime: LogicalTime[F],
-    implicit val errorHandlerEff: ErrorHandler[F],
     storageSize: Long,
-    val blockDagDir: Path,
-    val blockStoreDir: Path,
+    blockDagDir: Path,
+    blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     shardId: String = "casperlabs"
 )(
     implicit
     concurrentF: Concurrent[F],
-    val blockStore: BlockStore[F],
-    val blockDagStorage: BlockDagStorage[F],
-    val metricEff: Metrics[F],
-    val casperState: Cell[F, CasperState]
-) extends HashSetCasperTestNode[F] {
+    blockStore: BlockStore[F],
+    blockDagStorage: BlockDagStorage[F],
+    metricEff: Metrics[F],
+    casperState: Cell[F, CasperState],
+    val errorHandlerEff: ErrorHandler[F]
+) extends HashSetCasperTestNode[F](
+      local,
+      sk,
+      genesis,
+      blockDagDir,
+      blockStoreDir
+    )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
 
-  implicit val logEff: LogStub[F] = new LogStub[F]()
   implicit val timeEff            = logicalTime
   implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
   implicit val transportLayerEff  = tle
   implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
   implicit val rpConfAsk          = createRPConfAsk[F](local)
 
-  val bonds = genesis.body
-    .flatMap(_.state.map(_.bonds.map(b => b.validator.toByteArray -> b.stake).toMap))
-    .getOrElse(Map.empty)
-
-  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds)
-
   val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
-
-  val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
   val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
 
@@ -119,34 +115,10 @@ class TransportLayerCasperTestNode[F[_]](
     casperPacketHandler.handle
   )
 
-  def initialize(): F[Unit] =
-    // pre-population removed from internals of Casper
-    blockStore.put(genesis.blockHash, genesis, Seq.empty) *>
-      blockDagStorage.getRepresentation.flatMap { dag =>
-        ExecEngineUtil
-          .validateBlockCheckpoint[F](
-            genesis,
-            dag
-          )
-          .void
-      }
-
   def receive(): F[Unit] = tle.receive(p => handle[F](p, defaultTimeout), kp(().pure[F]))
 
   def clearMessages(): F[Unit] =
     transportLayerEff.clear(local)
-
-  def tearDown(): F[Unit] =
-    tearDownNode().map { _ =>
-      blockStoreDir.recursivelyDelete()
-      blockDagDir.recursivelyDelete()
-    }
-
-  def tearDownNode(): F[Unit] =
-    for {
-      _ <- blockStore.close()
-      _ <- blockDagStorage.close()
-    } yield ()
 }
 
 trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
@@ -186,14 +158,12 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       blockProcessingLock <- Semaphore[F](1)
       casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       node = new TransportLayerCasperTestNode[F](
-        name,
         identity,
         tle,
         genesis,
         transforms,
         sk,
         logicalTime,
-        errorHandler,
         storageSize,
         blockDagDir,
         blockStoreDir,
@@ -204,7 +174,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
         blockStore,
         blockDagStorage,
         metricEff,
-        casperState
+        casperState,
+        errorHandler
       )
       result <- node.initialize.map(_ => node)
     } yield result
@@ -230,12 +201,11 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
 
     val nodesF =
-      names
-        .zip(peers)
+      peers
         .zip(sks)
         .toList
         .traverse {
-          case ((n, p), sk) =>
+          case (p, sk) =>
             val tle                = new TransportLayerTestImpl[F](p, msgQueues)
             implicit val log       = new Log.NOPLog[F]()
             implicit val metricEff = new Metrics.MetricsNOP[F]
@@ -254,14 +224,12 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                               CasperState()
                             )
               node = new TransportLayerCasperTestNode[F](
-                n,
                 p,
                 tle,
                 genesis,
                 transforms,
                 sk,
                 logicalTime,
-                errorHandler,
                 storageSize,
                 blockDagDir,
                 blockStoreDir,
@@ -272,7 +240,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 blockStore,
                 blockDagStorage,
                 metricEff,
-                casperState
+                casperState,
+                errorHandler
               )
             } yield node
         }

@@ -47,16 +47,31 @@ import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
 
-trait HashSetCasperTestNode[F[_]] {
-  def local: Node
+/** Base class for test nodes with fields used by tests exposed as public. */
+abstract class HashSetCasperTestNode[F[_]](
+    val local: Node,
+    sk: Array[Byte],
+    val genesis: BlockMessage,
+    val blockDagDir: Path,
+    val blockStoreDir: Path
+)(
+    implicit
+    concurrentF: Concurrent[F],
+    val blockStore: BlockStore[F],
+    val blockDagStorage: BlockDagStorage[F],
+    val metricEff: Metrics[F],
+    val casperState: Cell[F, CasperState]
+) {
+  implicit val logEff: LogStub[F] = new LogStub[F]()
   implicit val casperEff: MultiParentCasperImpl[F]
-  implicit val logEff: LogStub[F]
-  implicit val metricEff: Metrics[F]
-  val validatorId: ValidatorIdentity
-  val casperState: Cell[F, CasperState]
-  val blockDagDir: Path
-  val blockStoreDir: Path
-  val genesis: BlockMessage
+
+  val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
+
+  val bonds = genesis.body
+    .flatMap(_.state.map(_.bonds.map(b => b.validator.toByteArray -> b.stake).toMap))
+    .getOrElse(Map.empty)
+
+  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds)
 
   /** Handle one message. */
   def receive(): F[Unit]
@@ -64,11 +79,32 @@ trait HashSetCasperTestNode[F[_]] {
   /** Forget messages not yet delivered. */
   def clearMessages(): F[Unit]
 
+  /** Put the genesis in the store. */
+  def initialize(): F[Unit] =
+    // pre-population removed from internals of Casper
+    blockStore.put(genesis.blockHash, genesis, Seq.empty) *>
+      blockDagStorage.getRepresentation.flatMap { dag =>
+        ExecEngineUtil
+          .validateBlockCheckpoint[F](
+            genesis,
+            dag
+          )
+          .void
+      }
+
   /** Close and delete storage. */
-  def tearDown(): F[Unit]
+  def tearDown(): F[Unit] =
+    tearDownNode().map { _ =>
+      blockStoreDir.recursivelyDelete()
+      blockDagDir.recursivelyDelete()
+    }
 
   /** Close storage. */
-  def tearDownNode(): F[Unit]
+  def tearDownNode(): F[Unit] =
+    for {
+      _ <- blockStore.close()
+      _ <- blockDagStorage.close()
+    } yield ()
 }
 
 trait HashSetCasperTestNodeFactory {
@@ -167,7 +203,7 @@ object HashSetCasperTestNode {
   def randomBytes(length: Int): Array[Byte] = Array.fill(length)(Random.nextInt(256).toByte)
 
   def peerNode(name: String, port: Int): Node =
-    Node(ByteString.copyFrom(name.getBytes), "host", port, port)
+    Node(ByteString.copyFrom(name.getBytes), name, port, port)
 
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
   def simpleEEApi[F[_]: Defer: Applicative](
