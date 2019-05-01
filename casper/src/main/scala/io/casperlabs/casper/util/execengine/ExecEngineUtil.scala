@@ -18,6 +18,8 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 
 import scala.collection.immutable.BitSet
 
+import Op.{OpMap, OpMapAddComm}
+
 case class DeploysCheckpoint(
     preStateHash: StateHash,
     postStateHash: StateHash,
@@ -137,17 +139,6 @@ object ExecEngineUtil {
 
   type TransformMap = Seq[TransformEntry]
 
-  /**
-    * Compute the combined effect of two effects applied one after the other
-    * (first `x` then `y`).
-    */
-  def sum(x: TransformMap, y: TransformMap): TransformMap = x ++ y // FIXME
-
-  /**
-    * Checks if effects `x` and `y` commute with each other.
-    */
-  def commutes(x: TransformMap, y: TransformMap): Boolean = true // FIXME
-
   /** Computes the largest commuting sub-set of blocks from the `candidateParents` along with an effect which
     * can be used to find the combined post-state of those commuting blocks.
     * @param candidateParents blocks to attempt to merge
@@ -172,7 +163,7 @@ object ExecEngineUtil {
     def netEffect(blocks: Vector[BlockMetadata]): F[TransformMap] =
       blocks
         .traverse(block => BlockStore[F].getTransforms(block.blockHash))
-        .map(_.flatten.foldLeft[TransformMap](Nil)(sum(_, _)))
+        .map(_.flatten.foldLeft[TransformMap](Nil)(_ ++ _))
 
     if (n <= 1) {
       // no parents or single parent, nothing to merge
@@ -198,12 +189,12 @@ object ExecEngineUtil {
 
         // always choose the first parent
         initChosen       = Vector(0)
-        initChosenEffect <- netEffect(groups(0))
+        initChosenEffect <- netEffect(groups(0)).map(Op.fromTransforms)
         // effects chosen apart from the first parent
         initNonFirstEffect = Seq.empty[TransformEntry]
 
         chosen <- (1 until n).toList
-                   .foldM[F, (Vector[Int], TransformMap, TransformMap)](
+                   .foldM[F, (Vector[Int], OpMap[ipc.Key], TransformMap)](
                      (initChosen, initChosenEffect, initNonFirstEffect)
                    ) {
                      case (
@@ -220,17 +211,17 @@ object ExecEngineUtil {
                        )
 
                        // if candidate commutes with chosen set, then included, otherwise do not include it
-                       candidateEffectF.map(
-                         candidateEffect =>
-                           if (commutes(chosenEffect, candidateEffect))
-                             (
-                               chosenSet :+ candidate,
-                               sum(chosenEffect, candidateEffect),
-                               sum(chosenNonFirstEffect, candidateEffect)
-                             )
-                           else
-                             unchanged
-                       )
+                       candidateEffectF.map { candidateEffect =>
+                         val ops = Op.fromTransforms(candidateEffect)
+                         if (chosenEffect ~ ops)
+                           (
+                             chosenSet :+ candidate,
+                             chosenEffect + ops,
+                             chosenNonFirstEffect ++ candidateEffect
+                           )
+                         else
+                           unchanged
+                       }
                    }
         // The effect we return is the one which would be applied onto the first parent's
         // post-state, so we do not include the first parent in the effect.
