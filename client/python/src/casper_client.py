@@ -320,89 +320,76 @@ def find_block_with_deploy_command(casper_client, args):
     response = casper_client.findBlockWithDeploy(args.user, args.timestamp)
     return _show_block(response)
 
+
 def command_line_tool():
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--help', action='help', default=argparse.SUPPRESS,
-                        help='show this help message and exit')
+    """
+    Parse command line and call an appropriate command.
+    """
 
-    parser.add_argument('-h', '--host', required=False, default=DEFAULT_HOST, type=str,
-                        help='Hostname or IP of node on which gRPC service is running.')
-    parser.add_argument('-p', '--port', required=False, default=DEFAULT_PORT, type=int,
-                        help='Port used for external gRPC API.')
+    class Parser:
+        def __init__(self):
+            self.parser = argparse.ArgumentParser(add_help=False)
+            self.parser.add_argument('--help', action='help', default=argparse.SUPPRESS,
+                                     help='show this help message and exit')
+            self.parser.add_argument('-h', '--host', required=False, default=DEFAULT_HOST, type=str,
+                                     help='Hostname or IP of node on which gRPC service is running.')
+            self.parser.add_argument('-p', '--port', required=False, default=DEFAULT_PORT, type=int,
+                                     help='Port used for external gRPC API.')
+            self.sp = self.parser.add_subparsers(help='Choose a request')
 
-    sp = parser.add_subparsers(help='Choose a request')
+        def addCommand(self, command: str, function, help, arguments):
+            command_parser = self.sp.add_parser(command, help=help)
+            command_parser.set_defaults(function=function)
+            for (args, options) in arguments:
+                command_parser.add_argument(*args, **options)
 
-    deploy_parser = sp.add_parser('deploy', help='Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance') 
-    deploy_parser.add_argument('-f', '--from', required=True, type=lambda x: bytes(x, 'utf-8'),
-                               help='Purse address that will be used to pay for the deployment.')
-    deploy_parser.add_argument('-g', '--gas-limit', required=True, type=int,
-                               help='The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.')
-    deploy_parser.add_argument('--gas-price', required=True, type=int,
-                               help='The price of gas for this transaction in units dust/gas. Must be positive integer.')
-    deploy_parser.add_argument('-n', '--nonce', required=False, type=int, default=0,
-                               help='This allows you to overwrite your own pending transactions that use the same nonce.')
-    deploy_parser.add_argument('-p', '--payment', required=True, type=str,
-                               help='Path to the file with payment code')
-    deploy_parser.add_argument('-s', '--session', required=True, type=str,
-                               help='Path to the file with session code')
-    deploy_parser.set_defaults(function=deploy_command)
+        def run(self):
+            if len(sys.argv) < 2:
+                self.parser.print_usage()
+                return 1
 
-    propose_parser = sp.add_parser('propose', help='Force a node to propose a block based on its accumulated deploys.')
-    propose_parser.set_defaults(function=propose_command)
+            args = self.parser.parse_args()
+            return args.function(CasperClient(args.host, args.port), args)
 
-    show_block_parser = sp.add_parser('show-block', help='View properties of a block known by Casper on an existing running node. Output includes: parent hashes, storage contents of the tuplespace.')
-    show_block_parser.add_argument('hash', type=str, help='the hash value of the block')
-    show_block_parser.set_defaults(function=show_block_command)
+    parser = Parser()
+    parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
+                      [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
+                       [('-g', '--gas-limit'), dict(required=True, type=int, help='The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.')],
+                       [('--gas-price',), dict(required=True, type=int, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
+                       [('-n', '--nonce'), dict(required=False, type=int, default=0, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
+                       [('-p', '--payment'), dict(required=True, type=str, help='Path to the file with payment code')],
+                       [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')]])
 
-    show_blocks_parser = sp.add_parser('show-blocks',
-                                       help='View list of blocks in the current Casper view on an existing running node.')
-    show_blocks_parser.add_argument('-d', '--depth', required=True, type=int,
-                                    help='lists blocks to the given depth in terms of block height')
-    show_blocks_parser.set_defaults(function=show_blocks_command)
-    
-    vdag_parser = sp.add_parser('vdag', help='DAG in DOT format')
-    vdag_parser.add_argument('-d', '--depth', required=True, type=int,
-                             help='depth in terms of block height')
-    vdag_parser.add_argument('-o', '--out', required=False, type=str,
-                             help='output image filename, outputs to stdout if not specified, '
-                                  + 'must end with one of the png, svg, svg_standalone, xdot, '
-                                  + 'plain, plain_ext, ps, ps2, json, json0')
-    vdag_parser.add_argument('-s', '--show-justification-lines', action='store_true',
-                             help='if justification lines should be shown')
-    vdag_parser.add_argument('--stream', required=False, choices=('single-output', 'multiple-outputs'),
-                             help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'")
-    vdag_parser.set_defaults(function=vdag_command)
+    parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 
-    query_state_parser = sp.add_parser('query-state', help='Query a value in the global state.')
-    query_state_parser.add_argument('-b', '--block-hash', required=True, type=str,
-                                    help='Hash of the block to query the state of')
-    query_state_parser.add_argument('-k', '--key', required=True, type=str,
-                                    help='Base16 encoding of the base key.')
-    query_state_parser.add_argument('-p', '--path', required=True, type=str,
-                                    help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")
-    query_state_parser.add_argument('-t', '--type', required=True, choices=('hash', 'uref', 'address'),
-                                    help="Type of base key. Must be one of 'hash', 'uref', 'address'")
-    query_state_parser.set_defaults(function=query_state_command)
+    parser.addCommand('show-block', show_block_command, 'View properties of a block known by Casper on an existing running node. Output includes: parent hashes, storage contents of the tuplespace.',
+                      [[('hash',), dict(type=str, help='the hash value of the block')]])
+
+    parser.addCommand('show-blocks', show_blocks_command, 'View list of blocks in the current Casper view on an existing running node.',
+                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')]])
 
 
-    show_main_chain_parser = sp.add_parser('show-main-chain', help='Show main chain')
-    show_main_chain_parser.add_argument('-d', '--depth', required=True, type=int,
-                                        help='depth in terms of block height')
-    show_main_chain_parser.set_defaults(function=show_main_chain_command)
+    parser.addCommand('vdag', vdag_command, 'DAG in DOT format',
+                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')],
+                       [('-o', '--out'), dict(required=False, type=str, help='output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0')],
+                       [('-s', '--show-justification-lines'), dict(action='store_true', help='if justification lines should be shown')],
+                       [('--stream',), dict(required=False, choices=('single-output', 'multiple-outputs'), help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'")]])
 
-    find_block_with_deploy_parser = sp.add_parser('find-block-with-deploy', help='Find block with deploy.')
-    find_block_with_deploy_parser.add_argument('-u', '--user', required=True, type=lambda x: bytes(x, 'utf-8'), help="User")
-    find_block_with_deploy_parser.add_argument('-t', '--timestamp', required=True, type=int,
-                                               help="Time in seconds since the epoch as an integer")
-    find_block_with_deploy_parser.set_defaults(function=find_block_with_deploy_command)
+    parser.addCommand('query-state', query_state_command, 'Query a value in the global state.',
+                      [[('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')],
+                       [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
+                       [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
+                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address'), help="Type of base key. Must be one of 'hash', 'uref', 'address'")]])
+
+    parser.addCommand('show-main-chain', show_main_chain_command, 'Show main chain',
+                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')]])
+
+    parser.addCommand('find-block-with-deploy', find_block_with_deploy_command, 'Find block with deploy',
+                      [[('-u', '--user'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help="User")],
+                       [('-t', '--timestamp'), dict(required=True, type=int, help="Time in seconds since the epoch as an integer")]])
 
 
-    if len(sys.argv) < 2:
-        parser.print_usage()
-        sys.exit(1)
-
-    args = parser.parse_args()
-    sys.exit(args.function(CasperClient(args.host, args.port), args))
+    sys.exit(parser.run())
 
 
 if __name__ == '__main__':
