@@ -108,8 +108,12 @@ class NodeRuntime private[node] (
                effects.time,
                metrics
              )
-        blockStore <- FileLMDBIndexBlockStore[Effect](conf.server.dataDir, blockstorePath)
-        blockDag   <- BlockDagFileStorage[Effect](conf.server.dataDir, dagStoragePath, blockStore)
+        blockStore <- FileLMDBIndexBlockStore[Effect](
+                       conf.server.dataDir,
+                       blockstorePath,
+                       100L * 1024L * 1024L * 4096L
+                     )
+        blockDag <- BlockDagFileStorage[Effect](conf.server.dataDir, dagStoragePath, blockStore)
       } yield (ee, nd, blockStore, blockDag)
 
       resources.use { case (ee, nd, bs, dag) => runMain(ee, nd, bs, dag, state) }
