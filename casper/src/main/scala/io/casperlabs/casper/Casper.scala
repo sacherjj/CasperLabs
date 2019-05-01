@@ -15,6 +15,7 @@ import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
+import io.casperlabs.comm.gossiping
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
@@ -51,11 +52,9 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
-      validatorId: Option[ValidatorIdentity],
-      genesis: BlockMessage,
-      shardId: String
-  ): F[MultiParentCasper[F]] =
+  private def init[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: ExecutionEngineService](
+      genesis: BlockMessage
+  ) =
     for {
       // Initialize DAG storage with genesis block in case it is empty
       _                   <- BlockDagStorage[F].insert(genesis)
@@ -66,15 +65,44 @@ sealed abstract class MultiParentCasperInstances {
                       CasperState()
                     )
 
-    } yield {
-      implicit val state = casperState
-      new MultiParentCasperImpl[F](
-        new MultiParentCasperImpl.StatelessExecutor(shardId),
-        new MultiParentCasperImpl.Broadcaster(),
-        validatorId,
-        genesis,
-        shardId,
-        blockProcessingLock
-      )
+    } yield (dag, blockProcessingLock, casperState)
+
+  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
+      validatorId: Option[ValidatorIdentity],
+      genesis: BlockMessage,
+      shardId: String
+  ): F[MultiParentCasper[F]] =
+    init(genesis) map {
+      case (dag, blockProcessingLock, casperState) =>
+        implicit val state = casperState
+        new MultiParentCasperImpl[F](
+          new MultiParentCasperImpl.StatelessExecutor(shardId),
+          MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
+          validatorId,
+          genesis,
+          shardId,
+          blockProcessingLock
+        )
+    }
+
+  /** Create a MultiParentCasper instance from the new RPC style gossiping. */
+  def fromGossipServices[F[_]: Concurrent: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService](
+      validatorId: Option[ValidatorIdentity],
+      genesis: BlockMessage,
+      shardId: String
+  )(
+      relaying: gossiping.Relaying[F]
+  ): F[MultiParentCasper[F]] =
+    init(genesis) map {
+      case (dag, blockProcessingLock, casperState) =>
+        implicit val state = casperState
+        new MultiParentCasperImpl[F](
+          new MultiParentCasperImpl.StatelessExecutor(shardId),
+          MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
+          validatorId,
+          genesis,
+          shardId,
+          blockProcessingLock
+        )
     }
 }

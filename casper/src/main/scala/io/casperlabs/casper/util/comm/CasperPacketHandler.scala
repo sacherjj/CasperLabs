@@ -289,7 +289,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                            blockMessage,
                            transforms
                          )
-                     casper <- MultiParentCasper.hashSetCasper[F](
+                     casper <- MultiParentCasper.fromTransportLayer[F](
                                 validatorId,
                                 blockMessage,
                                 shardId
@@ -603,7 +603,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                        )
                    _ <- LastApprovedBlock[F].set(ApprovedBlockWithTransforms(b, transforms))
                    casper <- MultiParentCasper
-                              .hashSetCasper[F](
+                              .fromTransportLayer[F](
                                 validatorId,
                                 blockMessage,
                                 shardId
