@@ -1,4 +1,3 @@
-use common::bytesrepr::{FromBytes, ToBytes};
 use common::key::Key;
 use common::value::Value;
 use global_state::StateReader;
@@ -50,16 +49,12 @@ impl InMemoryGlobalState {
     }
 }
 
-impl<K, V> StateReader<K, V> for InMemoryGlobalState
-where
-    K: ToBytes + FromBytes + Eq + std::fmt::Debug,
-    V: ToBytes + FromBytes,
-{
+impl StateReader<Key, Value> for InMemoryGlobalState {
     type Error = in_memory::Error;
 
-    fn read(&self, key: &K) -> Result<Option<V>, Self::Error> {
+    fn read(&self, key: &Key) -> Result<Option<Value>, Self::Error> {
         let txn = self.environment.create_read_txn()?;
-        let ret = match read::<K, V, InMemoryReadTransaction, InMemoryTrieStore, Self::Error>(
+        let ret = match read::<Key, Value, InMemoryReadTransaction, InMemoryTrieStore, Self::Error>(
             &txn,
             self.store.deref(),
             &self.root_hash,
