@@ -581,39 +581,31 @@ mod scan {
         let root = store
             .get(&txn, &root_hash)?
             .expect("check_scan received an invalid root hash");
-        let TrieScan {
-            mut tip,
-            mut parents,
-        } = scan::<TestKey, TestValue, R::ReadTransaction, S, E>(&txn, store, key, &root)?;
+        let TrieScan { mut tip, parents } =
+            scan::<TestKey, TestValue, R::ReadTransaction, S, E>(&txn, store, key, &root)?;
 
-        loop {
-            match parents.pop() {
-                Some((index, parent)) => {
-                    let expected_tip_hash = {
-                        let tip_bytes = tip.to_bytes().unwrap();
-                        Blake2bHash::new(&tip_bytes)
-                    };
-                    match parent {
-                        Trie::Leaf { .. } => panic!("parents should not contain any leaves"),
-                        Trie::Node { pointer_block } => {
-                            let pointer_tip_hash = pointer_block[index].map(|ptr| *ptr.hash());
-                            assert_eq!(Some(expected_tip_hash), pointer_tip_hash);
-                            tip = Trie::Node { pointer_block };
-                        }
-                        Trie::Extension { affix, pointer } => {
-                            let pointer_tip_hash = pointer.hash().to_owned();
-                            assert_eq!(expected_tip_hash, pointer_tip_hash);
-                            tip = Trie::Extension { affix, pointer };
-                        }
-                    }
+        for (index, parent) in parents.into_iter().rev() {
+            let expected_tip_hash = {
+                let tip_bytes = tip.to_bytes().unwrap();
+                Blake2bHash::new(&tip_bytes)
+            };
+            match parent {
+                Trie::Leaf { .. } => panic!("parents should not contain any leaves"),
+                Trie::Node { pointer_block } => {
+                    let pointer_tip_hash = pointer_block[index].map(|ptr| *ptr.hash());
+                    assert_eq!(Some(expected_tip_hash), pointer_tip_hash);
+                    tip = Trie::Node { pointer_block };
                 }
-                None => {
-                    assert_eq!(root, tip);
-                    txn.commit()?;
-                    return Ok(());
+                Trie::Extension { affix, pointer } => {
+                    let pointer_tip_hash = pointer.hash().to_owned();
+                    assert_eq!(expected_tip_hash, pointer_tip_hash);
+                    tip = Trie::Extension { affix, pointer };
                 }
             }
         }
+        assert_eq!(root, tip);
+        txn.commit()?;
+        Ok(())
     }
 
     mod partial_tries {
