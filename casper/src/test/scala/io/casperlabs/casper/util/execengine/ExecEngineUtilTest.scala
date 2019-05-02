@@ -9,6 +9,7 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.{InvalidPostStateHash, InvalidPreStateHash, Validate}
+import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
@@ -403,7 +404,7 @@ class ExecEngineUtilTest
                 val key =
                   Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
                 val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
-                val op            = Op(Op.OpInstance.Noop(io.casperlabs.ipc.NoOp()))
+                val op            = ipc.Op(ipc.Op.OpInstance.Noop(io.casperlabs.ipc.NoOp()))
                 val transforEntry = TransformEntry(Some(key), Some(transform))
                 val opEntry       = OpEntry(Some(key), Some(op))
                 ExecutionEffect(Seq(opEntry), Seq(transforEntry))
