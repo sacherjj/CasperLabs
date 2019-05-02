@@ -1,4 +1,3 @@
-use common::bytesrepr::{FromBytes, ToBytes};
 use common::key::Key;
 use common::value::Value;
 use error;
@@ -50,16 +49,12 @@ impl LmdbGlobalState {
     }
 }
 
-impl<K, V> StateReader<K, V> for LmdbGlobalState
-where
-    K: ToBytes + FromBytes + Eq + std::fmt::Debug,
-    V: ToBytes + FromBytes,
-{
+impl StateReader<Key, Value> for LmdbGlobalState {
     type Error = error::Error;
 
-    fn read(&self, key: &K) -> Result<Option<V>, Self::Error> {
+    fn read(&self, key: &Key) -> Result<Option<Value>, Self::Error> {
         let txn = self.environment.create_read_txn()?;
-        let ret = match read::<K, V, lmdb::RoTransaction, LmdbTrieStore, Self::Error>(
+        let ret = match read::<Key, Value, lmdb::RoTransaction, LmdbTrieStore, Self::Error>(
             &txn,
             self.store.deref(),
             &self.root_hash,
