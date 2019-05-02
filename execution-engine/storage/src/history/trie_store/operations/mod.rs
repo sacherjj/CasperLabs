@@ -249,8 +249,8 @@ where
                 Trie::Leaf {
                     key: ref leaf_key, ..
                 } if key != leaf_key => unimplemented!(),
-                /// This case is unreachable, but the compiler can't figure
-                /// that out.
+                // This case is unreachable, but the compiler can't figure
+                // that out.
                 Trie::Leaf { .. } => unreachable!(),
                 // If the "tip" is an existing node, then we can add the new
                 // leaf's hash to the node's pointer block and rehash.
