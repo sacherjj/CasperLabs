@@ -35,10 +35,11 @@ import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.execution.atomic.AtomicInt
 import monix.tail.Iterant
 
-import scala.collection.mutable
-import scala.concurrent.duration.{Duration, FiniteDuration, MILLISECONDS}
+import scala.collection.immutable.Queue
+import scala.concurrent.duration._
 import scala.util.Random
 
 class GossipServiceCasperTestNode[F[_]](
@@ -393,28 +394,92 @@ object GossipServiceCasperTestNodeFactory {
       }
     }
 
+    /** The tests assume we are using the TransportLayer and messages are fire-and-forget.
+      * The main use of `receives and `clearMessages` is to pass over blocks and to simulate
+      * dropping the block on the receiver end.
+      * The RPC works differently when it comes to pulling dependencies, it doesn't ask one by one,
+      * and because the tests assume to know how many exactly messages get passed and calls `receive`
+      * so many times. But we can preserve most of the spirit of the test by returning `true` here
+      * (they assume broadcast) and not execute the underlying call if `clearMessages` is called;
+      * but we can let the other methods work out on their own without suspension. We just have to
+      * make sure that if the test calls `receive` then all the async calls finish before we return
+      * to do any assertions. */
+    val notificationQueue = Ref.unsafe[F, Queue[F[Unit]]](Queue.empty)
+
+    /** Keep track of how many background operations (i.e. syncs and downloads) are running. */
+    val asyncOpsCount = AtomicInt(0)
+
+    implicit class RequestOps[T](req: F[T]) {
+      def withAsyncOpsCount: F[T] =
+        Sync[F].bracket(Sync[F].delay(asyncOpsCount.increment())) { _ =>
+          req
+        } { _ =>
+          Sync[F].delay(asyncOpsCount.decrement())
+        }
+    }
+
+    implicit class IterantOps[T](it: Iterant[F, T]) {
+      def withAsyncOpsCount: Iterant[F, T] =
+        Iterant.resource {
+          Sync[F].delay(asyncOpsCount.increment())
+        } { _ =>
+          Sync[F].delay(asyncOpsCount.decrement())
+        } flatMap { _ =>
+          it
+        }
+    }
+
     /** With the TransportLayer this would mean the target node receives the full block and adds it.
       * We have to allow `newBlocks` to return for the original block to be able to finish adding,
       * so maybe we can return `true`, and call the underlying service later. But then we have to
       * allow it to play out all async actions, such as downloading blocks, syncing the DAG, etc. */
-    def receive(): F[Unit] = ().pure[F]
+    def receive(): F[Unit] =
+      for {
+        notification <- notificationQueue.modify { q =>
+                         q dequeueOption match {
+                           case Some((notificaton, rest)) =>
+                             rest -> notificaton
+                           case None =>
+                             q -> ().pure[F]
+                         }
+                       }
+        _ <- notification
+        _ <- awaitAsyncOps
+      } yield ()
 
     /** With the TransportLayer this would mean the target node won't process a message.
       * For us it could mean that it receives the `newBlocks` notification but after that
       * we don't let it play out the async operations, for example by returning errors for
       * all requests it started. */
-    def clearMessages(): F[Unit] = ().pure[F]
+    def clearMessages(): F[Unit] =
+      notificationQueue.set(Queue.empty)
 
-    override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
-      underlying.getBlockChunked(request)
+    def awaitAsyncOps: F[Unit] = {
+      def loop(): F[Unit] =
+        Timer[F].sleep(100.millis) >>
+          Sync[F].delay(asyncOpsCount.get) >>= {
+          case 0 => ().pure[F]
+          case _ => loop()
+        }
+      Concurrent.timeoutTo[F, Unit](loop(), 5.seconds, Sync[F].raiseError {
+        new java.util.concurrent.TimeoutException("Still have async operations going!")
+      })
+    }
 
     override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
-      underlying.newBlocks(request)
+      notificationQueue.update { q =>
+        q enqueue underlying.newBlocks(request).void.withAsyncOpsCount
+      } as {
+        NewBlocksResponse(isNew = true)
+      }
+
+    override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
+      underlying.getBlockChunked(request).withAsyncOpsCount
 
     override def streamAncestorBlockSummaries(
         request: StreamAncestorBlockSummariesRequest
     ): Iterant[F, consensus.BlockSummary] =
-      underlying.streamAncestorBlockSummaries(request)
+      underlying.streamAncestorBlockSummaries(request).withAsyncOpsCount
 
     // The following methods are not tested in these suites.
 
