@@ -595,7 +595,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield result
   }
 
-  it should "ask peers for blocks it is missing" in effectTest {
+  ignore should "ask peers for blocks it is missing" in effectTest {
     for {
       nodes <- networkEff(validatorKeys.take(3), genesis, transforms)
       deployDatas = Vector(
@@ -674,6 +674,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
    *  f2 has in its justifications list c2. This should be handled properly.
    *
    */
+  // FIXME
   ignore should "ask peers for blocks it is missing and add them" in effectTest {
     //TODO: figure out a way to get wasm into deploys for tests
     val deployDatasFs = Vector[() => DeployData](
@@ -777,8 +778,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   }
 
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
-  // FIXME
-  ignore should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
+  it should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
     for {
       nodes       <- networkEff(validatorKeys.take(3), genesis, transforms)
       deployDatas <- (0 to 5).toList.traverse[Effect, DeployData](ProtoUtil.basicDeployData[Effect])
@@ -787,10 +787,13 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       createBlockResult1 <- nodes(0).casperEff
                              .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
       Created(signedBlock1) = createBlockResult1
+      // Didn't call addBlock on the 1st, so the 2nd will have the same parent.
       createBlockResult1Prime <- nodes(0).casperEff
                                   .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
       Created(signedBlock1Prime) = createBlockResult1Prime
 
+      // NOTE: Adding a block signed by node(0) directly to node(1) is not something you can do
+      // under normal gossiping conditions.
       _ <- nodes(1).casperEff.addBlock(signedBlock1)
       _ <- nodes(0).clearMessages() //nodes(0) misses this block
       _ <- nodes(2).clearMessages() //nodes(2) misses this block

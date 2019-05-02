@@ -105,7 +105,9 @@ object EffectsTestInstances {
     def shutdown(msg: Protocol): F[Unit] = ???
   }
 
-  class LogStub[F[_]: Applicative] extends Log[F] {
+  class LogStub[F[_]: Applicative](prefix: String = "") extends Log[F] {
+
+    private def p(msg: String) = s"$prefix $msg"
 
     @volatile var debugs: Vector[String]    = Vector.empty[String]
     @volatile var infos: Vector[String]     = Vector.empty[String]
@@ -127,29 +129,34 @@ object EffectsTestInstances {
     def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
     def trace(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
     def debug(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
-      debugs = debugs :+ msg
-      all = all :+ msg
+      println(s"DEBUG ${p(msg)}")
+      debugs = debugs :+ p(msg)
+      all = all :+ p(msg)
       ().pure[F]
     }
     def info(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
-      infos = infos :+ msg
-      all = all :+ msg
+      println(s"INFO  ${p(msg)}")
+      infos = infos :+ p(msg)
+      all = all :+ p(msg)
       ().pure[F]
     }
     def warn(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
-      warns = warns :+ msg
-      all = all :+ msg
+      println(s"WARN  ${p(msg)}")
+      warns = warns :+ p(msg)
+      all = all :+ p(msg)
       ().pure[F]
     }
     def error(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
-      errors = errors :+ msg
-      all = all :+ msg
+      println(s"ERROR ${p(msg)}")
+      errors = errors :+ p(msg)
+      all = all :+ p(msg)
       ().pure[F]
     }
     def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = synchronized {
+      println(s"ERROR ${p(msg)}: $cause")
       causes = causes :+ cause
-      errors = errors :+ msg
-      all = all :+ msg
+      errors = errors :+ p(msg)
+      all = all :+ p(msg)
       ().pure[F]
     }
   }

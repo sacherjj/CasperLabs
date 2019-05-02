@@ -219,7 +219,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
         case (peer, sk) =>
           val logicalTime = new LogicalTime[F]
           //implicit val log: Log[F] = new Log.NOPLog[F]()
-          implicit val log       = new LogStub[F]()
+          implicit val log       = new LogStub[F](peer.host)
           implicit val metricEff = new Metrics.MetricsNOP[F]
           implicit val nodeAsk   = makeNodeAsk(peer)(concurrentF)
 
@@ -311,7 +311,6 @@ object GossipServiceCasperTestNodeFactory {
         relaying: Relaying[F],
         connectToGossip: GossipService.Connector[F]
     ): F[Unit] = {
-
       for {
         downloadManagerR <- DownloadManagerImpl[F](
                              maxParallelDownloads = 10,
@@ -325,16 +324,16 @@ object GossipServiceCasperTestNodeFactory {
                                  // will assume the DownloadManager will do that.
                                  // Doing this log here as it's evidently happened if we are here, and the tests expect it.
                                  Log[F].info(
-                                   s"$host Requested missing block ${PrettyPrinter.buildString(block.blockHash)}"
+                                   s"Requested missing block ${PrettyPrinter.buildString(block.blockHash)}"
                                  ) *>
                                    casper
                                      .superAddBlock(LegacyConversions.fromBlock(block)) flatMap {
                                    case Valid =>
-                                     Log[F].debug(s"$host Validated and stored block ${PrettyPrinter
+                                     Log[F].debug(s"Validated and stored block ${PrettyPrinter
                                        .buildString(block.blockHash)}")
 
                                    case other =>
-                                     Log[F].debug(s"$host Received invalid block ${PrettyPrinter
+                                     Log[F].debug(s"Received invalid block ${PrettyPrinter
                                        .buildString(block.blockHash)}: $other")
                                      Sync[F].raiseError(
                                        new RuntimeException(s"Non-valid status: $other")
@@ -373,7 +372,7 @@ object GossipServiceCasperTestNodeFactory {
             override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
               // TODO: Presently the Validation only works on full blocks.
               Log[F].debug(
-                s"$host Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
+                s"Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
               )
 
             override def notInDag(blockHash: ByteString): F[Boolean] =
@@ -394,7 +393,7 @@ object GossipServiceCasperTestNodeFactory {
                          blockHash: ByteString
                      ): F[Option[consensus.BlockSummary]] = {
                        Log[F].debug(
-                         s"$host Retrieving block summary ${PrettyPrinter.buildString(blockHash)} from storage."
+                         s"Retrieving block summary ${PrettyPrinter.buildString(blockHash)} from storage."
                        )
                        blockStore
                          .get(blockHash)
@@ -405,7 +404,7 @@ object GossipServiceCasperTestNodeFactory {
 
                      override def getBlock(blockHash: ByteString): F[Option[consensus.Block]] =
                        Log[F].debug(
-                         s"$host Retrieving block ${PrettyPrinter.buildString(blockHash)} from storage."
+                         s"Retrieving block ${PrettyPrinter.buildString(blockHash)} from storage."
                        ) *>
                          blockStore
                            .get(blockHash)
@@ -418,7 +417,7 @@ object GossipServiceCasperTestNodeFactory {
                        ().pure[F]
                      override def onDownloaded(blockHash: ByteString) =
                        // The validation already did what it had to.
-                       Log[F].debug(s"$host Downloaded ${PrettyPrinter.buildString(blockHash)}")
+                       Log[F].debug(s"Downloaded ${PrettyPrinter.buildString(blockHash)}")
                      override def listTips =
                        ???
                    },
@@ -498,7 +497,11 @@ object GossipServiceCasperTestNodeFactory {
       * we don't let it play out the async operations, for example by returning errors for
       * all requests it started. */
     def clearMessages(): F[Unit] =
-      notificationQueue.set(Queue.empty)
+      for {
+        q <- notificationQueue.get
+        _ <- Log[F].debug(s"Forgetting ${q.size} notifications.")
+        _ <- notificationQueue.set(Queue.empty)
+      } yield ()
 
     def awaitAsyncOps: F[Unit] = {
       def loop(): F[Unit] =
@@ -514,7 +517,7 @@ object GossipServiceCasperTestNodeFactory {
 
     override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
       Log[F].info(
-        s"$host Received notification about block ${PrettyPrinter.buildString(request.blockHashes.head)}"
+        s"Received notification about block ${PrettyPrinter.buildString(request.blockHashes.head)}"
       ) *>
         notificationQueue.update { q =>
           q enqueue underlying.newBlocks(request).void.withAsyncOpsCount
@@ -526,7 +529,7 @@ object GossipServiceCasperTestNodeFactory {
       Iterant
         .liftF(
           Log[F].info(
-            s"$host Received request for block ${PrettyPrinter.buildString(request.blockHash)} Response sent."
+            s"Received request for block ${PrettyPrinter.buildString(request.blockHash)} Response sent."
           )
         )
         .flatMap { _ =>
@@ -537,7 +540,7 @@ object GossipServiceCasperTestNodeFactory {
         request: StreamAncestorBlockSummariesRequest
     ): Iterant[F, consensus.BlockSummary] =
       Iterant
-        .liftF(Log[F].info(s"$host Recevied request for ancestors of ${request.targetBlockHashes
+        .liftF(Log[F].info(s"Recevied request for ancestors of ${request.targetBlockHashes
           .map(PrettyPrinter.buildString(_))}"))
         .flatMap { _ =>
           underlying.streamAncestorBlockSummaries(request).withAsyncOpsCount

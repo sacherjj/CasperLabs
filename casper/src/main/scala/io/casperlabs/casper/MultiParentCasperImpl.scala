@@ -739,10 +739,14 @@ object MultiParentCasperImpl {
                 InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidShardId |
                 InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash |
                 Processing =>
-              ().pure[F]
+              Log[F].warn(
+                s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $status"
+              )
 
-            case BlockException(_) =>
-              ().pure[F]
+            case BlockException(ex) =>
+              Log[F].warn(
+                s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $ex"
+              )
           }
 
         /** Ask all peers to send us a block. */
