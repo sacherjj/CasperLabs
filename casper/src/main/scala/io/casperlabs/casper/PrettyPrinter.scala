@@ -51,8 +51,8 @@ object PrettyPrinter {
     case ipc.Value.ValueInstance.Account(ipc.Account(pk, nonce, urefs)) =>
       s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}})"
     case ipc.Value.ValueInstance.ByteArr(bytes) => s"ByteArray(${buildString(bytes)})"
-    case ipc.Value.ValueInstance.Contract(ipc.Contract(body, urefs)) =>
-      s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}})"
+    case ipc.Value.ValueInstance.Contract(ipc.Contract(body, urefs, protocolVersion)) =>
+      s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}}, ${protocolVersion})"
     case ipc.Value.ValueInstance.IntList(ipc.IntList(list))       => s"List(${list.mkString(",")})"
     case ipc.Value.ValueInstance.Integer(i)                       => s"Int32($i)"
     case ipc.Value.ValueInstance.NamedKey(nk)                     => buildString(nk)
