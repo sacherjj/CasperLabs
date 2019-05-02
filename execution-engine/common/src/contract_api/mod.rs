@@ -117,9 +117,13 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
 /// Note that the function is wrapped up in a new module and re-exported under the name
 /// "call". `fn_bytes_by_name` is meant to be used when storing a contract on-chain at
 /// an unforgable reference.
-pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
+pub fn fn_by_name(
+    name: &str,
+    known_urefs: BTreeMap<String, Key>,
+    protocol_version: u64,
+) -> Contract {
     let bytes = fn_bytes_by_name(name);
-    Contract::new(bytes, known_urefs)
+    Contract::new(bytes, known_urefs, protocol_version)
 }
 
 /// Gets the serialized bytes of an exported function (see `fn_by_name`), then
@@ -137,8 +141,13 @@ pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Contrac
 }
 
 /// Finds function by the name and stores it at the unforgable name.
-pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: UPointer<Contract>) {
-    let contract = fn_by_name(name, known_urefs);
+pub fn store_function_at(
+    name: &str,
+    known_urefs: BTreeMap<String, Key>,
+    uref: UPointer<Contract>,
+    protocol_version: u64,
+) {
+    let contract = fn_by_name(name, known_urefs, protocol_version);
     write(uref, contract);
 }
 

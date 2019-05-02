@@ -78,7 +78,14 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                 let ipc_contr = v.get_contract();
                 let contr_body = ipc_contr.get_body().to_vec();
                 let known_urefs: URefMap = ipc_contr.get_known_urefs().try_into()?;
-                transform_write(common::value::Contract::new(contr_body, known_urefs.0).into())
+                transform_write(
+                    common::value::Contract::new(
+                        contr_body,
+                        known_urefs.0,
+                        ipc_contr.protocol_version,
+                    )
+                    .into(),
+                )
             } else if v.has_string_list() {
                 let list = v.get_string_list().list.to_vec();
                 transform_write(common::value::Value::ListString(list))

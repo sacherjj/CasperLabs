@@ -325,7 +325,11 @@ where
         fn_bytes: Vec<u8>,
         urefs: BTreeMap<String, Key>,
     ) -> Result<[u8; 32], Error> {
-        let contract = Value::Contract(common::value::contract::Contract::new(fn_bytes, urefs));
+        let contract = Value::Contract(common::value::contract::Contract::new(
+            fn_bytes,
+            urefs,
+            self.context.protocol_version(),
+        ));
         let new_hash = self.context.store_contract(contract)?;
         Ok(new_hash)
     }
@@ -789,6 +793,8 @@ where
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
             rng,
+            // TODO(mpapierski): Shouldn't subcall be executed with its own protocol version, not the parent's ver?
+            current_runtime.context.protocol_version(),
         ),
     };
 
@@ -885,7 +891,7 @@ impl Executor<Module> for WasmiExecutor {
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
-        _protocol_version: u64,
+        protocol_version: u64,
         tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
@@ -928,6 +934,7 @@ impl Executor<Module> for WasmiExecutor {
             gas_counter,
             fn_store_id,
             rng,
+            protocol_version,
         );
         let mut runtime = Runtime::new(memory, parity_module, context);
         on_fail_charge!(
