@@ -105,9 +105,7 @@ object EffectsTestInstances {
     def shutdown(msg: Protocol): F[Unit] = ???
   }
 
-  class LogStub[F[_]: Applicative](prefix: String = "") extends Log[F] {
-
-    private def p(msg: String) = s"$prefix $msg"
+  class LogStub[F[_]: Applicative](prefix: String = "", printEnabled: Boolean = false) extends Log[F] {
 
     @volatile var debugs: Vector[String]    = Vector.empty[String]
     @volatile var infos: Vector[String]     = Vector.empty[String]
@@ -129,34 +127,34 @@ object EffectsTestInstances {
     def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
     def trace(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
     def debug(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
-      println(s"DEBUG ${p(msg)}")
-      debugs = debugs :+ p(msg)
-      all = all :+ p(msg)
+      if (printEnabled) println(s"DEBUG $prefix $msg")
+      debugs = debugs :+ msg
+      all = all :+ msg
       ().pure[F]
     }
     def info(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
-      println(s"INFO  ${p(msg)}")
-      infos = infos :+ p(msg)
-      all = all :+ p(msg)
+      if (printEnabled) println(s"INFO  $prefix $msg")
+      infos = infos :+ msg
+      all = all :+ msg
       ().pure[F]
     }
     def warn(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
-      println(s"WARN  ${p(msg)}")
-      warns = warns :+ p(msg)
-      all = all :+ p(msg)
+      if (printEnabled) println(s"WARN  $prefix $msg")
+      warns = warns :+ msg
+      all = all :+ msg
       ().pure[F]
     }
     def error(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
-      println(s"ERROR ${p(msg)}")
-      errors = errors :+ p(msg)
-      all = all :+ p(msg)
+      if (printEnabled) println(s"ERROR $prefix $msg")
+      errors = errors :+ msg
+      all = all :+ msg
       ().pure[F]
     }
     def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = synchronized {
-      println(s"ERROR ${p(msg)}: $cause")
+      if (printEnabled) println(s"ERROR $prefix $msg: $cause")
       causes = causes :+ cause
-      errors = errors :+ p(msg)
-      all = all :+ p(msg)
+      errors = errors :+ msg
+      all = all :+ msg
       ().pure[F]
     }
   }
