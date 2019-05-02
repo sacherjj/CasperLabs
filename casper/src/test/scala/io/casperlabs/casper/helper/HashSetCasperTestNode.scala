@@ -64,7 +64,7 @@ abstract class HashSetCasperTestNode[F[_]](
     val metricEff: Metrics[F],
     val casperState: Cell[F, CasperState]
 ) {
-  implicit val logEff: LogStub[F] = new LogStub[F]()
+  implicit val logEff: LogStub[F]
 
   implicit val casperEff: MultiParentCasperImpl[F] with HashSetCasperTestNode.AddBlockProxy[F]
 

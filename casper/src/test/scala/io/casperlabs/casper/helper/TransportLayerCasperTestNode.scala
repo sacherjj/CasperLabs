@@ -73,6 +73,7 @@ class TransportLayerCasperTestNode[F[_]](
       blockStoreDir
     )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
 
+  implicit val logEff: LogStub[F] = new LogStub[F]()
   implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
   implicit val transportLayerEff  = tle
   implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]

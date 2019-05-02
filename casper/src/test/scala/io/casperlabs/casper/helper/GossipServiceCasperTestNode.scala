@@ -61,7 +61,8 @@ class GossipServiceCasperTestNode[F[_]](
     blockDagStorage: BlockDagStorage[F],
     timeEff: Time[F],
     metricEff: Metrics[F],
-    casperState: Cell[F, CasperState]
+    casperState: Cell[F, CasperState],
+    val logEff: LogStub[F]
 ) extends HashSetCasperTestNode[F](
       local,
       sk,
@@ -140,13 +141,12 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       parF: Par[F],
       timerF: Timer[F]
   ): F[GossipServiceCasperTestNode[F]] = {
-    val name        = "standalone"
-    val identity    = peerNode(name, 40400)
-    val logicalTime = new LogicalTime[F]
-    //implicit val log       = new Log.NOPLog[F]()
-    implicit val log: Log[F] = Log.log[F]
-    implicit val metricEff   = new Metrics.MetricsNOP[F]
-    implicit val nodeAsk     = makeNodeAsk(identity)(concurrentF)
+    val name               = "standalone"
+    val identity           = peerNode(name, 40400)
+    val logicalTime        = new LogicalTime[F]
+    implicit val log       = new LogStub[F]()
+    implicit val metricEff = new Metrics.MetricsNOP[F]
+    implicit val nodeAsk   = makeNodeAsk(identity)(concurrentF)
 
     // Standalone, so nobody to relay to.
     val relaying = RelayingImpl(
@@ -178,7 +178,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             blockDagStorage,
             logicalTime,
             metricEff,
-            casperState
+            casperState,
+            log
           )
           _ <- node.initialize
         } yield node
@@ -218,9 +219,9 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
         case (peer, sk) =>
           val logicalTime = new LogicalTime[F]
           //implicit val log: Log[F] = new Log.NOPLog[F]()
-          implicit val log: Log[F] = new LogStub[F]()
-          implicit val metricEff   = new Metrics.MetricsNOP[F]
-          implicit val nodeAsk     = makeNodeAsk(peer)(concurrentF)
+          implicit val log       = new LogStub[F]()
+          implicit val metricEff = new Metrics.MetricsNOP[F]
+          implicit val nodeAsk   = makeNodeAsk(peer)(concurrentF)
 
           val gossipService = new TestGossipService[F](peer.host)
           gossipServices += peer -> gossipService
@@ -262,7 +263,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   blockDagStorage,
                   logicalTime,
                   metricEff,
-                  casperState
+                  casperState,
+                  log
                 )
                 _ <- gossipService.init(
                       node.casperEff,
@@ -321,17 +323,18 @@ object GossipServiceCasperTestNodeFactory {
                                override def validateBlock(block: consensus.Block): F[Unit] =
                                  // Casper can only validate, store, but won't gossip because the Broadcaster we give it
                                  // will assume the DownloadManager will do that.
-                                 Log[F].debug(
-                                   s"$host validating block ${PrettyPrinter.buildString(block.blockHash)}"
+                                 // Doing this log here as it's evidently happened if we are here, and the tests expect it.
+                                 Log[F].info(
+                                   s"$host Requested missing block ${PrettyPrinter.buildString(block.blockHash)}"
                                  ) *>
                                    casper
                                      .superAddBlock(LegacyConversions.fromBlock(block)) flatMap {
                                    case Valid =>
-                                     Log[F].debug(s"$host validated and stored block ${PrettyPrinter
+                                     Log[F].debug(s"$host Validated and stored block ${PrettyPrinter
                                        .buildString(block.blockHash)}")
 
                                    case other =>
-                                     Log[F].debug(s"$host received invalid block ${PrettyPrinter
+                                     Log[F].debug(s"$host Received invalid block ${PrettyPrinter
                                        .buildString(block.blockHash)}: $other")
                                      Sync[F].raiseError(
                                        new RuntimeException(s"Non-valid status: $other")
@@ -369,7 +372,9 @@ object GossipServiceCasperTestNodeFactory {
 
             override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
               // TODO: Presently the Validation only works on full blocks.
-              ().pure[F]
+              Log[F].debug(
+                s"$host Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
+              )
 
             override def notInDag(blockHash: ByteString): F[Boolean] =
               blockStore.contains(blockHash).map(!_)
@@ -389,7 +394,7 @@ object GossipServiceCasperTestNodeFactory {
                          blockHash: ByteString
                      ): F[Option[consensus.BlockSummary]] = {
                        Log[F].debug(
-                         s"$host retrieving block summary ${PrettyPrinter.buildString(blockHash)}"
+                         s"$host Retrieving block summary ${PrettyPrinter.buildString(blockHash)} from storage."
                        )
                        blockStore
                          .get(blockHash)
@@ -400,7 +405,7 @@ object GossipServiceCasperTestNodeFactory {
 
                      override def getBlock(blockHash: ByteString): F[Option[consensus.Block]] =
                        Log[F].debug(
-                         s"$host retrieving block ${PrettyPrinter.buildString(blockHash)}"
+                         s"$host Retrieving block ${PrettyPrinter.buildString(blockHash)} from storage."
                        ) *>
                          blockStore
                            .get(blockHash)
@@ -413,7 +418,7 @@ object GossipServiceCasperTestNodeFactory {
                        ().pure[F]
                      override def onDownloaded(blockHash: ByteString) =
                        // The validation already did what it had to.
-                       Log[F].debug(s"$host downloaded ${PrettyPrinter.buildString(blockHash)}")
+                       Log[F].debug(s"$host Downloaded ${PrettyPrinter.buildString(blockHash)}")
                      override def listTips =
                        ???
                    },
@@ -507,26 +512,36 @@ object GossipServiceCasperTestNodeFactory {
       })
     }
 
-    override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] = {
-      Log[F].debug(s"$host received newBlocks request")
-      notificationQueue.update { q =>
-        q enqueue underlying.newBlocks(request).void.withAsyncOpsCount
-      } as {
+    override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
+      Log[F].info(
+        s"$host Received notification about block ${PrettyPrinter.buildString(request.blockHashes.head)}"
+      ) *>
+        notificationQueue.update { q =>
+          q enqueue underlying.newBlocks(request).void.withAsyncOpsCount
+        } as {
         NewBlocksResponse(isNew = true)
       }
-    }
 
-    override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] = {
-      Log[F].debug(s"$host received getBlockChunked request")
-      underlying.getBlockChunked(request).withAsyncOpsCount
-    }
+    override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
+      Iterant
+        .liftF(
+          Log[F].info(
+            s"$host Received request for block ${PrettyPrinter.buildString(request.blockHash)} Response sent."
+          )
+        )
+        .flatMap { _ =>
+          underlying.getBlockChunked(request).withAsyncOpsCount
+        }
 
     override def streamAncestorBlockSummaries(
         request: StreamAncestorBlockSummariesRequest
-    ): Iterant[F, consensus.BlockSummary] = {
-      Log[F].debug(s"$host received streamAncestorBlockSummaries request")
-      underlying.streamAncestorBlockSummaries(request).withAsyncOpsCount
-    }
+    ): Iterant[F, consensus.BlockSummary] =
+      Iterant
+        .liftF(Log[F].info(s"$host Recevied request for ancestors of ${request.targetBlockHashes
+          .map(PrettyPrinter.buildString(_))}"))
+        .flatMap { _ =>
+          underlying.streamAncestorBlockSummaries(request).withAsyncOpsCount
+        }
 
     // The following methods are not tested in these suites.
 
