@@ -1,7 +1,6 @@
 package io.casperlabs.casper
 
-import io.casperlabs.casper.consensus
-import io.casperlabs.casper.protocol
+import com.google.protobuf.ByteString
 import scala.util.Try
 
 /** Convert between the message in CasperMessage.proto and consensus.proto while we have both.
@@ -35,9 +34,19 @@ object LegacyConversions {
                   .withStake(x.stake)
               })
           )
-          .withBodyHash(block.getHeader.deploysHash)
+          .withBodyHash(
+            // The new structure has body hash, but the old has two separate fields.
+            // In order to be able to restore them the `BodyHashes` message was introduced.
+            ByteString.copyFrom(
+              protocol
+                .BodyHashes()
+                .withDeploysHash(block.getHeader.deploysHash)
+                .withStateHash(block.getHeader.postStateHash)
+                .toByteArray
+            )
+          )
           .withTimestamp(block.getHeader.timestamp)
-          .withProtocolVersion(block.getHeader.protocolVersion.toInt)
+          .withProtocolVersion(block.getHeader.protocolVersion)
           .withDeployCount(block.getHeader.deployCount)
           .withChainId(block.shardId)
           .withValidatorBlockSeqNum(block.seqNum)
@@ -113,7 +122,8 @@ object LegacyConversions {
       .withSignature(summary.getSignature)
   }
 
-  def fromBlock(block: consensus.Block): protocol.BlockMessage =
+  def fromBlock(block: consensus.Block): protocol.BlockMessage = {
+    val bodyHashes = protocol.BodyHashes.parseFrom(block.getHeader.bodyHash.toByteArray)
     protocol
       .BlockMessage()
       .withBlockHash(block.blockHash)
@@ -121,8 +131,8 @@ object LegacyConversions {
         protocol
           .Header()
           .withParentsHashList(block.getHeader.parentHashes)
-          .withPostStateHash(block.getHeader.getState.postStateHash)
-          .withDeploysHash(block.getHeader.bodyHash)
+          .withPostStateHash(bodyHashes.stateHash)
+          .withDeploysHash(bodyHashes.deploysHash)
           .withTimestamp(block.getHeader.timestamp)
           .withProtocolVersion(block.getHeader.protocolVersion)
           .withDeployCount(block.getHeader.deployCount)
@@ -141,7 +151,7 @@ object LegacyConversions {
                   .withValidator(x.validatorPublicKey)
                   .withStake(x.stake)
               })
-              .withBlockNumber(block.getHeader.rank)
+              .withBlockNumber(block.getHeader.rank.toLong)
           )
           .withDeploys(block.getBody.deploys.map { x =>
             protocol
@@ -185,4 +195,5 @@ object LegacyConversions {
       .withSig(block.getSignature.sig)
       .withSigAlgorithm(block.getSignature.sigAlgorithm)
       .withShardId(block.getHeader.chainId)
+  }
 }

@@ -308,3 +308,9 @@ message Bond {
     int64 stake = 2;
 }
 // --------- End Core Protocol  --------
+
+// Technical message for mapping to new gossip structure.
+message BodyHashes {
+    bytes deploysHash = 1;
+    bytes stateHash = 2;
+}
