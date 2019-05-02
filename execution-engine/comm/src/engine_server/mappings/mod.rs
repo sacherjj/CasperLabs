@@ -78,11 +78,16 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                 let ipc_contr = v.get_contract();
                 let contr_body = ipc_contr.get_body().to_vec();
                 let known_urefs: URefMap = ipc_contr.get_known_urefs().try_into()?;
+                let protocol_version = if ipc_contr.has_protocol_version() {
+                    ipc_contr.get_protocol_version()
+                } else {
+                    return parse_error("Protocol version is not specified".to_string());
+                };
                 transform_write(
                     common::value::Contract::new(
                         contr_body,
                         known_urefs.0,
-                        ipc_contr.protocol_version,
+                        protocol_version.version,
                     )
                     .into(),
                 )
