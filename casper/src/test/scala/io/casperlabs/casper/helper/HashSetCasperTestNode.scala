@@ -65,7 +65,8 @@ abstract class HashSetCasperTestNode[F[_]](
     val casperState: Cell[F, CasperState]
 ) {
   implicit val logEff: LogStub[F] = new LogStub[F]()
-  implicit val casperEff: MultiParentCasperImpl[F]
+
+  implicit val casperEff: MultiParentCasperImpl[F] with HashSetCasperTestNode.AddBlockProxy[F]
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
@@ -187,6 +188,17 @@ trait HashSetCasperTestNodeFactory {
 
 object HashSetCasperTestNode {
   type Effect[A] = EitherT[Task, CommError, A]
+
+  /** Currently the tests call `addBlock` directly, but with the GossipService tests
+    * we want that to happen via gossiping, if the node isn't the creator. Yet this
+    * is currently also the only method that can do validation, so there has to be a
+    * back door to run blocks created by other nodes. */
+  trait AddBlockProxy[F[_]] { self: MultiParentCasper[F] =>
+    // This should point at the original `addBlock`,
+    // allowing the tests to override it but also call the original.
+    def superAddBlock(blockMessage: BlockMessage): F[BlockStatus] =
+      addBlock(blockMessage)
+  }
 
   val appErrId = new ApplicativeError[Id, CommError] {
     def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)

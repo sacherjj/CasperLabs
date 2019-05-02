@@ -78,35 +78,46 @@ class GossipServiceCasperTestNode[F[_]](
     case ValidatorIdentity(key, _, _) => ByteString.copyFrom(key)
   }
 
-  implicit val casperEff: MultiParentCasperImpl[F] = new MultiParentCasperImpl[F](
-    new MultiParentCasperImpl.StatelessExecutor(shardId),
-    MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
-    Some(validatorId),
-    genesis,
-    shardId,
-    blockProcessingLock,
-    faultToleranceThreshold = faultToleranceThreshold
-  ) {
-    override def addBlock(block: BlockMessage): F[BlockStatus] =
-      if (block.sender == ownValidatorKey) {
-        // The test is adding something this node created.
-        super.addBlock(block)
-      } else {
-        // The test is adding something it created in another node's name,
-        // i.e. it expects that dependencies will be requested.
-        val sender  = validatorToNode(block.sender)
-        val request = NewBlocksRequest(sender.some, List(block.blockHash))
-        gossipService.newBlocks(request).map { response =>
-          if (response.isNew) Processing else Valid
+  implicit val casperEff: MultiParentCasperImpl[F] with HashSetCasperTestNode.AddBlockProxy[F] =
+    new MultiParentCasperImpl[F](
+      new MultiParentCasperImpl.StatelessExecutor(shardId),
+      MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
+      Some(validatorId),
+      genesis,
+      shardId,
+      blockProcessingLock,
+      faultToleranceThreshold = faultToleranceThreshold
+    ) with HashSetCasperTestNode.AddBlockProxy[F] {
+      // Called in many ways:
+      // - test proposes a block on the node that created it
+      // - test tries to give a block created by node A to node B
+      // - the download manager tries to validate a block
+      override def addBlock(block: BlockMessage): F[BlockStatus] =
+        if (block.sender == ownValidatorKey) {
+          // The test is adding something this node created.
+          super.addBlock(block)
+        } else {
+          // The test is adding something it created in another node's name,
+          // i.e. it expects that dependencies will be requested.
+          val sender  = validatorToNode(block.sender)
+          val request = NewBlocksRequest(sender.some, List(block.blockHash))
+          gossipService.newBlocks(request).map { response =>
+            if (response.isNew) Processing else Valid
+          }
         }
-      }
-  }
+
+      override def superAddBlock(block: BlockMessage): F[BlockStatus] =
+        super.addBlock(block)
+    }
 
   /** Allow RPC calls intended for this node to be processed and enqueue responses. */
   def receive(): F[Unit] = gossipService.receive()
 
   /** Forget RPC calls intended for this node. */
   def clearMessages(): F[Unit] = gossipService.clearMessages()
+
+  override def tearDownNode() =
+    gossipService.shutdown >> super.tearDownNode()
 }
 
 trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
@@ -129,12 +140,13 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       parF: Par[F],
       timerF: Timer[F]
   ): F[GossipServiceCasperTestNode[F]] = {
-    val name               = "standalone"
-    val identity           = peerNode(name, 40400)
-    val logicalTime        = new LogicalTime[F]
-    implicit val log       = new Log.NOPLog[F]()
-    implicit val metricEff = new Metrics.MetricsNOP[F]
-    implicit val nodeAsk   = makeNodeAsk(identity)(concurrentF)
+    val name        = "standalone"
+    val identity    = peerNode(name, 40400)
+    val logicalTime = new LogicalTime[F]
+    //implicit val log       = new Log.NOPLog[F]()
+    implicit val log: Log[F] = Log.log[F]
+    implicit val metricEff   = new Metrics.MetricsNOP[F]
+    implicit val nodeAsk     = makeNodeAsk(identity)(concurrentF)
 
     // Standalone, so nobody to relay to.
     val relaying = RelayingImpl(
@@ -158,7 +170,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             blockProcessingLock,
             faultToleranceThreshold,
             relaying = relaying,
-            gossipService = new TestGossipService[F](),
+            gossipService = new TestGossipService[F](name),
             validatorToNode = Map.empty // Shouldn't need it.
           )(
             concurrentF,
@@ -186,12 +198,10 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       timerF: Timer[F]
   ): F[IndexedSeq[GossipServiceCasperTestNode[F]]] = {
     val n     = sks.length
-    val names = (1 to n).map(i => s"node-$i")
+    val names = (0 to n - 1).map(i => s"node-$i")
     val peers = names.map(peerNode(_, 40400))
 
-    var gossipServices = peers.map { peer =>
-      peer -> new TestGossipService[F]()
-    }.toMap
+    var gossipServices = Map.empty[Node, TestGossipService[F]]
 
     val validatorToNode = peers
       .zip(sks)
@@ -201,15 +211,19 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       }
       .toMap
 
-    peers
+    val nodesF = peers
       .zip(sks)
       .toList
       .traverse {
         case (peer, sk) =>
-          val logicalTime          = new LogicalTime[F]
-          implicit val log: Log[F] = new Log.NOPLog[F]()
+          val logicalTime = new LogicalTime[F]
+          //implicit val log: Log[F] = new Log.NOPLog[F]()
+          implicit val log: Log[F] = new LogStub[F]()
           implicit val metricEff   = new Metrics.MetricsNOP[F]
           implicit val nodeAsk     = makeNodeAsk(peer)(concurrentF)
+
+          val gossipService = new TestGossipService[F](peer.host)
+          gossipServices += peer -> gossipService
 
           // Simulate the broadcast semantics.
           val nodeDiscovery = new TestNodeDiscovery[F](peers.filterNot(_ == peer).toList)
@@ -231,7 +245,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 casperState <- Cell.mvarCell[F, CasperState](
                                 CasperState()
                               )
-                gossipService = gossipServices(peer)
                 node = new GossipServiceCasperTestNode[F](
                   peer,
                   genesis,
@@ -251,11 +264,20 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   metricEff,
                   casperState
                 )
-                _ <- gossipService.init(node.casperEff, blockStore, relaying, connectToGossip)
+                _ <- gossipService.init(
+                      node.casperEff,
+                      blockStore,
+                      relaying,
+                      connectToGossip
+                    )
               } yield node
           }
-      } map (_.toIndexedSeq)
+      }
 
+    for {
+      nodes <- nodesF
+      _     <- nodes.traverse(_.initialize())
+    } yield nodes.toVector
   }
 }
 
@@ -273,124 +295,143 @@ object GossipServiceCasperTestNodeFactory {
     }
 
   /** Accumulate messages until receive is called by the test. */
-  class TestGossipService[F[_]: Concurrent: Timer: Par]() extends GossipService[F] {
+  class TestGossipService[F[_]: Concurrent: Timer: Par: Log](host: String)
+      extends GossipService[F] {
 
     /** Exercise the full underlying stack. It's what we are testing here, via the MultiParentCasper tests. */
     var underlying: GossipServiceServer[F] = _
+    var shutdown: F[Unit]                  = ().pure[F]
 
     /** Casper is created a bit later then the TestGossipService instance. */
     def init(
-        casper: MultiParentCasperImpl[F],
+        casper: MultiParentCasperImpl[F] with HashSetCasperTestNode.AddBlockProxy[F],
         blockStore: BlockStore[F],
         relaying: Relaying[F],
         connectToGossip: GossipService.Connector[F]
-    )(implicit log: Log[F]): F[Unit] = {
+    ): F[Unit] = {
 
-      val resources = for {
-        downloadManager <- DownloadManagerImpl[F](
-                            maxParallelDownloads = 10,
-                            connectToGossip = connectToGossip,
-                            backend = new DownloadManagerImpl.Backend[F] {
-                              override def hasBlock(blockHash: ByteString): F[Boolean] =
-                                blockStore.contains(blockHash)
+      for {
+        downloadManagerR <- DownloadManagerImpl[F](
+                             maxParallelDownloads = 10,
+                             connectToGossip = connectToGossip,
+                             backend = new DownloadManagerImpl.Backend[F] {
+                               override def hasBlock(blockHash: ByteString): F[Boolean] =
+                                 blockStore.contains(blockHash)
 
-                              override def validateBlock(block: consensus.Block): F[Unit] =
-                                // Casper can only validate, store, but won't gossip because the Broadcaster we give it
-                                // will assume the DownloadManager will do that.
-                                casper.addBlock(LegacyConversions.fromBlock(block)) map {
-                                  case Valid =>
-                                  case other => new RuntimeException(s"Non-valid status: $other")
-                                }
+                               override def validateBlock(block: consensus.Block): F[Unit] =
+                                 // Casper can only validate, store, but won't gossip because the Broadcaster we give it
+                                 // will assume the DownloadManager will do that.
+                                 Log[F].debug(
+                                   s"$host validating block ${PrettyPrinter.buildString(block.blockHash)}"
+                                 ) *>
+                                   casper
+                                     .superAddBlock(LegacyConversions.fromBlock(block)) flatMap {
+                                   case Valid =>
+                                     Log[F].debug(s"$host validated and stored block ${PrettyPrinter
+                                       .buildString(block.blockHash)}")
 
-                              override def storeBlock(block: consensus.Block): F[Unit] =
-                                // Validation has already stored it.
-                                ().pure[F]
+                                   case other =>
+                                     Log[F].debug(s"$host received invalid block ${PrettyPrinter
+                                       .buildString(block.blockHash)}: $other")
+                                     Sync[F].raiseError(
+                                       new RuntimeException(s"Non-valid status: $other")
+                                     )
+                                 }
 
-                              override def storeBlockSummary(
-                                  summary: consensus.BlockSummary
-                              ): F[Unit] =
-                                // No means to store summaries separately yet.
-                                ().pure[F]
-                            },
-                            relaying = relaying,
-                            retriesConf = DownloadManagerImpl.RetriesConf.noRetries
-                          )
-      } yield downloadManager
+                               override def storeBlock(block: consensus.Block): F[Unit] =
+                                 // Validation has already stored it.
+                                 ().pure[F]
 
-      resources.use {
-        case downloadManager =>
-          val synchronizer = new SynchronizerImpl[F](
-            connectToGossip = connectToGossip,
-            backend = new SynchronizerImpl.Backend[F] {
-              override def tips: F[List[ByteString]] =
-                for {
-                  dag       <- casper.blockDag
-                  tipHashes <- casper.estimator(dag)
-                } yield tipHashes.toList
+                               override def storeBlockSummary(
+                                   summary: consensus.BlockSummary
+                               ): F[Unit] =
+                                 // No means to store summaries separately yet.
+                                 ().pure[F]
+                             },
+                             relaying = relaying,
+                             retriesConf = DownloadManagerImpl.RetriesConf.noRetries
+                           ).allocated
 
-              override def justifications: F[List[ByteString]] =
-                // TODO: Presently there's no way to ask.
-                List.empty.pure[F]
+        (downloadManager, downloadManagerShutdown) = downloadManagerR
 
-              override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
-                // TODO: Presently the Validation only works on full blocks.
-                ().pure[F]
+        synchronizer = new SynchronizerImpl[F](
+          connectToGossip = connectToGossip,
+          backend = new SynchronizerImpl.Backend[F] {
+            override def tips: F[List[ByteString]] =
+              for {
+                dag       <- casper.blockDag
+                tipHashes <- casper.estimator(dag)
+              } yield tipHashes.toList
 
-              override def notInDag(blockHash: ByteString): F[Boolean] =
-                blockStore.contains(blockHash).map(!_)
-            },
-            maxPossibleDepth = Int.MaxValue,
-            minBlockCountToCheckBranchingFactor = Int.MaxValue,
-            maxBranchingFactor = 2.0,
-            maxDepthAncestorsRequest = Int.MaxValue
-          )
+            override def justifications: F[List[ByteString]] =
+              // TODO: Presently there's no way to ask.
+              List.empty.pure[F]
 
-          for {
-            server <- GossipServiceServer[F](
-                       backend = new GossipServiceServer.Backend[F] {
-                         override def hasBlock(blockHash: ByteString): F[Boolean] =
-                           blockStore.contains(blockHash)
+            override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
+              // TODO: Presently the Validation only works on full blocks.
+              ().pure[F]
 
-                         override def getBlockSummary(
-                             blockHash: ByteString
-                         ): F[Option[consensus.BlockSummary]] =
-                           blockStore
-                             .get(blockHash)
-                             .map(
-                               _.map(mwt => LegacyConversions.toBlockSummary(mwt.getBlockMessage))
-                             )
+            override def notInDag(blockHash: ByteString): F[Boolean] =
+              blockStore.contains(blockHash).map(!_)
+          },
+          maxPossibleDepth = Int.MaxValue,
+          minBlockCountToCheckBranchingFactor = Int.MaxValue,
+          maxBranchingFactor = 2.0,
+          maxDepthAncestorsRequest = Int.MaxValue
+        )
 
-                         override def getBlock(blockHash: ByteString): F[Option[consensus.Block]] =
-                           blockStore
-                             .get(blockHash)
-                             .map(_.map(mwt => LegacyConversions.toBlock(mwt.getBlockMessage)))
-                       },
-                       synchronizer = synchronizer,
-                       downloadManager = downloadManager,
-                       consensus = new GossipServiceServer.Consensus[F] {
-                         override def onPending(dag: Vector[consensus.BlockSummary]) =
-                           ().pure[F]
-                         override def onDownloaded(blockHash: ByteString) =
-                           // The validation already did what it had to.
-                           ().pure[F]
-                         override def listTips =
-                           ???
-                       },
-                       // Not testing the genesis ceremony.
-                       genesisApprover = new GenesisApprover[F] {
-                         override def getCandidate = ???
-                         override def addApproval(
-                             blockHash: ByteString,
-                             approval: consensus.Approval
-                         )                          = ???
-                         override def awaitApproval = ???
-                       },
-                       maxChunkSize = 1024 * 1024,
-                       maxParallelBlockDownloads = 10
-                     )
-          } yield {
-            underlying = server
-          }
+        server <- GossipServiceServer[F](
+                   backend = new GossipServiceServer.Backend[F] {
+                     override def hasBlock(blockHash: ByteString): F[Boolean] =
+                       blockStore.contains(blockHash)
+
+                     override def getBlockSummary(
+                         blockHash: ByteString
+                     ): F[Option[consensus.BlockSummary]] = {
+                       Log[F].debug(
+                         s"$host retrieving block summary ${PrettyPrinter.buildString(blockHash)}"
+                       )
+                       blockStore
+                         .get(blockHash)
+                         .map(
+                           _.map(mwt => LegacyConversions.toBlockSummary(mwt.getBlockMessage))
+                         )
+                     }
+
+                     override def getBlock(blockHash: ByteString): F[Option[consensus.Block]] =
+                       Log[F].debug(
+                         s"$host retrieving block ${PrettyPrinter.buildString(blockHash)}"
+                       ) *>
+                         blockStore
+                           .get(blockHash)
+                           .map(_.map(mwt => LegacyConversions.toBlock(mwt.getBlockMessage)))
+                   },
+                   synchronizer = synchronizer,
+                   downloadManager = downloadManager,
+                   consensus = new GossipServiceServer.Consensus[F] {
+                     override def onPending(dag: Vector[consensus.BlockSummary]) =
+                       ().pure[F]
+                     override def onDownloaded(blockHash: ByteString) =
+                       // The validation already did what it had to.
+                       Log[F].debug(s"$host downloaded ${PrettyPrinter.buildString(blockHash)}")
+                     override def listTips =
+                       ???
+                   },
+                   // Not testing the genesis ceremony.
+                   genesisApprover = new GenesisApprover[F] {
+                     override def getCandidate = ???
+                     override def addApproval(
+                         blockHash: ByteString,
+                         approval: consensus.Approval
+                     )                          = ???
+                     override def awaitApproval = ???
+                   },
+                   maxChunkSize = 1024 * 1024,
+                   maxParallelBlockDownloads = 10
+                 )
+      } yield {
+        underlying = server
+        shutdown = downloadManagerShutdown
       }
     }
 
@@ -456,7 +497,7 @@ object GossipServiceCasperTestNodeFactory {
 
     def awaitAsyncOps: F[Unit] = {
       def loop(): F[Unit] =
-        Timer[F].sleep(100.millis) >>
+        Timer[F].sleep(250.millis) >>
           Sync[F].delay(asyncOpsCount.get) >>= {
           case 0 => ().pure[F]
           case _ => loop()
@@ -466,20 +507,26 @@ object GossipServiceCasperTestNodeFactory {
       })
     }
 
-    override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
+    override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] = {
+      Log[F].debug(s"$host received newBlocks request")
       notificationQueue.update { q =>
         q enqueue underlying.newBlocks(request).void.withAsyncOpsCount
       } as {
         NewBlocksResponse(isNew = true)
       }
+    }
 
-    override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
+    override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] = {
+      Log[F].debug(s"$host received getBlockChunked request")
       underlying.getBlockChunked(request).withAsyncOpsCount
+    }
 
     override def streamAncestorBlockSummaries(
         request: StreamAncestorBlockSummariesRequest
-    ): Iterant[F, consensus.BlockSummary] =
+    ): Iterant[F, consensus.BlockSummary] = {
+      Log[F].debug(s"$host received streamAncestorBlockSummaries request")
       underlying.streamAncestorBlockSummaries(request).withAsyncOpsCount
+    }
 
     // The following methods are not tested in these suites.
 

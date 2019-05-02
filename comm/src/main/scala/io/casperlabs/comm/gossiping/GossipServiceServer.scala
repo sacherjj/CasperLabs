@@ -95,7 +95,9 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
     }
 
     val trySync = for {
-      _ <- Log[F].info(s"Notified about ${newBlockHashes.size} new blocks by ${source.show}.")
+      _ <- Log[F].info(
+            s"Received notification about ${newBlockHashes.size} new blocks by ${source.show}."
+          )
       dagOrError <- synchronizer.syncDag(
                      source = source,
                      targetBlockHashes = newBlockHashes

@@ -85,15 +85,16 @@ class TransportLayerCasperTestNode[F[_]](
   implicit val labF =
     LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
 
-  implicit val casperEff: MultiParentCasperImpl[F] = new MultiParentCasperImpl[F](
-    new MultiParentCasperImpl.StatelessExecutor(shardId),
-    MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
-    Some(validatorId),
-    genesis,
-    shardId,
-    blockProcessingLock,
-    faultToleranceThreshold = faultToleranceThreshold
-  )
+  implicit val casperEff: MultiParentCasperImpl[F] with HashSetCasperTestNode.AddBlockProxy[F] =
+    new MultiParentCasperImpl[F](
+      new MultiParentCasperImpl.StatelessExecutor(shardId),
+      MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
+      Some(validatorId),
+      genesis,
+      shardId,
+      blockProcessingLock,
+      faultToleranceThreshold = faultToleranceThreshold
+    ) with HashSetCasperTestNode.AddBlockProxy[F]
 
   implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[F](Some(casperEff))
 
@@ -183,7 +184,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       timerF: Timer[F]
   ): F[IndexedSeq[TransportLayerCasperTestNode[F]]] = {
     val n     = sks.length
-    val names = (1 to n).map(i => s"node-$i")
+    val names = (0 to n - 1).map(i => s"node-$i")
     val peers = names.map(peerNode(_, 40400))
     val msgQueues = peers
       .map(_ -> new mutable.Queue[Protocol]())

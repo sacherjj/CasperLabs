@@ -69,7 +69,7 @@ class RelayingImpl[F[_]: Sync: Par: Log: NodeAsk](
       local    <- NodeAsk[F].ask
       response <- service.newBlocks(NewBlocksRequest(sender = local.some, blockHashes = List(hash)))
       msg = if (response.isNew)
-        s"${peer.show} accepted block for downloading ${hex(hash)}"
+        s"${peer.show} accepted block ${hex(hash)}"
       else
         s"${peer.show} rejected block ${hex(hash)}"
       _ <- Log[F].debug(msg)
