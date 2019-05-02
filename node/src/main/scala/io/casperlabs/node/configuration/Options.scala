@@ -293,6 +293,10 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverCleanBlockStorage =
+      gen[Flag]("Use this flag to clear the blockStore and blockDagStorage")
+
+    @scallop
     val serverRelayFactor =
       gen[Int]("Number of new nodes to which try to gossip a new block.")
 

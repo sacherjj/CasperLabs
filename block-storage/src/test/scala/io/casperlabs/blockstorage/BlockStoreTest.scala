@@ -278,4 +278,43 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
       }
     }
   }
+
+  it should "be able to clean storage and continue to work" in {
+    forAll(blockBatchesGen, minSize(5), sizeRange(10)) { blockStoreBatches =>
+      withStoreLocation { blockStoreDataDir =>
+        val blocks         = blockStoreBatches.flatten
+        val checkpointsDir = blockStoreDataDir.resolve("checkpoints")
+        for {
+          firstStore <- createBlockStore(blockStoreDataDir)
+          _ <- blockStoreBatches.traverse_[Task, Unit](
+                blockStoreElements =>
+                  blockStoreElements
+                    .traverse_[Task, Unit](firstStore.put) *> firstStore.checkpoint()
+              )
+          _ = checkpointsDir.toFile.list().size shouldBe blockStoreBatches.size
+          _ <- blocks.traverse[Task, Assertion] {
+                case b @ BlockMsgWithTransform(Some(block), _) =>
+                  firstStore.get(block.blockHash).map(_ shouldBe Some(b))
+              }
+          _ <- firstStore.find(_ => true).map(_.size shouldEqual blocks.size)
+          _ <- firstStore.clear()
+          _ = checkpointsDir.toFile.list().size shouldBe 0
+          _ <- firstStore.find(_ => true).map(_.size shouldEqual 0)
+          _ <- blockStoreBatches.traverse_[Task, Unit](
+                blockStoreElements =>
+                  blockStoreElements
+                    .traverse_[Task, Unit](firstStore.put) *> firstStore.checkpoint()
+              )
+          _           = checkpointsDir.toFile.list().size shouldBe blockStoreBatches.size
+          _           <- firstStore.close()
+          secondStore <- createBlockStore(blockStoreDataDir)
+          _ <- blocks.traverse[Task, Assertion] {
+                case b @ BlockMsgWithTransform(Some(block), _) =>
+                  secondStore.get(block.blockHash).map(_ shouldBe Some(b))
+              }
+          result <- secondStore.find(_ => true).map(_.size shouldEqual blocks.size)
+        } yield result
+      }
+    }
+  }
 }
