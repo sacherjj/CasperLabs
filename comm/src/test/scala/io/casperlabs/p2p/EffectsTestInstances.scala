@@ -105,7 +105,8 @@ object EffectsTestInstances {
     def shutdown(msg: Protocol): F[Unit] = ???
   }
 
-  class LogStub[F[_]: Applicative](prefix: String = "", printEnabled: Boolean = false) extends Log[F] {
+  class LogStub[F[_]: Applicative](prefix: String = "", printEnabled: Boolean = false)
+      extends Log[F] {
 
     @volatile var debugs: Vector[String]    = Vector.empty[String]
     @volatile var infos: Vector[String]     = Vector.empty[String]
