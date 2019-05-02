@@ -2,6 +2,7 @@ package io.casperlabs.casper
 
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.protocol
+import scala.util.Try
 
 /** Convert between the message in CasperMessage.proto and consensus.proto while we have both.
   * This is assuming that the storage and validation are still using the protocol.* types,
@@ -36,7 +37,7 @@ object LegacyConversions {
           )
           .withBodyHash(block.getHeader.deploysHash)
           .withTimestamp(block.getHeader.timestamp)
-          .withProtocolVersion(block.getHeader.protocolVersion)
+          .withProtocolVersion(block.getHeader.protocolVersion.toInt)
           .withDeployCount(block.getHeader.deployCount)
           .withChainId(block.shardId)
           .withValidatorBlockSeqNum(block.seqNum)
@@ -103,11 +104,85 @@ object LegacyConversions {
               )
               .withCost(x.cost)
               .withIsError(x.errored)
-          //.withErrorMessage() // Legacy doesn't have it.
+              //.withErrorMessage() // Legacy doesn't have it.
+              .withErrorMessage(
+                Option(x.getDeploy.gasLimit).filterNot(_ == 0).map(_.toString).getOrElse("")
+              ) // New version doesn't have limit. Preserve it so signatures can be checked.
           })
       )
       .withSignature(summary.getSignature)
   }
 
-  def fromBlock(block: consensus.Block): protocol.BlockMessage = ???
+  def fromBlock(block: consensus.Block): protocol.BlockMessage =
+    protocol
+      .BlockMessage()
+      .withBlockHash(block.blockHash)
+      .withHeader(
+        protocol
+          .Header()
+          .withParentsHashList(block.getHeader.parentHashes)
+          .withPostStateHash(block.getHeader.getState.postStateHash)
+          .withDeploysHash(block.getHeader.bodyHash)
+          .withTimestamp(block.getHeader.timestamp)
+          .withProtocolVersion(block.getHeader.protocolVersion)
+          .withDeployCount(block.getHeader.deployCount)
+      )
+      .withBody(
+        protocol
+          .Body()
+          .withState(
+            protocol
+              .RChainState()
+              .withPreStateHash(block.getHeader.getState.preStateHash)
+              .withPostStateHash(block.getHeader.getState.postStateHash)
+              .withBonds(block.getHeader.getState.bonds.map { x =>
+                protocol
+                  .Bond()
+                  .withValidator(x.validatorPublicKey)
+                  .withStake(x.stake)
+              })
+              .withBlockNumber(block.getHeader.rank)
+          )
+          .withDeploys(block.getBody.deploys.map { x =>
+            protocol
+              .ProcessedDeploy()
+              .withDeploy(
+                protocol
+                  .DeployData()
+                  .withAddress(x.getDeploy.getHeader.accountPublicKey) // TODO: Once we sign deploys, this needs to be derived.
+                  .withTimestamp(x.getDeploy.getHeader.timestamp)
+                  .withSession(
+                    protocol
+                      .DeployCode()
+                      .withCode(x.getDeploy.getBody.getSession.code)
+                      .withArgs(x.getDeploy.getBody.getSession.args)
+                  )
+                  .withPayment(
+                    protocol
+                      .DeployCode()
+                      .withCode(x.getDeploy.getBody.getPayment.code)
+                      .withArgs(x.getDeploy.getBody.getPayment.args)
+                  )
+                  .withGasLimit(Try(x.errorMessage.toLong).toOption.getOrElse(0L)) // New version doesn't have it.
+                  .withGasPrice(x.getDeploy.getHeader.gasPrice)
+                  .withNonce(x.getDeploy.getHeader.nonce)
+                  .withSigAlgorithm(x.getDeploy.getSignature.sigAlgorithm)
+                  .withSignature(x.getDeploy.getSignature.sig)
+                //.withUser() // We aren't signing deploys yet.
+              )
+              .withCost(x.cost)
+              .withErrored(x.isError)
+          })
+      )
+      .withJustifications(block.getHeader.justifications.map { x =>
+        protocol
+          .Justification()
+          .withValidator(x.validatorPublicKey)
+          .withLatestBlockHash(x.latestBlockHash)
+      })
+      .withSender(block.getHeader.validatorPublicKey)
+      .withSeqNum(block.getHeader.validatorBlockSeqNum)
+      .withSig(block.getSignature.sig)
+      .withSigAlgorithm(block.getSignature.sigAlgorithm)
+      .withShardId(block.getHeader.chainId)
 }
