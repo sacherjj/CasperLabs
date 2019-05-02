@@ -504,14 +504,21 @@ object GossipServiceCasperTestNodeFactory {
 
     def awaitAsyncOps: F[Unit] = {
       def loop(): F[Unit] =
-        Timer[F].sleep(250.millis) >>
+        Timer[F].sleep(50.millis) >>
           Sync[F].delay(asyncOpsCount.get) >>= {
           case 0 => ().pure[F]
           case _ => loop()
         }
-      Concurrent.timeoutTo[F, Unit](loop(), 5.seconds, Sync[F].raiseError {
-        new java.util.concurrent.TimeoutException("Still have async operations going!")
-      })
+
+      val onTimeout = for {
+        c <- Sync[F].delay(asyncOpsCount.get)
+        _ <- Log[F].warn(s"Still have ${c} active async ops.")
+        _ <- Sync[F].raiseError[Unit](
+              new java.util.concurrent.TimeoutException("Still have active async ops.")
+            )
+      } yield ()
+
+      Concurrent.timeoutTo[F, Unit](loop(), 5.seconds, onTimeout)
     }
 
     override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
