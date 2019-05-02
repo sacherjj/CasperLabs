@@ -351,7 +351,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     *
     * In the future it will be possible to create checkpoint with new [[ApprovedBlock]].
     **/
-  class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler](
+  class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Sync: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler](
       private val casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock,
       validatorId: Option[ValidatorIdentity]
@@ -441,7 +441,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       Log[F].info(s"No approved block available on node ${na.nodeIdentifer}")
   }
 
-  class CasperPacketHandlerImpl[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef](
+  class CasperPacketHandlerImpl[F[_]: Sync: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef](
       private val cphI: Ref[F, CasperPacketHandlerInternal[F]],
       validatorId: Option[ValidatorIdentity]
   ) extends CasperPacketHandler[F] {
@@ -619,10 +619,10 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       implicit C: CasperPacketHandler[F]
   ): CasperPacketHandler[T[F, ?]] =
     new CasperPacketHandler[T[F, ?]] {
-      override def handle(peer: Node): PartialFunction[Packet, T[F, Unit]] =
-        PartialFunction { (p: Packet) =>
+      override def handle(peer: Node): PartialFunction[Packet, T[F, Unit]] = {
+        case (p: Packet) =>
           C.handle(peer)(p).liftM[T]
-        }
+      }
     }
 
   private def sendNoApprovedBlockAvailable[F[_]: RPConfAsk: TransportLayer: Monad](

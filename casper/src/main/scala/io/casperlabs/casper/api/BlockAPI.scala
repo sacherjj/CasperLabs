@@ -98,7 +98,7 @@ object BlockAPI {
   }
 
   // FIX: Not used at the moment - in RChain it's being used in method like `getListeningName*`
-  private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+  private def getMainChainFromTip[F[_]: Sync: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[IndexedSeq[BlockMessage]] =
     for {
@@ -138,7 +138,7 @@ object BlockAPI {
   }
 
   // TOOD extract common code from show blocks
-  def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def showBlocks[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
     val errorMessage =
@@ -160,7 +160,7 @@ object BlockAPI {
     )
   }
 
-  private def getFlattenedBlockInfosUntilDepth[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+  private def getFlattenedBlockInfosUntilDepth[F[_]: Sync: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int,
       dag: BlockDagRepresentation[F]
   ): F[List[BlockInfoWithoutTuplespace]] =
@@ -175,7 +175,7 @@ object BlockAPI {
                }
     } yield result
 
-  def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def showMainChain[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
     val errorMessage =
@@ -199,7 +199,7 @@ object BlockAPI {
   }
 
   // TODO: Replace with call to BlockStore
-  def findBlockWithDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def findBlockWithDeploy[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       user: ByteString,
       timestamp: Long
   ): F[BlockQueryResponse] = {
@@ -233,7 +233,7 @@ object BlockAPI {
     )
   }
 
-  private def findBlockWithDeploy[F[_]: Monad: Log: BlockStore](
+  private def findBlockWithDeploy[F[_]: Sync: Log: BlockStore](
       blockHashes: Vector[BlockHash],
       user: ByteString,
       timestamp: Long

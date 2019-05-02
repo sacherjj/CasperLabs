@@ -1,5 +1,6 @@
 package io.casperlabs.casper.util
 
+import cats.effect.Sync
 import cats.data.OptionT
 import cats.implicits._
 import cats.{Applicative, Monad}
@@ -18,6 +19,7 @@ import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{Log, Time}
 
 import scala.collection.immutable
+import scala.util.control.NonFatal
 
 object ProtoUtil {
   /*
@@ -46,7 +48,7 @@ object ProtoUtil {
       } yield result
     }
 
-  def getMainChainUntilDepth[F[_]: Monad: BlockStore](
+  def getMainChainUntilDepth[F[_]: Sync: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
       depth: Int
@@ -76,14 +78,16 @@ object ProtoUtil {
   }
 
   // TODO: instead of throwing Exception use MonadError.raiseError
-  def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
+  def unsafeGetBlock[F[_]: Sync: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
       maybeBlock <- BlockStore[F].getBlockMessage(hash)
-      block = maybeBlock match {
-        case Some(b) => b
-        case None =>
-          throw new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
-      }
+      block <- maybeBlock match {
+                case Some(b) => b.pure[F]
+                case None =>
+                  Sync[F].raiseError(
+                    new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+                  )
+              }
     } yield block
 
   def creatorJustification(block: BlockMessage): Option[Justification] =
@@ -236,7 +240,7 @@ object ProtoUtil {
   def parentHashes(b: BlockMessage): Seq[ByteString] =
     b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
-  def unsafeGetParents[F[_]: Monad: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
+  def unsafeGetParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }
@@ -280,7 +284,7 @@ object ProtoUtil {
    * TODO: Update the logic of this function to make use of the trace logs and
    * say that two blocks don't conflict if they act on disjoint sets of channels
    */
-  def conflicts[F[_]: Monad: BlockStore: Log](
+  def conflicts[F[_]: Sync: BlockStore: Log](
       b1: BlockMessage,
       b2: BlockMessage,
       genesis: BlockMessage,
@@ -307,7 +311,7 @@ object ProtoUtil {
                            b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[DeployData])
                          deploys.map(_ -> b.blockHash)
                        }
-                       .groupBy { case (d, b) => d }
+                       .groupBy { case (d, _) => d }
                        .map { case (d, xs) => d -> xs.map(_._2).toSet }
                        .toMap
                    } yield deploys
@@ -331,15 +335,15 @@ object ProtoUtil {
                }
     } yield result
 
-  def chooseNonConflicting[F[_]: Monad: BlockStore: Log](
+  def chooseNonConflicting[F[_]: Sync: BlockStore: Log](
       blockHashes: Seq[BlockHash],
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[Seq[BlockMessage]] = {
+  ): F[List[BlockMessage]] = {
     def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
       conflicts[F](_, b, genesis, dag).map(b => !b)
 
-    for {
+    (for {
       blocks <- blockHashes.toList.traverse(hash => ProtoUtil.unsafeGetBlock[F](hash))
       result <- blocks
                  .foldM(List.empty[BlockMessage]) {
@@ -350,7 +354,15 @@ object ProtoUtil {
                      )
                  }
                  .map(_.reverse)
-    } yield result
+    } yield result) onError {
+      case NonFatal(ex) =>
+        Log[F].error(
+          s"Failed to choose non-conflicting parents from ${blockHashes
+            .map(PrettyPrinter.buildString(_))} (genesis is ${PrettyPrinter
+            .buildString(genesis.blockHash)}): $ex",
+          ex
+        )
+    }
   }
 
   def toJustification(
@@ -371,7 +383,7 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: Monad: BlockStore](
+  def toLatestMessage[F[_]: Sync: BlockStore](
       justifications: Seq[Justification],
       dag: BlockDagRepresentation[F]
   ): F[immutable.Map[Validator, BlockMetadata]] =
