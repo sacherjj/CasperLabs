@@ -229,8 +229,7 @@ where
                 value: value.to_owned(),
             };
             let path: Vec<u8> = key.to_bytes()?;
-            let TrieScan { tip, parents: _ } =
-                scan::<K, V, T, S, E>(txn, store, &path, &current_root)?;
+            let TrieScan { tip, .. } = scan::<K, V, T, S, E>(txn, store, &path, &current_root)?;
             let new_elements: Vec<(Blake2bHash, Trie<K, V>)> = match tip {
                 // If the "tip" is the same as the new leaf, then the leaf
                 // is already in the Trie.
