@@ -1,7 +1,10 @@
 use common::bytesrepr::{self, FromBytes, ToBytes};
 use history::trie::{Pointer, Trie};
-use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
+use history::trie_store::in_memory::{
+    self, InMemoryEnvironment, InMemoryReadWriteTransaction, InMemoryTrieStore,
+};
 use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+use history::trie_store::operations::{write, WriteResult};
 use history::trie_store::{Transaction, TransactionSource, TrieStore};
 use lmdb::DatabaseFlags;
 use shared::newtypes::Blake2bHash;
@@ -356,6 +359,31 @@ impl LmdbTestContext {
         self.states.push(root_hash);
         Ok(())
     }
+
+    fn write(&mut self, key: TestKey, value: TestValue) -> Result<WriteResult, failure::Error> {
+        let mut txn = self.environment.create_read_write_txn()?;
+        let write_result = {
+            let current_root = self
+                .states
+                .last()
+                .expect("LmdbTestContext was not constructed properly");
+            write::<TestKey, TestValue, lmdb::RwTransaction, LmdbTrieStore, error::Error>(
+                &mut txn,
+                &self.store,
+                current_root,
+                &key,
+                &value,
+            )?
+        };
+        if let WriteResult::RootNotFound = write_result {
+            panic!("LmdbTestContext has invalid root");
+        };
+        if let WriteResult::Written(new_root) = write_result {
+            self.states.push(new_root);
+        };
+        txn.commit()?;
+        Ok(write_result)
+    }
 }
 
 // A context for holding in-memory test resources
@@ -401,6 +429,31 @@ impl InMemoryTestContext {
         )?;
         self.states.push(root_hash);
         Ok(())
+    }
+
+    fn write(&mut self, key: TestKey, value: TestValue) -> Result<WriteResult, failure::Error> {
+        let mut txn = self.environment.create_read_write_txn()?;
+        let write_result = {
+            let current_root = self
+                .states
+                .last()
+                .expect("InMemoryTestContext was not constructed properly");
+            write::<
+                TestKey,
+                TestValue,
+                InMemoryReadWriteTransaction,
+                InMemoryTrieStore,
+                in_memory::Error,
+            >(&mut txn, &self.store, current_root, &key, &value)?
+        };
+        if let WriteResult::RootNotFound = write_result {
+            panic!("InMemoryTestContext has invalid root");
+        };
+        if let WriteResult::Written(new_root) = write_result {
+            self.states.push(new_root);
+        };
+        txn.commit()?;
+        Ok(write_result)
     }
 }
 
