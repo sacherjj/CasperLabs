@@ -479,16 +479,16 @@ object GossipServiceCasperTestNodeFactory {
       * allow it to play out all async actions, such as downloading blocks, syncing the DAG, etc. */
     def receive(): F[Unit] =
       for {
-        notification <- notificationQueue.modify { q =>
-                         q dequeueOption match {
-                           case Some((notificaton, rest)) =>
-                             rest -> notificaton
-                           case None =>
-                             q -> ().pure[F]
-                         }
-                       }
-        _ <- notification
-        _ <- awaitAsyncOps
+        maybeNotification <- notificationQueue.modify { q =>
+                              q dequeueOption match {
+                                case Some((notificaton, rest)) =>
+                                  rest -> Some(notificaton)
+                                case None =>
+                                  q -> None
+                              }
+                            }
+        _ <- maybeNotification.fold(().pure[F])(identity)
+        _ <- maybeNotification.fold(().pure[F])(_ => awaitAsyncOps)
       } yield ()
 
     /** With the TransportLayer this would mean the target node won't process a message.
@@ -503,8 +503,11 @@ object GossipServiceCasperTestNodeFactory {
       } yield ()
 
     def awaitAsyncOps: F[Unit] = {
+      val initialDelay = 250.millis
+      val pollInterval = 50.millis
+
       def loop(): F[Unit] =
-        Timer[F].sleep(50.millis) >>
+        Timer[F].sleep(pollInterval) >>
           Sync[F].delay(asyncOpsCount.get) >>= {
           case 0 => ().pure[F]
           case _ => loop()
@@ -518,7 +521,7 @@ object GossipServiceCasperTestNodeFactory {
             )
       } yield ()
 
-      Concurrent.timeoutTo[F, Unit](loop(), 5.seconds, onTimeout)
+      Timer[F].sleep(initialDelay) >> Concurrent.timeoutTo[F, Unit](loop(), 5.seconds, onTimeout)
     }
 
     override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
