@@ -310,13 +310,19 @@ object GossipServiceCasperTestNodeFactory {
         relaying: Relaying[F],
         connectToGossip: GossipService.Connector[F]
     ): F[Unit] = {
+      def isInDag(blockHash: ByteString): F[Boolean] =
+        for {
+          dag <- casper.blockDag
+          cont <- dag.contains(blockHash)
+        } yield cont
+
       for {
         downloadManagerR <- DownloadManagerImpl[F](
                              maxParallelDownloads = 10,
                              connectToGossip = connectToGossip,
                              backend = new DownloadManagerImpl.Backend[F] {
                                override def hasBlock(blockHash: ByteString): F[Boolean] =
-                                 blockStore.contains(blockHash)
+                                 isInDag(blockHash)
 
                                override def validateBlock(block: consensus.Block): F[Unit] =
                                  // Casper can only validate, store, but won't gossip because the Broadcaster we give it
@@ -375,7 +381,7 @@ object GossipServiceCasperTestNodeFactory {
               )
 
             override def notInDag(blockHash: ByteString): F[Boolean] =
-              blockStore.contains(blockHash).map(!_)
+              isInDag(blockHash).map(!_)
           },
           maxPossibleDepth = Int.MaxValue,
           minBlockCountToCheckBranchingFactor = Int.MaxValue,
@@ -386,7 +392,7 @@ object GossipServiceCasperTestNodeFactory {
         server <- GossipServiceServer[F](
                    backend = new GossipServiceServer.Backend[F] {
                      override def hasBlock(blockHash: ByteString): F[Boolean] =
-                       blockStore.contains(blockHash)
+                       isInDag(blockHash)
 
                      override def getBlockSummary(
                          blockHash: ByteString
@@ -413,10 +419,13 @@ object GossipServiceCasperTestNodeFactory {
                    downloadManager = downloadManager,
                    consensus = new GossipServiceServer.Consensus[F] {
                      override def onPending(dag: Vector[consensus.BlockSummary]) =
+                       // The EquivocationDetector treats equivocations with
                        ().pure[F]
+
                      override def onDownloaded(blockHash: ByteString) =
-                       // The validation already did what it had to.
+                       // Calling `superAddBlock` during validation has already stored the block.
                        Log[F].debug(s"Downloaded ${PrettyPrinter.buildString(blockHash)}")
+
                      override def listTips =
                        ???
                    },

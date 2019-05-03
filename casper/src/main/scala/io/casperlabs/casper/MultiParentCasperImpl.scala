@@ -625,6 +625,7 @@ object MultiParentCasperImpl {
             .info(
               s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
             ) *> dag.pure[F]
+
         case InvalidUnslashableBlock | InvalidFollows | InvalidBlockNumber | InvalidParents |
             JustificationRegression | InvalidSequenceNumber | NeglectedInvalidBlock |
             NeglectedEquivocation | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
@@ -675,14 +676,8 @@ object MultiParentCasperImpl {
         dag: BlockDagRepresentation[F]
     )(implicit state: Cell[F, CasperState]): F[Unit] =
       for {
-        missingDependencies <- dependenciesHashesOf(block)
-                                .filterA(
-                                  blockHash =>
-                                    dag
-                                      .lookup(blockHash)
-                                      .map(_.isEmpty)
-                                )
-        _ <- missingDependencies.traverse(hash => addMissingDependency(hash, block.blockHash))
+        missingDependencies <- dependenciesHashesOf(block).filterA(dag.contains(_).map(!_))
+        _                   <- missingDependencies.traverse(hash => addMissingDependency(hash, block.blockHash))
       } yield ()
 
     /** Keep track of a block depending on another one, so we know when we can start processing. */
