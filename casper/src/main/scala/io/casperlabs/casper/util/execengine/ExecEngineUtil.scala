@@ -3,6 +3,7 @@ package io.casperlabs.casper.util.execengine
 import cats.effect.Sync
 import cats.implicits._
 import cats.{Monad, MonadError}
+import cats.kernel.{Monoid, Order}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper._
@@ -147,6 +148,10 @@ object ExecEngineUtil {
   }
 
   type TransformMap = Seq[TransformEntry]
+  implicit val TransformMapMonoid: Monoid[TransformMap] = new Monoid[TransformMap] {
+    def combine(t1: TransformMap, t2: TransformMap): TransformMap = t1 ++ t2
+    def empty: TransformMap                                       = Nil
+  }
 
   /** Computes the largest commuting sub-set of blocks from the `candidateParents` along with an effect which
     * can be used to find the combined post-state of those commuting blocks.
@@ -157,36 +162,28 @@ object ExecEngineUtil {
     *         list of blocks, which all commute with each other.
     *
     */
-  def merge[F[_]: Monad: BlockStore](
-      candidateParentBlocks: Seq[BlockMessage],
-      dag: BlockDagRepresentation[F]
-  ): F[(TransformMap, Vector[BlockMessage])] = {
-    val candidateParents = candidateParentBlocks.map(BlockMetadata.fromBlock).toVector
-    val n                = candidateParents.length
+  def abstractMerge[F[_]: Monad, T: Monoid, A: Order, K](
+      candidates: IndexedSeq[A],
+      parents: A => F[List[A]],
+      effect: A => F[Option[T]],
+      toOps: T => OpMap[K]
+  ): F[(T, Vector[A])] = {
+    val n = candidates.length
 
-    def computeUncommonAncestors(
-        implicit o: Ordering[BlockMetadata]
-    ): F[Map[BlockMetadata, BitSet]] =
-      DagOperations.uncommonAncestors[F](candidateParents, dag)
-
-    def netEffect(blocks: Vector[BlockMetadata]): F[TransformMap] =
+    def netEffect(blocks: Vector[A]): F[T] =
       blocks
-        .traverse(block => BlockStore[F].getTransforms(block.blockHash))
-        .map(_.flatten.foldLeft[TransformMap](Nil)(_ ++ _))
+        .traverse(block => effect(block))
+        .map(_.flatten.foldLeft[T](Monoid[T].empty)(Monoid[T].combine))
 
     if (n <= 1) {
-      // no parents or single parent, nothing to merge
-      candidateParents.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash)).map { blocks =>
-        Seq.empty[TransformEntry] -> blocks
-      }
+      (Monoid[T].empty -> candidates.toVector).pure[F]
     } else
       for {
-        ordering          <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
-        uncommonAncestors <- computeUncommonAncestors(ordering)
+        uncommonAncestors <- DagOperations.abstractUncommonAncestors[F, A](candidates, parents)
 
         // collect uncommon ancestors based on which candidate they are an ancestor of
         groups = uncommonAncestors
-          .foldLeft(Vector.fill(n)(Vector.empty[BlockMetadata]).zipWithIndex) {
+          .foldLeft(Vector.fill(n)(Vector.empty[A]).zipWithIndex) {
             case (acc, (block, ancestry)) =>
               acc.map {
                 case (group, index) =>
@@ -194,16 +191,16 @@ object ExecEngineUtil {
                   newGroup -> index
               }
           } // sort in topological order to combine effects in the right order
-          .map { case (group, _) => group.sorted(ordering) }
+          .map { case (group, _) => group.sorted(Order[A].toOrdering) }
 
         // always choose the first parent
         initChosen       = Vector(0)
-        initChosenEffect <- netEffect(groups(0)).map(Op.fromTransforms)
+        initChosenEffect <- netEffect(groups(0)).map(toOps)
         // effects chosen apart from the first parent
-        initNonFirstEffect = Seq.empty[TransformEntry]
+        initNonFirstEffect = Monoid[T].empty
 
         chosen <- (1 until n).toList
-                   .foldM[F, (Vector[Int], OpMap[ipc.Key], TransformMap)](
+                   .foldM[F, (Vector[Int], OpMap[K], T)](
                      (initChosen, initChosenEffect, initNonFirstEffect)
                    ) {
                      case (
@@ -221,12 +218,12 @@ object ExecEngineUtil {
 
                        // if candidate commutes with chosen set, then included, otherwise do not include it
                        candidateEffectF.map { candidateEffect =>
-                         val ops = Op.fromTransforms(candidateEffect)
+                         val ops = toOps(candidateEffect)
                          if (chosenEffect ~ ops)
                            (
                              chosenSet :+ candidate,
                              chosenEffect + ops,
-                             chosenNonFirstEffect ++ candidateEffect
+                             Monoid[T].combine(chosenNonFirstEffect, candidateEffect)
                            )
                          else
                            unchanged
@@ -235,9 +232,38 @@ object ExecEngineUtil {
         // The effect we return is the one which would be applied onto the first parent's
         // post-state, so we do not include the first parent in the effect.
         (chosenParents, _, nonFirstEffect) = chosen
-        blocks <- chosenParents.traverse(
-                   i => ProtoUtil.unsafeGetBlock[F](candidateParents(i).blockHash)
-                 )
+        blocks                             = chosenParents.map(i => candidates(i))
       } yield (nonFirstEffect, blocks)
+  }
+
+  def merge[F[_]: Monad: BlockStore](
+      candidateParentBlocks: Seq[BlockMessage],
+      dag: BlockDagRepresentation[F]
+  ): F[(TransformMap, Vector[BlockMessage])] = {
+
+    def parents(b: BlockMetadata): F[List[BlockMetadata]] =
+      b.parents.traverse(b => dag.lookup(b).map(_.get))
+
+    def effect(block: BlockMetadata): F[Option[TransformMap]] =
+      BlockStore[F].getTransforms(block.blockHash)
+
+    def toOps(t: TransformMap): OpMap[ipc.Key] = Op.fromTransforms(t)
+
+    val candidateParents = candidateParentBlocks.map(BlockMetadata.fromBlock).toVector
+
+    for {
+      ordering <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
+      merged <- {
+        implicit val order = Order.fromOrdering(ordering)
+        abstractMerge[F, TransformMap, BlockMetadata, ipc.Key](
+          candidateParents,
+          parents,
+          effect,
+          toOps
+        )
+      }
+      (nonFirstEffect, chosenParents) = merged
+      blocks                          <- chosenParents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
+    } yield (nonFirstEffect, blocks)
   }
 }
