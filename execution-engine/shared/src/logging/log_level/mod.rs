@@ -12,10 +12,13 @@
 ///!            info: 5
 ///!            debug: 7
 use std::cmp::{Ord, Ordering};
+use std::fmt;
+
+use serde::Serialize;
 
 /// LogLevels to be used in CasperLabs EE logic
 #[repr(u8)] // https://doc.rust-lang.org/1.6.0/nomicon/other-reprs.html
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, Serialize)]
 pub enum LogLevel {
     /// emergency, alert, critical
     Fatal = 0,
@@ -108,6 +111,28 @@ impl Into<slog::Level> for LogLevel {
             LogLevel::Info => slog::Level::Info,
             LogLevel::Debug => slog::Level::Debug,
         }
+    }
+}
+
+impl fmt::Display for LogLevel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+#[derive(Clone, Debug, Hash, Serialize)]
+pub struct LogPriority(pub u8);
+
+impl LogPriority {
+    pub fn new(log_level: LogLevel) -> LogPriority {
+        let priority = log_level.get_priority();
+        LogPriority(priority)
+    }
+}
+
+impl fmt::Display for LogPriority {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0.to_string())
     }
 }
 
