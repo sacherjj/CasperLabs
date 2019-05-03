@@ -11,5 +11,7 @@ pytest-mypy = "*"
 pytest-pylint = "*"
 typing-extensions = "*"
 dataclasses = "*"
+protobuf = "*"
+grpcio = "*"
 
 [dev-packages]

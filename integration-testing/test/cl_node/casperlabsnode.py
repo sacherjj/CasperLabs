@@ -25,6 +25,14 @@ from .wait import (
     wait_for_converged_network
 )
 
+from .errors import (
+    UnexpectedShowBlocksOutputFormatError,
+    UnexpectedProposeOutputFormatError,
+    CasperLabsNodeAddressNotFoundError,
+    NonZeroExitCodeError,
+    CommandTimeoutError,
+)
+
 if TYPE_CHECKING:
     from .common import KeyPair
     from docker.models.containers import Container
@@ -55,39 +63,6 @@ HOST_MOUNT_DIR = f"/tmp/resources_{TAG}"
 HOST_GENESIS_DIR = f"{HOST_MOUNT_DIR}/genesis"
 HOST_BOOTSTRAP_DIR = f"{HOST_MOUNT_DIR}/bootstrap_certificate"
 
-
-class InterruptedException(Exception):
-    pass
-
-
-class CasperLabsNodeAddressNotFoundError(Exception):
-    pass
-
-
-class NonZeroExitCodeError(Exception):
-    def __init__(self, command: Tuple[Union[int, str], ...], exit_code: int, output: str):
-        self.command = command
-        self.exit_code = exit_code
-        self.output = output
-
-    def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({repr(self.command)}, {self.exit_code}, {repr(self.output)})'
-
-
-class CommandTimeoutError(Exception):
-    def __init__(self, command: Union[Tuple[str, ...], str], timeout: int) -> None:
-        self.command = command
-        self.timeout = timeout
-
-
-class UnexpectedShowBlocksOutputFormatError(Exception):
-    def __init__(self, output: str) -> None:
-        self.output = output
-
-
-class UnexpectedProposeOutputFormatError(Exception):
-    def __init__(self, output: str) -> None:
-        self.output = output
 
 
 def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:
