@@ -145,7 +145,9 @@ object ExecEngineUtil {
                       )
       (prestate, processedDeploys) = processedHash
       deployEffects                = processedDeployEffects(deploys.map(_.getDeploy) zip processedDeploys)
-      transformMap                 = findCommutingEffects(deployEffects).flatMap { case (_, eff, _) => eff.transformMap }
+      transformMap = findCommutingEffects(deployEffects).flatMap {
+        case (_, eff, _) => eff.transformMap
+      }
     } yield (prestate, transformMap)
 
   private def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
