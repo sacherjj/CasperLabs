@@ -312,7 +312,7 @@ object GossipServiceCasperTestNodeFactory {
     ): F[Unit] = {
       def isInDag(blockHash: ByteString): F[Boolean] =
         for {
-          dag <- casper.blockDag
+          dag  <- casper.blockDag
           cont <- dag.contains(blockHash)
         } yield cont
 
@@ -329,20 +329,27 @@ object GossipServiceCasperTestNodeFactory {
                                  // will assume the DownloadManager will do that.
                                  // Doing this log here as it's evidently happened if we are here, and the tests expect it.
                                  Log[F].info(
-                                   s"Requested missing block ${PrettyPrinter.buildString(block.blockHash)}"
+                                   s"Requested missing block ${PrettyPrinter.buildString(block.blockHash)} Now validating."
                                  ) *>
+                                   // Calling `superAddBlock` so it doesn't go through the GossipService again.
                                    casper
                                      .superAddBlock(LegacyConversions.fromBlock(block)) flatMap {
                                    case Valid =>
                                      Log[F].debug(s"Validated and stored block ${PrettyPrinter
                                        .buildString(block.blockHash)}")
 
+                                   case AdmissibleEquivocation =>
+                                     Log[F].debug(
+                                       s"Detected AdmissibleEquivocation on block ${PrettyPrinter
+                                         .buildString(block.blockHash)} Carry on down downloading children."
+                                     )
+
                                    case other =>
                                      Log[F].debug(s"Received invalid block ${PrettyPrinter
-                                       .buildString(block.blockHash)}: $other")
-                                     Sync[F].raiseError(
-                                       new RuntimeException(s"Non-valid status: $other")
-                                     )
+                                       .buildString(block.blockHash)}: $other") *>
+                                       Sync[F].raiseError(
+                                         new RuntimeException(s"Non-valid status: $other")
+                                       )
                                  }
 
                                override def storeBlock(block: consensus.Block): F[Unit] =
@@ -419,8 +426,17 @@ object GossipServiceCasperTestNodeFactory {
                    downloadManager = downloadManager,
                    consensus = new GossipServiceServer.Consensus[F] {
                      override def onPending(dag: Vector[consensus.BlockSummary]) =
-                       // The EquivocationDetector treats equivocations with
-                       ().pure[F]
+                       // The EquivocationDetector treats equivocations with children differently,
+                       // so let Casper know about the DAG dependencies up front.
+                       Log[F].debug(s"Feeding ${dag.size} pending blocks to Casper.") *>
+                         dag.traverse { summary =>
+                           val partialBlock = consensus
+                             .Block()
+                             .withBlockHash(summary.blockHash)
+                             .withHeader(summary.getHeader)
+
+                           casper.addMissingDependencies(LegacyConversions.fromBlock(partialBlock))
+                         }.void
 
                      override def onDownloaded(blockHash: ByteString) =
                        // Calling `superAddBlock` during validation has already stored the block.

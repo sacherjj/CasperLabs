@@ -777,7 +777,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield result
   }
 
-  // FIXME
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
   ignore should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
     for {
@@ -809,6 +808,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF false
       _ <- nodes(2).casperEff.contains(signedBlock1Prime) shouldBeF true
 
+      // Now that node(1) and node(2) have different blocks, they each create one on top of theirs.
       createBlockResult2 <- nodes(1).casperEff
                              .deploy(deployDatas(2)) *> nodes(1).casperEff.createBlock
       Created(signedBlock2) = createBlockResult2
@@ -823,6 +823,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(2).receive() // receives request for block1'; sends block1'
       _ <- nodes(1).receive() // receives block1'; adds both block3 and block1'
 
+      // node(1) should have both block2 and block3 at this point and recognize the equivocation.
+      // Because node(1) will also see that the singedBlock3 is building on top of signedBlock1Prime,
+      // it should download signedBlock1Prime as an `AdmissibleEquivocation`; otherwise if it didn't
+      // have an offspring it would be an `IgnorableEquivocation` and dropped.
       _ <- nodes(1).casperEff.contains(signedBlock3) shouldBeF true
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
 
@@ -840,7 +844,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _ = nodes(1).logEff.infos.count(_ contains "Added admissible equivocation") should be(1)
       _ = nodes(2).logEff.warns.size should be(0)
-      _ = nodes(1).logEff.warns.size should be(2)
+      _ = nodes(1).logEff.warns.size should be(1)
       _ = nodes(0).logEff.warns.size should be(0)
 
       _ <- nodes(1).casperEff
