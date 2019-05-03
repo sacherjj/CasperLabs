@@ -218,7 +218,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       .traverse {
         case (peer, sk) =>
           val logicalTime        = new LogicalTime[F]
-          implicit val log       = new LogStub[F](peer.host, printEnabled = true)
+          implicit val log       = new LogStub[F](peer.host, printEnabled = false)
           implicit val metricEff = new Metrics.MetricsNOP[F]
           implicit val nodeAsk   = makeNodeAsk(peer)(concurrentF)
 
