@@ -751,3 +751,79 @@ mod scan {
         }
     }
 }
+
+mod write {
+    use super::*;
+
+    mod partial_tries {
+        use super::*;
+
+        #[test]
+        fn lmdb_noop_writes_to_n_leaf_partial_trie_had_expected_results() {
+            for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
+                let (mut root_hash, tries) = generator().unwrap();
+                let mut context = LmdbTestContext::new(root_hash, &tries).unwrap();
+
+                for trie in &TEST_LEAVES[0..num_leaves] {
+                    if let Trie::Leaf { key, value } = trie {
+                        let write_result = context.write(*key, *value).unwrap();
+                        assert_eq!(WriteResult::AlreadyExists, write_result)
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn in_memory_noop_writes_to_n_leaf_partial_trie_had_expected_results() {
+            for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
+                let (mut root_hash, tries) = generator().unwrap();
+                let mut context = InMemoryTestContext::new(root_hash, &tries).unwrap();
+
+                for trie in &TEST_LEAVES[0..num_leaves] {
+                    if let Trie::Leaf { key, value } = trie {
+                        let write_result = context.write(*key, *value).unwrap();
+                        assert_eq!(WriteResult::AlreadyExists, write_result)
+                    }
+                }
+            }
+        }
+    }
+
+    mod full_tries {
+        use super::*;
+
+        #[test]
+        fn lmdb_noop_writes_to_n_leaf_full_trie_had_expected_results() {
+            let mut context = LmdbTestContext::empty().unwrap();
+
+            for (num_leaves, generator) in TEST_TRIE_GENERATORS[1..].iter().enumerate() {
+                let (root_hash, tries) = generator().unwrap();
+                context.push(root_hash, &tries).unwrap();
+
+                for trie in &TEST_LEAVES[0..num_leaves] {
+                    if let Trie::Leaf { key, value } = trie {
+                        let write_result = context.write(*key, *value).unwrap();
+                        assert_eq!(WriteResult::AlreadyExists, write_result)
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn in_memory_noop_writes_to_n_leaf_full_trie_had_expected_results() {
+            let mut context = InMemoryTestContext::empty().unwrap();
+
+            for (num_leaves, generator) in TEST_TRIE_GENERATORS[1..].iter().enumerate() {
+                let (root_hash, tries) = generator().unwrap();
+                context.push(root_hash, &tries).unwrap();
+
+                for trie in &TEST_LEAVES[0..num_leaves] {
+                    if let Trie::Leaf { key, value } = trie {
+                        let write_result = context.write(*key, *value).unwrap();
+                        assert_eq!(WriteResult::AlreadyExists, write_result)
+                    }
+                }
+            }
+        }
+    }
+}
