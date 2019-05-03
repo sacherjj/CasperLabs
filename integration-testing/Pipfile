@@ -13,5 +13,6 @@ typing-extensions = "*"
 dataclasses = "*"
 protobuf = "*"
 grpcio = "*"
+cython = "*"
 
 [dev-packages]
