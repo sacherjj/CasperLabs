@@ -393,7 +393,7 @@ object GossipServiceCasperTestNodeFactory {
           maxPossibleDepth = Int.MaxValue,
           minBlockCountToCheckBranchingFactor = Int.MaxValue,
           maxBranchingFactor = 2.0,
-          maxDepthAncestorsRequest = Int.MaxValue
+          maxDepthAncestorsRequest = 1 // Just so we don't see the full DAG being synced all the time. We should have justifications for early stop.
         )
 
         server <- GossipServiceServer[F](
@@ -440,7 +440,7 @@ object GossipServiceCasperTestNodeFactory {
 
                      override def onDownloaded(blockHash: ByteString) =
                        // Calling `superAddBlock` during validation has already stored the block.
-                       Log[F].debug(s"Downloaded ${PrettyPrinter.buildString(blockHash)}")
+                       Log[F].debug(s"Download ready for ${PrettyPrinter.buildString(blockHash)}")
 
                      override def listTips =
                        ???
@@ -502,19 +502,32 @@ object GossipServiceCasperTestNodeFactory {
       * We have to allow `newBlocks` to return for the original block to be able to finish adding,
       * so maybe we can return `true`, and call the underlying service later. But then we have to
       * allow it to play out all async actions, such as downloading blocks, syncing the DAG, etc. */
-    def receive(): F[Unit] =
-      for {
-        maybeNotification <- notificationQueue.modify { q =>
-                              q dequeueOption match {
-                                case Some((notificaton, rest)) =>
-                                  rest -> Some(notificaton)
-                                case None =>
-                                  q -> None
+    def receive(): F[Unit] = {
+      // It can be ricky to line up the semantics of the notifications between the TransportLayer
+      // and the GossipService. At least in one test the queue was longer and the node wasn't Processing
+      // the message the test was expecting it to, it was reacting to an earlier one. To circumvent
+      // these tests failures process all enqueued messages.
+      def receiveOne =
+        for {
+          maybeNotification <- notificationQueue.modify { q =>
+                                q dequeueOption match {
+                                  case Some((notificaton, rest)) =>
+                                    rest -> Some(notificaton)
+                                  case None =>
+                                    q -> None
+                                }
                               }
-                            }
-        _ <- maybeNotification.fold(().pure[F])(identity)
-        _ <- maybeNotification.fold(().pure[F])(_ => awaitAsyncOps)
-      } yield ()
+          _ <- maybeNotification.fold(().pure[F])(identity)
+          _ <- maybeNotification.fold(().pure[F])(_ => awaitAsyncOps)
+        } yield maybeNotification.nonEmpty
+
+      def loop(): F[Unit] =
+        receiveOne flatMap {
+          case false => ().pure[F]
+          case true  => loop()
+        }
+      loop()
+    }
 
     /** With the TransportLayer this would mean the target node won't process a message.
       * For us it could mean that it receives the `newBlocks` notification but after that
@@ -528,7 +541,7 @@ object GossipServiceCasperTestNodeFactory {
       } yield ()
 
     def awaitAsyncOps: F[Unit] = {
-      val initialDelay = 250.millis
+      val initialDelay = 150.millis
       val pollInterval = 50.millis
 
       def loop(): F[Unit] =

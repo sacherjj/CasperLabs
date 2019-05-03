@@ -674,7 +674,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
    *  f2 has in its justifications list c2. This should be handled properly.
    *
    */
-  // FIXME
   ignore should "ask peers for blocks it is missing and add them" in effectTest {
     //TODO: figure out a way to get wasm into deploys for tests
     val deployDatasFs = Vector[() => DeployData](
@@ -682,6 +681,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       () => ProtoUtil.sourceDeploy("2", System.currentTimeMillis, Integer.MAX_VALUE)
     )
 
+    /** Create a block from a deploy and add it on that node. */
     def deploy(node: HashSetCasperTestNode[Effect], dd: DeployData): Effect[BlockMessage] =
       for {
         createBlockResult1    <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
@@ -690,6 +690,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
         _ <- node.casperEff.addBlock(signedBlock1)
       } yield signedBlock1
 
+    /** nodes 0 and 1 create blocks in parallel; node 2 misses both, e.g. a1 and a2. */
     def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]) =
       for {
         _ <- deploy(nodes(0), deployDatasFs(0).apply())
@@ -700,6 +701,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
         _ <- nodes(2).clearMessages() //nodes(2) misses this block
       } yield ()
 
+    /** node 0 creates a block; node 1 gets it but node 2 doesn't. */
     def stepSingle(nodes: Seq[HashSetCasperTestNode[Effect]]) =
       for {
         _ <- deploy(nodes(0), deployDatasFs(0).apply())
@@ -731,15 +733,21 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       // this block will be propagated to all nodes and force nodes(2) to ask for missing blocks.
       br <- deploy(nodes(0), deployDatasFs(0).apply()) // block h1
-      _  <- nodes(0).casperEff.contains(br) shouldBeF true
+      _  = println(PrettyPrinter.buildString(br))
 
-      _ <- List.fill(22)(propagate(nodes)).toList.sequence // force the network to communicate
-
+      // node(0) just created this block, so it should have it.
+      _ <- nodes(0).casperEff.contains(br) shouldBeF true
+      // Let every node get everything.
+      _ <- List.fill(22)(propagate(nodes)).toList.sequence
+      // By now node(2) should have received all dependencies and added block h1
       _ <- nodes(2).casperEff.contains(br) shouldBeF true
-
+      // And if we create one more block on top of h1 it should be the only parent.
       nr <- deploy(nodes(2), deployDatasFs(0).apply())
-      _  = nr.header.get.parentsHashList shouldBe Seq(br.blockHash)
-      _  <- nodes.map(_.tearDownNode()).toList.sequence
+      _ = nr.header.get.parentsHashList.map(PrettyPrinter.buildString(_)) shouldBe Seq(
+        PrettyPrinter.buildString(br.blockHash)
+      )
+
+      _ <- nodes.map(_.tearDownNode()).toList.sequence
     } yield ()
   }
 
@@ -953,7 +961,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       // Cycle of requesting and passing blocks until block #9 from nodes(0) to nodes(1)
       _ <- (0 to 8).toList.traverse_[Effect, Unit] { i =>
-            nodes(1).receive() *> nodes(0).receive()
+            nodes(1).receive().void *> nodes(0).receive().void
           }
 
       // We simulate a network failure here by not allowing block #10 to get passed to nodes(1)
