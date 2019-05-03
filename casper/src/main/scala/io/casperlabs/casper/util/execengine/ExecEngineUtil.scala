@@ -46,10 +46,10 @@ object ExecEngineUtil {
                         protocolVersion
                       )
       (preStateHash, processedDeploys) = processedHash
-      deployEffects                    = processedDeployEffects(deploys zip processedDeploys)
-      commutingEffects                 = findCommutingEffects(deployEffects)
-      deploysForBlock = deployEffects.collect {
-        case (deploy, Some((_, cost))) => {
+      deployEffects                    = findCommutingEffects(processedDeployEffects(deploys zip processedDeploys))
+      commutingEffects                 = deployEffects.map { case (_, eff, cost) => (eff, cost) }
+      deploysForBlock = deployEffects.map {
+        case (deploy, _, cost) => {
           protocol.ProcessedDeploy(
             Some(deploy),
             cost,
@@ -103,14 +103,29 @@ object ExecEngineUtil {
         deploy -> Some((eff, cost))
     }
 
-  //TODO: actually find which ones commute
   //TODO: How to handle errors?
   def findCommutingEffects(
       deployEffects: Seq[(DeployData, Option[(ExecutionEffect, Long)])]
-  ): Seq[(ExecutionEffect, Long)] =
-    deployEffects.collect {
-      case (_, Some((eff, cost))) => (eff, cost)
+  ): Seq[(DeployData, ExecutionEffect, Long)] = {
+    val errorFree = deployEffects.collect {
+      case (d, Some((eff, cost))) => (d, eff, cost)
+    }.toList
+
+    errorFree match {
+      case Nil => Nil
+      case (head @ (_, eff0, _)) :: tail =>
+        val (result, _) = tail.foldLeft(Vector(head) -> Op.fromIpcEntry(eff0.opMap)) {
+          case (unchanged @ (acc, totalOps), next @ (_, eff, _)) =>
+            val ops = Op.fromIpcEntry(eff.opMap)
+            if (totalOps ~ ops)
+              (acc :+ next, totalOps + ops)
+            else
+              unchanged
+        }
+
+        result
     }
+  }
 
   def effectsForBlock[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       block: BlockMessage,
@@ -130,7 +145,7 @@ object ExecEngineUtil {
                       )
       (prestate, processedDeploys) = processedHash
       deployEffects                = processedDeployEffects(deploys.map(_.getDeploy) zip processedDeploys)
-      transformMap                 = findCommutingEffects(deployEffects).unzip._1.flatMap(_.transformMap)
+      transformMap                 = findCommutingEffects(deployEffects).flatMap { case (_, eff, _) => eff.transformMap }
     } yield (prestate, transformMap)
 
   private def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](

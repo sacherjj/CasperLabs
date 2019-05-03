@@ -154,8 +154,10 @@ object BlockApproverProtocol {
                              protocolVersion
                            )
                          ).leftMap(_.getMessage)
-      deployEffects    = ExecEngineUtil.processedDeployEffects(deploys zip processedDeploys)
-      commutingEffects = ExecEngineUtil.findCommutingEffects(deployEffects)
+      deployEffects = ExecEngineUtil.findCommutingEffects(
+        ExecEngineUtil.processedDeployEffects(deploys zip processedDeploys)
+      )
+      commutingEffects = deployEffects.map { case (_, eff, cost) => (eff, cost) }
       transforms       = commutingEffects.unzip._1.flatMap(_.transformMap)
       postStateHash <- EitherT(
                         ExecutionEngineService[F]

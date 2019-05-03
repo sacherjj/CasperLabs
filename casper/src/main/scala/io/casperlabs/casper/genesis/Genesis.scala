@@ -66,14 +66,16 @@ object Genesis {
                                )
                              )
                          )
-      deployEffects = ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
+      deployEffects = ExecEngineUtil.findCommutingEffects(
+        ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
+      )
 
       // Todo We shouldn't need to do any commutivity checking for the genesis block.
       // Either we make it a "SEQ" block (which is not a feature that exists yet)
       // or there should be a single deploy containing all the blessed contracts.
-      commutingEffects = ExecEngineUtil.findCommutingEffects(deployEffects)
-      deploysForBlock = deployEffects.collect {
-        case (deploy, Some((_, cost))) => {
+      commutingEffects = deployEffects.map { case (_, eff, cost) => (eff, cost) }
+      deploysForBlock = deployEffects.map {
+        case (deploy, _, cost) => {
           protocol.ProcessedDeploy(
             Some(deploy),
             cost,
