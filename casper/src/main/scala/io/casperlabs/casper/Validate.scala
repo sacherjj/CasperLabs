@@ -21,9 +21,10 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import scala.util.{Success, Try}
 
 object Validate {
-  type PublicKey = Array[Byte]
-  type Data      = Array[Byte]
-  type Signature = Array[Byte]
+  type PublicKey   = Array[Byte]
+  type Data        = Array[Byte]
+  type Signature   = Array[Byte]
+  type BlockHeight = Long
 
   type RaiseValidationError[F[_]] = FunctorRaise[F, InvalidBlock]
   object RaiseValidationError {
@@ -169,15 +170,21 @@ object Validate {
       true.pure[F]
     }
 
-  def version[F[_]: Applicative: Log](b: BlockMessage, version: Long): F[Boolean] = {
-    val blockVersion = b.header.get.version
+  // Validates whether block was built using correct protocol version.
+  def version[F[_]: Applicative: Log](
+      b: BlockMessage,
+      m: BlockHeight => ipc.ProtocolVersion
+  ): F[Boolean] = {
+    val blockVersion = b.header.get.protocolVersion
+    val blockHeight  = b.body.get.state.get.blockNumber
+    val version      = m(blockHeight).version
     if (blockVersion == version) {
       true.pure[F]
     } else {
       Log[F].warn(
         ignore(
           b,
-          s"received block version $blockVersion is the expected version $version."
+          s"Received block version $blockVersion, expected version $version."
         )
       ) *> false.pure[F]
     }
@@ -194,15 +201,25 @@ object Validate {
       lastFinalizedBlockHash: BlockHash
   ): F[Unit] =
     for {
+      _ <- Validate.blockSummaryPreGenesis(block, dag, shardId)
+      _ <- Validate.justificationFollows[F](block, genesis, dag)
+      _ <- Validate.justificationRegressions[F](block, genesis, dag)
+    } yield ()
+
+  /** Validations we can run even without an approved Genesis, i.e. on Genesis itself. */
+  def blockSummaryPreGenesis[F[_]: Monad: Log: Time: BlockStore: RaiseValidationError](
+      block: BlockMessage,
+      dag: BlockDagRepresentation[F],
+      shardId: String
+  ): F[Unit] =
+    for {
       _ <- Validate.blockHash[F](block)
       _ <- Validate.deployCount[F](block)
       _ <- Validate.missingBlocks[F](block, dag)
       _ <- Validate.timestamp[F](block, dag)
       _ <- Validate.repeatDeploy[F](block, dag)
       _ <- Validate.blockNumber[F](block)
-      _ <- Validate.justificationFollows[F](block, genesis, dag)
-      - <- Validate.sequenceNumber[F](block, dag)
-      - <- Validate.justificationRegressions[F](block, genesis, dag)
+      _ <- Validate.sequenceNumber[F](block, dag)
       _ <- Validate.shardIdentifier[F](block, shardId)
     } yield ()
 

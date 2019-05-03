@@ -52,7 +52,7 @@ class DownloadManagerSpec
     "scheduled to download a section of the DAG" should {
       // Make sure the genesis has more than 1 child so we can download them in parallel. This is easy to check.
       val dag = sample(
-        genBlockDag
+        genBlockDagFromGenesis
           .retryUntil { blocks =>
             (blocks(1).getHeader.parentHashes.toSet & blocks(2).getHeader.parentHashes.toSet).nonEmpty
           }
@@ -340,7 +340,7 @@ class DownloadManagerSpec
     }
 
     "cannot validate a block" should {
-      val dag    = sample(genBlockDag)
+      val dag    = sample(genBlockDagFromGenesis)
       val remote = MockGossipService(dag)
       def backend =
         MockBackend(_ => Task.raiseError(new java.lang.IllegalArgumentException("Nope.")))

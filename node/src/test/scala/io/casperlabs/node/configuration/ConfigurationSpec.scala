@@ -59,7 +59,8 @@ class ConfigurationSpec
       maxMessageSize = 1,
       chunkSize = 1,
       relayFactor = 1,
-      relaySaturation = 1
+      relaySaturation = 1,
+      cleanBlockStorage = false
     )
     val grpcServer = Configuration.GrpcServer(
       host = "test",

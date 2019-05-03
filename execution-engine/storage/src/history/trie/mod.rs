@@ -11,9 +11,11 @@ pub(crate) mod gens;
 #[cfg(test)]
 mod tests;
 
-const RADIX: usize = 256;
+pub const RADIX: usize = 256;
 
 const U32_SIZE: usize = size_of::<u32>();
+
+pub type Parents<K, V> = Vec<(usize, Trie<K, V>)>;
 
 /// Represents a pointer to the next object in a Merkle Trie
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -23,7 +25,7 @@ pub enum Pointer {
 }
 
 impl Pointer {
-    fn hash(&self) -> &Blake2bHash {
+    pub fn hash(&self) -> &Blake2bHash {
         match self {
             Pointer::LeafPointer(hash) => hash,
             Pointer::NodePointer(hash) => hash,
@@ -72,6 +74,14 @@ pub struct PointerBlock([Option<Pointer>; RADIX]);
 impl PointerBlock {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn from_indexed_pointers(indexed_pointers: &[(usize, Pointer)]) -> Self {
+        let mut ret = PointerBlock::new();
+        for (idx, ptr) in indexed_pointers.iter() {
+            ret[*idx] = Some(*ptr);
+        }
+        ret
     }
 }
 
@@ -127,12 +137,15 @@ impl ::std::ops::IndexMut<usize> for PointerBlock {
 }
 
 impl ::std::fmt::Debug for PointerBlock {
+    #[allow(clippy::assertions_on_constants)]
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "{}(", stringify!(PointerBlock))?;
-        for item in self.0[..].iter() {
-            write!(f, "{:?}", item)?;
+        assert!(RADIX > 1, "RADIX must be > 1");
+        write!(f, "{}([", stringify!(PointerBlock))?;
+        write!(f, "{:?}", self.0[0])?;
+        for item in self.0[1..].iter() {
+            write!(f, ", {:?}", item)?;
         }
-        write!(f, ")")
+        write!(f, "])")
     }
 }
 
@@ -151,6 +164,23 @@ impl<K, V> Trie<K, V> {
             Trie::Node { .. } => 1,
             Trie::Extension { .. } => 2,
         }
+    }
+
+    /// Constructs a [`Trie::Leaf`] from a given key and value.
+    pub fn leaf(key: K, value: V) -> Self {
+        Trie::Leaf { key, value }
+    }
+
+    /// Constructs a [`Trie::Node`] from a given slice of indexed pointers.
+    pub fn node(indexed_pointers: &[(usize, Pointer)]) -> Self {
+        let pointer_block = PointerBlock::from_indexed_pointers(indexed_pointers);
+        let pointer_block = Box::new(pointer_block);
+        Trie::Node { pointer_block }
+    }
+
+    /// Constructs a [`Trie::Extension`] from a given affix and pointer.
+    pub fn extension(affix: Vec<u8>, pointer: Pointer) -> Self {
+        Trie::Extension { affix, pointer }
     }
 }
 
@@ -223,5 +253,22 @@ impl<K: FromBytes, V: FromBytes> FromBytes for Trie<K, V> {
             }
             _ => Err(bytesrepr::Error::FormattingError),
         }
+    }
+}
+
+pub(crate) mod operations {
+    use common::bytesrepr::{self, ToBytes};
+    use history::trie::Trie;
+    use shared::newtypes::Blake2bHash;
+
+    /// Creates a tuple containing an empty root hash and an empty root (a node
+    /// with an empty pointer block)
+    pub fn create_hashed_empty_trie<K: ToBytes, V: ToBytes>(
+    ) -> Result<(Blake2bHash, Trie<K, V>), bytesrepr::Error> {
+        let root: Trie<K, V> = Trie::Node {
+            pointer_block: Default::default(),
+        };
+        let root_bytes: Vec<u8> = root.to_bytes()?;
+        Ok((Blake2bHash::new(&root_bytes), root))
     }
 }

@@ -3,22 +3,23 @@ package io.casperlabs.comm.gossiping
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
-import eu.timepit.refined._
-import eu.timepit.refined.auto._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.numeric._
 import com.google.protobuf.ByteString
+import eu.timepit.refined._
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.GossipError
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
-import io.casperlabs.comm.discovery.Node
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.shared.{Compression, Log}
+import shapeless.tag
+import shapeless.tag.@@
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
-import shapeless.tag, tag.@@
 
 /** Manage the download, validation, storing and gossiping of blocks. */
 trait DownloadManager[F[_]] {
@@ -138,9 +139,6 @@ object DownloadManagerImpl {
   /** All dependencies that need to be downloaded before a block. */
   private def dependencies(summary: BlockSummary): Seq[ByteString] =
     summary.getHeader.parentHashes ++ summary.getHeader.justifications.map(_.latestBlockHash)
-
-  private def base16(blockHash: ByteString) =
-    Base16.encode(blockHash.toByteArray)
 }
 
 class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
@@ -303,7 +301,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
 
   // Just say which block hash to download, try all possible sources.
   private def download(blockHash: ByteString): F[Unit] = {
-    val id                     = base16(blockHash)
+    val id                     = hex(blockHash)
     val success                = signal.put(Signal.DownloadSuccess(blockHash))
     def failure(ex: Throwable) = signal.put(Signal.DownloadFailure(blockHash, ex))
 

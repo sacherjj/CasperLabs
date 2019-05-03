@@ -6,6 +6,15 @@ use std::collections::{BTreeMap, HashMap};
 
 pub mod inmem;
 
+// TODO: remove this annotation
+#[allow(dead_code)]
+pub mod lmdb;
+
+// TODO: remove this annotation
+#[allow(dead_code)]
+#[cfg(test)]
+pub(crate) mod in_memory;
+
 #[derive(Debug)]
 pub struct ExecutionEffect(pub HashMap<Key, Op>, pub HashMap<Key, Transform>);
 

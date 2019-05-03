@@ -9,7 +9,7 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.{DeployResult => _, _}
@@ -24,7 +24,8 @@ case class DeploysCheckpoint(
     preStateHash: StateHash,
     postStateHash: StateHash,
     deploysForBlock: Seq[ProcessedDeploy],
-    blockNumber: Long
+    blockNumber: Long,
+    protocolVersion: ProtocolVersion
 )
 
 object ExecEngineUtil {
@@ -33,13 +34,15 @@ object ExecEngineUtil {
   def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
-      combinedEffect: TransformMap // effect used to obtain combined post-state of all parents
+      combinedEffect: TransformMap, // effect used to obtain combined post-state of all parents
+      protocolVersion: ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
       processedHash <- processDeploys[F](
                         parents,
                         combinedEffect,
-                        deploys
+                        deploys,
+                        protocolVersion
                       )
       (preStateHash, processedDeploys) = processedHash
       deployEffects                    = processedDeployEffects(deploys zip processedDeploys)
@@ -70,17 +73,20 @@ object ExecEngineUtil {
         .mkString("\n")
       _ <- Log[F]
             .info(s"Block #$number created with effects:\n$msgBody")
-    } yield DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number)
+    } yield DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number, protocolVersion)
 
   def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       parents: Seq[BlockMessage],
       combinedEffect: TransformMap, // effect used to obtain combined post-state of all parents
-      deploys: Seq[DeployData]
+      deploys: Seq[DeployData],
+      protocolVersion: ProtocolVersion
   ): F[(StateHash, Seq[DeployResult])] =
     for {
       prestate <- computePrestate[F](parents.toList, combinedEffect)
       ds       = deploys.map(ProtoUtil.deployDataToEEDeploy)
-      result   <- MonadError[F, Throwable].rethrow(ExecutionEngineService[F].exec(prestate, ds))
+      result <- MonadError[F, Throwable].rethrow(
+                 ExecutionEngineService[F].exec(prestate, ds, protocolVersion)
+               )
     } yield (prestate, result)
 
   /** Produce effects for each processed deploy. */
@@ -113,10 +119,13 @@ object ExecEngineUtil {
     for {
       parents <- ProtoUtil.unsafeGetParents[F](block)
       deploys = ProtoUtil.deploys(block)
+      protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap
+        .fromBlockMessage(block)
       processedHash <- processDeploys[F](
                         parents,
                         combinedEffect,
-                        deploys.flatMap(_.deploy)
+                        deploys.flatMap(_.deploy),
+                        protocolVersion
                       )
       (prestate, processedDeploys) = processedHash
       deployEffects                = processedDeployEffects(deploys.map(_.getDeploy) zip processedDeploys)

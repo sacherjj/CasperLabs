@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use common::key::Key;
 use common::value::Value;
+use shared::newtypes::Validated;
 use storage::global_state::{ExecutionEffect, StateReader};
 use storage::op::Op;
 use storage::transform::{self, Transform, TypeMismatch};
@@ -38,41 +39,42 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         }
     }
 
-    pub fn get(&mut self, k: &Key) -> Result<Option<Value>, R::Error> {
-        if let Some(value) = self.cache.get(k) {
+    pub fn get(&mut self, k: &Validated<Key>) -> Result<Option<Value>, R::Error> {
+        if let Some(value) = self.cache.get(&**k) {
             return Ok(Some(value.clone()));
         }
-        if let Some(value) = self.reader.read(k)? {
-            self.cache.insert(*k, value.clone());
+        if let Some(value) = self.reader.read(&**k)? {
+            self.cache.insert(**k, value.clone());
             Ok(Some(value))
         } else {
             Ok(None)
         }
     }
 
-    pub fn read(&mut self, k: Key) -> Result<Option<Value>, R::Error> {
-        if let Some(value) = self.get(&k)? {
-            add(&mut self.ops, k, Op::Read);
+    pub fn read(&mut self, k: &Validated<Key>) -> Result<Option<Value>, R::Error> {
+        if let Some(value) = self.get(k)? {
+            add(&mut self.ops, **k, Op::Read);
             Ok(Some(value))
         } else {
             Ok(None)
         }
     }
 
-    pub fn write(&mut self, k: Key, v: Value) {
-        let _ = self.cache.insert(k, v.clone());
-        add(&mut self.ops, k, Op::Write);
-        add(&mut self.fns, k, Transform::Write(v));
+    pub fn write(&mut self, k: Validated<Key>, v: Validated<Value>) {
+        let v_local = v.into_raw();
+        let _ = self.cache.insert(*k, v_local.clone());
+        add(&mut self.ops, *k, Op::Write);
+        add(&mut self.fns, *k, Transform::Write(v_local));
     }
 
     /// Ok(None) represents missing key to which we want to "add" some value.
     /// Ok(Some(unit)) represents successful operation.
     /// Err(error) is reserved for unexpected errors when accessing global state.
-    pub fn add(&mut self, k: Key, v: Value) -> Result<AddResult, R::Error> {
+    pub fn add(&mut self, k: Validated<Key>, v: Validated<Value>) -> Result<AddResult, R::Error> {
         match self.get(&k)? {
-            None => Ok(AddResult::KeyNotFound(k)),
+            None => Ok(AddResult::KeyNotFound(*k)),
             Some(curr) => {
-                let t = match v {
+                let t = match v.into_raw() {
                     Value::Int32(i) => Transform::AddInt32(i),
                     Value::UInt128(i) => Transform::AddUInt128(i),
                     Value::UInt256(i) => Transform::AddUInt256(i),
@@ -91,9 +93,9 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                 };
                 match t.clone().apply(curr) {
                     Ok(new_value) => {
-                        let _ = self.cache.insert(k, new_value);
-                        add(&mut self.ops, k, Op::Add);
-                        add(&mut self.fns, k, t);
+                        let _ = self.cache.insert(*k, new_value);
+                        add(&mut self.ops, *k, Op::Add);
+                        add(&mut self.fns, *k, t);
                         Ok(AddResult::Success)
                     }
                     Err(transform::Error::TypeMismatch(type_mismatch)) => {
@@ -110,7 +112,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     }
 
     pub fn query(&mut self, base_key: Key, path: &[String]) -> Result<QueryResult, R::Error> {
-        match self.read(base_key)? {
+        let validated_key = Validated::new(base_key, Validated::valid)?;
+        match self.read(&validated_key)? {
             None => Ok(QueryResult::ValueNotFound(self.error_path_msg(
                 base_key,
                 path,
@@ -129,7 +132,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                         match curr_value {
                             Value::Account(account) => {
                                 if let Some(key) = account.urefs_lookup().get(name) {
-                                    self.read_key_or_stop(*key, i)
+                                    let validated_key = Validated::new(*key, Validated::valid)?;
+                                    self.read_key_or_stop(validated_key, i)
                                 } else {
                                     Err(Ok((i, format!("Name {} not found in Account at path:", name))))
                                 }
@@ -137,7 +141,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
 
                             Value::Contract(contract) => {
                                 if let Some(key) = contract.urefs_lookup().get(name) {
-                                    self.read_key_or_stop(*key, i)
+                                    let validated_key = Validated::new(*key, Validated::valid)?;
+                                    self.read_key_or_stop(validated_key, i)
                                 } else {
                                     Err(Ok((i, format!("Name {} not found in Contract at path:", name))))
                                 }
@@ -163,14 +168,14 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
 
     fn read_key_or_stop(
         &mut self,
-        key: Key,
+        key: Validated<Key>,
         i: usize,
     ) -> Result<Value, Result<(usize, String), R::Error>> {
-        match self.read(key) {
+        match self.read(&key) {
             // continue recursing
             Ok(Some(value)) => Ok(value),
             // key not found in the global state; stop recursing
-            Ok(None) => Err(Ok((i, format!("Name {:?} not found: ", key)))),
+            Ok(None) => Err(Ok((i, format!("Name {:?} not found: ", *key)))),
             // global state access error; stop recursing
             Err(error) => Err(Err(error)),
         }
@@ -211,7 +216,7 @@ mod tests {
     use storage::op::Op;
     use storage::transform::Transform;
 
-    use super::{AddResult, QueryResult, TrackingCopy};
+    use super::{AddResult, QueryResult, TrackingCopy, Validated};
 
     struct CountingDb {
         count: Rc<Cell<i32>>,
@@ -267,12 +272,18 @@ mod tests {
 
         let zero = Value::Int32(0);
         // first read
-        let value = tc.read(k).unwrap().unwrap();
+        let value = tc
+            .read(&Validated::new(k, Validated::valid).unwrap())
+            .unwrap()
+            .unwrap();
         assert_eq!(value, zero);
 
         // second read; should use cache instead
         // of going back to the DB
-        let value = tc.read(k).unwrap().unwrap();
+        let value = tc
+            .read(&Validated::new(k, Validated::valid).unwrap())
+            .unwrap()
+            .unwrap();
         let db_value = counter.get();
         assert_eq!(value, zero);
         assert_eq!(db_value, 1);
@@ -286,7 +297,10 @@ mod tests {
         let k = Key::Hash([0u8; 32]);
 
         let zero = Value::Int32(0);
-        let value = tc.read(k).unwrap().unwrap();
+        let value = tc
+            .read(&Validated::new(k, Validated::valid).unwrap())
+            .unwrap()
+            .unwrap();
         // value read correctly
         assert_eq!(value, zero);
         // read does not cause any transform
@@ -307,7 +321,10 @@ mod tests {
         let two = Value::Int32(2);
 
         // writing should work
-        tc.write(k, one.clone());
+        tc.write(
+            Validated::new(k, Validated::valid).unwrap(),
+            Validated::new(one.clone(), Validated::valid).unwrap(),
+        );
         // write does not need to query the DB
         let db_value = counter.get();
         assert_eq!(db_value, 0);
@@ -319,7 +336,10 @@ mod tests {
         assert_eq!(tc.ops.get(&k), Some(&Op::Write));
 
         // writing again should update the values
-        tc.write(k, two.clone());
+        tc.write(
+            Validated::new(k, Validated::valid).unwrap(),
+            Validated::new(two.clone(), Validated::valid).unwrap(),
+        );
         let db_value = counter.get();
         assert_eq!(db_value, 0);
         assert_eq!(tc.fns.len(), 1);
@@ -338,7 +358,10 @@ mod tests {
         let three = Value::Int32(3);
 
         // adding should work
-        let add = tc.add(k, three.clone());
+        let add = tc.add(
+            Validated::new(k, Validated::valid).unwrap(),
+            Validated::new(three.clone(), Validated::valid).unwrap(),
+        );
         assert_matches!(add, Ok(_));
 
         // add creates a Transfrom
@@ -349,7 +372,10 @@ mod tests {
         assert_eq!(tc.ops.get(&k), Some(&Op::Add));
 
         // adding again should update the values
-        let add = tc.add(k, three);
+        let add = tc.add(
+            Validated::new(k, Validated::valid).unwrap(),
+            Validated::new(three, Validated::valid).unwrap(),
+        );
         assert_matches!(add, Ok(_));
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::AddInt32(6)));
@@ -377,13 +403,19 @@ mod tests {
         }
 
         // adding the wrong type should fail
-        let failed_add = tc.add(k, Value::Int32(3));
+        let failed_add = tc.add(
+            Validated::new(k, Validated::valid).unwrap(),
+            Validated::new(Value::Int32(3), Validated::valid).unwrap(),
+        );
         assert_matches!(failed_add, Ok(AddResult::TypeMismatch(_)));
         assert_eq!(tc.ops.is_empty(), true);
         assert_eq!(tc.fns.is_empty(), true);
 
         // adding correct type works
-        let add = tc.add(k, named_key);
+        let add = tc.add(
+            Validated::new(k, Validated::valid).unwrap(),
+            Validated::new(named_key, Validated::valid).unwrap(),
+        );
         assert_matches!(add, Ok(_));
         // add creates a Transfrom
         assert_eq!(tc.fns.len(), 1);
@@ -396,7 +428,10 @@ mod tests {
         if let Value::NamedKey(name, key) = other_named_key.clone() {
             map.insert(name, key);
         }
-        let add = tc.add(k, other_named_key);
+        let add = tc.add(
+            Validated::new(k, Validated::valid).unwrap(),
+            Validated::new(other_named_key, Validated::valid).unwrap(),
+        );
         assert_matches!(add, Ok(_));
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::AddKeys(map)));
@@ -413,8 +448,11 @@ mod tests {
 
         // reading then writing should update the op
         let value = Value::Int32(3);
-        let _ = tc.read(k);
-        tc.write(k, value.clone());
+        let _ = tc.read(&Validated::new(k, Validated::valid).unwrap());
+        tc.write(
+            Validated::new(k, Validated::valid).unwrap(),
+            Validated::new(value.clone(), Validated::valid).unwrap(),
+        );
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::Write(value)));
         assert_eq!(tc.ops.len(), 1);
@@ -430,8 +468,11 @@ mod tests {
 
         // reading then adding should update the op
         let value = Value::Int32(3);
-        let _ = tc.read(k);
-        let _ = tc.add(k, value);
+        let _ = tc.read(&Validated::new(k, Validated::valid).unwrap());
+        let _ = tc.add(
+            Validated::new(k, Validated::valid).unwrap(),
+            Validated::new(value, Validated::valid).unwrap(),
+        );
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::AddInt32(3)));
         assert_eq!(tc.ops.len(), 1);
@@ -449,8 +490,14 @@ mod tests {
         // adding then writing should update the op
         let value = Value::Int32(3);
         let write_value = Value::Int32(7);
-        let _ = tc.add(k, value);
-        tc.write(k, write_value.clone());
+        let _ = tc.add(
+            Validated::new(k, Validated::valid).unwrap(),
+            Validated::new(value, Validated::valid).unwrap(),
+        );
+        tc.write(
+            Validated::new(k, Validated::valid).unwrap(),
+            Validated::new(write_value.clone(), Validated::valid).unwrap(),
+        );
         assert_eq!(tc.fns.len(), 1);
         assert_eq!(tc.fns.get(&k), Some(&Transform::Write(write_value)));
         assert_eq!(tc.ops.len(), 1);

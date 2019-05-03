@@ -15,14 +15,12 @@ import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
+import io.casperlabs.comm.gossiping
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 trait Casper[F[_], A] {
-  def addBlock(
-      block: BlockMessage,
-      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus]
+  def addBlock(block: BlockMessage): F[BlockStatus]
   def contains(block: BlockMessage): F[Boolean]
   def deploy(deployData: DeployData): F[Either[Throwable, Unit]]
   def estimator(dag: BlockDagRepresentation[F]): F[A]
@@ -42,8 +40,6 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
 
 object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
-  def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
-    kp2(().pure[F])
 
   def forkChoiceTip[F[_]: MultiParentCasper: Monad: BlockStore]: F[BlockMessage] =
     for {
@@ -56,13 +52,11 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
-      validatorId: Option[ValidatorIdentity],
+  private def init[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: ExecutionEngineService](
       genesis: BlockMessage,
       genesisPreState: StateHash,
-      genesisEffects: ExecEngineUtil.TransformMap,
-      shardId: String
-  ): F[MultiParentCasper[F]] =
+      genesisEffects: ExecEngineUtil.TransformMap
+  ) =
     for {
       // Initialize DAG storage with genesis block in case it is empty
       _   <- BlockDagStorage[F].insert(genesis)
@@ -76,13 +70,48 @@ sealed abstract class MultiParentCasperInstances {
                       CasperState()
                     )
 
-    } yield {
-      implicit val state = casperState
-      new MultiParentCasperImpl[F](
-        validatorId,
-        genesis,
-        shardId,
-        blockProcessingLock
-      )
+    } yield (dag, blockProcessingLock, casperState)
+
+  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
+      validatorId: Option[ValidatorIdentity],
+      genesis: BlockMessage,
+      genesisPreState: StateHash,
+      genesisEffects: ExecEngineUtil.TransformMap,
+      shardId: String
+  ): F[MultiParentCasper[F]] =
+    init(genesis, genesisPreState, genesisEffects) map {
+      case (dag, blockProcessingLock, casperState) =>
+        implicit val state = casperState
+        new MultiParentCasperImpl[F](
+          new MultiParentCasperImpl.StatelessExecutor(shardId),
+          MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
+          validatorId,
+          genesis,
+          shardId,
+          blockProcessingLock
+        )
+    }
+
+  /** Create a MultiParentCasper instance from the new RPC style gossiping. */
+  def fromGossipServices[F[_]: Concurrent: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService](
+      validatorId: Option[ValidatorIdentity],
+      genesis: BlockMessage,
+      genesisPreState: StateHash,
+      genesisEffects: ExecEngineUtil.TransformMap,
+      shardId: String
+  )(
+      relaying: gossiping.Relaying[F]
+  ): F[MultiParentCasper[F]] =
+    init(genesis, genesisPreState, genesisEffects) map {
+      case (dag, blockProcessingLock, casperState) =>
+        implicit val state = casperState
+        new MultiParentCasperImpl[F](
+          new MultiParentCasperImpl.StatelessExecutor(shardId),
+          MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
+          validatorId,
+          genesis,
+          shardId,
+          blockProcessingLock
+        )
     }
 }

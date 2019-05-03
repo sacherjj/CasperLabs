@@ -1,5 +1,20 @@
+#[test]
+fn radix_is_256() {
+    assert_eq!(
+        super::RADIX,
+        256,
+        "Changing RADIX alone might cause things to break"
+    );
+}
+
 mod pointer_block {
     use crate::history::trie::*;
+
+    /// A defense against changes to [`RADIX`](history::trie::RADIX).
+    #[test]
+    fn debug_formatter_succeeds() {
+        let _ = format!("{:?}", PointerBlock::new());
+    }
 
     #[test]
     fn assignment_and_indexing() {

@@ -2,24 +2,17 @@ package io.casperlabs.client
 import java.io.File
 import java.nio.file.Files
 
-import cats.data.EitherT
-import cats.{Apply, Monad}
+import cats.Apply
 import cats.effect.{Sync, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
-import io.casperlabs.casper.protocol.{
-  BlockQuery,
-  BlocksQuery,
-  DeployCode,
-  DeployData,
-  VisualizeDagQuery
-}
+import io.casperlabs.casper.protocol._
 import io.casperlabs.client.configuration.Streaming
 
-import scala.util.Try
 import scala.concurrent.duration._
 import scala.language.higherKinds
+import scala.util.Try
 
 object DeployRuntime {
 
@@ -110,7 +103,6 @@ object DeployRuntime {
   def deployFileProgram[F[_]: Sync: DeployService](
       from: String,
       gasLimit: Long,
-      gasPrice: Long,
       nonce: Long,
       sessionCode: File,
       paymentCode: File
@@ -133,7 +125,6 @@ object DeployRuntime {
               .withPayment(DeployCode().withCode(payment))
               .withAddress(ByteString.copyFromUtf8(from))
               .withGasLimit(gasLimit)
-              .withGasPrice(gasPrice)
               .withNonce(nonce)
         }
         .flatMap(DeployService[F].deploy)

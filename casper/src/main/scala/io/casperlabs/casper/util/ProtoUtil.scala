@@ -10,8 +10,8 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.protocol.{DeployData, _}
 import io.casperlabs.casper.util.implicits._
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.catscontrib.ski.id
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.ipc
 import io.casperlabs.models.BlockMetadata
@@ -394,7 +394,7 @@ object ProtoUtil {
   def blockHeader(
       body: Body,
       parentHashes: Seq[ByteString],
-      version: Long,
+      protocolVersion: Long,
       timestamp: Long
   ): Header =
     Header()
@@ -402,7 +402,7 @@ object ProtoUtil {
       .withPostStateHash(protoHash(body.state.get))
       .withDeploysHash(protoSeqHash(body.deploys))
       .withDeployCount(body.deploys.size)
-      .withVersion(version)
+      .withProtocolVersion(protocolVersion)
       .withTimestamp(timestamp)
 
   def unsignedBlockProto(
@@ -475,8 +475,6 @@ object ProtoUtil {
     } yield signedBlock
   }
 
-  def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
-
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
@@ -509,11 +507,6 @@ object ProtoUtil {
       gasLimit = gasLimit
     )
 
-  def compiledSourceDeploy(
-      timestamp: Long,
-      gasLimit: Long
-  ): DeployData = ???
-
   def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): DeployData =
     DeployData(
       user = ByteString.EMPTY,
@@ -523,8 +516,11 @@ object ProtoUtil {
       gasLimit = gasLimit
     )
 
-  def termDeployNow(sessionCode: ByteString): DeployData =
-    sourceDeploy(sessionCode, System.currentTimeMillis(), Integer.MAX_VALUE)
+  // https://casperlabs.atlassian.net/browse/EE-283
+  // We are hardcoding exchange rate for DEV NET at 10:1
+  // (1 token buys you 10 units of gas).
+  // Later, post DEV NET, conversion rate will be part of a deploy.
+  val GAS_PRICE = 10
 
   def deployDataToEEDeploy(dd: DeployData): ipc.Deploy = ipc.Deploy(
     address = dd.address,
@@ -532,7 +528,7 @@ object ProtoUtil {
     session = dd.session.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
     payment = dd.payment.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
     gasLimit = dd.gasLimit,
-    gasPrice = dd.gasPrice,
+    gasPrice = GAS_PRICE,
     nonce = dd.nonce
   )
 

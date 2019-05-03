@@ -9,15 +9,22 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
-import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.{BlockStore, InMemBlockDagStorage, InMemBlockStore}
+import com.olegpy.meow.effects._
+import io.casperlabs.blockstorage.util.fileIO.IOError
+import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
+import io.casperlabs.blockstorage.{
+  BlockDagFileStorage,
+  BlockDagStorage,
+  BlockStore,
+  FileLMDBIndexBlockStore
+}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
 import io.casperlabs.catscontrib._
+import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
@@ -37,8 +44,6 @@ import kamon._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
-import com.olegpy.meow.effects._
-import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.concurrent.duration._
 
@@ -55,7 +60,7 @@ class NodeRuntime private[node] (
 
   private val initPeer = if (conf.casper.standalone) None else Some(conf.server.bootstrap)
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
 
   implicit def eitherTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
@@ -64,7 +69,14 @@ class NodeRuntime private[node] (
 
   private val port           = conf.server.port
   private val kademliaPort   = conf.server.kademliaPort
+  private val blockstorePath = conf.server.dataDir.resolve("blockstore")
+  private val dagStoragePath = conf.server.dataDir.resolve("dagstorage")
   private val defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
+
+  private val metrics = diagnostics.effects.metrics[Task]
+
+  implicit val metricsT: Metrics[EitherT[Task, CommError, ?]] =
+    Metrics.eitherT[CommError, Task](Monad[Task], metrics)
 
   case class Servers(
       grpcServerExternal: GrpcServer,
@@ -94,11 +106,17 @@ class NodeRuntime private[node] (
                effects.peerNodeAsk,
                log,
                effects.time,
-               diagnostics.effects.metrics
+               metrics
              )
-      } yield (ee, nd)
+        blockStore <- FileLMDBIndexBlockStore[Effect](
+                       conf.server.dataDir,
+                       blockstorePath,
+                       100L * 1024L * 1024L * 4096L
+                     )
+        blockDag <- BlockDagFileStorage[Effect](conf.server.dataDir, dagStoragePath, blockStore)
+      } yield (ee, nd, blockStore, blockDag)
 
-      resources.use { case (ee, nd) => runMain(ee, nd, state) }
+      resources.use { case (ee, nd, bs, dag) => runMain(ee, nd, bs, dag, state) }
     })
   }
 
@@ -106,6 +124,8 @@ class NodeRuntime private[node] (
       implicit
       executionEngineService: ExecutionEngineService[Effect],
       nodeDiscovery: NodeDiscovery[Task],
+      blockStore: BlockStore[Effect],
+      blockDagStorage: BlockDagStorage[Effect],
       rpConfState: MonadState[Task, RPConf]
   ) =
     for {
@@ -113,14 +133,20 @@ class NodeRuntime private[node] (
       defaultTimeout       = conf.server.defaultTimeout.millis
       rpConfAsk            = effects.rpConfAsk
       peerNodeAsk          = effects.peerNodeAsk
-      metrics              = diagnostics.effects.metrics[Task]
       tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
       time                 = effects.time
       multiParentCasperRef <- MultiParentCasperRef.of[Effect]
       lab                  <- LastApprovedBlock.of[Task].toEffect
       labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
-      commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
-      _                    <- commTmpFolder.deleteDirectory[Task]().toEffect
+      _ <- Task
+            .delay {
+              log.info("Cleaning block storage ...")
+              blockStore.clear() *> blockDagStorage.clear()
+            }
+            .whenA(conf.server.cleanBlockStorage)
+            .toEffect
+      commTmpFolder = conf.server.dataDir.resolve("tmp").resolve("comm")
+      _             <- commTmpFolder.deleteDirectory[Task]().toEffect
       transport = effects.tcpTransportLayer(
         port,
         conf.tls.certificate,
@@ -129,23 +155,6 @@ class NodeRuntime private[node] (
         conf.server.chunkSize,
         commTmpFolder
       )(grpcScheduler, log, metrics, tcpConnections)
-      // TODO: This change is temporary until itegulov's BlockStore implementation is in
-      blockMap <- Ref.of[Effect, Map[BlockHash, BlockMsgWithTransform]](
-                   Map.empty[BlockHash, BlockMsgWithTransform]
-                 )
-      metricsT = Metrics.eitherT[CommError, Task](Monad[Task], metrics)
-      blockStore = InMemBlockStore.create[Effect](
-        syncEffect,
-        blockMap,
-        metricsT
-      )
-      blockDagStorage <- InMemBlockDagStorage.create[Effect](
-                          Concurrent[Effect],
-                          Log.eitherTLog(Monad[Task], log),
-                          blockStore,
-                          metricsT
-                        )
-      _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
       oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](
@@ -205,7 +214,6 @@ class NodeRuntime private[node] (
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       multiParentCasperRef: MultiParentCasperRef[Effect],
-      metrics: Metrics[Task],
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
@@ -254,7 +262,6 @@ class NodeRuntime private[node] (
   )(
       implicit
       transport: TransportLayer[Task],
-      blockStore: BlockStore[Effect],
       peerNodeAsk: NodeAsk[Task]
   ): Unit =
     (for {
@@ -268,8 +275,6 @@ class NodeRuntime private[node] (
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
-      _   <- log.info("Bringing BlockStore down ...")
-      _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
@@ -277,7 +282,6 @@ class NodeRuntime private[node] (
       servers: Servers
   )(
       implicit transport: TransportLayer[Task],
-      blockStore: BlockStore[Effect],
       peerNodeAsk: NodeAsk[Task]
   ): Task[Unit] =
     Task.delay(

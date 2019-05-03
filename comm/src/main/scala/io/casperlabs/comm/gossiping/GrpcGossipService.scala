@@ -2,15 +2,16 @@ package io.casperlabs.comm.gossiping
 
 import cats.effect._
 import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
+import io.casperlabs.comm.ServiceError.{DeadlineExceeded, Unauthenticated}
 import io.casperlabs.comm.auth.Principal
 import io.casperlabs.comm.grpc.ContextKeys
-import io.casperlabs.comm.ServiceError.{DeadlineExceeded, NotFound, Unauthenticated}
 import io.casperlabs.shared.ObservableOps._
 import monix.eval.{Task, TaskLift, TaskLike}
 import monix.reactive.Observable
 import monix.tail.Iterant
-import scala.concurrent.duration.FiniteDuration
+
 import scala.concurrent.TimeoutException
+import scala.concurrent.duration.FiniteDuration
 
 /** Adapt the GossipService to Monix generated interfaces. */
 object GrpcGossipService {

@@ -9,6 +9,7 @@ use transform::{Transform, TypeMismatch};
 pub mod trie;
 pub mod trie_store;
 
+#[derive(Debug)]
 pub enum CommitResult {
     RootNotFound,
     Success(Blake2bHash),

@@ -9,7 +9,11 @@ use shared::newtypes::Blake2bHash;
 pub mod lmdb;
 
 #[cfg(test)]
-mod in_memory;
+pub(crate) mod in_memory;
+
+// TODO: remove this annotation
+#[allow(dead_code)]
+pub(crate) mod operations;
 
 #[cfg(test)]
 mod tests;

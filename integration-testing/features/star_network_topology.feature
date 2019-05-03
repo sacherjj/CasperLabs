@@ -1,7 +1,9 @@
 Feature: Star network topology operation
 
    Deploy works correctly for a Star topology.  (Nodes are not all interconnected.)
-   
+
+   # Note: This should be redefined to use star network from feature_glossary.md as we implement it for Given step.
+
    #
    #       Node2
    #         |
@@ -10,6 +12,7 @@ Feature: Star network topology operation
    #       Node3
    #
    # test_network_topology.py defined star_network_topology but DOES NOT TEST IT.
+   # Not Implemented
    Scenario: Star with Node0 as hub and 3 Nodes attached will all correctly propose and deploy
       Given Node0 comes up
         And Node1 comes up

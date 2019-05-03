@@ -6,12 +6,15 @@ import cats.data.EitherT
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import io.casperlabs.casper._
-import io.casperlabs.casper.helper.HashSetCasperTestNode
+import io.casperlabs.casper.helper.{
+  HashSetCasperTestNode,
+  TransportLayerCasperTestNode,
+  TransportLayerCasperTestNodeFactory
+}, HashSetCasperTestNode.Effect
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.rholang._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.metrics.Metrics
@@ -25,7 +28,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
-class CreateBlockAPITest extends FlatSpec with Matchers {
+class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCasperTestNodeFactory {
   import HashSetCasperTest._
   import HashSetCasperTestNode.Effect
 
@@ -44,7 +47,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-    val node   = HashSetCasperTestNode.standaloneEff(genesis, transforms, validatorKeys.head)
+    val node   = standaloneEff(genesis, transforms, validatorKeys.head)
     val casper = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
@@ -83,11 +86,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
-
-  def addBlock(
-      b: BlockMessage,
-      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus]                                     = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
+  def addBlock(b: BlockMessage): F[BlockStatus]         = underlying.addBlock(b)
   def contains(b: BlockMessage): F[Boolean]             = underlying.contains(b)
   def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
