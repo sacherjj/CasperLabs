@@ -628,7 +628,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(2).casperEff.contains(signedBlock2) shouldBeF true
       // TransportLayer gets 1 block, 1 is missing. GossipService gets 1 hash, 2 block missing.
       _ = nodes(2).logEff.infos
-        .count(_ startsWith "Requested missing block") should be >= 1
+        .count(_ startsWith "Requested missing block") should (be >= 1 and be <= 2)
       // TransportLayer controlled by .receive calls, only node(1) responds. GossipService has unlimited retrieve, goes to node(0).
       result = (0 to 1)
         .flatMap(nodes(_).logEff.infos)
@@ -831,7 +831,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).receive() // receives block1'; adds both block3 and block1'
 
       // node(1) should have both block2 and block3 at this point and recognize the equivocation.
-      // Because node(1) will also see that the singedBlock3 is building on top of signedBlock1Prime,
+      // Because node(1) will also see that the signedBlock3 is building on top of signedBlock1Prime,
       // it should download signedBlock1Prime as an `AdmissibleEquivocation`; otherwise if it didn't
       // have an offspring it would be an `IgnorableEquivocation` and dropped.
       _ <- nodes(1).casperEff.contains(signedBlock3) shouldBeF true

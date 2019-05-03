@@ -462,9 +462,9 @@ object GossipServiceCasperTestNodeFactory {
       * so maybe we can return `true`, and call the underlying service later. But then we have to
       * allow it to play out all async actions, such as downloading blocks, syncing the DAG, etc. */
     def receive(): F[Unit] = {
-      // It can be ricky to line up the semantics of the notifications between the TransportLayer
-      // and the GossipService. At least in one test the queue was longer and the node wasn't Processing
-      // the message the test was expecting it to, it was reacting to an earlier one. To circumvent
+      // It can be tricky to line up the semantics of the notifications between the TransportLayer
+      // and the GossipService. At least in one test the queue was longer and the node wasn't processing
+      // the message the test was expecting it to, it was still reacting to an earlier one. To circumvent
       // these tests failures process all enqueued messages.
       def receiveOne =
         for {
