@@ -1,5 +1,6 @@
 package io.casperlabs.casper.util.execengine
 
+import cats.kernel.Monoid
 import io.casperlabs.ipc
 
 import Op.{Add, NoOp, Read, Write}
@@ -28,6 +29,16 @@ object Op {
   case object Write extends Op
   case object Read  extends Op
   case object Add   extends Op
+
+  implicit val OpMonoid: Monoid[Op] = new Monoid[Op] {
+    def combine(a: Op, b: Op): Op = a + b
+    def empty: Op                 = NoOp
+  }
+
+  implicit def OpMapMonoid[K]: Monoid[OpMap[K]] = new Monoid[OpMap[K]] {
+    def combine(a: OpMap[K], b: OpMap[K]): OpMap[K] = a + b
+    def empty: OpMap[K]                             = Map.empty[K, Op]
+  }
 
   def fromTransform(t: ipc.Transform): Option[Op] = t.transformInstance match {
     case ipc.Transform.TransformInstance.Empty       => None

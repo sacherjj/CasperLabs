@@ -1,12 +1,14 @@
 package io.casperlabs.casper.util.execengine
 
 import cats.implicits._
+import cats.Id
+import cats.kernel.Order
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.{InvalidPostStateHash, InvalidPreStateHash, Validate}
 import io.casperlabs.ipc
@@ -16,6 +18,8 @@ import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
+
+import Op.OpMap
 
 import ExecEngineUtilTest._
 
@@ -482,9 +486,187 @@ class ExecEngineUtilTest
       } yield ()
   }
 
+  "abstractMerge" should "do nothing in the case of zero or one candidates" in {
+    val genesis = OpDagNode.genesis(Map(1     -> Op.Read))
+    val tip     = OpDagNode.withParents(Map(2 -> Op.Write), List(genesis))
+
+    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(tip))
+    val zeroResult = OpDagNode.merge(
+      Vector(genesis)
+    )
+    val oneResult = OpDagNode.merge(
+      Vector(tip)
+    )
+
+    zeroResult shouldBe (Map.empty, Vector(genesis))
+    oneResult shouldBe (Map.empty, Vector(tip))
+  }
+
+  it should "correctly merge in the case of non-conflicting multiple blocks with shared history" in {
+    val genesis = OpDagNode.genesis(Map(1 -> Op.Read))
+    val aOps    = Map(2 -> Op.Write)
+    val bOps    = Map(3 -> Op.Write)
+    val cOps    = Map(4 -> Op.Add)
+
+    val a = OpDagNode.withParents(aOps, List(genesis))
+    val b = OpDagNode.withParents(bOps, List(genesis))
+    val c = OpDagNode.withParents(cOps, List(genesis))
+
+    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(a, b, c))
+    val result         = OpDagNode.merge(Vector(a, b, c))
+
+    result shouldBe (bOps + cOps, Vector(a, b, c))
+  }
+
+  it should "correctly merge in the case of conflicting multiple blocks with shared history" in {
+    val genesis = OpDagNode.genesis(Map(1 -> Op.Read))
+    val aOps    = Map(2 -> Op.Write) // both a and b try to write to 2
+    val bOps    = Map(2 -> Op.Write, 3 -> Op.Write)
+    val cOps    = Map(4 -> Op.Add)
+
+    val a = OpDagNode.withParents(aOps, List(genesis))
+    val b = OpDagNode.withParents(bOps, List(genesis))
+    val c = OpDagNode.withParents(cOps, List(genesis))
+
+    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(a, b, c))
+    val result         = OpDagNode.merge(Vector(a, b, c))
+
+    result shouldBe (cOps, Vector(a, c))
+  }
+
+  it should "correctly merge in the case on non-conflicting blocks with a more complex history" in {
+    /*
+     * The DAG looks like:
+     *   j        k
+     *   |     /     \
+     *   g    h      i
+     *   \    /\    /
+     *    c d   e  f
+     *     \/    \/
+     *     a     b
+     *      \    /
+     *      genesis
+     */
+
+    val genesis = OpDagNode.genesis(Map(1 -> Op.Read))
+    val ops: Map[Char, OpMap[Int]] = ('a' to 'k').zipWithIndex.map {
+      case (char, index) => char -> Map(index -> Op.Write)
+    }.toMap
+    val a = OpDagNode.withParents(ops('a'), List(genesis))
+    val b = OpDagNode.withParents(ops('b'), List(genesis))
+    val c = OpDagNode.withParents(ops('c'), List(a))
+    val d = OpDagNode.withParents(ops('d'), List(a))
+    val e = OpDagNode.withParents(ops('e'), List(b))
+    val f = OpDagNode.withParents(ops('f'), List(b))
+    val g = OpDagNode.withParents(ops('g'), List(c))
+    val h = OpDagNode.withParents(ops('h'), List(d, e))
+    val i = OpDagNode.withParents(ops('i'), List(f))
+    val j = OpDagNode.withParents(ops('j'), List(g))
+    val k = OpDagNode.withParents(ops('k'), List(h, i))
+
+    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(j, k))
+    val result1        = OpDagNode.merge(Vector(j, k))
+    val result2        = OpDagNode.merge(Vector(k, j))
+
+    val nonFirstEffect1 = Vector('b', 'd', 'e', 'f', 'h', 'i', 'k').map(ops.apply).reduce(_ + _)
+    val nonFirstEffect2 = Vector('c', 'g', 'j').map(ops.apply).reduce(_ + _)
+
+    result1 shouldBe (nonFirstEffect1, Vector(j, k))
+    result2 shouldBe (nonFirstEffect2, Vector(k, j))
+  }
+
+  it should "correctly merge in the case on conflicting blocks with a more complex history" in {
+    /*
+     * The DAG looks like:
+     *  j   k        l
+     *   \/   \      |
+     *   g    h      i
+     *   \    /\    /
+     *    c d   e  f
+     *     \/    \/
+     *     a     b
+     *      \    /
+     *      genesis
+     */
+
+    val genesis = OpDagNode.genesis(Map(1 -> Op.Read))
+    val ops: Map[Char, OpMap[Int]] =
+      ('a' to 'l').zipWithIndex
+        .map {
+          case (char, index) => char -> Map(index -> Op.Write)
+        }
+        .toMap
+        .updated('e', Map(100 -> Op.Write)) // both e and f try to update 100, so they conflict
+        .updated('f', Map(100 -> Op.Add))
+
+    val a = OpDagNode.withParents(ops('a'), List(genesis))
+    val b = OpDagNode.withParents(ops('b'), List(genesis))
+    val c = OpDagNode.withParents(ops('c'), List(a))
+    val d = OpDagNode.withParents(ops('d'), List(a))
+    val e = OpDagNode.withParents(ops('e'), List(b))
+    val f = OpDagNode.withParents(ops('f'), List(b))
+    val g = OpDagNode.withParents(ops('g'), List(c))
+    val h = OpDagNode.withParents(ops('h'), List(d, e))
+    val i = OpDagNode.withParents(ops('i'), List(f))
+    val j = OpDagNode.withParents(ops('j'), List(g))
+    val k = OpDagNode.withParents(ops('k'), List(g, h))
+    val l = OpDagNode.withParents(ops('l'), List(i))
+
+    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(j, k, l))
+    val result1        = OpDagNode.merge(Vector(j, k, l))
+    val result2        = OpDagNode.merge(Vector(j, l, k))
+    val result3        = OpDagNode.merge(Vector(k, j, l))
+    val result4        = OpDagNode.merge(Vector(k, l, j))
+
+    val nonFirstEffect1 = Vector('b', 'd', 'e', 'h', 'k').map(ops.apply).reduce(_ + _)
+    val nonFirstEffect2 = Vector('b', 'f', 'i', 'l').map(ops.apply).reduce(_ + _)
+    val nonFirstEffect3 = ops('j')
+
+    // cannot pick l and k together since l's history conflicts with k's history
+    result1 shouldBe (nonFirstEffect1, Vector(j, k))
+    result2 shouldBe (nonFirstEffect2, Vector(j, l))
+    result3 shouldBe (nonFirstEffect3, Vector(k, j))
+    result4 shouldBe result3
+  }
 }
 
 object ExecEngineUtilTest {
+  case class OpDagNode(ops: OpMap[Int], parents: List[OpDagNode], height: Int)
+  object OpDagNode {
+    val getParents: OpDagNode => List[OpDagNode]   = _.parents
+    val getEffect: OpDagNode => Option[OpMap[Int]] = node => Some(node.ops)
+
+    def genesis(ops: OpMap[Int]): OpDagNode =
+      OpDagNode(ops, Nil, 0)
+
+    def withParents(ops: OpMap[Int], parents: List[OpDagNode]): OpDagNode = {
+      val maxParentHeight = parents.foldLeft(-1) { case (max, p) => math.max(max, p.height) }
+      OpDagNode(ops, parents, maxParentHeight + 1)
+    }
+
+    def merge(
+        candidates: Vector[OpDagNode]
+    )(implicit order: Order[OpDagNode]): (OpMap[Int], Vector[OpDagNode]) =
+      ExecEngineUtil.abstractMerge[Id, OpMap[Int], OpDagNode, Int](
+        candidates,
+        getParents,
+        getEffect,
+        identity
+      )
+  }
+  def opDagNodeOrder(tips: List[OpDagNode]): Order[OpDagNode] = {
+    val byHeight: Map[Int, Vector[OpDagNode]] =
+      DagOperations
+        .bfTraverseF[Id, OpDagNode](tips)(_.parents)
+        .foldLeft(Map.empty[Int, Vector[OpDagNode]]) {
+          case (acc, node) =>
+            val curr = acc.getOrElse(node.height, Vector.empty[OpDagNode])
+            acc.updated(node.height, node +: curr)
+        }
+    val mapping = byHeight.toVector.sortBy(_._1).flatMap(_._2).zipWithIndex.toMap
+    Order.by[OpDagNode, Int](mapping.apply)
+  }
+
   val registry = """ """.stripMargin
 
   val other = """ """.stripMargin
