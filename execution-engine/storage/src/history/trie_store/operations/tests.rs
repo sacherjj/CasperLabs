@@ -781,14 +781,41 @@ mod write {
         fn lmdb_noop_writes_to_n_leaf_partial_trie_had_expected_results() {
             for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
                 let (mut root_hash, tries) = generator().unwrap();
+
+                // Initialize trie, writing a set of leaves (and their parent nodes)
                 let mut context = LmdbTestContext::new(root_hash, &tries).unwrap();
 
+                assert_eq!(1, context.states.len());
+
+                // Check that the expected set of leaves is in the trie
+                check_leaves::<LmdbEnvironment, LmdbTrieStore, error::Error>(
+                    &context.environment,
+                    &context.store,
+                    &context.states[0],
+                    &TEST_LEAVES[..num_leaves],
+                    &[],
+                )
+                .unwrap();
+
+                // Rewrite that set of leaves
                 for trie in &TEST_LEAVES[0..num_leaves] {
                     if let Trie::Leaf { key, value } = trie {
                         let write_result = context.write(*key, *value).unwrap();
                         assert_eq!(WriteResult::AlreadyExists, write_result)
                     }
                 }
+
+                assert_eq!(1, context.states.len());
+
+                // Check that the expected set of leaves is in the trie
+                check_leaves::<LmdbEnvironment, LmdbTrieStore, error::Error>(
+                    &context.environment,
+                    &context.store,
+                    &context.states[0],
+                    &TEST_LEAVES[..num_leaves],
+                    &[],
+                )
+                .unwrap();
             }
         }
 
@@ -796,14 +823,41 @@ mod write {
         fn in_memory_noop_writes_to_n_leaf_partial_trie_had_expected_results() {
             for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
                 let (mut root_hash, tries) = generator().unwrap();
+
+                // Initialize trie, writing a set of leaves (and their parent nodes)
                 let mut context = InMemoryTestContext::new(root_hash, &tries).unwrap();
 
-                for trie in &TEST_LEAVES[0..num_leaves] {
+                assert_eq!(1, context.states.len());
+
+                // Check that the expected set of leaves is in the trie
+                check_leaves::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
+                    &context.environment,
+                    &context.store,
+                    &context.states[0],
+                    &TEST_LEAVES[..num_leaves],
+                    &[],
+                )
+                .unwrap();
+
+                // Rewrite that set of leaves
+                for trie in &TEST_LEAVES[..num_leaves] {
                     if let Trie::Leaf { key, value } = trie {
                         let write_result = context.write(*key, *value).unwrap();
                         assert_eq!(WriteResult::AlreadyExists, write_result)
                     }
                 }
+
+                assert_eq!(1, context.states.len());
+
+                // Check that the expected set of leaves is in the trie
+                check_leaves::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
+                    &context.environment,
+                    &context.store,
+                    &context.states[0],
+                    &TEST_LEAVES[..num_leaves],
+                    &[],
+                )
+                .unwrap();
             }
         }
     }
@@ -815,15 +869,46 @@ mod write {
         fn lmdb_noop_writes_to_n_leaf_full_trie_had_expected_results() {
             let mut context = LmdbTestContext::empty().unwrap();
 
-            for (num_leaves, generator) in TEST_TRIE_GENERATORS[1..].iter().enumerate() {
+            for (index, generator) in TEST_TRIE_GENERATORS[1..].iter().enumerate() {
                 let (root_hash, tries) = generator().unwrap();
+
+                // Initialize trie, writing a set of leaves (and their parent nodes)
                 context.push(root_hash, &tries).unwrap();
 
-                for trie in &TEST_LEAVES[0..num_leaves] {
+                let states_len_before_noop = context.states.len();
+
+                // Check that the expected set of leaves is in the trie at every state reference
+                for (num_leaves, state) in context.states[..index].iter().enumerate() {
+                    check_leaves::<LmdbEnvironment, LmdbTrieStore, error::Error>(
+                        &context.environment,
+                        &context.store,
+                        state,
+                        &TEST_LEAVES[..num_leaves],
+                        &[],
+                    )
+                    .unwrap();
+                }
+
+                // Rewrite that set of leaves
+                for trie in &TEST_LEAVES[..index] {
                     if let Trie::Leaf { key, value } = trie {
                         let write_result = context.write(*key, *value).unwrap();
                         assert_eq!(WriteResult::AlreadyExists, write_result)
                     }
+                }
+
+                assert_eq!(states_len_before_noop, context.states.len());
+
+                // Check that the expected set of leaves is in the trie at every state reference
+                for (num_leaves, state) in context.states[..index].iter().enumerate() {
+                    check_leaves::<LmdbEnvironment, LmdbTrieStore, error::Error>(
+                        &context.environment,
+                        &context.store,
+                        state,
+                        &TEST_LEAVES[..num_leaves],
+                        &[],
+                    )
+                    .unwrap();
                 }
             }
         }
@@ -832,15 +917,46 @@ mod write {
         fn in_memory_noop_writes_to_n_leaf_full_trie_had_expected_results() {
             let mut context = InMemoryTestContext::empty().unwrap();
 
-            for (num_leaves, generator) in TEST_TRIE_GENERATORS[1..].iter().enumerate() {
+            for (index, generator) in TEST_TRIE_GENERATORS[1..].iter().enumerate() {
                 let (root_hash, tries) = generator().unwrap();
+
+                // Initialize trie, writing a set of leaves (and their parent nodes)
                 context.push(root_hash, &tries).unwrap();
 
-                for trie in &TEST_LEAVES[0..num_leaves] {
+                let states_len_before_noop = context.states.len();
+
+                // Check that the expected set of leaves is in the trie at every state reference
+                for (num_leaves, state) in context.states[..index].iter().enumerate() {
+                    check_leaves::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
+                        &context.environment,
+                        &context.store,
+                        state,
+                        &TEST_LEAVES[..num_leaves],
+                        &[],
+                    )
+                    .unwrap();
+                }
+
+                // Rewrite that set of leaves
+                for trie in &TEST_LEAVES[..index] {
                     if let Trie::Leaf { key, value } = trie {
                         let write_result = context.write(*key, *value).unwrap();
                         assert_eq!(WriteResult::AlreadyExists, write_result)
                     }
+                }
+
+                assert_eq!(states_len_before_noop, context.states.len());
+
+                // Check that the expected set of leaves is in the trie at every state reference
+                for (num_leaves, state) in context.states[..index].iter().enumerate() {
+                    check_leaves::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
+                        &context.environment,
+                        &context.store,
+                        state,
+                        &TEST_LEAVES[..num_leaves],
+                        &[],
+                    )
+                    .unwrap();
                 }
             }
         }
