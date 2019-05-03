@@ -38,9 +38,9 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
     // and finally notify the consensus engine.
     newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying = false).start)
 
-  /* Same as 'newBlocks' but with synchronous semantics, needed for bootstrapping */
-  protected[gossiping] def newBlocksSynchronous(request: NewBlocksRequest): F[NewBlocksResponse] =
-    newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying = true))
+  /* Same as 'newBlocks' but with synchronous semantics, needed for bootstrapping and some tests. */
+  def newBlocksSynchronous(request: NewBlocksRequest, skipRelaying: Boolean): F[NewBlocksResponse] =
+    newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying))
 
   private def newBlocks(
       request: NewBlocksRequest,

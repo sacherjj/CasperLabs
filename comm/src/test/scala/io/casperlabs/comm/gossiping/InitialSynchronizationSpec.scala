@@ -223,8 +223,9 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
       ) {
     val asked = Atomic(Vector.empty[Node])
 
-    override protected[gossiping] def newBlocksSynchronous(
-        request: NewBlocksRequest
+    override def newBlocksSynchronous(
+        request: NewBlocksRequest,
+        skipRelaying: Boolean
     ): Task[NewBlocksResponse] = {
       asked.transform(_ :+ request.getSender)
       sync(request.getSender, request.blockHashes).map(b => NewBlocksResponse(isNew = b))

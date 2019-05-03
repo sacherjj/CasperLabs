@@ -475,29 +475,6 @@ object GossipServiceCasperTestNodeFactory {
       * to do any assertions. */
     val notificationQueue = Ref.unsafe[F, Queue[F[Unit]]](Queue.empty)
 
-    /** Keep track of how many background operations (i.e. syncs and downloads) are running. */
-    val asyncOpsCount = AtomicInt(0)
-
-    implicit class RequestOps[T](req: F[T]) {
-      def withAsyncOpsCount: F[T] =
-        Sync[F].bracket(Sync[F].delay(asyncOpsCount.increment())) { _ =>
-          req
-        } { _ =>
-          Sync[F].delay(asyncOpsCount.decrement())
-        }
-    }
-
-    implicit class IterantOps[T](it: Iterant[F, T]) {
-      def withAsyncOpsCount: Iterant[F, T] =
-        Iterant.resource {
-          Sync[F].delay(asyncOpsCount.increment())
-        } { _ =>
-          Sync[F].delay(asyncOpsCount.decrement())
-        } flatMap { _ =>
-          it
-        }
-    }
-
     /** With the TransportLayer this would mean the target node receives the full block and adds it.
       * We have to allow `newBlocks` to return for the original block to be able to finish adding,
       * so maybe we can return `true`, and call the underlying service later. But then we have to
@@ -518,7 +495,6 @@ object GossipServiceCasperTestNodeFactory {
                                 }
                               }
           _ <- maybeNotification.fold(().pure[F])(identity)
-          _ <- maybeNotification.fold(().pure[F])(_ => awaitAsyncOps)
         } yield maybeNotification.nonEmpty
 
       def loop(): F[Unit] =
@@ -540,37 +516,18 @@ object GossipServiceCasperTestNodeFactory {
         _ <- notificationQueue.set(Queue.empty)
       } yield ()
 
-    def awaitAsyncOps: F[Unit] = {
-      val initialDelay = 150.millis
-      val pollInterval = 50.millis
-
-      def loop(): F[Unit] =
-        Timer[F].sleep(pollInterval) >>
-          Sync[F].delay(asyncOpsCount.get) >>= {
-          case 0 => ().pure[F]
-          case _ => loop()
-        }
-
-      val onTimeout = for {
-        c <- Sync[F].delay(asyncOpsCount.get)
-        _ <- Log[F].warn(s"Still have ${c} active async ops.")
-        _ <- Sync[F].raiseError[Unit](
-              new java.util.concurrent.TimeoutException("Still have active async ops.")
-            )
-      } yield ()
-
-      Timer[F].sleep(initialDelay) >> Concurrent.timeoutTo[F, Unit](loop(), 5.seconds, onTimeout)
-    }
-
     override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
       Log[F].info(
         s"Received notification about block ${PrettyPrinter.buildString(request.blockHashes.head)}"
       ) *>
-        notificationQueue.update { q =>
-          q enqueue underlying.newBlocks(request).void.withAsyncOpsCount
-        } as {
-        NewBlocksResponse(isNew = true)
-      }
+        notificationQueue
+          .update { q =>
+            // Using `newBlocksSynchronous` so we finish as soon as it's done.
+            q enqueue underlying
+              .newBlocksSynchronous(request, skipRelaying = false)
+              .void
+          }
+          .as(NewBlocksResponse(isNew = true))
 
     override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
       Iterant
@@ -580,7 +537,7 @@ object GossipServiceCasperTestNodeFactory {
           )
         )
         .flatMap { _ =>
-          underlying.getBlockChunked(request).withAsyncOpsCount
+          underlying.getBlockChunked(request)
         }
 
     override def streamAncestorBlockSummaries(
@@ -590,7 +547,7 @@ object GossipServiceCasperTestNodeFactory {
         .liftF(Log[F].info(s"Recevied request for ancestors of ${request.targetBlockHashes
           .map(PrettyPrinter.buildString(_))}"))
         .flatMap { _ =>
-          underlying.streamAncestorBlockSummaries(request).withAsyncOpsCount
+          underlying.streamAncestorBlockSummaries(request)
         }
 
     // The following methods are not tested in these suites.
