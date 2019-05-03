@@ -801,7 +801,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       // NOTE: Adding a block created (but not stored) by node(0) directly to node(1)
       // is not something you can normally achieve with gossiping.
-      _ <- nodes(1).casperEff.superAddBlock(signedBlock1)
+      _ <- nodes(1).casperEff.addBlock(signedBlock1)
       _ <- nodes(0).clearMessages() //nodes(0) misses this block
       _ <- nodes(2).clearMessages() //nodes(2) misses this block
 
@@ -922,9 +922,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       // )
       // _ <- nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
       // _ <- nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks
-      // NOTE: Instead of the above let's just add it directly to node(1); need to use `superAddBlock` becuase node(0) doesn't have this block.
+      // NOTE: Instead of the above let's just add it directly to node(1); node(0) doesn't have this block.
       _ <- nodes(1).casperEff
-            .superAddBlock(signedInvalidBlock)
+            .addBlock(signedInvalidBlock)
 
       result = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
       _      <- nodes.map(_.tearDown()).toList.sequence

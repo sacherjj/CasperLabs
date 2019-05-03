@@ -86,7 +86,7 @@ class TransportLayerCasperTestNode[F[_]](
   implicit val labF =
     LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
 
-  implicit val casperEff: MultiParentCasperImpl[F] with HashSetCasperTestNode.AddBlockProxy[F] =
+  implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
       new MultiParentCasperImpl.StatelessExecutor(shardId),
       MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
@@ -95,7 +95,7 @@ class TransportLayerCasperTestNode[F[_]](
       shardId,
       blockProcessingLock,
       faultToleranceThreshold = faultToleranceThreshold
-    ) with HashSetCasperTestNode.AddBlockProxy[F]
+    )
 
   implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[F](Some(casperEff))
 

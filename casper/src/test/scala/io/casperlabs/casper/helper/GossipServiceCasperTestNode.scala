@@ -79,7 +79,11 @@ class GossipServiceCasperTestNode[F[_]](
     case ValidatorIdentity(key, _, _) => ByteString.copyFrom(key)
   }
 
-  implicit val casperEff: MultiParentCasperImpl[F] with HashSetCasperTestNode.AddBlockProxy[F] =
+  // `addBlock` called in many ways:
+  // - test proposes a block on the node that created it
+  // - test tries to give a block created by node A to node B without gossiping
+  // - the download manager tries to validate a block
+  implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
       new MultiParentCasperImpl.StatelessExecutor(shardId),
       MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
@@ -88,28 +92,7 @@ class GossipServiceCasperTestNode[F[_]](
       shardId,
       blockProcessingLock,
       faultToleranceThreshold = faultToleranceThreshold
-    ) with HashSetCasperTestNode.AddBlockProxy[F] {
-      // Called in many ways:
-      // - test proposes a block on the node that created it
-      // - test tries to give a block created by node A to node B
-      // - the download manager tries to validate a block
-      override def addBlock(block: BlockMessage): F[BlockStatus] =
-        if (block.sender == ownValidatorKey) {
-          // The test is adding something this node created.
-          super.addBlock(block)
-        } else {
-          // The test is adding something it created in another node's name,
-          // i.e. it expects that dependencies will be requested.
-          val sender  = validatorToNode(block.sender)
-          val request = NewBlocksRequest(sender.some, List(block.blockHash))
-          gossipService.newBlocks(request).map { response =>
-            if (response.isNew) Processing else Valid
-          }
-        }
-
-      override def superAddBlock(block: BlockMessage): F[BlockStatus] =
-        super.addBlock(block)
-    }
+    )
 
   /** Allow RPC calls intended for this node to be processed and enqueue responses. */
   def receive(): F[Unit] = gossipService.receive()
@@ -305,7 +288,7 @@ object GossipServiceCasperTestNodeFactory {
 
     /** Casper is created a bit later then the TestGossipService instance. */
     def init(
-        casper: MultiParentCasperImpl[F] with HashSetCasperTestNode.AddBlockProxy[F],
+        casper: MultiParentCasperImpl[F],
         blockStore: BlockStore[F],
         relaying: Relaying[F],
         connectToGossip: GossipService.Connector[F]
@@ -331,9 +314,8 @@ object GossipServiceCasperTestNodeFactory {
                                  Log[F].info(
                                    s"Requested missing block ${PrettyPrinter.buildString(block.blockHash)} Now validating."
                                  ) *>
-                                   // Calling `superAddBlock` so it doesn't go through the GossipService again.
                                    casper
-                                     .superAddBlock(LegacyConversions.fromBlock(block)) flatMap {
+                                     .addBlock(LegacyConversions.fromBlock(block)) flatMap {
                                    case Valid =>
                                      Log[F].debug(s"Validated and stored block ${PrettyPrinter
                                        .buildString(block.blockHash)}")
@@ -439,7 +421,7 @@ object GossipServiceCasperTestNodeFactory {
                          }.void
 
                      override def onDownloaded(blockHash: ByteString) =
-                       // Calling `superAddBlock` during validation has already stored the block.
+                       // Calling `addBlock` during validation has already stored the block.
                        Log[F].debug(s"Download ready for ${PrettyPrinter.buildString(blockHash)}")
 
                      override def listTips =
