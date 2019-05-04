@@ -12,6 +12,7 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.catscontrib.ski._
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
@@ -41,7 +42,7 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
 object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
 
-  def forkChoiceTip[F[_]: MultiParentCasper: Sync: BlockStore]: F[BlockMessage] =
+  def forkChoiceTip[F[_]: MultiParentCasper: MonadThrowable: BlockStore]: F[BlockMessage] =
     for {
       dag       <- MultiParentCasper[F].blockDag
       tipHashes <- MultiParentCasper[F].estimator(dag)
