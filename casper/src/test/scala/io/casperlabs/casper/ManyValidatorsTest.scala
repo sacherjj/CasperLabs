@@ -81,7 +81,7 @@ class ManyValidatorsTest
       _                  <- casperRef.set(casperEffect)
       cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       result <- BlockAPI.showBlocks[Task](Int.MaxValue)(
-                 Monad[Task],
+                 Sync[Task],
                  casperRef,
                  logEff,
                  cliqueOracleEffect,

@@ -134,7 +134,7 @@ message BlockInfoWithoutTuplespace {
     string blockHash = 1;
     string blockSize = 2;
     int64 blockNumber = 3;
-    int64 protocol_version = 4;
+    int64 protocolVersion = 4;
     int32 deployCount = 5;
     string tupleSpaceHash = 6; // Same as postStateHash of BlockMessage
     int64 timestamp = 7;
@@ -149,7 +149,7 @@ message BlockInfo {
     string blockHash = 1;
     string blockSize = 2;
     int64 blockNumber = 3;
-    int64 protocol_version = 4;
+    int64 protocolVersion = 4;
     int32 deployCount = 5;
     string tupleSpaceHash = 6; // Same as postStateHash of BlockMessage
     string tupleSpaceDump = 7;
@@ -245,7 +245,7 @@ message Header {
     bytes postStateHash = 2;
     bytes deploysHash = 3;
     int64 timestamp = 5;
-    int64 protocol_version = 6;
+    int64 protocolVersion = 6;
     int32 deployCount = 7;
     bytes extraBytes = 8;
 }
@@ -308,3 +308,9 @@ message Bond {
     int64 stake = 2;
 }
 // --------- End Core Protocol  --------
+
+// Technical message for mapping to new gossip structure.
+message BodyHashes {
+    bytes deploysHash = 1;
+    bytes stateHash = 2;
+}

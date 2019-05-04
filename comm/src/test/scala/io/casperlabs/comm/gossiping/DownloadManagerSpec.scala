@@ -241,7 +241,7 @@ class DownloadManagerSpec
                     connectToGossip = _ => remote,
                     backend = backend,
                     relaying = MockRelaying.default,
-                    retriesConf = defaultNoRetriesConf
+                    retriesConf = RetriesConf.noRetries
                   ).allocated
           (manager, release) = alloc
           _                  <- manager.scheduleDownload(summaryOf(block), source, relay = false)
@@ -264,7 +264,7 @@ class DownloadManagerSpec
                     connectToGossip = _ => MockGossipService(),
                     backend = MockBackend(),
                     relaying = MockRelaying.default,
-                    retriesConf = defaultNoRetriesConf
+                    retriesConf = RetriesConf.noRetries
                   ).allocated
           (manager, release) = alloc
           _                  <- release
@@ -520,8 +520,6 @@ class DownloadManagerSpec
 
 object DownloadManagerSpec {
 
-  val defaultNoRetriesConf: RetriesConf = RetriesConf(0, 1.second, 2.0)
-
   def summaryOf(block: Block): BlockSummary =
     BlockSummary()
       .withBlockHash(block.blockHash)
@@ -545,7 +543,7 @@ object DownloadManagerSpec {
         remote: Node => Task[GossipService[Task]] = _ => MockGossipService.default,
         maxParallelDownloads: Int = 1,
         relaying: MockRelaying = MockRelaying.default,
-        retriesConf: RetriesConf = defaultNoRetriesConf,
+        retriesConf: RetriesConf = RetriesConf.noRetries,
         timeout: FiniteDuration = 5.seconds
     )(
         test: TestArgs => Task[Unit]

@@ -118,7 +118,7 @@ object ExecEngineUtil {
       case (_, Some((eff, cost))) => (eff, cost)
     }
 
-  def effectsForBlock[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
+  def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[(StateHash, Seq[TransformEntry])] =
