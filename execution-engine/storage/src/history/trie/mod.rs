@@ -32,6 +32,13 @@ impl Pointer {
         }
     }
 
+    pub fn update(&self, hash: Blake2bHash) -> Self {
+        match self {
+            Pointer::LeafPointer(_) => Pointer::LeafPointer(hash),
+            Pointer::NodePointer(_) => Pointer::NodePointer(hash),
+        }
+    }
+
     fn tag(&self) -> u32 {
         match self {
             Pointer::LeafPointer(_) => 0,

@@ -199,6 +199,60 @@ where
     }
 }
 
+#[allow(clippy::type_complexity)]
+fn rehash<K, V, E>(
+    mut tip: Trie<K, V>,
+    parents: Parents<K, V>,
+) -> Result<Vec<(Blake2bHash, Trie<K, V>)>, E>
+where
+    K: ToBytes + Clone,
+    V: ToBytes + Clone,
+    E: From<common::bytesrepr::Error>,
+{
+    let mut ret: Vec<(Blake2bHash, Trie<K, V>)> = Vec::new();
+    let mut tip_hash = {
+        let trie_bytes = tip.to_bytes()?;
+        Blake2bHash::new(&trie_bytes)
+    };
+    ret.push((tip_hash, tip.to_owned()));
+
+    for (index, parent) in parents.into_iter().rev() {
+        match parent {
+            Trie::Leaf { .. } => {
+                panic!("parents should not contain any leaves");
+            }
+            Trie::Node { mut pointer_block } => {
+                tip = {
+                    let pointer = match tip {
+                        Trie::Leaf { .. } => Pointer::LeafPointer(tip_hash),
+                        Trie::Node { .. } => Pointer::NodePointer(tip_hash),
+                        Trie::Extension { .. } => Pointer::NodePointer(tip_hash),
+                    };
+                    pointer_block[index] = Some(pointer);
+                    Trie::Node { pointer_block }
+                };
+                tip_hash = {
+                    let node_bytes = tip.to_bytes()?;
+                    Blake2bHash::new(&node_bytes)
+                };
+                ret.push((tip_hash, tip.to_owned()))
+            }
+            Trie::Extension { affix, pointer } => {
+                tip = {
+                    let pointer = pointer.update(tip_hash);
+                    Trie::Extension { affix, pointer }
+                };
+                tip_hash = {
+                    let extension_bytes = tip.to_bytes()?;
+                    Blake2bHash::new(&extension_bytes)
+                };
+                ret.push((tip_hash, tip.to_owned()))
+            }
+        }
+    }
+    Ok(ret)
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum WriteResult {
     Written(Blake2bHash),
@@ -229,7 +283,8 @@ where
                 value: value.to_owned(),
             };
             let path: Vec<u8> = key.to_bytes()?;
-            let TrieScan { tip, .. } = scan::<K, V, T, S, E>(txn, store, &path, &current_root)?;
+            let TrieScan { tip, parents } =
+                scan::<K, V, T, S, E>(txn, store, &path, &current_root)?;
             let new_elements: Vec<(Blake2bHash, Trie<K, V>)> = match tip {
                 // If the "tip" is the same as the new leaf, then the leaf
                 // is already in the Trie.
@@ -241,7 +296,9 @@ where
                 Trie::Leaf {
                     key: ref leaf_key,
                     value: ref leaf_value,
-                } if key == leaf_key && value != leaf_value => unimplemented!(),
+                } if key == leaf_key && value != leaf_value => {
+                    rehash::<K, V, E>(new_leaf, parents)?
+                }
                 // If the "tip" is an existing leaf with a different key than
                 // the new leaf, then we are in a situation where the new leaf
                 // shares some common prefix with the existing leaf.
