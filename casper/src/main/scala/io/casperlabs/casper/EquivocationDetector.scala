@@ -1,13 +1,13 @@
 package io.casperlabs.casper
 
 import cats.{Applicative, Monad}
-import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper.protocol.{BlockMessage, Bond, Justification}
 import io.casperlabs.casper.util.{DoublyLinkedDag, ProtoUtil}
 import io.casperlabs.casper.util.ProtoUtil.{
@@ -108,7 +108,7 @@ object EquivocationDetector {
     } yield maybeCreatorJustification.latestBlockHash
 
   // See summary of algorithm above
-  def checkNeglectedEquivocationsWithUpdate[F[_]: Sync: BlockStore: FunctorRaise[
+  def checkNeglectedEquivocationsWithUpdate[F[_]: MonadThrowable: BlockStore: FunctorRaise[
     ?[_],
     InvalidBlock
   ]](
@@ -124,7 +124,7 @@ object EquivocationDetector {
       )
     )(FunctorRaise[F, InvalidBlock].raise[Unit](NeglectedEquivocation), Monad[F].unit)
 
-  private def isNeglectedEquivocationDetectedWithUpdate[F[_]: Sync: BlockStore](
+  private def isNeglectedEquivocationDetectedWithUpdate[F[_]: MonadThrowable: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
@@ -147,7 +147,7 @@ object EquivocationDetector {
     *
     * @return Whether a neglected equivocation was discovered.
     */
-  private def updateEquivocationsTracker[F[_]: Sync: BlockStore](
+  private def updateEquivocationsTracker[F[_]: MonadThrowable: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
@@ -180,7 +180,7 @@ object EquivocationDetector {
           } else ().pure[F]
     } yield neglectedEquivocationDetected
 
-  private def getEquivocationDiscoveryStatus[F[_]: Sync: BlockStore](
+  private def getEquivocationDiscoveryStatus[F[_]: MonadThrowable: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
@@ -208,7 +208,7 @@ object EquivocationDetector {
     }
   }
 
-  private def getEquivocationDiscoveryStatusForBondedValidator[F[_]: Sync: BlockStore](
+  private def getEquivocationDiscoveryStatusForBondedValidator[F[_]: MonadThrowable: BlockStore](
       equivocationRecord: EquivocationRecord,
       latestMessages: Map[Validator, BlockHash],
       stake: Long,
@@ -233,7 +233,7 @@ object EquivocationDetector {
       Applicative[F].pure(EquivocationDetected)
     }
 
-  private def isEquivocationDetectable[F[_]: Sync: BlockStore](
+  private def isEquivocationDetectable[F[_]: MonadThrowable: BlockStore](
       latestMessages: Seq[(Validator, BlockHash)],
       equivocationRecord: EquivocationRecord,
       equivocationChildren: Set[BlockMessage],
@@ -251,7 +251,7 @@ object EquivocationDetector {
         )
     }
 
-  private def isEquivocationDetectableAfterViewingBlock[F[_]: Sync: BlockStore](
+  private def isEquivocationDetectableAfterViewingBlock[F[_]: MonadThrowable: BlockStore](
       justificationBlockHash: BlockHash,
       equivocationRecord: EquivocationRecord,
       equivocationChildren: Set[BlockMessage],
@@ -273,7 +273,7 @@ object EquivocationDetector {
       } yield equivocationDetected
     }
 
-  private def isEquivocationDetectableThroughChildren[F[_]: Sync: BlockStore](
+  private def isEquivocationDetectableThroughChildren[F[_]: MonadThrowable: BlockStore](
       equivocationRecord: EquivocationRecord,
       equivocationChildren: Set[BlockMessage],
       remainder: Seq[(Validator, BlockHash)],
@@ -304,7 +304,7 @@ object EquivocationDetector {
     } yield equivocationDetected
   }
 
-  private def maybeAddEquivocationChild[F[_]: Sync: BlockStore](
+  private def maybeAddEquivocationChild[F[_]: MonadThrowable: BlockStore](
       justificationBlock: BlockMessage,
       equivocatingValidator: Validator,
       equivocationBaseBlockSeqNum: SequenceNumber,

@@ -1,6 +1,5 @@
 package io.casperlabs.casper.util
 
-import cats.effect.Sync
 import cats.data.OptionT
 import cats.implicits._
 import cats.{Applicative, Monad}
@@ -11,6 +10,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.protocol.{DeployData, _}
 import io.casperlabs.casper.util.implicits._
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
@@ -48,7 +48,7 @@ object ProtoUtil {
       } yield result
     }
 
-  def getMainChainUntilDepth[F[_]: Sync: BlockStore](
+  def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
       depth: Int
@@ -77,13 +77,13 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  def unsafeGetBlock[F[_]: Sync: BlockStore](hash: BlockHash): F[BlockMessage] =
+  def unsafeGetBlock[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
       maybeBlock <- BlockStore[F].getBlockMessage(hash)
       block <- maybeBlock match {
                 case Some(b) => b.pure[F]
                 case None =>
-                  Sync[F].raiseError(
+                  MonadThrowable[F].raiseError(
                     new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
                   )
               }
@@ -239,7 +239,7 @@ object ProtoUtil {
   def parentHashes(b: BlockMessage): Seq[ByteString] =
     b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
-  def unsafeGetParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
+  def unsafeGetParents[F[_]: MonadThrowable: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }
@@ -283,7 +283,7 @@ object ProtoUtil {
    * TODO: Update the logic of this function to make use of the trace logs and
    * say that two blocks don't conflict if they act on disjoint sets of channels
    */
-  def conflicts[F[_]: Sync: BlockStore: Log](
+  def conflicts[F[_]: MonadThrowable: BlockStore: Log](
       b1: BlockMessage,
       b2: BlockMessage,
       genesis: BlockMessage,
@@ -334,7 +334,7 @@ object ProtoUtil {
                }
     } yield result
 
-  def chooseNonConflicting[F[_]: Sync: BlockStore: Log](
+  def chooseNonConflicting[F[_]: MonadThrowable: BlockStore: Log](
       blockHashes: Seq[BlockHash],
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -382,7 +382,7 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: Sync: BlockStore](
+  def toLatestMessage[F[_]: MonadThrowable: BlockStore](
       justifications: Seq[Justification],
       dag: BlockDagRepresentation[F]
   ): F[immutable.Map[Validator, BlockMetadata]] =
