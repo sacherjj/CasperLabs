@@ -145,7 +145,7 @@ pipeline:
   run-integration-tests:
     <<: *sbtenv
     commands:
-      - python3 -m pip install pipenv dataclasses typing_extensions
+      - python3 -m pip install pipenv dataclasses typing_extensions protobuf grpcio
       - cd integration-testing
       - ./run_tests.sh
     volumes:
