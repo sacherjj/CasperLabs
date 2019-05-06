@@ -225,7 +225,7 @@ package object effects {
         }
     }
 
-  def diagnostics(
+  def diagnosticsService(
       implicit nodeDiscovery: NodeDiscovery[Task],
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],

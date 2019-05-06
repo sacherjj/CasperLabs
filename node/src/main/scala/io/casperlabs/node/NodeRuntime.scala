@@ -39,7 +39,6 @@ import io.casperlabs.p2p.effects._
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
-import kamon._
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
@@ -76,11 +75,6 @@ class NodeRuntime private[node] (
   val metrics = diagnostics.effects.metrics[Task]
   val metricsEff: Metrics[EitherT[Task, CommError, ?]] =
     Metrics.eitherT[CommError, Task](Monad[Task], metrics)
-
-  case class Servers(
-      // Metrics
-      httpServer: Fiber[Task, Unit]
-  )
 
   /**
     * Main node entry. It will:
@@ -138,7 +132,7 @@ class NodeRuntime private[node] (
         safetyOracle = SafetyOracle
           .cliqueOracle[Effect](Monad[Effect], logEff)
 
-        _ <- api.Servers
+        _ <- Servers
               .diagnosticsServerR(
                 conf.grpc.portInternal,
                 conf.server.maxMessageSize,
@@ -152,7 +146,7 @@ class NodeRuntime private[node] (
                 scheduler
               )
 
-        _ <- api.Servers.deploymentServerR[Effect](
+        _ <- Servers.deploymentServerR[Effect](
               conf.grpc.portExternal,
               conf.server.maxMessageSize,
               grpcScheduler
@@ -165,6 +159,17 @@ class NodeRuntime private[node] (
               safetyOracle,
               blockStore,
               executionEngineService,
+              scheduler
+            )
+
+        _ <- Servers.httpServerR(
+              conf.server.httpPort,
+              conf,
+              id
+            )(
+              log,
+              nodeDiscovery,
+              connectionsCell,
               scheduler
             )
 
@@ -261,41 +266,7 @@ class NodeRuntime private[node] (
       _ <- handleUnrecoverableErrors(program)
     } yield ()
 
-  private def acquireServers()(
-      implicit
-      nodeDiscovery: NodeDiscovery[Task],
-      blockStore: BlockStore[Effect],
-      oracle: SafetyOracle[Effect],
-      multiParentCasperRef: MultiParentCasperRef[Effect],
-      connectionsCell: ConnectionsCell[Task],
-      concurrent: Concurrent[Effect]
-  ): Effect[Servers] = {
-    implicit val s: Scheduler = scheduler
-
-    val prometheusReporter = new NewPrometheusReporter()
-    val prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
-
-    for {
-
-      httpServerFiber <- BlazeBuilder[Task]
-                          .bindHttp(conf.server.httpPort, "0.0.0.0")
-                          .mountService(prometheusService, "/metrics")
-                          .mountService(VersionInfo.service, "/version")
-                          .mountService(StatusInfo.service, "/status")
-                          .resource
-                          .use(_ => Task.never[Unit])
-                          .start
-                          .toEffect
-
-      metrics = new MetricsRuntime[Effect](conf, id)
-      _       <- metrics.setupMetrics(prometheusReporter)
-
-    } yield Servers(httpServerFiber)
-  }
-
-  private def clearResources[F[_]: Monad](
-      servers: Servers
-  )(
+  private def clearResources[F[_]: Monad]()(
       implicit
       transport: TransportLayer[Task],
       peerNodeAsk: NodeAsk[Task]
@@ -305,20 +276,15 @@ class NodeRuntime private[node] (
       loc <- peerNodeAsk.ask
       msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
-      _   <- log.info("Shutting down HTTP server....")
-      _   <- Task.delay(Kamon.stopAllReporters())
-      _   <- servers.httpServer.cancel
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
-  private def addShutdownHook[F[_]: Monad](
-      servers: Servers
-  )(
+  private def addShutdownHook[F[_]: Monad]()(
       implicit transport: TransportLayer[Task],
       peerNodeAsk: NodeAsk[Task]
   ): Task[Unit] =
     Task.delay(
-      sys.addShutdownHook(clearResources(servers))
+      sys.addShutdownHook(clearResources())
     )
 
   private def nodeProgram(
@@ -371,11 +337,10 @@ class NodeRuntime private[node] (
       } yield ()
 
     for {
-      _       <- info
-      local   <- peerNodeAsk.ask.toEffect
-      host    = local.host
-      servers <- acquireServers()
-      _       <- addShutdownHook(servers).toEffect
+      _     <- info
+      local <- peerNodeAsk.ask.toEffect
+      host  = local.host
+      _     <- addShutdownHook().toEffect
       _ <- TransportLayer[Effect].receive(
             pm => HandleMessages.handle[Effect](pm, defaultTimeout),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
