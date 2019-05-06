@@ -211,39 +211,45 @@ object ExecEngineUtil {
           .map { case (group, _) => group.sorted(Order[A].toOrdering) }
 
         // always choose the first parent
-        initChosen       = Vector(0)
-        initChosenEffect <- netEffect(groups(0)).map(toOps)
+        initChosen      = Vector(0)
+        initChosenGroup = groups(0)
         // effects chosen apart from the first parent
         initNonFirstEffect = Monoid[T].empty
 
         chosen <- (1 until n).toList
-                   .foldM[F, (Vector[Int], OpMap[K], T)](
-                     (initChosen, initChosenEffect, initNonFirstEffect)
+                   .foldM[F, (Vector[Int], Vector[A], T)](
+                     (initChosen, initChosenGroup, initNonFirstEffect)
                    ) {
                      case (
-                         unchanged @ (chosenSet, chosenEffect, chosenNonFirstEffect),
+                         unchanged @ (chosenSet, chosenGroup, chosenNonFirstEffect),
                          candidate
                          ) =>
-                       val candidateEffectF = netEffect(
-                         groups(candidate)
-                           .filterNot { // remove ancestors already included in the chosenSet
-                             block =>
-                               val ancestry = uncommonAncestors(block)
-                               chosenSet.exists(i => ancestry.contains(i))
-                           }
+                       val candidateGroup = groups(candidate)
+                         .filterNot { // remove ancestors already included in the chosenSet
+                           block =>
+                             val ancestry = uncommonAncestors(block)
+                             chosenSet.exists(i => ancestry.contains(i))
+                         }
+
+                       val chosenEffectF = netEffect(
+                         // remove ancestors already included in the candidate itself
+                         chosenGroup.filterNot { block =>
+                           uncommonAncestors(block).contains(candidate)
+                         }
                        )
 
                        // if candidate commutes with chosen set, then included, otherwise do not include it
-                       candidateEffectF.map { candidateEffect =>
-                         val ops = toOps(candidateEffect)
-                         if (chosenEffect ~ ops)
-                           (
-                             chosenSet :+ candidate,
-                             chosenEffect + ops,
-                             Monoid[T].combine(chosenNonFirstEffect, candidateEffect)
-                           )
-                         else
-                           unchanged
+                       chosenEffectF.flatMap { chosenEffect =>
+                         netEffect(candidateGroup).map { candidateEffect =>
+                           if (toOps(chosenEffect) ~ toOps(candidateEffect))
+                             (
+                               chosenSet :+ candidate,
+                               chosenGroup ++ candidateGroup,
+                               Monoid[T].combine(chosenNonFirstEffect, candidateEffect)
+                             )
+                           else
+                             unchanged
+                         }
                        }
                    }
         // The effect we return is the one which would be applied onto the first parent's

@@ -518,6 +518,28 @@ class ExecEngineUtilTest
     result shouldBe (bOps + cOps, Vector(a, b, c))
   }
 
+  // test case courtesy of @afck: https://github.com/CasperLabs/CasperLabs/pull/385#discussion_r281099630
+  it should "not consider effects of ancestors common to the presently chosen set and the candidate being merged" in {
+    val genesis = OpDagNode.genesis(Map(1 -> Op.Read))
+    val b1Ops   = Map(1 -> Op.Write)
+    val a2Ops   = Map(2 -> Op.Write)
+    val b2Ops   = Map(1 -> Op.Write)
+    val c2Ops   = Map(4 -> Op.Add)
+
+    val b1 = OpDagNode.withParents(b1Ops, List(genesis))
+    val a2 = OpDagNode.withParents(a2Ops, List(b1))
+    val b2 = OpDagNode.withParents(b2Ops, List(b1))
+    val c2 = OpDagNode.withParents(c2Ops, List(genesis))
+
+    // b1 and b2 both write to the same key, however since b1 is an ancestor of b2 and no other blocks
+    // write to that key, this should not impact the merge
+
+    implicit val order = ExecEngineUtilTest.opDagNodeOrder(List(a2, b2, c2))
+    val result         = OpDagNode.merge(Vector(a2, b2, c2))
+
+    result shouldBe (b2Ops + c2Ops, Vector(a2, b2, c2))
+  }
+
   it should "correctly merge in the case of conflicting multiple blocks with shared history" in {
     val genesis = OpDagNode.genesis(Map(1 -> Op.Read))
     val aOps    = Map(2 -> Op.Write) // both a and b try to write to 2
