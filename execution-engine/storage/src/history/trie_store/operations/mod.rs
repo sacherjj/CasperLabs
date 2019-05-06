@@ -260,12 +260,26 @@ fn common_prefix<A: Eq + Clone>(ls: &[A], rs: &[A]) -> Vec<A> {
         .collect()
 }
 
+fn get_parents_path<K, V>(parents: &[(usize, Trie<K, V>)]) -> Vec<u8> {
+    let mut ret = Vec::new();
+    for (index, element) in parents.iter() {
+        if let Trie::Extension { affix, .. } = element {
+            ret.extend(affix);
+        } else {
+            // TODO: don't downcast
+            assert!(*index < std::u8::MAX as usize);
+            ret.push(index.to_owned() as u8);
+        }
+    }
+    ret
+}
+
 /// Takes a path to a leaf, that leaf's parent node, and the parents of that
 /// node, and adds the node to the parents.
 ///
 /// This function will panic if the the path to the leaf and the path to its
 /// parent node do not share a common prefix.
-fn add_parent_node<K, V>(
+fn add_node_to_parents<K, V>(
     path_to_leaf: &[u8],
     new_parent_node: Trie<K, V>,
     mut parents: Parents<K, V>,
@@ -282,19 +296,7 @@ where
     // The current depth will be the length of the path to the new parent node.
     let depth: usize = {
         // Get the path to this node
-        let path_to_node: Vec<u8> = {
-            let mut ret = Vec::new();
-            for (index, element) in parents.iter() {
-                if let Trie::Extension { affix, .. } = element {
-                    ret.extend(affix);
-                } else {
-                    // TODO: don't downcast
-                    assert!(*index < std::u8::MAX as usize);
-                    ret.push(index.to_owned() as u8);
-                }
-            }
-            ret
-        };
+        let path_to_node: Vec<u8> = get_parents_path(&parents);
         // Check that the path to the node is a prefix of the current path
         let current_path = common_prefix(&path_to_leaf, &path_to_node);
         assert_eq!(current_path, path_to_node);
@@ -313,6 +315,54 @@ where
     // Add node to parents, along with index to modify
     parents.push((index, new_parent_node));
     Ok(parents)
+}
+
+#[allow(clippy::type_complexity)]
+fn reparent_leaf<K, V>(
+    new_leaf_path: &[u8],
+    existing_leaf_path: &[u8],
+    mut parents: Parents<K, V>,
+) -> Result<(Trie<K, V>, Parents<K, V>), bytesrepr::Error>
+where
+    K: ToBytes,
+    V: ToBytes,
+{
+    let (child_index, parent) = parents.pop().expect("parents should not be empty");
+    match parent {
+        Trie::Node { pointer_block } => {
+            // Get the path that the new leaf and existing leaf share
+            let shared_path = common_prefix(&new_leaf_path, &existing_leaf_path);
+            // Assemble a new node to hold the existing leaf. The new leaf will
+            // be added later during the add_parent_node and rehash phase.
+            let new_node = {
+                let index: usize = existing_leaf_path[shared_path.len()].into();
+                let existing_leaf_pointer =
+                    pointer_block[child_index].expect("parent has lost the existing leaf");
+                Trie::node(&[(index, existing_leaf_pointer)])
+            };
+            // Re-add the parent node to parents
+            parents.push((child_index, Trie::Node { pointer_block }));
+            // Create an affix for a possible extension node
+            let affix = {
+                let parents_path = get_parents_path(&parents);
+                &shared_path[parents_path.len()..]
+            };
+            // If the affix is non-empty, create an extension node and add it
+            // to parents.
+            if !affix.is_empty() {
+                let new_extension = {
+                    let new_node_hash = {
+                        let new_node_bytes = new_node.to_bytes()?;
+                        Blake2bHash::new(&new_node_bytes)
+                    };
+                    Trie::extension(affix.to_vec(), Pointer::NodePointer(new_node_hash))
+                };
+                parents.push((child_index, new_extension));
+            }
+            Ok((new_node, parents))
+        }
+        _ => panic!("A leaf should have a node for its parent"),
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -363,15 +413,21 @@ where
                 // the new leaf, then we are in a situation where the new leaf
                 // shares some common prefix with the existing leaf.
                 Trie::Leaf {
-                    key: ref leaf_key, ..
-                } if key != leaf_key => unimplemented!(),
+                    key: ref existing_leaf_key,
+                    ..
+                } if key != existing_leaf_key => {
+                    let existing_leaf_path = existing_leaf_key.to_bytes()?;
+                    let (new_node, parents) = reparent_leaf(&path, &existing_leaf_path, parents)?;
+                    let parents = add_node_to_parents(&path, new_node, parents)?;
+                    rehash(new_leaf, parents)?
+                }
                 // This case is unreachable, but the compiler can't figure
                 // that out.
                 Trie::Leaf { .. } => unreachable!(),
                 // If the "tip" is an existing node, then we can add a pointer
                 // to the new leaf to the node's pointer block.
                 node @ Trie::Node { .. } => {
-                    let parents = add_parent_node(&path, node, parents)?;
+                    let parents = add_node_to_parents(&path, node, parents)?;
                     rehash(new_leaf, parents)?
                 }
                 // If the "tip" is an extension node, then we must modify or

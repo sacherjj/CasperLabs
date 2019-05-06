@@ -235,6 +235,23 @@ impl InMemoryEnvironment {
     pub fn new() -> Self {
         Default::default()
     }
+
+    pub fn dump<K, V>(&self) -> Result<HashMap<Blake2bHash, Trie<K, V>>, in_memory::Error>
+    where
+        K: FromBytes,
+        V: FromBytes,
+    {
+        self.data
+            .lock()?
+            .iter()
+            .map(|(hash_bytes, trie_bytes)| {
+                let hash: Blake2bHash = deserialize(hash_bytes)?;
+                let trie: Trie<K, V> = deserialize(trie_bytes)?;
+                Ok((hash, trie))
+            })
+            .collect::<Result<HashMap<Blake2bHash, Trie<K, V>>, bytesrepr::Error>>()
+            .map_err(Into::into)
+    }
 }
 
 impl<'a> TransactionSource<'a> for InMemoryEnvironment {

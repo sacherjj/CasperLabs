@@ -817,12 +817,13 @@ mod write {
 
     mod empty_tries {
         use super::*;
+        use std::collections::HashMap;
 
-        fn node_writes_to_n_leaf_empty_trie_had_expected_results<'a, R, S, E>(
+        fn writes_to_n_leaf_empty_trie_had_expected_results<'a, R, S, E>(
             environment: &'a R,
             store: &S,
             states: &[Blake2bHash],
-            num_leaves: usize,
+            test_leaves: &[TestTrie],
         ) -> Result<(), E>
         where
             R: TransactionSource<'a, Handle = S::Handle>,
@@ -831,21 +832,16 @@ mod write {
             E: From<R::Error> + From<S::Error> + From<common::bytesrepr::Error>,
         {
             let mut states = states.to_vec();
-            let test_leaves = TEST_LEAVES_NON_COLLIDING;
 
             // Write set of leaves to the trie
-            let hashes = write_leaves::<R, S, E>(
-                environment,
-                store,
-                states.last().unwrap(),
-                &test_leaves[..num_leaves],
-            )?
-            .iter()
-            .map(|result| match result {
-                WriteResult::Written(root_hash) => *root_hash,
-                _ => panic!("write_leaves resulted in non-write"),
-            })
-            .collect::<Vec<Blake2bHash>>();
+            let hashes =
+                write_leaves::<R, S, E>(environment, store, states.last().unwrap(), &test_leaves)?
+                    .iter()
+                    .map(|result| match result {
+                        WriteResult::Written(root_hash) => *root_hash,
+                        _ => panic!("write_leaves resulted in non-write"),
+                    })
+                    .collect::<Vec<Blake2bHash>>();
 
             states.extend(hashes);
 
@@ -860,13 +856,13 @@ mod write {
         }
 
         #[test]
-        fn lmdb_node_writes_to_n_leaf_empty_trie_had_expected_results() {
+        fn lmdb_non_colliding_writes_to_n_leaf_empty_trie_had_expected_results() {
             for num_leaves in 1..=TEST_LEAVES_LENGTH {
                 let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
                 let mut context = LmdbTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
 
-                node_writes_to_n_leaf_empty_trie_had_expected_results::<
+                writes_to_n_leaf_empty_trie_had_expected_results::<
                     LmdbEnvironment,
                     LmdbTrieStore,
                     error::Error,
@@ -874,20 +870,20 @@ mod write {
                     &context.environment,
                     &context.store,
                     &initial_states,
-                    num_leaves,
+                    &TEST_LEAVES_NON_COLLIDING[..num_leaves],
                 )
                 .unwrap()
             }
         }
 
         #[test]
-        fn in_memory_node_writes_to_n_leaf_empty_trie_had_expected_results() {
+        fn in_memory_non_colliding_writes_to_n_leaf_empty_trie_had_expected_results() {
             for num_leaves in 1..=TEST_LEAVES_LENGTH {
                 let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
                 let mut context = InMemoryTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
 
-                node_writes_to_n_leaf_empty_trie_had_expected_results::<
+                writes_to_n_leaf_empty_trie_had_expected_results::<
                     InMemoryEnvironment,
                     InMemoryTrieStore,
                     in_memory::Error,
@@ -895,10 +891,87 @@ mod write {
                     &context.environment,
                     &context.store,
                     &initial_states,
-                    num_leaves,
+                    &TEST_LEAVES_NON_COLLIDING[..num_leaves],
                 )
                 .unwrap()
             }
+        }
+
+        #[test]
+        fn lmdb_writes_to_n_leaf_empty_trie_had_expected_results() {
+            // TODO: alter bounds
+            for num_leaves in 1..TEST_LEAVES_LENGTH {
+                let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
+                let context = LmdbTestContext::new(&tries).unwrap();
+                let initial_states = vec![root_hash];
+
+                writes_to_n_leaf_empty_trie_had_expected_results::<
+                    LmdbEnvironment,
+                    LmdbTrieStore,
+                    error::Error,
+                >(
+                    &context.environment,
+                    &context.store,
+                    &initial_states,
+                    &TEST_LEAVES[..num_leaves],
+                )
+                .unwrap()
+            }
+        }
+
+        #[test]
+        fn in_memory_writes_to_n_leaf_empty_trie_had_expected_results() {
+            // TODO: alter bounds
+            for num_leaves in 1..TEST_LEAVES_LENGTH {
+                let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
+                let context = InMemoryTestContext::new(&tries).unwrap();
+                let initial_states = vec![root_hash];
+
+                writes_to_n_leaf_empty_trie_had_expected_results::<
+                    InMemoryEnvironment,
+                    InMemoryTrieStore,
+                    in_memory::Error,
+                >(
+                    &context.environment,
+                    &context.store,
+                    &initial_states,
+                    &TEST_LEAVES[..num_leaves],
+                )
+                .unwrap()
+            }
+        }
+
+        #[test]
+        fn in_memory_writes_to_n_leaf_empty_trie_had_expected_store_contents() {
+            let expected_contents: HashMap<Blake2bHash, TestTrie> = {
+                let mut ret = HashMap::new();
+                // TODO: remove bounds
+                for generator in &TEST_TRIE_GENERATORS[..5] {
+                    let (_, tries) = generator().unwrap();
+                    for HashedTestTrie { hash, trie } in tries {
+                        ret.insert(hash, trie);
+                    }
+                }
+                ret
+            };
+
+            let actual_contents: HashMap<Blake2bHash, TestTrie> = {
+                let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
+                let context = InMemoryTestContext::new(&tries).unwrap();
+
+                write_leaves::<_, _, in_memory::Error>(
+                    &context.environment,
+                    &context.store,
+                    &root_hash,
+                    // TODO: remove bounds
+                    &TEST_LEAVES[..4],
+                )
+                .unwrap();
+
+                context.environment.dump().unwrap()
+            };
+
+            assert_eq!(expected_contents, actual_contents)
         }
     }
 
