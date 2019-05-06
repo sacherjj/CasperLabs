@@ -15,7 +15,8 @@ object GrpcServer {
       port: Int,
       services: List[ServiceBinder[F]],
       interceptors: List[ServerInterceptor] = Nil,
-      sslContext: Option[SslContext] = None
+      sslContext: Option[SslContext] = None,
+      maxMessageSize: Option[Int] = None
   )(
       implicit scheduler: Scheduler
   ): Resource[F, Server] =
@@ -28,6 +29,7 @@ object GrpcServer {
         sslContext.foreach(builder.sslContext(_))
         boundService.foreach(builder.addService(_))
         interceptors.foreach(builder.intercept(_))
+        maxMessageSize.foreach(builder.maxMessageSize(_))
 
         builder.build.start
       }
