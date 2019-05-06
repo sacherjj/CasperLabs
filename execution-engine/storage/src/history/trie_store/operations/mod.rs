@@ -1,4 +1,4 @@
-use common::bytesrepr::ToBytes;
+use common::bytesrepr::{self, ToBytes};
 use history::trie::{self, Parents, Pointer, Trie};
 use history::trie_store::{Readable, TrieStore, Writable};
 use shared::newtypes::Blake2bHash;
@@ -200,14 +200,13 @@ where
 }
 
 #[allow(clippy::type_complexity)]
-fn rehash<K, V, E>(
+fn rehash<K, V>(
     mut tip: Trie<K, V>,
     parents: Parents<K, V>,
-) -> Result<Vec<(Blake2bHash, Trie<K, V>)>, E>
+) -> Result<Vec<(Blake2bHash, Trie<K, V>)>, bytesrepr::Error>
 where
     K: ToBytes + Clone,
     V: ToBytes + Clone,
-    E: From<common::bytesrepr::Error>,
 {
     let mut ret: Vec<(Blake2bHash, Trie<K, V>)> = Vec::new();
     let mut tip_hash = {
@@ -296,9 +295,7 @@ where
                 Trie::Leaf {
                     key: ref leaf_key,
                     value: ref leaf_value,
-                } if key == leaf_key && value != leaf_value => {
-                    rehash::<K, V, E>(new_leaf, parents)?
-                }
+                } if key == leaf_key && value != leaf_value => rehash(new_leaf, parents)?,
                 // If the "tip" is an existing leaf with a different key than
                 // the new leaf, then we are in a situation where the new leaf
                 // shares some common prefix with the existing leaf.
