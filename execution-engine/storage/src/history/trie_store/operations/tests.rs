@@ -728,9 +728,11 @@ mod write {
                 let write_result = write::<TestKey, TestValue, R::ReadWriteTransaction, S, E>(
                     &mut txn, store, &root_hash, key, value,
                 )?;
-                root_hash = match write_result {
-                    WriteResult::Written(root_hash) => root_hash,
-                    WriteResult::AlreadyExists => root_hash,
+                match write_result {
+                    WriteResult::Written(hash) => {
+                        root_hash = hash;
+                    }
+                    WriteResult::AlreadyExists => (),
                     WriteResult::RootNotFound => panic!("write_leaves given an invalid root"),
                 };
                 results.push(write_result);
