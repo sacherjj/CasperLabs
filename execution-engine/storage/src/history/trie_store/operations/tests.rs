@@ -840,11 +840,10 @@ mod write {
             )?
             .iter()
             .map(|result| match result {
-                WriteResult::Written(root_hash) => Some(*root_hash),
-                _ => None,
+                WriteResult::Written(root_hash) => *root_hash,
+                _ => panic!("write_leaves resulted in non-write"),
             })
-            .collect::<Option<Vec<Blake2bHash>>>()
-            .unwrap();
+            .collect::<Vec<Blake2bHash>>();
 
             states.extend(hashes);
 
@@ -1199,11 +1198,10 @@ mod write {
             )?
             .iter()
             .map(|result| match result {
-                WriteResult::Written(root_hash) => Some(*root_hash),
-                _ => None,
+                WriteResult::Written(root_hash) => *root_hash,
+                _ => panic!("write_leaves resulted in non-write"),
             })
-            .collect::<Option<Vec<Blake2bHash>>>()
-            .unwrap();
+            .collect::<Vec<Blake2bHash>>();
 
             states.extend(hashes);
 
@@ -1308,11 +1306,10 @@ mod write {
             )?
             .iter()
             .map(|result| match result {
-                WriteResult::Written(root_hash) => Some(*root_hash),
-                _ => None,
+                WriteResult::Written(root_hash) => *root_hash,
+                _ => panic!("write_leaves resulted in non-write"),
             })
-            .collect::<Option<Vec<Blake2bHash>>>()
-            .unwrap();
+            .collect::<Vec<Blake2bHash>>();
 
             states.extend(hashes);
 
