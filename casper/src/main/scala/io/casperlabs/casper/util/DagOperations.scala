@@ -7,7 +7,7 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.util.MapHelper.updatedWith
-import io.casperlabs.catscontrib.ListContrib
+import io.casperlabs.catscontrib.{ListContrib, MonadThrowable}
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.StreamT
 
@@ -199,7 +199,7 @@ object DagOperations {
   //Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.
   //Based on that, we compute by finding the first block from genesis for which there
   //exists a child of that block which is an ancestor of b1 or b2 but not both.
-  def greatestCommonAncestorF[F[_]: Monad: BlockStore](
+  def greatestCommonAncestorF[F[_]: MonadThrowable: BlockStore](
       b1: BlockMessage,
       b2: BlockMessage,
       genesis: BlockMessage,

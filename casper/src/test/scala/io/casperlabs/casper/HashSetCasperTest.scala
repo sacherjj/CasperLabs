@@ -11,6 +11,7 @@ import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
 import io.casperlabs.casper.helper.{
   BlockDagStorageTestFixture,
   BlockUtil,
+  GossipServiceCasperTestNodeFactory,
   HashSetCasperTestNode,
   HashSetCasperTestNodeFactory,
   TransportLayerCasperTestNode,
@@ -43,6 +44,9 @@ import scala.concurrent.duration.Duration
 /** Run tests using the TransportLayer. */
 class TransportLayerCasperTest extends HashSetCasperTest with TransportLayerCasperTestNodeFactory
 
+/** Run tests using the GossipService and co. */
+class GossipServiceCasperTest extends HashSetCasperTest with GossipServiceCasperTestNodeFactory
+
 /** Run tests against whatever kind of test node the inheriting sets up. */
 abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasperTestNodeFactory {
 
@@ -63,7 +67,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
-  "HashSetCasper" should "accept deploys" in effectTest {
+  behavior of "HashSetCasper"
+
+  it should "accept deploys" in effectTest {
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
@@ -240,13 +246,11 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     for {
       nodes              <- networkEff(validatorKeys.take(2), genesis, transforms)
       List(node0, node1) = nodes.toList
-
       unsignedBlock <- (node0.casperEff.deploy(data0) *> node0.casperEff.createBlock)
                         .map {
                           case Created(block) =>
                             block.copy(sigAlgorithm = "invalid", sig = ByteString.EMPTY)
                         }
-
       _ <- node0.casperEff.addBlock(unsignedBlock)
       _ <- node1.clearMessages() //node1 misses this block
 
@@ -294,7 +298,11 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _                    <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
-              blockStore.getBlockMessage(signedBlock.blockHash) shouldBeF Some(signedBlock)
+              blockStore
+                .getBlockMessage(signedBlock.blockHash)
+                .map(_.map(_.toProtoString)) shouldBeF Some(
+                signedBlock.toProtoString
+              )
             }(nodes(0).metricEff, nodes(0).logEff)
           }
     } yield result
@@ -618,12 +626,15 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _ <- nodes(2).casperEff.contains(signedBlock1) shouldBeF true
       _ <- nodes(2).casperEff.contains(signedBlock2) shouldBeF true
-
+      // TransportLayer gets 1 block, 1 is missing. GossipService gets 1 hash, 2 block missing.
       _ = nodes(2).logEff.infos
-        .count(_ startsWith "Requested missing block") should be(1)
-      result = nodes(1).logEff.infos.count(
-        s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
-      ) should be(1)
+        .count(_ startsWith "Requested missing block") should (be >= 1 and be <= 2)
+      // TransportLayer controlled by .receive calls, only node(1) responds. GossipService has unlimited retrieve, goes to node(0).
+      result = (0 to 1)
+        .flatMap(nodes(_).logEff.infos)
+        .count(
+          s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
+        ) should be >= 1
 
       _ <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
@@ -670,6 +681,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       () => ProtoUtil.sourceDeploy("2", System.currentTimeMillis, Integer.MAX_VALUE)
     )
 
+    /** Create a block from a deploy and add it on that node. */
     def deploy(node: HashSetCasperTestNode[Effect], dd: DeployData): Effect[BlockMessage] =
       for {
         createBlockResult1    <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
@@ -678,6 +690,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
         _ <- node.casperEff.addBlock(signedBlock1)
       } yield signedBlock1
 
+    /** nodes 0 and 1 create blocks in parallel; node 2 misses both, e.g. a1 and a2. */
     def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]) =
       for {
         _ <- deploy(nodes(0), deployDatasFs(0).apply())
@@ -688,6 +701,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
         _ <- nodes(2).clearMessages() //nodes(2) misses this block
       } yield ()
 
+    /** node 0 creates a block; node 1 gets it but node 2 doesn't. */
     def stepSingle(nodes: Seq[HashSetCasperTestNode[Effect]]) =
       for {
         _ <- deploy(nodes(0), deployDatasFs(0).apply())
@@ -719,15 +733,20 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       // this block will be propagated to all nodes and force nodes(2) to ask for missing blocks.
       br <- deploy(nodes(0), deployDatasFs(0).apply()) // block h1
-      _  <- nodes(0).casperEff.contains(br) shouldBeF true
 
-      _ <- List.fill(22)(propagate(nodes)).toList.sequence // force the network to communicate
-
+      // node(0) just created this block, so it should have it.
+      _ <- nodes(0).casperEff.contains(br) shouldBeF true
+      // Let every node get everything.
+      _ <- List.fill(22)(propagate(nodes)).toList.sequence
+      // By now node(2) should have received all dependencies and added block h1
       _ <- nodes(2).casperEff.contains(br) shouldBeF true
-
+      // And if we create one more block on top of h1 it should be the only parent.
       nr <- deploy(nodes(2), deployDatasFs(0).apply())
-      _  = nr.header.get.parentsHashList shouldBe Seq(br.blockHash)
-      _  <- nodes.map(_.tearDownNode()).toList.sequence
+      _ = nr.header.get.parentsHashList.map(PrettyPrinter.buildString(_)) shouldBe Seq(
+        PrettyPrinter.buildString(br.blockHash)
+      )
+
+      _ <- nodes.map(_.tearDownNode()).toList.sequence
     } yield ()
   }
 
@@ -771,14 +790,17 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       nodes       <- networkEff(validatorKeys.take(3), genesis, transforms)
       deployDatas <- (0 to 5).toList.traverse[Effect, DeployData](ProtoUtil.basicDeployData[Effect])
 
-      // Creates a pair that constitutes equivocation blocks
+      // Creates a pair that constitutes equivocation blocks.
       createBlockResult1 <- nodes(0).casperEff
                              .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
       Created(signedBlock1) = createBlockResult1
+      // Create a 2nd block without storing the 1st, so they have the same parent.
       createBlockResult1Prime <- nodes(0).casperEff
                                   .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
       Created(signedBlock1Prime) = createBlockResult1Prime
 
+      // NOTE: Adding a block created (but not stored) by node(0) directly to node(1)
+      // is not something you can normally achieve with gossiping.
       _ <- nodes(1).casperEff.addBlock(signedBlock1)
       _ <- nodes(0).clearMessages() //nodes(0) misses this block
       _ <- nodes(2).clearMessages() //nodes(2) misses this block
@@ -793,6 +815,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF false
       _ <- nodes(2).casperEff.contains(signedBlock1Prime) shouldBeF true
 
+      // Now that node(1) and node(2) have different blocks, they each create one on top of theirs.
       createBlockResult2 <- nodes(1).casperEff
                              .deploy(deployDatas(2)) *> nodes(1).casperEff.createBlock
       Created(signedBlock2) = createBlockResult2
@@ -807,6 +830,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(2).receive() // receives request for block1'; sends block1'
       _ <- nodes(1).receive() // receives block1'; adds both block3 and block1'
 
+      // node(1) should have both block2 and block3 at this point and recognize the equivocation.
+      // Because node(1) will also see that the signedBlock3 is building on top of signedBlock1Prime,
+      // it should download signedBlock1Prime as an `AdmissibleEquivocation`; otherwise if it didn't
+      // have an offspring it would be an `IgnorableEquivocation` and dropped.
       _ <- nodes(1).casperEff.contains(signedBlock3) shouldBeF true
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
 
@@ -822,7 +849,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).casperEff
             .contains(signedBlock4) shouldBeF true // However, in invalidBlockTracker
 
-      _ = nodes(1).logEff.infos.count(_ startsWith "Added admissible equivocation") should be(1)
+      _ = nodes(1).logEff.infos.count(_ contains "Added admissible equivocation") should be(1)
       _ = nodes(2).logEff.warns.size should be(0)
       _ = nodes(1).logEff.warns.size should be(1)
       _ = nodes(0).logEff.warns.size should be(0)
@@ -860,7 +887,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield result
   }
 
-  it should "prepare to slash an block that includes a invalid block pointer" in effectTest {
+  it should "prepare to slash a block that includes a invalid block pointer" in effectTest {
     for {
       nodes           <- networkEff(validatorKeys.take(3), genesis, transforms)
       deploys         <- (0 to 5).toList.traverse(i => ProtoUtil.basicDeploy[Effect](i))
@@ -874,12 +901,14 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
         nodes(0).validatorId.privateKey
       ) // Invalid seq num
 
+      // This is going to be signed by node(1)
       blockWithInvalidJustification <- buildBlockWithInvalidJustification(
                                         nodes,
                                         deploysWithCost,
                                         signedInvalidBlock
                                       )
 
+      // Adding the block that only refers to an invalid node as justification; it will not send notifications.
       _ <- nodes(1).casperEff
             .addBlock(blockWithInvalidJustification)
       _ <- nodes(0)
@@ -893,7 +922,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       // )
       // _ <- nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
       // _ <- nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks
-      // NOTE: Instead of the above let's just add it directly to node(1)
+      // NOTE: Instead of the above let's just add it directly to node(1); node(0) doesn't have this block.
       _ <- nodes(1).casperEff
             .addBlock(signedInvalidBlock)
 
@@ -929,24 +958,27 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       Created(block11) = createBlock11Result
       _                <- nodes(0).casperEff.addBlock(block11)
 
-      // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)
+      // Cycle of requesting and passing blocks until block #9 from nodes(0) to nodes(1)
       _ <- (0 to 8).toList.traverse_[Effect, Unit] { i =>
-            nodes(1).receive() *> nodes(0).receive()
+            nodes(1).receive().void *> nodes(0).receive().void
           }
 
-      // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
-
+      // We simulate a network failure here by not allowing block #10 to get passed to nodes(1)
       // And then we assume fetchDependencies eventually gets called
       _ <- nodes(1).casperEff.fetchDependencies
       _ <- nodes(0).receive()
 
-      _ = nodes(1).logEff.infos.count(_ startsWith "Requested missing block") should be(10)
-      result = nodes(0).logEff.infos.count(
+      reqCnt = nodes(1).logEff.infos.count(_ startsWith "Requested missing block")
+      _      = reqCnt should be >= 10 // TransportLayer
+      _      = reqCnt should be <= 11 // GossipService
+
+      resCnt = nodes(0).logEff.infos.count(
         s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
-      ) should be(10)
+      )
+      _ = resCnt shouldBe reqCnt
 
       _ <- nodes.map(_.tearDown()).toList.sequence
-    } yield result
+    } yield ()
   }
 
   it should "increment last finalized block as appropriate in round robin" in effectTest {

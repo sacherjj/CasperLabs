@@ -90,7 +90,9 @@ class InitialSynchronizationSpec
             ) { (initialSynchronizer, mockGossipServiceServer) =>
               for {
                 w <- initialSynchronizer.sync()
-                _ <- w.timeout(75.millis).attempt
+                // It's configured with minimum isccessful being infinite so it will try
+                // forever and fail. We just want to give it enough time to try all of them.
+                _ <- w.timeout(200.millis).attempt
               } yield {
                 val asked = mockGossipServiceServer.asked.get()
                 Inspectors.forAll(failingNodes) { node =>
@@ -223,8 +225,9 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
       ) {
     val asked = Atomic(Vector.empty[Node])
 
-    override protected[gossiping] def newBlocksSynchronous(
-        request: NewBlocksRequest
+    override def newBlocksSynchronous(
+        request: NewBlocksRequest,
+        skipRelaying: Boolean
     ): Task[NewBlocksResponse] = {
       asked.transform(_ :+ request.getSender)
       sync(request.getSender, request.blockHashes).map(b => NewBlocksResponse(isNew = b))

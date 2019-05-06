@@ -10,6 +10,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.protocol.{DeployData, _}
 import io.casperlabs.casper.util.implicits._
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
@@ -18,6 +19,7 @@ import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{Log, Time}
 
 import scala.collection.immutable
+import scala.util.control.NonFatal
 
 object ProtoUtil {
   /*
@@ -46,7 +48,7 @@ object ProtoUtil {
       } yield result
     }
 
-  def getMainChainUntilDepth[F[_]: Monad: BlockStore](
+  def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
       depth: Int
@@ -75,15 +77,16 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  // TODO: instead of throwing Exception use MonadError.raiseError
-  def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
+  def unsafeGetBlock[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
       maybeBlock <- BlockStore[F].getBlockMessage(hash)
-      block = maybeBlock match {
-        case Some(b) => b
-        case None =>
-          throw new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
-      }
+      block <- maybeBlock match {
+                case Some(b) => b.pure[F]
+                case None =>
+                  MonadThrowable[F].raiseError(
+                    new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+                  )
+              }
     } yield block
 
   def creatorJustification(block: BlockMessage): Option[Justification] =
@@ -236,7 +239,7 @@ object ProtoUtil {
   def parentHashes(b: BlockMessage): Seq[ByteString] =
     b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
-  def unsafeGetParents[F[_]: Monad: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
+  def unsafeGetParents[F[_]: MonadThrowable: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }
@@ -292,7 +295,7 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: Monad: BlockStore](
+  def toLatestMessage[F[_]: MonadThrowable: BlockStore](
       justifications: Seq[Justification],
       dag: BlockDagRepresentation[F]
   ): F[immutable.Map[Validator, BlockMetadata]] =

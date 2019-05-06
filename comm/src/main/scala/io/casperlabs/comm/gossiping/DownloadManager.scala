@@ -94,6 +94,9 @@ object DownloadManagerImpl {
       initialBackoffPeriod: FiniteDuration,
       backoffFactor: Double Refined GreaterEqual[W.`1.0`.T]
   )
+  object RetriesConf {
+    val noRetries = RetriesConf(0, Duration.Zero, 1.0)
+  }
 
   /** Start the download manager. */
   def apply[F[_]: Concurrent: Log: Timer](

@@ -32,40 +32,6 @@ impl Blake2bHash {
     }
 }
 
-/// Newtype used for differentiating between plain T and validated T.
-/// What validation means is left purposefully vague as it may depend on the context.
-pub struct Validated<T>(T);
-
-impl<T> Validated<T> {
-    pub fn new<E, F>(v: T, guard: F) -> Result<Validated<T>, E>
-    where
-        F: Fn(&T) -> Result<(), E>,
-    {
-        guard(&v).map(|_| Validated(v))
-    }
-
-    pub fn valid(_v: &T) -> Result<(), !> {
-        Ok(())
-    }
-
-    pub fn into_raw(self) -> T {
-        self.0
-    }
-}
-
-impl<T: Clone> Clone for Validated<T> {
-    fn clone(&self) -> Self {
-        Validated(self.0.clone())
-    }
-}
-
-impl<T: Clone> Deref for Validated<T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        &self.0
-    }
-}
-
 impl From<[u8; BLAKE2B_DIGEST_LENGTH]> for Blake2bHash {
     fn from(arr: [u8; BLAKE2B_DIGEST_LENGTH]) -> Self {
         Blake2bHash(arr)
@@ -89,5 +55,41 @@ impl ToBytes for Blake2bHash {
 impl FromBytes for Blake2bHash {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         FromBytes::from_bytes(bytes).map(|(arr, rem)| (Blake2bHash(arr), rem))
+    }
+}
+
+/// Represents a validated value.  Validation is user-specified.
+pub struct Validated<T>(T);
+
+impl<T> Validated<T> {
+    /// Creates a validated value from a given value and validation function.
+    pub fn new<E, F>(v: T, guard: F) -> Result<Validated<T>, E>
+    where
+        F: Fn(&T) -> Result<(), E>,
+    {
+        guard(&v).map(|_| Validated(v))
+    }
+
+    /// A validation function which always succeeds.
+    pub fn valid(_v: &T) -> Result<(), !> {
+        Ok(())
+    }
+
+    pub fn into_raw(self) -> T {
+        self.0
+    }
+}
+
+impl<T: Clone> Clone for Validated<T> {
+    fn clone(&self) -> Self {
+        Validated(self.0.clone())
+    }
+}
+
+impl<T: Clone> Deref for Validated<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.0
     }
 }

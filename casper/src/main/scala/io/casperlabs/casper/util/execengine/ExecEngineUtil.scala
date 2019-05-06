@@ -6,6 +6,7 @@ import cats.{Monad, MonadError}
 import cats.kernel.{Monoid, Order}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
@@ -127,7 +128,7 @@ object ExecEngineUtil {
     }
   }
 
-  def effectsForBlock[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
+  def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
       block: BlockMessage,
       combinedEffect: TransformMap,
       dag: BlockDagRepresentation[F]
@@ -259,7 +260,7 @@ object ExecEngineUtil {
       } yield (nonFirstEffect, blocks)
   }
 
-  def merge[F[_]: Monad: BlockStore](
+  def merge[F[_]: MonadThrowable: BlockStore](
       candidateParentBlocks: Seq[BlockMessage],
       dag: BlockDagRepresentation[F]
   ): F[(TransformMap, Vector[BlockMessage])] = {

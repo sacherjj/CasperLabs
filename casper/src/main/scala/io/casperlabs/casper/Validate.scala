@@ -12,6 +12,7 @@ import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.ipc
@@ -193,7 +194,7 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    */
-  def blockSummary[F[_]: Monad: Log: Time: BlockStore: RaiseValidationError](
+  def blockSummary[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -207,7 +208,7 @@ object Validate {
     } yield ()
 
   /** Validations we can run even without an approved Genesis, i.e. on Genesis itself. */
-  def blockSummaryPreGenesis[F[_]: Monad: Log: Time: BlockStore: RaiseValidationError](
+  def blockSummaryPreGenesis[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       shardId: String
@@ -252,7 +253,7 @@ object Validate {
     *
     * Agnostic of non-parent justifications
     */
-  def repeatDeploy[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def repeatDeploy[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Unit] = {
@@ -289,7 +290,7 @@ object Validate {
   }
 
   // This is not a slashable offence
-  def timestamp[F[_]: Monad: Log: Time: BlockStore: RaiseValidationError](
+  def timestamp[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
@@ -324,7 +325,7 @@ object Validate {
     } yield result
 
   // Agnostic of non-parent justifications
-  def blockNumber[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def blockNumber[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage
   ): F[Unit] =
     for {
@@ -355,7 +356,7 @@ object Validate {
     * creator justification, this check will fail as expected. The exception is when
     * B's creator justification is the genesis block.
     */
-  def sequenceNumber[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def sequenceNumber[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
@@ -439,7 +440,7 @@ object Validate {
   /**
     * Works only with fully explicit justifications.
     */
-  def parents[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def parents[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
       genesis: BlockMessage,
       lastFinalizedBlockHash: BlockHash,
@@ -490,7 +491,7 @@ object Validate {
   /*
    * This check must come before Validate.parents
    */
-  def justificationFollows[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def justificationFollows[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -525,7 +526,7 @@ object Validate {
    * Hence, we ignore justification regressions involving the block's sender and
    * let checkEquivocations handle it instead.
    */
-  def justificationRegressions[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def justificationRegressions[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -551,7 +552,7 @@ object Validate {
     } yield result
   }
 
-  private def justificationRegressionsAux[F[_]: Monad: Log: BlockStore: FunctorRaise[
+  private def justificationRegressionsAux[F[_]: MonadThrowable: Log: BlockStore: FunctorRaise[
     ?[_],
     InvalidBlock
   ]](
@@ -588,7 +589,7 @@ object Validate {
           }
     } yield ()
 
-  private def isJustificationRegression[F[_]: Monad: Log: BlockStore](
+  private def isJustificationRegression[F[_]: MonadThrowable: Log: BlockStore](
       currentBlockJustificationHash: BlockHash,
       previousBlockJustificationHash: BlockHash
   ): F[Boolean] =

@@ -463,6 +463,16 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       s <- Cell[F, CasperState].read
       _ <- s.dependencyDag.dependencyFree.toList.traverse(broadcaster.requestMissingDependency(_))
     } yield ()
+
+  /** The new gossiping first syncs the missing DAG, then downloads and adds the blocks in topological order.
+    * However the EquivocationDetector wants to know about dependencies so it can assign different statuses,
+    * so we'll make the synchronized DAG known via a partial block message, so any missing dependencies can
+    * be tracked, i.e. Casper will know about the pending graph.  */
+  def addMissingDependencies(block: BlockMessage): F[Unit] =
+    for {
+      dag <- blockDag
+      _   <- statelessExecutor.addMissingDependencies(block, dag)
+    } yield ()
 }
 
 object MultiParentCasperImpl {
@@ -645,6 +655,7 @@ object MultiParentCasperImpl {
             .info(
               s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
             ) *> dag.pure[F]
+
         case InvalidUnslashableBlock | InvalidFollows | InvalidBlockNumber | InvalidParents |
             JustificationRegression | InvalidSequenceNumber | NeglectedInvalidBlock |
             NeglectedEquivocation | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
@@ -690,19 +701,13 @@ object MultiParentCasperImpl {
 
     /** Check if the block has dependencies that we don't have in store.
       * Add those to the dependency DAG. */
-    private def addMissingDependencies(
+    def addMissingDependencies(
         block: BlockMessage,
         dag: BlockDagRepresentation[F]
     )(implicit state: Cell[F, CasperState]): F[Unit] =
       for {
-        missingDependencies <- dependenciesHashesOf(block)
-                                .filterA(
-                                  blockHash =>
-                                    dag
-                                      .lookup(blockHash)
-                                      .map(_.isEmpty)
-                                )
-        _ <- missingDependencies.traverse(hash => addMissingDependency(hash, block.blockHash))
+        missingDependencies <- dependenciesHashesOf(block).filterA(dag.contains(_).map(!_))
+        _                   <- missingDependencies.traverse(hash => addMissingDependency(hash, block.blockHash))
       } yield ()
 
     /** Keep track of a block depending on another one, so we know when we can start processing. */
@@ -759,10 +764,14 @@ object MultiParentCasperImpl {
                 InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidShardId |
                 InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash |
                 Processing =>
-              ().pure[F]
+              Log[F].debug(
+                s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $status"
+              )
 
-            case BlockException(_) =>
-              ().pure[F]
+            case BlockException(ex) =>
+              Log[F].debug(
+                s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $ex"
+              )
           }
 
         /** Ask all peers to send us a block. */
@@ -799,10 +808,6 @@ object MultiParentCasperImpl {
           ByteString.copyFrom(publicKey)
       }
 
-      private def throwMissingDependencies[T]: T = throw new RuntimeException(
-        "Impossible! The DownloadManager should not tell Casper about blocks with missing dependencies!"
-      )
-
       def networkEffects(
           block: BlockMessage,
           status: BlockStatus
@@ -818,7 +823,9 @@ object MultiParentCasperImpl {
             }
 
           case MissingBlocks =>
-            throwMissingDependencies
+            throw new RuntimeException(
+              "Impossible! The DownloadManager should not tell Casper about blocks with missing dependencies!"
+            )
 
           case IgnorableEquivocation | InvalidUnslashableBlock | InvalidFollows |
               InvalidBlockNumber | InvalidParents | JustificationRegression |
@@ -828,11 +835,14 @@ object MultiParentCasperImpl {
               Processing =>
             ().pure[F]
 
-          case BlockException(_) => ().pure[F]
+          case BlockException(_) =>
+            ().pure[F]
         }
 
       def requestMissingDependency(blockHash: BlockHash): F[Unit] =
-        throwMissingDependencies
+        // We are letting Casper know about the pending DAG, so it may try to ask for dependencies,
+        // but those will be naturally downloaded by the DownloadManager.
+        ().pure[F]
     }
   }
 }

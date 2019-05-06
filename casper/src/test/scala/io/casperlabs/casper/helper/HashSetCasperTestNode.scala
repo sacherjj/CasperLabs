@@ -3,10 +3,11 @@ package io.casperlabs.casper.helper
 import java.nio.file.Path
 
 import cats.data.EitherT
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Timer}
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
-import cats.{Applicative, ApplicativeError, Defer, Id, Monad}
+import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
+import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
@@ -42,6 +43,7 @@ import io.casperlabs.shared.{Cell, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.eval.instances.CatsParallelForTask
 
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
@@ -62,7 +64,8 @@ abstract class HashSetCasperTestNode[F[_]](
     val metricEff: Metrics[F],
     val casperState: Cell[F, CasperState]
 ) {
-  implicit val logEff: LogStub[F] = new LogStub[F]()
+  implicit val logEff: LogStub[F]
+
   implicit val casperEff: MultiParentCasperImpl[F]
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
@@ -108,7 +111,7 @@ abstract class HashSetCasperTestNode[F[_]](
 }
 
 trait HashSetCasperTestNodeFactory {
-  import HashSetCasperTestNode.Effect
+  import HashSetCasperTestNode._
 
   type TestNode[F[_]] <: HashSetCasperTestNode[F]
 
@@ -121,7 +124,9 @@ trait HashSetCasperTestNodeFactory {
   )(
       implicit
       errorHandler: ErrorHandler[F],
-      concurrentF: Concurrent[F]
+      concurrentF: Concurrent[F],
+      parF: Par[F],
+      timerF: Timer[F]
   ): F[TestNode[F]]
 
   def standaloneEff(
@@ -135,7 +140,9 @@ trait HashSetCasperTestNodeFactory {
   ): TestNode[Effect] =
     standaloneF[Effect](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
-      Concurrent[Effect]
+      Concurrent[Effect],
+      Par[Effect],
+      Timer[Effect]
     ).value.unsafeRunSync.right.get
 
   def networkF[F[_]](
@@ -146,7 +153,9 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f
   )(
       implicit errorHandler: ErrorHandler[F],
-      concurrentF: Concurrent[F]
+      concurrentF: Concurrent[F],
+      parF: Par[F],
+      timerF: Timer[F]
   ): F[IndexedSeq[TestNode[F]]]
 
   def networkEff(
@@ -158,8 +167,23 @@ trait HashSetCasperTestNodeFactory {
   ): Effect[IndexedSeq[TestNode[Effect]]] =
     networkF[Effect](sks, genesis, transforms, storageSize, faultToleranceThreshold)(
       ApplicativeError_[Effect, CommError],
-      Concurrent[Effect]
+      Concurrent[Effect],
+      Par[Effect],
+      Timer[Effect]
     )
+
+  protected def initStorage[F[_]: Concurrent: Log: Metrics](genesis: BlockMessage) = {
+    val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
+    val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
+    val env           = Context.env(blockStoreDir, BlockDagStorageTestFixture.mapSize)
+    for {
+      blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
+      blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
+                          BlockDagFileStorage.Config(blockDagDir),
+                          genesis
+                        )(Concurrent[F], Log[F], blockStore, Metrics[F])
+    } yield (blockDagDir, blockStoreDir, blockDagStorage, blockStore)
+  }
 }
 
 object HashSetCasperTestNode {
@@ -197,6 +221,31 @@ object HashSetCasperTestNode {
   }
 
   implicit val syncEffectInstance = cats.effect.Sync.catsEitherTSync[Task, CommError]
+
+  implicit val parEffectInstance: Par[Effect] = Par.fromParallel(CatsParallelForEffect)
+
+  // We could try figuring this out for a type as follows:
+  // type EffectPar[A] = EitherT[Task.Par, CommError, A]
+  object CatsParallelForEffect extends Parallel[Effect, Task.Par] {
+    override def applicative: Applicative[Task.Par] = CatsParallelForTask.applicative
+    override def monad: Monad[Effect]               = Concurrent[Effect]
+
+    override val sequential: Task.Par ~> Effect = new (Task.Par ~> Effect) {
+      def apply[A](fa: Task.Par[A]): Effect[A] = {
+        val task = Task.Par.unwrap(fa)
+        EitherT.liftF(task)
+      }
+    }
+    override val parallel: Effect ~> Task.Par = new (Effect ~> Task.Par) {
+      def apply[A](fa: Effect[A]): Task.Par[A] = {
+        val task = fa.value.flatMap {
+          case Left(ce) => Task.raiseError(new RuntimeException(ce.toString))
+          case Right(a) => Task.pure(a)
+        }
+        Task.Par.apply(task)
+      }
+    }
+  }
 
   val errorHandler = ApplicativeError_.applicativeError[Id, CommError](appErrId)
 

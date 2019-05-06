@@ -12,6 +12,7 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.catscontrib.ski._
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
@@ -41,7 +42,7 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
 object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
 
-  def forkChoiceTip[F[_]: MultiParentCasper: Monad: BlockStore]: F[BlockMessage] =
+  def forkChoiceTip[F[_]: MultiParentCasper: MonadThrowable: BlockStore]: F[BlockMessage] =
     for {
       dag       <- MultiParentCasper[F].blockDag
       tipHashes <- MultiParentCasper[F].estimator(dag)
@@ -70,7 +71,7 @@ sealed abstract class MultiParentCasperInstances {
                       CasperState()
                     )
 
-    } yield (dag, blockProcessingLock, casperState)
+    } yield (blockProcessingLock, casperState)
 
   def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
       validatorId: Option[ValidatorIdentity],
@@ -80,7 +81,7 @@ sealed abstract class MultiParentCasperInstances {
       shardId: String
   ): F[MultiParentCasper[F]] =
     init(genesis, genesisPreState, genesisEffects) map {
-      case (dag, blockProcessingLock, casperState) =>
+      case (blockProcessingLock, casperState) =>
         implicit val state = casperState
         new MultiParentCasperImpl[F](
           new MultiParentCasperImpl.StatelessExecutor(shardId),
@@ -103,7 +104,7 @@ sealed abstract class MultiParentCasperInstances {
       relaying: gossiping.Relaying[F]
   ): F[MultiParentCasper[F]] =
     init(genesis, genesisPreState, genesisEffects) map {
-      case (dag, blockProcessingLock, casperState) =>
+      case (blockProcessingLock, casperState) =>
         implicit val state = casperState
         new MultiParentCasperImpl[F](
           new MultiParentCasperImpl.StatelessExecutor(shardId),

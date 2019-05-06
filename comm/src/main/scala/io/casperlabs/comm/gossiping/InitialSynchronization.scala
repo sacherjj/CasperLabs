@@ -55,7 +55,8 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
               NewBlocksRequest(
                 sender = node.some,
                 blockHashes = tips.map(_.blockHash)
-              )
+              ),
+              skipRelaying = true
             )
       } yield ()
 
