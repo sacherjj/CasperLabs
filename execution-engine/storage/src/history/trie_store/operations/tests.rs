@@ -831,6 +831,7 @@ mod write {
             let mut states = states.to_vec();
             let test_leaves = TEST_LEAVES_NON_COLLIDING;
 
+            // Write set of leaves to the trie
             let hashes = write_leaves::<R, S, E>(
                 environment,
                 store,
@@ -847,6 +848,8 @@ mod write {
 
             states.extend(hashes);
 
+            // Check that the expected set of leaves is in the trie at every
+            // state, and that the set of other leaves is not.
             for (num_leaves, state) in states.iter().enumerate() {
                 let (used, unused) = test_leaves.split_at(num_leaves);
                 check_leaves::<R, S, E>(environment, store, state, used, unused)?;
@@ -1187,6 +1190,7 @@ mod write {
                 )?;
             }
 
+            // Write set of leaves to the trie
             let hashes = write_leaves::<R, S, E>(
                 environment,
                 store,
@@ -1295,6 +1299,7 @@ mod write {
                 )?;
             }
 
+            // Write set of leaves to the trie
             let hashes = write_leaves::<R, S, E>(
                 environment,
                 store,
