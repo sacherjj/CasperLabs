@@ -134,6 +134,9 @@ class NodeRuntime private[node] (
         nodeMetrics = diagnostics.effects.nodeCoreMetrics[Task]
         jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
 
+        // TODO: Only a loop started with the TransportLayer keeps filling this up,
+        // so if we use the GossipService it's going to stay empty. The diagnostics
+        // should use NodeDiscovery instead.
         connectionsCell <- Resource.liftF(effects.rpConnections.toEffect)
 
         multiParentCasperRef <- Resource.liftF(MultiParentCasperRef.of[Effect])
@@ -229,30 +232,9 @@ class NodeRuntime private[node] (
       if (conf.casper.standalone) Log[Effect].info(s"Starting stand-alone node.")
       else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
 
-    // TODO: The check uses the TransportLayer to disconnect from all peers and reconnect with a
-    // new hostname if the IP address changes. I'm not sure how this works with the certificate,
-    // given that the certificate is checked against the remote peer host name.
-    // We should move the disconnect to Kademlia so we don't need the TransportLayer for this.
-    // val dynamicIpCheck: Task[Unit] =
-    //   if (conf.server.dynamicHostAddress)
-    //     for {
-    //       local <- peerNodeAsk.ask
-    //       newLocal <- WhoAmI
-    //                    .checkLocalPeerNode[Task](conf.server.port, conf.server.kademliaPort, local)
-    //       _ <- newLocal.fold(Task.unit) { pn =>
-    //             Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
-    //           }
-    //     } yield ()
-    //   else Task.unit
-
     val loop: Effect[Unit] =
       for {
         _ <- time.sleep(1.minute).toEffect
-        // _ <- dynamicIpCheck.toEffect
-        // NOTE: I think the following two are covered by the periodic NodeDiscovery,
-        // since protocol handshakes are not necessary any more.
-        // _ <- Connect.clearConnections[Effect]
-        // _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
       } yield ()
 
     val casperLoop: Effect[Unit] =

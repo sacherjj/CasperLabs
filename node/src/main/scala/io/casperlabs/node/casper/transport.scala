@@ -4,7 +4,7 @@ import cats._
 import cats.data._
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.mtl.MonadState
+import cats.mtl.{ApplicativeAsk, MonadState}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
@@ -92,12 +92,17 @@ package object transport {
       lab    <- LastApprovedBlock.of[Task].toEffect
       labEff = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
 
-      rpConfAskEff = eitherTrpConfAsk(effects.rpConfAsk(rpConfState))
+      rpConfAsk    = effects.rpConfAsk(rpConfState)
+      rpConfAskEff = eitherTrpConfAsk(rpConfAsk)
       peerNodeAsk  = effects.peerNodeAsk(rpConfState)
 
       connectionsCellEff: ConnectionsCell[Effect] = Cell.eitherTCell(Monad[Task], connectionsCell)
 
-      timeEff: Time[Effect] = Time.eitherTTime(Monad[Task], effects.time)
+      nodeDiscoveryEff: NodeDiscovery[Effect] = NodeDiscovery
+        .eitherTNodeDiscovery(Monad[Task], nodeDiscovery)
+
+      time                  = effects.time
+      timeEff: Time[Effect] = Time.eitherTTime(Monad[Task], time)
 
       defaultTimeout = conf.server.defaultTimeout.millis
 
@@ -111,9 +116,9 @@ package object transport {
                                 labEff,
                                 metricsEff,
                                 blockStore,
-                                Cell.eitherTCell(Monad[Task], connectionsCell),
-                                NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
-                                TransportLayer.eitherTTransportLayer(Monad[Task], log, transport),
+                                connectionsCellEff,
+                                nodeDiscoveryEff,
+                                transportEff,
                                 ErrorHandler[Effect],
                                 rpConfAskEff,
                                 safetyOracle,
@@ -133,6 +138,7 @@ package object transport {
         ErrorHandler[Effect]
       )
 
+      // Start receiving messages from peers.
       _ <- transportEff.receive(
             pm =>
               HandleMessages.handle[Effect](pm, defaultTimeout)(
@@ -150,6 +156,19 @@ package object transport {
           )
       _ <- logEff.info(s"Started transport layer on port $port.")
 
+      // Start the loop that keeps the ConnectionCell up to date.
+      loop <- Concurrent[Effect].start {
+               connectLoop(conf)(
+                 timeEff,
+                 logEff,
+                 metricsEff,
+                 connectionsCellEff,
+                 rpConfAskEff,
+                 transportEff,
+                 nodeDiscoveryEff
+               ).forever
+             }
+
       shutdown = {
         for {
           _     <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
@@ -158,6 +177,50 @@ package object transport {
           _     <- transport.shutdown(msg)
         } yield ()
       }
-    } yield () -> shutdown.toEffect
+    } yield () -> loop.cancel.attempt.void *> shutdown.toEffect
   }
+
+  private def connectLoop(conf: Configuration)(
+      implicit
+      time: Time[Effect],
+      log: Log[Effect],
+      metrics: Metrics[Effect],
+      connectionsCell: ConnectionsCell[Effect],
+      rpConfAsk: ApplicativeAsk[Effect, RPConf],
+      transport: TransportLayer[Effect],
+      nodeDiscovery: NodeDiscovery[Effect]
+  ): Effect[Unit] =
+    for {
+      _ <- time.sleep(1.minute)
+      //_ <- dynamicIpCheck(conf)
+      _ <- Connect.clearConnections[Effect]
+      _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
+    } yield ()
+
+  // TODO: The check uses the TransportLayer to disconnect from all peers and reconnect with a
+  // new hostname if the IP address changes. I'm not sure how this works with the certificate,
+  // given that the certificate is checked against the remote peer host name.
+  // We should move the disconnect to Kademlia so we don't need the TransportLayer for this.
+  // private def dynamicIpCheck(
+  //     conf: Configuration
+  // )(
+  //     implicit
+  //     log: Log[Task],
+  //     connectionsCell: ConnectionsCell[Task],
+  //     peerNodeAsk: ApplicativeAsk[Task, Node],
+  //     rpConfState: MonadState[Task, RPConf],
+  //     rpConfAsk: ApplicativeAsk[Task, RPConf],
+  //     transport: TransportLayer[Task],
+  //     metrics: Metrics[Task]
+  // ): Task[Unit] =
+  //   if (conf.server.dynamicHostAddress)
+  //     for {
+  //       local <- peerNodeAsk.ask
+  //       newLocal <- WhoAmI
+  //                    .checkLocalPeerNode[Task](conf.server.port, conf.server.kademliaPort, local)
+  //       _ <- newLocal.fold(Task.unit) { pn =>
+  //             Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
+  //           }
+  //     } yield ()
+  //   else Task.unit
 }
