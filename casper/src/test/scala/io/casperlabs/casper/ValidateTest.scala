@@ -210,10 +210,11 @@ class ValidateTest
       for {
         _     <- createChain[Task](1)
         block <- blockDagStorage.lookupByIdUnsafe(0)
-        _ <- Validate.blockNumber[Task](block.withBlockNumber(1)).attempt shouldBeF Left(
+        dag   <- blockDagStorage.getRepresentation
+        _ <- Validate.blockNumber[Task](block.withBlockNumber(1), dag).attempt shouldBeF Left(
               InvalidBlockNumber
             )
-        _      <- Validate.blockNumber[Task](block) shouldBeF Unit
+        _      <- Validate.blockNumber[Task](block, dag) shouldBeF Unit
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no parents") should be(true)
       } yield result
@@ -223,15 +224,16 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       val n = 6
       for {
-        _ <- createChain[Task](n)
-        _ <- blockDagStorage.lookupByIdUnsafe(0) >>= Validate.blockNumber[Task]
-        _ <- blockDagStorage.lookupByIdUnsafe(1) >>= Validate.blockNumber[Task]
-        _ <- blockDagStorage.lookupByIdUnsafe(2) >>= Validate.blockNumber[Task]
-        _ <- blockDagStorage.lookupByIdUnsafe(3) >>= Validate.blockNumber[Task]
-        _ <- blockDagStorage.lookupByIdUnsafe(4) >>= Validate.blockNumber[Task]
-        _ <- blockDagStorage.lookupByIdUnsafe(5) >>= Validate.blockNumber[Task]
+        _   <- createChain[Task](n)
+        dag <- blockDagStorage.getRepresentation
+        _   <- blockDagStorage.lookupByIdUnsafe(0) >>= (b => Validate.blockNumber[Task](b, dag))
+        _   <- blockDagStorage.lookupByIdUnsafe(1) >>= (b => Validate.blockNumber[Task](b, dag))
+        _   <- blockDagStorage.lookupByIdUnsafe(2) >>= (b => Validate.blockNumber[Task](b, dag))
+        _   <- blockDagStorage.lookupByIdUnsafe(3) >>= (b => Validate.blockNumber[Task](b, dag))
+        _   <- blockDagStorage.lookupByIdUnsafe(4) >>= (b => Validate.blockNumber[Task](b, dag))
+        _   <- blockDagStorage.lookupByIdUnsafe(5) >>= (b => Validate.blockNumber[Task](b, dag))
         _ <- (0 until n).toList.forallM[Task] { i =>
-              (blockDagStorage.lookupByIdUnsafe(i) >>= Validate.blockNumber[Task])
+              (blockDagStorage.lookupByIdUnsafe(i) >>= (b => Validate.blockNumber[Task](b, dag)))
                 .map(_ => true)
             } shouldBeF true
         result = log.warns should be(Nil)
@@ -239,25 +241,26 @@ class ValidateTest
   }
 
   it should "correctly validate a multiparent block where the parents have different block numbers" in withStorage {
-    implicit blockStore => _ =>
+    implicit blockStore => implicit blockDagStorage =>
       def createBlockWithNumber(
           n: Long,
           parentHashes: Seq[ByteString] = Nil
       ): Task[BlockMessage] = {
-        val blockWithNumber = BlockMessage.defaultInstance.withBlockNumber(n)
+        val blockWithNumber = BlockMessage().withBlockNumber(n)
         val header          = blockWithNumber.getHeader.withParentsHashList(parentHashes)
         val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
         val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
-
-        blockStore.put(hash, block, Seq.empty) *> block.pure[Task]
+        blockStore.put(hash, block, Seq.empty) *> blockDagStorage.insert(block) *> block.pure[Task]
       }
 
       for {
-        b1 <- createBlockWithNumber(3)
-        b2 <- createBlockWithNumber(7)
-        b3 <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
-        _  <- Validate.blockNumber[Task](b3) shouldBeF Unit
-        result <- Validate.blockNumber[Task](b3.withBlockNumber(4)).attempt shouldBeF Left(
+        _   <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
+        b1  <- createBlockWithNumber(3)
+        b2  <- createBlockWithNumber(7)
+        b3  <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
+        dag <- blockDagStorage.getRepresentation
+        _   <- Validate.blockNumber[Task](b3, dag) shouldBeF Unit
+        result <- Validate.blockNumber[Task](b3.withBlockNumber(4), dag).attempt shouldBeF Left(
                    InvalidBlockNumber
                  )
       } yield result
