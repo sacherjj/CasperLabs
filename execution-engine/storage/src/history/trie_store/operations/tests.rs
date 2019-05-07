@@ -259,7 +259,7 @@ fn create_4_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 
     let root = HashedTestTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(ext_node_1.hash)),
-        (1, Pointer::LeafPointer(ext_node_2.hash)),
+        (1, Pointer::NodePointer(ext_node_2.hash)),
     ]))?;
 
     let root_hash = root.hash;
@@ -299,20 +299,20 @@ fn create_5_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
         Pointer::NodePointer(node_1.hash),
     ))?;
 
-    let ext_node_3 = HashedTestTrie::new(Trie::extension(
+    let ext_node_2 = HashedTestTrie::new(Trie::extension(
         vec![0u8],
         Pointer::NodePointer(node_3.hash),
     ))?;
 
     let root = HashedTestTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(ext_node_1.hash)),
-        (1, Pointer::LeafPointer(ext_node_3.hash)),
+        (1, Pointer::NodePointer(ext_node_2.hash)),
     ]))?;
 
     let root_hash: Blake2bHash = root.hash;
 
     let non_leaves: Vec<HashedTestTrie> =
-        vec![node_1, node_2, node_3, ext_node_1, ext_node_3, root];
+        vec![node_1, node_2, node_3, ext_node_1, ext_node_2, root];
 
     let tries: Vec<HashedTestTrie> = {
         let mut ret = Vec::new();
