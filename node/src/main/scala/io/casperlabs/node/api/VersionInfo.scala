@@ -1,7 +1,8 @@
-package io.casperlabs.node
+package io.casperlabs.node.api
 
 import cats.effect.Sync
 import cats.implicits._
+import io.casperlabs.node.BuildInfo
 import org.http4s._
 
 object VersionInfo {

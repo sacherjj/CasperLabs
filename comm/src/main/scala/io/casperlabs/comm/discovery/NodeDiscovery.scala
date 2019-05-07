@@ -6,8 +6,14 @@ import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.{MonadTrans, _}
 
 trait NodeDiscovery[F[_]] {
+
+  /** Forever try discoverying new peers. */
   def discover: F[Unit]
+
+  /** Iteratively try to find a peer. */
   def lookup(id: NodeIdentifier): F[Option[Node]]
+
+  /** Return the currently active peers. */
   def alivePeersAscendingDistance: F[List[Node]]
 }
 
