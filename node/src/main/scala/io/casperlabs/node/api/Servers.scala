@@ -28,28 +28,7 @@ import monix.execution.Scheduler
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import org.http4s.server.blaze.BlazeBuilder
 
-// class GrpcServer(server: Server) {
-//   def start: Task[Unit] = Task.delay(server.start())
-
-//   private def attemptShutdown: Task[Boolean] =
-//     (for {
-//       _          <- Task.delay(server.shutdown())
-//       _          <- Task.delay(server.awaitTermination(1000, TimeUnit.MILLISECONDS))
-//       terminated <- Task.delay(server.isTerminated)
-//     } yield terminated).attempt map (_.fold(kp(false), id))
-
-//   private def shutdownImmediately: Task[Unit] =
-//     Task.delay(server.shutdownNow()).attempt.as(())
-
-//   def stop: Task[Unit] = attemptShutdown >>= { stopped =>
-//     if (stopped) Task.unit else shutdownImmediately
-//   }
-//   def port: Int = server.getPort
-// }
-
 object Servers {
-
-  // def apply(server: Server): GrpcServer = new GrpcServer(server)
 
   def diagnosticsServerR(
       port: Int,

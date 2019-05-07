@@ -40,3 +40,20 @@ object GrpcServer {
         }
     )
 }
+
+// NOTE: For reference this was how the node used to stop gRPC servers:
+// class GrpcServer(server: Server) {
+//   private def attemptShutdown: Task[Boolean] =
+//     (for {
+//       _          <- Task.delay(server.shutdown())
+//       _          <- Task.delay(server.awaitTermination(1000, TimeUnit.MILLISECONDS))
+//       terminated <- Task.delay(server.isTerminated)
+//     } yield terminated).attempt map (_.fold(kp(false), id))
+//
+//   private def shutdownImmediately: Task[Unit] =
+//     Task.delay(server.shutdownNow()).attempt.as(())
+//
+//   def stop: Task[Unit] = attemptShutdown >>= { stopped =>
+//     if (stopped) Task.unit else shutdownImmediately
+//   }
+// }
