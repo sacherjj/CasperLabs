@@ -132,7 +132,7 @@ class NodeRuntime private[node] (
         safetyOracle = SafetyOracle
           .cliqueOracle[Effect](Monad[Effect], logEff)
 
-        _ <- Servers
+        _ <- api.Servers
               .diagnosticsServerR(
                 conf.grpc.portInternal,
                 conf.server.maxMessageSize,
@@ -146,7 +146,7 @@ class NodeRuntime private[node] (
                 scheduler
               )
 
-        _ <- Servers.deploymentServerR[Effect](
+        _ <- api.Servers.deploymentServerR[Effect](
               conf.grpc.portExternal,
               conf.server.maxMessageSize,
               grpcScheduler
@@ -162,7 +162,7 @@ class NodeRuntime private[node] (
               scheduler
             )
 
-        _ <- Servers.httpServerR(
+        _ <- api.Servers.httpServerR(
               conf.server.httpPort,
               conf,
               id

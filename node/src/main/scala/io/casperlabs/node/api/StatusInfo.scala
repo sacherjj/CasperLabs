@@ -1,4 +1,4 @@
-package io.casperlabs.node
+package io.casperlabs.node.api
 
 import cats.effect.Sync
 import cats.implicits._

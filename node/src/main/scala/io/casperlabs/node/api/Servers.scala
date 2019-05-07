@@ -1,4 +1,4 @@
-package io.casperlabs.node
+package io.casperlabs.node.api
 
 import java.util.concurrent.TimeUnit
 
@@ -16,7 +16,9 @@ import io.casperlabs.comm.grpc.GrpcServer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
+import io.casperlabs.node.diagnostics.effects.diagnosticsService
 import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
+import io.casperlabs.node._
 import io.casperlabs.shared._
 import io.grpc.Server
 import io.grpc.netty.NettyServerBuilder
@@ -68,7 +70,7 @@ object Servers {
       services = List(
         (_: Scheduler) =>
           Task.delay {
-            DiagnosticsGrpcMonix.bindService(diagnostics.effects.diagnosticsService, grpcExecutor)
+            DiagnosticsGrpcMonix.bindService(diagnosticsService, grpcExecutor)
           }
       )
     ).void.toEffect <* Resource.liftF(
@@ -87,7 +89,7 @@ object Servers {
         (_: Scheduler) =>
           for {
             blockApiLock <- Semaphore[F](1)
-            inst         <- api.DeployGrpcService.instance(blockApiLock)
+            inst         <- DeployGrpcService.instance(blockApiLock)
           } yield {
             CasperMessageGrpcMonix.bindService(inst, grpcExecutor)
           }
