@@ -89,8 +89,11 @@ object BlockAPI {
           case false =>
             DeployServiceResponse(success = false, "Error: There is another propose in progress.")
               .pure[F]
-        } { _ =>
-          blockApiLock.release
+        } {
+          case true =>
+            blockApiLock.release
+          case false =>
+            ().pure[F]
         }
       },
       errorMessage,
