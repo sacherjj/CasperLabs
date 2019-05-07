@@ -80,6 +80,9 @@ class NodeRuntime private[node] (
 
     rpConfState >>= (_.runState { implicit state =>
       val resources = for {
+        // Print something at the end when all resources are gone.
+        _ <- Resource(Task.now(() -> logEff.info("Goodbye.")).toEffect)
+
         executionEngineService <- GrpcExecutionEngineService[Effect](
                                    conf.grpc.socket,
                                    conf.server.maxMessageSize,
