@@ -3,21 +3,27 @@ import logging
 from pathlib import Path
 import shutil
 import tempfile
-from typing import TYPE_CHECKING, Tuple, Generator
+from typing import TYPE_CHECKING, Tuple, Generator, Optional
 import re
+
+from docker.errors import ContainerError
 
 from test.cl_node.errors import (
     CasperLabsNodeAddressNotFoundError,
+    NonZeroExitCodeError,
 )
 
 from test.cl_node.docker_base import LoggingDockerBase
+from test.cl_node.common import random_string
+from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
+from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 
 if TYPE_CHECKING:
     from test.cl_node.docker_base import DockerConfig
 
 # TODO: Either load casper_client as a package, or fix import
 # Copied casper_client into directory structure for now.
-from test.cl_node.client.casper_client import CasperClient
+# from test.cl_node.client.casper_client import CasperClient
 
 # def get_python_client_folder() -> Path:
 #     """ This will return the resources folder that is copied into the correct location for testing """
@@ -71,6 +77,8 @@ class DockerNode(LoggingDockerBase):
 
         self.deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix='deploy_')
         self.create_resources_dir()
+        self.network = f'casperlabs_net_{self.config.number}_{random_string(5)}'
+        self.config.docker_client.networks.create(self.network, driver='bridge')
 
         container = self.config.docker_client.containers.run(
             self.image_name,
@@ -80,13 +88,13 @@ class DockerNode(LoggingDockerBase):
             detach=True,
             mem_limit=self.config.mem_limit,
             ports={f'{self.GRPC_PORT}/tcp': self.config.grpc_port},  # Exposing grpc for Python Client
-            network=self.config.network,
+            network=self.network,
             volumes=self.volumes,
             command=self.container_command,
             hostname=self.container_name,
             environment=env,
         )
-        self.client = CasperClient(port=self.config.grpc_port)
+        # self.client = CasperClient(port=self.config.grpc_port)
         return container
 
     def create_resources_dir(self) -> None:
@@ -94,6 +102,16 @@ class DockerNode(LoggingDockerBase):
             shutil.rmtree(self.host_mount_dir)
         resources_source_path = get_resources_folder()
         shutil.copytree(resources_source_path, self.host_mount_dir)
+        self.create_bonds_file()
+
+    def create_bonds_file(self) -> None:
+        N = len(PREGENERATED_KEYPAIRS)
+        path = f'{self.host_genesis_dir}/bonds.txt'
+        os.makedirs(os.path.dirname(path))
+        with open(path, 'a') as f:
+            for i, pair in enumerate(PREGENERATED_KEYPAIRS):
+                bond = N + 2 * i
+                f.write(f'{pair.public_key} {bond}\n')
 
     def cleanup(self):
         super().cleanup()
@@ -141,32 +159,64 @@ class DockerNode(LoggingDockerBase):
         output = self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
         return output
 
-    def deploy(self, from_address: str = "00000000000000000000",
-               gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0,
-               session_contract_path=None,
-               payment_contract_path=None) -> str:
+    def invoke_client(self, command: str) -> str:
+        volumes = {
+            self.host_mount_dir: {
+                'bind': '/data',
+                'mode': 'ro'
+            }
+        }
+        try:
+            logging.info(f"COMMAND {command}")
+            output = self.config.docker_client.containers.run(
+                image=f"casperlabs/client:{self.docker_tag}",
+                auto_remove=True,
+                name=f"client-{random_string(5)}",
+                command=command,
+                network=self.network,
+                volumes=volumes
+            ).decode('utf-8')
+            logging.debug(f"OUTPUT {output}")
+            return output
+        except ContainerError as err:
+            logging.warning(f"EXITED code={err.exit_status} command='{err.command}' stderr='{err.stderr}'")
+            raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
 
-        if session_contract_path is None:
-            session_contract_path = f'{self.host_mount_dir}/helloname.wasm'
-        if payment_contract_path is None:
-            payment_contract_path = f'{self.host_mount_dir}/helloname.wasm'
+    def deploy(self,
+               from_address: str = "00000000000000000000",
+               gas_limit: int = 1000000,
+               gas_price: int = 1,
+               nonce: int = 0,
+               session_contract: Optional[str]='helloname.wasm',
+               payment_contract: Optional[str]='helloname.wasm') -> str:
 
-        logging.info(f'PY_CLIENT.deploy(from_address={from_address}, gas_limit={gas_limit}, gas_price={gas_price}, '
-                     f'payment_contract={payment_contract_path}, session_contract={session_contract_path}, '
-                     f'nonce={nonce})')
-        return self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price,
-                                  payment_contract_path, session_contract_path, nonce)
+        command = " ".join([
+            f"--host {self.name}",
+            "deploy",
+            f"--from {from_address}",
+            f"--gas-limit {gas_limit}",
+            f"--gas-price {gas_price}",
+            f"--nonce {nonce}",
+            f"--session=/data/{session_contract}",
+            f"--payment=/data/{payment_contract}"
+        ])
 
-    def propose(self):
-        logging.info(f'PY_CLIENT.propose()')
-        return self.client.propose()
+        return self.invoke_client(command)
 
-    def show_blocks_with_depth(self, depth: int) -> Generator:
-        return self.client.showBlocks(depth)
+    def propose(self) -> str:
+        command = f"--host {self.name} propose"
+        return self.invoke_client(command)
+
+    def show_blocks(self) -> Tuple[int, str]:
+        return self.exec_run(f'{self.CL_NODE_BINARY} show-blocks')
+
+    def show_blocks_with_depth(self, depth: int) -> str:
+        command = f"--host {self.name} show-blocks --depth={depth}"
+        return self.invoke_client(command)
 
     def get_blocks_count(self, depth: int) -> int:
-        block_count = sum([1 for _ in self.show_blocks_with_depth(depth)])
-        return block_count
+        show_blocks_output = self.show_blocks_with_depth(depth)
+        return extract_block_count_from_show_blocks(show_blocks_output)
 
     @property
     def address(self) -> str:
@@ -177,3 +227,32 @@ class DockerNode(LoggingDockerBase):
             raise CasperLabsNodeAddressNotFoundError()
         address = m.group(1)
         return address
+
+    # Methods for new Python Client that was temp removed.
+    #
+    # def deploy(self, from_address: str = "00000000000000000000",
+    #            gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0,
+    #            session_contract_path=None,
+    #            payment_contract_path=None) -> str:
+    #
+    #     if session_contract_path is None:
+    #         session_contract_path = f'{self.host_mount_dir}/helloname.wasm'
+    #     if payment_contract_path is None:
+    #         payment_contract_path = f'{self.host_mount_dir}/helloname.wasm'
+    #
+    #     logging.info(f'PY_CLIENT.deploy(from_address={from_address}, gas_limit={gas_limit}, gas_price={gas_price}, '
+    #                  f'payment_contract={payment_contract_path}, session_contract={session_contract_path}, '
+    #                  f'nonce={nonce})')
+    #     return self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price,
+    #                               payment_contract_path, session_contract_path, nonce)
+    #
+    # def propose(self):
+    #     logging.info(f'PY_CLIENT.propose()')
+    #     return self.client.propose()
+    #
+    # def show_blocks_with_depth(self, depth: int) -> Generator:
+    #     return self.client.showBlocks(depth)
+    #
+    # def get_blocks_count(self, depth: int) -> int:
+    #     block_count = sum([1 for _ in self.show_blocks_with_depth(depth)])
+    #     return block_count
