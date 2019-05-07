@@ -146,7 +146,12 @@ class NodeRuntime private[node] (
             .whenA(conf.server.cleanBlockStorage)
             .toEffect
       commTmpFolder = conf.server.dataDir.resolve("tmp").resolve("comm")
-      _             <- commTmpFolder.deleteDirectory[Task]().toEffect
+      _ <- commTmpFolder.toFile
+            .exists()
+            .fold(
+              commTmpFolder.deleteDirectory[Task]().toEffect,
+              Task.unit.toEffect
+            )
       transport = effects.tcpTransportLayer(
         port,
         conf.tls.certificate,
