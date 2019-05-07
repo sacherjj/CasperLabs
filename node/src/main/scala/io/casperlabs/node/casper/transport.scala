@@ -223,14 +223,12 @@ package object transport {
       transport: TransportLayer[Task],
       metrics: Metrics[Task]
   ): Task[Unit] =
-    if (conf.server.dynamicHostAddress)
-      for {
-        local <- peerNodeAsk.ask
-        newLocal <- WhoAmI
-                     .checkLocalPeerNode[Task](conf.server.port, conf.server.kademliaPort, local)
-        _ <- newLocal.fold(Task.unit) { pn =>
-              Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
-            }
-      } yield ()
-    else Task.unit
+    (for {
+      local <- peerNodeAsk.ask
+      newLocal <- WhoAmI
+                   .checkLocalPeerNode[Task](conf.server.port, conf.server.kademliaPort, local)
+      _ <- newLocal.fold(Task.unit) { pn =>
+            Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
+          }
+    } yield ()).whenA(conf.server.dynamicHostAddress)
 }
