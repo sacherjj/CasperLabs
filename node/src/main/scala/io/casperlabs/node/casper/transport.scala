@@ -5,10 +5,13 @@ import cats.data._
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.mtl.{ApplicativeAsk, MonadState}
+import cats.instances.option._
+import cats.instances.unit._
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
+import cats.syntax.foldable._
 import com.olegpy.meow.effects._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
@@ -227,7 +230,7 @@ package object transport {
       local <- peerNodeAsk.ask
       newLocal <- WhoAmI
                    .checkLocalPeerNode[Task](conf.server.port, conf.server.kademliaPort, local)
-      _ <- newLocal.fold(Task.unit) { pn =>
+      _ <- newLocal.foldMap { pn =>
             Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
           }
     } yield ()).whenA(conf.server.dynamicHostAddress)
