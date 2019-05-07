@@ -232,14 +232,6 @@ class NodeRuntime private[node] (
       if (conf.casper.standalone) Log[Effect].info(s"Starting stand-alone node.")
       else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
 
-    val loop: Effect[Unit] =
-      for {
-        _ <- time.sleep(1.minute).toEffect
-        // NOTE: All the original periodic tasks were moved into the transport module resource setup.
-        // The NodeDiscovery loop should be enough for the gossiping, but the diagnostics would not
-        // show the info if it's based on ConnectionsCell.
-      } yield ()
-
     val casperLoop: Effect[Unit] =
       for {
         casper <- multiParentCasperRef.get
@@ -248,16 +240,14 @@ class NodeRuntime private[node] (
       } yield ()
 
     for {
-      _       <- info
-      local   <- peerNodeAsk.ask.toEffect
-      host    = local.host
       _       <- addShutdownHook(release).toEffect
-      _       <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler).start.toEffect
+      _       <- info
       _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
+      host    <- peerNodeAsk.ask.toEffect.map(_.host)
       address = s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
       // This loop will keep the program from exiting until shutdown is initiated.
-      _ <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
+      _ <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler).toEffect
     } yield ()
   }
 
