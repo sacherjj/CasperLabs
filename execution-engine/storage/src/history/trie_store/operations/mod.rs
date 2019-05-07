@@ -321,12 +321,13 @@ where
 fn reparent_leaf<K, V>(
     new_leaf_path: &[u8],
     existing_leaf_path: &[u8],
-    mut parents: Parents<K, V>,
+    parents: Parents<K, V>,
 ) -> Result<(Trie<K, V>, Parents<K, V>), bytesrepr::Error>
 where
     K: ToBytes,
     V: ToBytes,
 {
+    let mut parents = parents;
     let (child_index, parent) = parents.pop().expect("parents should not be empty");
     match parent {
         Trie::Node { pointer_block } => {
@@ -395,7 +396,7 @@ where
                 value: value.to_owned(),
             };
             let path: Vec<u8> = key.to_bytes()?;
-            let TrieScan { tip, mut parents } =
+            let TrieScan { tip, parents } =
                 scan::<K, V, T, S, E>(txn, store, &path, &current_root)?;
             let new_elements: Vec<(Blake2bHash, Trie<K, V>)> = match tip {
                 // If the "tip" is the same as the new leaf, then the leaf
