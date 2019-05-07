@@ -41,7 +41,6 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
-import org.http4s.server.blaze._
 
 import scala.concurrent.duration._
 
@@ -60,6 +59,7 @@ class NodeRuntime private[node] (
 
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
 
+  // TODO: Remove
   implicit def eitherTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
 
@@ -69,7 +69,9 @@ class NodeRuntime private[node] (
   private val kademliaPort   = conf.server.kademliaPort
   private val blockstorePath = conf.server.dataDir.resolve("blockstore")
   private val dagStoragePath = conf.server.dataDir.resolve("dagstorage")
-  private val defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
+
+  // TODO: Can remove.
+  private val defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
 
   // TODO: Move into resources
   val metrics = diagnostics.effects.metrics[Task]
@@ -96,7 +98,9 @@ class NodeRuntime private[node] (
                                    initBonds = Map.empty
                                  )
 
-        nodeDiscovery <- effects.nodeDiscovery(id, kademliaPort, defaultTimeout)(initPeer)(
+        nodeDiscovery <- effects.nodeDiscovery(id, kademliaPort, conf.server.defaultTimeout.millis)(
+                          initPeer
+                        )(
                           grpcScheduler,
                           effects.peerNodeAsk,
                           log,
@@ -367,7 +371,8 @@ class NodeRuntime private[node] (
         } *> Task.delay(System.exit(1)).as(Right(()))
     )
 
-  private def syncEffect = cats.effect.Sync.catsEitherTSync[Task, CommError]
+  // TODO: Remove
+  //private def syncEffect = cats.effect.Sync.catsEitherTSync[Task, CommError]
 
   private val rpClearConnConf = ClearConnectionsConf(
     conf.server.maxNumOfConnections,
