@@ -260,9 +260,14 @@ fn common_prefix<A: Eq + Clone>(ls: &[A], rs: &[A]) -> Vec<A> {
         .collect()
 }
 
-fn attach_leaf_to_node<K, V>(
-    path: &[u8],
-    node: Trie<K, V>,
+/// Takes a path to a leaf, that leaf's parent node, and the parents of that
+/// node, and adds the node to the parents.
+///
+/// This function will panic if the the path to the leaf and the path to its
+/// parent node do not share a common prefix.
+fn add_parent_node<K, V>(
+    path_to_leaf: &[u8],
+    new_parent_node: Trie<K, V>,
     mut parents: Parents<K, V>,
 ) -> Result<Parents<K, V>, bytesrepr::Error>
 where
@@ -270,11 +275,11 @@ where
     V: ToBytes,
 {
     // TODO: add is_leaf() method to Trie
-    match node {
+    match new_parent_node {
         Trie::Node { .. } => (),
-        _ => panic!("attach_leaf_to_node was not given a node"),
+        _ => panic!("new_parent must be a node"),
     }
-    // The current depth will be the length of the path to this node.
+    // The current depth will be the length of the path to the new parent node.
     let depth: usize = {
         // Get the path to this node
         let path_to_node: Vec<u8> = {
@@ -283,6 +288,7 @@ where
                 if let Trie::Extension { affix, .. } = element {
                     ret.extend(affix);
                 } else {
+                    // TODO: don't downcast
                     assert!(*index < std::u8::MAX as usize);
                     ret.push(index.to_owned() as u8);
                 }
@@ -290,18 +296,22 @@ where
             ret
         };
         // Check that the path to the node is a prefix of the current path
-        let current_path = common_prefix(&path, &path_to_node);
+        let current_path = common_prefix(&path_to_leaf, &path_to_node);
         assert_eq!(current_path, path_to_node);
         // Get the length
         path_to_node.len()
     };
     // Index path by current depth;
     let index: usize = {
-        assert!(depth < path.len(), "depth must be < {}", path.len());
-        path[depth].into()
+        assert!(
+            depth < path_to_leaf.len(),
+            "depth must be < {}",
+            path_to_leaf.len()
+        );
+        path_to_leaf[depth].into()
     };
     // Add node to parents, along with index to modify
-    parents.push((index, node));
+    parents.push((index, new_parent_node));
     Ok(parents)
 }
 
@@ -358,10 +368,10 @@ where
                 // This case is unreachable, but the compiler can't figure
                 // that out.
                 Trie::Leaf { .. } => unreachable!(),
-                // If the "tip" is an existing node, then we can add the new
-                // leaf's hash to the node's pointer block and rehash.
+                // If the "tip" is an existing node, then we can add a pointer
+                // to the new leaf to the node's pointer block.
                 node @ Trie::Node { .. } => {
-                    let parents = attach_leaf_to_node(&path, node, parents)?;
+                    let parents = add_parent_node(&path, node, parents)?;
                     rehash(new_leaf, parents)?
                 }
                 // If the "tip" is an extension node, then we must modify or
