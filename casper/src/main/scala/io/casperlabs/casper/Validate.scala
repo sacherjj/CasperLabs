@@ -375,10 +375,16 @@ object Validate {
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
                                         case (_, Justification(_, latestBlockHash)) =>
-                                          for {
-                                            latestBlock <- ProtoUtil
-                                                            .unsafeGetBlock[F](latestBlockHash)
-                                          } yield latestBlock.seqNum
+                                          dag.lookup(latestBlockHash).flatMap {
+                                            case Some(block) => block.seqNum.pure[F]
+
+                                            case None =>
+                                              MonadThrowable[F].raiseError[Int](
+                                                new Exception(
+                                                  s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
+                                                )
+                                              )
+                                          }
                                       }
       number = b.seqNum
       result = creatorJustificationSeqNumber + 1 == number
