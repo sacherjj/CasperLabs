@@ -158,15 +158,27 @@ package object transport {
 
       // Start the loop that keeps the ConnectionCell up to date.
       loop <- Concurrent[Effect].start {
-               connectLoop(conf)(
-                 timeEff,
-                 logEff,
-                 metricsEff,
-                 connectionsCellEff,
-                 rpConfAskEff,
-                 transportEff,
-                 nodeDiscoveryEff
-               ).forever
+               (for {
+                 _ <- timeEff.sleep(1.minute)
+                 _ <- dynamicIpCheck(conf)(
+                       log,
+                       connectionsCell,
+                       peerNodeAsk,
+                       rpConfState,
+                       rpConfAsk,
+                       transport,
+                       metrics
+                     ).toEffect
+                 _ <- refreshConnections(
+                       timeEff,
+                       logEff,
+                       metricsEff,
+                       connectionsCellEff,
+                       rpConfAskEff,
+                       transportEff,
+                       nodeDiscoveryEff
+                     )
+               } yield ()).forever
              }
 
       shutdown = {
@@ -180,7 +192,7 @@ package object transport {
     } yield () -> loop.cancel.attempt.void *> shutdown.toEffect
   }
 
-  private def connectLoop(conf: Configuration)(
+  private def refreshConnections(
       implicit
       time: Time[Effect],
       log: Log[Effect],
@@ -191,8 +203,6 @@ package object transport {
       nodeDiscovery: NodeDiscovery[Effect]
   ): Effect[Unit] =
     for {
-      _ <- time.sleep(1.minute)
-      //_ <- dynamicIpCheck(conf)
       _ <- Connect.clearConnections[Effect]
       _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
     } yield ()
@@ -201,26 +211,26 @@ package object transport {
   // new hostname if the IP address changes. I'm not sure how this works with the certificate,
   // given that the certificate is checked against the remote peer host name.
   // We should move the disconnect to Kademlia so we don't need the TransportLayer for this.
-  // private def dynamicIpCheck(
-  //     conf: Configuration
-  // )(
-  //     implicit
-  //     log: Log[Task],
-  //     connectionsCell: ConnectionsCell[Task],
-  //     peerNodeAsk: ApplicativeAsk[Task, Node],
-  //     rpConfState: MonadState[Task, RPConf],
-  //     rpConfAsk: ApplicativeAsk[Task, RPConf],
-  //     transport: TransportLayer[Task],
-  //     metrics: Metrics[Task]
-  // ): Task[Unit] =
-  //   if (conf.server.dynamicHostAddress)
-  //     for {
-  //       local <- peerNodeAsk.ask
-  //       newLocal <- WhoAmI
-  //                    .checkLocalPeerNode[Task](conf.server.port, conf.server.kademliaPort, local)
-  //       _ <- newLocal.fold(Task.unit) { pn =>
-  //             Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
-  //           }
-  //     } yield ()
-  //   else Task.unit
+  private def dynamicIpCheck(
+      conf: Configuration
+  )(
+      implicit
+      log: Log[Task],
+      connectionsCell: ConnectionsCell[Task],
+      peerNodeAsk: ApplicativeAsk[Task, Node],
+      rpConfState: MonadState[Task, RPConf],
+      rpConfAsk: ApplicativeAsk[Task, RPConf],
+      transport: TransportLayer[Task],
+      metrics: Metrics[Task]
+  ): Task[Unit] =
+    if (conf.server.dynamicHostAddress)
+      for {
+        local <- peerNodeAsk.ask
+        newLocal <- WhoAmI
+                     .checkLocalPeerNode[Task](conf.server.port, conf.server.kademliaPort, local)
+        _ <- newLocal.fold(Task.unit) { pn =>
+              Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
+            }
+      } yield ()
+    else Task.unit
 }

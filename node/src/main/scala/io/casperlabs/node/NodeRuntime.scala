@@ -186,7 +186,7 @@ class NodeRuntime private[node] (
             )
 
         _ <- casper.transport.apply(
-              conf.server.port,
+              port,
               conf,
               grpcScheduler
             )(
@@ -235,6 +235,9 @@ class NodeRuntime private[node] (
     val loop: Effect[Unit] =
       for {
         _ <- time.sleep(1.minute).toEffect
+        // NOTE: All the original periodic tasks were moved into the transport module resource setup.
+        // The NodeDiscovery loop should be enough for the gossiping, but the diagnostics would not
+        // show the info if it's based on ConnectionsCell.
       } yield ()
 
     val casperLoop: Effect[Unit] =
