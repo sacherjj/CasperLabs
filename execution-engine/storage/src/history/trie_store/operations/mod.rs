@@ -252,6 +252,69 @@ where
     Ok(ret)
 }
 
+fn common_prefix<A: Eq + Clone>(ls: &[A], rs: &[A]) -> Vec<A> {
+    ls.iter()
+        .zip(rs.iter())
+        .take_while(|(l, r)| l == r)
+        .map(|(l, _)| l.to_owned())
+        .collect()
+}
+
+/// Takes a path to a leaf, that leaf's parent node, and the parents of that
+/// node, and adds the node to the parents.
+///
+/// This function will panic if the the path to the leaf and the path to its
+/// parent node do not share a common prefix.
+fn add_parent_node<K, V>(
+    path_to_leaf: &[u8],
+    new_parent_node: Trie<K, V>,
+    mut parents: Parents<K, V>,
+) -> Result<Parents<K, V>, bytesrepr::Error>
+where
+    K: ToBytes,
+    V: ToBytes,
+{
+    // TODO: add is_leaf() method to Trie
+    match new_parent_node {
+        Trie::Node { .. } => (),
+        _ => panic!("new_parent must be a node"),
+    }
+    // The current depth will be the length of the path to the new parent node.
+    let depth: usize = {
+        // Get the path to this node
+        let path_to_node: Vec<u8> = {
+            let mut ret = Vec::new();
+            for (index, element) in parents.iter() {
+                if let Trie::Extension { affix, .. } = element {
+                    ret.extend(affix);
+                } else {
+                    // TODO: don't downcast
+                    assert!(*index < std::u8::MAX as usize);
+                    ret.push(index.to_owned() as u8);
+                }
+            }
+            ret
+        };
+        // Check that the path to the node is a prefix of the current path
+        let current_path = common_prefix(&path_to_leaf, &path_to_node);
+        assert_eq!(current_path, path_to_node);
+        // Get the length
+        path_to_node.len()
+    };
+    // Index path by current depth;
+    let index: usize = {
+        assert!(
+            depth < path_to_leaf.len(),
+            "depth must be < {}",
+            path_to_leaf.len()
+        );
+        path_to_leaf[depth].into()
+    };
+    // Add node to parents, along with index to modify
+    parents.push((index, new_parent_node));
+    Ok(parents)
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum WriteResult {
     Written(Blake2bHash),
@@ -282,7 +345,7 @@ where
                 value: value.to_owned(),
             };
             let path: Vec<u8> = key.to_bytes()?;
-            let TrieScan { tip, parents } =
+            let TrieScan { tip, mut parents } =
                 scan::<K, V, T, S, E>(txn, store, &path, &current_root)?;
             let new_elements: Vec<(Blake2bHash, Trie<K, V>)> = match tip {
                 // If the "tip" is the same as the new leaf, then the leaf
@@ -305,9 +368,12 @@ where
                 // This case is unreachable, but the compiler can't figure
                 // that out.
                 Trie::Leaf { .. } => unreachable!(),
-                // If the "tip" is an existing node, then we can add the new
-                // leaf's hash to the node's pointer block and rehash.
-                Trie::Node { .. } => unimplemented!(),
+                // If the "tip" is an existing node, then we can add a pointer
+                // to the new leaf to the node's pointer block.
+                node @ Trie::Node { .. } => {
+                    let parents = add_parent_node(&path, node, parents)?;
+                    rehash(new_leaf, parents)?
+                }
                 // If the "tip" is an extension node, then we must modify or
                 // replace it, adding a node where necessary.
                 Trie::Extension { .. } => unimplemented!(),
