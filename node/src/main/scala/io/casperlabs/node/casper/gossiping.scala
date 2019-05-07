@@ -6,36 +6,48 @@ import cats.implicits._
 import cats.data.OptionT
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
-import io.casperlabs.shared.{Cell, Log, Time}
+import io.casperlabs.shared.{Cell, Log, Resources, Time}
 import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.LegacyConversions
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.comm.NodeAsk
+import io.casperlabs.comm.{CachedConnections, NodeAsk}
 import io.casperlabs.comm.ServiceError.{Unavailable}
-import io.casperlabs.comm.discovery.NodeDiscovery
+import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.grpc.SslContexts
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.grpc.ManagedChannel
+import io.netty.handler.ssl.{ClientAuth, SslContext}
+import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import monix.execution.Scheduler
+import scala.io.Source
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
-  def apply[F[_]: Par: Concurrent: Log: Metrics: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService](
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
+
+  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService](
       port: Int,
       conf: Configuration,
       grpcScheduler: Scheduler
   )(implicit scheduler: Scheduler): Resource[F, Unit] = {
 
-    val connectToGossip: GossipService.Connector[F] = ???
+    val cert = Resources.withResource(Source.fromFile(conf.tls.certificate.toFile))(_.mkString)
+    val key  = Resources.withResource(Source.fromFile(conf.tls.key.toFile))(_.mkString)
 
-    // TODO: Method to create MultiParentCasperImpl.StatelessExecutor with temporary CasperState
-    // to run and store the genesis block candidate.
+    val clientSslContext = SslContexts.forClient(cert, key)
 
-    // TODO: Create caching for connections
+    // For client stub to GossipService conversions.
+    implicit val oi = ObservableIterant.default
+
     // TODO: Create GenesisApprover
     // TODO: Create Synchrnozier
     // TODO: Create StashingSynchronizer
@@ -43,17 +55,27 @@ package object gossiping {
     // TODO: Create GossipServiceServer
     // TODO: Start gRPC for GossipServiceServer
 
-    // TODO: Configure relaying.
-    val relaying = RelayingImpl(
-      NodeDiscovery[F],
-      connectToGossip = connectToGossip,
-      relayFactor = 2,
-      relaySaturation = 90
-    )
-
     for {
+      cachedConnections <- connectionsCache(conf.server.maxMessageSize, clientSslContext)
+
+      connectToGossip: GossipService.Connector[F] = (node: Node) => {
+        cachedConnections.connection(node, enforce = true) map { chan =>
+          new GossipingGrpcMonix.GossipServiceStub(chan)
+        } map {
+          GrpcGossipService.toGossipService(_)
+        }
+      }
+
+      relaying = RelayingImpl(
+        NodeDiscovery[F],
+        connectToGossip = connectToGossip,
+        // TODO: Add to config.
+        relayFactor = 2,
+        relaySaturation = 90
+      )
+
       downloadManager <- DownloadManagerImpl[F](
-                          // TODO: Configure parallelism.
+                          // TODO: Add to configu.
                           maxParallelDownloads = 10,
                           connectToGossip = connectToGossip,
                           backend = new DownloadManagerImpl.Backend[F] {
@@ -80,12 +102,14 @@ package object gossiping {
     } yield ()
   }
 
+  /** Check if we have a block yet. */
   private def isInDag[F[_]: Sync: BlockDagStorage](blockHash: ByteString): F[Boolean] =
     for {
       dag  <- BlockDagStorage[F].getRepresentation
       cont <- dag.contains(blockHash)
     } yield cont
 
+  /** Validate the genesis candidate or any new block via Casper. */
   private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
       shardId: String,
       block: consensus.Block
@@ -125,6 +149,50 @@ package object gossiping {
               new RuntimeException(s"Non-valid status: $other")
             )
       }
+
+  /** Cached connection resources, closed at the end. */
+  private def connectionsCache[F[_]: Concurrent: Log: Metrics](
+      maxMessageSize: Int,
+      clientSslContext: SslContext
+  )(implicit scheduler: Scheduler): Resource[F, CachedConnections[F, Unit]] = Resource {
+    for {
+      fromOpener <- CachedConnections[F, Unit]
+      cache = fromOpener {
+        gossipChannel(
+          _,
+          maxMessageSize,
+          clientSslContext
+        )
+      }
+      shutdown = cache.read.flatMap { s =>
+        s.connections.toList.traverse {
+          case (peer, chan) =>
+            Log[F].debug(s"Closing connection to ${peer.show}") *>
+              Sync[F].delay(chan.shutdown()).attempt.void
+        }.void
+      }
+    } yield (cache, shutdown)
+  }
+
+  /** Open a gRPC channel for gossiping. */
+  private def gossipChannel[F[_]: Sync: Log](
+      peer: Node,
+      maxMessageSize: Int,
+      clientSslContext: SslContext
+  )(implicit scheduler: Scheduler): F[ManagedChannel] =
+    for {
+      _ <- Log[F].debug(s"Creating new channel to peer ${peer.show}")
+      chan <- Sync[F].delay {
+               NettyChannelBuilder
+                 .forAddress(peer.host, peer.protocolPort)
+                 .executor(scheduler)
+                 .maxInboundMessageSize(maxMessageSize)
+                 .negotiationType(NegotiationType.TLS)
+                 .sslContext(clientSslContext)
+                 .overrideAuthority(Base16.encode(peer.id.toByteArray))
+                 .build()
+             }
+    } yield chan
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
