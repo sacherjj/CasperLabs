@@ -80,9 +80,6 @@ class NodeRuntime private[node] (
 
     rpConfState >>= (_.runState { implicit state =>
       val resources = for {
-        // Print something at the end when all resources are gone.
-        _ <- Resource(Task.now(() -> logEff.info("Goodbye.")).toEffect)
-
         executionEngineService <- GrpcExecutionEngineService[Effect](
                                    conf.grpc.socket,
                                    conf.server.maxMessageSize,
@@ -210,10 +207,10 @@ class NodeRuntime private[node] (
 
       } yield (nodeDiscovery, multiParentCasperRef)
 
-      resources.use {
-        case (nodeDiscovery, multiParentCasperRef) =>
+      resources.allocated flatMap {
+        case ((nodeDiscovery, multiParentCasperRef), release) =>
           handleUnrecoverableErrors {
-            nodeProgram(state, nodeDiscovery, multiParentCasperRef)
+            nodeProgram(state, nodeDiscovery, multiParentCasperRef, release)
           }
       }
     })
@@ -224,8 +221,8 @@ class NodeRuntime private[node] (
       implicit
       rpConfState: RPConfState[Task],
       nodeDiscovery: NodeDiscovery[Task],
-      //connectionsCell: ConnectionsCell[Task],
-      multiParentCasperRef: MultiParentCasperRef[Effect]
+      multiParentCasperRef: MultiParentCasperRef[Effect],
+      release: Effect[Unit]
   ): Effect[Unit] = {
 
     val peerNodeAsk = effects.peerNodeAsk(rpConfState)
@@ -254,7 +251,7 @@ class NodeRuntime private[node] (
       _       <- info
       local   <- peerNodeAsk.ask.toEffect
       host    = local.host
-      _       <- addShutdownHook().toEffect
+      _       <- addShutdownHook(release).toEffect
       _       <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler).start.toEffect
       _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
       address = s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
@@ -264,13 +261,20 @@ class NodeRuntime private[node] (
     } yield ()
   }
 
-  private def shutdown(): Unit =
+  private def shutdown(release: Effect[Unit]): Unit = {
     // Everything has been moved to Resources.
-    log.info("Shutting down...").unsafeRunSync(scheduler)
+    val task = for {
+      _ <- log.info("Shutting down...")
+      _ <- release.value
+      _ <- log.info("Goodbye.")
+    } yield ()
+    // Run the release synchronously so that we can see the final message.
+    task.unsafeRunSync(scheduler)
+  }
 
-  private def addShutdownHook[F[_]](): Task[Unit] =
+  private def addShutdownHook(release: Effect[Unit]): Task[Unit] =
     Task.delay(
-      sys.addShutdownHook(shutdown())
+      sys.addShutdownHook(shutdown(release))
     )
 
   /**
