@@ -862,11 +862,7 @@ mod write {
                 let mut context = LmdbTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
 
-                writes_to_n_leaf_empty_trie_had_expected_results::<
-                    LmdbEnvironment,
-                    LmdbTrieStore,
-                    error::Error,
-                >(
+                writes_to_n_leaf_empty_trie_had_expected_results::<_, _, error::Error>(
                     &context.environment,
                     &context.store,
                     &initial_states,
@@ -883,11 +879,7 @@ mod write {
                 let mut context = InMemoryTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
 
-                writes_to_n_leaf_empty_trie_had_expected_results::<
-                    InMemoryEnvironment,
-                    InMemoryTrieStore,
-                    in_memory::Error,
-                >(
+                writes_to_n_leaf_empty_trie_had_expected_results::<_, _, in_memory::Error>(
                     &context.environment,
                     &context.store,
                     &initial_states,
@@ -905,11 +897,7 @@ mod write {
                 let context = LmdbTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
 
-                writes_to_n_leaf_empty_trie_had_expected_results::<
-                    LmdbEnvironment,
-                    LmdbTrieStore,
-                    error::Error,
-                >(
+                writes_to_n_leaf_empty_trie_had_expected_results::<_, _, error::Error>(
                     &context.environment,
                     &context.store,
                     &initial_states,
@@ -927,11 +915,7 @@ mod write {
                 let context = InMemoryTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
 
-                writes_to_n_leaf_empty_trie_had_expected_results::<
-                    InMemoryEnvironment,
-                    InMemoryTrieStore,
-                    in_memory::Error,
-                >(
+                writes_to_n_leaf_empty_trie_had_expected_results::<_, _, in_memory::Error>(
                     &context.environment,
                     &context.store,
                     &initial_states,
