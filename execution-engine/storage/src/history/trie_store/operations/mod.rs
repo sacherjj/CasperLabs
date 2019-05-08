@@ -144,11 +144,12 @@ where
                 return Ok(TrieScan::new(leaf, acc));
             }
             Trie::Node { pointer_block } => {
-                let index: usize = {
+                let index = {
                     assert!(depth < path.len(), "depth must be < {}", path.len());
-                    path[depth].into()
+                    path[depth]
                 };
                 let maybe_pointer: Option<Pointer> = {
+                    let index: usize = index.into();
                     assert!(index < trie::RADIX, "index must be < {}", trie::RADIX);
                     pointer_block[index]
                 };
@@ -178,9 +179,9 @@ where
                 }
                 match store.get(txn, pointer.hash())? {
                     Some(next) => {
-                        let index: usize = {
+                        let index = {
                             assert!(depth < path.len(), "depth must be < {}", path.len());
-                            path[depth].into()
+                            path[depth]
                         };
                         current = next;
                         depth += affix.len();
@@ -227,7 +228,7 @@ where
                         Trie::Node { .. } => Pointer::NodePointer(tip_hash),
                         Trie::Extension { .. } => Pointer::NodePointer(tip_hash),
                     };
-                    pointer_block[index] = Some(pointer);
+                    pointer_block[index.into()] = Some(pointer);
                     Trie::Node { pointer_block }
                 };
                 tip_hash = {
@@ -260,15 +261,13 @@ fn common_prefix<A: Eq + Clone>(ls: &[A], rs: &[A]) -> Vec<A> {
         .collect()
 }
 
-fn get_parents_path<K, V>(parents: &[(usize, Trie<K, V>)]) -> Vec<u8> {
+fn get_parents_path<K, V>(parents: &[(u8, Trie<K, V>)]) -> Vec<u8> {
     let mut ret = Vec::new();
     for (index, element) in parents.iter() {
         if let Trie::Extension { affix, .. } = element {
             ret.extend(affix);
         } else {
-            // TODO: don't downcast
-            assert!(*index < std::u8::MAX as usize);
-            ret.push(index.to_owned() as u8);
+            ret.push(index.to_owned());
         }
     }
     ret
@@ -304,13 +303,13 @@ where
         path_to_node.len()
     };
     // Index path by current depth;
-    let index: usize = {
+    let index = {
         assert!(
             depth < path_to_leaf.len(),
             "depth must be < {}",
             path_to_leaf.len()
         );
-        path_to_leaf[depth].into()
+        path_to_leaf[depth]
     };
     // Add node to parents, along with index to modify
     parents.push((index, new_parent_node));
@@ -345,7 +344,7 @@ where
     let new_node = {
         let index: usize = existing_leaf_path[shared_path.len()].into();
         let existing_leaf_pointer =
-            pointer_block[child_index].expect("parent has lost the existing leaf");
+            pointer_block[child_index.into()].expect("parent has lost the existing leaf");
         Trie::node(&[(index, existing_leaf_pointer)])
     };
     // Re-add the parent node to parents
