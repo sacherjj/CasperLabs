@@ -199,10 +199,17 @@ class SynchronizerImpl[F[_]: Sync: Log](
       }
     }
 
+  // TODO: Rewrite this check to be based on the number of validators:
+  // at any rank the DAG cannot be wider then the number of validators,
+  // otherwise some of them would be equivocating (which is fine, up to a threshold of 0.33).
   private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
-    val depth    = syncState.distanceFromOriginalTarget.values.toList.maximumOption.getOrElse(0)
-    val maxTotal = math.pow(maxBranchingFactor, depth.toDouble).ceil.toInt
-    val total    = syncState.summaries.size
+    val depth = syncState.distanceFromOriginalTarget.values.toList.maximumOption.getOrElse(0)
+    val maxTotal =
+      if (maxBranchingFactor <= 1) depth
+      else {
+        ((math.pow(maxBranchingFactor, depth.toDouble) - 1) / (maxBranchingFactor - 1)).ceil.toInt
+      }
+    val total = syncState.summaries.size
     if (total > minBlockCountToCheckBranchingFactor &&
         total > syncState.originalTargets.size &&
         total > maxTotal) {

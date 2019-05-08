@@ -6,6 +6,9 @@ import cats.implicits._
 import cats.data.OptionT
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
+import eu.timepit.refined._
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
 import io.casperlabs.shared.{Cell, Log, Resources, Time}
 import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper._
@@ -17,7 +20,7 @@ import io.casperlabs.casper.LegacyConversions
 import io.casperlabs.casper.util.comm.BlockApproverProtocol
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
-import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
+import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.gossiping._
@@ -52,8 +55,6 @@ package object gossiping {
     // For client stub to GossipService conversions.
     implicit val oi = ObservableIterant.default
 
-    // TODO: Create Synchrnozier
-    // TODO: Create StashingSynchronizer
     // TODO: Create InitialSynchronization
     // TODO: Create GossipServiceServer
     // TODO: Start gRPC for GossipServiceServer
@@ -78,7 +79,28 @@ package object gossiping {
 
       genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
 
-      // TODO: Start fiber on `genesisApprover.awaitApproval` and trigger the StashingSynchronizer and set MultiParentCasperRef.
+      // Make sure MultiParentCasperRef is set before the synchronizer is resumed.
+      awaitApproval = genesisApprover.awaitApproval >>= { genesisBlockHash =>
+        for {
+          maybeGenesis <- BlockStore[F].get(genesisBlockHash)
+          genesis <- MonadThrowable[F].fromOption(
+                      maybeGenesis,
+                      NotFound(s"Cannot retrieve Genesis ${show(genesisBlockHash)}")
+                    )
+          validatorId <- ValidatorIdentity.fromConfig[F](conf.casper)
+          casper <- MultiParentCasper.fromGossipServices(
+                     validatorId,
+                     genesis.getBlockMessage,
+                     conf.casper.shardId,
+                     relaying
+                   )
+          _ <- MultiParentCasperRef[F].set(casper)
+          _ <- Log[F].info("Making the transition to block processing.")
+        } yield ()
+      }
+
+      // The StashingSynchronizer will start a fiber to await on the above.
+      synchronizer <- makeSynchronizer(connectToGossip, awaitApproval)
 
     } yield ()
   }
@@ -130,6 +152,12 @@ package object gossiping {
               new RuntimeException(s"Non-valid status: $other")
             )
       }
+
+  /** Only meant to be called once the genesis has been approved and the Casper instance created. */
+  private def unsafeGetCasper[F[_]: Sync: MultiParentCasperRef]: F[MultiParentCasper[F]] =
+    MultiParentCasperRef[F].get.flatMap {
+      MonadThrowable[F].fromOption(_, Unavailable("Casper is not yet available."))
+    }
 
   /** Cached connection resources, closed at the end. */
   private def makeConnectionsCache[F[_]: Concurrent: Log: Metrics](
@@ -385,6 +413,51 @@ package object gossiping {
                    )
                  }
     } yield approver
+
+  private def makeSynchronizer[F[_]: Concurrent: Par: Log: MultiParentCasperRef: BlockDagStorage](
+      connectToGossip: GossipService.Connector[F],
+      awaitApproved: F[Unit]
+  ): Resource[F, Synchronizer[F]] = Resource.liftF {
+    for {
+      underlying <- Sync[F].delay {
+                     new SynchronizerImpl[F](
+                       connectToGossip,
+                       new SynchronizerImpl.Backend[F] {
+                         override def tips: F[List[ByteString]] =
+                           for {
+                             casper    <- unsafeGetCasper
+                             dag       <- casper.blockDag
+                             tipHashes <- casper.estimator(dag)
+                           } yield tipHashes.toList
+
+                         override def justifications: F[List[ByteString]] =
+                           for {
+                             casper <- unsafeGetCasper
+                             dag    <- casper.blockDag
+                             latest <- dag.latestMessageHashes
+                           } yield latest.values.toList
+
+                         override def validate(blockSummary: BlockSummary): F[Unit] =
+                           // TODO: Presently the Validation only works on full blocks.
+                           // Logging so we get an idea of how many summaries we are pulling.
+                           Log[F].debug(
+                             s"Trying to validate block summary ${show(blockSummary.blockHash)}"
+                           )
+
+                         override def notInDag(blockHash: ByteString): F[Boolean] =
+                           isInDag(blockHash).map(!_)
+                       },
+                       // TODO: Move to config.
+                       maxPossibleDepth = 1000,
+                       minBlockCountToCheckBranchingFactor = 100,
+                       // Really what we should be looking at is the width at any rank being less than the number of validators.
+                       maxBranchingFactor = 1.5,
+                       maxDepthAncestorsRequest = 10
+                     )
+                   }
+      stashing <- StashingSynchronizer.wrap(underlying, awaitApproved)
+    } yield stashing
+  }
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
