@@ -52,7 +52,6 @@ package object gossiping {
     // For client stub to GossipService conversions.
     implicit val oi = ObservableIterant.default
 
-    // TODO: Create GenesisApprover
     // TODO: Create Synchrnozier
     // TODO: Create StashingSynchronizer
     // TODO: Create InitialSynchronization
@@ -252,6 +251,21 @@ package object gossiping {
                 } yield bonds
               }
 
+      validatorId <- Resource.liftF {
+                      ValidatorIdentity.fromConfig[F](conf.casper)
+                    }
+
+      approveBlock = (block: Block) => {
+        val sig = validatorId.get.signature(block.blockHash.toByteArray)
+        Approval()
+          .withValidatorPublicKey(sig.publicKey)
+          .withSignature(
+            Signature()
+              .withSigAlgorithm(sig.algorithm)
+              .withSig(sig.sig)
+          )
+      }
+
       candidateValidator <- Resource.liftF[F, Block => F[Either[Throwable, Option[Approval]]]] {
                              if (conf.casper.approveGenesis) {
                                // This is the case of a validator that will pull the genesis from the bootstrap, validate and approve it.
@@ -260,8 +274,7 @@ package object gossiping {
                                  _ <- Log[F].info("Starting in approve genesis mode")
                                  timestamp <- conf.casper.deployTimestamp
                                                .fold(Time[F].currentMillis)(_.pure[F])
-                                 wallets     <- Genesis.getWallets[F](conf.casper.walletsFile)
-                                 validatorId <- ValidatorIdentity.fromConfig[F](conf.casper)
+                                 wallets <- Genesis.getWallets[F](conf.casper.walletsFile)
                                  bondsMap = bonds.map {
                                    case (k, v) => ByteString.copyFrom(k) -> v
                                  }
@@ -286,19 +299,7 @@ package object gossiping {
                                        Left(InvalidArgument(msg))
 
                                      case Right(()) =>
-                                       Right(
-                                         validatorId
-                                           .map { id =>
-                                             val sig = id.signature(block.blockHash.toByteArray)
-                                             Approval()
-                                               .withValidatorPublicKey(sig.publicKey)
-                                               .withSignature(
-                                                 Signature()
-                                                   .withSigAlgorithm(sig.algorithm)
-                                                   .withSig(sig.sig)
-                                               )
-                                           }
-                                       )
+                                       Right(validatorId.map(_ => approveBlock(block)))
                                    }
                                  }
                                }
@@ -348,23 +349,35 @@ package object gossiping {
       }
 
       approver <- if (conf.casper.standalone) {
-                   GenesisApproverImpl.fromGenesis(
-                     backend,
-                     NodeDiscovery[F],
-                     connectToGossip,
-                     // TODO: Move to config.
-                     relayFactor = 10,
-                     // TODO: Create Genesis block.
-                     genesis = ???,
-                     // TODO: Sign approval.
-                     approval = ???
-                   )
+                   for {
+                     genesis <- Resource.liftF {
+                                 Genesis[F](
+                                   conf.casper.walletsFile,
+                                   conf.casper.minimumBond,
+                                   conf.casper.maximumBond,
+                                   conf.casper.hasFaucet,
+                                   conf.casper.shardId,
+                                   conf.casper.deployTimestamp
+                                 ).map { x =>
+                                   LegacyConversions.toBlock(x.getBlockMessage)
+                                 }
+                               }
+                     approver <- GenesisApproverImpl.fromGenesis(
+                                  backend,
+                                  NodeDiscovery[F],
+                                  connectToGossip,
+                                  // TODO: Move to config.
+                                  relayFactor = 10,
+                                  genesis = genesis,
+                                  approval = approveBlock(genesis)
+                                )
+                   } yield approver
                  } else {
                    GenesisApproverImpl.fromBootstrap(
                      backend,
                      NodeDiscovery[F],
                      connectToGossip,
-                     bootstrap = ???,
+                     bootstrap = conf.server.bootstrap,
                      // TODO: Move to config.
                      relayFactor = 10,
                      pollInterval = 30.seconds,
