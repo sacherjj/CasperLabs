@@ -10,11 +10,14 @@ import io.casperlabs.shared.{Cell, Log, Resources, Time}
 import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.genesis.Genesis
+import io.casperlabs.casper.protocol
 import io.casperlabs.casper.LegacyConversions
+import io.casperlabs.casper.util.comm.BlockApproverProtocol
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
-import io.casperlabs.comm.ServiceError.{Unavailable}
+import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.gossiping._
@@ -76,6 +79,8 @@ package object gossiping {
 
       genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
 
+      // TODO: Start fiber on `genesisApprover.awaitApproval` and trigger the StashingSynchronizer and set MultiParentCasperRef.
+
     } yield ()
   }
 
@@ -89,7 +94,7 @@ package object gossiping {
   /** Validate the genesis candidate or any new block via Casper. */
   private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
       shardId: String,
-      block: consensus.Block
+      block: Block
   ): F[Unit] =
     MultiParentCasperRef[F].get
       .flatMap {
@@ -207,15 +212,15 @@ package object gossiping {
         override def hasBlock(blockHash: ByteString): F[Boolean] =
           isInDag(blockHash)
 
-        override def validateBlock(block: consensus.Block): F[Unit] =
+        override def validateBlock(block: Block): F[Unit] =
           validateAndAddBlock(conf.casper.shardId, block)
 
-        override def storeBlock(block: consensus.Block): F[Unit] =
+        override def storeBlock(block: Block): F[Unit] =
           // Validation has already stored it.
           ().pure[F]
 
         override def storeBlockSummary(
-            summary: consensus.BlockSummary
+            summary: BlockSummary
         ): F[Unit] =
           // TODO: Add separate storage for summaries.
           ().pure[F]
@@ -225,39 +230,148 @@ package object gossiping {
       retriesConf = DownloadManagerImpl.RetriesConf.noRetries
     )
 
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Timer: NodeDiscovery](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: ExecutionEngineService](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F]
-  ): Resource[F, GenesisApprover[F]] = {
-    // TODO: Move to config. Using a higher value to spread the approval quickly.
-    val backend: GenesisApproverImpl.Backend[F] = ???
+  ): Resource[F, GenesisApprover[F]] =
+    for {
+      knownValidators <- Resource.liftF {
+                          // Based on `CasperPacketHandler.of` in default mode.
+                          CasperConf.parseValidatorsFile[F](conf.casper.knownValidatorsFile)
+                        }
 
-    if (conf.casper.standalone) {
-      GenesisApproverImpl.fromGenesis(
-        backend,
-        NodeDiscovery[F],
-        connectToGossip,
-        // TODO: Move to config.
-        relayFactor = 10,
-        // TODO: Create Genesis block.
-        genesis = ???,
-        // TODO: Sign approval.
-        approval = ???
-      )
-    } else {
-      GenesisApproverImpl.fromBootstrap(
-        backend,
-        NodeDiscovery[F],
-        connectToGossip,
-        bootstrap = ???,
-        // TODO: Move to config.
-        relayFactor = 10,
-        pollInterval = 30.seconds,
-        downloadManager = downloadManager
-      )
-    }
-  }
+      bonds <- Resource.liftF {
+                for {
+                  bonds <- Genesis.getBonds[F](
+                            conf.casper.genesisPath,
+                            conf.casper.bondsFile,
+                            conf.casper.numValidators
+                          )
+                  _ <- ExecutionEngineService[F].setBonds(bonds)
+                } yield bonds
+              }
+
+      candidateValidator <- Resource.liftF[F, Block => F[Either[Throwable, Option[Approval]]]] {
+                             if (conf.casper.approveGenesis) {
+                               // This is the case of a validator that will pull the genesis from the bootstrap, validate and approve it.
+                               // Based on `CasperPacketHandler.of`.
+                               for {
+                                 _ <- Log[F].info("Starting in approve genesis mode")
+                                 timestamp <- conf.casper.deployTimestamp
+                                               .fold(Time[F].currentMillis)(_.pure[F])
+                                 wallets     <- Genesis.getWallets[F](conf.casper.walletsFile)
+                                 validatorId <- ValidatorIdentity.fromConfig[F](conf.casper)
+                                 bondsMap = bonds.map {
+                                   case (k, v) => ByteString.copyFrom(k) -> v
+                                 }
+                               } yield { (block: Block) =>
+                                 {
+                                   val candidate = protocol
+                                     .ApprovedBlockCandidate()
+                                     .withBlock(LegacyConversions.fromBlock(block))
+                                     .withRequiredSigs(conf.casper.requiredSigs)
+
+                                   BlockApproverProtocol.validateCandidate(
+                                     candidate,
+                                     conf.casper.requiredSigs,
+                                     timestamp,
+                                     wallets,
+                                     bondsMap,
+                                     conf.casper.minimumBond,
+                                     conf.casper.maximumBond,
+                                     conf.casper.hasFaucet
+                                   ) map {
+                                     case Left(msg) =>
+                                       Left(InvalidArgument(msg))
+
+                                     case Right(()) =>
+                                       Right(
+                                         validatorId
+                                           .map { id =>
+                                             val sig = id.signature(block.blockHash.toByteArray)
+                                             Approval()
+                                               .withValidatorPublicKey(sig.publicKey)
+                                               .withSignature(
+                                                 Signature()
+                                                   .withSigAlgorithm(sig.algorithm)
+                                                   .withSig(sig.sig)
+                                               )
+                                           }
+                                       )
+                                   }
+                                 }
+                               }
+                             } else if (conf.casper.standalone) {
+                               // This is the case of the bootstrap node. It will not pull candidates.
+                               Log[F].info("Starting in create genesis mode") *>
+                                 ((_: Block) => none[Approval].asRight[Throwable].pure[F]).pure[F]
+                             } else {
+                               // Non-validating nodes. They are okay with everything,
+                               // only checking that the required signatures are present.
+                               Log[F].info("Starting in default mode") *>
+                                 ((_: Block) => none[Approval].asRight[Throwable].pure[F]).pure[F]
+                             }
+                           }
+
+      backend = new GenesisApproverImpl.Backend[F] {
+        override def validateCandidate(
+            block: Block
+        ): F[Either[Throwable, Option[Approval]]] =
+          candidateValidator(block)
+
+        override def canTransition(
+            block: Block,
+            signatories: Set[ByteString]
+        ): Boolean =
+          signatories.size >= conf.casper.requiredSigs &&
+            knownValidators.forall(signatories(_))
+
+        override def validateSignature(
+            blockHash: ByteString,
+            publicKey: ByteString,
+            signature: Signature
+        ): Boolean =
+          Validate.signature(
+            blockHash.toByteArray,
+            protocol
+              .Signature()
+              .withPublicKey(publicKey)
+              .withAlgorithm(signature.sigAlgorithm)
+              .withSig(signature.sig)
+          )
+
+        override def getBlock(blockHash: ByteString): F[Option[Block]] =
+          BlockStore[F]
+            .get(blockHash)
+            .map(_.map(x => LegacyConversions.toBlock(x.getBlockMessage)))
+      }
+
+      approver <- if (conf.casper.standalone) {
+                   GenesisApproverImpl.fromGenesis(
+                     backend,
+                     NodeDiscovery[F],
+                     connectToGossip,
+                     // TODO: Move to config.
+                     relayFactor = 10,
+                     // TODO: Create Genesis block.
+                     genesis = ???,
+                     // TODO: Sign approval.
+                     approval = ???
+                   )
+                 } else {
+                   GenesisApproverImpl.fromBootstrap(
+                     backend,
+                     NodeDiscovery[F],
+                     connectToGossip,
+                     bootstrap = ???,
+                     // TODO: Move to config.
+                     relayFactor = 10,
+                     pollInterval = 30.seconds,
+                     downloadManager = downloadManager
+                   )
+                 }
+    } yield approver
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)

@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
 import io.casperlabs.ipc
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -42,11 +42,13 @@ object Validate {
 
   final case class ValidateErrorWrapper(status: InvalidBlock) extends Exception
 
-  val DRIFT                                 = 15000 // 15 seconds
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  val DRIFT                                                                    = 15000 // 15 seconds
+  private implicit val logSource: LogSource                                    = LogSource(this.getClass)
   val signatureVerifiers: Map[String, (Data, Signature, PublicKey) => Boolean] =
+    // NOTE: This is the mirror of `SignatureAlgorithms`.
     Map(
-      "ed25519" -> Ed25519.verify
+      "ed25519"   -> Ed25519.verify,
+      "secp256k1" -> Secp256k1.verify
     )
 
   def signature(d: Data, sig: protocol.Signature): Boolean =
