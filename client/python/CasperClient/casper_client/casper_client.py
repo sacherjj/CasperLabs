@@ -8,12 +8,11 @@ import argparse
 import grpc
 import functools
 
+from .protos import CasperMessage_pb2
+from .protos.CasperMessage_pb2_grpc import DeployServiceStub
 
-import CasperMessage_pb2
-from CasperMessage_pb2_grpc import DeployServiceStub
-
-DEFAULT_HOST='127.0.0.1'
-DEFAULT_PORT=40401
+DEFAULT_HOST = '127.0.0.1'
+DEFAULT_PORT = 40401
 
 
 class InternalError(Exception):
@@ -26,7 +25,7 @@ class InternalError(Exception):
     pass
 
 
-def read_deploy_code(fileName: str):
+def read_deploy_code(filename: str):
     """
     Returns DeployCode object as defined in CasperMessage.proto
     with its attribute code populated with compiled WASM code
@@ -36,13 +35,13 @@ def read_deploy_code(fileName: str):
     to pass anything in the args (ABI encoded arguments)
     attribute of DeployCode.
 
-    :param fileName: path to file with compiled WASM code
+    :param filename: path to file with compiled WASM code
     :return: a CasperMessage_pb2.DeployCode object
     """
-    deployCode = CasperMessage_pb2.DeployCode()
-    with open(fileName, "rb") as f:
-        deployCode.code = f.read()
-        return deployCode
+    deploy_code = CasperMessage_pb2.DeployCode()
+    with open(filename, "rb") as f:
+        deploy_code.code = f.read()
+        return deploy_code
 
 
 def guarded(function):
@@ -62,7 +61,6 @@ def guarded(function):
             raise InternalError() from e
 
     return wrapper
-
 
 
 class CasperClient:
@@ -102,15 +100,14 @@ class CasperClient:
 
         self.node = Node()
 
-
     @guarded
-    def deploy(self, from_: bytes, gas_limit: int, gas_price: int, payment: str, session: str, nonce: int=0):
+    def deploy(self, from_addr: bytes, gas_limit: int, gas_price: int, payment: str, session: str, nonce: int=0):
         """
         Deploy a smart contract source file to Casper on an existing running node.
         The deploy will be packaged and sent as a block to the network depending
         on the configuration of the Casper instance.
 
-        :param from:          Purse address that will be used to pay for the deployment.
+        :param from_addr:     Purse address that will be used to pay for the deployment.
         :param gas_limit:     The amount of gas to use for the transaction (unused gas
                               is refunded). Must be positive integer.
         :param gas_price:     The price of gas for this transaction in units dust/gas.
@@ -122,13 +119,13 @@ class CasperClient:
         :return:              deserialized DeployServiceResponse object
         """
         data = CasperMessage_pb2.DeployData(
-            address = from_,
-            timestamp = int(time.time()),
-            session = read_deploy_code(session),
-            payment = read_deploy_code(payment),
-            gas_limit = gas_limit,
-            gas_price = gas_price,
-            nonce = nonce,
+            address=from_addr,
+            timestamp=int(time.time()),
+            session=read_deploy_code(session),
+            payment=read_deploy_code(payment),
+            gas_limit=gas_limit,
+            gas_price=gas_price,
+            nonce=nonce,
 
             # TODO: Scala client does not set attributes below
             #string sig_algorithm = 8; // name of the algorithm used for signing
@@ -184,7 +181,8 @@ class CasperClient:
         :return:                          VisualizeBlocksResponse object
         """
         # TODO: handle stream parameter
-        return self.node.visualizeDag(CasperMessage_pb2.VisualizeDagQuery(depth=depth, showJustificationLines=show_justification_lines))
+        return self.node.visualizeDag(
+            CasperMessage_pb2.VisualizeDagQuery(depth=depth, showJustificationLines=show_justification_lines))
 
     @guarded
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
@@ -199,8 +197,8 @@ class CasperClient:
                                   'address'.
         :return:                  QueryStateResponse object
         """
-        return self.node.queryState(CasperMessage_pb2.QueryStateRequest(block_hash=blockHash, key_bytes=key, key_variant=keyType, path=path))
-
+        return self.node.queryState(
+            CasperMessage_pb2.QueryStateRequest(block_hash=blockHash, key_bytes=key, key_variant=keyType, path=path))
 
     @guarded
     def showMainChain(self, depth: int):
@@ -213,7 +211,6 @@ class CasperClient:
         :return:
         """
         yield from self.node.showMainChain_(CasperMessage_pb2.BlocksQuery(depth=depth))
-
 
     @guarded
     def findBlockWithDeploy(self, user: bytes, timestamp: int):
@@ -260,20 +257,23 @@ def guarded_command(function):
 
     return wrapper
 
+
 def _show_blocks(response):
     count = 0
     for block in response:
-        print ('------------- block {} ---------------'.format(block.blockNumber))
-        print (block)
-        print ('-----------------------------------------------------\n')
+        print('------------- block {} ---------------'.format(block.blockNumber))
+        print(block)
+        print('-----------------------------------------------------\n')
         count += 1
-    print ('count:', count)
+    print('count:', count)
+
 
 def _show_block(response):
     if response.status != 'Success':
         print(response.status)
         return 1
     print(response)
+
 
 @guarded_command
 def deploy_command(casper_client, args):
@@ -283,6 +283,7 @@ def deploy_command(casper_client, args):
     if not response.success:
         return 1
 
+
 @guarded_command
 def propose_command(casper_client, args):
     response = casper_client.propose()
@@ -290,30 +291,36 @@ def propose_command(casper_client, args):
     if not response.success:
         return 1
 
+
 @guarded_command
 def show_block_command(casper_client, args):
     response = casper_client.showBlock(args.hash)
     return _show_block(response)
+
 
 @guarded_command
 def show_blocks_command(casper_client, args):
     response = casper_client.showBlocks(args.depth)
     _show_blocks(response)
 
+
 @guarded_command
 def vdag_command(casper_client, args):
     response = casper_client.visualizeDag(args.depth)
-    print (response.content)
+    print(response.content)
+
 
 @guarded_command
 def query_state_command(casper_client, args):
     response = casper_client.queryState(args.block_hash, args.key, args.path, getattr(args, 'type'))
     print(response.result)
 
+
 @guarded_command
 def show_main_chain_command(casper_client, args):
     response = casper_client.showMainChain(args.depth)
     _show_blocks(response)
+
 
 @guarded_command
 def find_block_with_deploy_command(casper_client, args):
@@ -388,10 +395,8 @@ def command_line_tool():
                       [[('-u', '--user'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help="User")],
                        [('-t', '--timestamp'), dict(required=True, type=int, help="Time in seconds since the epoch as an integer")]])
 
-
     sys.exit(parser.run())
 
 
 if __name__ == '__main__':
     command_line_tool()
-
