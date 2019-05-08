@@ -1,5 +1,5 @@
-use std::collections::btree_map::BTreeMap;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -58,7 +58,7 @@ impl LogMessage {
     }
 
     pub fn new_msg(log_settings: LogSettings, log_level: LogLevel, message: String) -> LogMessage {
-        let mut properties: BTreeMap<String, String> = BTreeMap::new();
+        let mut properties = BTreeMap::new();
 
         properties.insert("message".to_owned(), message);
 
@@ -87,7 +87,7 @@ impl From<(LogSettings, LogLevel, String, BTreeMap<String, String>)> for LogMess
 
 /// newtype for Rfc3999 formatted timestamp
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct TimestampRfc3999(pub String);
+pub struct TimestampRfc3999(pub(crate) String);
 
 impl Default for TimestampRfc3999 {
     fn default() -> Self {
@@ -103,7 +103,7 @@ impl fmt::Display for TimestampRfc3999 {
 }
 
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct MessageTemplate(pub String);
+pub struct MessageTemplate(pub(crate) String);
 
 impl MessageTemplate {
     pub fn new(fmt_template: String) -> Self {
@@ -112,7 +112,7 @@ impl MessageTemplate {
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub struct MessageId(pub String);
+pub struct MessageId(pub(crate) String);
 
 impl MessageId {
     pub fn new(hash: String) -> MessageId {
@@ -121,7 +121,7 @@ impl MessageId {
 }
 
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct MessageProperties(pub BTreeMap<String, String>);
+pub struct MessageProperties(pub(crate) BTreeMap<String, String>);
 
 impl MessageProperties {
     pub fn new(properties: BTreeMap<String, String>) -> MessageProperties {
@@ -138,20 +138,21 @@ impl MessageProperties {
             return String::new();
         }
 
-        if self.0.keys().len() == 0 {
+        let properties = &self.0;
+        if properties.keys().len() == 0 {
             return String::new();
         }
 
         const BRL: char = '{';
         const BRR: char = '}';
 
-        let mut buf: String = String::new();
-        let mut candidate_key: String = String::new();
+        let mut buf = String::new();
+        let mut candidate_key = String::new();
 
-        let mut key_seek: bool = false;
-        let mut key_lookup: bool = false;
+        let mut key_seek = false;
+        let mut key_lookup = false;
 
-        let mut exit: bool = false;
+        let mut exit = false;
         let mut ci = message_template.char_indices();
 
         loop {
@@ -162,7 +163,7 @@ impl MessageProperties {
                     let c = x.1;
 
                     // multiple opening braces should be caught
-                    if c.eq(&BRL) {
+                    if c == BRL {
                         // flag key seek behavior
                         key_seek = true;
 
@@ -178,7 +179,7 @@ impl MessageProperties {
                     }
 
                     // multiple closing braces should be caught
-                    if c.eq(&BRR) {
+                    if c == BRR {
                         // end key siphon
                         key_seek = false;
 
@@ -207,7 +208,7 @@ impl MessageProperties {
             if key_lookup {
                 key_lookup = false;
 
-                if let Some(v) = self.0.get(&candidate_key) {
+                if let Some(v) = properties.get(&candidate_key) {
                     // buffer keyed val
                     buf.push_str(v);
                 }

@@ -143,7 +143,6 @@ fn slog_log<F>(
     }
 }
 
-#[allow(dead_code)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,7 +262,7 @@ mod tests {
         let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Debug));
 
         // arbitrary format; any {???} brace encased elements that match a property key will get transcluded in description
-        let mut message_format: String = String::new();
+        let mut message_format = String::new();
 
         message_format.push_str("TRACE: {entry_point} start: {start}; stop: {stop}; elapsed(ns): {duration-in-nanoseconds}; successful: {successful}");
 

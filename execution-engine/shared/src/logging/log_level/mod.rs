@@ -121,7 +121,7 @@ impl fmt::Display for LogLevel {
 }
 
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct LogPriority(pub u8);
+pub struct LogPriority(pub(crate) u8);
 
 impl LogPriority {
     pub fn new(log_level: LogLevel) -> LogPriority {

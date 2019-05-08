@@ -43,7 +43,7 @@ impl From<&LogMessage> for LogSettings {
 
 /// newtype for LogLevel when used to filter out messages of lesser priority
 #[derive(Clone, Copy, Debug, Hash, Serialize)]
-pub struct LogLevelFilter(pub LogLevel);
+pub struct LogLevelFilter(pub(crate) LogLevel);
 
 impl LogLevelFilter {
     pub fn new(log_level: LogLevel) -> LogLevelFilter {
@@ -65,7 +65,7 @@ impl Into<slog::Level> for LogLevelFilter {
 
 /// newtype to encapsulate process_id / PID
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct ProcessId(pub i32);
+pub struct ProcessId(pub(crate) i32);
 
 impl ProcessId {
     pub fn new(pid: i32) -> ProcessId {
@@ -75,7 +75,7 @@ impl ProcessId {
 
 /// newtype to encapsulate process_name
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct ProcessName(pub String);
+pub struct ProcessName(pub(crate) String);
 
 impl ProcessName {
     pub fn new(process_name: String) -> ProcessName {
@@ -85,7 +85,7 @@ impl ProcessName {
 
 /// newtype to encapsulate process_name
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct HostName(pub String);
+pub struct HostName(pub(crate) String);
 
 impl HostName {
     pub fn new(host_name: String) -> HostName {
@@ -112,12 +112,9 @@ fn get_hostname() -> String {
     }
 }
 
-#[allow(dead_code)]
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const PROC_NAME: &str = "ee-shared-log-settings-tests";
 
     #[test]
     fn should_get_host_name() {
