@@ -28,6 +28,7 @@ import io.netty.handler.ssl.{ClientAuth, SslContext}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import monix.execution.Scheduler
 import scala.io.Source
+import scala.concurrent.duration._
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
@@ -57,7 +58,7 @@ package object gossiping {
     // TODO: Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
 
     for {
-      cachedConnections <- connectionsCache(conf.server.maxMessageSize, clientSslContext)
+      cachedConnections <- makeConnectionsCache(conf.server.maxMessageSize, clientSslContext)
 
       connectToGossip: GossipService.Connector[F] = (node: Node) => {
         cachedConnections.connection(node, enforce = true) map { chan =>
@@ -69,39 +70,12 @@ package object gossiping {
         }
       }
 
-      relaying = RelayingImpl(
-        NodeDiscovery[F],
-        connectToGossip = connectToGossip,
-        // TODO: Add to config.
-        relayFactor = 2,
-        relaySaturation = 90
-      )
+      relaying <- makeRelaying(connectToGossip)
 
-      downloadManager <- DownloadManagerImpl[F](
-                          // TODO: Add to config.
-                          maxParallelDownloads = 10,
-                          connectToGossip = connectToGossip,
-                          backend = new DownloadManagerImpl.Backend[F] {
-                            override def hasBlock(blockHash: ByteString): F[Boolean] =
-                              isInDag(blockHash)
+      downloadManager <- makeDownloadManager(conf, connectToGossip, relaying)
 
-                            override def validateBlock(block: consensus.Block): F[Unit] =
-                              validateAndAddBlock(conf.casper.shardId, block)
+      genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
 
-                            override def storeBlock(block: consensus.Block): F[Unit] =
-                              // Validation has already stored it.
-                              ().pure[F]
-
-                            override def storeBlockSummary(
-                                summary: consensus.BlockSummary
-                            ): F[Unit] =
-                              // TODO: Add separate storage for summaries.
-                              ().pure[F]
-                          },
-                          relaying = relaying,
-                          // TODO: Configure retry.
-                          retriesConf = DownloadManagerImpl.RetriesConf.noRetries
-                        )
     } yield ()
   }
 
@@ -154,14 +128,14 @@ package object gossiping {
       }
 
   /** Cached connection resources, closed at the end. */
-  private def connectionsCache[F[_]: Concurrent: Log: Metrics](
+  private def makeConnectionsCache[F[_]: Concurrent: Log: Metrics](
       maxMessageSize: Int,
       clientSslContext: SslContext
   )(implicit scheduler: Scheduler): Resource[F, CachedConnections[F, Unit]] = Resource {
     for {
-      fromOpener <- CachedConnections[F, Unit]
-      cache = fromOpener {
-        gossipChannel(
+      makeCache <- CachedConnections[F, Unit]
+      cache = makeCache {
+        makeGossipChannel(
           _,
           maxMessageSize,
           clientSslContext
@@ -178,7 +152,7 @@ package object gossiping {
   }
 
   /** Open a gRPC channel for gossiping. */
-  private def gossipChannel[F[_]: Sync: Log](
+  private def makeGossipChannel[F[_]: Sync: Log](
       peer: Node,
       maxMessageSize: Int,
       clientSslContext: SslContext
@@ -207,6 +181,83 @@ package object gossiping {
             }
       } yield s.copy(connections = s.connections - peer)
     }
+
+  private def makeRelaying[F[_]: Sync: Par: Log: NodeDiscovery: NodeAsk](
+      connectToGossip: GossipService.Connector[F]
+  ): Resource[F, Relaying[F]] = Resource.pure {
+    RelayingImpl(
+      NodeDiscovery[F],
+      connectToGossip = connectToGossip,
+      // TODO: Add to config.
+      relayFactor = 2,
+      relaySaturation = 90
+    )
+  }
+
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
+      conf: Configuration,
+      connectToGossip: GossipService.Connector[F],
+      relaying: Relaying[F]
+  ): Resource[F, DownloadManager[F]] =
+    DownloadManagerImpl[F](
+      // TODO: Add to config.
+      maxParallelDownloads = 10,
+      connectToGossip = connectToGossip,
+      backend = new DownloadManagerImpl.Backend[F] {
+        override def hasBlock(blockHash: ByteString): F[Boolean] =
+          isInDag(blockHash)
+
+        override def validateBlock(block: consensus.Block): F[Unit] =
+          validateAndAddBlock(conf.casper.shardId, block)
+
+        override def storeBlock(block: consensus.Block): F[Unit] =
+          // Validation has already stored it.
+          ().pure[F]
+
+        override def storeBlockSummary(
+            summary: consensus.BlockSummary
+        ): F[Unit] =
+          // TODO: Add separate storage for summaries.
+          ().pure[F]
+      },
+      relaying = relaying,
+      // TODO: Configure retry.
+      retriesConf = DownloadManagerImpl.RetriesConf.noRetries
+    )
+
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Timer: NodeDiscovery](
+      conf: Configuration,
+      connectToGossip: GossipService.Connector[F],
+      downloadManager: DownloadManager[F]
+  ): Resource[F, GenesisApprover[F]] = {
+    // TODO: Move to config. Using a higher value to spread the approval quickly.
+    val backend: GenesisApproverImpl.Backend[F] = ???
+
+    if (conf.casper.standalone) {
+      GenesisApproverImpl.fromGenesis(
+        backend,
+        NodeDiscovery[F],
+        connectToGossip,
+        // TODO: Move to config.
+        relayFactor = 10,
+        // TODO: Create Genesis block.
+        genesis = ???,
+        // TODO: Sign approval.
+        approval = ???
+      )
+    } else {
+      GenesisApproverImpl.fromBootstrap(
+        backend,
+        NodeDiscovery[F],
+        connectToGossip,
+        bootstrap = ???,
+        // TODO: Move to config.
+        relayFactor = 10,
+        pollInterval = 30.seconds,
+        downloadManager = downloadManager
+      )
+    }
+  }
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
