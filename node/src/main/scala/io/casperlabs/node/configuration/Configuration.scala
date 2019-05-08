@@ -64,6 +64,7 @@ object Configuration extends ParserImplicits {
       maxNumOfConnections: Int,
       maxMessageSize: Int,
       chunkSize: Int,
+      useGossiping: Boolean,
       relayFactor: Int,
       relaySaturation: Int,
       cleanBlockStorage: Boolean
@@ -86,6 +87,7 @@ object Configuration extends ParserImplicits {
       envVars: Map[String, String]
   ): ValidatedNel[String, (Command, Configuration)] = {
     val res = for {
+      // NOTE: This is coming from test resources, not the main one.
       defaultRaw         <- readFile(Source.fromResource("default-configuration.toml"))
       defaults           <- parseToml(defaultRaw)
       options            <- Options.safeCreate(args, defaults)
