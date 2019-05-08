@@ -132,16 +132,13 @@ impl MessageProperties {
     /// and applies them as candidate keys for the encapsulated collection of
     /// message properties. the underlying value of any candidate key that
     /// has an entry in the collection will be spliced into the output in
-    /// the place of it's corresponding brace encased candidate key
+    /// the place of its corresponding brace encased candidate key
     pub fn get_formatted_message(&self, message_template: &str) -> String {
         if message_template.is_empty() {
             return String::new();
         }
 
         let properties = &self.0;
-        if properties.keys().len() == 0 {
-            return String::new();
-        }
 
         const BRL: char = '{';
         const BRR: char = '}';
@@ -333,6 +330,19 @@ mod tests {
             "this is a message with some additional data".to_string(),
             "message malformed"
         )
+    }
+
+    #[test]
+    fn should_format_message_template_with_no_properties() {
+        let properties: BTreeMap<String, String> = BTreeMap::new();
+
+        let props = MessageProperties::new(properties);
+
+        let template = "{message}".to_string();
+
+        let formatted = props.get_formatted_message(&template);
+
+        assert_eq!(formatted, "".to_string(), "message malformed")
     }
 
     #[test]

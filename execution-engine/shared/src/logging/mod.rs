@@ -264,7 +264,10 @@ mod tests {
         // arbitrary format; any {???} brace encased elements that match a property key will get transcluded in description
         let mut message_format = String::new();
 
-        message_format.push_str("TRACE: {entry_point} start: {start}; stop: {stop}; elapsed(ns): {duration-in-nanoseconds}; successful: {successful}");
+        message_format.push_str(
+            "TRACE: {entry_point} start: {start}; stop: {stop}; \
+             elapsed(ns): {duration-in-nanoseconds}; successful: {successful}",
+        );
 
         if properties.contains_key("error") {
             message_format.push_str("; error: {error}");
