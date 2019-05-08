@@ -89,12 +89,7 @@ object BlockAPI {
           case false =>
             DeployServiceResponse(success = false, "Error: There is another propose in progress.")
               .pure[F]
-        } {
-          case true =>
-            blockApiLock.release
-          case false =>
-            ().pure[F]
-        }
+        }(blockApiLock.release.whenA(_))
       },
       errorMessage,
       default = DeployServiceResponse(success = false, s"Error: $errorMessage").pure[F]

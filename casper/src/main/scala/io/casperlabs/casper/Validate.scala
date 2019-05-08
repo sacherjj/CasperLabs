@@ -333,13 +333,12 @@ object Validate {
     for {
       parents <- ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
                   dag.lookup(parentHash).flatMap {
-                    case Some(p) => p.pure[F]
-                    case None =>
-                      MonadThrowable[F].raiseError[BlockMetadata](
-                        new Exception(
-                          s"Block dag store was missing ${PrettyPrinter.buildString(parentHash)}."
-                        )
+                    MonadThrowable[F].fromOption(
+                      _,
+                      new Exception(
+                        s"Block dag store was missing ${PrettyPrinter.buildString(parentHash)}."
                       )
+                    )
                   }
                 }
       maxBlockNumber = parents.foldLeft(-1L) {
