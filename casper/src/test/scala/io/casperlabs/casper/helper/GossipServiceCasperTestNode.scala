@@ -360,8 +360,10 @@ object GossipServiceCasperTestNodeFactory {
               } yield tipHashes.toList
 
             override def justifications: F[List[ByteString]] =
-              // TODO: Presently there's no way to ask.
-              List.empty.pure[F]
+              for {
+                dag    <- casper.blockDag
+                latest <- dag.latestMessageHashes
+              } yield latest.values.toList
 
             override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
               // TODO: Presently the Validation only works on full blocks.

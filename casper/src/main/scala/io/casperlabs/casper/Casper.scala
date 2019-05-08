@@ -90,8 +90,7 @@ sealed abstract class MultiParentCasperInstances {
   def fromGossipServices[F[_]: Concurrent: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService](
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
-      shardId: String
-  )(
+      shardId: String,
       relaying: gossiping.Relaying[F]
   ): F[MultiParentCasper[F]] =
     init(genesis) map {
