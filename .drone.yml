@@ -139,6 +139,7 @@ pipeline:
       - sbt node/docker:publishLocal client/docker:publishLocal
       - export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}
       - make docker-build/execution-engine
+      - make docker-build/integration-testing
     volumes:	
       - /var/run/docker.sock:/var/run/docker.sock
 
@@ -147,7 +148,7 @@ pipeline:
     commands:
       - python3 -m pip install pipenv dataclasses typing_extensions
       - cd integration-testing
-      - ./run_tests.sh
+      - ./docker_run_tests.sh
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp

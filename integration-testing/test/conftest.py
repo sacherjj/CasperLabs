@@ -17,6 +17,8 @@ from .cl_node.common import KeyPair, TestingContext
 from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from .cl_node.casperlabsnode import docker_network_with_started_bootstrap, HOST_GENESIS_DIR, HOST_MOUNT_DIR
 
+from .cl_node.casperlabs_network import OneNodeNetwork, ThreeNodeNetwork
+
 
 if TYPE_CHECKING:
     from docker.client import DockerClient
@@ -106,16 +108,6 @@ def command_line_options_fixture(request):
     yield command_line_options
 
 
-def create_genesis_folder() -> None:
-    try:
-        if os.path.exists(HOST_GENESIS_DIR):
-            shutil.rmtree(HOST_GENESIS_DIR)
-        os.makedirs(HOST_GENESIS_DIR)
-    except Exception as ex:
-        sys.exit(1)
-        logging.exception(f"An exception occured while creating the folder {HOST_GENESIS_DIR}: {ex}")
-
-
 def create_bonds_file(validator_keys: List[KeyPair]) -> str:
     (fd, _file) = tempfile.mkstemp(prefix="bonds-", suffix=".txt", dir="/tmp")
     try:
@@ -148,7 +140,6 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
     # Using pre-generated validator key pairs by cl_node. We do this because warning below  with python generated keys
     # WARN  io.casperlabs.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
     validator_keys = [kp for kp in [bootstrap_keypair] + peers_keypairs[0: command_line_options_fixture.peer_count + 1]]
-    create_genesis_folder()
     bonds_file = create_bonds_file(validator_keys)
     peers_keypairs = validator_keys
     context = TestingContext(
@@ -161,8 +152,21 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
     yield context
 
 
-@pytest.yield_fixture(scope='module')
+@pytest.fixture(scope='module')
 def started_standalone_bootstrap_node(command_line_options_fixture, docker_client_fixture):
     with testing_context(command_line_options_fixture, docker_client_fixture) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
             yield bootstrap_node
+
+
+@pytest.fixture(scope='module')
+def one_node_network(docker_client_fixture):
+    with OneNodeNetwork(docker_client_fixture) as onn:
+        yield onn
+
+
+@pytest.fixture(scope='module')
+def three_node_network(docker_client_fixture):
+    with ThreeNodeNetwork(docker_client_fixture) as tnn:
+        yield tnn
+
