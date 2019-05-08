@@ -32,15 +32,9 @@ package object effects {
       time: Time[Task],
       metrics: Metrics[Task]
   ): Resource[Effect, NodeDiscovery[Task]] =
-    Resource(
-      NodeDiscoveryImpl
-        .create[Task](id, port, timeout)(init)
-        .allocated
-        .map {
-          case (nd, release) => (nd, release.toEffect)
-        }
-        .toEffect
-    )
+    NodeDiscoveryImpl
+      .create[Task](id, port, timeout)(init)
+      .toEffect
 
   def time(implicit timer: Timer[Task]): Time[Task] =
     new Time[Task] {

@@ -118,6 +118,52 @@ const TEST_LEAVES_UPDATED: [TestTrie; TEST_LEAVES_LENGTH] = [
     },
 ];
 
+const TEST_LEAVES_NON_COLLIDING: [TestTrie; TEST_LEAVES_LENGTH] = [
+    Trie::Leaf {
+        key: TestKey([0u8, 0, 0, 0]),
+        value: TestValue(*b"valueA"),
+    },
+    Trie::Leaf {
+        key: TestKey([1u8, 0, 0, 0]),
+        value: TestValue(*b"valueB"),
+    },
+    Trie::Leaf {
+        key: TestKey([2u8, 0, 0, 0]),
+        value: TestValue(*b"valueC"),
+    },
+    Trie::Leaf {
+        key: TestKey([3u8, 0, 0, 0]),
+        value: TestValue(*b"valueD"),
+    },
+    Trie::Leaf {
+        key: TestKey([4u8, 0, 0, 0]),
+        value: TestValue(*b"valueE"),
+    },
+];
+
+const TEST_LEAVES_ADJACENTS: [TestTrie; TEST_LEAVES_LENGTH] = [
+    Trie::Leaf {
+        key: TestKey([0u8, 0, 0, 1]),
+        value: TestValue(*b"valueA"),
+    },
+    Trie::Leaf {
+        key: TestKey([1u8, 0, 1, 1]),
+        value: TestValue(*b"valueB"),
+    },
+    Trie::Leaf {
+        key: TestKey([1u8, 0, 1, 2]),
+        value: TestValue(*b"valueC"),
+    },
+    Trie::Leaf {
+        key: TestKey([1u8, 0, 3, 255]),
+        value: TestValue(*b"valueD"),
+    },
+    Trie::Leaf {
+        key: TestKey([2u8, 0, 0, 0]),
+        value: TestValue(*b"valueE"),
+    },
+];
+
 type TestTrieGenerator = fn() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error>;
 
 const TEST_TRIE_GENERATORS_LENGTH: usize = 6;
@@ -259,7 +305,7 @@ fn create_4_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 
     let root = HashedTestTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(ext_node_1.hash)),
-        (1, Pointer::LeafPointer(ext_node_2.hash)),
+        (1, Pointer::NodePointer(ext_node_2.hash)),
     ]))?;
 
     let root_hash = root.hash;
@@ -299,20 +345,20 @@ fn create_5_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
         Pointer::NodePointer(node_1.hash),
     ))?;
 
-    let ext_node_3 = HashedTestTrie::new(Trie::extension(
+    let ext_node_2 = HashedTestTrie::new(Trie::extension(
         vec![0u8],
         Pointer::NodePointer(node_3.hash),
     ))?;
 
     let root = HashedTestTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(ext_node_1.hash)),
-        (1, Pointer::LeafPointer(ext_node_3.hash)),
+        (1, Pointer::NodePointer(ext_node_2.hash)),
     ]))?;
 
     let root_hash: Blake2bHash = root.hash;
 
     let non_leaves: Vec<HashedTestTrie> =
-        vec![node_1, node_2, node_3, ext_node_1, ext_node_3, root];
+        vec![node_1, node_2, node_3, ext_node_1, ext_node_2, root];
 
     let tries: Vec<HashedTestTrie> = {
         let mut ret = Vec::new();
@@ -769,6 +815,93 @@ mod write {
         Ok(results)
     }
 
+    mod empty_tries {
+        use super::*;
+
+        fn node_writes_to_n_leaf_empty_trie_had_expected_results<'a, R, S, E>(
+            environment: &'a R,
+            store: &S,
+            states: &[Blake2bHash],
+            num_leaves: usize,
+        ) -> Result<(), E>
+        where
+            R: TransactionSource<'a, Handle = S::Handle>,
+            S: TrieStore<TestKey, TestValue>,
+            S::Error: From<R::Error>,
+            E: From<R::Error> + From<S::Error> + From<common::bytesrepr::Error>,
+        {
+            let mut states = states.to_vec();
+            let test_leaves = TEST_LEAVES_NON_COLLIDING;
+
+            // Write set of leaves to the trie
+            let hashes = write_leaves::<R, S, E>(
+                environment,
+                store,
+                states.last().unwrap(),
+                &test_leaves[..num_leaves],
+            )?
+            .iter()
+            .map(|result| match result {
+                WriteResult::Written(root_hash) => *root_hash,
+                _ => panic!("write_leaves resulted in non-write"),
+            })
+            .collect::<Vec<Blake2bHash>>();
+
+            states.extend(hashes);
+
+            // Check that the expected set of leaves is in the trie at every
+            // state, and that the set of other leaves is not.
+            for (num_leaves, state) in states.iter().enumerate() {
+                let (used, unused) = test_leaves.split_at(num_leaves);
+                check_leaves::<R, S, E>(environment, store, state, used, unused)?;
+            }
+
+            Ok(())
+        }
+
+        #[test]
+        fn lmdb_node_writes_to_n_leaf_empty_trie_had_expected_results() {
+            for num_leaves in 1..=TEST_LEAVES_LENGTH {
+                let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
+                let mut context = LmdbTestContext::new(&tries).unwrap();
+                let initial_states = vec![root_hash];
+
+                node_writes_to_n_leaf_empty_trie_had_expected_results::<
+                    LmdbEnvironment,
+                    LmdbTrieStore,
+                    error::Error,
+                >(
+                    &context.environment,
+                    &context.store,
+                    &initial_states,
+                    num_leaves,
+                )
+                .unwrap()
+            }
+        }
+
+        #[test]
+        fn in_memory_node_writes_to_n_leaf_empty_trie_had_expected_results() {
+            for num_leaves in 1..=TEST_LEAVES_LENGTH {
+                let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
+                let mut context = InMemoryTestContext::new(&tries).unwrap();
+                let initial_states = vec![root_hash];
+
+                node_writes_to_n_leaf_empty_trie_had_expected_results::<
+                    InMemoryEnvironment,
+                    InMemoryTrieStore,
+                    in_memory::Error,
+                >(
+                    &context.environment,
+                    &context.store,
+                    &initial_states,
+                    num_leaves,
+                )
+                .unwrap()
+            }
+        }
+    }
+
     mod partial_tries {
         use super::*;
 
@@ -1058,6 +1191,7 @@ mod write {
                 )?;
             }
 
+            // Write set of leaves to the trie
             let hashes = write_leaves::<R, S, E>(
                 environment,
                 store,
@@ -1066,11 +1200,10 @@ mod write {
             )?
             .iter()
             .map(|result| match result {
-                WriteResult::Written(root_hash) => Some(*root_hash),
-                _ => None,
+                WriteResult::Written(root_hash) => *root_hash,
+                _ => panic!("write_leaves resulted in non-write"),
             })
-            .collect::<Option<Vec<Blake2bHash>>>()
-            .unwrap();
+            .collect::<Vec<Blake2bHash>>();
 
             states.extend(hashes);
 
@@ -1139,6 +1272,113 @@ mod write {
                 >(&context.environment, &context.store, &states, num_leaves)
                 .unwrap()
             }
+        }
+
+        fn node_writes_to_5_leaf_full_trie_had_expected_results<'a, R, S, E>(
+            environment: &'a R,
+            store: &S,
+            states: &[Blake2bHash],
+        ) -> Result<(), E>
+        where
+            R: TransactionSource<'a, Handle = S::Handle>,
+            S: TrieStore<TestKey, TestValue>,
+            S::Error: From<R::Error>,
+            E: From<R::Error> + From<S::Error> + From<common::bytesrepr::Error>,
+        {
+            let mut states = states.to_vec();
+            let num_leaves = 5;
+
+            // Check that the expected set of leaves is in the trie at every state reference
+            for (state_index, state) in states.iter().enumerate() {
+                check_leaves::<R, S, E>(
+                    environment,
+                    store,
+                    state,
+                    &TEST_LEAVES[..state_index],
+                    &[],
+                )?;
+            }
+
+            // Write set of leaves to the trie
+            let hashes = write_leaves::<R, S, E>(
+                environment,
+                store,
+                states.last().unwrap(),
+                &TEST_LEAVES_ADJACENTS,
+            )?
+            .iter()
+            .map(|result| match result {
+                WriteResult::Written(root_hash) => *root_hash,
+                _ => panic!("write_leaves resulted in non-write"),
+            })
+            .collect::<Vec<Blake2bHash>>();
+
+            states.extend(hashes);
+
+            let expected: Vec<Vec<TestTrie>> = {
+                let mut ret = vec![vec![]];
+                if num_leaves > 0 {
+                    for i in 1..=num_leaves {
+                        ret.push(TEST_LEAVES[..i].to_vec())
+                    }
+                    for i in 1..=num_leaves {
+                        ret.push(
+                            TEST_LEAVES
+                                .iter()
+                                .chain(&TEST_LEAVES_ADJACENTS[..i])
+                                .map(ToOwned::to_owned)
+                                .collect::<Vec<TestTrie>>(),
+                        )
+                    }
+                }
+                ret
+            };
+
+            assert_eq!(states.len(), expected.len());
+
+            // Check that the expected set of leaves is in the trie at every state reference
+            for (state_index, state) in states.iter().enumerate() {
+                check_leaves::<R, S, E>(environment, store, state, &expected[state_index], &[])?;
+            }
+            Ok(())
+        }
+
+        #[test]
+        fn lmdb_node_writes_to_5_leaf_full_trie_had_expected_results() {
+            let context = LmdbTestContext::new(&[]).unwrap();
+            let mut states: Vec<Blake2bHash> = Vec::new();
+
+            for generator in &TEST_TRIE_GENERATORS {
+                let (root_hash, tries) = generator().unwrap();
+                context.update(&tries).unwrap();
+                states.push(root_hash);
+            }
+
+            node_writes_to_5_leaf_full_trie_had_expected_results::<
+                LmdbEnvironment,
+                LmdbTrieStore,
+                error::Error,
+            >(&context.environment, &context.store, &states)
+            .unwrap()
+        }
+
+        #[test]
+        fn in_memory_node_writes_to_5_leaf_full_trie_had_expected_results() {
+            let context = InMemoryTestContext::new(&[]).unwrap();
+            let mut states: Vec<Blake2bHash> = Vec::new();
+
+            for generator in &TEST_TRIE_GENERATORS {
+                let (root_hash, tries) = generator().unwrap();
+                context.update(&tries).unwrap();
+                states.push(root_hash);
+            }
+
+            node_writes_to_5_leaf_full_trie_had_expected_results::<
+                InMemoryEnvironment,
+                InMemoryTrieStore,
+                in_memory::Error,
+            >(&context.environment, &context.store, &states)
+            .unwrap()
         }
     }
 }

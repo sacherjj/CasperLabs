@@ -3,6 +3,7 @@ package io.casperlabs
 import cats.Monad
 import cats.data.EitherT
 import cats.syntax.applicative._
+import cats.effect.Resource
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.eitherT._
 import io.casperlabs.comm.CommError
@@ -34,4 +35,12 @@ package object node {
           }
 
     }
+
+  implicit class ResourceTaskEffectOps[A](r: Resource[Task, A]) {
+    def toEffect: Resource[Effect, A] = Resource {
+      r.allocated.map {
+        case (x, releaseTask) => (x, releaseTask.toEffect)
+      }.toEffect
+    }
+  }
 }
