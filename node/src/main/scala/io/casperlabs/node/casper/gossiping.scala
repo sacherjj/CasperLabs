@@ -120,13 +120,11 @@ package object gossiping {
                                )
 
       // Nothing really depends on the initial synchronization, so just start it in the background.
-      _ <- Resource {
-            Concurrent[F].start(initialSynchronization.sync()).map { fiber =>
-              (fiber, fiber.cancel.attempt.void)
-            }
-          }
+      _ <- makeFiberResource(initialSynchronization.sync())
 
-      // TODO: Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
+      // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
+      // NOTE: The TransportLayer has the `Connect` loops to do this.
+      _ <- makePeerCountPrinter
 
     } yield ()
   }
@@ -612,6 +610,40 @@ package object gossiping {
         roundPeriod = 30.seconds,
         connector = connectToGossip
       )
+    }
+
+  /** The TransportLayer setup prints the number of peers now and then which integration tests
+    * may depend upon. We aren't using the `Connect` functionality so have to do it another way. */
+  private def makePeerCountPrinter[F[_]: Concurrent: Time: Log: NodeDiscovery]
+    : Resource[F, Unit] = {
+    def loop(prevPeers: Set[Node]): F[Unit] = {
+      // Based on Connecttions.removeConn
+      val newPeers = for {
+        _     <- Time[F].sleep(1.minute)
+        peers <- NodeDiscovery[F].alivePeersAscendingDistance.map(_.toSet)
+        _     <- Log[F].info(s"Peers: ${peers.size}").whenA(peers.size != prevPeers.size)
+        _ <- (prevPeers diff peers).toList.traverse { peer =>
+              Log[F].info(s"Disconnected from ${peer.show}")
+            }
+        _ <- (peers diff prevPeers).toList.traverse { peer =>
+              Log[F].info(s"Connected to ${peer.show}")
+            }
+      } yield peers
+
+      newPeers flatMap { peers =>
+        loop(peers)
+      }
+    }
+
+    makeFiberResource(loop(Set.empty)).map(_ => ())
+  }
+
+  /** Start something in a fiber. Make sure it stops if the resource is released. */
+  private def makeFiberResource[F[_]: Concurrent, A](f: F[A]): Resource[F, Fiber[F, A]] =
+    Resource {
+      Concurrent[F].start(f).map { fiber =>
+        (fiber, fiber.cancel.attempt.void)
+      }
     }
 
   private def show(hash: ByteString) =
