@@ -24,7 +24,7 @@ import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.gossiping._
-import io.casperlabs.comm.grpc.SslContexts
+import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
@@ -33,6 +33,7 @@ import io.grpc.ManagedChannel
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import monix.execution.Scheduler
+import monix.eval.TaskLike
 import scala.io.Source
 import scala.concurrent.duration._
 
@@ -51,17 +52,17 @@ package object gossiping {
     val key  = Resources.withResource(Source.fromFile(conf.tls.key.toFile))(_.mkString)
 
     val clientSslContext = SslContexts.forClient(cert, key)
+    val serverSslContext = SslContexts.forServer(cert, key, ClientAuth.REQUIRE)
 
     // For client stub to GossipService conversions.
     implicit val oi = ObservableIterant.default
 
-    // TODO: Create InitialSynchronization
-    // TODO: Create GossipServiceServer
-    // TODO: Start gRPC for GossipServiceServer
-    // TODO: Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
-
     for {
-      cachedConnections <- makeConnectionsCache(conf.server.maxMessageSize, clientSslContext)
+      cachedConnections <- makeConnectionsCache(
+                            conf.server.maxMessageSize,
+                            clientSslContext,
+                            grpcScheduler
+                          )
 
       connectToGossip: GossipService.Connector[F] = (node: Node) => {
         cachedConnections.connection(node, enforce = true) map { chan =>
@@ -101,6 +102,21 @@ package object gossiping {
 
       // The StashingSynchronizer will start a fiber to await on the above.
       synchronizer <- makeSynchronizer(connectToGossip, awaitApproval)
+
+      gossipServiceServer <- makeGossipServiceServer(
+                              port,
+                              conf,
+                              synchronizer,
+                              downloadManager,
+                              genesisApprover,
+                              serverSslContext,
+                              grpcScheduler
+                            )
+
+      // TODO: Create InitialSynchronization
+      // TODO: Start the initial syncing.
+
+      // TODO: Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
 
     } yield ()
   }
@@ -162,15 +178,17 @@ package object gossiping {
   /** Cached connection resources, closed at the end. */
   private def makeConnectionsCache[F[_]: Concurrent: Log: Metrics](
       maxMessageSize: Int,
-      clientSslContext: SslContext
-  )(implicit scheduler: Scheduler): Resource[F, CachedConnections[F, Unit]] = Resource {
+      clientSslContext: SslContext,
+      grpcScheduler: Scheduler
+  ): Resource[F, CachedConnections[F, Unit]] = Resource {
     for {
       makeCache <- CachedConnections[F, Unit]
       cache = makeCache {
         makeGossipChannel(
           _,
           maxMessageSize,
-          clientSslContext
+          clientSslContext,
+          grpcScheduler
         )
       }
       shutdown = cache.read.flatMap { s =>
@@ -187,14 +205,15 @@ package object gossiping {
   private def makeGossipChannel[F[_]: Sync: Log](
       peer: Node,
       maxMessageSize: Int,
-      clientSslContext: SslContext
-  )(implicit scheduler: Scheduler): F[ManagedChannel] =
+      clientSslContext: SslContext,
+      grpcScheduler: Scheduler
+  ): F[ManagedChannel] =
     for {
       _ <- Log[F].debug(s"Creating new channel to peer ${peer.show}")
       chan <- Sync[F].delay {
                NettyChannelBuilder
                  .forAddress(peer.host, peer.protocolPort)
-                 .executor(scheduler)
+                 .executor(grpcScheduler)
                  .maxInboundMessageSize(maxMessageSize)
                  .negotiationType(NegotiationType.TLS)
                  .sslContext(clientSslContext)
@@ -458,6 +477,114 @@ package object gossiping {
       stashing <- StashingSynchronizer.wrap(underlying, awaitApproved)
     } yield stashing
   }
+
+  /** Create and start the gossip service. */
+  private def makeGossipServiceServer[F[_]: Concurrent: Par: TaskLike: ObservableIterant: Log: BlockStore: BlockDagStorage: MultiParentCasperRef](
+      port: Int,
+      conf: Configuration,
+      synchronizer: Synchronizer[F],
+      downloadManager: DownloadManager[F],
+      genesisApprover: GenesisApprover[F],
+      serverSslContext: SslContext,
+      grpcScheduler: Scheduler
+  ): Resource[F, GossipServiceServer[F]] = {
+    implicit val logId = Log.logId
+    for {
+      backend <- Resource.pure[F, GossipServiceServer.Backend[F]] {
+                  new GossipServiceServer.Backend[F] {
+                    override def hasBlock(blockHash: ByteString): F[Boolean] =
+                      isInDag(blockHash)
+
+                    override def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]] =
+                      // TODO: Need a more efficient way to retrieve the summary.
+                      // Perhaps the BlockDagStorage can be made to store it? Or the BlockStore could put it into LMDB
+                      BlockStore[F]
+                        .get(blockHash)
+                        .map(_.map(x => LegacyConversions.toBlockSummary(x.getBlockMessage)))
+
+                    override def getBlock(blockHash: ByteString): F[Option[Block]] =
+                      BlockStore[F]
+                        .get(blockHash)
+                        .map(_.map(x => LegacyConversions.toBlock(x.getBlockMessage)))
+                  }
+                }
+
+      consensus <- Resource.pure[F, GossipServiceServer.Consensus[F]] {
+                    new GossipServiceServer.Consensus[F] {
+                      override def onPending(dag: Vector[consensus.BlockSummary]) =
+                        // The EquivocationDetector treats equivocations with children differently,
+                        // so let Casper know about the DAG dependencies up front.
+                        for {
+                          _      <- Log[F].debug(s"Feeding ${dag.size} pending blocks to Casper.")
+                          casper <- unsafeGetCasper.map(_.asInstanceOf[MultiParentCasperImpl[F]])
+                          _ <- dag.traverse { summary =>
+                                val partialBlock = consensus
+                                  .Block()
+                                  .withBlockHash(summary.blockHash)
+                                  .withHeader(summary.getHeader)
+
+                                casper.addMissingDependencies(
+                                  LegacyConversions.fromBlock(partialBlock)
+                                )
+                              }
+                        } yield ()
+
+                      override def onDownloaded(blockHash: ByteString) =
+                        // Calling `addBlock` during validation has already stored the block.
+                        Log[F].debug(s"Download ready for ${show(blockHash)}")
+
+                      override def listTips =
+                        for {
+                          casper    <- unsafeGetCasper
+                          dag       <- casper.blockDag
+                          tipHashes <- casper.estimator(dag)
+                          tips      <- tipHashes.toList.traverse(backend.getBlockSummary(_))
+                        } yield tips.flatten
+                    }
+                  }
+
+      server <- Resource.liftF {
+                 GossipServiceServer[F](
+                   backend,
+                   synchronizer,
+                   downloadManager,
+                   consensus,
+                   genesisApprover,
+                   maxChunkSize = conf.server.chunkSize,
+                   // TODO: Move to config.
+                   maxParallelBlockDownloads = 5
+                 )
+               }
+
+      // Start the gRPC server.
+      _ <- {
+        implicit val s = grpcScheduler
+        GrpcServer(
+          port,
+          services = List(
+            (scheduler: Scheduler) =>
+              Sync[F].delay {
+                val svc = GrpcGossipService.fromGossipService(
+                  server,
+                  // TODO: Move to config.
+                  blockChunkConsumerTimeout = 10.seconds
+                )
+                GossipingGrpcMonix.bindService(svc, scheduler)
+              }
+          ),
+          interceptors = List(
+            new AuthInterceptor(),
+            ErrorInterceptor.default
+          ),
+          sslContext = serverSslContext.some,
+          maxMessageSize = conf.server.maxMessageSize.some
+        )
+      }
+
+    } yield server
+  }
+
+  //private def makeInitialSynchronizer[F[_]: Concurrent: Par: Log: Timer: NodeDiscovery
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
