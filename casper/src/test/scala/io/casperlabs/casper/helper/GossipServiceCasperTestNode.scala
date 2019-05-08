@@ -361,9 +361,9 @@ object GossipServiceCasperTestNodeFactory {
 
             override def justifications: F[List[ByteString]] =
               for {
-                 dag    <- casper.blockDag
-                 latest <- dag.latestMessageHashes
-               } yield latest.values.toList
+                dag    <- casper.blockDag
+                latest <- dag.latestMessageHashes
+              } yield latest.values.toList
 
             override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
               // TODO: Presently the Validation only works on full blocks.
