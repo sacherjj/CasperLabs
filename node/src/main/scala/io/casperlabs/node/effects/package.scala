@@ -108,64 +108,79 @@ package object effects {
     }
   }
 
-  object CatsConcurrentEffectForEffect extends ConcurrentEffect[Effect] {
-    val C = implicitly[Concurrent[Effect]]
+  implicit def catsConcurrentEffectForEffect(implicit scheduler: Scheduler) =
+    new ConcurrentEffect[Effect] {
+      val C = implicitly[Concurrent[Effect]]
+      val E = implicitly[cats.effect.Effect[Task]]
+      val F = implicitly[ConcurrentEffect[Task]]
 
-    // Members declared in cats.Applicative
-    def pure[A](x: A): Effect[A] =
-      C.pure[A](x)
+      // Members declared in cats.Applicative
+      def pure[A](x: A): Effect[A] =
+        C.pure[A](x)
 
-    // Members declared in cats.ApplicativeError
-    def handleErrorWith[A](fa: Effect[A])(f: Throwable => Effect[A]): Effect[A] =
-      C.handleErrorWith[A](fa)(f)
+      // Members declared in cats.ApplicativeError
+      def handleErrorWith[A](fa: Effect[A])(f: Throwable => Effect[A]): Effect[A] =
+        C.handleErrorWith[A](fa)(f)
 
-    def raiseError[A](e: Throwable): Effect[A] =
-      C.raiseError[A](e)
+      def raiseError[A](e: Throwable): Effect[A] =
+        C.raiseError[A](e)
 
-    // Members declared in cats.effect.Async
-    def async[A](k: (Either[Throwable, A] => Unit) => Unit): Effect[A] =
-      C.async[A](k)
+      // Members declared in cats.effect.Async
+      def async[A](k: (Either[Throwable, A] => Unit) => Unit): Effect[A] =
+        C.async[A](k)
 
-    def asyncF[A](k: (Either[Throwable, A] => Unit) => Effect[Unit]): Effect[A] =
-      C.asyncF[A](k)
+      def asyncF[A](k: (Either[Throwable, A] => Unit) => Effect[Unit]): Effect[A] =
+        C.asyncF[A](k)
 
-    // Members declared in cats.effect.Bracket
-    def bracketCase[A, B](acquire: Effect[A])(
-        use: A => Effect[B]
-    )(release: (A, cats.effect.ExitCase[Throwable]) => Effect[Unit]): Effect[B] =
-      C.bracketCase[A, B](acquire)(use)(release)
+      // Members declared in cats.effect.Bracket
+      def bracketCase[A, B](acquire: Effect[A])(
+          use: A => Effect[B]
+      )(release: (A, cats.effect.ExitCase[Throwable]) => Effect[Unit]): Effect[B] =
+        C.bracketCase[A, B](acquire)(use)(release)
 
-    // Members declared in cats.effect.Concurrent
-    def racePair[A, B](
-        fa: Effect[A],
-        fb: Effect[B]
-    ): Effect[Either[(A, Fiber[Effect, B]), (Fiber[Effect, A], B)]] =
-      C.racePair[A, B](fa, fb)
+      // Members declared in cats.effect.Concurrent
+      def racePair[A, B](
+          fa: Effect[A],
+          fb: Effect[B]
+      ): Effect[Either[(A, Fiber[Effect, B]), (Fiber[Effect, A], B)]] =
+        C.racePair[A, B](fa, fb)
 
-    def start[A](fa: Effect[A]): Effect[Fiber[Effect, A]] =
-      C.start[A](fa)
+      def start[A](fa: Effect[A]): Effect[Fiber[Effect, A]] =
+        C.start[A](fa)
 
-    // Members declared in cats.effect.ConcurrentEffect
-    def runCancelable[A](fa: Effect[A])(
-        cb: Either[Throwable, A] => cats.effect.IO[Unit]
-    ): cats.effect.SyncIO[cats.effect.CancelToken[Effect]] = ???
+      // Members declared in cats.effect.ConcurrentEffect
+      def runCancelable[A](fa: Effect[A])(
+          cb: Either[Throwable, A] => cats.effect.IO[Unit]
+      ): cats.effect.SyncIO[cats.effect.CancelToken[Effect]] =
+        F.runCancelable(fa.value) {
+          case Left(ex)        => cb(Left(ex))
+          case Right(Left(ce)) => cb(Left(new RuntimeException(ce.toString)))
+          case Right(Right(x)) => cb(Right(x))
+        } map {
+          EitherT.liftF(_)
+        }
 
-    // Members declared in cats.effect.Effect
-    def runAsync[A](fa: Effect[A])(
-        cb: Either[Throwable, A] => cats.effect.IO[Unit]
-    ): cats.effect.SyncIO[Unit] = ???
+      // Members declared in cats.effect.Effect
+      def runAsync[A](fa: Effect[A])(
+          cb: Either[Throwable, A] => cats.effect.IO[Unit]
+      ): cats.effect.SyncIO[Unit] =
+        E.runAsync(fa.value) {
+          case Left(ex)        => cb(Left(ex))
+          case Right(Left(ce)) => cb(Left(new RuntimeException(ce.toString)))
+          case Right(Right(x)) => cb(Right(x))
+        }
 
-    // Members declared in cats.FlatMap
-    def flatMap[A, B](fa: Effect[A])(f: A => Effect[B]): Effect[B] =
-      C.flatMap[A, B](fa)(f)
+      // Members declared in cats.FlatMap
+      def flatMap[A, B](fa: Effect[A])(f: A => Effect[B]): Effect[B] =
+        C.flatMap[A, B](fa)(f)
 
-    def tailRecM[A, B](a: A)(f: A => Effect[Either[A, B]]): Effect[B] =
-      C.tailRecM[A, B](a)(f)
+      def tailRecM[A, B](a: A)(f: A => Effect[Either[A, B]]): Effect[B] =
+        C.tailRecM[A, B](a)(f)
 
-    // Members declared in cats.effect.Sync
-    def suspend[A](thunk: => Effect[A]): Effect[A] =
-      C.suspend[A](thunk)
+      // Members declared in cats.effect.Sync
+      def suspend[A](thunk: => Effect[A]): Effect[A] =
+        C.suspend[A](thunk)
 
-  }
+    }
 
 }

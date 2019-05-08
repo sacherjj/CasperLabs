@@ -192,7 +192,7 @@ class NodeRuntime private[node] (
                 grpcScheduler
               )(
                 effects.parEffectInstance,
-                effects.CatsConcurrentEffectForEffect,
+                effects.catsConcurrentEffectForEffect(scheduler),
                 logEff,
                 metricsEff,
                 Time.eitherTTime(Monad[Task], effects.time),
