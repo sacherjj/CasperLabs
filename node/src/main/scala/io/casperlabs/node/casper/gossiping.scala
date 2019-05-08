@@ -113,8 +113,18 @@ package object gossiping {
                               grpcScheduler
                             )
 
-      // TODO: Create InitialSynchronization
-      // TODO: Start the initial syncing.
+      initialSynchronization <- makeInitialSynchronization(
+                                 gossipServiceServer,
+                                 conf.server.bootstrap,
+                                 connectToGossip
+                               )
+
+      // Nothing really depends on the initial synchronization, so just start it in the background.
+      _ <- Resource {
+            Concurrent[F].start(initialSynchronization.sync()).map { fiber =>
+              (fiber, fiber.cancel.attempt.void)
+            }
+          }
 
       // TODO: Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
 
@@ -584,7 +594,25 @@ package object gossiping {
     } yield server
   }
 
-  //private def makeInitialSynchronizer[F[_]: Concurrent: Par: Log: Timer: NodeDiscovery
+  private def makeInitialSynchronization[F[_]: Concurrent: Par: Log: Timer: NodeDiscovery](
+      gossipServiceServer: GossipServiceServer[F],
+      bootstrap: Node,
+      connectToGossip: GossipService.Connector[F]
+  ): Resource[F, InitialSynchronization[F]] =
+    Resource.pure {
+      new InitialSynchronizationImpl(
+        NodeDiscovery[F],
+        gossipServiceServer,
+        InitialSynchronizationImpl.Bootstrap(bootstrap),
+        // TODO: Move to config
+        selectNodes = (b, ns) => b +: ns.take(5),
+        minSuccessful = 1,
+        memoizeNodes = false,
+        skipFailedNodesInNextRounds = false,
+        roundPeriod = 30.seconds,
+        connector = connectToGossip
+      )
+    }
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
