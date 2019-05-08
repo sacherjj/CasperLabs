@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -129,7 +129,7 @@ impl MessageProperties {
     }
 
     /// strips out brace encased tokens in message_template
-    /// and applies them as candidate keys for the encased collection of
+    /// and applies them as candidate keys for the encapsulated collection of
     /// message properties. the underlying value of any candidate key that
     /// has an entry in the collection will be spliced into the output in
     /// the place of it's corresponding brace encased candidate key
@@ -159,9 +159,7 @@ impl MessageProperties {
             let mut oc: Option<char> = None;
 
             match ci.next() {
-                Some(x) => {
-                    let c = x.1;
-
+                Some((_, c)) => {
                     // multiple opening braces should be caught
                     if c == BRL {
                         // flag key seek behavior
