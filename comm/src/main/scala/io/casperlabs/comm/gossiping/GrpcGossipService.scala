@@ -1,6 +1,8 @@
 package io.casperlabs.comm.gossiping
 
+import cats._
 import cats.effect._
+import cats.implicits._
 import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.{DeadlineExceeded, Unauthenticated}
 import io.casperlabs.comm.auth.Principal
@@ -79,37 +81,48 @@ object GrpcGossipService {
 
   /** Create the internal interface from the Monix specific instance,
     * to be used as the "client side", i.e. to request data from another peer. */
-  def toGossipService[F[_]: Sync: TaskLift: ObservableIterant](
-      stub: GossipingGrpcMonix.GossipService
+  def toGossipService[F[_]: Sync: TaskLift: TaskLike: ObservableIterant](
+      stub: GossipingGrpcMonix.GossipService,
+      // Can inject a callback to close the faulty channel.
+      onError: PartialFunction[Throwable, F[Unit]] = ignoreErrors[F]
   ): GossipService[F] =
     new GossipService[F] {
+      private def withErrorCallback[T](obs: Observable[T]): Iterant[F, T] =
+        obs.doOnErrorF(onError orElse { case _ => ().pure[F] }).toIterant
+
+      private def withErrorCallback[T](task: Task[T]): F[T] =
+        task.to[F].onError(onError)
 
       /** Notify the callee about new blocks. */
       def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
-        stub.newBlocks(request).to[F]
+        withErrorCallback(stub.newBlocks(request))
 
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
-        stub.streamAncestorBlockSummaries(request).toIterant
+        withErrorCallback(stub.streamAncestorBlockSummaries(request))
 
       def streamDagTipBlockSummaries(
           request: StreamDagTipBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
-        stub.streamDagTipBlockSummaries(request).toIterant
+        withErrorCallback(stub.streamDagTipBlockSummaries(request))
 
       def streamBlockSummaries(
           request: StreamBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
-        stub.streamBlockSummaries(request).toIterant
+        withErrorCallback(stub.streamBlockSummaries(request))
 
       def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
-        stub.getBlockChunked(request).toIterant
+        withErrorCallback(stub.getBlockChunked(request))
 
       def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
-        stub.getGenesisCandidate(request).to[F]
+        withErrorCallback(stub.getGenesisCandidate(request))
 
       def addApproval(request: AddApprovalRequest): F[Empty] =
-        stub.addApproval(request).to[F]
+        withErrorCallback(stub.addApproval(request))
     }
+
+  private def ignoreErrors[F[_]]: PartialFunction[Throwable, F[Unit]] = {
+    case _ if false => ??? // Not returning anything because there's no Applicative in scope.
+  }
 }

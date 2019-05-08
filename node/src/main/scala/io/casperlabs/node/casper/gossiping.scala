@@ -54,6 +54,7 @@ package object gossiping {
     // TODO: Create InitialSynchronization
     // TODO: Create GossipServiceServer
     // TODO: Start gRPC for GossipServiceServer
+    // TODO: Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
 
     for {
       cachedConnections <- connectionsCache(conf.server.maxMessageSize, clientSslContext)
@@ -62,7 +63,9 @@ package object gossiping {
         cachedConnections.connection(node, enforce = true) map { chan =>
           new GossipingGrpcMonix.GossipServiceStub(chan)
         } map {
-          GrpcGossipService.toGossipService(_)
+          GrpcGossipService.toGossipService(_, onError = {
+            case Unavailable(_) => disconnect(cachedConnections, node)
+          })
         }
       }
 
@@ -75,7 +78,7 @@ package object gossiping {
       )
 
       downloadManager <- DownloadManagerImpl[F](
-                          // TODO: Add to configu.
+                          // TODO: Add to config.
                           maxParallelDownloads = 10,
                           connectToGossip = connectToGossip,
                           backend = new DownloadManagerImpl.Backend[F] {
@@ -193,6 +196,17 @@ package object gossiping {
                  .build()
              }
     } yield chan
+
+  /** Close and remove a cached connection. */
+  private def disconnect[F[_]: Sync: Log](cache: CachedConnections[F, Unit], peer: Node): F[Unit] =
+    cache.modify { s =>
+      for {
+        _ <- s.connections.get(peer).fold(().pure[F]) { c =>
+              Log[F].debug(s"Disconnecting from peer ${peer.show}") *>
+                Sync[F].delay(c.shutdown()).attempt.void
+            }
+      } yield s.copy(connections = s.connections - peer)
+    }
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
