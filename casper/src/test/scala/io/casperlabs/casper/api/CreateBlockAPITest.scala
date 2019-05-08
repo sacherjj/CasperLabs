@@ -13,7 +13,6 @@ import io.casperlabs.casper.helper.{
 }, HashSetCasperTestNode.Effect
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util._
-import io.casperlabs.casper.util.rholang._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.signatures.Ed25519
