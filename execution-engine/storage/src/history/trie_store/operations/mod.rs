@@ -317,6 +317,11 @@ where
     Ok(parents)
 }
 
+/// Takes paths to a new leaf and an existing leaf that share a common prefix,
+/// along with the parents of the existing leaf. Creates a new node (adding a
+/// possible parent extension for it to parents) which contains the existing
+/// leaf.  Returns the new node and parents, so that they can be used by
+/// [`add_node_to_parents`].
 #[allow(clippy::type_complexity)]
 fn reparent_leaf<K, V>(
     new_leaf_path: &[u8],
@@ -329,41 +334,36 @@ where
 {
     let mut parents = parents;
     let (child_index, parent) = parents.pop().expect("parents should not be empty");
-    match parent {
-        Trie::Node { pointer_block } => {
-            // Get the path that the new leaf and existing leaf share
-            let shared_path = common_prefix(&new_leaf_path, &existing_leaf_path);
-            // Assemble a new node to hold the existing leaf. The new leaf will
-            // be added later during the add_parent_node and rehash phase.
-            let new_node = {
-                let index: usize = existing_leaf_path[shared_path.len()].into();
-                let existing_leaf_pointer =
-                    pointer_block[child_index].expect("parent has lost the existing leaf");
-                Trie::node(&[(index, existing_leaf_pointer)])
-            };
-            // Re-add the parent node to parents
-            parents.push((child_index, Trie::Node { pointer_block }));
-            // Create an affix for a possible extension node
-            let affix = {
-                let parents_path = get_parents_path(&parents);
-                &shared_path[parents_path.len()..]
-            };
-            // If the affix is non-empty, create an extension node and add it
-            // to parents.
-            if !affix.is_empty() {
-                let new_extension = {
-                    let new_node_hash = {
-                        let new_node_bytes = new_node.to_bytes()?;
-                        Blake2bHash::new(&new_node_bytes)
-                    };
-                    Trie::extension(affix.to_vec(), Pointer::NodePointer(new_node_hash))
-                };
-                parents.push((child_index, new_extension));
-            }
-            Ok((new_node, parents))
-        }
+    let pointer_block = match parent {
+        Trie::Node { pointer_block } => pointer_block,
         _ => panic!("A leaf should have a node for its parent"),
+    };
+    // Get the path that the new leaf and existing leaf share
+    let shared_path = common_prefix(&new_leaf_path, &existing_leaf_path);
+    // Assemble a new node to hold the existing leaf. The new leaf will
+    // be added later during the add_parent_node and rehash phase.
+    let new_node = {
+        let index: usize = existing_leaf_path[shared_path.len()].into();
+        let existing_leaf_pointer =
+            pointer_block[child_index].expect("parent has lost the existing leaf");
+        Trie::node(&[(index, existing_leaf_pointer)])
+    };
+    // Re-add the parent node to parents
+    parents.push((child_index, Trie::Node { pointer_block }));
+    // Create an affix for a possible extension node
+    let affix = {
+        let parents_path = get_parents_path(&parents);
+        &shared_path[parents_path.len()..]
+    };
+    // If the affix is non-empty, create an extension node and add it
+    // to parents.
+    if !affix.is_empty() {
+        let new_node_bytes = new_node.to_bytes()?;
+        let new_node_hash = Blake2bHash::new(&new_node_bytes);
+        let new_extension = Trie::extension(affix.to_vec(), Pointer::NodePointer(new_node_hash));
+        parents.push((child_index, new_extension));
     }
+    Ok((new_node, parents))
 }
 
 #[derive(Debug, PartialEq, Eq)]
