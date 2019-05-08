@@ -1,4 +1,4 @@
-package io.casperlabsnode.casper
+package io.casperlabs.node.casper
 
 import cats._
 import cats.effect._

@@ -185,25 +185,48 @@ class NodeRuntime private[node] (
               scheduler
             )
 
-        _ <- casper.transport.apply(
-              port,
-              conf,
-              grpcScheduler
-            )(
-              log,
-              logEff,
-              metrics,
-              metricsEff,
-              safetyOracle,
-              blockStore,
-              blockDagStorage,
-              connectionsCell,
-              nodeDiscovery,
-              state,
-              multiParentCasperRef,
-              executionEngineService,
-              scheduler
-            )
+        _ <- if (conf.server.useGossiping) {
+              casper.gossiping.apply[Effect](
+                port,
+                conf,
+                grpcScheduler
+              )(
+                effects.parEffectInstance,
+                effects.CatsConcurrentEffectForEffect,
+                logEff,
+                metricsEff,
+                Time.eitherTTime(Monad[Task], effects.time),
+                Timer[Effect],
+                safetyOracle,
+                blockStore,
+                blockDagStorage,
+                NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
+                effects.eitherTpeerNodeAsk(effects.peerNodeAsk(state)),
+                multiParentCasperRef,
+                executionEngineService,
+                scheduler
+              )
+            } else {
+              casper.transport.apply(
+                port,
+                conf,
+                grpcScheduler
+              )(
+                log,
+                logEff,
+                metrics,
+                metricsEff,
+                safetyOracle,
+                blockStore,
+                blockDagStorage,
+                connectionsCell,
+                nodeDiscovery,
+                state,
+                multiParentCasperRef,
+                executionEngineService,
+                scheduler
+              )
+            }
 
       } yield (nodeDiscovery, multiParentCasperRef)
 
