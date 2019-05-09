@@ -967,8 +967,7 @@ mod write {
 
         #[test]
         fn lmdb_writes_to_n_leaf_empty_trie_had_expected_results() {
-            // TODO: alter bounds
-            for num_leaves in 1..2 {
+            for num_leaves in 1..=TEST_LEAVES_LENGTH {
                 let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
                 let context = LmdbTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
@@ -985,8 +984,7 @@ mod write {
 
         #[test]
         fn in_memory_writes_to_n_leaf_empty_trie_had_expected_results() {
-            // TODO: alter bounds
-            for num_leaves in 1..2 {
+            for num_leaves in 1..=TEST_LEAVES_LENGTH {
                 let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
                 let context = InMemoryTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
@@ -1005,8 +1003,7 @@ mod write {
         fn in_memory_writes_to_n_leaf_empty_trie_had_expected_store_contents() {
             let expected_contents: HashMap<Blake2bHash, TestTrie> = {
                 let mut ret = HashMap::new();
-                // TODO: remove bounds
-                for generator in &TEST_TRIE_GENERATORS[..3] {
+                for generator in &TEST_TRIE_GENERATORS {
                     let (_, tries) = generator().unwrap();
                     for HashedTestTrie { hash, trie } in tries {
                         ret.insert(hash, trie);
@@ -1023,8 +1020,7 @@ mod write {
                     &context.environment,
                     &context.store,
                     &root_hash,
-                    // TODO: remove bounds
-                    &TEST_LEAVES[..2],
+                    &TEST_LEAVES,
                 )
                 .unwrap();
 

@@ -287,7 +287,7 @@ where
     K: ToBytes,
     V: ToBytes,
 {
-    // TODO: add is_leaf() method to Trie
+    // TODO: add is_node() method to Trie
     match new_parent_node {
         Trie::Node { .. } => (),
         _ => panic!("new_parent must be a node"),
@@ -365,6 +365,73 @@ where
     Ok((new_node, parents))
 }
 
+/// Takes a path to a new leaf, an existing extension that leaf collides with,
+/// and the parents of that extension.  Creates a new node and possible parent
+/// and child extensions.  The node pointer contained in the existing extension
+/// is repositioned in the new node or the possible child extension.  The
+/// possible parent extension is added to parents.  Returns the new node,
+/// parents, and the the possible child extension (paired with its hashed).
+/// The new node and parents can be used by [`add_node_to_parents`], and the
+/// new hashed child extension can be added to the list of new trie elements.
+#[allow(clippy::type_complexity)]
+fn modify_extension<K, V>(
+    new_leaf_path: &[u8],
+    existing_extension: Trie<K, V>,
+    mut parents: Parents<K, V>,
+) -> Result<(Trie<K, V>, Parents<K, V>, Option<(Blake2bHash, Trie<K, V>)>), bytesrepr::Error>
+where
+    K: ToBytes + Clone,
+    V: ToBytes + Clone,
+{
+    // TODO: add is_extension() method to Trie
+    let (affix, pointer) = match existing_extension {
+        Trie::Extension { affix, pointer } => (affix, pointer),
+        _ => panic!("existing_extension must be an extension"),
+    };
+    let parents_path = get_parents_path(&parents);
+    // Get the path to the existing extension node
+    let existing_extension_path: Vec<u8> =
+        parents_path.iter().chain(affix.iter()).cloned().collect();
+    // Get the path that the new leaf and existing leaf share
+    let shared_path = common_prefix(&new_leaf_path, &existing_extension_path);
+    // Create an affix for a possible parent extension above the new
+    // node.
+    let parent_extension_affix = shared_path[parents_path.len()..].to_vec();
+    // Create an affix for a possible child extension between the new
+    // node and the node that the existing extension pointed to.
+    let child_extension_affix = affix[parent_extension_affix.len() + 1..].to_vec();
+    // Create a child extension (paired with its hash) if necessary
+    let maybe_hashed_child_extension: Option<(Blake2bHash, Trie<K, V>)> =
+        if child_extension_affix.is_empty() {
+            None
+        } else {
+            let child_extension = Trie::extension(child_extension_affix.to_vec(), pointer);
+            let child_extension_bytes = child_extension.to_bytes()?;
+            let child_extension_hash = Blake2bHash::new(&child_extension_bytes);
+            Some((child_extension_hash, child_extension))
+        };
+    // Assemble a new node.
+    let new_node: Trie<K, V> = {
+        let index: usize = existing_extension_path[shared_path.len()].into();
+        let pointer = maybe_hashed_child_extension
+            .to_owned()
+            .map(|(hash, _)| Ok(Pointer::NodePointer(hash)))
+            .unwrap_or_else(|| Ok(pointer))?;
+        Trie::node(&[(index, pointer)])
+    };
+    // Create a parent extension if necessary
+    if !parent_extension_affix.is_empty() {
+        let new_node_bytes = new_node.to_bytes()?;
+        let new_node_hash = Blake2bHash::new(&new_node_bytes);
+        let parent_extension = Trie::extension(
+            parent_extension_affix.to_vec(),
+            Pointer::NodePointer(new_node_hash),
+        );
+        parents.push((parent_extension_affix[0], parent_extension));
+    }
+    Ok((new_node, parents, maybe_hashed_child_extension))
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum WriteResult {
     Written(Blake2bHash),
@@ -432,7 +499,18 @@ where
                 }
                 // If the "tip" is an extension node, then we must modify or
                 // replace it, adding a node where necessary.
-                Trie::Extension { .. } => unimplemented!(),
+                extension @ Trie::Extension { .. } => {
+                    let (new_node, parents, maybe_hashed_extension) =
+                        modify_extension(&path, extension, parents)?;
+                    let parents = add_node_to_parents(&path, new_node, parents)?;
+                    if let Some(hashed_extension) = maybe_hashed_extension {
+                        let mut ret = vec![hashed_extension];
+                        ret.extend(rehash(new_leaf, parents)?);
+                        ret
+                    } else {
+                        rehash(new_leaf, parents)?
+                    }
+                }
             };
             if new_elements.is_empty() {
                 return Ok(WriteResult::AlreadyExists);
