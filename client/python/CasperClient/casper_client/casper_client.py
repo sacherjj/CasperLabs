@@ -8,8 +8,8 @@ import argparse
 import grpc
 import functools
 
-from .protos import CasperMessage_pb2
-from .protos.CasperMessage_pb2_grpc import DeployServiceStub
+from .proto import CasperMessage_pb2
+from .proto.CasperMessage_pb2_grpc import DeployServiceStub
 
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 40401
