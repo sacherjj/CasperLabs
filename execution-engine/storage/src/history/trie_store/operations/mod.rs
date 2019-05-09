@@ -376,7 +376,7 @@ struct SplitResult<K, V> {
 /// and child extensions.  The node pointer contained in the existing extension
 /// is repositioned in the new node or the possible child extension.  The
 /// possible parent extension is added to parents.  Returns the new node,
-/// parents, and the the possible child extension (paired with its hashed).
+/// parents, and the the possible child extension (paired with its hash).
 /// The new node and parents can be used by [`add_node_to_parents`], and the
 /// new hashed child extension can be added to the list of new trie elements.
 fn split_extension<K, V>(
@@ -420,8 +420,7 @@ where
         let index: usize = existing_extension_path[shared_path.len()].into();
         let pointer = maybe_hashed_child_extension
             .to_owned()
-            .map(|(hash, _)| Ok(Pointer::NodePointer(hash)))
-            .unwrap_or_else(|| Ok(pointer))?;
+            .map_or_else(|| Ok(pointer), |(hash, _)| Ok(Pointer::NodePointer(hash)))?;
         Trie::node(&[(index, pointer)])
     };
     // Create a parent extension if necessary
