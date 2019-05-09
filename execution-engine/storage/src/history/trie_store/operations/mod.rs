@@ -420,7 +420,7 @@ where
         let index: usize = existing_extension_path[shared_path.len()].into();
         let pointer = maybe_hashed_child_extension
             .to_owned()
-            .map_or_else(|| pointer, |(hash, _)| Pointer::NodePointer(hash));
+            .map_or(pointer, |(hash, _)| Pointer::NodePointer(hash));
         Trie::node(&[(index, pointer)])
     };
     // Create a parent extension if necessary
