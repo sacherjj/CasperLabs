@@ -5,7 +5,7 @@ from setuptools import setup
 setup(
     name='casperlabs_client',
     version='0.3.0',
-    packages=['casper_client', 'casper_client.scalapb'],
+    packages=['casper_client', 'casper_client.proto'],
     install_requires=['grpcio>=1.20'],
     description='Python Client for interacting with a CasperLabs Node',
     author='CasperLabs',
