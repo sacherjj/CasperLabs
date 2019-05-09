@@ -5,6 +5,7 @@ import java.nio.file.Path
 import cats.{~>, Applicative, Monad, Parallel}
 import cats.data.EitherT
 import cats.effect.{Concurrent, ConcurrentEffect, Fiber, Resource, Timer}
+import cats.syntax.either._
 import cats.mtl._
 import cats.temp.par.Par
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
@@ -88,19 +89,23 @@ package object effects {
   // We could try figuring this out for a type as follows and then we wouldn't have to use `raiseError`:
   // type EffectPar[A] = EitherT[Task.Par, CommError, A]
   object CatsParallelForEffect extends Parallel[Effect, Task.Par] {
+    case class CommErrorException(val error: CommError) extends Exception(error.toString)
+
     override def applicative: Applicative[Task.Par] = CatsParallelForTask.applicative
     override def monad: Monad[Effect]               = Monad[Effect]
 
     override val sequential: Task.Par ~> Effect = new (Task.Par ~> Effect) {
       def apply[A](fa: Task.Par[A]): Effect[A] = {
-        val task = Task.Par.unwrap(fa)
-        EitherT.liftF(task)
+        val task = Task.Par.unwrap(fa).map(_.asRight[CommError]).onErrorRecover {
+          case CommErrorException(ce) => ce.asLeft[A]
+        }
+        EitherT(task)
       }
     }
     override val parallel: Effect ~> Task.Par = new (Effect ~> Task.Par) {
       def apply[A](fa: Effect[A]): Task.Par[A] = {
         val task = fa.value.flatMap {
-          case Left(ce) => Task.raiseError(new RuntimeException(ce.toString))
+          case Left(ce) => Task.raiseError(new CommErrorException(ce))
           case Right(a) => Task.pure(a)
         }
         Task.Par.apply(task)
@@ -110,6 +115,7 @@ package object effects {
 
   implicit def catsConcurrentEffectForEffect(implicit scheduler: Scheduler) =
     new ConcurrentEffect[Effect] {
+      import CatsParallelForEffect.CommErrorException
       val C = implicitly[Concurrent[Effect]]
       val E = implicitly[cats.effect.Effect[Task]]
       val F = implicitly[ConcurrentEffect[Task]]
@@ -154,10 +160,14 @@ package object effects {
       ): cats.effect.SyncIO[cats.effect.CancelToken[Effect]] =
         F.runCancelable(fa.value) {
           case Left(ex)        => cb(Left(ex))
-          case Right(Left(ce)) => cb(Left(new RuntimeException(ce.toString)))
+          case Right(Left(ce)) => cb(Left(CommErrorException(ce)))
           case Right(Right(x)) => cb(Right(x))
-        } map {
-          EitherT.liftF(_)
+        } map { x =>
+          EitherT {
+            x.map(_.asRight[CommError]).onErrorRecover {
+              case CommErrorException(ce) => ce.asLeft[Unit]
+            }
+          }
         }
 
       // Members declared in cats.effect.Effect
@@ -166,7 +176,7 @@ package object effects {
       ): cats.effect.SyncIO[Unit] =
         E.runAsync(fa.value) {
           case Left(ex)        => cb(Left(ex))
-          case Right(Left(ce)) => cb(Left(new RuntimeException(ce.toString)))
+          case Right(Left(ce)) => cb(Left(CommErrorException(ce)))
           case Right(Right(x)) => cb(Right(x))
         }
 
