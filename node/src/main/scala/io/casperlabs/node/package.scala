@@ -2,6 +2,7 @@ package io.casperlabs
 
 import cats.Monad
 import cats.{~>, Applicative, Monad, Parallel}
+import cats.mtl.{ApplicativeAsk, DefaultApplicativeAsk}
 import cats.effect.{Concurrent, ConcurrentEffect, Fiber, Resource}
 import cats.data.EitherT
 import cats.syntax.applicative._
@@ -46,6 +47,14 @@ package object node {
 
     }
 
+  implicit def eitherTApplicativeAsk[A](
+      implicit ev: ApplicativeAsk[Task, A]
+  ): ApplicativeAsk[Effect, A] =
+    new DefaultApplicativeAsk[Effect, A] {
+      val applicative: Applicative[Effect] = Applicative[Effect]
+      def ask: Effect[A]                   = ev.ask.toEffect
+    }
+
   implicit class ResourceTaskEffectOps[A](r: Resource[Task, A]) {
     def toEffect: Resource[Effect, A] = Resource {
       r.allocated.map {
@@ -53,8 +62,6 @@ package object node {
       }.toEffect
     }
   }
-
-  val catsParForEffect: Par[Effect] = Par.fromParallel(catsParallelForEffect)
 
   // We could try figuring this out for a type as follows and then we wouldn't have to use `raiseError`:
   // type EffectPar[A] = EitherT[Task.Par, CommError, A]
@@ -81,6 +88,8 @@ package object node {
       }
     }
   }
+
+  val catsParForEffect: Par[Effect] = Par.fromParallel(catsParallelForEffect)
 
   def catsConcurrentEffectForEffect(implicit scheduler: Scheduler) =
     new ConcurrentEffect[Effect] {

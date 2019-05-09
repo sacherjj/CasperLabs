@@ -76,9 +76,4 @@ package object effects {
       val applicative: Applicative[Task] = Applicative[Task]
       def ask: Task[Node]                = state.get.map(_.local)
     }
-
-  implicit def eitherTpeerNodeAsk(
-      implicit ev: ApplicativeAsk[Task, Node]
-  ): ApplicativeAsk[Effect, Node] =
-    ApplicativeAsk[Effect, Node]
 }

@@ -201,7 +201,7 @@ class NodeRuntime private[node] (
                 blockStore,
                 blockDagStorage,
                 NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
-                effects.eitherTpeerNodeAsk(effects.peerNodeAsk(state)),
+                eitherTApplicativeAsk(effects.peerNodeAsk(state)),
                 multiParentCasperRef,
                 executionEngineService,
                 scheduler
