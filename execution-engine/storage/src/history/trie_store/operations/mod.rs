@@ -365,6 +365,12 @@ where
     Ok((new_node, parents))
 }
 
+struct SplitResult<K, V> {
+    new_node: Trie<K, V>,
+    parents: Parents<K, V>,
+    maybe_hashed_child_extension: Option<(Blake2bHash, Trie<K, V>)>,
+}
+
 /// Takes a path to a new leaf, an existing extension that leaf collides with,
 /// and the parents of that extension.  Creates a new node and possible parent
 /// and child extensions.  The node pointer contained in the existing extension
@@ -373,12 +379,11 @@ where
 /// parents, and the the possible child extension (paired with its hashed).
 /// The new node and parents can be used by [`add_node_to_parents`], and the
 /// new hashed child extension can be added to the list of new trie elements.
-#[allow(clippy::type_complexity)]
-fn modify_extension<K, V>(
+fn split_extension<K, V>(
     new_leaf_path: &[u8],
     existing_extension: Trie<K, V>,
     mut parents: Parents<K, V>,
-) -> Result<(Trie<K, V>, Parents<K, V>, Option<(Blake2bHash, Trie<K, V>)>), bytesrepr::Error>
+) -> Result<SplitResult<K, V>, bytesrepr::Error>
 where
     K: ToBytes + Clone,
     V: ToBytes + Clone,
@@ -429,7 +434,11 @@ where
         );
         parents.push((parent_extension_affix[0], parent_extension));
     }
-    Ok((new_node, parents, maybe_hashed_child_extension))
+    Ok(SplitResult {
+        new_node,
+        parents,
+        maybe_hashed_child_extension,
+    })
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -500,10 +509,13 @@ where
                 // If the "tip" is an extension node, then we must modify or
                 // replace it, adding a node where necessary.
                 extension @ Trie::Extension { .. } => {
-                    let (new_node, parents, maybe_hashed_extension) =
-                        modify_extension(&path, extension, parents)?;
+                    let SplitResult {
+                        new_node,
+                        parents,
+                        maybe_hashed_child_extension,
+                    } = split_extension(&path, extension, parents)?;
                     let parents = add_node_to_parents(&path, new_node, parents)?;
-                    if let Some(hashed_extension) = maybe_hashed_extension {
+                    if let Some(hashed_extension) = maybe_hashed_child_extension {
                         let mut ret = vec![hashed_extension];
                         ret.extend(rehash(new_leaf, parents)?);
                         ret
