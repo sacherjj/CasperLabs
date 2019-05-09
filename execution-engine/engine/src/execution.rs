@@ -8,7 +8,7 @@ use common::value::Value;
 use shared::newtypes::Validated;
 use storage::global_state::{ExecutionEffect, StateReader};
 use storage::transform::TypeMismatch;
-use trackingcopy::TrackingCopy;
+use trackingcopy::{heap_meter::HeapSize, Meter, TrackingCopy};
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
@@ -89,12 +89,12 @@ impl From<!> for Error {
 
 impl HostError for Error {}
 
-pub struct Runtime<'a, R: StateReader<Key, Value>> {
+pub struct Runtime<'a, R: StateReader<Key, Value>, M: Meter<Key, Value>> {
     memory: MemoryRef,
     module: Module,
     result: Vec<u8>,
     host_buf: Vec<u8>,
-    context: RuntimeContext<'a, R>,
+    context: RuntimeContext<'a, R, M>,
 }
 
 /// Rename function called `name` in the `module` to `call`.
@@ -113,12 +113,16 @@ pub fn rename_export_to_call(module: &mut Module, name: String) {
     main_export.push_str("call");
 }
 
-impl<'a, R: StateReader<Key, Value>> Runtime<'a, R>
+impl<'a, R: StateReader<Key, Value>> Runtime<'a, R, HeapSize>
 where
     R::Error: Into<Error>,
 {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(memory: MemoryRef, module: Module, context: RuntimeContext<'a, R>) -> Self {
+    pub fn new(
+        memory: MemoryRef,
+        module: Module,
+        context: RuntimeContext<'a, R, HeapSize>,
+    ) -> Self {
         Runtime {
             memory,
             module,
@@ -419,7 +423,7 @@ const HAS_UREF_FUNC_INDEX: usize = 14;
 const ADD_UREF_FUNC_INDEX: usize = 15;
 const STORE_FN_INDEX: usize = 16;
 
-impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
+impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R, HeapSize>
 where
     R::Error: Into<Error>,
 {
@@ -762,7 +766,7 @@ fn sub_call<R: StateReader<Key, Value>>(
     args: Vec<Vec<u8>>,
     refs: &mut BTreeMap<String, Key>,
     key: Key,
-    current_runtime: &mut Runtime<R>,
+    current_runtime: &mut Runtime<R, HeapSize>,
     // Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
@@ -868,7 +872,7 @@ pub trait Executor<A> {
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
-        tc: Rc<RefCell<TrackingCopy<R>>>,
+        tc: Rc<RefCell<TrackingCopy<R, HeapSize>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
         R::Error: Into<Error>;
@@ -886,7 +890,7 @@ impl Executor<Module> for WasmiExecutor {
         nonce: u64,
         gas_limit: u64,
         _protocol_version: u64,
-        tc: Rc<RefCell<TrackingCopy<R>>>,
+        tc: Rc<RefCell<TrackingCopy<R, HeapSize>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
         R::Error: Into<Error>,

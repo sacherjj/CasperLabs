@@ -9,7 +9,7 @@ use std::rc::Rc;
 use storage::global_state::ExecutionEffect;
 use storage::history::*;
 use storage::transform::Transform;
-use trackingcopy::TrackingCopy;
+use trackingcopy::{heap_meter::HeapSize, TrackingCopy};
 use wasm_prep::Preprocessor;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -115,9 +115,9 @@ where
     pub fn tracking_copy(
         &self,
         hash: Blake2bHash,
-    ) -> Result<Option<TrackingCopy<H::Reader>>, Error> {
+    ) -> Result<Option<TrackingCopy<H::Reader, HeapSize>>, Error> {
         match self.state.lock().checkout(hash).map_err(Into::into)? {
-            Some(tc) => Ok(Some(TrackingCopy::new(tc))),
+            Some(tc) => Ok(Some(TrackingCopy::new(tc, HeapSize))),
             None => Ok(None),
         }
     }

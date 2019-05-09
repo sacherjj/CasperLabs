@@ -4,6 +4,7 @@ extern crate blake2;
 extern crate common;
 extern crate core;
 extern crate failure;
+extern crate heapsize;
 extern crate itertools;
 extern crate lru_cache;
 extern crate parity_wasm;

@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use common::key::Key;
 use common::value::Value;
 use lru_cache::LruCache;
+use parking_lot::Mutex;
 use shared::newtypes::Validated;
 use storage::global_state::{ExecutionEffect, StateReader};
 use storage::op::Op;
@@ -15,25 +16,72 @@ pub enum QueryResult {
     ValueNotFound(String),
 }
 
+/// Trait for measuring "size" of key-value pairs.
+pub trait Meter<K, V> {
+    fn measure(&self, k: &K, v: &V) -> usize;
+}
+
+pub mod heap_meter {
+    use heapsize::HeapSizeOf;
+
+    pub struct HeapSize;
+
+    impl<K: HeapSizeOf, V: HeapSizeOf> super::Meter<K, V> for HeapSize {
+        fn measure(&self, _: &K, v: &V) -> usize {
+            std::mem::size_of::<V>() + v.heap_size_of_children()
+        }
+    }
+}
+
+#[cfg(test)]
+pub mod count_meter {
+    pub struct Count;
+
+    impl<K, V> super::Meter<K, V> for Count {
+        fn measure(&self, _k: &K, _v: &V) -> usize {
+            1
+        }
+    }
+}
+
 /// Keeps track of already accessed keys.
 /// We deliberately separate cached Reads from cached mutations
 /// because we want to invalidate Reads' cache so it doesn't grow too fast.
-pub struct TrackingCopyCache {
+pub struct TrackingCopyCache<M: Meter<Key, Value>> {
+    max_cache_size: usize,
+    current_cache_size: Mutex<usize>,
     reads_cached: LruCache<Key, Value>,
     muts_cached: HashMap<Key, Value>,
+    meter: M,
 }
 
-impl TrackingCopyCache {
-    pub fn new(capacity: usize) -> TrackingCopyCache {
+const INIT_CACHE_SIZE: usize = 100;
+
+impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
+    pub fn new(cache_size: usize, meter: M) -> TrackingCopyCache<M> {
         TrackingCopyCache {
-            reads_cached: LruCache::new(capacity),
+            max_cache_size: cache_size,
+            current_cache_size: Mutex::new(0),
+            reads_cached: LruCache::new(INIT_CACHE_SIZE),
             muts_cached: HashMap::new(),
+            meter,
         }
     }
 
     /// Inserts `key` and `value` pair to Read cache.
     pub fn insert_read(&mut self, key: Key, value: Value) {
+        let element_size = Meter::measure(&self.meter, &key, &value);
         self.reads_cached.insert(key, value);
+        *self.current_cache_size.lock() += element_size;
+        while *self.current_cache_size.lock() > self.max_cache_size {
+            match self.reads_cached.remove_lru() {
+                Some((k, v)) => {
+                    let element_size = Meter::measure(&self.meter, &k, &v);
+                    *self.current_cache_size.lock() -= element_size;
+                }
+                None => break,
+            }
+        }
     }
 
     /// Inserts `key` and `value` pair to Write/Add cache.
@@ -44,7 +92,7 @@ impl TrackingCopyCache {
     /// Gets value from `key` in the cache.
     pub fn get(&mut self, key: &Key) -> Option<&Value> {
         if let Some(value) = self.muts_cached.get(&key) {
-            return Some(value)
+            return Some(value);
         };
 
         self.reads_cached.get_mut(key).map(|v| {
@@ -59,9 +107,9 @@ impl TrackingCopyCache {
     }
 }
 
-pub struct TrackingCopy<R: StateReader<Key, Value>> {
+pub struct TrackingCopy<R: StateReader<Key, Value>, M: Meter<Key, Value>> {
     reader: R,
-    cache: TrackingCopyCache,
+    cache: TrackingCopyCache<M>,
     ops: HashMap<Key, Op>,
     fns: HashMap<Key, Transform>,
 }
@@ -74,11 +122,11 @@ pub enum AddResult {
     Overflow,
 }
 
-impl<R: StateReader<Key, Value>> TrackingCopy<R> {
-    pub fn new(reader: R) -> TrackingCopy<R> {
+impl<R: StateReader<Key, Value>, M: Meter<Key, Value>> TrackingCopy<R, M> {
+    pub fn new(reader: R, meter: M) -> TrackingCopy<R, M> {
         TrackingCopy {
             reader,
-            cache: TrackingCopyCache::new(32),
+            cache: TrackingCopyCache::new(1024 * 16, meter),
             ops: HashMap::new(),
             fns: HashMap::new(),
         }
@@ -261,7 +309,8 @@ mod tests {
     use storage::op::Op;
     use storage::transform::Transform;
 
-    use super::{AddResult, QueryResult, TrackingCopy, Validated};
+    use super::{AddResult, QueryResult, Validated};
+    use trackingcopy::{count_meter::Count, TrackingCopy};
 
     struct CountingDb {
         count: Rc<Cell<i32>>,
@@ -301,7 +350,7 @@ mod tests {
     fn tracking_copy_new() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
-        let tc = TrackingCopy::new(db);
+        let tc = TrackingCopy::new(db, Count);
 
         assert_eq!(tc.cache.is_empty(), true);
         assert_eq!(tc.ops.is_empty(), true);
@@ -312,7 +361,7 @@ mod tests {
     fn tracking_copy_caching() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(Rc::clone(&counter));
-        let mut tc = TrackingCopy::new(db);
+        let mut tc = TrackingCopy::new(db, Count);
         let k = Key::Hash([0u8; 32]);
 
         let zero = Value::Int32(0);
@@ -338,7 +387,7 @@ mod tests {
     fn tracking_copy_read() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(Rc::clone(&counter));
-        let mut tc = TrackingCopy::new(db);
+        let mut tc = TrackingCopy::new(db, Count);
         let k = Key::Hash([0u8; 32]);
 
         let zero = Value::Int32(0);
@@ -359,7 +408,7 @@ mod tests {
     fn tracking_copy_write() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(Rc::clone(&counter));
-        let mut tc = TrackingCopy::new(db);
+        let mut tc = TrackingCopy::new(db, Count);
         let k = Key::Hash([0u8; 32]);
 
         let one = Value::Int32(1);
@@ -397,7 +446,7 @@ mod tests {
     fn tracking_copy_add_i32() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
-        let mut tc = TrackingCopy::new(db);
+        let mut tc = TrackingCopy::new(db, Count);
         let k = Key::Hash([0u8; 32]);
 
         let three = Value::Int32(3);
@@ -433,7 +482,7 @@ mod tests {
         // DB now holds an `Account` so that we can test adding a `NamedKey`
         let account = common::value::Account::new([0u8; 32], 0u64, BTreeMap::new());
         let db = CountingDb::new_init(Value::Account(account));
-        let mut tc = TrackingCopy::new(db);
+        let mut tc = TrackingCopy::new(db, Count);
         let k = Key::Hash([0u8; 32]);
         let u1 = Key::URef([1u8; 32], AccessRights::READ_WRITE);
         let u2 = Key::URef([2u8; 32], AccessRights::READ_WRITE);
@@ -488,7 +537,7 @@ mod tests {
     fn tracking_copy_rw() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
-        let mut tc = TrackingCopy::new(db);
+        let mut tc = TrackingCopy::new(db, Count);
         let k = Key::Hash([0u8; 32]);
 
         // reading then writing should update the op
@@ -508,7 +557,7 @@ mod tests {
     fn tracking_copy_ra() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
-        let mut tc = TrackingCopy::new(db);
+        let mut tc = TrackingCopy::new(db, Count);
         let k = Key::Hash([0u8; 32]);
 
         // reading then adding should update the op
@@ -529,7 +578,7 @@ mod tests {
     fn tracking_copy_aw() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
-        let mut tc = TrackingCopy::new(db);
+        let mut tc = TrackingCopy::new(db, Count);
         let k = Key::Hash([0u8; 32]);
 
         // adding then writing should update the op
@@ -553,7 +602,7 @@ mod tests {
         #[test]
         fn query_empty_path(k in key_arb(), missing_key in key_arb(), v in value_arb()) {
             let gs = InMemGS::new(iter::once((k, v.clone())).collect());
-            let mut tc = TrackingCopy::new(gs);
+            let mut tc = TrackingCopy::new(gs, Count);
             let empty_path = Vec::new();
             if let Ok(QueryResult::Success(result)) = tc.query(k, &empty_path) {
                 assert_eq!(v, result);
@@ -586,7 +635,7 @@ mod tests {
             map.insert(contract_key, contract);
 
             let gs = InMemGS::new(map);
-            let mut tc = TrackingCopy::new(gs);
+            let mut tc = TrackingCopy::new(gs, Count);
             let path = vec!(name.clone());
             if let Ok(QueryResult::Success(result)) = tc.query(contract_key, &path) {
                 assert_eq!(v, result);
@@ -624,7 +673,7 @@ mod tests {
             map.insert(account_key, Value::Account(account));
 
             let gs = InMemGS::new(map);
-            let mut tc = TrackingCopy::new(gs);
+            let mut tc = TrackingCopy::new(gs, Count);
             let path = vec!(name.clone());
             if let Ok(QueryResult::Success(result)) = tc.query(account_key, &path) {
                 assert_eq!(v, result);
@@ -672,7 +721,7 @@ mod tests {
             map.insert(account_key, Value::Account(account));
 
             let gs = InMemGS::new(map);
-            let mut tc = TrackingCopy::new(gs);
+            let mut tc = TrackingCopy::new(gs, Count);
             let path = vec!(contract_name, state_name);
             if let Ok(QueryResult::Success(result)) = tc.query(account_key, &path) {
                 assert_eq!(v, result);
@@ -682,3 +731,41 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+pub mod tracking_copy_cache {
+    use common::key::Key;
+    use common::value::Value;
+    use trackingcopy::count_meter::Count;
+    use trackingcopy::TrackingCopyCache;
+
+    #[test]
+    fn cache_reads_invalidation() {
+        let mut tc_cache = TrackingCopyCache::new(2, Count);
+        let (k1, v1) = (Key::Hash([1u8; 32]), Value::Int32(1));
+        let (k2, v2) = (Key::Hash([2u8; 32]), Value::Int32(2));
+        let (k3, v3) = (Key::Hash([3u8; 32]), Value::Int32(3));
+        tc_cache.insert_read(k1, v1);
+        tc_cache.insert_read(k2, v2.clone());
+        tc_cache.insert_read(k3, v3.clone());
+        assert!(tc_cache.get(&k1).is_none()); // first entry should be invalidated
+        assert_eq!(tc_cache.get(&k2), Some(&v2)); // k2 and k3 should be there
+        assert_eq!(tc_cache.get(&k3), Some(&v3));
+    }
+
+    #[test]
+    fn cache_writes_not_invalidated() {
+        let mut tc_cache = TrackingCopyCache::new(2, Count);
+        let (k1, v1) = (Key::Hash([1u8; 32]), Value::Int32(1));
+        let (k2, v2) = (Key::Hash([2u8; 32]), Value::Int32(2));
+        let (k3, v3) = (Key::Hash([3u8; 32]), Value::Int32(3));
+        tc_cache.insert_write(k1, v1.clone());
+        tc_cache.insert_read(k2, v2.clone());
+        tc_cache.insert_read(k3, v3.clone());
+        // Writes are not subject to cache invalidation
+        assert_eq!(tc_cache.get(&k1), Some(&v1));
+        assert_eq!(tc_cache.get(&k2), Some(&v2)); // k2 and k3 should be there
+        assert_eq!(tc_cache.get(&k3), Some(&v3));
+    }
+}
+

@@ -2,6 +2,7 @@ use super::alloc::vec::Vec;
 use super::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
 use crate::contract_api::pointers::*;
 use bitflags;
+use heapsize::HeapSizeOf;
 
 bitflags! {
     #[allow(clippy::derive_hash_xor_eq)]
@@ -40,7 +41,9 @@ pub enum Key {
     URef([u8; 32], AccessRights), //TODO: more bytes?
 }
 
+use crate::bytesrepr::U8_SIZE;
 use Key::*;
+
 impl Key {
     pub fn to_u_ptr<T>(self) -> Option<UPointer<T>> {
         if let URef(id, access_right) = self {
@@ -55,6 +58,16 @@ impl Key {
             URef(id, rights) => Some(ContractPointer::URef(UPointer::new(id, rights))),
             Hash(id) => Some(ContractPointer::Hash(id)),
             _ => None,
+        }
+    }
+}
+
+impl HeapSizeOf for Key {
+    fn heap_size_of_children(&self) -> usize {
+        match self {
+            Key::Account(_) => U8_SIZE * 20,
+            Key::Hash(_) => U8_SIZE * 32,
+            Key::URef(_, _) => U32_SIZE * 32 + U8_SIZE,
         }
     }
 }
