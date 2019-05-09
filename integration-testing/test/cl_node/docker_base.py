@@ -50,28 +50,32 @@ class DockerConfig:
     """
     docker_client: 'DockerClient'
     node_private_key: str
-    node_public_key: str
+    node_public_key: str = None
     network: Optional[Any] = None
     number: int = 0
     rand_str: Optional[str] = None
     volumes: Optional[Dict[str, Dict[str, str]]] = None
-    command_timeout: int = 120
+    command_timeout: int = 60
     mem_limit: str = '4G'
     is_bootstrap: bool = False
+    bootstrap_address: Optional[str] = None
 
     def __post_init__(self):
         if self.rand_str is None:
             self.rand_str = random_string(5)
-        if self.node_command_options is None:
-            self.node_command_options = {}
 
     def node_command_options(self, server_host: str) -> dict:
         options = {'--server-host': server_host,
-                   '--tls-certificate': '/root/.casperlabs/bootstrap/node.certificate.pem',
-                   '--tls-key': '/root/.casperlabs/bootstrap/node.key.pem',
                    '--casper-validator-private-key': self.node_private_key,
-                   '--casper-validator-public-key': self.node_public_key,
-                   '--grpc-socket': '/root/.casperlabs/sockets/.casper-node.sock'}
+                   '--grpc-socket': '/root/.casperlabs/sockets/.casper-node.sock',
+                   '--metrics-prometheus': ''}
+        if self.is_bootstrap:
+            options['--tls-certificate'] = '/root/.casperlabs/bootstrap/node.certificate.pem'
+            options['--tls-key'] = '/root/.casperlabs/bootstrap/node.key.pem'
+        if self.bootstrap_address:
+            options['--server-bootstrap'] = self.bootstrap_address
+        if self.node_public_key:
+            options['--casper-validator-public-key'] = self.node_public_key
         return options
 
     @property
@@ -138,7 +142,7 @@ class DockerBase:
         raise NotImplementedError('No implementation of _get_container')
 
     def __repr__(self):
-        return f"<{self.__name__} {self.container_name}"
+        return f"<{self.__class__.__name__} {self.container_name}"
 
     def exec_run(self, cmd: Union[Tuple[str, ...], str], stderr=True) -> Tuple[int, str]:
         queue: Queue = Queue(1)
