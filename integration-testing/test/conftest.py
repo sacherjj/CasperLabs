@@ -20,6 +20,7 @@ from .cl_node.casperlabsnode import docker_network_with_started_bootstrap, HOST_
 from .cl_node.casperlabs_network import (
     OneNodeNetwork,
     TwoNodeNetwork,
+    ThreeNodeNetwork,
 )
 
 
@@ -186,3 +187,9 @@ def two_node_network(docker_client_fixture):
         tnn.create_cl_network()
         yield tnn
 
+
+@pytest.fixture()
+def three_node_network(docker_client_fixture):
+    with ThreeNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn

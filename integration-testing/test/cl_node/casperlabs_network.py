@@ -1,7 +1,7 @@
 import docker
 import logging
 
-from typing import List, Callable
+from typing import List, Callable, Optional
 
 
 from test.cl_node.docker_base import DockerConfig
@@ -42,7 +42,7 @@ class CasperLabsNetwork:
         self._next_key_number += 1
         return key_pair
 
-    def create_cl_network(self):
+    def create_cl_network(self, node_count: Optional[int] = None):
         """
         Should be implemented with each network class to setup custom nodes and networks.
         """
@@ -67,7 +67,7 @@ class CasperLabsNetwork:
         self._add_cl_node(config)
         self.wait_method(wait_for_node_started, 0)
 
-    def add_cl_node(self, config: DockerConfig, network_with_bootstrap: bool=True) -> None:
+    def add_cl_node(self, config: DockerConfig, network_with_bootstrap: bool = True) -> None:
         if self.node_count == 0:
             raise Exception('Must create bootstrap first')
         config.bootstrap_address = self.cl_nodes[0].node.address
@@ -108,7 +108,7 @@ class CasperLabsNetwork:
 class OneNodeNetwork(CasperLabsNetwork):
     """ A single node network with just a bootstrap """
 
-    def create_cl_network(self):
+    def create_cl_network(self, node_count=None):
         kp = self.get_key()
         config = DockerConfig(self.docker_client,
                               node_private_key=kp.private_key,
@@ -118,9 +118,8 @@ class OneNodeNetwork(CasperLabsNetwork):
 
 
 class TwoNodeNetwork(CasperLabsNetwork):
-    """ Two networked nodes """
 
-    def create_cl_network(self):
+    def create_cl_network(self, node_count=None):
         kp = self.get_key()
         config = DockerConfig(self.docker_client,
                               node_private_key=kp.private_key,
@@ -134,19 +133,42 @@ class TwoNodeNetwork(CasperLabsNetwork):
         self.wait_method(wait_for_approved_block_received_handler_state, 1)
 
 
-# class ThreeNodeNetwork(CasperLabsNetwork):
-#     """ Three node network plus bootstrap """
-#
-#     def create_cl_network(self):
-#         # TODO: Add proper wait states for detecting network is fully up
-#         is_bootstrap = True
-#         network = self.create_docker_network()
-#         for node_number in range(4):
-#             kp = self.get_key()
-#             config = DockerConfig(docker_client=self.docker_client, number=node_number, is_bootstrap=is_bootstrap,
-#                                   node_private_key=kp.private_key, node_public_key=kp.public_key, network=network)
-#             self.add_cl_node(config)
-#             is_bootstrap = False
+class ThreeNodeNetwork(CasperLabsNetwork):
+
+    def create_cl_network(self, node_count=None):
+        kp = self.get_key()
+        config = DockerConfig(self.docker_client,
+                              node_private_key=kp.private_key,
+                              node_public_key=kp.public_key,
+                              network=self.create_docker_network())
+        self.add_bootstrap(config)
+
+        for _ in range(1, 3):
+            kp = self.get_key()
+            config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
+            self.add_cl_node(config)
+
+        for node_number in range(1, 3):
+            self.wait_method(wait_for_approved_block_received_handler_state, node_number)
+
+
+class MultiNodeJoinedNetwork(CasperLabsNetwork):
+
+    def create_cl_network(self, node_count=10):
+        kp = self.get_key()
+        config = DockerConfig(self.docker_client,
+                              node_private_key=kp.private_key,
+                              node_public_key=kp.public_key,
+                              network=self.create_docker_network())
+        self.add_bootstrap(config)
+
+        for _ in range(1, node_count):
+            kp = self.get_key()
+            config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
+            self.add_cl_node(config)
+
+        for node_number in range(1, node_count):
+            self.wait_method(wait_for_approved_block_received_handler_state, node_number)
 
 
 if __name__ == '__main__':
@@ -169,6 +191,6 @@ if __name__ == '__main__':
     # with OneNodeNetwork(docker.from_env()) as onn:
     #     pass
 
-    with TwoNodeNetwork(docker.from_env()) as net:
-        net.create_cl_network()
+    with MultiNodeJoinedNetwork(docker.from_env()) as net:
+        net.create_cl_network(10)
         time.sleep(10)

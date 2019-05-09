@@ -185,7 +185,7 @@ class DockerNode(LoggingDockerBase):
                 network=self.network,
                 volumes=volumes
             ).decode('utf-8')
-            logging.debug(f"OUTPUT {output}")
+            logging.info(f"OUTPUT {self.container_name} {output}")
             return output
         except ContainerError as err:
             logging.warning(f"EXITED code={err.exit_status} command='{err.command}' stderr='{err.stderr}'")
