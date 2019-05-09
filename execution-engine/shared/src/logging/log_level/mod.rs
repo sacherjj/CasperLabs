@@ -120,13 +120,19 @@ impl fmt::Display for LogLevel {
     }
 }
 
+/// newtype to encapsulate log level priority
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct LogPriority(pub(crate) u8);
+pub struct LogPriority(u8);
 
 impl LogPriority {
     pub fn new(log_level: LogLevel) -> LogPriority {
         let priority = log_level.get_priority();
         LogPriority(priority)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn value(&self) -> u8 {
+        self.0
     }
 }
 
@@ -280,5 +286,16 @@ mod tests {
     fn should_get_loglevel_item_priority() {
         let ll = LogLevel::Error;
         assert_eq!(ll.get_priority(), 3, "error should be 3");
+    }
+
+    #[test]
+    fn should_get_log_priority_fm_log_level() {
+        let ll = LogLevel::Info;
+
+        let lp = LogPriority::new(ll);
+
+        let priority = lp.value();
+
+        assert_eq!(ll.get_priority(), priority, "priority mismatch");
     }
 }

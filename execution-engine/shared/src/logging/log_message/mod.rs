@@ -87,7 +87,7 @@ impl From<(LogSettings, LogLevel, String, BTreeMap<String, String>)> for LogMess
 
 /// newtype for Rfc3999 formatted timestamp
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct TimestampRfc3999(pub(crate) String);
+pub struct TimestampRfc3999(String);
 
 impl Default for TimestampRfc3999 {
     fn default() -> Self {
@@ -103,29 +103,44 @@ impl fmt::Display for TimestampRfc3999 {
 }
 
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct MessageTemplate(pub(crate) String);
+pub struct MessageTemplate(String);
 
 impl MessageTemplate {
     pub fn new(fmt_template: String) -> Self {
         MessageTemplate(fmt_template)
     }
+
+    #[allow(dead_code)]
+    pub(crate) fn value(&self) -> String {
+        self.0.to_owned()
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub struct MessageId(pub(crate) String);
+pub struct MessageId(String);
 
 impl MessageId {
     pub fn new(hash: String) -> MessageId {
         MessageId(hash)
     }
+
+    #[allow(dead_code)]
+    pub(crate) fn value(&self) -> String {
+        self.0.to_owned()
+    }
 }
 
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct MessageProperties(pub(crate) BTreeMap<String, String>);
+pub struct MessageProperties(BTreeMap<String, String>);
 
 impl MessageProperties {
     pub fn new(properties: BTreeMap<String, String>) -> MessageProperties {
         MessageProperties(properties)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn value(&self) -> BTreeMap<String, String> {
+        self.0.to_owned()
     }
 
     /// strips out brace encased tokens in message_template
@@ -385,18 +400,18 @@ mod tests {
     }
 
     fn should_have_process_id(l: &super::LogMessage) -> bool {
-        l.process_id.0 > 0
+        l.process_id.value() > 0
     }
 
     fn should_have_process_name(l: &super::LogMessage) -> bool {
-        !l.process_name.0.is_empty()
+        !l.process_name.value().is_empty()
     }
 
     fn should_have_host_name(l: &super::LogMessage) -> bool {
-        !l.host_name.0.is_empty()
+        !l.host_name.value().is_empty()
     }
 
     fn should_have_at_least_one_property(l: &super::LogMessage) -> bool {
-        l.properties.0.keys().len() > 0
+        l.properties.value().keys().len() > 0
     }
 }

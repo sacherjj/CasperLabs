@@ -43,11 +43,16 @@ impl From<&LogMessage> for LogSettings {
 
 /// newtype for LogLevel when used to filter out messages of lesser priority
 #[derive(Clone, Copy, Debug, Hash, Serialize)]
-pub struct LogLevelFilter(pub(crate) LogLevel);
+pub struct LogLevelFilter(LogLevel);
 
 impl LogLevelFilter {
     pub fn new(log_level: LogLevel) -> LogLevelFilter {
         LogLevelFilter(log_level)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn as_log_level(self) -> LogLevel {
+        self.0
     }
 }
 
@@ -65,31 +70,46 @@ impl Into<slog::Level> for LogLevelFilter {
 
 /// newtype to encapsulate process_id / PID
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct ProcessId(pub(crate) i32);
+pub struct ProcessId(i32);
 
 impl ProcessId {
     pub fn new(pid: i32) -> ProcessId {
         ProcessId(pid)
     }
-}
 
-/// newtype to encapsulate process_name
-#[derive(Clone, Debug, Hash, Serialize)]
-pub struct ProcessName(pub(crate) String);
-
-impl ProcessName {
-    pub fn new(process_name: String) -> ProcessName {
-        ProcessName(process_name)
+    #[allow(dead_code)]
+    pub(crate) fn value(&self) -> i32 {
+        self.0
     }
 }
 
 /// newtype to encapsulate process_name
 #[derive(Clone, Debug, Hash, Serialize)]
-pub struct HostName(pub(crate) String);
+pub struct ProcessName(String);
+
+impl ProcessName {
+    pub fn new(process_name: String) -> ProcessName {
+        ProcessName(process_name)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn value(&self) -> String {
+        self.0.to_owned()
+    }
+}
+
+/// newtype to encapsulate process_name
+#[derive(Clone, Debug, Hash, Serialize)]
+pub struct HostName(String);
 
 impl HostName {
     pub fn new(host_name: String) -> HostName {
         HostName(host_name)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn value(&self) -> String {
+        self.0.to_owned()
     }
 }
 
