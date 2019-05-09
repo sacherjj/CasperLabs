@@ -131,7 +131,10 @@ object Validate {
       } yield result
     }
 
-  def formatOfFields[F[_]: Monad: Log](b: BlockMessage, isGenesis: Boolean = false): F[Boolean] =
+  def formatOfFields[F[_]: Monad: Log](
+      b: BlockMessage,
+      treatAsGenesis: Boolean = false
+  ): F[Boolean] =
     if (b.blockHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block hash is empty."))
@@ -144,19 +147,19 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block body is missing."))
       } yield false
-    } else if (b.sig.isEmpty && !isGenesis) {
+    } else if (b.sig.isEmpty && !treatAsGenesis) {
       for {
         _ <- Log[F].warn(ignore(b, s"block signature is empty."))
       } yield false
-    } else if (!b.sig.isEmpty && isGenesis) {
+    } else if (!b.sig.isEmpty && treatAsGenesis) {
       for {
         _ <- Log[F].warn(ignore(b, s"block signature is not empty on Genesis."))
       } yield false
-    } else if (b.sigAlgorithm.isEmpty && !isGenesis) {
+    } else if (b.sigAlgorithm.isEmpty && !treatAsGenesis) {
       for {
         _ <- Log[F].warn(ignore(b, s"block signature algorithm is not empty on Genesis."))
       } yield false
-    } else if (!b.sigAlgorithm.isEmpty && isGenesis) {
+    } else if (!b.sigAlgorithm.isEmpty && treatAsGenesis) {
       for {
         _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
       } yield false
@@ -208,10 +211,11 @@ object Validate {
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       shardId: String,
-      lastFinalizedBlockHash: BlockHash
+      lastFinalizedBlockHash: BlockHash,
+      treatAsGenesis: Boolean = false
   ): F[Unit] =
     for {
-      _ <- Validate.blockSummaryPreGenesis(block, dag, shardId)
+      _ <- Validate.blockSummaryPreGenesis(block, dag, shardId, treatAsGenesis)
       _ <- Validate.justificationFollows[F](block, genesis, dag)
       _ <- Validate.parents[F](block, genesis, lastFinalizedBlockHash, dag)
       _ <- Validate.justificationRegressions[F](block, genesis, dag)
@@ -221,10 +225,11 @@ object Validate {
   def blockSummaryPreGenesis[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      shardId: String
+      shardId: String,
+      treatAsGenesis: Boolean
   ): F[Unit] =
     for {
-      _ <- Validate.blockHash[F](block)
+      _ <- Validate.blockHash[F](block, treatAsGenesis)
       _ <- Validate.deployCount[F](block)
       _ <- Validate.missingBlocks[F](block, dag)
       _ <- Validate.timestamp[F](block, dag)
@@ -412,27 +417,43 @@ object Validate {
     }
 
   def blockHash[F[_]: Monad: RaiseValidationError: Log](
-      b: BlockMessage
+      b: BlockMessage,
+      treatAsGenesis: Boolean = false
   ): F[Unit] = {
-    val blockHashComputed = ProtoUtil.hashSignedBlock(
-      b.header.get,
-      b.sender,
-      b.sigAlgorithm,
-      b.seqNum,
-      b.shardId,
-      b.extraBytes
-    )
+    val blockHashComputed = if (treatAsGenesis) {
+      ProtoUtil.hashUnsignedBlock(b.header.get, b.justifications)
+    } else {
+      ProtoUtil.hashSignedBlock(
+        b.header.get,
+        b.sender,
+        b.sigAlgorithm,
+        b.seqNum,
+        b.shardId,
+        b.extraBytes
+      )
+    }
     val deployHashComputed    = ProtoUtil.protoSeqHash(b.body.get.deploys)
     val postStateHashComputed = ProtoUtil.protoHash(b.body.get.state.get)
     if (b.blockHash == blockHashComputed &&
         b.header.get.deploysHash == deployHashComputed &&
         b.header.get.postStateHash == postStateHashComputed) {
       Applicative[F].unit
-    } else
+    } else {
+      def show(hash: ByteString) = PrettyPrinter.buildString(hash)
       for {
         _ <- Log[F].warn(ignore(b, s"block hash does not match to computed value."))
+        _ <- Log[F].warn(
+              s"Expected block hash ${show(blockHashComputed)}; got ${show(b.blockHash)}"
+            )
+        _ <- Log[F].warn(
+              s"Expected deploy hash ${show(deployHashComputed)}; got ${show(b.header.get.deploysHash)}"
+            )
+        _ <- Log[F].warn(
+              s"Expected state hash ${show(postStateHashComputed)}; got ${show(b.header.get.postStateHash)}"
+            )
         _ <- RaiseValidationError[F].raise[Unit](InvalidBlockHash)
       } yield ()
+    }
   }
 
   def deployCount[F[_]: Monad: Log: RaiseValidationError](
