@@ -64,7 +64,6 @@ HOST_GENESIS_DIR = f"{HOST_MOUNT_DIR}/genesis"
 HOST_BOOTSTRAP_DIR = f"{HOST_MOUNT_DIR}/bootstrap_certificate"
 
 
-
 def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:
     lines = show_blocks_output.splitlines()
     prefix = 'count: '
@@ -299,7 +298,7 @@ def make_node(
     deploy_dir = make_tempdir(prefix=f"{HOST_MOUNT_DIR}/")
 
     command = make_container_command(container_command, container_command_options, is_bootstrap)
-
+    logging.info(f'{name} command: {command}')
     env = {
         'RUST_BACKTRACE': 'full'
     }

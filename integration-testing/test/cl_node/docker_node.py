@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 import shutil
 import tempfile
-from typing import TYPE_CHECKING, Tuple, Generator, Optional
+from typing import TYPE_CHECKING, Tuple, Generator, Optional, List
 import re
 
 from docker.errors import ContainerError
@@ -77,8 +77,9 @@ class DockerNode(LoggingDockerBase):
 
         self.deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix='deploy_')
         self.create_resources_dir()
-        self.network = f'casperlabs_net_{self.config.number}_{random_string(5)}'
-        self.config.docker_client.networks.create(self.network, driver='bridge')
+
+        commands = self.container_command
+        logging.info(f'{self.container_name} commands: {commands}')
 
         container = self.config.docker_client.containers.run(
             self.image_name,
@@ -90,12 +91,16 @@ class DockerNode(LoggingDockerBase):
             ports={f'{self.GRPC_PORT}/tcp': self.config.grpc_port},  # Exposing grpc for Python Client
             network=self.network,
             volumes=self.volumes,
-            command=self.container_command,
+            command=commands,
             hostname=self.container_name,
             environment=env,
         )
         # self.client = CasperClient(port=self.config.grpc_port)
         return container
+
+    @property
+    def network(self):
+        return self.config.network
 
     def create_resources_dir(self) -> None:
         if os.path.exists(self.host_mount_dir):
@@ -167,16 +172,17 @@ class DockerNode(LoggingDockerBase):
             }
         }
         try:
+            command = f'--host {self.container_name} {command}'
             logging.info(f"COMMAND {command}")
             output = self.config.docker_client.containers.run(
                 image=f"casperlabs/client:{self.docker_tag}",
                 auto_remove=True,
-                name=f"client-{random_string(5)}",
+                name=f"client-{self.config.number}-{random_string(5)}",
                 command=command,
                 network=self.network,
                 volumes=volumes
             ).decode('utf-8')
-            logging.debug(f"OUTPUT {output}")
+            logging.debug(f"OUTPUT {self.container_name} {output}")
             return output
         except ContainerError as err:
             logging.warning(f"EXITED code={err.exit_status} command='{err.command}' stderr='{err.stderr}'")
@@ -191,7 +197,6 @@ class DockerNode(LoggingDockerBase):
                payment_contract: Optional[str]='helloname.wasm') -> str:
 
         command = " ".join([
-            f"--host {self.name}",
             "deploy",
             f"--from {from_address}",
             f"--gas-limit {gas_limit}",
@@ -204,24 +209,47 @@ class DockerNode(LoggingDockerBase):
         return self.invoke_client(command)
 
     def propose(self) -> str:
-        command = f"--host {self.name} propose"
-        return self.invoke_client(command)
+        return self.invoke_client('propose')
+
+    def show_block(self, hash: str) -> str:
+        return self.invoke_client(f'show-block {hash}')
 
     def show_blocks(self) -> Tuple[int, str]:
         return self.exec_run(f'{self.CL_NODE_BINARY} show-blocks')
 
     def show_blocks_with_depth(self, depth: int) -> str:
-        command = f"--host {self.name} show-blocks --depth={depth}"
-        return self.invoke_client(command)
+        return self.invoke_client(f"show-blocks --depth={depth}")
+
+    def blocks_as_list_with_depth(self, depth: int) -> List:
+        # TODO: Replace with generator using Python client
+        result = self.show_blocks_with_depth(depth)
+        block_list = []
+        for i, section in enumerate(result.split(' ---------------\n')):
+            if i == 0:
+                continue
+            cur_block = {}
+            for line in section.split('\n'):
+                try:
+                    name, value = line.split(': ', 1)
+                    cur_block[name] = value.replace('"', '')
+                except ValueError:
+                    pass
+            block_list.append(cur_block)
+        block_list.reverse()
+        return block_list
 
     def get_blocks_count(self, depth: int) -> int:
         show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
 
+    def vdag(self, depth: int, show_justification_lines: bool = False) -> str:
+        just_text = '--show-justification-lines' if show_justification_lines else ''
+        return self.invoke_client(f'vdag --depth {depth} {just_text}')
+
     @property
     def address(self) -> str:
         m = re.search(f"Listening for traffic on (casperlabs://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$",
-                      self.logs,
+                      self.logs(),
                       re.MULTILINE | re.DOTALL)
         if m is None:
             raise CasperLabsNodeAddressNotFoundError()
