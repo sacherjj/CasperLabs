@@ -138,9 +138,6 @@ impl MessageProperties {
             return String::new();
         }
 
-        const BRL: char = '{';
-        const BRR: char = '}';
-
         let mut buf = String::new();
         let mut candidate_key = String::new();
 
@@ -148,48 +145,21 @@ impl MessageProperties {
         let properties = &self.0;
 
         for c in message_template.chars() {
-            // multiple opening braces should be caught
-            if c == BRL {
-                // flag key seek behavior
-                key_seek = true;
-
-                // reset candidate key
-                if !candidate_key.is_empty() {
+            match c {
+                '{' => {
+                    key_seek = true;
                     candidate_key.clear();
                 }
-
-                continue;
-            }
-
-            // multiple closing braces should be caught
-            if c == BRR {
-                // end key siphon
-                key_seek = false;
-
-                if candidate_key.is_empty() {
-                    continue;
+                '}' if key_seek => {
+                    key_seek = false;
+                    if let Some(v) = properties.get(&candidate_key) {
+                        buf.push_str(v);
+                    }
                 }
-
-                // flag key look up behavior
-                if let Some(v) = properties.get(&candidate_key) {
-                    // buffer keyed val
-                    buf.push_str(v);
-                }
-
-                candidate_key.clear();
-
-                continue;
+                '}' => (),
+                c if key_seek => candidate_key.push(c),
+                c => buf.push(c),
             }
-
-            //build up candidate key
-            if key_seek {
-                candidate_key.push(c);
-
-                continue;
-            }
-
-            // otherwise, capture current char
-            buf.push(c);
         }
         buf
     }
