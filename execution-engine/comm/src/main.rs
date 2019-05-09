@@ -13,7 +13,7 @@ pub mod engine_server;
 use clap::{App, Arg};
 use engine_server::*;
 use execution_engine::engine::EngineState;
-use storage::global_state::inmem::InMemHist;
+use storage::global_state::in_memory::InMemoryGlobalState;
 
 fn main() {
     let matches = App::new("Execution engine server")
@@ -28,8 +28,9 @@ fn main() {
     }
 
     let init_state = storage::global_state::mocked_account([48u8; 20]);
-    let engine_state =
-        EngineState::new(InMemHist::new_initialized(&([0u8; 32].into()), init_state));
+    let global_state =
+        InMemoryGlobalState::from_pairs(&init_state).expect("Could not create global state");
+    let engine_state = EngineState::new(global_state);
     let server_builder = engine_server::new(socket, engine_state);
     let _server = server_builder.build().expect("Start server");
 
