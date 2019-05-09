@@ -12,7 +12,7 @@ pub mod log_message;
 pub mod log_settings;
 
 // log with basic stir message
-pub fn log(log_settings: LogSettings, log_level: LogLevel, value: &str) {
+pub fn log(log_settings: &LogSettings, log_level: LogLevel, value: &str) {
     let log_output_factory = |_: &slog::Record| {
         get_msg(
             LogMessage::new_msg(log_settings.to_owned(), log_level, value.to_owned()),
@@ -43,7 +43,7 @@ where
 
 // log with message format and properties
 pub fn log_props(
-    log_settings: LogSettings,
+    log_settings: &LogSettings,
     log_level: LogLevel,
     message_format: String,
     properties: BTreeMap<String, String>,
@@ -184,7 +184,7 @@ mod tests {
     fn should_log_stir() {
         let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Debug));
         log(
-            settings,
+            &settings,
             LogLevel::Debug,
             "this is a stir and it should get logged",
         );
@@ -194,7 +194,7 @@ mod tests {
     fn should_log_with_props_and_template() {
         let x = property_logger_test_helper();
 
-        log_props(x.0, x.1, x.2, x.3);
+        log_props(&x.0, x.1, x.2, x.3);
     }
 
     #[test]

@@ -138,8 +138,6 @@ impl MessageProperties {
             return String::new();
         }
 
-        let properties = &self.0;
-
         const BRL: char = '{';
         const BRR: char = '}';
 
@@ -147,77 +145,52 @@ impl MessageProperties {
         let mut candidate_key = String::new();
 
         let mut key_seek = false;
-        let mut key_lookup = false;
+        let properties = &self.0;
 
-        let mut exit = false;
-        let mut ci = message_template.char_indices();
+        for c in message_template.chars() {
+            // multiple opening braces should be caught
+            if c == BRL {
+                // flag key seek behavior
+                key_seek = true;
 
-        loop {
-            let mut oc: Option<char> = None;
-
-            match ci.next() {
-                Some((_, c)) => {
-                    // multiple opening braces should be caught
-                    if c == BRL {
-                        // flag key seek behavior
-                        key_seek = true;
-
-                        // end key lookup behavior
-                        key_lookup = false;
-
-                        // reset candidate key
-                        if !candidate_key.is_empty() {
-                            candidate_key.clear();
-                        }
-
-                        continue;
-                    }
-
-                    // multiple closing braces should be caught
-                    if c == BRR {
-                        // end key siphon
-                        key_seek = false;
-
-                        // flag key look up behavior
-                        key_lookup = true;
-
-                        continue;
-                    }
-
-                    //build up candidate key
-                    if key_seek {
-                        candidate_key.push(c);
-
-                        continue;
-                    }
-
-                    // otherwise, capture current char
-                    oc = Some(c);
+                // reset candidate key
+                if !candidate_key.is_empty() {
+                    candidate_key.clear();
                 }
-                None => {
-                    exit = true;
-                }
+
+                continue;
             }
 
-            // lookup candidate key
-            if key_lookup {
-                key_lookup = false;
+            // multiple closing braces should be caught
+            if c == BRR {
+                // end key siphon
+                key_seek = false;
 
+                if candidate_key.is_empty() {
+                    continue;
+                }
+
+                // flag key look up behavior
                 if let Some(v) = properties.get(&candidate_key) {
                     // buffer keyed val
                     buf.push_str(v);
                 }
+
+                candidate_key.clear();
+
+                continue;
             }
 
-            if let Some(c) = oc {
-                buf.push(c);
+            //build up candidate key
+            if key_seek {
+                candidate_key.push(c);
+
+                continue;
             }
 
-            if exit {
-                break;
-            }
+            // otherwise, capture current char
+            buf.push(c);
         }
-
         buf
     }
 }
@@ -339,6 +312,58 @@ mod tests {
         let props = MessageProperties::new(properties);
 
         let template = "{message}".to_string();
+
+        let formatted = props.get_formatted_message(&template);
+
+        assert_eq!(formatted, "".to_string(), "message malformed")
+    }
+
+    #[test]
+    fn should_format_message_template_with_unclosed_brace() {
+        let properties: BTreeMap<String, String> = BTreeMap::new();
+
+        let props = MessageProperties::new(properties);
+
+        let template = "{message".to_string();
+
+        let formatted = props.get_formatted_message(&template);
+
+        assert_eq!(formatted, "".to_string(), "message malformed")
+    }
+
+    #[test]
+    fn should_format_message_template_with_unopened_brace() {
+        let properties: BTreeMap<String, String> = BTreeMap::new();
+
+        let props = MessageProperties::new(properties);
+
+        let template = "message}".to_string();
+
+        let formatted = props.get_formatted_message(&template);
+
+        assert_eq!(formatted, "message".to_string(), "message malformed")
+    }
+
+    #[test]
+    fn should_format_message_template_with_mismatched_braces_left() {
+        let properties: BTreeMap<String, String> = BTreeMap::new();
+
+        let props = MessageProperties::new(properties);
+
+        let template = "{{message}".to_string();
+
+        let formatted = props.get_formatted_message(&template);
+
+        assert_eq!(formatted, "".to_string(), "message malformed")
+    }
+
+    #[test]
+    fn should_format_message_template_with_mismatched_braces_right() {
+        let properties: BTreeMap<String, String> = BTreeMap::new();
+
+        let props = MessageProperties::new(properties);
+
+        let template = "{message}}".to_string();
 
         let formatted = props.get_formatted_message(&template);
 
