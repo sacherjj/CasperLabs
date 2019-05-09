@@ -277,7 +277,7 @@ package object gossiping {
       retriesConf = DownloadManagerImpl.RetriesConf.noRetries
     )
 
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: ExecutionEngineService](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F]
@@ -410,6 +410,12 @@ package object gossiping {
                                    LegacyConversions.toBlock(x.getBlockMessage)
                                  }
                                }
+
+                     // Store it so others can pull it from the bootstrap node.
+                     _ <- Resource.liftF {
+                           validateAndAddBlock(conf.casper.shardId, genesis)
+                         }
+
                      approver <- GenesisApproverImpl.fromGenesis(
                                   backend,
                                   NodeDiscovery[F],
