@@ -413,7 +413,10 @@ package object gossiping {
 
                      // Store it so others can pull it from the bootstrap node.
                      _ <- Resource.liftF {
-                           validateAndAddBlock(conf.casper.shardId, genesis)
+                           Log[F].info(
+                             s"Trying to store generated genesis candidate ${genesis.blockHash}..."
+                           ) *>
+                             validateAndAddBlock(conf.casper.shardId, genesis)
                          }
 
                      approver <- GenesisApproverImpl.fromGenesis(

@@ -473,22 +473,19 @@ object MultiParentCasperImpl {
 
     implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
 
-    /** When we're creating Genesis we won't have a Genesis check against. */
-    def isGenesisLike(block: BlockMessage) =
-      block.getHeader.parentsHashList.isEmpty
-
     def validateAndAddBlock(
         maybeContext: Option[StatelessExecutor.Context],
         dag: BlockDagRepresentation[F],
         block: BlockMessage
-    )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] =
+    )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] = {
+      val treatAsGenesis = block.getHeader.parentsHashList.isEmpty
       for {
         dag         <- BlockDagStorage[F].getRepresentation
-        validFormat <- Validate.formatOfFields[F](block)
-        validSig    <- Validate.blockSignature[F](block)
+        validFormat <- Validate.formatOfFields[F](block, treatAsGenesis)
+        validSig    <- if (!treatAsGenesis) Validate.blockSignature[F](block) else true.pure[F]
         validSender <- maybeContext.map { ctx =>
                         Validate.blockSender[F](block, ctx.genesis, dag)
-                      } getOrElse isGenesisLike(block).pure[F]
+                      } getOrElse (treatAsGenesis && block.sender.isEmpty).pure[F]
         validVersion <- Validate.version[F](
                          block,
                          CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
@@ -500,7 +497,7 @@ object MultiParentCasperImpl {
                         else attemptAdd(maybeContext, dag, block)
         (status, updatedDag) = attemptResult
       } yield (status, updatedDag)
-
+    }
     /* Execute the block to get the effects then do some more validation.
      * Save the block if everything checks out.
      * We want to catch equivocations only after we confirm that the block completing

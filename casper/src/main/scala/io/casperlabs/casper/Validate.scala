@@ -131,7 +131,7 @@ object Validate {
       } yield result
     }
 
-  def formatOfFields[F[_]: Monad: Log](b: BlockMessage): F[Boolean] =
+  def formatOfFields[F[_]: Monad: Log](b: BlockMessage, isGenesis: Boolean = false): F[Boolean] =
     if (b.blockHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block hash is empty."))
@@ -144,11 +144,19 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block body is missing."))
       } yield false
-    } else if (b.sig.isEmpty) {
+    } else if (b.sig.isEmpty && !isGenesis) {
       for {
         _ <- Log[F].warn(ignore(b, s"block signature is empty."))
       } yield false
-    } else if (b.sigAlgorithm.isEmpty) {
+    } else if (!b.sig.isEmpty && isGenesis) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block signature is not empty on Genesis."))
+      } yield false
+    } else if (b.sigAlgorithm.isEmpty && !isGenesis) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block signature algorithm is not empty on Genesis."))
+      } yield false
+    } else if (!b.sigAlgorithm.isEmpty && isGenesis) {
       for {
         _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
       } yield false
