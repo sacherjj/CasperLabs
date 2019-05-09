@@ -5,7 +5,7 @@ from .cl_node.wait import (
 
 
 def test_propose(one_node_network):
-    node = one_node_network.clnodes[0].node
+    node = one_node_network.docker_nodes[0]
     result = node.deploy()
     assert 'Success!' in str(result)
     result = node.propose()
