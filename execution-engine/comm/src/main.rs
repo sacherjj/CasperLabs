@@ -60,11 +60,12 @@ fn main() {
                 dir.push(DEFAULT_DATA_DIR_RELATIVE);
                 dir
             },
-            |str| PathBuf::from(str),
+            PathBuf::from,
         );
         ret = fs::canonicalize(ret).expect(CANONICALIZE_DATA_DIR_EXPECT);
         ret.push(GLOBAL_STATE_DIR);
-        fs::create_dir_all(&ret).expect(&format!("{}: {:?}", CREATE_DATA_DIR_EXPECT, ret));
+        fs::create_dir_all(&ret)
+            .unwrap_or_else(|_| panic!("{}: {:?}", CREATE_DATA_DIR_EXPECT, ret));
         ret
     };
 
