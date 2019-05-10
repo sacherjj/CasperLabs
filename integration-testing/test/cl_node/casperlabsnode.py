@@ -484,7 +484,6 @@ def visualize_dag(
     container = docker_client.containers.run(
         image,
         name=name,
-        auto_remove=False,
         user='root',
         detach=True,
         command=command,
@@ -638,7 +637,7 @@ def get_contract_state(
         image,
         name=name,
         user='root',
-        auto_remove=False,
+        auto_remove=True,
         command=command,
         network=network_name,
         hostname=name
