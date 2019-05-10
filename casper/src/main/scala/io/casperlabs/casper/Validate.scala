@@ -15,6 +15,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
 import io.casperlabs.ipc
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
@@ -221,7 +222,7 @@ object Validate {
       _ <- Validate.missingBlocks[F](block, dag)
       _ <- Validate.timestamp[F](block, dag)
       _ <- Validate.repeatDeploy[F](block, dag)
-      _ <- Validate.blockNumber[F](block)
+      _ <- Validate.blockNumber[F](block, dag)
       _ <- Validate.sequenceNumber[F](block, dag)
       _ <- Validate.shardIdentifier[F](block, shardId)
     } yield ()
@@ -327,13 +328,23 @@ object Validate {
     } yield result
 
   // Agnostic of non-parent justifications
-  def blockNumber[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
-      b: BlockMessage
+  def blockNumber[F[_]: MonadThrowable: Log: RaiseValidationError](
+      b: BlockMessage,
+      dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
-      parents <- ProtoUtil.unsafeGetParents[F](b)
+      parents <- ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
+                  dag.lookup(parentHash).flatMap {
+                    MonadThrowable[F].fromOption(
+                      _,
+                      new Exception(
+                        s"Block dag store was missing ${PrettyPrinter.buildString(parentHash)}."
+                      )
+                    )
+                  }
+                }
       maxBlockNumber = parents.foldLeft(-1L) {
-        case (acc, p) => math.max(acc, ProtoUtil.blockNumber(p))
+        case (acc, p) => math.max(acc, p.blockNum)
       }
       number = ProtoUtil.blockNumber(b)
       result = maxBlockNumber + 1 == number
@@ -365,10 +376,16 @@ object Validate {
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
                                         case (_, Justification(_, latestBlockHash)) =>
-                                          for {
-                                            latestBlock <- ProtoUtil
-                                                            .unsafeGetBlock[F](latestBlockHash)
-                                          } yield latestBlock.seqNum
+                                          dag.lookup(latestBlockHash).flatMap {
+                                            case Some(block) => block.seqNum.pure[F]
+
+                                            case None =>
+                                              MonadThrowable[F].raiseError[Int](
+                                                new Exception(
+                                                  s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
+                                                )
+                                              )
+                                          }
                                       }
       number = b.seqNum
       result = creatorJustificationSeqNumber + 1 == number
