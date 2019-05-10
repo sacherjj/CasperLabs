@@ -138,6 +138,7 @@ impl History for InMemoryGlobalState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use global_state::mocked_account;
 
     #[derive(Debug, Clone)]
     struct TestPair {
@@ -261,5 +262,16 @@ mod tests {
             None,
             original_checkout.read(&test_pairs_updated[2].key).unwrap()
         );
+    }
+
+    #[test]
+    fn initial_state_has_the_expected_hash() {
+        let expected_bytes = vec![
+            86u8, 34, 94, 200, 7, 200, 168, 251, 27, 186, 60, 15, 247, 221, 85, 229, 213, 163, 251,
+            227, 103, 100, 22, 220, 98, 40, 57, 16, 139, 74, 114, 76,
+        ];
+        let init_state = mocked_account([48u8; 20]);
+        let global_state = InMemoryGlobalState::from_pairs(&init_state).unwrap();
+        assert_eq!(expected_bytes, global_state.root_hash.to_vec())
     }
 }
