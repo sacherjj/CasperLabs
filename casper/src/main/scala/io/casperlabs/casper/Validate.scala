@@ -457,7 +457,14 @@ object Validate {
     }
 
   /**
-    * Works only with fully explicit justifications.
+    * Checks that the parents of `b` were chosen correctly according to the
+    * forkchoice rule. This is done by using the justifications of `b` as the
+    * set of latest messages, so the justifications must be fully explicit.
+    * For multi-parent blocks this requires doing commutativity checking, so
+    * the combined effect of all parents except the first (i.e. the effect
+    * which would need to be applied to the first parent's post-state to
+    * obtain the pre-state of `b`) is given as the return value in order to
+    * avoid repeating work downstream.
     */
   def parents[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
