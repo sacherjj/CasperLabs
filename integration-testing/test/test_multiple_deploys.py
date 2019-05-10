@@ -120,7 +120,7 @@ class DeployThread(threading.Thread):
 @pytest.mark.parametrize("contract_path,expected_blocks_count", [
                           # Bootstrap node will only deploy the first contract.
                           # Rest of the nodes will deploy all contracts from the list.
-                          # Deploying helloname.wasm second time should be idempontent, according to Michael.
+                          # Deploying helloname.wasm second time should be idempotent, according to Michael.
                         (['helloname.wasm','helloname.wasm','helloworld.wasm',], 4)
 ])
 # Curently nodes is a network of three nodes, the first one is the bootstrap node.
