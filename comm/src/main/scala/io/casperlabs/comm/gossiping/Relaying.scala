@@ -4,10 +4,11 @@ import cats.effect._
 import cats.implicits._
 import cats.temp.par._
 import com.google.protobuf.ByteString
-import io.casperlabs.comm.NodeAsk
+import io.casperlabs.comm.{CommMetricsSource, NodeAsk}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping.Utils._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import simulacrum.typeclass
 
@@ -19,7 +20,7 @@ trait Relaying[F[_]] {
 }
 
 object RelayingImpl {
-  def apply[F[_]: Sync: Par: Log: NodeAsk](
+  def apply[F[_]: Sync: Par: Log: Metrics: NodeAsk](
       nd: NodeDiscovery[F],
       connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
@@ -37,12 +38,14 @@ object RelayingImpl {
 /**
   * https://techspec.casperlabs.io/technical-details/global-state/communications#picking-nodes-for-gossip
   */
-class RelayingImpl[F[_]: Sync: Par: Log: NodeAsk](
+class RelayingImpl[F[_]: Sync: Par: Log: Metrics: NodeAsk](
     nd: NodeDiscovery[F],
     connectToGossip: Node => F[GossipService[F]],
     relayFactor: Int,
     maxToTry: Int
 ) extends Relaying[F] {
+
+  implicit val metricsSource = Metrics.Source(CommMetricsSource, "Relaying")
 
   override def relay(hashes: List[ByteString]): F[Unit] = {
     def loop(hash: ByteString, peers: List[Node], relayed: Int, contacted: Int): F[Unit] = {
@@ -68,14 +71,16 @@ class RelayingImpl[F[_]: Sync: Par: Log: NodeAsk](
       service  <- connectToGossip(peer)
       local    <- NodeAsk[F].ask
       response <- service.newBlocks(NewBlocksRequest(sender = local.some, blockHashes = List(hash)))
-      msg = if (response.isNew)
-        s"${peer.show} accepted block ${hex(hash)}"
+      (msg, counter) = if (response.isNew)
+        s"${peer.show} accepted block ${hex(hash)}" -> "relay_accepted"
       else
-        s"${peer.show} rejected block ${hex(hash)}"
+        s"${peer.show} rejected block ${hex(hash)}" -> "relay_rejected"
       _ <- Log[F].debug(msg)
+      _ <- Metrics[F].incrementCounter(counter)
     } yield response.isNew).handleErrorWith { e =>
       for {
         _ <- Log[F].debug(s"NewBlocks request failed ${peer.show}, $e")
+        _ <- Metrics[F].incrementCounter("relay_failed")
       } yield false
     }
 }
