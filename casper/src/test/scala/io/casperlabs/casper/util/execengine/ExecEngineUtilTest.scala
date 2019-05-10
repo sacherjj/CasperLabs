@@ -382,7 +382,7 @@ class ExecEngineUtilTest
           checkpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                          parents = Seq.empty,
                          deploys = deploys,
-                         combinedEffect = Nil,
+                         nonFirstParentsCombinedEffect = Nil,
                          ProtocolVersion(1)
                        )
         } yield {

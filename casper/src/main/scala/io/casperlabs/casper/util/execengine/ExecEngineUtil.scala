@@ -36,13 +36,13 @@ object ExecEngineUtil {
   def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
       parents: Seq[BlockMessage],
       deploys: Seq[DeployData],
-      combinedEffect: TransformMap, // effect used to obtain combined post-state of all parents
+      nonFirstParentsCombinedEffect: TransformMap, // effect used to obtain combined post-state of all parents
       protocolVersion: ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
       processedHash <- processDeploys[F](
                         parents,
-                        combinedEffect,
+                        nonFirstParentsCombinedEffect,
                         deploys,
                         protocolVersion
                       )
@@ -79,12 +79,12 @@ object ExecEngineUtil {
 
   def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
       parents: Seq[BlockMessage],
-      combinedEffect: TransformMap, // effect used to obtain combined post-state of all parents
+      nonFirstParentsCombinedEffect: TransformMap, // effect used to obtain combined post-state of all parents
       deploys: Seq[DeployData],
       protocolVersion: ProtocolVersion
   ): F[(StateHash, Seq[DeployResult])] =
     for {
-      prestate <- computePrestate[F](parents.toList, combinedEffect)
+      prestate <- computePrestate[F](parents.toList, nonFirstParentsCombinedEffect)
       ds       = deploys.map(ProtoUtil.deployDataToEEDeploy)
       result <- MonadError[F, Throwable].rethrow(
                  ExecutionEngineService[F].exec(prestate, ds, protocolVersion)
@@ -130,7 +130,7 @@ object ExecEngineUtil {
 
   def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
       block: BlockMessage,
-      combinedEffect: TransformMap,
+      nonFirstParentsCombinedEffect: TransformMap,
       dag: BlockDagRepresentation[F]
   ): F[(StateHash, Seq[TransformEntry])] =
     for {
@@ -140,7 +140,7 @@ object ExecEngineUtil {
         .fromBlockMessage(block)
       processedHash <- processDeploys[F](
                         parents,
-                        combinedEffect,
+                        nonFirstParentsCombinedEffect,
                         deploys.flatMap(_.deploy),
                         protocolVersion
                       )
@@ -153,7 +153,7 @@ object ExecEngineUtil {
 
   private def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
       parents: List[BlockMessage],
-      combinedEffect: TransformMap // effect used to obtain combined post-state of all parents
+      nonFirstParentsCombinedEffect: TransformMap // effect used to obtain combined post-state of all parents
   ): F[StateHash] = parents match {
     case Nil => ExecutionEngineService[F].emptyStateHash.pure[F] //no parents
     case soleParent :: Nil =>
@@ -161,7 +161,7 @@ object ExecEngineUtil {
     case initParent :: _ => //multiple parents
       val prestate = ProtoUtil.postStateHash(initParent)
       MonadError[F, Throwable].rethrow(
-        ExecutionEngineService[F].commit(prestate, combinedEffect)
+        ExecutionEngineService[F].commit(prestate, nonFirstParentsCombinedEffect)
       )
   }
 
