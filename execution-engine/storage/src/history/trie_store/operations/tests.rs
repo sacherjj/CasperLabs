@@ -1640,11 +1640,11 @@ mod proptests {
     }
 
     fn test_key_arb() -> impl Strategy<Value = TestKey> {
-        array::uniform7(any::<u8>()).prop_map(|arr| TestKey(arr))
+        array::uniform7(any::<u8>()).prop_map(TestKey)
     }
 
     fn test_value_arb() -> impl Strategy<Value = TestValue> {
-        array::uniform6(any::<u8>()).prop_map(|arr| TestValue(arr))
+        array::uniform6(any::<u8>()).prop_map(TestValue)
     }
 
     proptest! {
