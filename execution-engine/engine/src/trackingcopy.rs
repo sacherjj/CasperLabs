@@ -139,7 +139,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                                 }
                             }
 
-                            Value::Contract(contract) => {
+                            Value::Contract{ contract, .. } => {
                                 if let Some(key) = contract.urefs_lookup().get(name) {
                                     let validated_key = Validated::new(*key, Validated::valid)?;
                                     self.read_key_or_stop(validated_key, i)
@@ -536,9 +536,10 @@ mod tests {
 
             let mut known_urefs = BTreeMap::new();
             known_urefs.insert(name.clone(), k);
-            let contract: Value = Contract::new(body, known_urefs, 1).into();
+            let contract = Contract::new(body, known_urefs);
+            let value = Value::from_contract(contract, 1);
             let contract_key = Key::Hash(hash);
-            map.insert(contract_key, contract);
+            map.insert(contract_key, value);
 
             let gs = InMemGS::new(map);
             let mut tc = TrackingCopy::new(gs);
@@ -611,9 +612,10 @@ mod tests {
             // create contract which knows about value
             let mut contract_known_urefs = BTreeMap::new();
             contract_known_urefs.insert(state_name.clone(), k);
-            let contract: Value = Contract::new(body, contract_known_urefs, 1).into();
+            let contract = Contract::new(body, contract_known_urefs);
+            let value = Value::from_contract(contract, 1);
             let contract_key = Key::Hash(hash);
-            map.insert(contract_key, contract);
+            map.insert(contract_key, value);
 
             // create account which knows about contract
             let mut account_known_urefs = BTreeMap::new();

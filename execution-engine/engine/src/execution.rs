@@ -287,15 +287,24 @@ where
         args_bytes: Vec<u8>,
         urefs_bytes: Vec<u8>,
     ) -> Result<usize, Error> {
-        let (args, module, mut refs) = {
+        let (args, module, mut refs, protocol_version) = {
             match self.context.read_gs(&key)? {
                 None => Err(Error::KeyNotFound(key)),
                 Some(value) => {
-                    if let Value::Contract(contract) = value {
+                    if let Value::Contract {
+                        contract,
+                        protocol_version,
+                    } = value
+                    {
                         let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
                         let module = parity_wasm::deserialize_buffer(contract.bytes())?;
 
-                        Ok((args, module, contract.urefs_lookup().clone()))
+                        Ok((
+                            args,
+                            module,
+                            contract.urefs_lookup().clone(),
+                            protocol_version,
+                        ))
                     } else {
                         Err(Error::FunctionNotFound(format!(
                             "Value at {:?} is not a contract",
@@ -307,7 +316,15 @@ where
         }?;
 
         let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
-        let result = sub_call(module, args, &mut refs, key, self, extra_urefs)?;
+        let result = sub_call(
+            module,
+            args,
+            &mut refs,
+            key,
+            self,
+            extra_urefs,
+            protocol_version,
+        )?;
         self.host_buf = result;
         Ok(self.host_buf.len())
     }
@@ -325,12 +342,9 @@ where
         fn_bytes: Vec<u8>,
         urefs: BTreeMap<String, Key>,
     ) -> Result<[u8; 32], Error> {
-        let contract = Value::Contract(common::value::contract::Contract::new(
-            fn_bytes,
-            urefs,
-            self.context.protocol_version(),
-        ));
-        let new_hash = self.context.store_contract(contract)?;
+        let contract = common::value::contract::Contract::new(fn_bytes, urefs);
+        let value = Value::from_contract(contract, self.context.protocol_version());
+        let new_hash = self.context.store_contract(value)?;
         Ok(new_hash)
     }
 
@@ -770,6 +784,7 @@ fn sub_call<R: StateReader<Key, Value>>(
     // Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
+    protocol_version: u64,
 ) -> Result<Vec<u8>, Error>
 where
     R::Error: Into<Error>,
@@ -793,8 +808,7 @@ where
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
             rng,
-            // TODO(mpapierski): Shouldn't subcall be executed with its own protocol version, not the parent's ver?
-            current_runtime.context.protocol_version(),
+            protocol_version,
         ),
     };
 

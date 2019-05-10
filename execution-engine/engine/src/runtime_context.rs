@@ -232,7 +232,7 @@ where
                     .values()
                     .try_for_each(|key| self.validate_key(key))
             }
-            Value::Contract(contract) => contract
+            Value::Contract { contract, .. } => contract
                 .urefs_lookup()
                 .values()
                 .try_for_each(|key| self.validate_key(key)),
@@ -505,15 +505,12 @@ mod tests {
         let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
         let known_urefs = vec_key_rights_to_map(vec![uref]);
 
-        let contract = Value::Contract(Contract::new(
-            Vec::new(),
-            once(("ValidURef".to_owned(), uref)).collect(),
-            1,
-        ));
+        let contract = Contract::new(Vec::new(), once(("ValidURef".to_owned(), uref)).collect());
+        let value = Value::from_contract(contract, 1);
 
         let query_result = test(known_urefs, |mut rc| {
             let contract_addr = rc
-                .store_contract(contract.clone())
+                .store_contract(value.clone())
                 .expect("Storing contract with valid URefs should succeed.");
             let contract_key = Key::Hash(contract_addr);
             rc.read_gs(&contract_key)
@@ -523,20 +520,17 @@ mod tests {
             .expect("Reading contract from the GS should work.")
             .expect("Contract should be found.");
 
-        assert_eq!(contract, contract_gs);
+        assert_eq!(value, contract_gs);
     }
 
     #[test]
     fn store_contract_with_uref_forged() {
         let mut rng = rand::thread_rng();
         let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
-        let contract = Value::Contract(Contract::new(
-            Vec::new(),
-            once(("ForgedURef".to_owned(), uref)).collect(),
-            1,
-        ));
+        let contract = Contract::new(Vec::new(), once(("ForgedURef".to_owned(), uref)).collect());
+        let value = Value::from_contract(contract, 1);
 
-        let query_result = test(HashMap::new(), |mut rc| rc.store_contract(contract.clone()));
+        let query_result = test(HashMap::new(), |mut rc| rc.store_contract(value.clone()));
 
         assert_forged_reference(query_result);
     }
@@ -547,11 +541,11 @@ mod tests {
         let mut rng = rand::thread_rng();
         let contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
         let known_urefs = vec_key_rights_to_map(vec![contract_uref]);
-        let contract = Value::Contract(Contract::new(
+        let contract = Contract::new(
             Vec::new(),
             once(("ValidURef".to_owned(), contract_uref)).collect(),
-            1,
-        ));
+        );
+        let contract = Value::from_contract(contract, 1);
 
         let query_result = test(known_urefs, |mut rc| {
             rc.write_gs(contract_uref, contract.clone())
@@ -571,10 +565,11 @@ mod tests {
         // Test that storing contract under URef that is not known fails with ForgedReference error.
         let mut rng = rand::thread_rng();
         let contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
-        let contract = Value::Contract(Contract::new(Vec::new(), BTreeMap::new(), 1));
+        let contract = Contract::new(Vec::new(), BTreeMap::new());
+        let value = Value::from_contract(contract, 1);
 
         let query_result = test(HashMap::new(), |mut rc| {
-            rc.write_gs(contract_uref, contract.clone())
+            rc.write_gs(contract_uref, value.clone())
         });
 
         assert_forged_reference(query_result);
@@ -586,10 +581,12 @@ mod tests {
         let mut rng = rand::thread_rng();
         let contract_uref = random_uref_key(&mut rng, AccessRights::READ);
         let known_urefs = vec_key_rights_to_map(vec![contract_uref]);
-        let contract = Value::Contract(Contract::new(Vec::new(), BTreeMap::new(), 1));
+
+        let contract = Contract::new(Vec::new(), BTreeMap::new());
+        let value = Value::from_contract(contract, 1);
 
         let query_result = test(known_urefs, |mut rc| {
-            rc.write_gs(contract_uref, contract.clone())
+            rc.write_gs(contract_uref, value.clone())
         });
 
         assert_invalid_access(query_result, AccessRights::WRITE);
@@ -699,12 +696,13 @@ mod tests {
         let (account_key, account) = mock_account(base_acc_addr);
         let mut rng = rand::thread_rng();
         let contract_key = random_contract_key(&mut rng);
-        let contract = Value::Contract(Contract::new(Vec::new(), BTreeMap::new(), 1));
+        let contract = Contract::new(Vec::new(), BTreeMap::new());
+        let value = Value::from_contract(contract, 1);
         let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut().write(
             Validated::new(contract_key, Validated::valid).unwrap(),
-            Validated::new(contract.clone(), Validated::valid).unwrap(),
+            Validated::new(value.clone(), Validated::valid).unwrap(),
         );
 
         let mut uref_map = BTreeMap::new();
@@ -732,11 +730,9 @@ mod tests {
             .add_gs(contract_key, named_key)
             .expect("Adding should work.");
 
-        let updated_contract = Value::Contract(Contract::new(
-            Vec::new(),
-            once((uref_name, uref)).collect(),
-            1,
-        ));
+        let contract = Contract::new(Vec::new(), once((uref_name, uref)).collect());
+
+        let updated_contract = Value::from_contract(contract, 1);
 
         assert_eq!(
             *tc.borrow().effect().1.get(&contract_key).unwrap(),
@@ -752,12 +748,13 @@ mod tests {
         let mut rng = rand::thread_rng();
         let contract_key = random_contract_key(&mut rng);
         let other_contract_key = random_contract_key(&mut rng);
-        let contract = Value::Contract(Contract::new(Vec::new(), BTreeMap::new(), 1));
+        let contract = Contract::new(Vec::new(), BTreeMap::new());
+        let value = Value::from_contract(contract, 1);
         let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut().write(
             Validated::new(contract_key, Validated::valid).unwrap(),
-            Validated::new(contract.clone(), Validated::valid).unwrap(),
+            Validated::new(value.clone(), Validated::valid).unwrap(),
         );
 
         let mut uref_map = BTreeMap::new();
