@@ -6,8 +6,8 @@ use history::trie_store::operations::{read, write, ReadResult, WriteResult};
 use history::trie_store::{Transaction, TransactionSource, TrieStore};
 use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
-use transform::{self, Transform, TypeMismatch};
 use std::hash::BuildHasher;
+use transform::{self, Transform, TypeMismatch};
 
 // needs to be public for use in the gens crate
 pub mod trie;
