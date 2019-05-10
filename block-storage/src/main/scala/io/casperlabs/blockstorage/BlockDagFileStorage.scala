@@ -221,7 +221,7 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
   private def updateLatestMessagesCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile("casperlabs-block-dag-file-storage-latest-messages-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, latestMessagesCrcFilePath)
     } yield ()
@@ -234,15 +234,9 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
       latestMessages                <- (state >> 'latestMessages).get
       latestMessagesLogOutputStream <- (state >> 'latestMessagesLogOutputStream).get
       _                             <- latestMessagesLogOutputStream.close
-      tmpSquashedData <- createTemporaryFile(
-                          "casperlabs-block-dag-store-latest-messages-",
-                          "-squashed-data"
-                        )
-      tmpSquashedCrc <- createTemporaryFile(
-                         "casperlabs-block-dag-store-latest-messages-",
-                         "-squashed-crc"
-                       )
-      dataByteBuffer = ByteBuffer.allocate(64 * latestMessages.size)
+      tmpSquashedData               <- createSameDirectoryTemporaryFile(latestMessagesDataFilePath)
+      tmpSquashedCrc                <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
+      dataByteBuffer                = ByteBuffer.allocate(64 * latestMessages.size)
       _ <- latestMessages.toList.traverse_ {
             case (validator, blockHash) =>
               Sync[F].delay {
@@ -290,7 +284,7 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
   private def updateDataLookupCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile[F]("casperlabs-block-dag-file-storage-data-lookup-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(blockMetadataCrcPath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, blockMetadataCrcPath)
     } yield ()

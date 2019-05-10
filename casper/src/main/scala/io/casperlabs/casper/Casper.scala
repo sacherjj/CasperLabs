@@ -99,8 +99,7 @@ sealed abstract class MultiParentCasperInstances {
       genesis: BlockMessage,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
-      shardId: String
-  )(
+      shardId: String,
       relaying: gossiping.Relaying[F]
   ): F[MultiParentCasper[F]] =
     init(genesis, genesisPreState, genesisEffects) map {

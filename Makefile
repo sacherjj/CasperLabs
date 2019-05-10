@@ -37,7 +37,8 @@ clean: cargo/clean
 docker-build-all: \
 	docker-build/node \
 	docker-build/client \
-	docker-build/execution-engine
+	docker-build/execution-engine \
+	docker-build/integration-testing
 
 docker-push-all: \
 	docker-push/node \
@@ -47,6 +48,7 @@ docker-push-all: \
 docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
 docker-build/client: .make/docker-build/universal/client .make/docker-build/test/client
 docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
+docker-build/integration-testing: .make/docker-build/integration-testing .make/docker-build/test/integration-testing
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -104,6 +106,12 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	rm -rf $(STAGE)/.docker $(STAGE)/Dockerfile
 	mkdir -p $(dir $@) && touch $@
 
+# Dockerize the Integration Tests
+.make/docker-build/integration-testing: \
+		integration-testing/Dockerfile
+	$(eval IT_PATH = integration-testing)
+	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
+	mkdir -p $(dir $@) && touch $@
 
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
@@ -133,6 +141,12 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 .make/docker-build/test/client: \
 		.make/docker-build/universal/client
 	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:test
+	mkdir -p $(dir $@) && touch $@
+
+# Make a test tagged version of client so all tags exist for integration-testing
+.make/docker-build/test/integration-testing: \
+		.make/docker-build/integration-testing
+	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:test
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
