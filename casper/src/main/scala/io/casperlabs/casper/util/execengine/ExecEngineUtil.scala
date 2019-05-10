@@ -174,7 +174,14 @@ object ExecEngineUtil {
 
   /** Computes the largest commuting sub-set of blocks from the `candidateParents` along with an effect which
     * can be used to find the combined post-state of those commuting blocks.
-    * @param candidateParents blocks to attempt to merge
+    * @tparam F effect type (a la tagless final)
+    * @tparam T type for transforms (i.e. effects deploys create when executed)
+    * @tparam A type for "blocks". Order must be a topological order of the DAG blocks form
+    * @tparam K type for keys specifying what a transform is applied to (equal to ipc.Key in production)
+    * @param candidates "blocks" to attempt to merge
+    * @param parents function for computing the parents of a "block" (equal to _.parents in production)
+    * @param effect function for computing the transforms of a block (looks up the transaforms from the blockstore in production)
+    * @param toOps function for converting transforms into the OpMap, which is then used for commutativity checking
     * @return a tuple of two elements. The first element is the net effect for all commuting blocks (including ancestors)
     *         except the first block (i.e. this effect will give the combined post state for all chosen commuting
     *         blocks when applied to the post-state of the first chosen block). The second element is the chosen
