@@ -282,24 +282,6 @@ from_try_from_impl!(Vec<String>, ListString);
 from_try_from_impl!(String, String);
 from_try_from_impl!(account::Account, Account);
 
-// impl From<contract::Contract> for Value {
-//     fn from(contract: contract::Contract) -> Self {
-//         Value::Contract{ contract, protocol_version: None }
-//     }
-// }
-
-// impl TryFrom<Value> for contract::Contract {
-//     type Error = String;
-
-//     fn try_from(v: Value) -> Result<contract::Contract, String> {
-//         if let Value::Contract{contract, ..} = v {
-//             Ok(contract)
-//         } else {
-//             Err(v.type_string())
-//         }
-//     }
-// }
-
 impl From<(String, Key)> for Value {
     fn from(tuple: (String, Key)) -> Self {
         Value::NamedKey(tuple.0, tuple.1)
