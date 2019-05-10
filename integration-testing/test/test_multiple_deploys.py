@@ -97,6 +97,9 @@ def parse_block(s):
 
 
 def parse_show_blocks(s):
+    """
+    TODO: remove this and related functions once Python client is integrated into test framework.
+    """
     blocks = s.split('-----------------------------------------------------')[:-1]
     return [parse_block(b) for b in blocks]
 
@@ -115,8 +118,12 @@ class DeployThread(threading.Thread):
 
 
 @pytest.mark.parametrize("contract_path,expected_blocks_count", [
+                          # Bootstrap node will only deploy the first contract.
+                          # Rest of the nodes will deploy all contracts from the list.
+                          # Deploying helloname.wasm second time should be idempontent, according to Michael.
                         (['helloname.wasm','helloname.wasm','helloworld.wasm',], 4)
 ])
+# Curently nodes is a network of three nodes, the first one is the bootstrap node.
 def test_multiple_deploys_at_once(nodes, timeout, contract_path, expected_blocks_count):
     bootstrap_node = nodes[0]
 
@@ -139,5 +146,5 @@ def test_multiple_deploys_at_once(nodes, timeout, contract_path, expected_blocks
 
     for node in nodes:
         # Check expected deploy numbers in blocks
-        assert [b.deployCount for b in parse_show_blocks(node.show_blocks_with_depth(10))] == [3, 3, 1, 0] 
+        assert [b.deployCount for b in parse_show_blocks(node.show_blocks_with_depth(10))] == [3, 3, 1, 0]  # That's what we see for 3 nodes.
 
