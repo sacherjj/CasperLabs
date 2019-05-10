@@ -53,8 +53,8 @@ fn main() {
     }
 
     let data_dir: PathBuf = {
-        let mut ret = matches.value_of("data-dir").map_or_else(
-            || {
+        let mut ret = matches.value_of("data-dir").map_or(
+            {
                 let mut dir = home_dir().expect(GET_HOME_DIR_EXPECT);
                 dir.push(DEFAULT_DATA_DIR_RELATIVE);
                 dir
