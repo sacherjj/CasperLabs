@@ -23,11 +23,10 @@ use std::sync::Arc;
 use storage::global_state::lmdb::LmdbGlobalState;
 use storage::history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
-const DEFAULT_DATA_DIR_RELATIVE: &str = "./.casperlabs";
+const DEFAULT_DATA_DIR_RELATIVE: &str = ".casperlabs";
 const GLOBAL_STATE_DIR: &str = "global_state";
 
 const GET_HOME_DIR_EXPECT: &str = "Could not get home directory";
-const CANONICALIZE_DATA_DIR_EXPECT: &str = "Could not canonicalize data directory";
 const CREATE_DATA_DIR_EXPECT: &str = "Could not create directory";
 const LMDB_ENVIRONMENT_EXPECT: &str = "Could not create LmdbEnvironment";
 const LMDB_TRIE_STORE_EXPECT: &str = "Could not create LmdbTrieStore";
@@ -62,7 +61,6 @@ fn main() {
             },
             PathBuf::from,
         );
-        ret = fs::canonicalize(ret).expect(CANONICALIZE_DATA_DIR_EXPECT);
         ret.push(GLOBAL_STATE_DIR);
         fs::create_dir_all(&ret)
             .unwrap_or_else(|_| panic!("{}: {:?}", CREATE_DATA_DIR_EXPECT, ret));
