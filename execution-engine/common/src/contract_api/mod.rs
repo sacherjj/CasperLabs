@@ -137,13 +137,9 @@ pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Contrac
 }
 
 /// Finds function by the name and stores it at the unforgable name.
-pub fn store_function_at(
-    name: &str,
-    known_urefs: BTreeMap<String, Key>,
-    uref: UPointer<Contract>,
-    protocol_version: u64,
-) {
+pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: UPointer<Contract>) {
     let contract = fn_by_name(name, known_urefs);
+    let protocol_version = unsafe { ext_ffi::protocol_version };
     let value = Value::from_contract(contract, protocol_version);
     write_untyped(&uref.into(), &value);
 }
