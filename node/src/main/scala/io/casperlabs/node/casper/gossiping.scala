@@ -259,7 +259,7 @@ package object gossiping {
     )
   }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F]
@@ -502,7 +502,7 @@ package object gossiping {
   }
 
   /** Create and start the gossip service. */
-  private def makeGossipServiceServer[F[_]: Concurrent: Par: TaskLike: ObservableIterant: Log: BlockStore: BlockDagStorage: MultiParentCasperRef](
+  private def makeGossipServiceServer[F[_]: Concurrent: Par: TaskLike: ObservableIterant: Log: Metrics: BlockStore: BlockDagStorage: MultiParentCasperRef](
       port: Int,
       conf: Configuration,
       synchronizer: Synchronizer[F],

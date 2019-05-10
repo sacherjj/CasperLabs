@@ -9,11 +9,12 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.comm.GossipError
+import io.casperlabs.comm.{CommMetricsSource, GossipError}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.Utils._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Compression, Log}
 import shapeless.tag
 import shapeless.tag.@@
@@ -99,7 +100,7 @@ object DownloadManagerImpl {
   }
 
   /** Start the download manager. */
-  def apply[F[_]: Concurrent: Log: Timer](
+  def apply[F[_]: Concurrent: Log: Timer: Metrics](
       maxParallelDownloads: Int,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
@@ -144,7 +145,7 @@ object DownloadManagerImpl {
     summary.getHeader.parentHashes ++ summary.getHeader.justifications.map(_.latestBlockHash)
 }
 
-class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
+class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
     isShutdown: Ref[F, Boolean],
     // Keep track of active downloads and dependencies.
     itemsRef: Ref[F, Map[ByteString, DownloadManagerImpl.Item[F]]],
@@ -160,6 +161,8 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
     relaying: Relaying[F],
     retriesConf: RetriesConf
 ) extends DownloadManager[F] {
+
+  implicit val metricsSource = Metrics.Source(CommMetricsSource, "DownloadManager")
 
   import DownloadManagerImpl._
 
@@ -195,6 +198,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
                 item  <- mergeItem(items, summary, source, relay, downloadFeedback)
                 _     <- itemsRef.update(_ + (summary.blockHash -> item))
                 _     <- if (item.canStart) startWorker(item) else Sync[F].unit
+                _     <- setScheduledGauge
               } yield ()
             }
           )
@@ -219,6 +223,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
           (watchers, startables) = next
           _                      <- watchers.traverse(_.complete(Right(())).attempt.void)
           _                      <- startables.traverse(startWorker)
+          _                      <- setScheduledGauge
         } yield ()
 
         finish.attempt *> run
@@ -237,10 +242,18 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
                      }
           // Tell whoever scheduled it before that it's over.
           _ <- watchers.traverse(_.complete(Left(ex)).attempt.void)
+          _ <- setScheduledGauge
         } yield ()
 
         finish.attempt *> run
     }
+
+  // Indicate how many items we have in the queue.
+  private def setScheduledGauge =
+    for {
+      items <- itemsRef.get
+      _     <- Metrics[F].setGauge("downloads_scheduled", items.size.toLong)
+    } yield ()
 
   /** Either create a new item or add the source to an existing one. */
   private def mergeItem(
@@ -297,9 +310,14 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
   /** Kick off the download and mark the item. */
   private def startWorker(item: Item[F]): F[Unit] =
     for {
-      _      <- itemsRef.update(_ + (item.summary.blockHash -> item.copy(isDownloading = true)))
-      worker <- Concurrent[F].start(download(item.summary.blockHash))
-      _      <- workersRef.update(_ + (item.summary.blockHash -> worker))
+      _ <- itemsRef.update(_ + (item.summary.blockHash -> item.copy(isDownloading = true)))
+      worker <- Concurrent[F].start {
+                 // Indicate how many items are currently being attempted, including their retry wait time.
+                 Metrics[F].gauge("downloads_ongoing") {
+                   download(item.summary.blockHash)
+                 }
+               }
+      _ <- workersRef.update(_ + (item.summary.blockHash -> worker))
     } yield ()
 
   // Just say which block hash to download, try all possible sources.
@@ -318,6 +336,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
         _ <- backend.storeBlockSummary(summary)
         _ <- relaying.relay(List(summary.blockHash)).whenA(relay)
         _ <- success
+        _ <- Metrics[F].incrementCounter("downloads_succeeded")
       } yield ()
 
     def downloadWithRetries(summary: BlockSummary, source: Node, relay: Boolean): F[Unit] = {
@@ -330,12 +349,17 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
           downloadEffect.handleErrorWith { e =>
             val duration = retriesConf.initialBackoffPeriod *
               math.pow(retriesConf.backoffFactor, counter.toDouble)
+
             val nextCounter = counter + 1
+
             duration match {
               case delay: FiniteDuration =>
-                Log[F].warn(
-                  s"Retrying downloading of block $id, source: ${source.show}, attempt: $nextCounter, delay: $delay, error: $e"
-                ) >>
+                // Downloads never fail forever, even if the signal is raised, a new schedule can restart it,
+                // maybe from a different source, so let's count every time it doesn't succeed.
+                Metrics[F].incrementCounter("downloads_failed") *>
+                  Log[F].warn(
+                    s"Retrying downloading of block $id, source: ${source.show}, attempt: $nextCounter, delay: $delay, error: $e"
+                  ) >>
                   Timer[F].sleep(delay) >> loop(nextCounter, e.some)
               case _: Duration.Infinite =>
                 Sync[F].raiseError[Unit](
@@ -397,7 +421,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
         copy(totalSizeSoFar = totalSizeSoFar + data.size, chunks = data :: chunks)
     }
 
-    semaphore.withPermit {
+    val effect =
       for {
         stub <- connectToGossip(source)
         req = GetBlockChunkedRequest(
@@ -454,6 +478,13 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer](
 
         block <- Sync[F].delay(Block.parseFrom(content))
       } yield block
+
+    // Indicate how many fetches we are trying to do at a time. If it's larger then the semaphore
+    // we configured we'd know where we'd have to raise it to allow maximum throughput.
+    Metrics[F].gauge("fetches_ongoing") {
+      semaphore.withPermit {
+        effect
+      }
     }
   }
 }
