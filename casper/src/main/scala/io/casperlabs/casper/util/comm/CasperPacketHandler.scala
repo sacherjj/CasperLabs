@@ -6,6 +6,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
+import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
@@ -283,17 +284,13 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      capserHandlerInternal
                    )
                  case Some(ApprovedBlockWithTransforms(approvedBlock, transforms)) =>
-                   val blockMessage = approvedBlock.candidate.flatMap(_.block).get
+                   val genesis = approvedBlock.candidate.flatMap(_.block).get
                    for {
-                     _ <- BlockStore[F].put(
-                           blockMessage.blockHash,
-                           blockMessage,
-                           transforms
-                         )
+                     _ <- insertIntoBlockAndDagStore[F](genesis, transforms)
                      casper <- MultiParentCasper.fromTransportLayer[F](
                                 validatorId,
-                                blockMessage,
-                                ProtoUtil.preStateHash(blockMessage),
+                                genesis,
+                                ProtoUtil.preStateHash(genesis),
                                 transforms,
                                 shardId
                               )
@@ -591,27 +588,23 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       isValid <- Validate.approvedBlock[F](b, validators)
       casper <- if (isValid) {
                  for {
-                   _            <- Log[F].info("Valid ApprovedBlock received!")
-                   blockMessage = b.candidate.flatMap(_.block).get
-                   dag          <- BlockDagStorage[F].getRepresentation
-                   parents      <- ProtoUtil.unsafeGetParents[F](blockMessage)
-                   merged       <- ExecEngineUtil.merge[F](parents, dag)
-                   prestate     <- ExecEngineUtil.computePrestate[F](merged)
+                   _        <- Log[F].info("Valid ApprovedBlock received!")
+                   genesis  = b.candidate.flatMap(_.block).get
+                   dag      <- BlockDagStorage[F].getRepresentation
+                   parents  <- ProtoUtil.unsafeGetParents[F](genesis)
+                   merged   <- ExecEngineUtil.merge[F](parents, dag)
+                   prestate <- ExecEngineUtil.computePrestate[F](merged)
                    transforms <- ExecEngineUtil.effectsForBlock[F](
-                                  blockMessage,
+                                  genesis,
                                   prestate,
                                   dag
                                 )
-                   _ <- BlockStore[F].put(
-                         blockMessage.blockHash,
-                         blockMessage,
-                         transforms
-                       )
+                   _ <- insertIntoBlockAndDagStore[F](genesis, transforms)
                    _ <- LastApprovedBlock[F].set(ApprovedBlockWithTransforms(b, transforms))
                    casper <- MultiParentCasper
                               .fromTransportLayer[F](
                                 validatorId,
-                                blockMessage,
+                                genesis,
                                 prestate,
                                 transforms,
                                 shardId
@@ -622,6 +615,15 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    .info("Invalid ApprovedBlock received; refusing to add.")
                    .map(_ => none[MultiParentCasper[F]])
     } yield casper
+
+  private def insertIntoBlockAndDagStore[F[_]: Sync: ErrorHandler: Log: BlockStore: BlockDagStorage](
+      genesis: BlockMessage,
+      transforms: Seq[TransformEntry]
+  ): F[Unit] =
+    for {
+      _ <- BlockStore[F].put(genesis.blockHash, genesis, transforms)
+      _ <- BlockDagStorage[F].insert(genesis)
+    } yield ()
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
       implicit C: CasperPacketHandler[F]
