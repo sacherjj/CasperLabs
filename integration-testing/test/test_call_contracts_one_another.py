@@ -75,7 +75,7 @@ def test_call_contracts_one_another(command_line_options_fixture, docker_client_
                     port=40401,
                     _type="address",
                     key=3030303030303030303030303030303030303030,
-                    path="hello",
+                    path="helloworld",
                     block_hash=hello_world_hash
                 )
                 logging.info(f"The output is :{output}")
