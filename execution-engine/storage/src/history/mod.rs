@@ -83,7 +83,7 @@ where
                 Ok(updated_value) => updated_value,
                 Err(err) => return Ok(err.into()),
             },
-            (ReadResult::RootNotFound, _) => unreachable!(), // is this an abuse of unreachable?
+            _x @ (ReadResult::RootNotFound, _) => panic!(stringify!(_x._1)),
         };
 
         match write::<_, _, _, _, E>(&mut txn, store, &current_root, &key, &value)? {
@@ -91,7 +91,7 @@ where
                 current_root = root_hash;
             }
             WriteResult::AlreadyExists => (),
-            WriteResult::RootNotFound => panic!("InMemoryGlobalState has invalid root"),
+            _x @ WriteResult::RootNotFound => panic!(stringify!(_x)),
         }
     }
 
