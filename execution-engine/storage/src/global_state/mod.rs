@@ -4,12 +4,8 @@ use crate::common::key::Key;
 use crate::common::value::{Account, Value};
 use std::collections::{BTreeMap, HashMap};
 
-// TODO: remove this annotation
-#[allow(dead_code)]
 pub mod lmdb;
 
-// TODO: remove this annotation
-#[allow(dead_code)]
 pub mod in_memory;
 
 #[derive(Debug)]
