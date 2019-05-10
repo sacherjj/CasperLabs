@@ -316,8 +316,9 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   it should "be able to clean storage and continue to work" in {
     forAll(blockBatchesGen, minSize(5), sizeRange(10)) { blockStoreBatches =>
       withStoreLocation { blockStoreDataDir =>
-        val blocks         = blockStoreBatches.flatten
-        val checkpointsDir = blockStoreDataDir.resolve("checkpoints")
+        val blocks            = blockStoreBatches.flatten
+        val checkpointsDir    = blockStoreDataDir.resolve("checkpoints")
+        val approvedBlockPath = blockStoreDataDir.resolve("approved-block")
         for {
           firstStore <- createBlockStore(blockStoreDataDir)
           _ <- blockStoreBatches.traverse_[Task, Unit](
@@ -331,7 +332,9 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                   firstStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
           _ <- firstStore.find(_ => true).map(_.size shouldEqual blocks.size)
+          _ = approvedBlockPath.toFile.exists() shouldBe true
           _ <- firstStore.clear()
+          _ = approvedBlockPath.toFile.exists() shouldBe false
           _ = checkpointsDir.toFile.list().size shouldBe 0
           _ <- firstStore.find(_ => true).map(_.size shouldEqual 0)
           _ <- blockStoreBatches.traverse_[Task, Unit](

@@ -229,6 +229,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
               index.drop(txn)
             }
         _      <- checkpointsDir.deleteDirectory()
+        _      <- approvedBlockPath.deleteSingleFile()
         _      <- makeDirectory(checkpointsDir)
         _      <- modifyCheckpoints(_.empty)
         _      <- modifyCurrentIndex(_ => 0)
