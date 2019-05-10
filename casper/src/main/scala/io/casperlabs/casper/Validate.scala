@@ -486,7 +486,7 @@ object Validate {
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
-      computedParentHashes = merged.map(_.blockHash).toSeq
+      computedParentHashes = merged.parents.map(_.blockHash)
       _ <- if (parentHashes == computedParentHashes)
             Applicative[F].unit
           else {

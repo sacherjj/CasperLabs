@@ -272,7 +272,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
         tipHashes <- estimator(dag).map(_.toVector)
         tips      <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
         merged    <- ExecEngineUtil.merge[F](tips, dag)
-        parents   = merged.toSeq
+        parents   = merged.parents
         _ <- Log[F].info(
               s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
             )

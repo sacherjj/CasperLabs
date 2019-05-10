@@ -2,7 +2,7 @@ package io.casperlabs.casper.util.execengine
 
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Applicative, Eval, Monad, MonadError, Traverse}
+import cats.{Monad, MonadError}
 import cats.kernel.Monoid
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
@@ -51,7 +51,7 @@ object ExecEngineUtil {
       postStateHash <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F].commit(preStateHash, transforms)
                       )
-      maxBlockNumber = merged.foldl(-1L) {
+      maxBlockNumber = merged.parents.foldl(-1L) {
         case (acc, b) => math.max(acc, blockNumber(b))
       }
       number = maxBlockNumber + 1
@@ -179,9 +179,14 @@ object ExecEngineUtil {
   }
 
   sealed trait MergeResult[+T, +A] { self =>
-    def toSeq: Seq[A] = self match {
-      case MergeResult.EmptyMerge            => Seq.empty[A]
+    def parents: Vector[A] = self match {
+      case MergeResult.EmptyMerge            => Vector.empty[A]
       case MergeResult.Result(head, _, tail) => head +: tail
+    }
+
+    def transform: Option[T] = self match {
+      case MergeResult.EmptyMerge      => None
+      case MergeResult.Result(_, t, _) => Some(t)
     }
   }
   object MergeResult {
@@ -198,29 +203,6 @@ object ExecEngineUtil {
         nonFirstParentsCombinedEffect: T,
         nonFirstParents: Vector[A]
     ): MergeResult[T, A] = Result(firstParent, nonFirstParentsCombinedEffect, nonFirstParents)
-
-    implicit def traverse[T]: Traverse[MergeResult[T, ?]] = new Traverse[MergeResult[T, ?]] {
-      def foldLeft[A, B](fa: MergeResult[T, A], b: B)(f: (B, A) => B): B =
-        fa match {
-          case EmptyMerge            => b
-          case Result(head, _, tail) => tail.foldLeft(f(b, head))(f)
-        }
-
-      def foldRight[A, B](fa: MergeResult[T, A], lb: Eval[B])(f: (A, Eval[B]) => Eval[B]): Eval[B] =
-        fa match {
-          case EmptyMerge            => lb
-          case Result(head, _, tail) => (head +: tail).foldr(lb)(f)
-        }
-
-      def traverse[G[_]: Applicative, A, B](
-          fa: MergeResult[T, A]
-      )(f: A => G[B]): G[MergeResult[T, B]] =
-        fa match {
-          case EmptyMerge => empty[T, B].pure[G]
-          case Result(head, t, tail) =>
-            (head +: tail).traverse(f).map(bs => result(bs.head, t, bs.tail))
-        }
-    }
   }
 
   /** Computes the largest commuting sub-set of blocks from the `candidateParents` along with an effect which
@@ -347,7 +329,11 @@ object ExecEngineUtil {
           toOps
         )
       }
-      blocks <- merged.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
-    } yield blocks
+      blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
+    } yield
+      merged.transform match {
+        case None    => MergeResult.empty[TransformMap, BlockMessage]
+        case Some(t) => MergeResult.result(blocks.head, t, blocks.tail)
+      }
   }
 }
