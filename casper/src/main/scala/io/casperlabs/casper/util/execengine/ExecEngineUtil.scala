@@ -3,7 +3,7 @@ package io.casperlabs.casper.util.execengine
 import cats.effect.Sync
 import cats.implicits._
 import cats.{Monad, MonadError}
-import cats.kernel.{Monoid, Order}
+import cats.kernel.Monoid
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.catscontrib.MonadThrowable
@@ -188,7 +188,7 @@ object ExecEngineUtil {
     *         list of blocks, which all commute with each other.
     *
     */
-  def abstractMerge[F[_]: Monad, T: Monoid, A: Order, K](
+  def abstractMerge[F[_]: Monad, T: Monoid, A: Ordering, K](
       candidates: IndexedSeq[A],
       parents: A => F[List[A]],
       effect: A => F[Option[T]],
@@ -217,7 +217,7 @@ object ExecEngineUtil {
                   newGroup -> index
               }
           } // sort in topological order to combine effects in the right order
-          .map { case (group, _) => group.sorted(Order[A].toOrdering) }
+          .map { case (group, _) => group.sorted }
 
         // always choose the first parent
         initChosen      = Vector(0)
@@ -286,7 +286,7 @@ object ExecEngineUtil {
     for {
       ordering <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
       merged <- {
-        implicit val order = Order.fromOrdering(ordering)
+        implicit val order = ordering
         abstractMerge[F, TransformMap, BlockMetadata, ipc.Key](
           candidateParents,
           parents,

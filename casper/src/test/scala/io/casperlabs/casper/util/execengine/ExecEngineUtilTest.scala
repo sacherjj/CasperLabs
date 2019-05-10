@@ -2,7 +2,6 @@ package io.casperlabs.casper.util.execengine
 
 import cats.implicits._
 import cats.Id
-import cats.kernel.Order
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.helper.BlockGenerator._
@@ -668,7 +667,7 @@ object ExecEngineUtilTest {
 
     def merge(
         candidates: Vector[OpDagNode]
-    )(implicit order: Order[OpDagNode]): (OpMap[Int], Vector[OpDagNode]) =
+    )(implicit order: Ordering[OpDagNode]): (OpMap[Int], Vector[OpDagNode]) =
       ExecEngineUtil.abstractMerge[Id, OpMap[Int], OpDagNode, Int](
         candidates,
         getParents,
@@ -676,18 +675,8 @@ object ExecEngineUtilTest {
         identity
       )
   }
-  def opDagNodeOrder(tips: List[OpDagNode]): Order[OpDagNode] = {
-    val byHeight: Map[Int, Vector[OpDagNode]] =
-      DagOperations
-        .bfTraverseF[Id, OpDagNode](tips)(_.parents)
-        .foldLeft(Map.empty[Int, Vector[OpDagNode]]) {
-          case (acc, node) =>
-            val curr = acc.getOrElse(node.height, Vector.empty[OpDagNode])
-            acc.updated(node.height, node +: curr)
-        }
-    val mapping = byHeight.toVector.sortBy(_._1).flatMap(_._2).zipWithIndex.toMap
-    Order.by[OpDagNode, Int](mapping.apply)
-  }
+  def opDagNodeOrder(tips: List[OpDagNode]): Ordering[OpDagNode] =
+    Ordering.by[OpDagNode, Int](_.height)
 
   val registry = """ """.stripMargin
 

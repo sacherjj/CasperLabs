@@ -2,7 +2,6 @@ package io.casperlabs.casper.util
 
 import cats.{Eval, Monad}
 import cats.implicits._
-import cats.kernel.Order
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.Estimator.BlockHash
@@ -82,11 +81,10 @@ object DagOperations {
     * @return A map from uncommon ancestor blocks to BitSets, where a block B is
     *         and ancestor of starting block with index i if B's BitSet contains i.
     */
-  def abstractUncommonAncestors[F[_]: Monad, A: Order](
+  def abstractUncommonAncestors[F[_]: Monad, A: Ordering](
       start: IndexedSeq[A],
       parents: A => F[List[A]]
   ): F[Map[A, BitSet]] = {
-    implicit val topoSort: Ordering[A] = Order[A].toOrdering
     val commonSet                      = BitSet(0 until start.length: _*)
     def isCommon(set: BitSet): Boolean = set == commonSet
 
@@ -192,7 +190,6 @@ object DagOperations {
     def parents(b: BlockMetadata): F[List[BlockMetadata]] =
       b.parents.traverse(b => dag.lookup(b).map(_.get))
 
-    implicit val order = Order.fromOrdering[BlockMetadata]
     abstractUncommonAncestors[F, BlockMetadata](blocks, parents)
   }
 
