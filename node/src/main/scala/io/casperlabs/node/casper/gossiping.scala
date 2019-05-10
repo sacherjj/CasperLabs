@@ -25,10 +25,17 @@ import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.gossiping._
-import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
+import io.casperlabs.comm.grpc.{
+  AuthInterceptor,
+  ErrorInterceptor,
+  GrpcServer,
+  MetricsInterceptor,
+  SslContexts
+}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.diagnostics
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.grpc.ManagedChannel
 import io.netty.handler.ssl.{ClientAuth, SslContext}
@@ -505,6 +512,9 @@ package object gossiping {
       grpcScheduler: Scheduler
   ): Resource[F, GossipServiceServer[F]] = {
     implicit val logId = Log.logId
+    implicit val metricsId =
+      diagnostics.effects.metrics[Id](io.casperlabs.catscontrib.effect.implicits.syncId)
+
     for {
       backend <- Resource.pure[F, GossipServiceServer.Backend[F]] {
                   new GossipServiceServer.Backend[F] {
@@ -590,6 +600,7 @@ package object gossiping {
           ),
           interceptors = List(
             new AuthInterceptor(),
+            new MetricsInterceptor(),
             ErrorInterceptor.default
           ),
           sslContext = serverSslContext.some,
