@@ -209,7 +209,11 @@ class Node:
             raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
 
     def deploy(self, from_address: str = "00000000000000000000",
+               session: str = None, payment: str = None,
                gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
+
+        session = session if session is not None else CONTRACT_NAME
+        payment = payment if payment is not None else CONTRACT_NAME
 
         command = " ".join([
             f"--host {self.name}",
