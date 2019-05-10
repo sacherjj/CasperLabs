@@ -209,13 +209,11 @@ mod tests {
         let mut state = create_test_state();
         let root_hash = state.root_hash;
 
-        let effects: HashMap<Key, Transform> = {
-            let mut tmp = HashMap::new();
-            for TestPair { key, value } in &test_pairs_updated {
-                tmp.insert(*key, Transform::Write(value.to_owned()));
-            }
-            tmp
-        };
+        let effects: HashMap<Key, Transform> = test_pairs_updated
+            .iter()
+            .cloned()
+            .map(|TestPair { key, value }| (key, Transform::Write(value)))
+            .collect();
 
         let updated_hash = match state.commit(root_hash, effects).unwrap() {
             CommitResult::Success(hash) => hash,
