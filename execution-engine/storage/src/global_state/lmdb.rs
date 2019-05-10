@@ -5,7 +5,7 @@ use global_state::StateReader;
 use history::trie::operations::create_hashed_empty_trie;
 use history::trie::Trie;
 use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use history::trie_store::operations::{read, ReadResult};
+use history::trie_store::operations::{read, write, ReadResult, WriteResult};
 use history::trie_store::{Transaction, TransactionSource, TrieStore};
 use history::{commit, CommitResult, History};
 use lmdb;
@@ -50,6 +50,38 @@ impl LmdbGlobalState {
             store,
             root_hash,
         }
+    }
+
+    /// Creates a state from an environement, a store, and given set of [`Key`](common::key::key),
+    /// [`Value`](common::value::Value) pairs.
+    pub fn from_pairs(
+        environment: Arc<LmdbEnvironment>,
+        store: Arc<LmdbTrieStore>,
+        pairs: &[(Key, Value)],
+    ) -> Result<Self, error::Error> {
+        let mut ret = LmdbGlobalState::empty(environment, store)?;
+        {
+            let mut txn = ret.environment.create_read_write_txn()?;
+            let mut current_root = ret.root_hash;
+            for (key, value) in pairs {
+                match write::<_, _, _, LmdbTrieStore, error::Error>(
+                    &mut txn,
+                    &ret.store,
+                    &current_root,
+                    key,
+                    value,
+                )? {
+                    WriteResult::Written(root_hash) => {
+                        current_root = root_hash;
+                    }
+                    WriteResult::AlreadyExists => (),
+                    WriteResult::RootNotFound => panic!("LmdbGlobalState has invalid root"),
+                }
+            }
+            ret.root_hash = current_root;
+            txn.commit()?;
+        }
+        Ok(ret)
     }
 }
 
