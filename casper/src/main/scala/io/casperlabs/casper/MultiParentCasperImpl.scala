@@ -268,11 +268,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
-        dag                       <- blockDag
-        tipHashes                 <- estimator(dag).map(_.toVector)
-        tips                      <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
-        merged                    <- ExecEngineUtil.merge[F](tips, dag)
-        (prestateEffect, parents) = merged
+        dag       <- blockDag
+        tipHashes <- estimator(dag).map(_.toVector)
+        tips      <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
+        merged    <- ExecEngineUtil.merge[F](tips, dag)
+        parents   = merged.toSeq
         _ <- Log[F].info(
               s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
             )
@@ -294,7 +294,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                      createProposal(
                        dag,
                        parents,
-                       prestateEffect,
+                       merged,
                        remaining,
                        justifications,
                        protocolVersion
@@ -342,7 +342,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   private def createProposal(
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMessage],
-      prestateEffect: ExecEngineUtil.TransformMap,
+      merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, BlockMessage],
       deploys: Seq[DeployData],
       justifications: Seq[Justification],
       protocolVersion: ProtocolVersion
@@ -352,9 +352,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       s   <- Cell[F, CasperState].read
       stateResult <- ExecEngineUtil
                       .computeDeploysCheckpoint[F](
-                        parents,
+                        merged,
                         deploys,
-                        prestateEffect,
                         protocolVersion
                       )
       DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number, protocolVersion) = stateResult
@@ -543,11 +542,15 @@ object MultiParentCasperImpl {
         casperState <- Cell[F, CasperState].read
         // Confirm the parents are correct (including checking they commute) and capture
         // the effect needed to compute the correct pre-state as well.
-        parentsEffect <- maybeContext.fold(Seq.empty[ipc.TransformEntry].pure[F]) { ctx =>
-                          Validate.parents[F](block, ctx.lastFinalizedBlockHash, dag)
-                        }
+        merged <- maybeContext.fold(
+                   ExecEngineUtil.MergeResult
+                     .empty[ExecEngineUtil.TransformMap, BlockMessage]
+                     .pure[F]
+                 ) { ctx =>
+                   Validate.parents[F](block, ctx.lastFinalizedBlockHash, dag)
+                 }
         processedHash <- ExecEngineUtil
-                          .effectsForBlock[F](block, parentsEffect, dag)
+                          .effectsForBlock[F](block, merged, dag)
                           .recoverWith {
                             case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                           }

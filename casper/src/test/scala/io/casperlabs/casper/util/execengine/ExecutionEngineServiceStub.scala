@@ -29,8 +29,7 @@ object ExecutionEngineServiceStub {
     (for {
       parents                 <- ProtoUtil.unsafeGetParents[F](b)
       merged                  <- ExecEngineUtil.merge[F](parents, dag)
-      (combinedEffect, _)     = merged
-      processedHash           <- ExecEngineUtil.effectsForBlock[F](b, combinedEffect, dag)
+      processedHash           <- ExecEngineUtil.effectsForBlock[F](b, merged, dag)
       (preStateHash, effects) = processedHash
       _                       <- Validate.transactions[F](b, dag, preStateHash, effects)
     } yield ProtoUtil.postStateHash(b)).attempt

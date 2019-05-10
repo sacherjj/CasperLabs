@@ -323,9 +323,8 @@ class ExecEngineUtilTest
     for {
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
-                          Seq.empty,
+                          ExecEngineUtil.MergeResult.empty,
                           deploy,
-                          Nil,
                           protocolVersion
                         )
       DeploysCheckpoint(_, _, result, _, _) = computeResult
@@ -379,9 +378,8 @@ class ExecEngineUtilTest
         for {
           dag <- blockDagStorage.getRepresentation
           checkpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
-                         parents = Seq.empty,
+                         merged = ExecEngineUtil.MergeResult.empty,
                          deploys = deploys,
-                         nonFirstParentsCombinedEffect = Nil,
                          ProtocolVersion(1)
                        )
         } yield {
@@ -667,13 +665,20 @@ object ExecEngineUtilTest {
 
     def merge(
         candidates: Vector[OpDagNode]
-    )(implicit order: Ordering[OpDagNode]): (OpMap[Int], Vector[OpDagNode]) =
-      ExecEngineUtil.abstractMerge[Id, OpMap[Int], OpDagNode, Int](
+    )(implicit order: Ordering[OpDagNode]): (OpMap[Int], Vector[OpDagNode]) = {
+      val merged = ExecEngineUtil.abstractMerge[Id, OpMap[Int], OpDagNode, Int](
         candidates,
         getParents,
         getEffect,
         identity
       )
+
+      merged match {
+        case ExecEngineUtil.MergeResult.EmptyMerge =>
+          throw new RuntimeException("No candidates were given to merge!")
+        case ExecEngineUtil.MergeResult.Result(head, effect, tail) => (effect, head +: tail)
+      }
+    }
   }
   def opDagNodeOrder(tips: List[OpDagNode]): Ordering[OpDagNode] =
     Ordering.by[OpDagNode, Int](_.height)

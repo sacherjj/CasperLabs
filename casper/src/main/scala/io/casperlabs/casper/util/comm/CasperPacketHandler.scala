@@ -591,15 +591,14 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       isValid <- Validate.approvedBlock[F](b, validators)
       casper <- if (isValid) {
                  for {
-                   _                   <- Log[F].info("Valid ApprovedBlock received!")
-                   blockMessage        = b.candidate.flatMap(_.block).get
-                   dag                 <- BlockDagStorage[F].getRepresentation
-                   parents             <- ProtoUtil.unsafeGetParents[F](blockMessage)
-                   merged              <- ExecEngineUtil.merge[F](parents, dag)
-                   (combinedEffect, _) = merged
+                   _            <- Log[F].info("Valid ApprovedBlock received!")
+                   blockMessage = b.candidate.flatMap(_.block).get
+                   dag          <- BlockDagStorage[F].getRepresentation
+                   parents      <- ProtoUtil.unsafeGetParents[F](blockMessage)
+                   merged       <- ExecEngineUtil.merge[F](parents, dag)
                    effects <- ExecEngineUtil.effectsForBlock[F](
                                blockMessage,
-                               combinedEffect,
+                               merged,
                                dag
                              )
                    (prestate, transforms) = effects

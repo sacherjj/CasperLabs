@@ -470,7 +470,7 @@ object Validate {
       b: BlockMessage,
       lastFinalizedBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
-  ): F[ExecEngineUtil.TransformMap] = {
+  ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, BlockMessage]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
       case hashes if hashes.isEmpty => Seq(lastFinalizedBlockHash)
@@ -481,13 +481,12 @@ object Validate {
       hashes.map(PrettyPrinter.buildString(_)).mkString("[", ", ", "]")
 
     for {
-      latestMessagesHashes      <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
-      tipHashes                 <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
-      _                         <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
-      tips                      <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
-      merged                    <- ExecEngineUtil.merge[F](tips, dag)
-      (effect, computedParents) = merged
-      computedParentHashes      = computedParents.map(_.blockHash).toSeq
+      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
+      tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
+      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
+      tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
+      merged               <- ExecEngineUtil.merge[F](tips, dag)
+      computedParentHashes = merged.map(_.blockHash).toSeq
       _ <- if (parentHashes == computedParentHashes)
             Applicative[F].unit
           else {
@@ -510,7 +509,7 @@ object Validate {
               _ <- RaiseValidationError[F].raise[Unit](InvalidParents)
             } yield ()
           }
-    } yield effect
+    } yield merged
   }
 
   /*

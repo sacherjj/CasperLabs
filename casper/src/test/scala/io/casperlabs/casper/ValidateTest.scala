@@ -756,9 +756,8 @@ class ValidateTest
       for {
         dag1 <- blockDagStorage.getRepresentation
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
-                              Seq.empty,
+                              ExecEngineUtil.MergeResult.empty,
                               deploys,
-                              Nil,
                               ProtocolVersion(1)
                             )
         DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _) = deploysCheckpoint

@@ -2,7 +2,7 @@ package io.casperlabs.casper.util.execengine
 
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Monad, MonadError}
+import cats.{Applicative, Eval, Monad, MonadError, Traverse}
 import cats.kernel.Monoid
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
@@ -34,15 +34,13 @@ object ExecEngineUtil {
   type StateHash = ByteString
 
   def computeDeploysCheckpoint[F[_]: MonadError[?[_], Throwable]: BlockStore: Log: ExecutionEngineService](
-      parents: Seq[BlockMessage],
+      merged: MergeResult[TransformMap, BlockMessage],
       deploys: Seq[DeployData],
-      nonFirstParentsCombinedEffect: TransformMap, // effect used to obtain combined post-state of all parents
       protocolVersion: ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
       processedHash <- processDeploys[F](
-                        parents,
-                        nonFirstParentsCombinedEffect,
+                        merged,
                         deploys,
                         protocolVersion
                       )
@@ -53,7 +51,7 @@ object ExecEngineUtil {
       postStateHash <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F].commit(preStateHash, transforms)
                       )
-      maxBlockNumber = parents.foldLeft(-1L) {
+      maxBlockNumber = merged.foldl(-1L) {
         case (acc, b) => math.max(acc, blockNumber(b))
       }
       number = maxBlockNumber + 1
@@ -69,13 +67,12 @@ object ExecEngineUtil {
     } yield DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number, protocolVersion)
 
   def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
-      parents: Seq[BlockMessage],
-      nonFirstParentsCombinedEffect: TransformMap, // effect used to obtain combined post-state of all parents
+      merged: MergeResult[TransformMap, BlockMessage],
       deploys: Seq[DeployData],
       protocolVersion: ProtocolVersion
   ): F[(StateHash, Seq[DeployResult])] =
     for {
-      prestate <- computePrestate[F](parents.toList, nonFirstParentsCombinedEffect)
+      prestate <- computePrestate[F](merged)
       ds       = deploys.map(ProtoUtil.deployDataToEEDeploy)
       result <- MonadError[F, Throwable].rethrow(
                  ExecutionEngineService[F].exec(prestate, ds, protocolVersion)
@@ -144,17 +141,15 @@ object ExecEngineUtil {
 
   def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
       block: BlockMessage,
-      nonFirstParentsCombinedEffect: TransformMap,
+      merged: MergeResult[TransformMap, BlockMessage],
       dag: BlockDagRepresentation[F]
-  ): F[(StateHash, Seq[TransformEntry])] =
+  ): F[(StateHash, Seq[TransformEntry])] = {
+    val deploys         = ProtoUtil.deploys(block)
+    val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlockMessage(block)
+
     for {
-      parents <- ProtoUtil.unsafeGetParents[F](block)
-      deploys = ProtoUtil.deploys(block)
-      protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap
-        .fromBlockMessage(block)
       processedHash <- processDeploys[F](
-                        parents,
-                        nonFirstParentsCombinedEffect,
+                        merged,
                         deploys.flatMap(_.deploy),
                         protocolVersion
                       )
@@ -162,15 +157,15 @@ object ExecEngineUtil {
       deployEffects                = processedDeployEffects(deploys.map(_.getDeploy) zip processedDeploys)
       transformMap                 = extractTransforms(findCommutingEffects(deployEffects))
     } yield (prestate, transformMap)
+  }
 
   private def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
-      parents: List[BlockMessage],
-      nonFirstParentsCombinedEffect: TransformMap // effect used to obtain combined post-state of all parents
-  ): F[StateHash] = parents match {
-    case Nil => ExecutionEngineService[F].emptyStateHash.pure[F] //no parents
-    case soleParent :: Nil =>
+      merged: MergeResult[TransformMap, BlockMessage]
+  ): F[StateHash] = merged match {
+    case MergeResult.EmptyMerge => ExecutionEngineService[F].emptyStateHash.pure[F] //no parents
+    case MergeResult.Result(soleParent, _, others) if others.isEmpty =>
       ProtoUtil.postStateHash(soleParent).pure[F] //single parent
-    case initParent :: _ => //multiple parents
+    case MergeResult.Result(initParent, nonFirstParentsCombinedEffect, _) => //multiple parents
       val prestate = ProtoUtil.postStateHash(initParent)
       MonadError[F, Throwable].rethrow(
         ExecutionEngineService[F].commit(prestate, nonFirstParentsCombinedEffect)
@@ -183,6 +178,51 @@ object ExecEngineUtil {
     def empty: TransformMap                                       = Nil
   }
 
+  sealed trait MergeResult[+T, +A] { self =>
+    def toSeq: Seq[A] = self match {
+      case MergeResult.EmptyMerge            => Seq.empty[A]
+      case MergeResult.Result(head, _, tail) => head +: tail
+    }
+  }
+  object MergeResult {
+    case object EmptyMerge extends MergeResult[Nothing, Nothing]
+    case class Result[T, A](
+        firstParent: A,
+        nonFirstParentsCombinedEffect: T,
+        nonFirstParents: Vector[A]
+    ) extends MergeResult[T, A]
+
+    def empty[T, A]: MergeResult[T, A] = EmptyMerge
+    def result[T, A](
+        firstParent: A,
+        nonFirstParentsCombinedEffect: T,
+        nonFirstParents: Vector[A]
+    ): MergeResult[T, A] = Result(firstParent, nonFirstParentsCombinedEffect, nonFirstParents)
+
+    implicit def traverse[T]: Traverse[MergeResult[T, ?]] = new Traverse[MergeResult[T, ?]] {
+      def foldLeft[A, B](fa: MergeResult[T, A], b: B)(f: (B, A) => B): B =
+        fa match {
+          case EmptyMerge            => b
+          case Result(head, _, tail) => tail.foldLeft(f(b, head))(f)
+        }
+
+      def foldRight[A, B](fa: MergeResult[T, A], lb: Eval[B])(f: (A, Eval[B]) => Eval[B]): Eval[B] =
+        fa match {
+          case EmptyMerge            => lb
+          case Result(head, _, tail) => (head +: tail).foldr(lb)(f)
+        }
+
+      def traverse[G[_]: Applicative, A, B](
+          fa: MergeResult[T, A]
+      )(f: A => G[B]): G[MergeResult[T, B]] =
+        fa match {
+          case EmptyMerge => empty[T, B].pure[G]
+          case Result(head, t, tail) =>
+            (head +: tail).traverse(f).map(bs => result(bs.head, t, bs.tail))
+        }
+    }
+  }
+
   /** Computes the largest commuting sub-set of blocks from the `candidateParents` along with an effect which
     * can be used to find the combined post-state of those commuting blocks.
     * @tparam F effect type (a la tagless final)
@@ -193,18 +233,18 @@ object ExecEngineUtil {
     * @param parents function for computing the parents of a "block" (equal to _.parents in production)
     * @param effect function for computing the transforms of a block (looks up the transaforms from the blockstore in production)
     * @param toOps function for converting transforms into the OpMap, which is then used for commutativity checking
-    * @return a tuple of two elements. The first element is the net effect for all commuting blocks (including ancestors)
-    *         except the first block (i.e. this effect will give the combined post state for all chosen commuting
-    *         blocks when applied to the post-state of the first chosen block). The second element is the chosen
-    *         list of blocks, which all commute with each other.
-    *
+    * @return an instance of the MergeResult class. It is either an `EmptyMerge` (which only happens when `candidates` is empty)
+    *         or a `Result` which contains the "first parent" (the who's post-state will be used to apply the effects to obtain
+    *         the merged post-state), the combined effect of all parents apart from the first (i.e. this effect will give
+    *         the combined post state for all chosen commuting blocks when applied to the post-state of the first chosen block),
+    *         and the list of the additional chosen parents apart from the first.
     */
   def abstractMerge[F[_]: Monad, T: Monoid, A: Ordering, K](
       candidates: IndexedSeq[A],
       parents: A => F[List[A]],
       effect: A => F[Option[T]],
       toOps: T => OpMap[K]
-  ): F[(T, Vector[A])] = {
+  ): F[MergeResult[T, A]] = {
     val n = candidates.length
 
     def netEffect(blocks: Vector[A]): F[T] =
@@ -212,8 +252,10 @@ object ExecEngineUtil {
         .traverse(block => effect(block))
         .map(_.flatten.foldLeft[T](Monoid[T].empty)(Monoid[T].combine))
 
-    if (n <= 1) {
-      (Monoid[T].empty -> candidates.toVector).pure[F]
+    if (n == 0) {
+      MergeResult.empty[T, A].pure[F]
+    } else if (n == 1) {
+      MergeResult.result[T, A](candidates.head, Monoid[T].empty, Vector.empty).pure[F]
     } else
       for {
         uncommonAncestors <- DagOperations.abstractUncommonAncestors[F, A](candidates, parents)
@@ -276,13 +318,13 @@ object ExecEngineUtil {
         // post-state, so we do not include the first parent in the effect.
         (chosenParents, _, nonFirstEffect) = chosen
         blocks                             = chosenParents.map(i => candidates(i))
-      } yield (nonFirstEffect, blocks)
+      } yield MergeResult.result[T, A](blocks.head, nonFirstEffect, blocks.tail)
   }
 
   def merge[F[_]: MonadThrowable: BlockStore](
       candidateParentBlocks: Seq[BlockMessage],
       dag: BlockDagRepresentation[F]
-  ): F[(TransformMap, Vector[BlockMessage])] = {
+  ): F[MergeResult[TransformMap, BlockMessage]] = {
 
     def parents(b: BlockMetadata): F[List[BlockMetadata]] =
       b.parents.traverse(b => dag.lookup(b).map(_.get))
@@ -305,8 +347,7 @@ object ExecEngineUtil {
           toOps
         )
       }
-      (nonFirstEffect, chosenParents) = merged
-      blocks                          <- chosenParents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
-    } yield (nonFirstEffect, blocks)
+      blocks <- merged.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
+    } yield blocks
   }
 }

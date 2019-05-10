@@ -82,13 +82,10 @@ object BlockGenerator {
         "Received a different genesis block."
       )
 
-      merged                             <- ExecEngineUtil.merge[F](parents, dag)
-      (combinedEffect, commutingParents) = merged
-
+      merged <- ExecEngineUtil.merge[F](parents, dag)
       result <- computeDeploysCheckpoint[F](
-                 commutingParents,
+                 merged,
                  deploys,
-                 combinedEffect,
                  ProtocolVersion(1)
                )
     } yield result
