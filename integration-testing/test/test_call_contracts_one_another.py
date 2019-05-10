@@ -36,7 +36,7 @@ def test_call_contracts_one_another(command_line_options_fixture, docker_client_
                     block_hash = propose(node, contract_name)
                     list_of_hashes.append(block_hash)
                 generated_hashes[contract_name] = list_of_hashes
-            logging.info(generated_hashes)
+
             for index, counter_hash in enumerate(generated_hashes[COUNTER_CALL]):
                 expected_result = index + 1
                 output = get_contract_state(
@@ -49,8 +49,7 @@ def test_call_contracts_one_another(command_line_options_fixture, docker_client_
                     path="counter/count",
                     block_hash=counter_hash
                 )
-                assert  f"integer: {expected_result}" in str(output)
-                logging.info(f"The output is :{output}")
+                assert bytes(f'integer: {expected_result}\n\n', 'utf-8') == output
 
             for index, mailing_list_hash in enumerate(generated_hashes[MAILING_LIST_CALL]):
                 output = get_contract_state(
@@ -63,9 +62,7 @@ def test_call_contracts_one_another(command_line_options_fixture, docker_client_
                     path="mailing/list",
                     block_hash=mailing_list_hash
                 )
-                assert 'string_list {\\n  list: "CasperLabs"\\n}' in str(output)
-
-                logging.info(f"The output is :{output}")
+                assert bytes('string_list {\n  list: "CasperLabs"\n}\n\n', 'utf-8') == output
 
             for index, hello_world_hash in enumerate(generated_hashes[HELLO_WORLD]):
                 output = get_contract_state(
@@ -78,4 +75,4 @@ def test_call_contracts_one_another(command_line_options_fixture, docker_client_
                     path="helloworld",
                     block_hash=hello_world_hash
                 )
-                logging.info(f"The output is :{output}")
+                assert b'string_val: "Hello, World"\n\n' == output
