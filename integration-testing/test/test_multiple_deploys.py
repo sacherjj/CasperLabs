@@ -80,25 +80,28 @@ def nodes(command_line_options_fixture, docker_client_fixture):
                 docker_client_fixture.volumes.get(v).remove(force=True)
     
 
+@pytest.fixture
+def timeout(command_line_options_fixture):
+    return command_line_options_fixture.node_startup_timeout
+
+
 @pytest.mark.parametrize("contract_path,expected_blocks_count", [
                         (['helloname.wasm','helloname.wasm','helloworld.wasm',], 4)
 ])
-def test_multiple_deploys_at_once(nodes, command_line_options_fixture, contract_path, expected_blocks_count):
-    deploy_threads = [DeployThread("node1", nodes[0], [contract_path[0]]),
-                      DeployThread("node2", nodes[1], contract_path),
-                      DeployThread("node3", nodes[2], contract_path)]
+def test_multiple_deploys_at_once(nodes, timeout, contract_path, expected_blocks_count):
+    bootstrap_node = nodes[0]
 
-    timeout = command_line_options_fixture.node_startup_timeout
+    bootstrap_deploy_thread = DeployThread("node0", bootstrap_node, [contract_path[0]])
+    rest_of_deploy_threads = [DeployThread("node" + str(i+1), node, contract_path)
+                              for i, node in enumerate(nodes[1:])]
 
-    first_deploy_thread, rest_of_deploy_threads = deploy_threads[0], deploy_threads[1:]
-        
-    first_deploy_thread.start()
-    wait_for_blocks_count_at_least(nodes[0], 1, 1, timeout)
+    bootstrap_deploy_thread.start()
+    wait_for_blocks_count_at_least(bootstrap_node, 1, 1, timeout)
 
     for t in rest_of_deploy_threads:
         t.start()
 
-    for i in deploy_threads:
+    for i in [bootstrap_deploy_thread] + rest_of_deploy_threads:
         t.join()
 
     # See COMMENT_EXPECTED_BLOCKS 
