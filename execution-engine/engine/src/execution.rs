@@ -930,7 +930,10 @@ impl Executor<Module> for WasmiExecutor {
         R::Error: Into<Error>,
     {
         let acct_key = Key::Account(account_addr);
-        let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone(), 1), 0);
+        let (instance, memory) = on_fail_charge!(
+            instance_and_memory(parity_module.clone(), protocol_version),
+            0
+        );
         #[allow(unreachable_code)]
         let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid), 0);
         let value = on_fail_charge! {
