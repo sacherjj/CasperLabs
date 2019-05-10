@@ -5,11 +5,11 @@ from typing import Generator
 from . import conftest
 from .cl_node.casperlabsnode import (
     HELLO_NAME,
-    docker_network_with_started_bootstrap,
-    start_network,
     complete_network,
     deploy,
-    propose
+    docker_network_with_started_bootstrap,
+    propose,
+    start_network,
 )
 from .cl_node.common import Network, TestingContext
 from .cl_node.wait import (

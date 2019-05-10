@@ -1,8 +1,8 @@
 import contextlib
 import logging
-import shutil
 import os
 import re
+import shutil
 import threading
 from multiprocessing import Process, Queue
 from queue import Empty
@@ -11,27 +11,22 @@ from typing import TYPE_CHECKING, Dict, Generator, List, Optional, Tuple, Union
 from docker.client import DockerClient
 from docker.errors import ContainerError
 
-from .common import (
-    TestingContext,
-    Network,
-    make_tempdir,
-    random_string,
+from .common import Network, TestingContext, make_tempdir, random_string
+from .errors import (
+    CasperLabsNodeAddressNotFoundError,
+    CommandTimeoutError,
+    NonZeroExitCodeError,
+    UnexpectedProposeOutputFormatError,
+    UnexpectedShowBlocksOutputFormatError,
 )
 from .wait import (
+    wait_for_approved_block_received,
     wait_for_approved_block_received_handler_state,
+    wait_for_converged_network,
     wait_for_node_started,
     wait_for_started_network,
-    wait_for_approved_block_received,
-    wait_for_converged_network
 )
 
-from .errors import (
-    UnexpectedShowBlocksOutputFormatError,
-    UnexpectedProposeOutputFormatError,
-    CasperLabsNodeAddressNotFoundError,
-    NonZeroExitCodeError,
-    CommandTimeoutError,
-)
 
 if TYPE_CHECKING:
     from .common import KeyPair

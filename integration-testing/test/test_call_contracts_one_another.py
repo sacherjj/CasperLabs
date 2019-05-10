@@ -1,19 +1,18 @@
 import logging
+
 from . import conftest
 from .cl_node.casperlabsnode import (
+    COMBINED_CONTRACT,
     COUNTER_CALL,
     HELLO_WORLD,
     MAILING_LIST_CALL,
-    COMBINED_CONTRACT,
     complete_network,
     deploy,
+    get_contract_state,
     propose,
-    get_contract_state
 )
 from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
-from .cl_node.wait import (
-    wait_for_count_the_blocks_on_node,
-)
+from .cl_node.wait import wait_for_count_the_blocks_on_node
 
 
 def test_call_contracts_one_another(command_line_options_fixture, docker_client_fixture):
