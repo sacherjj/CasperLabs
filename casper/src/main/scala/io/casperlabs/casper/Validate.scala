@@ -468,7 +468,6 @@ object Validate {
     */
   def parents[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
-      genesis: BlockMessage,
       lastFinalizedBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[ExecEngineUtil.TransformMap] = {

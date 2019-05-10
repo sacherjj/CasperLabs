@@ -544,7 +544,7 @@ object MultiParentCasperImpl {
         // Confirm the parents are correct (including checking they commute) and capture
         // the effect needed to compute the correct pre-state as well.
         parentsEffect <- maybeContext.fold(Seq.empty[ipc.TransformEntry].pure[F]) { ctx =>
-                          Validate.parents[F](block, ctx.genesis, ctx.lastFinalizedBlockHash, dag)
+                          Validate.parents[F](block, ctx.lastFinalizedBlockHash, dag)
                         }
         processedHash <- ExecEngineUtil
                           .effectsForBlock[F](block, parentsEffect, dag)
