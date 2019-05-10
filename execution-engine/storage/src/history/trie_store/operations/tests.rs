@@ -1552,17 +1552,16 @@ mod proptests {
         let mut txn = environment.create_read_write_txn()?;
 
         for (key, value) in pairs.iter() {
-            let hash: Blake2bHash = match write::<TestKey, TestValue, R::ReadWriteTransaction, S, E>(
+            match write::<TestKey, TestValue, R::ReadWriteTransaction, S, E>(
                 &mut txn, store, &root_hash, key, value,
             )? {
                 WriteResult::Written(hash) => {
                     root_hash = hash;
-                    root_hash
                 }
-                WriteResult::AlreadyExists => root_hash,
+                WriteResult::AlreadyExists => (),
                 WriteResult::RootNotFound => panic!("write_leaves given an invalid root"),
             };
-            results.push(hash);
+            results.push(root_hash);
         }
         txn.commit()?;
         Ok(results)
