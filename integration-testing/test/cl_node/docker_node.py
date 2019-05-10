@@ -15,7 +15,10 @@ from test.cl_node.errors import (
 
 from test.cl_node.docker_base import LoggingDockerBase
 from test.cl_node.common import random_string
-from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
+from test.cl_node.casperlabsnode import (
+    extract_block_count_from_show_blocks,
+    extract_block_hash_from_propose_output,
+)
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 
 if TYPE_CHECKING:
@@ -180,7 +183,7 @@ class DockerNode(LoggingDockerBase):
                 name=f"client-{self.config.number}-{random_string(5)}",
                 command=command,
                 network=self.network,
-                volumes=volumes
+                volumes=volumes,
             ).decode('utf-8')
             logging.debug(f"OUTPUT {self.container_name} {output}")
             return output
@@ -210,6 +213,15 @@ class DockerNode(LoggingDockerBase):
 
     def propose(self) -> str:
         return self.invoke_client('propose')
+
+    def deploy_and_propose(self, **deploy_kwargs) -> str:
+        deploy_output = self.deploy(**deploy_kwargs)
+        assert 'Success!' in deploy_output
+        block_hash_output_string = self.propose()
+        block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
+        assert block_hash is not None
+        logging.info(f"The block hash: {block_hash} generated for {self.container.name}")
+        return block_hash
 
     def show_block(self, hash: str) -> str:
         return self.invoke_client(f'show-block {hash}')

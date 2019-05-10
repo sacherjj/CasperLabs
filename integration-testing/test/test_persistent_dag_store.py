@@ -16,6 +16,7 @@ from .cl_node.wait import (
     wait_for_finalised_hash,
 )
 
+from .cl_node.docker_node import DockerNode
 
 def test_persistent_dag_store(command_line_options_fixture, docker_client_fixture):
     with conftest.testing_context(
@@ -44,3 +45,29 @@ def test_persistent_dag_store(command_line_options_fixture, docker_client_fixtur
             wait_for_finalised_hash(network.peers[0], hash_string, context.node_startup_timeout * 3)
             number_of_blocks = 1
             wait_for_metrics_and_assert_blocks_avaialable(network.peers[0], context.node_startup_timeout * 3, number_of_blocks)
+
+
+def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_network):
+    tnn = two_node_network
+    node0, node1 = tnn.docker_nodes
+    for node in (node0, node1):
+        node.deploy_and_propose()
+
+    dag0 = node0.vdag(10)
+    dag1 = node1.vdag(10)
+    blocks0 = node0.show_blocks_with_depth(10)
+    blocks1 = node1.show_blocks_with_depth(10)
+
+    for node_num in range(2):
+        tnn.stop_cl_node(node_num)
+    for node_num in range(2):
+        tnn.start_cl_node(node_num)
+
+    # When starting container back up, logs are not seen and cannot test for conditions that happened before
+    # as those immediately are true with logs history.  Possibly modify logs method to have a time since argument.
+    # Not sure how to get logs printing again.
+
+    assert dag0 == node0.vdag(10)
+    assert dag1 == node1.vdag(10)
+    assert blocks0 == node0.show_blocks_with_depth(10)
+    assert blocks1 == node1.show_blocks_with_depth(10)

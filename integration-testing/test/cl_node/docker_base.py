@@ -12,7 +12,6 @@ from typing import (
     Tuple,
 )
 
-
 from test.cl_node.errors import (
     NonZeroExitCodeError,
     CommandTimeoutError,
@@ -192,6 +191,7 @@ class LoggingDockerBase(DockerBase):
             logger=logging.getLogger('peers'),
             terminate_thread_event=self.terminate_background_logging_event,
         )
+        self.log_from_time = None
         self.background_logging.start()
 
     @property
@@ -202,7 +202,10 @@ class LoggingDockerBase(DockerBase):
         return super()._get_container()
 
     def logs(self) -> str:
-        return self.container.logs().decode('utf-8')
+        if self.log_from_time is None:
+            return self.container.logs().decode('utf-8')
+        else:
+            return self.container.logs()
 
     def cleanup(self):
         super().cleanup()
