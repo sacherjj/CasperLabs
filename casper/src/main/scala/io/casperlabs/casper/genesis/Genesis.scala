@@ -66,24 +66,14 @@ object Genesis {
                                )
                              )
                          )
-      deployEffects = ExecEngineUtil.findCommutingEffects(
-        ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
-      )
-
       // Todo We shouldn't need to do any commutivity checking for the genesis block.
       // Either we make it a "SEQ" block (which is not a feature that exists yet)
       // or there should be a single deploy containing all the blessed contracts.
-      commutingEffects = deployEffects.map { case (_, eff, cost) => (eff, cost) }
-      deploysForBlock = deployEffects.map {
-        case (deploy, _, cost) => {
-          protocol.ProcessedDeploy(
-            Some(deploy),
-            cost,
-            false
-          )
-        }
-      }
-      transforms = commutingEffects.unzip._1.flatMap(_.transformMap)
+      deployEffects = ExecEngineUtil.findCommutingEffects(
+        ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
+      )
+      deploysForBlock = ExecEngineUtil.extractProcessedDepoys(deployEffects)
+      transforms      = ExecEngineUtil.extractTransforms(deployEffects)
       postStateHash <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F].commit(startHash, transforms)
                       )

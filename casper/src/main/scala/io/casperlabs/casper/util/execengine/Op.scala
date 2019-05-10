@@ -52,8 +52,8 @@ object Op {
     case ipc.Transform.TransformInstance.Empty       => None
     case ipc.Transform.TransformInstance.Identity(_) => Some(Read)
     case ipc.Transform.TransformInstance.Write(_)    => Some(Write)
-    // Failures have the same commutativity properties as write (commute with nothing)
-    case ipc.Transform.TransformInstance.Failure(_) => Some(Write)
+    // Transform failures should never arise because merging is total
+    case ipc.Transform.TransformInstance.Failure(_) => None
     case _                                          => Some(Add) // We treat all types of addition the same (for now)
   }
 

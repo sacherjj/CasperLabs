@@ -48,17 +48,8 @@ object ExecEngineUtil {
                       )
       (preStateHash, processedDeploys) = processedHash
       deployEffects                    = findCommutingEffects(processedDeployEffects(deploys zip processedDeploys))
-      commutingEffects                 = deployEffects.map { case (_, eff, cost) => (eff, cost) }
-      deploysForBlock = deployEffects.map {
-        case (deploy, _, cost) => {
-          protocol.ProcessedDeploy(
-            Some(deploy),
-            cost,
-            false
-          )
-        }
-      }
-      transforms = commutingEffects.unzip._1.flatMap(_.transformMap)
+      deploysForBlock                  = extractProcessedDepoys(deployEffects)
+      transforms                       = extractTransforms(deployEffects)
       postStateHash <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F].commit(preStateHash, transforms)
                       )
@@ -94,30 +85,28 @@ object ExecEngineUtil {
   /** Produce effects for each processed deploy. */
   def processedDeployEffects(
       deployResults: Seq[(DeployData, DeployResult)]
-  ): Seq[(DeployData, Option[(ExecutionEffect, Long)])] =
+  ): Seq[(DeployData, Long, Option[ExecutionEffect])] =
     deployResults.map {
       case (deploy, DeployResult(_, DeployResult.Result.Empty)) =>
-        deploy -> None //This should never happen either
-      case (deploy, DeployResult(_, DeployResult.Result.Error(_))) =>
-        deploy -> None //We should not be ignoring error cost
+        (deploy, 0L, None) //This should never happen either
+      case (deploy, DeployResult(cost, DeployResult.Result.Error(_))) =>
+        (deploy, cost, None)
       case (deploy, DeployResult(cost, DeployResult.Result.Effects(eff))) =>
-        deploy -> Some((eff, cost))
+        (deploy, cost, Some(eff))
     }
 
-  //TODO: How to handle errors?
   //TODO: Logic for picking the commuting group? Prioritize highest revenue? Try to include as many deploys as possible?
   def findCommutingEffects(
-      deployEffects: Seq[(DeployData, Option[(ExecutionEffect, Long)])]
-  ): Seq[(DeployData, ExecutionEffect, Long)] = {
-    val errorFree = deployEffects.collect {
-      case (d, Some((eff, cost))) => (d, eff, cost)
-    }.toList
+      deployEffects: Seq[(DeployData, Long, Option[ExecutionEffect])]
+  ): Seq[(DeployData, Long, Option[ExecutionEffect])] = {
+    val (errors, errorFree) = deployEffects.span(_._3.isEmpty)
 
-    errorFree match {
-      case Nil => Nil
-      case (head @ (_, eff0, _)) :: tail =>
-        val (result, _) = tail.foldLeft(Vector(head) -> Op.fromIpcEntry(eff0.opMap)) {
-          case (unchanged @ (acc, totalOps), next @ (_, eff, _)) =>
+    val nonConflicting = errorFree.toList match {
+      case Nil                           => Nil
+      case (head @ (_, _, eff0)) :: tail =>
+        // the `eff0.get` call is safe because of the `span` above which separates into Some and None cases
+        val (result, _) = tail.foldLeft(Vector(head) -> Op.fromIpcEntry(eff0.get.opMap)) {
+          case (unchanged @ (acc, totalOps), next @ (_, _, Some(eff))) =>
             val ops = Op.fromIpcEntry(eff.opMap)
             if (totalOps ~ ops)
               (acc :+ next, totalOps + ops)
@@ -127,7 +116,31 @@ object ExecEngineUtil {
 
         result
     }
+
+    // We include errors because we define them as
+    // commuting with everything since we will never
+    // re-run them (this is a policy decision we have made) and
+    // they touch no keys because we rolled back the changes
+    nonConflicting ++ errors
   }
+
+  def extractProcessedDepoys(
+      commutingEffects: Seq[(DeployData, Long, Option[ExecutionEffect])]
+  ): Seq[protocol.ProcessedDeploy] =
+    commutingEffects.map {
+      case (deploy, cost, maybeEffect) => {
+        protocol.ProcessedDeploy(
+          Some(deploy),
+          cost,
+          maybeEffect.isEmpty // `None` menas there was an error
+        )
+      }
+    }
+
+  def extractTransforms(
+      commutingEffects: Seq[(DeployData, Long, Option[ExecutionEffect])]
+  ): Seq[TransformEntry] =
+    commutingEffects.collect { case (_, _, Some(eff)) => eff.transformMap }.flatten
 
   def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
       block: BlockMessage,
@@ -147,9 +160,7 @@ object ExecEngineUtil {
                       )
       (prestate, processedDeploys) = processedHash
       deployEffects                = processedDeployEffects(deploys.map(_.getDeploy) zip processedDeploys)
-      transformMap = findCommutingEffects(deployEffects).flatMap {
-        case (_, eff, _) => eff.transformMap
-      }
+      transformMap                 = extractTransforms(findCommutingEffects(deployEffects))
     } yield (prestate, transformMap)
 
   private def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
