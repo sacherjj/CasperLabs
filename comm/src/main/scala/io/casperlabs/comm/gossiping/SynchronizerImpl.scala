@@ -10,6 +10,7 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.comm.CommMetricsSource
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
@@ -22,12 +23,12 @@ import io.casperlabs.comm.gossiping.Synchronizer.SyncError.{
   ValidationError
 }
 import io.casperlabs.comm.gossiping.Utils.hex
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
-
 import scala.util.control.NonFatal
 
 // TODO: Optimise to heap-safe
-class SynchronizerImpl[F[_]: Sync: Log](
+class SynchronizerImpl[F[_]: Sync: Log: Metrics](
     connectToGossip: Node => F[GossipService[F]],
     backend: SynchronizerImpl.Backend[F],
     maxPossibleDepth: Int Refined Positive,
@@ -37,6 +38,8 @@ class SynchronizerImpl[F[_]: Sync: Log](
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
 
+  implicit val metricsSource = Metrics.Source(CommMetricsSource, "Synchronizer")
+
   import io.casperlabs.comm.gossiping.SynchronizerImpl._
 
   override def syncDag(
@@ -44,15 +47,19 @@ class SynchronizerImpl[F[_]: Sync: Log](
       targetBlockHashes: Set[ByteString]
   ): F[Either[SyncError, Vector[BlockSummary]]] = {
     val effect = for {
+      _              <- Metrics[F].incrementCounter("syncs")
+      _              <- Metrics[F].incrementCounter("sync_targets", delta = targetBlockHashes.size.toLong)
       service        <- connectToGossip(source)
       tips           <- backend.tips
       justifications <- backend.justifications
-      syncStateOrError <- loop(
-                           service,
-                           targetBlockHashes.toList,
-                           tips ::: justifications,
-                           SyncState.initial(targetBlockHashes)
-                         )
+      syncStateOrError <- Metrics[F].gauge("syncs_ongoing") {
+                           loop(
+                             service,
+                             targetBlockHashes.toList,
+                             tips ::: justifications,
+                             SyncState.initial(targetBlockHashes)
+                           )
+                         }
       res <- syncStateOrError.fold(
               _.asLeft[Vector[BlockSummary]].pure[F], { syncState =>
                 missingDependencies(syncState.parentToChildren).map { missing =>
@@ -64,10 +71,13 @@ class SynchronizerImpl[F[_]: Sync: Log](
                 }
               }
             )
+      _ <- Metrics[F].incrementCounter(if (res.isLeft) "syncs_failed" else "syncs_succeeded")
     } yield res
+
     effect.onError {
       case NonFatal(e) =>
-        Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e)
+        Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e) *>
+          Metrics[F].incrementCounter("syncs_failed")
     }
   }
 
@@ -133,6 +143,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
       .foldWhileLeftEvalL(prevSyncState.asRight[SyncError].pure[F]) {
         case (Right(syncState), summary) =>
           val effect = for {
+            _ <- EitherT.liftF(Metrics[F].incrementCounter("traversed_summaries"))
             _ <- noCycles(syncState, summary)
             distance <- reachable(
                          syncState,
@@ -150,6 +161,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
                     .handleError(e => ValidationError(summary, e).asLeft[Unit])
                 )
           } yield newSyncState
+
           effect.value.map {
             case x @ Left(_) =>
               (x: Either[SyncError, SyncState])

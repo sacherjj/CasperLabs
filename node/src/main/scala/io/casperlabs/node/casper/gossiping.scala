@@ -456,7 +456,7 @@ package object gossiping {
                  }
     } yield approver
 
-  private def makeSynchronizer[F[_]: Concurrent: Par: Log: MultiParentCasperRef: BlockDagStorage](
+  private def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: BlockDagStorage](
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
