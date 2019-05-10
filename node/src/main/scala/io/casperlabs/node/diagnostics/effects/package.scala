@@ -213,7 +213,7 @@ package object effects {
           }
         }
 
-      def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A] =
+      def timer[A](name: String)(block: F[A])(implicit ev: Metrics.Source): F[A] =
         m.getOrElseUpdate(source(name), Kamon.timer(source(name))) match {
           case c: metric.Timer =>
             for {
