@@ -764,14 +764,18 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
         field_name: &str,
         _global_type: &GlobalDescriptor,
     ) -> Result<GlobalRef, InterpreterError> {
-        if field_name == "protocol_version" {
-            // Expose a `protocol_value` as immutable variable
-            Ok(GlobalInstance::alloc(self.protocol_version.into(), false))
-        } else {
-            Err(InterpreterError::Instantiation(
-                "Tried to import global variable with wrong name".to_owned(),
-            ))
-        }
+        let global_ref = match field_name {
+            "protocol_version" => {
+                // Expose a `protocol_version` as immutable variable
+                GlobalInstance::alloc(self.protocol_version.into(), false)
+            }
+            _ => {
+                return Err(InterpreterError::Instantiation(
+                    "Tried to import global variable with wrong name".to_owned(),
+                ))
+            }
+        };
+        Ok(global_ref)
     }
 }
 
