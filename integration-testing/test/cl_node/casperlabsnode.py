@@ -213,7 +213,7 @@ class Node:
                gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
 
         session = session or CONTRACT_NAME
-        payment = payment if payment is not None else CONTRACT_NAME
+        payment = payment or CONTRACT_NAME
 
         command = " ".join([
             f"--host {self.name}",
