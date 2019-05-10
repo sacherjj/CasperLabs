@@ -14,19 +14,6 @@ from .cl_node.wait import (
 )
 
 import pytest
-from contextlib import ExitStack
-
-class DeployThread(threading.Thread):
-    def __init__(self, name: str, node: Node, contracts: str) -> None:
-        threading.Thread.__init__(self)
-        self.name = name
-        self.node = node
-        self.contracts = contracts
-
-    def run(self) -> None:
-        for contract in self.contracts:
-            self.node.deploy(session = contract, payment = contract)
-        self.node.propose()
 
 
 BOOTSTRAP_NODE_KEYS = PREGENERATED_KEYPAIRS[0]
@@ -85,6 +72,48 @@ def timeout(command_line_options_fixture):
     return command_line_options_fixture.node_startup_timeout
 
 
+def parse_value(s):
+    try:
+        return int(s)
+    except ValueError:
+        return s[1:-1] # unquote string
+
+        
+def parse_line(line):
+    k, v = line.split(': ')
+    return k, parse_value(v)
+
+
+def parse_block(s):
+
+    class Block:
+        def __init__(self, d):
+            self.d = d
+
+        def __getattr__(self, name):
+            return self.d[name]
+
+    return Block(dict(parse_line(line) for line in filter(lambda line: ':' in line, s.splitlines())))
+
+
+def parse_show_blocks(s):
+    blocks = s.split('-----------------------------------------------------')[:-1]
+    return [parse_block(b) for b in blocks]
+
+
+class DeployThread(threading.Thread):
+    def __init__(self, name: str, node: Node, contracts: str) -> None:
+        threading.Thread.__init__(self)
+        self.name = name
+        self.node = node
+        self.contracts = contracts
+
+    def run(self) -> None:
+        for contract in self.contracts:
+            self.node.deploy(session = contract, payment = contract)
+        self.node.propose()
+
+
 @pytest.mark.parametrize("contract_path,expected_blocks_count", [
                         (['helloname.wasm','helloname.wasm','helloworld.wasm',], 4)
 ])
@@ -107,4 +136,8 @@ def test_multiple_deploys_at_once(nodes, timeout, contract_path, expected_blocks
     # See COMMENT_EXPECTED_BLOCKS 
     for node in nodes:
         wait_for_blocks_count_at_least(node, expected_blocks_count, expected_blocks_count * 2, timeout)
+
+    for node in nodes:
+        # Check expected deploy numbers in blocks
+        assert [b.deployCount for b in parse_show_blocks(node.show_blocks_with_depth(10))] == [3, 3, 1, 0] 
 
