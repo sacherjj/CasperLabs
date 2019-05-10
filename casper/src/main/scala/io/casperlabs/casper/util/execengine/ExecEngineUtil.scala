@@ -105,6 +105,7 @@ object ExecEngineUtil {
     }
 
   //TODO: How to handle errors?
+  //TODO: Logic for picking the commuting group? Prioritize highest revenue? Try to include as many deploys as possible?
   def findCommutingEffects(
       deployEffects: Seq[(DeployData, Option[(ExecutionEffect, Long)])]
   ): Seq[(DeployData, ExecutionEffect, Long)] = {
