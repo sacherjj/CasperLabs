@@ -213,8 +213,8 @@ class Node:
                session: str = HELLO_NAME, payment: str = HELLO_NAME,
                gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
 
-        command = (f"--host {self.name} deploy --from {from_address} --gas-limit"
-                   f"{gas_limit} --gas-price  {gas_price} --nonce {nonce} --session=/data/{session}"
+        command = (f"--host {self.name} deploy --from {from_address} --gas-limit "
+                   f"{gas_limit} --gas-price  {gas_price} --nonce {nonce} --session=/data/{session} "
                    f"--payment=/data/{payment}")
         volumes = {
             HOST_MOUNT_DIR: {
@@ -785,7 +785,7 @@ def complete_network(context: TestingContext) -> Generator[Network, None, None]:
 def deploy(node: 'Node', _contract_name: str, nonce: int = 0):
     local_contract_file_path = os.path.join('resources', _contract_name)
     shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{_contract_name}")
-    deploy_output = node.deploy(contract_name=_contract_name, nonce=nonce)
+    deploy_output = node.deploy(session=_contract_name, payment=_contract_name, nonce=nonce)
     assert deploy_output.strip() == "Success!"
     logging.info(f"The deployed output is : {deploy_output}")
 
