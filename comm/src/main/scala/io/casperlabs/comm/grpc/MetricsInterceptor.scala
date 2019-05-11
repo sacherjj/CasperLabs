@@ -28,10 +28,8 @@ class MetricsInterceptor()(implicit metrics: Metrics[Id]) extends ServerIntercep
       override def close(status: Status, trailers: Metadata) = {
         metrics.decrementGauge(gauge)
         metrics.incrementCounter(counter)
-        if (!status.isOk) {
-          // NOTE: If we were using the Prometheus client we could attach a label with the status.
-          metrics.incrementCounter(counter + "_failed")
-        }
+        // Add `_failed` so the metrics is established and we can calculate ratios.
+        metrics.incrementCounter(counter + "_failed", delta = if (status.isOk) 0 else 1)
         super.close(status, trailers)
       }
     }

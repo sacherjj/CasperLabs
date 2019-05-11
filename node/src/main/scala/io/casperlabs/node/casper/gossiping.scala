@@ -250,45 +250,48 @@ package object gossiping {
   private def makeRelaying[F[_]: Sync: Par: Log: Metrics: NodeDiscovery: NodeAsk](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F]
-  ): Resource[F, Relaying[F]] = Resource.pure {
-    RelayingImpl(
-      NodeDiscovery[F],
-      connectToGossip = connectToGossip,
-      relayFactor = conf.server.relayFactor,
-      relaySaturation = conf.server.relaySaturation
-    )
-  }
+  ): Resource[F, Relaying[F]] =
+    Resource.liftF(RelayingImpl.establishMetrics[F]) *>
+      Resource.pure {
+        RelayingImpl(
+          NodeDiscovery[F],
+          connectToGossip = connectToGossip,
+          relayFactor = conf.server.relayFactor,
+          relaySaturation = conf.server.relaySaturation
+        )
+      }
 
   private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F]
   ): Resource[F, DownloadManager[F]] =
-    DownloadManagerImpl[F](
-      // TODO: Add to config.
-      maxParallelDownloads = 10,
-      connectToGossip = connectToGossip,
-      backend = new DownloadManagerImpl.Backend[F] {
-        override def hasBlock(blockHash: ByteString): F[Boolean] =
-          isInDag(blockHash)
+    Resource.liftF(DownloadManagerImpl.establishMetrics[F]) *>
+      DownloadManagerImpl[F](
+        // TODO: Add to config.
+        maxParallelDownloads = 10,
+        connectToGossip = connectToGossip,
+        backend = new DownloadManagerImpl.Backend[F] {
+          override def hasBlock(blockHash: ByteString): F[Boolean] =
+            isInDag(blockHash)
 
-        override def validateBlock(block: Block): F[Unit] =
-          validateAndAddBlock(conf.casper.shardId, block)
+          override def validateBlock(block: Block): F[Unit] =
+            validateAndAddBlock(conf.casper.shardId, block)
 
-        override def storeBlock(block: Block): F[Unit] =
-          // Validation has already stored it.
-          ().pure[F]
+          override def storeBlock(block: Block): F[Unit] =
+            // Validation has already stored it.
+            ().pure[F]
 
-        override def storeBlockSummary(
-            summary: BlockSummary
-        ): F[Unit] =
-          // TODO: Add separate storage for summaries.
-          ().pure[F]
-      },
-      relaying = relaying,
-      // TODO: Configure retry.
-      retriesConf = DownloadManagerImpl.RetriesConf.noRetries
-    )
+          override def storeBlockSummary(
+              summary: BlockSummary
+          ): F[Unit] =
+            // TODO: Add separate storage for summaries.
+            ().pure[F]
+        },
+        relaying = relaying,
+        // TODO: Configure retry.
+        retriesConf = DownloadManagerImpl.RetriesConf.noRetries
+      )
 
   private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService](
       conf: Configuration,
@@ -461,6 +464,7 @@ package object gossiping {
       awaitApproved: F[Unit]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
+      _ <- SynchronizerImpl.establishMetrics[F]
       underlying <- Sync[F].delay {
                      new SynchronizerImpl[F](
                        connectToGossip,

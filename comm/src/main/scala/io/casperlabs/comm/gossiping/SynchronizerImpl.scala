@@ -1,5 +1,6 @@
 package io.casperlabs.comm.gossiping
 
+import cats.Monad
 import cats.data._
 import cats.effect._
 import cats.implicits._
@@ -36,8 +37,6 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
     maxDepthAncestorsRequest: Int Refined Positive
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
-
-  implicit val metricsSource = Metrics.Source(GossipingMetricsSource, "Synchronizer")
 
   import io.casperlabs.comm.gossiping.SynchronizerImpl._
 
@@ -295,6 +294,20 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
 }
 
 object SynchronizerImpl {
+  implicit val metricsSource: Metrics.Source =
+    Metrics.Source(GossipingMetricsSource, "Synchronizer")
+
+  /** Export base 0 values so we have non-empty series for charts. */
+  def establishMetrics[F[_]: Monad: Metrics] =
+    for {
+      _ <- Metrics[F].incrementCounter("syncs", 0)
+      _ <- Metrics[F].incrementCounter("syncs_failed", 0)
+      _ <- Metrics[F].incrementCounter("syncs_succeeded", 0)
+      _ <- Metrics[F].incrementCounter("sync_targets", 0)
+      _ <- Metrics[F].incrementCounter("traversed_summaries", 0)
+      _ <- Metrics[F].incrementGauge("syncs_ongoing", 0)
+    } yield ()
+
   trait Backend[F[_]] {
     def tips: F[List[ByteString]]
     def justifications: F[List[ByteString]]

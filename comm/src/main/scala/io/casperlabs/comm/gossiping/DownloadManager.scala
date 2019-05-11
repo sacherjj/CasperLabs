@@ -1,5 +1,6 @@
 package io.casperlabs.comm.gossiping
 
+import cats.Monad
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
@@ -39,6 +40,18 @@ trait DownloadManager[F[_]] {
 }
 
 object DownloadManagerImpl {
+  implicit val metricsSource: Metrics.Source =
+    Metrics.Source(GossipingMetricsSource, "DownloadManager")
+
+  /** Export base 0 values so we have non-empty series for charts. */
+  def establishMetrics[F[_]: Monad: Metrics] =
+    for {
+      _ <- Metrics[F].incrementCounter("downloads_failed", 0)
+      _ <- Metrics[F].incrementCounter("downloads_succeeded", 0)
+      _ <- Metrics[F].incrementGauge("downloads_scheduled", 0)
+      _ <- Metrics[F].incrementGauge("downloads_ongoing", 0)
+      _ <- Metrics[F].incrementGauge("fetches_ongoing", 0)
+    } yield ()
 
   type Feedback[F[_]] = Deferred[F, Either[Throwable, Unit]]
   sealed trait DownloadTag
@@ -161,8 +174,6 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
     relaying: Relaying[F],
     retriesConf: RetriesConf
 ) extends DownloadManager[F] {
-
-  implicit val metricsSource = Metrics.Source(GossipingMetricsSource, "DownloadManager")
 
   import DownloadManagerImpl._
 

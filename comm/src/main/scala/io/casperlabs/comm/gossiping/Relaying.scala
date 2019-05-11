@@ -1,5 +1,6 @@
 package io.casperlabs.comm.gossiping
 
+import cats.Monad
 import cats.effect._
 import cats.implicits._
 import cats.temp.par._
@@ -20,6 +21,16 @@ trait Relaying[F[_]] {
 }
 
 object RelayingImpl {
+  implicit val metricsSource: Metrics.Source = Metrics.Source(GossipingMetricsSource, "Relaying")
+
+  /** Export base 0 values so we have non-empty series for charts. */
+  def establishMetrics[F[_]: Monad: Metrics] =
+    for {
+      _ <- Metrics[F].incrementCounter("relay_accepted", 0)
+      _ <- Metrics[F].incrementCounter("relay_rejected", 0)
+      _ <- Metrics[F].incrementCounter("relay_failed", 0)
+    } yield ()
+
   def apply[F[_]: Sync: Par: Log: Metrics: NodeAsk](
       nd: NodeDiscovery[F],
       connectToGossip: GossipService.Connector[F],
@@ -44,8 +55,7 @@ class RelayingImpl[F[_]: Sync: Par: Log: Metrics: NodeAsk](
     relayFactor: Int,
     maxToTry: Int
 ) extends Relaying[F] {
-
-  implicit val metricsSource = Metrics.Source(GossipingMetricsSource, "Relaying")
+  import RelayingImpl._
 
   override def relay(hashes: List[ByteString]): F[Unit] = {
     def loop(hash: ByteString, peers: List[Node], relayed: Int, contacted: Int): F[Unit] = {
