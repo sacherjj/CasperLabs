@@ -141,7 +141,7 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
       .foldWhileLeftEvalL(prevSyncState.asRight[SyncError].pure[F]) {
         case (Right(syncState), summary) =>
           val effect = for {
-            _ <- EitherT.liftF(Metrics[F].incrementCounter("traversed_summaries"))
+            _ <- EitherT.liftF(Metrics[F].incrementCounter("summaries_traversed"))
             _ <- noCycles(syncState, summary)
             distance <- reachable(
                          syncState,
@@ -304,7 +304,7 @@ object SynchronizerImpl {
       _ <- Metrics[F].incrementCounter("syncs_failed", 0)
       _ <- Metrics[F].incrementCounter("syncs_succeeded", 0)
       _ <- Metrics[F].incrementCounter("sync_targets", 0)
-      _ <- Metrics[F].incrementCounter("traversed_summaries", 0)
+      _ <- Metrics[F].incrementCounter("summaries_traversed", 0)
       _ <- Metrics[F].incrementGauge("syncs_ongoing", 0)
     } yield ()
 
