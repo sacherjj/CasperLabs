@@ -41,7 +41,11 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
 
   private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
-  override def emptyStateHash: ByteString = ByteString.copyFrom(Array.fill(32)(0.toByte))
+  override def emptyStateHash: ByteString = {
+    val arr: Array[Byte] = Array(86, 34, 94, 200, 7, 200, 168, 251, 27, 186, 60, 15, 247, 221, 85,
+      229, 213, 163, 251, 227, 103, 100, 22, 220, 98, 40, 57, 16, 139, 74, 114, 76).map(_.toByte)
+    ByteString.copyFrom(arr)
+  }
 
   def sendMessage[A, B, R](msg: A, rpc: Stub => A => Task[B])(f: B => R): F[R] =
     rpc(stub)(msg).to[F].map(f(_)).recoverWith {
