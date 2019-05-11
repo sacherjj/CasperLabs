@@ -2,7 +2,7 @@ package io.casperlabs.casper.util.execengine
 
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Monad, MonadError}
+import cats.{Foldable, Monad, MonadError}
 import cats.kernel.Monoid
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
@@ -232,7 +232,7 @@ object ExecEngineUtil {
     def netEffect(blocks: Vector[A]): F[T] =
       blocks
         .traverse(block => effect(block))
-        .map(_.flatten.foldLeft[T](Monoid[T].empty)(Monoid[T].combine))
+        .map(va => Foldable[Vector].fold(va.flatten))
 
     if (n == 0) {
       MergeResult.empty[T, A].pure[F]
