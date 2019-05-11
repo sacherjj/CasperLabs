@@ -39,15 +39,15 @@ object ExecEngineUtil {
       protocolVersion: ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
-      processedHash <- processDeploys[F](
-                        merged,
-                        deploys,
-                        protocolVersion
-                      )
-      (preStateHash, processedDeploys) = processedHash
-      deployEffects                    = findCommutingEffects(processedDeployEffects(deploys zip processedDeploys))
-      deploysForBlock                  = extractProcessedDepoys(deployEffects)
-      transforms                       = extractTransforms(deployEffects)
+      preStateHash <- computePrestate[F](merged)
+      processedDeploys <- processDeploys[F](
+                           preStateHash,
+                           deploys,
+                           protocolVersion
+                         )
+      deployEffects   = findCommutingEffects(processedDeployEffects(deploys zip processedDeploys))
+      deploysForBlock = extractProcessedDepoys(deployEffects)
+      transforms      = extractTransforms(deployEffects)
       postStateHash <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F].commit(preStateHash, transforms)
                       )
@@ -67,17 +67,13 @@ object ExecEngineUtil {
     } yield DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number, protocolVersion)
 
   def processDeploys[F[_]: MonadError[?[_], Throwable]: BlockStore: ExecutionEngineService](
-      merged: MergeResult[TransformMap, BlockMessage],
+      prestate: StateHash,
       deploys: Seq[DeployData],
       protocolVersion: ProtocolVersion
-  ): F[(StateHash, Seq[DeployResult])] =
-    for {
-      prestate <- computePrestate[F](merged)
-      ds       = deploys.map(ProtoUtil.deployDataToEEDeploy)
-      result <- MonadError[F, Throwable].rethrow(
-                 ExecutionEngineService[F].exec(prestate, ds, protocolVersion)
-               )
-    } yield (prestate, result)
+  ): F[Seq[DeployResult]] =
+    ExecutionEngineService[F]
+      .exec(prestate, deploys.map(ProtoUtil.deployDataToEEDeploy), protocolVersion)
+      .rethrow
 
   /** Produce effects for each processed deploy. */
   def processedDeployEffects(
@@ -141,25 +137,24 @@ object ExecEngineUtil {
 
   def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
       block: BlockMessage,
-      merged: MergeResult[TransformMap, BlockMessage],
+      prestate: StateHash,
       dag: BlockDagRepresentation[F]
-  ): F[(StateHash, Seq[TransformEntry])] = {
+  ): F[Seq[TransformEntry]] = {
     val deploys         = ProtoUtil.deploys(block)
     val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlockMessage(block)
 
     for {
-      processedHash <- processDeploys[F](
-                        merged,
-                        deploys.flatMap(_.deploy),
-                        protocolVersion
-                      )
-      (prestate, processedDeploys) = processedHash
-      deployEffects                = processedDeployEffects(deploys.map(_.getDeploy) zip processedDeploys)
-      transformMap                 = extractTransforms(findCommutingEffects(deployEffects))
-    } yield (prestate, transformMap)
+      processedDeploys <- processDeploys[F](
+                           prestate,
+                           deploys.flatMap(_.deploy),
+                           protocolVersion
+                         )
+      deployEffects = processedDeployEffects(deploys.map(_.getDeploy) zip processedDeploys)
+      transformMap  = (findCommutingEffects _ andThen extractTransforms)(deployEffects)
+    } yield transformMap
   }
 
-  private def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
+  def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
       merged: MergeResult[TransformMap, BlockMessage]
   ): F[StateHash] = merged match {
     case MergeResult.EmptyMerge => ExecutionEngineService[F].emptyStateHash.pure[F] //no parents

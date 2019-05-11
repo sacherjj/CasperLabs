@@ -549,12 +549,12 @@ object MultiParentCasperImpl {
                  ) { ctx =>
                    Validate.parents[F](block, ctx.lastFinalizedBlockHash, dag)
                  }
-        processedHash <- ExecEngineUtil
-                          .effectsForBlock[F](block, merged, dag)
-                          .recoverWith {
-                            case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
-                          }
-        (preStateHash, blockEffects) = processedHash
+        preStateHash <- ExecEngineUtil.computePrestate[F](merged)
+        blockEffects <- ExecEngineUtil
+                         .effectsForBlock[F](block, preStateHash, dag)
+                         .recoverWith {
+                           case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
+                         }
         _ <- Validate.transactions[F](
               block,
               dag,

@@ -27,11 +27,11 @@ object ExecutionEngineServiceStub {
       dag: BlockDagRepresentation[F]
   ): F[Either[Throwable, StateHash]] =
     (for {
-      parents                 <- ProtoUtil.unsafeGetParents[F](b)
-      merged                  <- ExecEngineUtil.merge[F](parents, dag)
-      processedHash           <- ExecEngineUtil.effectsForBlock[F](b, merged, dag)
-      (preStateHash, effects) = processedHash
-      _                       <- Validate.transactions[F](b, dag, preStateHash, effects)
+      parents      <- ProtoUtil.unsafeGetParents[F](b)
+      merged       <- ExecEngineUtil.merge[F](parents, dag)
+      preStateHash <- ExecEngineUtil.computePrestate[F](merged)
+      effects      <- ExecEngineUtil.effectsForBlock[F](b, preStateHash, dag)
+      _            <- Validate.transactions[F](b, dag, preStateHash, effects)
     } yield ProtoUtil.postStateHash(b)).attempt
 
   def mock[F[_]](

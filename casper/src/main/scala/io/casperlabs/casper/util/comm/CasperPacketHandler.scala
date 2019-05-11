@@ -596,12 +596,12 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    dag          <- BlockDagStorage[F].getRepresentation
                    parents      <- ProtoUtil.unsafeGetParents[F](blockMessage)
                    merged       <- ExecEngineUtil.merge[F](parents, dag)
-                   effects <- ExecEngineUtil.effectsForBlock[F](
-                               blockMessage,
-                               merged,
-                               dag
-                             )
-                   (prestate, transforms) = effects
+                   prestate     <- ExecEngineUtil.computePrestate[F](merged)
+                   transforms <- ExecEngineUtil.effectsForBlock[F](
+                                  blockMessage,
+                                  prestate,
+                                  dag
+                                )
                    _ <- BlockStore[F].put(
                          blockMessage.blockHash,
                          blockMessage,
