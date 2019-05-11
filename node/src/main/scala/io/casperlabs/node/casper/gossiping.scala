@@ -82,7 +82,7 @@ package object gossiping {
         }
       }
 
-      relaying <- makeRelaying(connectToGossip)
+      relaying <- makeRelaying(conf, connectToGossip)
 
       downloadManager <- makeDownloadManager(conf, connectToGossip, relaying)
 
@@ -248,14 +248,14 @@ package object gossiping {
     }
 
   private def makeRelaying[F[_]: Sync: Par: Log: Metrics: NodeDiscovery: NodeAsk](
+      conf: Configuration,
       connectToGossip: GossipService.Connector[F]
   ): Resource[F, Relaying[F]] = Resource.pure {
     RelayingImpl(
       NodeDiscovery[F],
       connectToGossip = connectToGossip,
-      // TODO: Add to config.
-      relayFactor = 2,
-      relaySaturation = 90
+      relayFactor = conf.server.relayFactor,
+      relaySaturation = conf.server.relaySaturation
     )
   }
 
