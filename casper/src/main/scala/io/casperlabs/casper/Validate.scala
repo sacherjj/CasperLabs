@@ -9,6 +9,7 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage, Bond, Justification}
 import io.casperlabs.casper.util.ProtoUtil.bonds
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
@@ -206,7 +207,6 @@ object Validate {
     for {
       _ <- Validate.blockSummaryPreGenesis(block, dag, shardId)
       _ <- Validate.justificationFollows[F](block, genesis, dag)
-      _ <- Validate.parents[F](block, genesis, lastFinalizedBlockHash, dag)
       _ <- Validate.justificationRegressions[F](block, genesis, dag)
     } yield ()
 
@@ -457,14 +457,20 @@ object Validate {
     }
 
   /**
-    * Works only with fully explicit justifications.
+    * Checks that the parents of `b` were chosen correctly according to the
+    * forkchoice rule. This is done by using the justifications of `b` as the
+    * set of latest messages, so the justifications must be fully explicit.
+    * For multi-parent blocks this requires doing commutativity checking, so
+    * the combined effect of all parents except the first (i.e. the effect
+    * which would need to be applied to the first parent's post-state to
+    * obtain the pre-state of `b`) is given as the return value in order to
+    * avoid repeating work downstream.
     */
   def parents[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
-      genesis: BlockMessage,
       lastFinalizedBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
-  ): F[Unit] = {
+  ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, BlockMessage]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
       case hashes if hashes.isEmpty => Seq(lastFinalizedBlockHash)
@@ -478,8 +484,9 @@ object Validate {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
       tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](tipHashes, genesis, dag)
-      computedParentHashes = computedParents.map(_.blockHash)
+      tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
+      merged               <- ExecEngineUtil.merge[F](tips, dag)
+      computedParentHashes = merged.parents.map(_.blockHash)
       _ <- if (parentHashes == computedParentHashes)
             Applicative[F].unit
           else {
@@ -502,7 +509,7 @@ object Validate {
               _ <- RaiseValidationError[F].raise[Unit](InvalidParents)
             } yield ()
           }
-    } yield ()
+    } yield merged
   }
 
   /*

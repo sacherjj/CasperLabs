@@ -17,6 +17,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.protocol
 import io.casperlabs.casper.LegacyConversions
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.comm.BlockApproverProtocol
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
@@ -84,14 +85,19 @@ package object gossiping {
       awaitApproval = genesisApprover.awaitApproval >>= { genesisBlockHash =>
         for {
           maybeGenesis <- BlockStore[F].get(genesisBlockHash)
-          genesis <- MonadThrowable[F].fromOption(
-                      maybeGenesis,
-                      NotFound(s"Cannot retrieve Genesis ${show(genesisBlockHash)}")
-                    )
+          genesisStore <- MonadThrowable[F].fromOption(
+                           maybeGenesis,
+                           NotFound(s"Cannot retrieve Genesis ${show(genesisBlockHash)}")
+                         )
           validatorId <- ValidatorIdentity.fromConfig[F](conf.casper)
+          genesis     = genesisStore.getBlockMessage
+          prestate    = ProtoUtil.preStateHash(genesis)
+          transforms  = genesisStore.transformEntry
           casper <- MultiParentCasper.fromGossipServices(
                      validatorId,
-                     genesis.getBlockMessage,
+                     genesis,
+                     prestate,
+                     transforms,
                      conf.casper.shardId,
                      relaying
                    )
