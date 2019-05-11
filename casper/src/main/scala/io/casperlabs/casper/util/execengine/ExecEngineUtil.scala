@@ -129,7 +129,7 @@ object ExecEngineUtil {
         protocol.ProcessedDeploy(
           Some(deploy),
           cost,
-          maybeEffect.isEmpty // `None` menas there was an error
+          maybeEffect.isEmpty // `None` means there was an error
         )
       }
     }
@@ -331,9 +331,8 @@ object ExecEngineUtil {
       }
       blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
     } yield
-      merged.transform match {
-        case None    => MergeResult.empty[TransformMap, BlockMessage]
-        case Some(t) => MergeResult.result(blocks.head, t, blocks.tail)
-      }
+      merged.transform.fold(MergeResult.empty[TransformMap, BlockMessage])(
+        MergeResult.result(blocks.head, _, blocks.tail)
+      )
   }
 }
