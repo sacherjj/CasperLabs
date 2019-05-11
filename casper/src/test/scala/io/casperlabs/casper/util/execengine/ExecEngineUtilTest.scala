@@ -553,7 +553,7 @@ class ExecEngineUtilTest
     result shouldBe (cOps, Vector(a, c))
   }
 
-  it should "correctly merge in the case on non-conflicting blocks with a more complex history" in {
+  it should "correctly merge in the case of non-conflicting blocks with a more complex history" in {
     /*
      * The DAG looks like:
      *   j        k
@@ -594,7 +594,7 @@ class ExecEngineUtilTest
     result2 shouldBe (nonFirstEffect2, Vector(k, j))
   }
 
-  it should "correctly merge in the case on conflicting blocks with a more complex history" in {
+  it should "correctly merge in the case of conflicting blocks with a more complex history" in {
     /*
      * The DAG looks like:
      *  j   k        l
