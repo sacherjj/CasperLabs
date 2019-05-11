@@ -9,7 +9,7 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.comm.{CommMetricsSource, GossipError}
+import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
@@ -162,7 +162,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
     retriesConf: RetriesConf
 ) extends DownloadManager[F] {
 
-  implicit val metricsSource = Metrics.Source(CommMetricsSource, "DownloadManager")
+  implicit val metricsSource = Metrics.Source(GossipingMetricsSource, "DownloadManager")
 
   import DownloadManagerImpl._
 

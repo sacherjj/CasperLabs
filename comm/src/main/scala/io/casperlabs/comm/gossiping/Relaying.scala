@@ -4,7 +4,7 @@ import cats.effect._
 import cats.implicits._
 import cats.temp.par._
 import com.google.protobuf.ByteString
-import io.casperlabs.comm.{CommMetricsSource, NodeAsk}
+import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping.Utils._
@@ -45,7 +45,7 @@ class RelayingImpl[F[_]: Sync: Par: Log: Metrics: NodeAsk](
     maxToTry: Int
 ) extends Relaying[F] {
 
-  implicit val metricsSource = Metrics.Source(CommMetricsSource, "Relaying")
+  implicit val metricsSource = Metrics.Source(GossipingMetricsSource, "Relaying")
 
   override def relay(hashes: List[ByteString]): F[Unit] = {
     def loop(hash: ByteString, peers: List[Node], relayed: Int, contacted: Int): F[Unit] = {

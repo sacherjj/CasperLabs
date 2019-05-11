@@ -10,7 +10,6 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.comm.CommMetricsSource
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
@@ -38,7 +37,7 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
 
-  implicit val metricsSource = Metrics.Source(CommMetricsSource, "Synchronizer")
+  implicit val metricsSource = Metrics.Source(GossipingMetricsSource, "Synchronizer")
 
   import io.casperlabs.comm.gossiping.SynchronizerImpl._
 
