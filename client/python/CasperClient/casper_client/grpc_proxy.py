@@ -18,7 +18,7 @@ class ProxyServicer:
 
 
     def __getattr__(self, name):
-        node_address = "{}:{}".format(self.node_host, self.node_port)
+        node_address = f"{self.node_host}:{self.node_port}"
 
         def f(request, context):
             with grpc.insecure_channel(node_address) as channel:

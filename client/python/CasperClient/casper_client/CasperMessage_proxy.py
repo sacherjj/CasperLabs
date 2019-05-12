@@ -27,7 +27,7 @@ def serve(proxy_port: int, node_host: str, node_port: int):
                                         pre_callback = delay,
                                         post_callback = printer)
     CasperMessage_pb2_grpc.add_DeployServiceServicer_to_server(servicer, server)
-    server.add_insecure_port('[::]:{}'.format(proxy_port))
+    server.add_insecure_port(f'[::]:{proxy_port}')
     server.start()
     try:
         while True:
