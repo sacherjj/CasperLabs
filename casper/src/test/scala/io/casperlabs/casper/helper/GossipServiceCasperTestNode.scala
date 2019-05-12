@@ -282,6 +282,8 @@ object GossipServiceCasperTestNodeFactory {
   class TestGossipService[F[_]: Concurrent: Timer: Par: Log](host: String)
       extends GossipService[F] {
 
+    implicit val metrics = new Metrics.MetricsNOP[F]
+
     /** Exercise the full underlying stack. It's what we are testing here, via the MultiParentCasper tests. */
     var underlying: GossipServiceServer[F] = _
     var shutdown: F[Unit]                  = ().pure[F]

@@ -255,7 +255,7 @@ class NodeRuntime private[node] (
       if (conf.casper.standalone) Log[Effect].info(s"Starting stand-alone node.")
       else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
 
-    val casperLoop: Effect[Unit] =
+    val fetchLoop: Effect[Unit] =
       for {
         casper <- multiParentCasperRef.get
         _      <- casper.fold(().pure[Effect])(_.fetchDependencies)
@@ -265,7 +265,7 @@ class NodeRuntime private[node] (
     for {
       _       <- addShutdownHook(release).toEffect
       _       <- info
-      _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
+      _       <- Task.defer(fetchLoop.forever.value).executeOn(loopScheduler).start.toEffect
       host    <- peerNodeAsk.ask.toEffect.map(_.host)
       address = s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")

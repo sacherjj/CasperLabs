@@ -13,6 +13,7 @@ import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.Log.NOPLog
+import io.casperlabs.metrics.Metrics
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler.Implicits.global
@@ -131,6 +132,7 @@ object RelayingSpec {
   }
 
   private val noOpLog: Log[Task] = new NOPLog[Task]
+  implicit val metrics           = new Metrics.MetricsNOP[Task]
 
   object TestFixture {
     def apply(
@@ -183,6 +185,7 @@ object RelayingSpec {
         Sync[Task],
         Par.fromParallel(CatsParallelForTask),
         log,
+        metrics,
         ask
       )
       test(relayingImpl, asked, maxConcurrentRequests).runSyncUnsafe(5.seconds)

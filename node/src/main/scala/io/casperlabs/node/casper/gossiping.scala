@@ -25,10 +25,17 @@ import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.gossiping._
-import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
+import io.casperlabs.comm.grpc.{
+  AuthInterceptor,
+  ErrorInterceptor,
+  GrpcServer,
+  MetricsInterceptor,
+  SslContexts
+}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.diagnostics
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.grpc.ManagedChannel
 import io.netty.handler.ssl.{ClientAuth, SslContext}
@@ -75,7 +82,7 @@ package object gossiping {
         }
       }
 
-      relaying <- makeRelaying(connectToGossip)
+      relaying <- makeRelaying(conf, connectToGossip)
 
       downloadManager <- makeDownloadManager(conf, connectToGossip, relaying)
 
@@ -240,48 +247,51 @@ package object gossiping {
       } yield s.copy(connections = s.connections - peer)
     }
 
-  private def makeRelaying[F[_]: Sync: Par: Log: NodeDiscovery: NodeAsk](
+  private def makeRelaying[F[_]: Sync: Par: Log: Metrics: NodeDiscovery: NodeAsk](
+      conf: Configuration,
       connectToGossip: GossipService.Connector[F]
-  ): Resource[F, Relaying[F]] = Resource.pure {
-    RelayingImpl(
-      NodeDiscovery[F],
-      connectToGossip = connectToGossip,
-      // TODO: Add to config.
-      relayFactor = 2,
-      relaySaturation = 90
-    )
-  }
+  ): Resource[F, Relaying[F]] =
+    Resource.liftF(RelayingImpl.establishMetrics[F]) *>
+      Resource.pure {
+        RelayingImpl(
+          NodeDiscovery[F],
+          connectToGossip = connectToGossip,
+          relayFactor = conf.server.relayFactor,
+          relaySaturation = conf.server.relaySaturation
+        )
+      }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F]
   ): Resource[F, DownloadManager[F]] =
-    DownloadManagerImpl[F](
-      // TODO: Add to config.
-      maxParallelDownloads = 10,
-      connectToGossip = connectToGossip,
-      backend = new DownloadManagerImpl.Backend[F] {
-        override def hasBlock(blockHash: ByteString): F[Boolean] =
-          isInDag(blockHash)
+    Resource.liftF(DownloadManagerImpl.establishMetrics[F]) *>
+      DownloadManagerImpl[F](
+        // TODO: Add to config.
+        maxParallelDownloads = 10,
+        connectToGossip = connectToGossip,
+        backend = new DownloadManagerImpl.Backend[F] {
+          override def hasBlock(blockHash: ByteString): F[Boolean] =
+            isInDag(blockHash)
 
-        override def validateBlock(block: Block): F[Unit] =
-          validateAndAddBlock(conf.casper.shardId, block)
+          override def validateBlock(block: Block): F[Unit] =
+            validateAndAddBlock(conf.casper.shardId, block)
 
-        override def storeBlock(block: Block): F[Unit] =
-          // Validation has already stored it.
-          ().pure[F]
+          override def storeBlock(block: Block): F[Unit] =
+            // Validation has already stored it.
+            ().pure[F]
 
-        override def storeBlockSummary(
-            summary: BlockSummary
-        ): F[Unit] =
-          // TODO: Add separate storage for summaries.
-          ().pure[F]
-      },
-      relaying = relaying,
-      // TODO: Configure retry.
-      retriesConf = DownloadManagerImpl.RetriesConf.noRetries
-    )
+          override def storeBlockSummary(
+              summary: BlockSummary
+          ): F[Unit] =
+            // TODO: Add separate storage for summaries.
+            ().pure[F]
+        },
+        relaying = relaying,
+        // TODO: Configure retry.
+        retriesConf = DownloadManagerImpl.RetriesConf.noRetries
+      )
 
   private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService](
       conf: Configuration,
@@ -449,11 +459,12 @@ package object gossiping {
                  }
     } yield approver
 
-  private def makeSynchronizer[F[_]: Concurrent: Par: Log: MultiParentCasperRef: BlockDagStorage](
+  private def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: BlockDagStorage](
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
+      _ <- SynchronizerImpl.establishMetrics[F]
       underlying <- Sync[F].delay {
                      new SynchronizerImpl[F](
                        connectToGossip,
@@ -495,7 +506,7 @@ package object gossiping {
   }
 
   /** Create and start the gossip service. */
-  private def makeGossipServiceServer[F[_]: Concurrent: Par: TaskLike: ObservableIterant: Log: BlockStore: BlockDagStorage: MultiParentCasperRef](
+  private def makeGossipServiceServer[F[_]: Concurrent: Par: TaskLike: ObservableIterant: Log: Metrics: BlockStore: BlockDagStorage: MultiParentCasperRef](
       port: Int,
       conf: Configuration,
       synchronizer: Synchronizer[F],
@@ -505,6 +516,9 @@ package object gossiping {
       grpcScheduler: Scheduler
   ): Resource[F, GossipServiceServer[F]] = {
     implicit val logId = Log.logId
+    implicit val metricsId =
+      diagnostics.effects.metrics[Id](io.casperlabs.catscontrib.effect.implicits.syncId)
+
     for {
       backend <- Resource.pure[F, GossipServiceServer.Backend[F]] {
                   new GossipServiceServer.Backend[F] {
@@ -590,6 +604,7 @@ package object gossiping {
           ),
           interceptors = List(
             new AuthInterceptor(),
+            new MetricsInterceptor(),
             ErrorInterceptor.default
           ),
           sslContext = serverSslContext.some,
