@@ -345,11 +345,13 @@ object ProtoUtil {
       .withShardId(shardId)
   }
 
+  // TODO: Why isn't the shard ID part of this?
   def hashUnsignedBlock(header: Header, justifications: Seq[Justification]): BlockHash = {
     val items = header.toByteArray +: justifications.map(_.toByteArray)
     hashByteArrays(items: _*)
   }
 
+  // TODO: Why isn't the justifications part of this?
   def hashSignedBlock(
       header: Header,
       sender: ByteString,

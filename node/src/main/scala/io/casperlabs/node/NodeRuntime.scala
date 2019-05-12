@@ -185,25 +185,48 @@ class NodeRuntime private[node] (
               scheduler
             )
 
-        _ <- casper.transport.apply(
-              port,
-              conf,
-              grpcScheduler
-            )(
-              log,
-              logEff,
-              metrics,
-              metricsEff,
-              safetyOracle,
-              blockStore,
-              blockDagStorage,
-              connectionsCell,
-              nodeDiscovery,
-              state,
-              multiParentCasperRef,
-              executionEngineService,
-              scheduler
-            )
+        _ <- if (conf.server.useGossiping) {
+              casper.gossiping.apply[Effect](
+                port,
+                conf,
+                grpcScheduler
+              )(
+                catsParForEffect,
+                catsConcurrentEffectForEffect(scheduler),
+                logEff,
+                metricsEff,
+                Time.eitherTTime(Monad[Task], effects.time),
+                Timer[Effect],
+                safetyOracle,
+                blockStore,
+                blockDagStorage,
+                NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
+                eitherTApplicativeAsk(effects.peerNodeAsk(state)),
+                multiParentCasperRef,
+                executionEngineService,
+                scheduler
+              )
+            } else {
+              casper.transport.apply(
+                port,
+                conf,
+                grpcScheduler
+              )(
+                log,
+                logEff,
+                metrics,
+                metricsEff,
+                safetyOracle,
+                blockStore,
+                blockDagStorage,
+                connectionsCell,
+                nodeDiscovery,
+                state,
+                multiParentCasperRef,
+                executionEngineService,
+                scheduler
+              )
+            }
 
       } yield (nodeDiscovery, multiParentCasperRef)
 

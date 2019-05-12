@@ -2,7 +2,8 @@ package io.casperlabs.node
 
 import java.nio.file.Path
 
-import cats.Applicative
+import cats.{Applicative, Monad}
+import cats.data.EitherT
 import cats.effect.{Resource, Timer}
 import cats.mtl._
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
@@ -75,5 +76,4 @@ package object effects {
       val applicative: Applicative[Task] = Applicative[Task]
       def ask: Task[Node]                = state.get.map(_.local)
     }
-
 }

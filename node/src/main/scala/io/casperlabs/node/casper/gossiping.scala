@@ -1,4 +1,4 @@
-package io.casperlabsnode.casper
+package io.casperlabs.node.casper
 
 import cats._
 import cats.effect._
@@ -119,17 +119,10 @@ package object gossiping {
                               grpcScheduler
                             )
 
-      initialSynchronization <- makeInitialSynchronization(
-                                 gossipServiceServer,
-                                 conf.server.bootstrap,
-                                 connectToGossip
-                               )
-
-      // Nothing really depends on the initial synchronization, so just start it in the background.
-      _ <- makeFiberResource(initialSynchronization.sync())
+      // Start syncing with the bootstrap in the background.
+      _ <- makeInitialSynchronization(conf, gossipServiceServer, connectToGossip)
 
       // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
-      // NOTE: The TransportLayer has the `Connect` loops to do this.
       _ <- makePeerCountPrinter
 
     } yield ()
@@ -290,7 +283,7 @@ package object gossiping {
       retriesConf = DownloadManagerImpl.RetriesConf.noRetries
     )
 
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: ExecutionEngineService](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F]
@@ -423,6 +416,15 @@ package object gossiping {
                                    LegacyConversions.toBlock(x.getBlockMessage)
                                  }
                                }
+
+                     // Store it so others can pull it from the bootstrap node.
+                     _ <- Resource.liftF {
+                           Log[F].info(
+                             s"Trying to store generated genesis candidate ${genesis.blockHash}..."
+                           ) *>
+                             validateAndAddBlock(conf.casper.shardId, genesis)
+                         }
+
                      approver <- GenesisApproverImpl.fromGenesis(
                                   backend,
                                   NodeDiscovery[F],
@@ -598,24 +600,32 @@ package object gossiping {
     } yield server
   }
 
+  /** Make the best effort so sync with the bootstrap node and some others.
+    * Nothing really depends on this at the moment so just do it in the background. */
   private def makeInitialSynchronization[F[_]: Concurrent: Par: Log: Timer: NodeDiscovery](
+      conf: Configuration,
       gossipServiceServer: GossipServiceServer[F],
-      bootstrap: Node,
       connectToGossip: GossipService.Connector[F]
-  ): Resource[F, InitialSynchronization[F]] =
-    Resource.pure {
-      new InitialSynchronizationImpl(
-        NodeDiscovery[F],
-        gossipServiceServer,
-        InitialSynchronizationImpl.Bootstrap(bootstrap),
-        // TODO: Move to config
-        selectNodes = (b, ns) => b +: ns.take(5),
-        minSuccessful = 1,
-        memoizeNodes = false,
-        skipFailedNodesInNextRounds = false,
-        roundPeriod = 30.seconds,
-        connector = connectToGossip
-      )
+  ): Resource[F, Unit] =
+    if (conf.casper.standalone) Resource.pure(())
+    else {
+      for {
+        initialSync <- Resource.pure[F, InitialSynchronization[F]] {
+                        new InitialSynchronizationImpl(
+                          NodeDiscovery[F],
+                          gossipServiceServer,
+                          InitialSynchronizationImpl.Bootstrap(conf.server.bootstrap),
+                          // TODO: Move to config
+                          selectNodes = (b, ns) => b +: ns.take(5),
+                          minSuccessful = 1,
+                          memoizeNodes = false,
+                          skipFailedNodesInNextRounds = false,
+                          roundPeriod = 30.seconds,
+                          connector = connectToGossip
+                        )
+                      }
+        _ <- makeFiberResource(initialSync.sync())
+      } yield ()
     }
 
   /** The TransportLayer setup prints the number of peers now and then which integration tests
