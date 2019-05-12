@@ -1,4 +1,5 @@
 import docker
+import logging
 
 from typing import List, Callable
 
