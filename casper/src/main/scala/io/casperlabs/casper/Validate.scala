@@ -442,15 +442,21 @@ object Validate {
       def show(hash: ByteString) = PrettyPrinter.buildString(hash)
       for {
         _ <- Log[F].warn(ignore(b, s"block hash does not match to computed value."))
-        _ <- Log[F].warn(
-              s"Expected block hash ${show(blockHashComputed)}; got ${show(b.blockHash)}"
-            )
-        _ <- Log[F].warn(
-              s"Expected deploy hash ${show(deployHashComputed)}; got ${show(b.header.get.deploysHash)}"
-            )
-        _ <- Log[F].warn(
-              s"Expected state hash ${show(postStateHashComputed)}; got ${show(b.header.get.postStateHash)}"
-            )
+        _ <- Log[F]
+              .warn(
+                s"Expected block hash ${show(blockHashComputed)}; got ${show(b.blockHash)}"
+              )
+              .whenA(b.blockHash != blockHashComputed)
+        _ <- Log[F]
+              .warn(
+                s"Expected deploy hash ${show(deployHashComputed)}; got ${show(b.header.get.deploysHash)}"
+              )
+              .whenA(b.header.get.deploysHash != deployHashComputed)
+        _ <- Log[F]
+              .warn(
+                s"Expected state hash ${show(postStateHashComputed)}; got ${show(b.header.get.postStateHash)}"
+              )
+              .whenA(b.header.get.postStateHash != postStateHashComputed)
         _ <- RaiseValidationError[F].raise[Unit](InvalidBlockHash)
       } yield ()
     }
