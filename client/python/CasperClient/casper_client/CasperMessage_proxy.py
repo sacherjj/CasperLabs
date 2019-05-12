@@ -13,12 +13,19 @@ def printer(name, request, v):
     print(name, ':', request, '=>', v)
 
 
+def delay(name, request):
+    print ('received: ', name, ':', request)
+    time.sleep(1)
+    return request
+
+
 def serve(proxy_port: int, node_host: str, node_port: int):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
     servicer = grpc_proxy.ProxyServicer(node_host, node_port,
                                         service_stub = CasperMessage_pb2_grpc.DeployServiceStub,
                                         unary_stream_methods = ['showBlocks', 'showMainChain'],
-                                        callback = printer)
+                                        pre_callback = delay,
+                                        post_callback = printer)
     CasperMessage_pb2_grpc.add_DeployServiceServicer_to_server(servicer, server)
     server.add_insecure_port('[::]:{}'.format(proxy_port))
     server.start()
