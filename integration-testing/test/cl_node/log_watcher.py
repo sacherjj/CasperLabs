@@ -78,13 +78,13 @@ def wait_for_log_watcher(log_watcher: "LogWatcherThread", timeout_secs: float = 
 
     If no data is required, construction of LogWatcherThread object can be in the with:
 
-        with wait_for_log_watcher(TextInLogLine(cl_node_0.node, 'Goodbye.')):
+        with wait_for_log_watcher(GoodbyeInLogLine(cl_node_0.node)):
             cl_node_0.stop()
 
     If you wish to retrieve object.data, you must create the LogWatcherThread object prior to using
     the context manager:
 
-        text_in_log = TextInLogLineThread(cl_node_0.node, 'Goodbye.')
+        text_in_log = GoodbyeInLogLine(cl_node_0.node)
         with wait_for_log_Watcher(text_in_log):
            cl_node_0.stop
         data_returned = text_in_log.data
