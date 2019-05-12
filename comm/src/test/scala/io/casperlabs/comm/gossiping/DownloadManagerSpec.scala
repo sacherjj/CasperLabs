@@ -10,6 +10,7 @@ import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.GossipError
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import java.util.concurrent.atomic.AtomicInteger
@@ -519,6 +520,7 @@ class DownloadManagerSpec
 }
 
 object DownloadManagerSpec {
+  implicit val metrics = new Metrics.MetricsNOP[Task]
 
   def summaryOf(block: Block): BlockSummary =
     BlockSummary()

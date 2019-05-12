@@ -185,25 +185,48 @@ class NodeRuntime private[node] (
               scheduler
             )
 
-        _ <- casper.transport.apply(
-              port,
-              conf,
-              grpcScheduler
-            )(
-              log,
-              logEff,
-              metrics,
-              metricsEff,
-              safetyOracle,
-              blockStore,
-              blockDagStorage,
-              connectionsCell,
-              nodeDiscovery,
-              state,
-              multiParentCasperRef,
-              executionEngineService,
-              scheduler
-            )
+        _ <- if (conf.server.useGossiping) {
+              casper.gossiping.apply[Effect](
+                port,
+                conf,
+                grpcScheduler
+              )(
+                catsParForEffect,
+                catsConcurrentEffectForEffect(scheduler),
+                logEff,
+                metricsEff,
+                Time.eitherTTime(Monad[Task], effects.time),
+                Timer[Effect],
+                safetyOracle,
+                blockStore,
+                blockDagStorage,
+                NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
+                eitherTApplicativeAsk(effects.peerNodeAsk(state)),
+                multiParentCasperRef,
+                executionEngineService,
+                scheduler
+              )
+            } else {
+              casper.transport.apply(
+                port,
+                conf,
+                grpcScheduler
+              )(
+                log,
+                logEff,
+                metrics,
+                metricsEff,
+                safetyOracle,
+                blockStore,
+                blockDagStorage,
+                connectionsCell,
+                nodeDiscovery,
+                state,
+                multiParentCasperRef,
+                executionEngineService,
+                scheduler
+              )
+            }
 
       } yield (nodeDiscovery, multiParentCasperRef)
 
@@ -232,7 +255,7 @@ class NodeRuntime private[node] (
       if (conf.casper.standalone) Log[Effect].info(s"Starting stand-alone node.")
       else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
 
-    val casperLoop: Effect[Unit] =
+    val fetchLoop: Effect[Unit] =
       for {
         casper <- multiParentCasperRef.get
         _      <- casper.fold(().pure[Effect])(_.fetchDependencies)
@@ -242,7 +265,7 @@ class NodeRuntime private[node] (
     for {
       _       <- addShutdownHook(release).toEffect
       _       <- info
-      _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
+      _       <- Task.defer(fetchLoop.forever.value).executeOn(loopScheduler).start.toEffect
       host    <- peerNodeAsk.ask.toEffect.map(_.host)
       address = s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")

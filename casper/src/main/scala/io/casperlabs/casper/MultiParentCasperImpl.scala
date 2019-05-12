@@ -269,8 +269,10 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
         dag       <- blockDag
-        tipHashes <- estimator(dag)
-        parents   <- chooseNonConflicting[F](tipHashes, genesis, dag)
+        tipHashes <- estimator(dag).map(_.toVector)
+        tips      <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
+        merged    <- ExecEngineUtil.merge[F](tips, dag)
+        parents   = merged.parents
         _ <- Log[F].info(
               s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
             )
@@ -289,7 +291,14 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
         number          = maxBlockNumber + 1
         protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(number)
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
-                     createProposal(dag, parents, remaining, justifications, protocolVersion)
+                     createProposal(
+                       dag,
+                       parents,
+                       merged,
+                       remaining,
+                       justifications,
+                       protocolVersion
+                     )
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
@@ -333,6 +342,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   private def createProposal(
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMessage],
+      merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, BlockMessage],
       deploys: Seq[DeployData],
       justifications: Seq[Justification],
       protocolVersion: ProtocolVersion
@@ -341,7 +351,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       now <- Time[F].currentMillis
       s   <- Cell[F, CasperState].read
       stateResult <- ExecEngineUtil
-                      .computeDeploysCheckpoint(parents, deploys, dag, protocolVersion)
+                      .computeDeploysCheckpoint[F](
+                        merged,
+                        deploys,
+                        protocolVersion
+                      )
       DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number, protocolVersion) = stateResult
       //TODO: compute bonds properly
       newBonds = ProtoUtil.bonds(parents.head)
@@ -408,7 +422,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                                                    .Context(genesis, lastFinalizedBlockHash)
                                                    .some,
                                                  updatedDag,
-                                                 block
+                                                 block,
+                                                 treatAsGenesis = false
                                                )
                                      (status, updatedDag) = attempt
                                    } yield ((block, status) :: attempts, updatedDag)
@@ -473,22 +488,23 @@ object MultiParentCasperImpl {
 
     implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
 
-    /** When we're creating Genesis we won't have a Genesis check against. */
-    def isGenesisLike(block: BlockMessage) =
-      block.getHeader.parentsHashList.isEmpty
-
     def validateAndAddBlock(
         maybeContext: Option[StatelessExecutor.Context],
         dag: BlockDagRepresentation[F],
         block: BlockMessage
-    )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] =
+    )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] = {
+      val treatAsGenesis =
+        block.getHeader.parentsHashList.isEmpty &&
+          block.sender.isEmpty &&
+          block.sig.isEmpty
+
       for {
         dag         <- BlockDagStorage[F].getRepresentation
-        validFormat <- Validate.formatOfFields[F](block)
-        validSig    <- Validate.blockSignature[F](block)
+        validFormat <- Validate.formatOfFields[F](block, treatAsGenesis)
+        validSig    <- if (!treatAsGenesis) Validate.blockSignature[F](block) else true.pure[F]
         validSender <- maybeContext.map { ctx =>
                         Validate.blockSender[F](block, ctx.genesis, dag)
-                      } getOrElse isGenesisLike(block).pure[F]
+                      } getOrElse (treatAsGenesis).pure[F]
         validVersion <- Validate.version[F](
                          block,
                          CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
@@ -497,10 +513,10 @@ object MultiParentCasperImpl {
                         else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]
                         else if (!validSender) (InvalidUnslashableBlock, dag).pure[F]
                         else if (!validVersion) (InvalidUnslashableBlock, dag).pure[F]
-                        else attemptAdd(maybeContext, dag, block)
+                        else attemptAdd(maybeContext, dag, block, treatAsGenesis)
         (status, updatedDag) = attemptResult
       } yield (status, updatedDag)
-
+    }
     /* Execute the block to get the effects then do some more validation.
      * Save the block if everything checks out.
      * We want to catch equivocations only after we confirm that the block completing
@@ -508,7 +524,8 @@ object MultiParentCasperImpl {
     def attemptAdd(
         maybeContext: Option[StatelessExecutor.Context],
         dag: BlockDagRepresentation[F],
-        block: BlockMessage
+        block: BlockMessage,
+        treatAsGenesis: Boolean
     )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] = {
       val validationStatus = (for {
         _ <- Log[F].info(
@@ -523,15 +540,25 @@ object MultiParentCasperImpl {
                                    ctx.lastFinalizedBlockHash
                                  )
                                } getOrElse {
-                                 Validate.blockSummaryPreGenesis[F](block, dag, shardId)
+                                 Validate
+                                   .blockSummaryPreGenesis[F](block, dag, shardId, treatAsGenesis)
                                }
         casperState <- Cell[F, CasperState].read
-        processedHash <- ExecEngineUtil
-                          .effectsForBlock(block, dag)
-                          .recoverWith {
-                            case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
-                          }
-        (preStateHash, blockEffects) = processedHash
+        // Confirm the parents are correct (including checking they commute) and capture
+        // the effect needed to compute the correct pre-state as well.
+        merged <- maybeContext.fold(
+                   ExecEngineUtil.MergeResult
+                     .empty[ExecEngineUtil.TransformMap, BlockMessage]
+                     .pure[F]
+                 ) { ctx =>
+                   Validate.parents[F](block, ctx.lastFinalizedBlockHash, dag)
+                 }
+        preStateHash <- ExecEngineUtil.computePrestate[F](merged)
+        blockEffects <- ExecEngineUtil
+                         .effectsForBlock[F](block, preStateHash, dag)
+                         .recoverWith {
+                           case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
+                         }
         _ <- Validate.transactions[F](
               block,
               dag,

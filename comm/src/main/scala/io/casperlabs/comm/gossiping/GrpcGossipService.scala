@@ -84,7 +84,7 @@ object GrpcGossipService {
   def toGossipService[F[_]: Sync: TaskLift: TaskLike: ObservableIterant](
       stub: GossipingGrpcMonix.GossipService,
       // Can inject a callback to close the faulty channel.
-      onError: PartialFunction[Throwable, F[Unit]] = ignoreErrors[F]
+      onError: PartialFunction[Throwable, F[Unit]] = PartialFunction.empty
   ): GossipService[F] =
     new GossipService[F] {
       private def withErrorCallback[T](obs: Observable[T]): Iterant[F, T] =
@@ -121,8 +121,4 @@ object GrpcGossipService {
       def addApproval(request: AddApprovalRequest): F[Empty] =
         withErrorCallback(stub.addApproval(request))
     }
-
-  private def ignoreErrors[F[_]]: PartialFunction[Throwable, F[Unit]] = {
-    case _ if false => ??? // Not returning anything because there's no Applicative in scope.
-  }
 }

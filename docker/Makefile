@@ -25,8 +25,11 @@ node-%: .casperlabs
 	mkdir node-$(N)
 	$(eval ENV = node-$(N)/.env)
 
+	# Copy default env values. Create overrides with `export CL_<name>=<value>` before running `make node-X/up` commands.
+	cp ${PWD}/template/.env $(ENV)
+
 	@# Create an .env file to hold template variables for docker-compose.
-	echo NODE_NUMBER=$(N) > $(ENV)
+	echo NODE_NUMBER=$(N) >> $(ENV)
 	echo CL_VERSION=$(CL_VERSION) >> $(ENV)
 
 	@# The name of the file is the public key. Content is the private key.

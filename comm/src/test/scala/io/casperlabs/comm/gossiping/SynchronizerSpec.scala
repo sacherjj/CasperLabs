@@ -11,6 +11,7 @@ import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -20,7 +21,6 @@ import monix.tail.Iterant
 import org.scalacheck.Gen
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
-
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
 
@@ -279,6 +279,7 @@ class SynchronizerSpec
 
 object SynchronizerSpec {
   implicit var log: LogStub[Task] = new LogStub[Task]
+  implicit val metrics            = new Metrics.MetricsNOP[Task]
 
   object MockBackend {
     def apply(
