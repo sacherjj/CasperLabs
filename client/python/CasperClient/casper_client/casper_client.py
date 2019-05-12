@@ -163,7 +163,7 @@ class CasperClient:
 
         :return:    response object
         """
-        return self.node.createBlock(CasperMessage_pb2.google_dot_protobuf_dot_empty__pb2.Empty())
+        return self.node.createBlock(CasperMessage_pb2.empty__pb2.Empty())
 
     @guarded
     def visualizeDag(self, depth: int, out: str = None, show_justification_lines: bool = False, stream: str = None):
