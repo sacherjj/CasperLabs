@@ -11,7 +11,6 @@ from typing import (
     Union,
     Tuple,
 )
-import time
 
 from test.cl_node.errors import (
     NonZeroExitCodeError,

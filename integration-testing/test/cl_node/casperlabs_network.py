@@ -1,7 +1,6 @@
 import docker
-import logging
 
-from typing import List, Callable, Optional
+from typing import List, Callable
 
 
 from test.cl_node.docker_base import DockerConfig
@@ -12,8 +11,6 @@ from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.wait import (
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,
-    wait_for_good_bye,
-    wait_for_requested_for_fork_tip,
     wait_for_peers_count_at_least,
 )
 from test.cl_node.log_watcher import (
