@@ -2,18 +2,26 @@ package io.casperlabs.blockstorage
 
 import cats._
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.InMemBlockStore.emptyMapRef
-import io.casperlabs.casper.protocol.{BlockMessage, Header}
+import io.casperlabs.casper.protocol.{
+  ApprovedBlock,
+  ApprovedBlockCandidate,
+  BlockMessage,
+  Header,
+  Signature
+}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElementsGen}
+import io.casperlabs.ipc.{Key, KeyHash, Op, ReadOp, Transform, TransformEntry, TransformIdentity}
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -121,11 +129,12 @@ trait BlockStoreTest
 class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val test = for {
-      refTask <- emptyMapRef[Task]
-      metrics = new MetricsNOP[Task]()
-      store   = InMemBlockStore.create[Task](Monad[Task], refTask, metrics)
-      _       <- store.find(_ => true).map(map => assert(map.isEmpty))
-      result  <- f(store)
+      refTask          <- emptyMapRef[Task]
+      approvedBlockRef <- Ref[Task].of(none[ApprovedBlockWithTransforms])
+      metrics          = new MetricsNOP[Task]()
+      store            = InMemBlockStore.create[Task](Monad[Task], refTask, approvedBlockRef, metrics)
+      _                <- store.find(_ => true).map(map => assert(map.isEmpty))
+      result           <- f(store)
     } yield result
     test.unsafeRunSync
   }
@@ -220,6 +229,31 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
           _      <- secondStore.close()
         } yield result
       }
+    }
+  }
+
+  "FileLMDBIndexBlockStore" should "persist approved block on restart" in {
+    withStoreLocation { blockStoreDataDir =>
+      val approvedBlock =
+        ApprovedBlock(
+          Some(ApprovedBlockCandidate(Some(BlockMessage()), 1)),
+          List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
+        )
+      val key            = Key(Key.KeyInstance.Hash(KeyHash()))
+      val transform      = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
+      val transforEntrys = Seq(TransformEntry(Some(key), Some(transform)))
+
+      for {
+        firstStore          <- createBlockStore(blockStoreDataDir)
+        _                   <- firstStore.putApprovedBlockTransform(approvedBlock, transforEntrys)
+        _                   <- firstStore.close()
+        secondStore         <- createBlockStore(blockStoreDataDir)
+        storedApprovedBlock <- secondStore.getApprovedBlockTransform
+        _ = storedApprovedBlock shouldBe Some(
+          ApprovedBlockWithTransforms(Some(approvedBlock), transforEntrys)
+        )
+        _ <- secondStore.close()
+      } yield ()
     }
   }
 

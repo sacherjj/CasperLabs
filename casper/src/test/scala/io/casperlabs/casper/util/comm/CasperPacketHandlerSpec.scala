@@ -40,7 +40,7 @@ import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Cell
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{Matchers, WordSpec}
@@ -95,8 +95,9 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val metrics = new MetricsNOP[Task]
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMsgWithTransform]](Map.empty)
-    implicit val blockStore = InMemBlockStore.create[Task]
+    implicit val blockMap         = Ref.unsafe[Task, Map[BlockHash, BlockMsgWithTransform]](Map.empty)
+    implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlockWithTransforms]](None)
+    implicit val blockStore       = InMemBlockStore.create[Task]
     implicit val blockDagStorage = InMemBlockDagStorage
       .create[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
@@ -244,7 +245,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           head              = transportLayer.requests.head
           _ = assert(
             ApprovedBlock
-              .parseFrom(head.msg.message.packet.get.content.toByteArray) == lastApprovedBlock.get.approvedBlock
+              .parseFrom(head.msg.message.packet.get.content.toByteArray) == lastApprovedBlock.get.getApprovedBlock
           )
         } yield ()
 

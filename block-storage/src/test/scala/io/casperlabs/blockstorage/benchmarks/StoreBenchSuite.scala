@@ -6,6 +6,8 @@ import java.util.{Properties, UUID}
 
 import cats.Monad
 import cats.effect.Concurrent
+import cats.effect.concurrent.Ref
+import cats.implicits.none
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{
@@ -18,6 +20,7 @@ import io.casperlabs.blockstorage.{
   LMDBBlockStore
 }
 import io.casperlabs.casper.protocol.{
+  ApprovedBlock,
   BlockMessage,
   Body,
   DeployCode,
@@ -31,7 +34,7 @@ import io.casperlabs.ipc.Transform.TransformInstance
 import io.casperlabs.ipc.{DeployCode => _, _}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
 import io.casperlabs.{metrics, shared}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -176,6 +179,7 @@ object Init {
         FileLMDBIndexBlockStore.Config(
           storagePath = createPath("file_lmdb_storage"),
           indexPath = createPath("file_lmdb_index"),
+          approvedBlockPath = createPath("file_lmdb_approvedBlock"),
           checkpointsDirPath = createPath("file_lmdb_checkpoints"),
           mapSize = 1073741824L * 12
         )
@@ -187,6 +191,7 @@ object Init {
   def inMemBlockStore = InMemBlockStore.create[Task](
     Monad[Task],
     InMemBlockStore.emptyMapRef[Task].runSyncUnsafe(),
+    Ref[Task].of(none[ApprovedBlockWithTransforms]).runSyncUnsafe(),
     metricsNop
   )
 

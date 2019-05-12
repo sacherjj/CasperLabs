@@ -38,6 +38,7 @@ import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.ApprovedBlockWithTransforms
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -84,7 +85,7 @@ class TransportLayerCasperTestNode[F[_]](
   val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
 
   implicit val labF =
-    LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
+    LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(Some(approvedBlock), transforms)))
 
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](

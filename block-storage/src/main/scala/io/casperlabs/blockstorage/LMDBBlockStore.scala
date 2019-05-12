@@ -8,12 +8,13 @@ import cats.effect.{ExitCase, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage}
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
+import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Resources.withResource
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
 import org.lmdbjava._
@@ -95,6 +96,12 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
           .toList
       }
     }
+
+  def getApprovedBlockTransform(): F[Option[ApprovedBlockWithTransforms]] =
+    none[ApprovedBlockWithTransforms].pure[F]
+
+  def putApprovedBlockTransform(block: ApprovedBlock, transforms: Seq[TransformEntry]): F[Unit] =
+    ().pure[F]
 
   def checkpoint(): F[Unit] =
     ().pure[F]

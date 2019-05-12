@@ -19,12 +19,13 @@ import io.casperlabs.blockstorage.util.fileIO
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage}
 import io.casperlabs.catscontrib.MonadStateOps._
+import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
 import monix.eval.Task
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
@@ -45,6 +46,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     env: Env[ByteBuffer],
     index: Dbi[ByteBuffer],
     storagePath: Path,
+    approvedBlockPath: Path,
     checkpointsDir: Path,
     state: MonadState[F, FileLMDBIndexBlockStoreState[F]]
 ) extends BlockStore[F] {
@@ -184,6 +186,23 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
       } yield ()
     )
 
+  def getApprovedBlockTransform(): F[Option[ApprovedBlockWithTransforms]] =
+    lock.withPermit(
+      readAllBytesFromFile(approvedBlockPath).map {
+        case bytes if bytes.isEmpty =>
+          None
+        case bytes =>
+          Some(ApprovedBlockWithTransforms.parseFrom(bytes))
+      }
+    )
+
+  def putApprovedBlockTransform(block: ApprovedBlock, transforms: Seq[TransformEntry]): F[Unit] =
+    lock.withPermit {
+      val tmpFile = approvedBlockPath.resolveSibling(approvedBlockPath.getFileName + ".tmp")
+      writeToFile(tmpFile, ApprovedBlockWithTransforms(Some(block), transforms).toByteArray) >>
+        moveFile(tmpFile, approvedBlockPath, StandardCopyOption.ATOMIC_MOVE).as(())
+    }
+
   override def checkpoint(): F[Unit] =
     lock.withPermit(
       for {
@@ -240,6 +259,7 @@ object FileLMDBIndexBlockStore {
   final case class Config(
       storagePath: Path,
       indexPath: Path,
+      approvedBlockPath: Path,
       checkpointsDirPath: Path,
       mapSize: Long,
       maxDbs: Int = 1,
@@ -294,11 +314,17 @@ object FileLMDBIndexBlockStore {
       env: Env[ByteBuffer],
       blockStoreDataDir: Path
   ): F[StorageErr[BlockStore[F]]] =
-    create(env, blockStoreDataDir.resolve("storage"), blockStoreDataDir.resolve("checkpoints"))
+    create(
+      env,
+      blockStoreDataDir.resolve("storage"),
+      blockStoreDataDir.resolve("approved-block"),
+      blockStoreDataDir.resolve("checkpoints")
+    )
 
   def create[F[_]: Monad: Concurrent: Log](
       env: Env[ByteBuffer],
       storagePath: Path,
+      approvedBlockPath: Path,
       checkpointsDirPath: Path
   ): F[StorageErr[BlockStore[F]]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
@@ -307,6 +333,7 @@ object FileLMDBIndexBlockStore {
       index <- Sync[F].delay {
                 env.openDbi(s"block_store_index", MDB_CREATE)
               }
+      _                            <- createNewFile(approvedBlockPath)
       blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath, RandomAccessIO.ReadWrite)
       sortedCheckpointsEither      <- loadCheckpoints(checkpointsDirPath)
       result <- sortedCheckpointsEither match {
@@ -325,6 +352,7 @@ object FileLMDBIndexBlockStore {
                        env,
                        index,
                        storagePath,
+                       approvedBlockPath,
                        checkpointsDirPath,
                        st
                      ): BlockStore[F]).asRight[StorageError]
@@ -347,7 +375,12 @@ object FileLMDBIndexBlockStore {
                 .setMaxReaders(config.maxReaders)
                 .open(config.indexPath.toFile, flags: _*)
             }
-      result <- create[F](env, config.storagePath, config.checkpointsDirPath)
+      result <- create[F](
+                 env,
+                 config.storagePath,
+                 config.approvedBlockPath,
+                 config.checkpointsDirPath
+               )
     } yield result
 
   def apply[F[_]: Concurrent: Log: RaiseIOError: Metrics](
