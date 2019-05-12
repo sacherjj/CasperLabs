@@ -16,6 +16,11 @@ from test.cl_node.wait import (
     wait_for_requested_for_fork_tip,
     wait_for_peers_count_at_least,
 )
+from test.cl_node.log_watcher import (
+    wait_for_log_watcher,
+    GoodbyeInLogLine,
+    RequestedForkTipFromPeersInLogLine,
+)
 
 
 class CasperLabsNetwork:
@@ -80,15 +85,16 @@ class CasperLabsNetwork:
         self._add_cl_node(config)
 
     def stop_cl_node(self, node_number: int) -> None:
-        self.cl_nodes[node_number].execution_engine.container.stop()
-        self.cl_nodes[node_number].node.container.stop()
-        self.wait_method(wait_for_good_bye, node_number)
+        self.cl_nodes[node_number].execution_engine.stop()
+        node = self.cl_nodes[node_number].node
+        with wait_for_log_watcher(GoodbyeInLogLine(node.container)):
+            node.stop()
 
     def start_cl_node(self, node_number: int) -> None:
-        self.cl_nodes[node_number].execution_engine.container.start()
-        self.cl_nodes[node_number].node.container.start()
-        self.wait_method(wait_for_node_started, node_number)
-        self.wait_method(wait_for_requested_for_fork_tip, node_number)
+        self.cl_nodes[node_number].execution_engine.start()
+        node = self.cl_nodes[node_number].node
+        with wait_for_log_watcher(RequestedForkTipFromPeersInLogLine(node.container)):
+            node.start()
 
     def wait_for_peers(self) -> None:
         if self.node_count < 2:
