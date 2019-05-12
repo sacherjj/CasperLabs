@@ -31,7 +31,7 @@ import io.casperlabs.models.BlockMetadata
 import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.{Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -283,7 +283,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      validatorId,
                      capserHandlerInternal
                    )
-                 case Some(ApprovedBlockWithTransforms(approvedBlock, transforms)) =>
+                 case Some(ApprovedBlockWithTransforms(Some(approvedBlock), transforms)) =>
                    val genesis = approvedBlock.candidate.flatMap(_.block).get
                    for {
                      _ <- insertIntoBlockAndDagStore[F](genesis, transforms)
@@ -600,7 +600,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                                   dag
                                 )
                    _ <- insertIntoBlockAndDagStore[F](genesis, transforms)
-                   _ <- LastApprovedBlock[F].set(ApprovedBlockWithTransforms(b, transforms))
+                   _ <- LastApprovedBlock[F].set(ApprovedBlockWithTransforms(Some(b), transforms))
                    casper <- MultiParentCasper
                               .fromTransportLayer[F](
                                 validatorId,

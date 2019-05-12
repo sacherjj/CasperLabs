@@ -19,6 +19,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
+import io.casperlabs.storage.ApprovedBlockWithTransforms
 
 import scala.concurrent.duration._
 import scala.language.higherKinds
@@ -175,7 +176,7 @@ object ApproveBlockProtocol {
         for {
           _ <- LastApprovedBlock[F].set(
                 ApprovedBlockWithTransforms(
-                  ApprovedBlock(Some(candidate), signatures.toSeq),
+                  Some(ApprovedBlock(Some(candidate), signatures.toSeq)),
                   transforms
                 )
               )
@@ -187,10 +188,8 @@ object ApproveBlockProtocol {
       for {
         apbO <- LastApprovedBlock[F].get
         _ <- apbO match {
-              case None =>
-                Log[F].warn(s"APPROVAL: Expected ApprovedBlock but was None.")
-              case Some(b) =>
-                val serializedApprovedBlock = b.approvedBlock.toByteString
+              case Some(b) if b.approvedBlock.nonEmpty =>
+                val serializedApprovedBlock = b.getApprovedBlock.toByteString
                 for {
                   _ <- Log[F].info(
                         s"APPROVAL: Beginning send of ApprovedBlock $candidateHash to peers..."
@@ -198,6 +197,8 @@ object ApproveBlockProtocol {
                   _ <- CommUtil.streamToPeers[F](transport.ApprovedBlock, serializedApprovedBlock)
                   _ <- Log[F].info(s"APPROVAL: Sent ApprovedBlock $candidateHash to peers.")
                 } yield ()
+              case _ =>
+                Log[F].warn(s"APPROVAL: Expected ApprovedBlock but was None.")
             }
       } yield ()
   }

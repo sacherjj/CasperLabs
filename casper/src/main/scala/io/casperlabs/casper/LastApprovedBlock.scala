@@ -8,11 +8,7 @@ import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.MonadTrans
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.shared.MaybeCell
-
-final case class ApprovedBlockWithTransforms(
-    approvedBlock: ApprovedBlock,
-    transforms: Seq[TransformEntry]
-)
+import io.casperlabs.storage.ApprovedBlockWithTransforms
 
 object LastApprovedBlock extends LastApprovedBlockInstances {
   type LastApprovedBlock[F[_]] = MaybeCell[F, ApprovedBlockWithTransforms]
