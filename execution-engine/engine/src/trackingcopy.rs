@@ -29,9 +29,12 @@ pub struct TrackingCopyCache<M: Meter<Key, Value>> {
 }
 
 impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
-    pub fn new(cache_size: usize, meter: M) -> TrackingCopyCache<M> {
+    /// Creates instance of `TrackingCopyCache` with specified `max_cache_size`,
+    /// above which least-recently-used elements of the cache are invalidated.
+    /// Measurements of elements' "size" is done with the usage of `Meter` instance.
+    pub fn new(max_cache_size: usize, meter: M) -> TrackingCopyCache<M> {
         TrackingCopyCache {
-            max_cache_size: cache_size,
+            max_cache_size,
             current_cache_size: Mutex::new(0),
             reads_cached: LinkedHashMap::new(),
             muts_cached: HashMap::new(),
@@ -97,7 +100,7 @@ impl<R: StateReader<Key, Value>, M: Meter<Key, Value>> TrackingCopy<R, M> {
     pub fn new(reader: R, meter: M) -> TrackingCopy<R, M> {
         TrackingCopy {
             reader,
-            cache: TrackingCopyCache::new(1024 * 16, meter),
+            cache: TrackingCopyCache::new(1024 * 16, meter), //TODO: Should `max_cache_size` be fraction of Wasm memory limit?
             ops: HashMap::new(),
             fns: HashMap::new(),
         }
