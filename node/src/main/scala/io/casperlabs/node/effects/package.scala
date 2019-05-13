@@ -2,7 +2,8 @@ package io.casperlabs.node
 
 import java.nio.file.Path
 
-import cats.Applicative
+import cats.{Applicative, Monad}
+import cats.data.EitherT
 import cats.effect.{Resource, Timer}
 import cats.mtl._
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
@@ -32,15 +33,9 @@ package object effects {
       time: Time[Task],
       metrics: Metrics[Task]
   ): Resource[Effect, NodeDiscovery[Task]] =
-    Resource(
-      NodeDiscoveryImpl
-        .create[Task](id, port, timeout)(init)
-        .allocated
-        .map {
-          case (nd, release) => (nd, release.toEffect)
-        }
-        .toEffect
-    )
+    NodeDiscoveryImpl
+      .create[Task](id, port, timeout)(init)
+      .toEffect
 
   def time(implicit timer: Timer[Task]): Time[Task] =
     new Time[Task] {
@@ -81,5 +76,4 @@ package object effects {
       val applicative: Applicative[Task] = Applicative[Task]
       def ask: Task[Node]                = state.get.map(_.local)
     }
-
 }

@@ -75,6 +75,9 @@ object Connect {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  /** Look at how many active connections we have. If more than 2/3 of the maximum then
+    * use the TransportLayer to send Heartbeat messages and get rid of some that aren't
+    * responding. Currently 10 connections are pinged in a round. */
   def clearConnections[F[_]: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
     : F[Int] = {
 
@@ -105,6 +108,7 @@ object Connect {
     } yield cleared
   }
 
+  /** Disconnect from all connections. */
   def resetConnections[F[_]: Monad: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
     : F[Unit] =
     ConnectionsCell[F].flatModify { connections =>
@@ -116,6 +120,7 @@ object Connect {
       } yield result
     }
 
+  /** Use NodeDiscovery to get a list of live peers and do the protocol handshake. */
   def findAndConnect[F[_]: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       conn: (Node, FiniteDuration) => F[Unit]
   ): F[List[Node]] =
@@ -137,6 +142,7 @@ object Connect {
                   }
     } yield connected
 
+  /** Exchange protocol handshakes. NOTE: I don't think that's necessary any more. */
   def connect[F[_]: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       peer: Node,
       timeout: FiniteDuration

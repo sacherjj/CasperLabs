@@ -105,7 +105,7 @@ object EffectsTestInstances {
     def shutdown(msg: Protocol): F[Unit] = ???
   }
 
-  class LogStub[F[_]: Applicative] extends Log[F] {
+  class LogStub[F[_]: Sync](prefix: String = "", printEnabled: Boolean = false) extends Log[F] {
 
     @volatile var debugs: Vector[String]    = Vector.empty[String]
     @volatile var infos: Vector[String]     = Vector.empty[String]
@@ -126,32 +126,34 @@ object EffectsTestInstances {
     }
     def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
     def trace(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
-    def debug(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
+    def debug(msg: String)(implicit ev: LogSource): F[Unit] = sync {
+      if (printEnabled) println(s"DEBUG $prefix $msg")
       debugs = debugs :+ msg
       all = all :+ msg
-      ().pure[F]
     }
-    def info(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
+    def info(msg: String)(implicit ev: LogSource): F[Unit] = sync {
+      if (printEnabled) println(s"INFO  $prefix $msg")
       infos = infos :+ msg
       all = all :+ msg
-      ().pure[F]
     }
-    def warn(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
+    def warn(msg: String)(implicit ev: LogSource): F[Unit] = sync {
+      if (printEnabled) println(s"WARN  $prefix $msg")
       warns = warns :+ msg
       all = all :+ msg
-      ().pure[F]
     }
-    def error(msg: String)(implicit ev: LogSource): F[Unit] = synchronized {
+    def error(msg: String)(implicit ev: LogSource): F[Unit] = sync {
+      if (printEnabled) println(s"ERROR $prefix $msg")
       errors = errors :+ msg
       all = all :+ msg
-      ().pure[F]
     }
-    def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = synchronized {
+    def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = sync {
+      if (printEnabled) println(s"ERROR $prefix $msg: $cause")
       causes = causes :+ cause
       errors = errors :+ msg
       all = all :+ msg
-      ().pure[F]
     }
+
+    private def sync(thunk: => Unit): F[Unit] = Sync[F].delay(synchronized(thunk))
   }
 
 }

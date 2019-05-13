@@ -1,5 +1,6 @@
 package io.casperlabs.comm.gossiping
 
+import cats.Monad
 import cats.data._
 import cats.effect._
 import cats.implicits._
@@ -21,12 +22,13 @@ import io.casperlabs.comm.gossiping.Synchronizer.SyncError.{
   Unreachable,
   ValidationError
 }
+import io.casperlabs.comm.gossiping.Utils.hex
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
-
 import scala.util.control.NonFatal
 
 // TODO: Optimise to heap-safe
-class SynchronizerImpl[F[_]: Sync: Log](
+class SynchronizerImpl[F[_]: Sync: Log: Metrics](
     connectToGossip: Node => F[GossipService[F]],
     backend: SynchronizerImpl.Backend[F],
     maxPossibleDepth: Int Refined Positive,
@@ -43,18 +45,22 @@ class SynchronizerImpl[F[_]: Sync: Log](
       targetBlockHashes: Set[ByteString]
   ): F[Either[SyncError, Vector[BlockSummary]]] = {
     val effect = for {
+      _              <- Metrics[F].incrementCounter("syncs")
+      _              <- Metrics[F].incrementCounter("sync_targets", delta = targetBlockHashes.size.toLong)
       service        <- connectToGossip(source)
       tips           <- backend.tips
       justifications <- backend.justifications
-      syncStateOrError <- loop(
-                           service,
-                           targetBlockHashes.toList,
-                           tips ::: justifications,
-                           SyncState.initial(targetBlockHashes)
-                         )
+      syncStateOrError <- Metrics[F].gauge("syncs_ongoing") {
+                           loop(
+                             service,
+                             targetBlockHashes.toList,
+                             tips ::: justifications,
+                             SyncState.initial(targetBlockHashes)
+                           )
+                         }
       res <- syncStateOrError.fold(
               _.asLeft[Vector[BlockSummary]].pure[F], { syncState =>
-                missingDependencies(syncState.dag).map { missing =>
+                missingDependencies(syncState.parentToChildren).map { missing =>
                   if (missing.isEmpty) {
                     topologicalSort(syncState).asRight[SyncError]
                   } else {
@@ -63,10 +69,13 @@ class SynchronizerImpl[F[_]: Sync: Log](
                 }
               }
             )
+      _ <- Metrics[F].incrementCounter(if (res.isLeft) "syncs_failed" else "syncs_succeeded")
     } yield res
+
     effect.onError {
       case NonFatal(e) =>
-        Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e)
+        Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e) *>
+          Metrics[F].incrementCounter("syncs_failed")
     }
   }
 
@@ -87,7 +96,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
       ).flatMap {
         case left @ Left(_) => (left: Either[SyncError, SyncState]).pure[F]
         case Right(newSyncState) =>
-          missingDependencies(newSyncState.dag)
+          missingDependencies(newSyncState.parentToChildren)
             .flatMap(
               missing =>
                 if (prevSyncState.summaries == newSyncState.summaries)
@@ -97,12 +106,18 @@ class SynchronizerImpl[F[_]: Sync: Log](
       }
     }
 
-  private def missingDependencies(dag: Map[ByteString, Set[ByteString]]): F[List[ByteString]] =
-    danglingParents(dag).toList.filterA(backend.notInDag)
+  private def missingDependencies(
+      parentToChildren: Map[ByteString, Set[ByteString]]
+  ): F[List[ByteString]] =
+    danglingParents(parentToChildren).toList.filterA(backend.notInDag)
 
-  private def danglingParents(dag: Map[ByteString, Set[ByteString]]): Set[ByteString] = {
-    val allParents  = dag.keySet
-    val allChildren = dag.values.foldLeft(Set.empty[ByteString]) { case (a, b) => a union b }
+  private def danglingParents(
+      parentToChildren: Map[ByteString, Set[ByteString]]
+  ): Set[ByteString] = {
+    val allParents = parentToChildren.keySet
+    val allChildren = parentToChildren.values.foldLeft(Set.empty[ByteString]) {
+      case (a, b) => a union b
+    }
     allParents.diff(allChildren)
   }
 
@@ -126,6 +141,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
       .foldWhileLeftEvalL(prevSyncState.asRight[SyncError].pure[F]) {
         case (Right(syncState), summary) =>
           val effect = for {
+            _ <- EitherT.liftF(Metrics[F].incrementCounter("summaries_traversed"))
             _ <- noCycles(syncState, summary)
             distance <- reachable(
                          syncState,
@@ -143,6 +159,7 @@ class SynchronizerImpl[F[_]: Sync: Log](
                     .handleError(e => ValidationError(summary, e).asLeft[Unit])
                 )
           } yield newSyncState
+
           effect.value.map {
             case x @ Left(_) =>
               (x: Either[SyncError, SyncState])
@@ -163,16 +180,14 @@ class SynchronizerImpl[F[_]: Sync: Log](
         if (current(summary.blockHash)) {
           EitherT((Cycle(summary): SyncError).asLeft[Unit].pure[F])
         } else {
-          val next = current.flatMap(dependenciesFromDag(syncState.dag, _))
+          val next = current.flatMap(syncState.childToParents(_))
           loop(next)
         }
       }
 
-    val dependencies = summary.getHeader.parentHashes.toSet ++ summary.getHeader.justifications
-      .map(_.latestBlockHash)
-      .toSet
+    val deps = dependencies(summary).toSet
 
-    val existingDeps = syncState.summaries.keySet intersect dependencies
+    val existingDeps = syncState.summaries.keySet intersect deps
     if (existingDeps.nonEmpty) {
       loop(existingDeps)
     } else {
@@ -194,18 +209,17 @@ class SynchronizerImpl[F[_]: Sync: Log](
       }
     }
 
-  private def dependenciesFromDag(
-      dag: Map[ByteString, Set[ByteString]],
-      hash: ByteString
-  ): Set[ByteString] =
-    dag.filter {
-      case (_, children) => children(hash)
-    }.keySet
-
+  // TODO: Rewrite this check to be based on the number of validators:
+  // at any rank the DAG cannot be wider then the number of validators,
+  // otherwise some of them would be equivocating (which is fine, up to a threshold of 0.33).
   private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
-    val depth    = syncState.distanceFromOriginalTarget.values.toList.maximumOption.getOrElse(0)
-    val maxTotal = math.pow(maxBranchingFactor, depth.toDouble).ceil.toInt
-    val total    = syncState.summaries.size
+    val depth = syncState.distanceFromOriginalTarget.values.toList.maximumOption.getOrElse(0)
+    val maxTotal =
+      if (maxBranchingFactor <= 1) depth
+      else {
+        ((math.pow(maxBranchingFactor, depth.toDouble) - 1) / (maxBranchingFactor - 1)).ceil.toInt
+      }
+    val total = syncState.summaries.size
     if (total > minBlockCountToCheckBranchingFactor &&
         total > syncState.originalTargets.size &&
         total > maxTotal) {
@@ -215,39 +229,44 @@ class SynchronizerImpl[F[_]: Sync: Log](
     }
   }
 
+  /** Check that `toCheck` can be reached from the current `targetBlockHashes` within the distance
+    * of a single `maxDepthAncestorsRequest`. If so, return the distance to the original targets,
+    * i.e. the ones that can be multiple recursive steps away already. */
   private def reachable(
       syncState: SyncState,
       toCheck: BlockSummary,
       targetBlockHashes: Set[ByteString]
   ): EitherT[F, SyncError, Int] = {
-    /* Returns child-to-parents map */
-    def getParents(hashes: List[ByteString]): Map[ByteString, Set[ByteString]] =
-      hashes
-        .map(hash => hash -> dependenciesFromDag(syncState.dag, hash))
-        .foldLeft(Monoid.empty[Map[ByteString, Set[ByteString]]]) { case (a, b) => a |+| Map(b) }
+    // One map with all the children's parents in it.
+    def getParents(children: List[ByteString]): Map[ByteString, Set[ByteString]] =
+      children
+        .map(hash => Map(hash -> syncState.childToParents(hash)))
+        .foldLeft(Monoid.empty[Map[ByteString, Set[ByteString]]]) { case (a, b) => a |+| b }
 
+    // Start with the current targets and move towards their children until we find
+    // `toCheck`, or go farther then the allowed distance.
     @annotation.tailrec
     def loop(
         childrenToParents: Map[ByteString, Set[ByteString]],
         counter: Int
     ): EitherT[F, SyncError, Int] =
       if (counter <= maxDepthAncestorsRequest && childrenToParents.nonEmpty) {
-        val maybeChildDistance = {
+        val maybeChildOfToCheckDistance = {
           val childrenDistances = childrenToParents.collect {
             case (child, parents) if parents(toCheck.blockHash) =>
               syncState.distanceFromOriginalTarget(child)
           }.toList
 
           if (childrenDistances.nonEmpty) {
-            childrenDistances.min.some
+            Some(childrenDistances.min)
           } else {
             None
           }
         }
 
         // Not using .fold because it won't be tail-recursive
-        if (maybeChildDistance.nonEmpty) {
-          EitherT((counter + maybeChildDistance.get).asRight[SyncError].pure[F])
+        if (maybeChildOfToCheckDistance.nonEmpty) {
+          EitherT((counter + maybeChildOfToCheckDistance.get + 1).asRight[SyncError].pure[F])
         } else {
           loop(getParents(childrenToParents.values.toSet.flatten.toList), counter + 1)
         }
@@ -258,22 +277,37 @@ class SynchronizerImpl[F[_]: Sync: Log](
     if (syncState.originalTargets(toCheck.blockHash)) {
       EitherT(0.asRight[SyncError].pure[F])
     } else {
-      loop(
-        getParents(targetBlockHashes.toList) ++ syncState.dag
-          .collect {
-            case (parent, children) if targetBlockHashes(parent) =>
-              children.map(child => child -> Set(parent)).toMap
-          }
-          .foldLeft(Monoid.empty[Map[ByteString, Set[ByteString]]]) {
-            case (a, b) => a |+| b
-          },
-        1
+      // `toCheck` can be one of the targets, so start with the parents and walk from there; 0 distance
+      val targetsToParents = getParents(targetBlockHashes.toList)
+
+      // If `toCheck` is not part of the original targets then there must have been something
+      // that lead us here and that will already have its distance established. Start from there.
+      val childrenOfTargets = getParents(
+        targetBlockHashes.flatMap(syncState.parentToChildren(_)).toList
       )
+
+      // Not sure if the same `counter` value should apply to both of those groups.
+      // But with counter=1 and maxDepthAncestorsRequest=1 it failed to sync some block in HashSetCasperTest.
+      loop(targetsToParents ++ childrenOfTargets, counter = 0)
     }
   }
 }
 
 object SynchronizerImpl {
+  implicit val metricsSource: Metrics.Source =
+    Metrics.Source(GossipingMetricsSource, "Synchronizer")
+
+  /** Export base 0 values so we have non-empty series for charts. */
+  def establishMetrics[F[_]: Monad: Metrics] =
+    for {
+      _ <- Metrics[F].incrementCounter("syncs", 0)
+      _ <- Metrics[F].incrementCounter("syncs_failed", 0)
+      _ <- Metrics[F].incrementCounter("syncs_succeeded", 0)
+      _ <- Metrics[F].incrementCounter("sync_targets", 0)
+      _ <- Metrics[F].incrementCounter("summaries_traversed", 0)
+      _ <- Metrics[F].incrementGauge("syncs_ongoing", 0)
+    } yield ()
+
   trait Backend[F[_]] {
     def tips: F[List[ByteString]]
     def justifications: F[List[ByteString]]
@@ -284,17 +318,21 @@ object SynchronizerImpl {
   final case class SyncState(
       originalTargets: Set[ByteString],
       summaries: Map[ByteString, BlockSummary],
-      dag: Map[ByteString, Set[ByteString]],
+      parentToChildren: Map[ByteString, Set[ByteString]],
+      childToParents: Map[ByteString, Set[ByteString]],
       distanceFromOriginalTarget: Map[ByteString, Int]
   ) {
     def append(summary: BlockSummary, distance: Int): SyncState =
       SyncState(
         originalTargets,
         summaries + (summary.blockHash -> summary),
-        dependencies(summary).foldLeft(dag) {
+        parentToChildren = dependencies(summary).foldLeft(parentToChildren) {
           case (acc, dependency) =>
-            acc + (dependency -> (acc
-              .getOrElse(dependency, Set.empty[ByteString]) + summary.blockHash))
+            acc + (dependency -> (acc(dependency) + summary.blockHash))
+        },
+        childToParents = dependencies(summary).foldLeft(childToParents) {
+          case (acc, dependency) =>
+            acc + (summary.blockHash -> (acc(summary.blockHash) + dependency))
         },
         distanceFromOriginalTarget.updated(summary.blockHash, distance)
       )
@@ -305,6 +343,12 @@ object SynchronizerImpl {
 
   object SyncState {
     def initial(originalTargets: Set[ByteString]) =
-      SyncState(originalTargets, Map.empty, Map.empty, Map.empty)
+      SyncState(
+        originalTargets,
+        summaries = Map.empty,
+        parentToChildren = Map.empty.withDefaultValue(Set.empty),
+        childToParents = Map.empty.withDefaultValue(Set.empty),
+        distanceFromOriginalTarget = Map.empty
+      )
   }
 }

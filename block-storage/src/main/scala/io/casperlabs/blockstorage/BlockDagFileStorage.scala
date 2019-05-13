@@ -18,7 +18,7 @@ import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
+import io.casperlabs.blockstorage.util.{fileIO, BlockMessageUtil, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.catscontrib.MonadStateOps._
@@ -221,7 +221,7 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
   private def updateLatestMessagesCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile("casperlabs-block-dag-file-storage-latest-messages-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, latestMessagesCrcFilePath)
     } yield ()
@@ -234,15 +234,9 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
       latestMessages                <- (state >> 'latestMessages).get
       latestMessagesLogOutputStream <- (state >> 'latestMessagesLogOutputStream).get
       _                             <- latestMessagesLogOutputStream.close
-      tmpSquashedData <- createTemporaryFile(
-                          "casperlabs-block-dag-store-latest-messages-",
-                          "-squashed-data"
-                        )
-      tmpSquashedCrc <- createTemporaryFile(
-                         "casperlabs-block-dag-store-latest-messages-",
-                         "-squashed-crc"
-                       )
-      dataByteBuffer = ByteBuffer.allocate(64 * latestMessages.size)
+      tmpSquashedData               <- createSameDirectoryTemporaryFile(latestMessagesDataFilePath)
+      tmpSquashedCrc                <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
+      dataByteBuffer                = ByteBuffer.allocate(64 * latestMessages.size)
       _ <- latestMessages.toList.traverse_ {
             case (validator, blockHash) =>
               Sync[F].delay {
@@ -290,7 +284,7 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
   private def updateDataLookupCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile[F]("casperlabs-block-dag-file-storage-data-lookup-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(blockMetadataCrcPath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, blockMetadataCrcPath)
     } yield ()
@@ -815,4 +809,22 @@ object BlockDagFileStorage {
         override implicit val a: Apply[F]   = Concurrent[F]
       }
     )
+
+  def apply[F[_]: Concurrent: Log: RaiseIOError: Metrics](
+      dataDir: Path,
+      dagStoragePath: Path,
+      blockStore: BlockStore[F]
+  ): Resource[F, BlockDagStorage[F]] =
+    Resource.make {
+      for {
+        _         <- fileIO.makeDirectory(dagStoragePath)
+        dagConfig = BlockDagFileStorage.Config(dagStoragePath)
+        storage <- BlockDagFileStorage.create(dagConfig)(
+                    Concurrent[F],
+                    Log[F],
+                    blockStore,
+                    Metrics[F]
+                  )
+      } yield storage
+    }(_.close()).widen
 }

@@ -17,8 +17,8 @@
 //! let leaf_2 = Trie::Leaf { key: vec![1u8, 0, 0], value: b"val_2".to_vec() };
 //!
 //! // Get their hashes
-//! let leaf_1_hash = Blake2bHash::new(&leaf_1.to_bytes());
-//! let leaf_2_hash = Blake2bHash::new(&leaf_2.to_bytes());
+//! let leaf_1_hash = Blake2bHash::new(&leaf_1.to_bytes().unwrap());
+//! let leaf_2_hash = Blake2bHash::new(&leaf_2.to_bytes().unwrap());
 //!
 //! // Create a node
 //! let node: Trie<Vec<u8>, Vec<u8>> = {
@@ -30,7 +30,7 @@
 //! };
 //!
 //! // Get its hash
-//! let node_hash = Blake2bHash::new(&node.to_bytes());
+//! let node_hash = Blake2bHash::new(&node.to_bytes().unwrap());
 //!
 //! // Create the environment and the store. For both the in-memory and
 //! // LMDB-backed implementations, the environment is the source of
@@ -234,6 +234,23 @@ impl Default for InMemoryEnvironment {
 impl InMemoryEnvironment {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn dump<K, V>(&self) -> Result<HashMap<Blake2bHash, Trie<K, V>>, in_memory::Error>
+    where
+        K: FromBytes,
+        V: FromBytes,
+    {
+        self.data
+            .lock()?
+            .iter()
+            .map(|(hash_bytes, trie_bytes)| {
+                let hash: Blake2bHash = deserialize(hash_bytes)?;
+                let trie: Trie<K, V> = deserialize(trie_bytes)?;
+                Ok((hash, trie))
+            })
+            .collect::<Result<HashMap<Blake2bHash, Trie<K, V>>, bytesrepr::Error>>()
+            .map_err(Into::into)
     }
 }
 

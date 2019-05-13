@@ -1,12 +1,14 @@
+import logging
 import re
 import time
-import logging
+from typing import TYPE_CHECKING
 
 import pytest
 import typing_extensions
 
-from typing import TYPE_CHECKING
 from .common import Network, WaitTimeoutError
+
+
 if TYPE_CHECKING:
     from .casperlabsnode import Node, NonZeroExitCodeError
 
@@ -106,6 +108,26 @@ class MetricsAvailable:
         if blocks is None:
             return False
         return int(blocks.group(1)) == self.number_of_blocks
+
+
+class TotalBlocksOnNode:
+    def __init__(self, node: 'Node', number_of_blocks: int) -> None:
+        self.node = node
+        self.number_of_blocks = number_of_blocks
+
+    def is_satisfied(self) -> bool:
+        _, data = self.node.get_metrics()
+        received_blocks_pattern = re.compile(r"^casperlabs_casper_packet_handler_blocks_received_total (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+        duplicates_blocks_pattern = re.compile(r"^casperlabs_casper_packet_handler_blocks_received_again_total (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+        api_created_blocks_pattern = re.compile(r"^casperlabs_casper_block_api_create_blocks_total (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+        total_blocks = received_blocks_pattern.search(data)
+        dup_blocks = duplicates_blocks_pattern.search(data)
+        api_blocks = api_created_blocks_pattern.search(data)
+        count = int(total_blocks.group(1)) - int(dup_blocks.group(1) or 0) + int(api_blocks.group(1) or 0)
+        logging.info(count)
+        if total_blocks is None:
+            return False
+        return count == self.number_of_blocks
 
 
 class HasAtLeastPeers:
@@ -246,6 +268,11 @@ def wait_for_peers_count_at_least(node: 'Node', npeers: int, timeout: int) -> No
 
 def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout: int, number_of_blocks: int) -> None:
     predicate = MetricsAvailable(node, number_of_blocks)
+    wait_using_wall_clock_time_or_fail(predicate, timeout)
+
+
+def wait_for_count_the_blocks_on_node(node: 'Node', timeout: int, number_of_blocks: int) -> None:
+    predicate = TotalBlocksOnNode(node, number_of_blocks)
     wait_using_wall_clock_time_or_fail(predicate, timeout)
 
 

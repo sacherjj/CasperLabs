@@ -83,7 +83,7 @@ object Main {
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     val node =
       for {
-        _       <- log.info(VersionInfo.get).toEffect
+        _       <- log.info(api.VersionInfo.get).toEffect
         runtime <- NodeRuntime(conf)
         _       <- runtime.main
       } yield ()
