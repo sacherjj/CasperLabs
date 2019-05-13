@@ -5,10 +5,12 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::Value;
+use meter::heap_meter::HeapSize;
+use meter::Meter;
 use shared::newtypes::Validated;
 use storage::global_state::{ExecutionEffect, StateReader};
 use storage::transform::TypeMismatch;
-use trackingcopy::{heap_meter::HeapSize, Meter, TrackingCopy};
+use trackingcopy::TrackingCopy;
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,

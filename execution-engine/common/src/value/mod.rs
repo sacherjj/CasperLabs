@@ -3,16 +3,14 @@ pub mod contract;
 pub mod uint;
 
 use crate::bytesrepr::{
-    Error, FromBytes, ToBytes, I32_SIZE, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U64_SIZE,
-    U8_SIZE,
+    Error, FromBytes, ToBytes, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U8_SIZE,
 };
 use crate::key::{Key, UREF_SIZE};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::iter;
-use core::mem::{size_of, size_of_val};
-use heapsize::HeapSizeOf;
+use core::mem::size_of;
 
 pub use self::account::Account;
 pub use self::contract::Contract;
@@ -31,30 +29,6 @@ pub enum Value {
     NamedKey(String, Key),
     Account(account::Account),
     Contract(contract::Contract),
-}
-
-impl HeapSizeOf for Value {
-    fn heap_size_of_children(&self) -> usize {
-        match self {
-            Value::Int32(_) => U32_SIZE,
-            Value::UInt128(_) => U128_SIZE,
-            Value::UInt256(_) => U256_SIZE,
-            Value::UInt512(_) => U512_SIZE,
-            Value::ByteArray(vec) => vec.capacity() * U8_SIZE,
-            Value::ListInt32(list) => list.capacity() * I32_SIZE,
-            String(s) => size_of_val(s),
-            ListString(list) => list.iter().fold(0, |sum, el| sum + size_of_val(el)),
-            NamedKey(name, key) => size_of_val(name) + key.heap_size_of_children(),
-            Account(account) => {
-                size_of_val(account.pub_key())
-                    + U64_SIZE
-                    + account.urefs_lookup().heap_size_of_children()
-            }
-            Contract(contract) => {
-                contract.urefs_lookup().heap_size_of_children() + contract.bytes().len() * U8_SIZE
-            }
-        }
-    }
 }
 
 const INT32_ID: u8 = 0;

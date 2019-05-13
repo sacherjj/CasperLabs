@@ -6,6 +6,7 @@ use common::key::{AccessRights, Key};
 use common::value::account::Account;
 use common::value::Value;
 use execution::Error;
+use meter::Meter;
 use rand::RngCore;
 use rand_chacha::ChaChaRng;
 use shared::newtypes::Validated;
@@ -13,7 +14,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 use storage::global_state::{ExecutionEffect, StateReader};
-use trackingcopy::{AddResult, Meter, TrackingCopy};
+use trackingcopy::{AddResult, TrackingCopy};
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R: StateReader<Key, Value>, M: Meter<Key, Value>> {
@@ -345,6 +346,7 @@ mod tests {
     use common::key::{AccessRights, Key};
     use common::value::{self, Account, Contract, Value};
     use execution::{create_rng, vec_key_rights_to_map};
+    use meter::count_meter::Count;
     use rand::RngCore;
     use rand_chacha::ChaChaRng;
     use shared::newtypes::Blake2bHash;
@@ -355,7 +357,7 @@ mod tests {
     use storage::global_state::inmem::*;
     use storage::history::*;
     use storage::transform::Transform;
-    use trackingcopy::{count_meter::Count, TrackingCopy};
+    use trackingcopy::TrackingCopy;
 
     fn mock_tc(
         init_key: Key,

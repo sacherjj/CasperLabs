@@ -1,6 +1,7 @@
 use common::key::Key;
 use execution::{self, Executor};
 use failure::Fail;
+use meter::heap_meter::HeapSize;
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::cell::RefCell;
@@ -9,7 +10,7 @@ use std::rc::Rc;
 use storage::global_state::ExecutionEffect;
 use storage::history::*;
 use storage::transform::Transform;
-use trackingcopy::{heap_meter::HeapSize, TrackingCopy};
+use trackingcopy::TrackingCopy;
 use wasm_prep::Preprocessor;
 
 #[derive(Debug, PartialEq, Eq, Clone)]

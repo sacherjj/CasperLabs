@@ -21,8 +21,6 @@ extern crate bitflags;
 #[cfg(any(test, feature = "gens"))]
 extern crate proptest;
 
-extern crate heapsize;
-
 #[cfg(not(feature = "std"))]
 #[global_allocator]
 pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;

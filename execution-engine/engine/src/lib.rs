@@ -4,7 +4,6 @@ extern crate blake2;
 extern crate common;
 extern crate core;
 extern crate failure;
-extern crate heapsize;
 extern crate itertools;
 extern crate lru_cache;
 extern crate parity_wasm;
@@ -19,8 +18,10 @@ extern crate wasm_prep;
 extern crate wasmi;
 
 pub mod argsparser;
+pub mod bytesmeter;
 pub mod engine;
 pub mod execution;
+pub mod meter;
 pub mod runtime_context;
 pub mod trackingcopy;
 

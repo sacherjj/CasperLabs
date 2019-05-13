@@ -20,7 +20,6 @@ rand_chacha = "0.1.1"
 shared = { path = "../shared" }
 itertools = "0.8.0"
 lru-cache = "0.1.2"
-heapsize = "0.4.2"
 
 [dev-dependencies]
 matches = "0.1.8"

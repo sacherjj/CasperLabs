@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use common::key::Key;
 use common::value::Value;
 use lru_cache::LruCache;
+use meter::Meter;
 use parking_lot::Mutex;
 use shared::newtypes::Validated;
 use storage::global_state::{ExecutionEffect, StateReader};
@@ -14,34 +15,6 @@ use utils::add;
 pub enum QueryResult {
     Success(Value),
     ValueNotFound(String),
-}
-
-/// Trait for measuring "size" of key-value pairs.
-pub trait Meter<K, V> {
-    fn measure(&self, k: &K, v: &V) -> usize;
-}
-
-pub mod heap_meter {
-    use heapsize::HeapSizeOf;
-
-    pub struct HeapSize;
-
-    impl<K: HeapSizeOf, V: HeapSizeOf> super::Meter<K, V> for HeapSize {
-        fn measure(&self, _: &K, v: &V) -> usize {
-            std::mem::size_of::<V>() + v.heap_size_of_children()
-        }
-    }
-}
-
-#[cfg(test)]
-pub mod count_meter {
-    pub struct Count;
-
-    impl<K, V> super::Meter<K, V> for Count {
-        fn measure(&self, _k: &K, _v: &V) -> usize {
-            1
-        }
-    }
 }
 
 /// Keeps track of already accessed keys.
@@ -310,7 +283,8 @@ mod tests {
     use storage::transform::Transform;
 
     use super::{AddResult, QueryResult, Validated};
-    use trackingcopy::{count_meter::Count, TrackingCopy};
+    use meter::count_meter::Count;
+    use trackingcopy::TrackingCopy;
 
     struct CountingDb {
         count: Rc<Cell<i32>>,
@@ -736,7 +710,7 @@ mod tests {
 pub mod tracking_copy_cache {
     use common::key::Key;
     use common::value::Value;
-    use trackingcopy::count_meter::Count;
+    use meter::count_meter::Count;
     use trackingcopy::TrackingCopyCache;
 
     #[test]
@@ -768,4 +742,3 @@ pub mod tracking_copy_cache {
         assert_eq!(tc_cache.get(&k3), Some(&v3));
     }
 }
-
