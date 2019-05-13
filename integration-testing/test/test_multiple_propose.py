@@ -30,5 +30,5 @@ def test_multiple_propose(started_standalone_bootstrap_node, wasm):
         assert e.exit_code == 1, "Second propose should fail"
     wait_for_blocks_count_at_least(started_standalone_bootstrap_node, 1, 1, started_standalone_bootstrap_node.timeout)
 
-    # Number of blocks after second ppropose should not chaange
+    # Number of blocks after second propose should not change
     assert started_standalone_bootstrap_node.get_blocks_count(100) == number_of_blocks

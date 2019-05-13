@@ -1,8 +1,8 @@
 import contextlib
 import logging
-import shutil
 import os
 import re
+import shutil
 import threading
 from multiprocessing import Process, Queue
 from queue import Empty
@@ -11,27 +11,22 @@ from typing import TYPE_CHECKING, Dict, Generator, List, Optional, Tuple, Union
 from docker.client import DockerClient
 from docker.errors import ContainerError
 
-from .common import (
-    TestingContext,
-    Network,
-    make_tempdir,
-    random_string,
+from .common import Network, TestingContext, make_tempdir, random_string
+from .errors import (
+    CasperLabsNodeAddressNotFoundError,
+    CommandTimeoutError,
+    NonZeroExitCodeError,
+    UnexpectedProposeOutputFormatError,
+    UnexpectedShowBlocksOutputFormatError,
 )
 from .wait import (
+    wait_for_approved_block_received,
     wait_for_approved_block_received_handler_state,
+    wait_for_converged_network,
     wait_for_node_started,
     wait_for_started_network,
-    wait_for_approved_block_received,
-    wait_for_converged_network
 )
 
-from .errors import (
-    UnexpectedShowBlocksOutputFormatError,
-    UnexpectedProposeOutputFormatError,
-    CasperLabsNodeAddressNotFoundError,
-    NonZeroExitCodeError,
-    CommandTimeoutError,
-)
 
 if TYPE_CHECKING:
     from .common import KeyPair
@@ -57,7 +52,13 @@ CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
 CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
 GRPC_SOCKET_FILE = f"{CL_SOCKETS_DIR}/.casper-node.sock"
 EXECUTION_ENGINE_COMMAND = ".casperlabs/sockets/.casper-node.sock"
-CONTRACT_NAME = "helloname.wasm"
+
+HELLO_NAME = "helloname.wasm"
+HELLO_WORLD = "helloworld.wasm"
+COUNTER_CALL = "countercall.wasm"
+MAILING_LIST_CALL = "mailinglistcall.wasm"
+COMBINED_CONTRACT = "combinedcontractsdefine.wasm"
+
 
 HOST_MOUNT_DIR = f"/tmp/resources_{TAG}"
 HOST_GENESIS_DIR = f"{HOST_MOUNT_DIR}/genesis"
@@ -212,6 +213,7 @@ class Node:
                session: str = None, payment: str = None,
                gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
 
+<<<<<<< HEAD
         session = session or CONTRACT_NAME
         payment = payment or CONTRACT_NAME
 
@@ -226,6 +228,13 @@ class Node:
             f"--payment=/data/{CONTRACT_NAME}"
         ])
 
+=======
+        session = session if session is not None else HELLO_NAME
+        payment = payment if payment is not None else HELLO_NAME
+        command = (f"--host {self.name} deploy --from {from_address} --gas-limit "
+                   f"{gas_limit} --gas-price  {gas_price} --nonce {nonce} --session=/data/{session} "
+                   f"--payment=/data/{payment}")
+>>>>>>> 7e4d0bf354e74c64222d5fb2c0c657231719caa1
         volumes = {
             HOST_MOUNT_DIR: {
                 "bind": "/data",
@@ -341,7 +350,6 @@ def make_node(
         hostname=name,
         environment=env,
     )
-
     node = Node(
         container,
         deploy_dir,
@@ -512,17 +520,21 @@ def make_vdag_name(network: str, i: Union[int, str]) -> str:
     return f"vdag.{i}.{network}"
 
 
+def make_get_state_client_name() -> str:
+    return f"get_state.{random_string(5)}"
+
+
 def make_peer(
-        *,
-        docker_client: "DockerClient",
-        network: str,
-        socket_volume: str,
-        name: str,
-        command_timeout: int,
-        bonds_file: str,
-        bootstrap: Node,
-        key_pair: "KeyPair",
-        mem_limit: Optional[str] = None,
+    *,
+    docker_client: "DockerClient",
+    network: str,
+    socket_volume: str,
+    name: str,
+    command_timeout: int,
+    bonds_file: str,
+    bootstrap: Node,
+    key_pair: "KeyPair",
+    mem_limit: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -618,6 +630,33 @@ def started_peer(
         yield peer
     finally:
         peer.cleanup()
+
+
+def get_contract_state(
+    *,
+    docker_client: "DockerClient",
+    network_name: str,
+    target_host_name: str,
+    port: int,
+    _type: str,
+    key: str,
+    path: str,
+    block_hash: str,
+    image: str = DEFAULT_CLIENT_IMAGE
+):
+    name = make_get_state_client_name()
+    command = f'--host {target_host_name} --port {port} query-state -t {_type} -k {key} -p "{path}" -b {block_hash}'
+    logging.info(command)
+    output = docker_client.containers.run(
+        image,
+        name=name,
+        user='root',
+        auto_remove=True,
+        command=command,
+        network=network_name,
+        hostname=name
+    )
+    return output
 
 
 def create_peer_nodes(
@@ -762,14 +801,18 @@ def complete_network(context: TestingContext) -> Generator[Network, None, None]:
             yield network
 
 
-def deploy_and_propose(node, _contract_name):
+def deploy(node: 'Node', _contract_name: str, nonce: int = 0):
     local_contract_file_path = os.path.join('resources', _contract_name)
     shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{_contract_name}")
-    deploy_output = node.deploy()
+    deploy_output = node.deploy(session=_contract_name, payment=_contract_name, nonce=nonce)
     assert deploy_output.strip() == "Success!"
     logging.info(f"The deployed output is : {deploy_output}")
+
+
+def propose(node: 'Node', *args):
     block_hash_output_string = node.propose()
     block_hash = extract_block_hash_from_propose_output(block_hash_output_string)
     assert block_hash is not None
-    logging.info(f"The block hash: {block_hash} generated for {node.container.name} for {_contract_name}")
+    con_names = ", ".join([n for n in args])
+    logging.info(f"The block hash: {block_hash} generated for {node.container.name} for {con_names}")
     return block_hash

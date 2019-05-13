@@ -4,11 +4,12 @@ from typing import Generator
 
 from . import conftest
 from .cl_node.casperlabsnode import (
-    CONTRACT_NAME,
-    docker_network_with_started_bootstrap,
-    start_network,
+    HELLO_NAME,
     complete_network,
-    deploy_and_propose
+    deploy,
+    docker_network_with_started_bootstrap,
+    propose,
+    start_network,
 )
 from .cl_node.common import Network, TestingContext
 from .cl_node.wait import (
@@ -56,7 +57,8 @@ def casper_propose_and_deploy(network):
     """
     for node in network.nodes:
         logging.info("Run test on node '{}'".format(node.name))
-        deploy_and_propose(node, CONTRACT_NAME)
+        deploy(node, HELLO_NAME)
+        propose(node, HELLO_NAME)
 
 
 def test_casper_propose_and_deploy(command_line_options_fixture, docker_client_fixture):
