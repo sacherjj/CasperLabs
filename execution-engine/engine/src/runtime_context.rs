@@ -31,6 +31,7 @@ pub struct RuntimeContext<'a, R: StateReader<Key, Value>> {
     gas_counter: u64,
     fn_store_id: u32,
     rng: ChaChaRng,
+    protocol_version: u64,
 }
 
 impl<'a, R: StateReader<Key, Value>> RuntimeContext<'a, R>
@@ -49,6 +50,7 @@ where
         gas_counter: u64,
         fn_store_id: u32,
         rng: ChaChaRng,
+        protocol_version: u64,
     ) -> Self {
         RuntimeContext {
             state,
@@ -61,6 +63,7 @@ where
             gas_counter,
             fn_store_id,
             rng,
+            protocol_version,
         }
     }
 
@@ -114,6 +117,10 @@ where
 
     pub fn base_key(&self) -> Key {
         self.base_key
+    }
+
+    pub fn protocol_version(&self) -> u64 {
+        self.protocol_version
     }
 
     /// Generates new function address.
@@ -426,6 +433,7 @@ mod tests {
             0,
             0,
             rng,
+            1,
         )
     }
 
@@ -711,6 +719,7 @@ mod tests {
             0,
             0,
             chacha_rng,
+            1,
         );
 
         let uref_name = "NewURef".to_owned();
@@ -762,6 +771,7 @@ mod tests {
             0,
             0,
             chacha_rng,
+            1,
         );
 
         let uref_name = "NewURef".to_owned();

@@ -95,7 +95,6 @@ pub struct Runtime<'a, R: StateReader<Key, Value>> {
     module: Module,
     result: Vec<u8>,
     host_buf: Vec<u8>,
-    protocol_version: u64,
     context: RuntimeContext<'a, R>,
 }
 
@@ -120,18 +119,12 @@ where
     R::Error: Into<Error>,
 {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        memory: MemoryRef,
-        module: Module,
-        protocol_version: u64,
-        context: RuntimeContext<'a, R>,
-    ) -> Self {
+    pub fn new(memory: MemoryRef, module: Module, context: RuntimeContext<'a, R>) -> Self {
         Runtime {
             memory,
             module,
             result: Vec::new(),
             host_buf: Vec::new(),
-            protocol_version,
             context,
         }
     }
@@ -351,7 +344,7 @@ where
         urefs: BTreeMap<String, Key>,
     ) -> Result<[u8; 32], Error> {
         let contract = common::value::contract::Contract::new(fn_bytes, urefs);
-        let value = Value::from_contract(contract, self.protocol_version);
+        let value = Value::from_contract(contract, self.context.protocol_version());
         let new_hash = self.context.store_contract(value)?;
         Ok(new_hash)
     }
@@ -822,7 +815,6 @@ where
         module: parity_module,
         result: Vec::new(),
         host_buf: Vec::new(),
-        protocol_version,
         context: RuntimeContext::new(
             current_runtime.context.state(),
             refs,
@@ -834,6 +826,7 @@ where
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
             rng,
+            protocol_version,
         ),
     };
 
@@ -976,8 +969,9 @@ impl Executor<Module> for WasmiExecutor {
             gas_counter,
             fn_store_id,
             rng,
+            protocol_version,
         );
-        let mut runtime = Runtime::new(memory, parity_module, protocol_version, context);
+        let mut runtime = Runtime::new(memory, parity_module, context);
         on_fail_charge!(
             instance.invoke_export("call", &[], &mut runtime),
             runtime.context.gas_counter()
