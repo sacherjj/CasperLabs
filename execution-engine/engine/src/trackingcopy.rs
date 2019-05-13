@@ -69,11 +69,7 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
             return Some(value);
         };
 
-        self.reads_cached.get_refresh(key).map(|v| {
-            // a hack to downgrade &mut Value to &Value
-            let v_imm: &Value = v;
-            v_imm
-        })
+        self.reads_cached.get_refresh(key).map(|v| &*v)
     }
 
     pub fn is_empty(&self) -> bool {
