@@ -12,6 +12,7 @@
       }
     ]
   },
+  "description": "Block propagation with the TransportLayer",
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
@@ -426,7 +427,7 @@
     ]
   },
   "timezone": "",
-  "title": "Block Gossiping",
+  "title": "Block Broadcasting",
   "uid": "c18uWEXik",
   "version": 1
 }
