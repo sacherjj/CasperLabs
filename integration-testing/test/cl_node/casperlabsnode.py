@@ -210,9 +210,11 @@ class Node:
             raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
 
     def deploy(self, from_address: str = "00000000000000000000",
-               session: str = HELLO_NAME, payment: str = HELLO_NAME,
+               session: str = None, payment: str = None,
                gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
 
+        session = session if session is not None else HELLO_NAME
+        payment = payment if payment is not None else HELLO_NAME
         command = (f"--host {self.name} deploy --from {from_address} --gas-limit "
                    f"{gas_limit} --gas-price  {gas_price} --nonce {nonce} --session=/data/{session} "
                    f"--payment=/data/{payment}")
