@@ -45,6 +45,7 @@ services:
       CL_VALIDATOR_PRIVATE_KEY: $CL_VALIDATOR_PRIVATE_KEY
       CL_GRPC_SOCKET: /root/.casperlabs/sockets/.casper-node.sock
       CL_SERVER_USE_GOSSIPING: $CL_SERVER_USE_GOSSIPING
+      CL_SERVER_RELAY_FACTOR: 1
       CL_LOG_LEVEL: $CL_LOG_LEVEL
     entrypoint:
       - sh
