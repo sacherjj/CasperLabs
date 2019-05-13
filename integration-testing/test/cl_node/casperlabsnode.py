@@ -213,28 +213,17 @@ class Node:
                session: str = None, payment: str = None,
                gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
 
-<<<<<<< HEAD
         session = session or CONTRACT_NAME
         payment = payment or CONTRACT_NAME
 
-        command = " ".join([
-            f"--host {self.name}",
-            "deploy",
-            "--from", from_address,
-            "--gas-limit", str(gas_limit),
-            "--gas-price", str(gas_price),
-            "--nonce", str(nonce),
-            f"--session=/data/{CONTRACT_NAME}",
-            f"--payment=/data/{CONTRACT_NAME}"
-        ])
-
-=======
-        session = session if session is not None else HELLO_NAME
-        payment = payment if payment is not None else HELLO_NAME
-        command = (f"--host {self.name} deploy --from {from_address} --gas-limit "
-                   f"{gas_limit} --gas-price  {gas_price} --nonce {nonce} --session=/data/{session} "
+        command = (f"--host {self.name} deploy "
+                   f"--from {from_address} "
+                   f"--gas-limit {gas_limit} "
+                   f"--gas-price {gas_price} "
+                   f"--nonce {nonce} "
+                   f"--session=/data/{session} "
                    f"--payment=/data/{payment}")
->>>>>>> 7e4d0bf354e74c64222d5fb2c0c657231719caa1
+
         volumes = {
             HOST_MOUNT_DIR: {
                 "bind": "/data",

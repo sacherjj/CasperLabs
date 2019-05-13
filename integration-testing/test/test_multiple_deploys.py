@@ -127,7 +127,7 @@ class DeployThread(threading.Thread):
                          # Propose only picks out one of the deploys because
                          # it is not allowed to pick deploys that conflict (write the same key) any more.
                          # helloworld.wasm fails because helloname.wasm was not deployed yet.
-                         ([['helloname.wasm','helloname.wasm','helloworld.wasm']], [1, 1, 1, 0]),
+                         ([['helloname.wasm'],['helloworld.wasm']], [1, 1, 1, 1, 1, 1, 0]),
 ])
 # Curently nodes is a network of three bootstrap connected nodes.
 def test_multiple_deploys_at_once(nodes, timeout,
