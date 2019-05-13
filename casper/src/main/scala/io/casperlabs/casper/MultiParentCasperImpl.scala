@@ -1,6 +1,6 @@
 package io.casperlabs.casper
 
-import cats.Monad
+import cats.{Applicative, Monad}
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
@@ -20,6 +20,7 @@ import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
+import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc.{ProtocolVersion, ValidateRequest}
@@ -68,8 +69,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
   /** Add a block if it hasn't been added yet. */
   def addBlock(
-      block: BlockMessage,
-      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
+      block: BlockMessage
   ): F[BlockStatus] =
     Sync[F].bracket(blockProcessingLock.acquire)(
       _ =>
@@ -91,15 +91,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                              )
                          )
                      } else {
-                       (validatorId match {
-                         case Some(
-                             ValidatorIdentity(publicKey, _, _)
-                             ) =>
-                           val sender =
-                             ByteString.copyFrom(publicKey)
-                           handleDoppelganger(block, sender)
-                         case None => ().pure[F]
-                       }) *> Cell[F, CasperState].modify { s =>
+                       Cell[F, CasperState].modify { s =>
                          s.copy(
                            seenBlockHashes = s.seenBlockHashes + blockHash
                          )
@@ -277,8 +269,10 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
         dag       <- blockDag
-        tipHashes <- estimator(dag)
-        parents   <- chooseNonConflicting[F](tipHashes, genesis, dag)
+        tipHashes <- estimator(dag).map(_.toVector)
+        tips      <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
+        merged    <- ExecEngineUtil.merge[F](tips, dag)
+        parents   = merged.parents
         _ <- Log[F].info(
               s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
             )
@@ -297,7 +291,14 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
         number          = maxBlockNumber + 1
         protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(number)
         proposal <- if (remaining.nonEmpty || parents.length > 1) {
-                     createProposal(dag, parents, remaining, justifications, protocolVersion)
+                     createProposal(
+                       dag,
+                       parents,
+                       merged,
+                       remaining,
+                       justifications,
+                       protocolVersion
+                     )
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
@@ -341,6 +342,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   private def createProposal(
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMessage],
+      merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, BlockMessage],
       deploys: Seq[DeployData],
       justifications: Seq[Justification],
       protocolVersion: ProtocolVersion
@@ -349,7 +351,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       now <- Time[F].currentMillis
       s   <- Cell[F, CasperState].read
       stateResult <- ExecEngineUtil
-                      .computeDeploysCheckpoint(parents, deploys, dag, protocolVersion)
+                      .computeDeploysCheckpoint[F](
+                        merged,
+                        deploys,
+                        protocolVersion
+                      )
       DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number, protocolVersion) = stateResult
       //TODO: compute bonds properly
       newBonds = ProtoUtil.bonds(parents.head)
@@ -416,7 +422,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                                                    .Context(genesis, lastFinalizedBlockHash)
                                                    .some,
                                                  updatedDag,
-                                                 block
+                                                 block,
+                                                 treatAsGenesis = false
                                                )
                                      (status, updatedDag) = attempt
                                    } yield ((block, status) :: attempts, updatedDag)
@@ -456,6 +463,16 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       s <- Cell[F, CasperState].read
       _ <- s.dependencyDag.dependencyFree.toList.traverse(broadcaster.requestMissingDependency(_))
     } yield ()
+
+  /** The new gossiping first syncs the missing DAG, then downloads and adds the blocks in topological order.
+    * However the EquivocationDetector wants to know about dependencies so it can assign different statuses,
+    * so we'll make the synchronized DAG known via a partial block message, so any missing dependencies can
+    * be tracked, i.e. Casper will know about the pending graph.  */
+  def addMissingDependencies(block: BlockMessage): F[Unit] =
+    for {
+      dag <- blockDag
+      _   <- statelessExecutor.addMissingDependencies(block, dag)
+    } yield ()
 }
 
 object MultiParentCasperImpl {
@@ -471,22 +488,23 @@ object MultiParentCasperImpl {
 
     implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
 
-    /** When we're creating Genesis we won't have a Genesis check against. */
-    def isGenesisLike(block: BlockMessage) =
-      block.getHeader.parentsHashList.isEmpty
-
     def validateAndAddBlock(
         maybeContext: Option[StatelessExecutor.Context],
         dag: BlockDagRepresentation[F],
         block: BlockMessage
-    )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] =
+    )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] = {
+      val treatAsGenesis =
+        block.getHeader.parentsHashList.isEmpty &&
+          block.sender.isEmpty &&
+          block.sig.isEmpty
+
       for {
         dag         <- BlockDagStorage[F].getRepresentation
-        validFormat <- Validate.formatOfFields[F](block)
-        validSig    <- Validate.blockSignature[F](block)
+        validFormat <- Validate.formatOfFields[F](block, treatAsGenesis)
+        validSig    <- if (!treatAsGenesis) Validate.blockSignature[F](block) else true.pure[F]
         validSender <- maybeContext.map { ctx =>
                         Validate.blockSender[F](block, ctx.genesis, dag)
-                      } getOrElse isGenesisLike(block).pure[F]
+                      } getOrElse (treatAsGenesis).pure[F]
         validVersion <- Validate.version[F](
                          block,
                          CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
@@ -495,10 +513,10 @@ object MultiParentCasperImpl {
                         else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]
                         else if (!validSender) (InvalidUnslashableBlock, dag).pure[F]
                         else if (!validVersion) (InvalidUnslashableBlock, dag).pure[F]
-                        else attemptAdd(maybeContext, dag, block)
+                        else attemptAdd(maybeContext, dag, block, treatAsGenesis)
         (status, updatedDag) = attemptResult
       } yield (status, updatedDag)
-
+    }
     /* Execute the block to get the effects then do some more validation.
      * Save the block if everything checks out.
      * We want to catch equivocations only after we confirm that the block completing
@@ -506,7 +524,8 @@ object MultiParentCasperImpl {
     def attemptAdd(
         maybeContext: Option[StatelessExecutor.Context],
         dag: BlockDagRepresentation[F],
-        block: BlockMessage
+        block: BlockMessage,
+        treatAsGenesis: Boolean
     )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] = {
       val validationStatus = (for {
         _ <- Log[F].info(
@@ -521,15 +540,25 @@ object MultiParentCasperImpl {
                                    ctx.lastFinalizedBlockHash
                                  )
                                } getOrElse {
-                                 Validate.blockSummaryPreGenesis[F](block, dag, shardId)
+                                 Validate
+                                   .blockSummaryPreGenesis[F](block, dag, shardId, treatAsGenesis)
                                }
         casperState <- Cell[F, CasperState].read
-        processedHash <- ExecEngineUtil
-                          .effectsForBlock(block, dag)
-                          .recoverWith {
-                            case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
-                          }
-        (preStateHash, blockEffects) = processedHash
+        // Confirm the parents are correct (including checking they commute) and capture
+        // the effect needed to compute the correct pre-state as well.
+        merged <- maybeContext.fold(
+                   ExecEngineUtil.MergeResult
+                     .empty[ExecEngineUtil.TransformMap, BlockMessage]
+                     .pure[F]
+                 ) { ctx =>
+                   Validate.parents[F](block, ctx.lastFinalizedBlockHash, dag)
+                 }
+        preStateHash <- ExecEngineUtil.computePrestate[F](merged)
+        blockEffects <- ExecEngineUtil
+                         .effectsForBlock[F](block, preStateHash, dag)
+                         .recoverWith {
+                           case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
+                         }
         _ <- Validate.transactions[F](
               block,
               dag,
@@ -633,6 +662,7 @@ object MultiParentCasperImpl {
             .info(
               s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
             ) *> dag.pure[F]
+
         case InvalidUnslashableBlock | InvalidFollows | InvalidBlockNumber | InvalidParents |
             JustificationRegression | InvalidSequenceNumber | NeglectedInvalidBlock |
             NeglectedEquivocation | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
@@ -678,19 +708,13 @@ object MultiParentCasperImpl {
 
     /** Check if the block has dependencies that we don't have in store.
       * Add those to the dependency DAG. */
-    private def addMissingDependencies(
+    def addMissingDependencies(
         block: BlockMessage,
         dag: BlockDagRepresentation[F]
     )(implicit state: Cell[F, CasperState]): F[Unit] =
       for {
-        missingDependencies <- dependenciesHashesOf(block)
-                                .filterA(
-                                  blockHash =>
-                                    dag
-                                      .lookup(blockHash)
-                                      .map(_.isEmpty)
-                                )
-        _ <- missingDependencies.traverse(hash => addMissingDependency(hash, block.blockHash))
+        missingDependencies <- dependenciesHashesOf(block).filterA(dag.contains(_).map(!_))
+        _                   <- missingDependencies.traverse(hash => addMissingDependency(hash, block.blockHash))
       } yield ()
 
     /** Keep track of a block depending on another one, so we know when we can start processing. */
@@ -711,56 +735,121 @@ object MultiParentCasperImpl {
     case class Context(genesis: BlockMessage, lastFinalizedBlockHash: BlockHash)
   }
 
-  // Temporary class to encapsulate the gossiping effects. Later should be completely farmed out to the
-  // thing calling the MultiParentCasper methods.
-  class Broadcaster[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk]() {
-
-    /** Gossip the created block, or ask for dependencies. */
+  /** Encapsulating all methods that might use peer-to-peer communication. */
+  trait Broadcaster[F[_]] {
     def networkEffects(
-        block: BlockMessage, // Not just BlockHash because if the status MissingBlocks it's not in store yet; although we should be able to get it from CasperState.
+        block: BlockMessage,
         status: BlockStatus
-    )(implicit state: Cell[F, CasperState]): F[Unit] =
-      status match {
-        //Add successful! Send block to peers, log success, try to add other blocks
-        case Valid =>
-          CommUtil.sendBlock[F](block)
+    ): F[Unit]
 
-        case MissingBlocks =>
-          // In the future this won't happen because the DownloadManager won't try to add blocks with missing dependencies.
-          fetchMissingDependencies(block)
+    def requestMissingDependency(blockHash: BlockHash): F[Unit]
+  }
 
-        case AdmissibleEquivocation =>
-          CommUtil.sendBlock[F](block)
+  object Broadcaster {
+    def fromTransportLayer[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk]()(
+        implicit state: Cell[F, CasperState]
+    ) =
+      new Broadcaster[F] {
 
-        case IgnorableEquivocation | InvalidUnslashableBlock | InvalidFollows | InvalidBlockNumber |
-            InvalidParents | JustificationRegression | InvalidSequenceNumber |
-            NeglectedInvalidBlock | NeglectedEquivocation | InvalidTransaction | InvalidBondsCache |
-            InvalidRepeatDeploy | InvalidShardId | InvalidBlockHash | InvalidDeployCount |
-            InvalidPreStateHash | InvalidPostStateHash | Processing =>
-          ().pure[F]
+        /** Gossip the created block, or ask for dependencies. */
+        def networkEffects(
+            block: BlockMessage, // Not just BlockHash because if the status MissingBlocks it's not in store yet; although we should be able to get it from CasperState.
+            status: BlockStatus
+        ): F[Unit] =
+          status match {
+            //Add successful! Send block to peers.
+            case Valid | AdmissibleEquivocation =>
+              CommUtil.sendBlock[F](block)
 
-        case BlockException(_) => ().pure[F]
+            case MissingBlocks =>
+              // In the future this won't happen because the DownloadManager won't try to add blocks with missing dependencies.
+              fetchMissingDependencies(block)
+
+            case IgnorableEquivocation | InvalidUnslashableBlock | InvalidFollows |
+                InvalidBlockNumber | InvalidParents | JustificationRegression |
+                InvalidSequenceNumber | NeglectedInvalidBlock | NeglectedEquivocation |
+                InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidShardId |
+                InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash |
+                Processing =>
+              Log[F].debug(
+                s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $status"
+              )
+
+            case BlockException(ex) =>
+              Log[F].debug(
+                s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $ex"
+              )
+          }
+
+        /** Ask all peers to send us a block. */
+        def requestMissingDependency(blockHash: BlockHash) =
+          CommUtil.sendBlockRequest[F](
+            BlockRequest(Base16.encode(blockHash.toByteArray), blockHash)
+          )
+
+        /** Check if the block has dependencies that we don't have in store of buffer.
+          * Add those to the dependency DAG and ask peers to send it. */
+        private def fetchMissingDependencies(
+            block: BlockMessage
+        )(implicit state: Cell[F, CasperState]): F[Unit] =
+          for {
+            casperState <- Cell[F, CasperState].read
+            missingDependencies = casperState.dependencyDag
+              .childToParentAdjacencyList(block.blockHash)
+              .toList
+            missingUnseenDependencies = missingDependencies.filter(
+              blockHash => !casperState.seenBlockHashes.contains(blockHash)
+            )
+            _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
+          } yield ()
       }
 
-    /** Ask all peers to send us a block. */
-    def requestMissingDependency(blockHash: BlockHash) =
-      CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(blockHash.toByteArray), blockHash))
+    /** Network access using the new RPC style gossiping. */
+    def fromGossipServices[F[_]: Applicative](
+        validatorId: Option[ValidatorIdentity],
+        relaying: gossiping.Relaying[F]
+    ) = new Broadcaster[F] {
 
-    /** Check if the block has dependencies that we don't have in store of buffer.
-      * Add those to the dependency DAG and ask peers to send it. */
-    private def fetchMissingDependencies(
-        block: BlockMessage
-    )(implicit state: Cell[F, CasperState]): F[Unit] =
-      for {
-        casperState <- Cell[F, CasperState].read
-        missingDependencies = casperState.dependencyDag
-          .childToParentAdjacencyList(block.blockHash)
-          .toList
-        missingUnseenDependencies = missingDependencies.filter(
-          blockHash => !casperState.seenBlockHashes.contains(blockHash)
-        )
-        _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
-      } yield ()
+      val maybeOwnPublickKey = validatorId map {
+        case ValidatorIdentity(publicKey, _, _) =>
+          ByteString.copyFrom(publicKey)
+      }
 
+      def networkEffects(
+          block: BlockMessage,
+          status: BlockStatus
+      ): F[Unit] =
+        status match {
+          case Valid | AdmissibleEquivocation =>
+            maybeOwnPublickKey match {
+              case Some(key) if key == block.sender =>
+                relaying.relay(List(block.blockHash))
+              case _ =>
+                // We were adding somebody else's block. The DownloadManager did the gossiping.
+                ().pure[F]
+            }
+
+          case MissingBlocks =>
+            throw new RuntimeException(
+              "Impossible! The DownloadManager should not tell Casper about blocks with missing dependencies!"
+            )
+
+          case IgnorableEquivocation | InvalidUnslashableBlock | InvalidFollows |
+              InvalidBlockNumber | InvalidParents | JustificationRegression |
+              InvalidSequenceNumber | NeglectedInvalidBlock | NeglectedEquivocation |
+              InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidShardId |
+              InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash |
+              Processing =>
+            ().pure[F]
+
+          case BlockException(_) =>
+            ().pure[F]
+        }
+
+      def requestMissingDependency(blockHash: BlockHash): F[Unit] =
+        // We are letting Casper know about the pending DAG, so it may try to ask for dependencies,
+        // but those will be naturally downloaded by the DownloadManager.
+        ().pure[F]
+    }
   }
 }

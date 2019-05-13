@@ -2,7 +2,11 @@ package io.casperlabs.casper.util.comm
 
 import io.casperlabs.casper.HashSetCasperTest
 import io.casperlabs.casper.genesis.contracts._
-import io.casperlabs.casper.helper.HashSetCasperTestNode
+import io.casperlabs.casper.helper.{
+  HashSetCasperTestNode,
+  TransportLayerCasperTestNode,
+  TransportLayerCasperTestNodeFactory
+}
 import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.scalatestcontrib._
@@ -68,7 +72,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   }
 }
 
-object BlockApproverProtocolTest {
+object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
   def createUnapproved(requiredSigs: Int, block: BlockMessage): UnapprovedBlock =
     UnapprovedBlock(Some(ApprovedBlockCandidate(Some(block), requiredSigs)), 0L, 0L)
 
@@ -80,7 +84,7 @@ object BlockApproverProtocolTest {
       wallets: Seq[PreWallet],
       sk: Array[Byte],
       bonds: Map[Array[Byte], Long]
-  ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
+  ): Effect[(BlockApproverProtocol, TransportLayerCasperTestNode[Effect])] = {
 
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
@@ -94,7 +98,7 @@ object BlockApproverProtocolTest {
       deployTimestamp
     )
     for {
-      nodes <- HashSetCasperTestNode.networkEff(Vector(sk), genesis, transforms)
+      nodes <- networkEff(Vector(sk), genesis, transforms)
       node  = nodes.head
     } yield
       new BlockApproverProtocol(

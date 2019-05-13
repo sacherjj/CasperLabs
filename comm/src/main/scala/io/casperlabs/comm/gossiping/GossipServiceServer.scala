@@ -14,13 +14,14 @@ import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.shared.{Compression, Log}
+import io.casperlabs.metrics.Metrics
 import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
 import scala.util.control.NonFatal
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
-class GossipServiceServer[F[_]: Concurrent: Par: Log](
+class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
     backend: GossipServiceServer.Backend[F],
     synchronizer: Synchronizer[F],
     downloadManager: DownloadManager[F],
@@ -38,9 +39,9 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
     // and finally notify the consensus engine.
     newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying = false).start)
 
-  /* Same as 'newBlocks' but with synchronous semantics, needed for bootstrapping */
-  protected[gossiping] def newBlocksSynchronous(request: NewBlocksRequest): F[NewBlocksResponse] =
-    newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying = true))
+  /* Same as 'newBlocks' but with synchronous semantics, needed for bootstrapping and some tests. */
+  def newBlocksSynchronous(request: NewBlocksRequest, skipRelaying: Boolean): F[NewBlocksResponse] =
+    newBlocks(request, (node, hashes) => sync(node, hashes, skipRelaying))
 
   private def newBlocks(
       request: NewBlocksRequest,
@@ -95,7 +96,9 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log](
     }
 
     val trySync = for {
-      _ <- Log[F].info(s"Notified about ${newBlockHashes.size} new blocks by ${source.show}.")
+      _ <- Log[F].info(
+            s"Received notification about ${newBlockHashes.size} new blocks from ${source.show}."
+          )
       dagOrError <- synchronizer.syncDag(
                      source = source,
                      targetBlockHashes = newBlockHashes
@@ -289,7 +292,7 @@ object GossipServiceServer {
     def listTips: F[Seq[BlockSummary]]
   }
 
-  def apply[F[_]: Concurrent: Par: Log](
+  def apply[F[_]: Concurrent: Par: Log: Metrics](
       backend: GossipServiceServer.Backend[F],
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],

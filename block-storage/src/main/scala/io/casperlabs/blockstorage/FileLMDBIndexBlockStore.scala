@@ -6,7 +6,7 @@ import java.nio.file._
 
 import cats.Monad
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, ExitCase, Sync}
+import cats.effect.{Concurrent, Effect, ExitCase, Resource, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
@@ -15,6 +15,7 @@ import io.casperlabs.shared.Resources.withResource
 import io.casperlabs.blockstorage.FileLMDBIndexBlockStore.Checkpoint
 import io.casperlabs.blockstorage.StorageError.StorageErr
 import io.casperlabs.blockstorage.util.byteOps._
+import io.casperlabs.blockstorage.util.fileIO
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
@@ -24,8 +25,10 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
+import monix.eval.Task
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
+import io.casperlabs.shared.PathOps._
 
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
@@ -206,6 +209,10 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
         _ <- withWriteTxn { txn =>
               index.drop(txn)
             }
+        _      <- checkpointsDir.deleteDirectory()
+        _      <- makeDirectory(checkpointsDir)
+        _      <- modifyCheckpoints(_.empty)
+        _      <- modifyCurrentIndex(_ => 0)
         result <- blockMessageRandomAccessFile.setLength(0)
       } yield result
     )
@@ -342,4 +349,20 @@ object FileLMDBIndexBlockStore {
             }
       result <- create[F](env, config.storagePath, config.checkpointsDirPath)
     } yield result
+
+  def apply[F[_]: Concurrent: Log: RaiseIOError: Metrics](
+      dataDir: Path,
+      blockstorePath: Path,
+      mapSize: Long
+  ): Resource[F, BlockStore[F]] =
+    Resource.make {
+      for {
+        _             <- fileIO.makeDirectory(dataDir)
+        _             <- fileIO.makeDirectory(blockstorePath)
+        blockstoreEnv = Context.env(blockstorePath, mapSize)
+        storage <- FileLMDBIndexBlockStore
+                    .create(blockstoreEnv, blockstorePath)
+                    .map(_.right.get)
+      } yield storage
+    }(_.close())
 }

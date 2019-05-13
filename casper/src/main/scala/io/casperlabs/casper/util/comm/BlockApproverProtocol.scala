@@ -9,8 +9,7 @@ import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProcessedDeployUtil, ProtoUtil}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.Node
@@ -154,9 +153,10 @@ object BlockApproverProtocol {
                              protocolVersion
                            )
                          ).leftMap(_.getMessage)
-      deployEffects    = ExecEngineUtil.processedDeployEffects(deploys zip processedDeploys)
-      commutingEffects = ExecEngineUtil.findCommutingEffects(deployEffects)
-      transforms       = commutingEffects.unzip._1.flatMap(_.transformMap)
+      deployEffects = ExecEngineUtil.findCommutingEffects(
+        ExecEngineUtil.processedDeployEffects(deploys zip processedDeploys)
+      )
+      transforms = ExecEngineUtil.extractTransforms(deployEffects)
       postStateHash <- EitherT(
                         ExecutionEngineService[F]
                           .commit(ExecutionEngineService[F].emptyStateHash, transforms)

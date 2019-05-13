@@ -129,7 +129,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def createAtDefaultLocation(
       dagDataDir: Path,
       maxSizeFactor: Int = 10
-  )(implicit blockStore: BlockStore[Task]): Task[BlockDagFileStorage[Task]] = {
+  )(implicit blockStore: BlockStore[Task]): Task[BlockDagStorage[Task]] = {
     implicit val log = new shared.Log.NOPLog[Task]()
     implicit val met = new MetricsNOP[Task]
     BlockDagFileStorage.create[Task](
@@ -405,6 +405,42 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
             result,
             blockElements.flatMap(_.blockMessage)
           )
+      }
+    }
+  }
+
+  it should "be able to clear and continue working" in {
+    forAll(blockElementsWithParentsGen, minSize(1), sizeRange(2)) { blockElements =>
+      withDagStorageLocation { (dagDataDir, blockStore) =>
+        for {
+          firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          _ <- blockElements.traverse_(
+                b =>
+                  blockStore.put(b.getBlockMessage.blockHash, b) *> firstStorage.insert(
+                    b.getBlockMessage
+                  )
+              )
+          _             = firstStorage.close()
+          secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          elements      <- lookupElements(blockElements, secondStorage)
+          _ = testLookupElementsResult(
+            elements,
+            blockElements.flatMap(_.blockMessage)
+          )
+          _      <- secondStorage.clear()
+          _      <- blockStore.clear()
+          result <- lookupElements(blockElements, secondStorage)
+          _      <- secondStorage.close()
+        } yield
+          result match {
+            case (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) => {
+              list.foreach(_ shouldBe ((None, None, None, None, false)))
+              latestMessageHashes shouldBe Map()
+              latestMessages shouldBe Map()
+              topoSort shouldBe Vector()
+              topoSortTail shouldBe Vector()
+            }
+          }
       }
     }
   }

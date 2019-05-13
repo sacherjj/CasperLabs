@@ -15,6 +15,7 @@ extern crate proptest;
 
 #[cfg(test)]
 extern crate tempfile;
+extern crate core;
 
 pub mod error;
 pub mod global_state;

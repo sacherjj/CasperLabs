@@ -17,6 +17,8 @@ storage = { path = "../storage" }
 wasm-prep = { path = "../wasm-prep" }
 common = { path = "../common", package = "casperlabs-contract-ffi" }
 wabt = "0.7.4"
+dirs = "1.0.5"
+lmdb = "0.8.0"
 
 [build-dependencies]
 protoc-rust-grpc = "0.6.1"

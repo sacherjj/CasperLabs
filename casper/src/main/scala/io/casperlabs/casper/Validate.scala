@@ -9,11 +9,14 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage, Bond, Justification}
 import io.casperlabs.casper.util.ProtoUtil.bonds
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
 import io.casperlabs.ipc
+import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
@@ -41,11 +44,13 @@ object Validate {
 
   final case class ValidateErrorWrapper(status: InvalidBlock) extends Exception
 
-  val DRIFT                                 = 15000 // 15 seconds
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  val DRIFT                                                                    = 15000 // 15 seconds
+  private implicit val logSource: LogSource                                    = LogSource(this.getClass)
   val signatureVerifiers: Map[String, (Data, Signature, PublicKey) => Boolean] =
+    // NOTE: This is the mirror of `SignatureAlgorithms`.
     Map(
-      "ed25519" -> Ed25519.verify
+      "ed25519"   -> Ed25519.verify,
+      "secp256k1" -> Secp256k1.verify
     )
 
   def signature(d: Data, sig: protocol.Signature): Boolean =
@@ -128,7 +133,10 @@ object Validate {
       } yield result
     }
 
-  def formatOfFields[F[_]: Monad: Log](b: BlockMessage): F[Boolean] =
+  def formatOfFields[F[_]: Monad: Log](
+      b: BlockMessage,
+      treatAsGenesis: Boolean = false
+  ): F[Boolean] =
     if (b.blockHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block hash is empty."))
@@ -141,11 +149,19 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block body is missing."))
       } yield false
-    } else if (b.sig.isEmpty) {
+    } else if (b.sig.isEmpty && !treatAsGenesis) {
       for {
         _ <- Log[F].warn(ignore(b, s"block signature is empty."))
       } yield false
-    } else if (b.sigAlgorithm.isEmpty) {
+    } else if (!b.sig.isEmpty && treatAsGenesis) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block signature is not empty on Genesis."))
+      } yield false
+    } else if (b.sigAlgorithm.isEmpty && !treatAsGenesis) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block signature algorithm is not empty on Genesis."))
+      } yield false
+    } else if (!b.sigAlgorithm.isEmpty && treatAsGenesis) {
       for {
         _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
       } yield false
@@ -192,33 +208,34 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    */
-  def blockSummary[F[_]: Monad: Log: Time: BlockStore: RaiseValidationError](
+  def blockSummary[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       shardId: String,
-      lastFinalizedBlockHash: BlockHash
+      lastFinalizedBlockHash: BlockHash,
+      treatAsGenesis: Boolean = false
   ): F[Unit] =
     for {
-      _ <- Validate.blockSummaryPreGenesis(block, dag, shardId)
+      _ <- Validate.blockSummaryPreGenesis(block, dag, shardId, treatAsGenesis)
       _ <- Validate.justificationFollows[F](block, genesis, dag)
-      _ <- Validate.parents[F](block, genesis, lastFinalizedBlockHash, dag)
       _ <- Validate.justificationRegressions[F](block, genesis, dag)
     } yield ()
 
   /** Validations we can run even without an approved Genesis, i.e. on Genesis itself. */
-  def blockSummaryPreGenesis[F[_]: Monad: Log: Time: BlockStore: RaiseValidationError](
+  def blockSummaryPreGenesis[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      shardId: String
+      shardId: String,
+      treatAsGenesis: Boolean
   ): F[Unit] =
     for {
-      _ <- Validate.blockHash[F](block)
+      _ <- Validate.blockHash[F](block, treatAsGenesis)
       _ <- Validate.deployCount[F](block)
       _ <- Validate.missingBlocks[F](block, dag)
       _ <- Validate.timestamp[F](block, dag)
       _ <- Validate.repeatDeploy[F](block, dag)
-      _ <- Validate.blockNumber[F](block)
+      _ <- Validate.blockNumber[F](block, dag)
       _ <- Validate.sequenceNumber[F](block, dag)
       _ <- Validate.shardIdentifier[F](block, shardId)
     } yield ()
@@ -252,7 +269,7 @@ object Validate {
     *
     * Agnostic of non-parent justifications
     */
-  def repeatDeploy[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def repeatDeploy[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Unit] = {
@@ -289,7 +306,7 @@ object Validate {
   }
 
   // This is not a slashable offence
-  def timestamp[F[_]: Monad: Log: Time: BlockStore: RaiseValidationError](
+  def timestamp[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
@@ -324,13 +341,23 @@ object Validate {
     } yield result
 
   // Agnostic of non-parent justifications
-  def blockNumber[F[_]: Monad: Log: BlockStore: RaiseValidationError](
-      b: BlockMessage
+  def blockNumber[F[_]: MonadThrowable: Log: RaiseValidationError](
+      b: BlockMessage,
+      dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
-      parents <- ProtoUtil.unsafeGetParents[F](b)
+      parents <- ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
+                  dag.lookup(parentHash).flatMap {
+                    MonadThrowable[F].fromOption(
+                      _,
+                      new Exception(
+                        s"Block dag store was missing ${PrettyPrinter.buildString(parentHash)}."
+                      )
+                    )
+                  }
+                }
       maxBlockNumber = parents.foldLeft(-1L) {
-        case (acc, p) => math.max(acc, ProtoUtil.blockNumber(p))
+        case (acc, p) => math.max(acc, p.blockNum)
       }
       number = ProtoUtil.blockNumber(b)
       result = maxBlockNumber + 1 == number
@@ -355,17 +382,23 @@ object Validate {
     * creator justification, this check will fail as expected. The exception is when
     * B's creator justification is the genesis block.
     */
-  def sequenceNumber[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def sequenceNumber[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
                                         case (_, Justification(_, latestBlockHash)) =>
-                                          for {
-                                            latestBlock <- ProtoUtil
-                                                            .unsafeGetBlock[F](latestBlockHash)
-                                          } yield latestBlock.seqNum
+                                          dag.lookup(latestBlockHash).flatMap {
+                                            case Some(block) => block.seqNum.pure[F]
+
+                                            case None =>
+                                              MonadThrowable[F].raiseError[Int](
+                                                new Exception(
+                                                  s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
+                                                )
+                                              )
+                                          }
                                       }
       number = b.seqNum
       result = creatorJustificationSeqNumber + 1 == number
@@ -401,27 +434,49 @@ object Validate {
     }
 
   def blockHash[F[_]: Monad: RaiseValidationError: Log](
-      b: BlockMessage
+      b: BlockMessage,
+      treatAsGenesis: Boolean = false
   ): F[Unit] = {
-    val blockHashComputed = ProtoUtil.hashSignedBlock(
-      b.header.get,
-      b.sender,
-      b.sigAlgorithm,
-      b.seqNum,
-      b.shardId,
-      b.extraBytes
-    )
+    val blockHashComputed = if (treatAsGenesis) {
+      ProtoUtil.hashUnsignedBlock(b.header.get, b.justifications)
+    } else {
+      ProtoUtil.hashSignedBlock(
+        b.header.get,
+        b.sender,
+        b.sigAlgorithm,
+        b.seqNum,
+        b.shardId,
+        b.extraBytes
+      )
+    }
     val deployHashComputed    = ProtoUtil.protoSeqHash(b.body.get.deploys)
     val postStateHashComputed = ProtoUtil.protoHash(b.body.get.state.get)
     if (b.blockHash == blockHashComputed &&
         b.header.get.deploysHash == deployHashComputed &&
         b.header.get.postStateHash == postStateHashComputed) {
       Applicative[F].unit
-    } else
+    } else {
+      def show(hash: ByteString) = PrettyPrinter.buildString(hash)
       for {
         _ <- Log[F].warn(ignore(b, s"block hash does not match to computed value."))
+        _ <- Log[F]
+              .warn(
+                s"Expected block hash ${show(blockHashComputed)}; got ${show(b.blockHash)}"
+              )
+              .whenA(b.blockHash != blockHashComputed)
+        _ <- Log[F]
+              .warn(
+                s"Expected deploy hash ${show(deployHashComputed)}; got ${show(b.header.get.deploysHash)}"
+              )
+              .whenA(b.header.get.deploysHash != deployHashComputed)
+        _ <- Log[F]
+              .warn(
+                s"Expected state hash ${show(postStateHashComputed)}; got ${show(b.header.get.postStateHash)}"
+              )
+              .whenA(b.header.get.postStateHash != postStateHashComputed)
         _ <- RaiseValidationError[F].raise[Unit](InvalidBlockHash)
       } yield ()
+    }
   }
 
   def deployCount[F[_]: Monad: Log: RaiseValidationError](
@@ -437,14 +492,20 @@ object Validate {
     }
 
   /**
-    * Works only with fully explicit justifications.
+    * Checks that the parents of `b` were chosen correctly according to the
+    * forkchoice rule. This is done by using the justifications of `b` as the
+    * set of latest messages, so the justifications must be fully explicit.
+    * For multi-parent blocks this requires doing commutativity checking, so
+    * the combined effect of all parents except the first (i.e. the effect
+    * which would need to be applied to the first parent's post-state to
+    * obtain the pre-state of `b`) is given as the return value in order to
+    * avoid repeating work downstream.
     */
-  def parents[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def parents[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
-      genesis: BlockMessage,
       lastFinalizedBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
-  ): F[Unit] = {
+  ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, BlockMessage]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
       case hashes if hashes.isEmpty => Seq(lastFinalizedBlockHash)
@@ -458,8 +519,9 @@ object Validate {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
       tipHashes            <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](tipHashes, genesis, dag)
-      computedParentHashes = computedParents.map(_.blockHash)
+      tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
+      merged               <- ExecEngineUtil.merge[F](tips, dag)
+      computedParentHashes = merged.parents.map(_.blockHash)
       _ <- if (parentHashes == computedParentHashes)
             Applicative[F].unit
           else {
@@ -482,13 +544,13 @@ object Validate {
               _ <- RaiseValidationError[F].raise[Unit](InvalidParents)
             } yield ()
           }
-    } yield ()
+    } yield merged
   }
 
   /*
    * This check must come before Validate.parents
    */
-  def justificationFollows[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def justificationFollows[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -523,7 +585,7 @@ object Validate {
    * Hence, we ignore justification regressions involving the block's sender and
    * let checkEquivocations handle it instead.
    */
-  def justificationRegressions[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def justificationRegressions[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -549,7 +611,7 @@ object Validate {
     } yield result
   }
 
-  private def justificationRegressionsAux[F[_]: Monad: Log: BlockStore: FunctorRaise[
+  private def justificationRegressionsAux[F[_]: MonadThrowable: Log: BlockStore: FunctorRaise[
     ?[_],
     InvalidBlock
   ]](
@@ -586,7 +648,7 @@ object Validate {
           }
     } yield ()
 
-  private def isJustificationRegression[F[_]: Monad: Log: BlockStore](
+  private def isJustificationRegression[F[_]: MonadThrowable: Log: BlockStore](
       currentBlockJustificationHash: BlockHash,
       previousBlockJustificationHash: BlockHash
   ): F[Boolean] =

@@ -9,6 +9,7 @@ import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.protocol.{BlockMessage, Bond}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.{Log, Time}
@@ -81,7 +82,7 @@ class ManyValidatorsTest
       _                  <- casperRef.set(casperEffect)
       cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       result <- BlockAPI.showBlocks[Task](Int.MaxValue)(
-                 Monad[Task],
+                 MonadThrowable[Task],
                  casperRef,
                  logEff,
                  cliqueOracleEffect,

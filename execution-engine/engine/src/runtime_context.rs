@@ -347,18 +347,17 @@ mod tests {
     use execution::{create_rng, vec_key_rights_to_map};
     use rand::RngCore;
     use rand_chacha::ChaChaRng;
-    use shared::newtypes::Blake2bHash;
     use std::cell::RefCell;
     use std::collections::{BTreeMap, HashMap, HashSet};
     use std::iter::once;
     use std::rc::Rc;
-    use storage::global_state::inmem::*;
+    use storage::global_state::in_memory::InMemoryGlobalState;
     use storage::history::*;
     use storage::transform::Transform;
 
-    fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemGS<Key, Value>> {
-        let root_hash: Blake2bHash = [0u8; 32].into();
-        let mut hist = InMemHist::new(&root_hash);
+    fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {
+        let mut hist = InMemoryGlobalState::empty().unwrap();
+        let root_hash = hist.root_hash;
         let transform = Transform::Write(value::Value::Account(init_account.clone()));
 
         let mut m = HashMap::new();
@@ -414,7 +413,7 @@ mod tests {
         uref_map: &'a mut BTreeMap<String, Key>,
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         rng: ChaChaRng,
-    ) -> RuntimeContext<'a, InMemGS<Key, Value>> {
+    ) -> RuntimeContext<'a, InMemoryGlobalState> {
         let tc = mock_tc(base_key, &account);
         RuntimeContext::new(
             Rc::new(RefCell::new(tc)),
@@ -457,7 +456,7 @@ mod tests {
         query: F,
     ) -> Result<T, Error>
     where
-        F: Fn(RuntimeContext<InMemGS<Key, Value>>) -> Result<T, Error>,
+        F: Fn(RuntimeContext<InMemoryGlobalState>) -> Result<T, Error>,
     {
         let base_acc_addr = [0u8; 20];
         let (key, account) = mock_account(base_acc_addr);

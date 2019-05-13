@@ -14,7 +14,7 @@ use clap::{App, Arg};
 use execution_engine::engine::{EngineState, ExecutionResult, RootNotFound};
 use execution_engine::execution::WasmiExecutor;
 use shared::newtypes::Blake2bHash;
-use storage::global_state::inmem::InMemHist;
+use storage::global_state::in_memory::InMemoryGlobalState;
 use storage::history::CommitResult;
 use wasm_prep::WasmiPreprocessor;
 
@@ -82,8 +82,6 @@ fn main() {
         address
     };
 
-    let mut state_hash: Blake2bHash = [0u8; 32].into();
-
     let gas_limit: u64 = matches
         .value_of("gas-limit")
         .and_then(|v| v.parse::<u64>().ok())
@@ -98,7 +96,9 @@ fn main() {
     // TODO: Better error handling?
     //    let global_state = LmdbGs::new(&path).unwrap();
     let init_state = storage::global_state::mocked_account(account_addr);
-    let global_state = InMemHist::new_initialized(&state_hash, init_state);
+    let global_state =
+        InMemoryGlobalState::from_pairs(&init_state).expect("Could not create global state");
+    let mut state_hash: Blake2bHash = global_state.root_hash;
     let engine_state = EngineState::new(global_state);
 
     let wasmi_executor = WasmiExecutor;

@@ -1,11 +1,16 @@
 package io.casperlabs.casper.util.execengine
 
 import cats.Applicative
-import cats.syntax.applicative._
-import cats.syntax.either._
+import cats.effect.Sync
+import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.protocol.Bond
+import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.Validate
 import io.casperlabs.ipc._
+import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -14,6 +19,20 @@ import scala.util.Either
 
 object ExecutionEngineServiceStub {
   type Bonds = Map[Array[Byte], Long]
+
+  implicit def functorRaiseInvalidBlock[F[_]: Sync] = Validate.raiseValidateErrorThroughSync[F]
+
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
+      b: BlockMessage,
+      dag: BlockDagRepresentation[F]
+  ): F[Either[Throwable, StateHash]] =
+    (for {
+      parents      <- ProtoUtil.unsafeGetParents[F](b)
+      merged       <- ExecEngineUtil.merge[F](parents, dag)
+      preStateHash <- ExecEngineUtil.computePrestate[F](merged)
+      effects      <- ExecEngineUtil.effectsForBlock[F](b, preStateHash, dag)
+      _            <- Validate.transactions[F](b, dag, preStateHash, effects)
+    } yield ProtoUtil.postStateHash(b)).attempt
 
   def mock[F[_]](
       execFunc: (
@@ -53,12 +72,12 @@ object ExecutionEngineServiceStub {
 
   def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
     mock[F](
-      (_, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure,
-      (_, _) => ByteString.EMPTY.asRight[Throwable].pure,
+      (_, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
+      (_, _) => ByteString.EMPTY.asRight[Throwable].pure[F],
       (_, _, _) =>
         Applicative[F]
           .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented"))),
-      _ => Seq.empty[Bond].pure,
+      _ => Seq.empty[Bond].pure[F],
       _ => Applicative[F].unit,
       _ => ().asRight[String].pure[F]
     )
