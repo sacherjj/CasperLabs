@@ -13,26 +13,11 @@ from .cl_node.wait import (
     wait_for_peers_count_at_least,
 )
 
-
-class DeployThread(threading.Thread):
-    def __init__(self, name: str, node: Node, contract: str, count: int) -> None:
-        threading.Thread.__init__(self)
-        self.name = name
-        self.node = node
-        self.contract = contract
-        self.count = count
-
-    def run(self) -> None:
-        for _ in range(self.count):
-            self.node.deploy()
-            self.node.propose()
+import pytest
+from typing import List
 
 
 BOOTSTRAP_NODE_KEYS = PREGENERATED_KEYPAIRS[0]
-BONDED_VALIDATOR_KEY_1 = PREGENERATED_KEYPAIRS[1]
-BONDED_VALIDATOR_KEY_2 = PREGENERATED_KEYPAIRS[2]
-BONDED_VALIDATOR_KEY_3 = PREGENERATED_KEYPAIRS[3]
-
 
 def create_volume(docker_client) -> str:
     volume_name = "casperlabs{}".format(random_string(5).lower())
@@ -40,76 +25,127 @@ def create_volume(docker_client) -> str:
     return volume_name
 
 
-def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fixture):
-    contract_path = 'helloname.wasm'
-    peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3]
-    with conftest.testing_context(command_line_options_fixture, docker_client_fixture, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=peers_keypairs) as context:
+# An explanation given by @Akosh about number of expected blocks.
+# This is why the expected blocks are 4.
+COMMENT_EXPECTED_BLOCKS = """
+I think there is some randomness to it. --depth gives you the last
+layers in the topological sorting of the DAG, which I believe is
+stored by rank.
+I'm not sure about the details, for example if we have
+`G<-B1, G<-B2, B1<-B3` then G is rank 0, B1 and B2 are rank 1 and
+B3 is rank 2. But we could also argue that a depth of 1 should
+return B3 and B2.
+
+Whatever --depth does, the layout of the DAG depends on how the
+gossiping went when you did you proposals. If you did it real slow,
+one by one, then you might have a chain of 8 blocks
+(for example `G<-A1<-B1<-B2<-C1<-B3<-C2<-C3`), all linear;
+but if you did it in perfect parallelism you could have all of them
+branch out and be only 4 levels deep
+(`G<-A1, G<-B1, G<-C1, [A1,B1,C1]<-C2`, etc).
+"""
+
+
+@pytest.fixture
+def timeout(command_line_options_fixture):
+    return command_line_options_fixture.node_startup_timeout
+
+
+def parse_value(s):
+    try:
+        return int(s)
+    except ValueError:
+        return s[1:-1] # unquote string
+
+        
+def parse_line(line):
+    k, v = line.split(': ')
+    return k, parse_value(v)
+
+
+def parse_block(s):
+
+    class Block:
+        def __init__(self, d):
+            self.d = d
+
+        def __getattr__(self, name):
+            return self.d[name]
+
+    return Block(dict(parse_line(line) for line in filter(lambda line: ':' in line, s.splitlines())))
+
+
+def parse_show_blocks(s):
+    """
+    TODO: remove this and related functions once Python client is integrated into test framework.
+    """
+    blocks = s.split('-----------------------------------------------------')[:-1]
+    return [parse_block(b) for b in blocks]
+
+
+@pytest.fixture
+def nodes(command_line_options_fixture, docker_client_fixture, timeout, bootstrap_contract_path = 'helloname.wasm'):
+    with conftest.testing_context(command_line_options_fixture, docker_client_fixture,
+                                  bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=PREGENERATED_KEYPAIRS[1:]) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
-            volume_name1 = create_volume(docker_client_fixture)
-            kwargs = {'context': context, 'bootstrap': bootstrap_node}
-            with bootstrap_connected_peer(name='bonded-validator-1', keypair=BONDED_VALIDATOR_KEY_1, socket_volume=volume_name1, **kwargs) as no1:
-                volume_name2 = create_volume(docker_client_fixture)
-                with bootstrap_connected_peer(name='bonded-validator-2', keypair=BONDED_VALIDATOR_KEY_2, socket_volume=volume_name2, **kwargs) as no2:
-                    volume_name3 = create_volume(docker_client_fixture)
-                    with bootstrap_connected_peer(name='bonded-validator-3', keypair=BONDED_VALIDATOR_KEY_3, socket_volume=volume_name3, **kwargs) as no3:
-                        wait_for_peers_count_at_least(bootstrap_node, 3, context.node_startup_timeout)
-                        deploy1 = DeployThread("node1", no1, contract_path, 1)
-                        deploy1.start()
-                        expected_blocks_count = 1
-                        wait_for_blocks_count_at_least(
-                            no1,
-                            expected_blocks_count,
-                            1,
-                            context.node_startup_timeout
-                        )
-                        deploy2 = DeployThread("node2", no2, contract_path, 3)
-                        deploy2.start()
+            volume_names = [create_volume(docker_client_fixture) for _ in range(3)]
+            peers = [bootstrap_connected_peer(name = 'bonded-validator-'+str(i+1),
+                                              keypair = PREGENERATED_KEYPAIRS[i+1],
+                                              socket_volume = volume_name,
+                                              context = context,
+                                              bootstrap = bootstrap_node)
+                     for i, volume_name in enumerate(volume_names)]
+            # TODO: change bootstrap_connected_peer so the lines below are not needed
+            with peers[0] as n0, peers[1] as n1, peers[2] as n2:
+                wait_for_peers_count_at_least(bootstrap_node, 3, context.node_startup_timeout)
+                yield [n0, n1, n2]
 
-                        deploy3 = DeployThread("node3", no3, contract_path, 3)
-                        deploy3.start()
-
-                        deploy1.join()
-                        deploy2.join()
-                        deploy3.join()
-
-                        # An explanation given by @Akosh about number of expected blocks.
-                        # This is why the expected blocks are 4.
-                        """
-                        I think there is some randomness to it. --depth gives you the last
-                        layers in the topological sorting of the DAG, which I believe is
-                        stored by rank.
-                        I'm not sure about the details, for example if we have
-                        `G<-B1, G<-B2, B1<-B3` then G is rank 0, B1 and B2 are rank 1 and
-                        B3 is rank 2. But we could also argue that a depth of 1 should
-                        return B3 and B2.
-
-                        Whatever --depth does, the layout of the DAG depends on how the
-                        gossiping went when you did you proposals. If you did it real slow,
-                        one by one, then you might have a chain of 8 blocks
-                        (for example `G<-A1<-B1<-B2<-C1<-B3<-C2<-C3`), all linear;
-                        but if you did it in perfect parallelism you could have all of them
-                        branch out and be only 4 levels deep
-                        (`G<-A1, G<-B1, G<-C1, [A1,B1,C1]<-C2`, etc).
-                        """
-                        expected_blocks_count = 8
-                        wait_for_blocks_count_at_least(
-                            no1,
-                            expected_blocks_count,
-                            8,
-                            context.node_startup_timeout
-                        )
-                        wait_for_blocks_count_at_least(
-                            no2,
-                            expected_blocks_count,
-                            8,
-                            context.node_startup_timeout
-                        )
-                        wait_for_blocks_count_at_least(
-                            no3,
-                            expected_blocks_count,
-                            8,
-                            context.node_startup_timeout
-                        )
-
-            for v in (volume_name1, volume_name2, volume_name3):
+            # Tear down.
+            for v in volume_names:
                 docker_client_fixture.volumes.get(v).remove(force=True)
+    
+
+class DeployThread(threading.Thread):
+    def __init__(self, name: str, node: Node, batches_of_contracts: List[List[str]]) -> None:
+        threading.Thread.__init__(self)
+        self.name = name
+        self.node = node
+        self.batches_of_contracts = batches_of_contracts 
+
+    def run(self) -> None:
+        for batch in self.batches_of_contracts:
+            for contract in batch:
+                assert 'Success' in self.node.deploy(session = contract, payment = contract)
+            self.node.propose()
+
+
+@pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
+
+                         # Nodes deploy one or more contracts followed by propose.
+
+                         # Only first helloname.wasm will not fail to be deployed and proposed. 
+                         # Propose only picks out one of the deploys because
+                         # it is not allowed to pick deploys that conflict (write the same key) any more.
+                         # helloworld.wasm fails because helloname.wasm was not deployed yet.
+                         ([['helloname.wasm','helloname.wasm','helloworld.wasm']], [1, 1, 1, 0]),
+])
+# Curently nodes is a network of three bootstrap connected nodes.
+def test_multiple_deploys_at_once(nodes, timeout,
+                                  contract_paths: List[List[str]], expected_deploy_counts_in_blocks):
+    deploy_threads = [DeployThread("node" + str(i+1), node, contract_paths)
+                      for i, node in enumerate(nodes)]
+
+    for t in deploy_threads:
+        t.start()
+
+    for i in deploy_threads:
+        t.join()
+
+    # See COMMENT_EXPECTED_BLOCKS 
+    for node in nodes:
+        wait_for_blocks_count_at_least(node, len(expected_deploy_counts_in_blocks), len(expected_deploy_counts_in_blocks) * 2, timeout)
+
+    for node in nodes:
+        blocks = parse_show_blocks(node.show_blocks_with_depth(len(expected_deploy_counts_in_blocks) * 100))
+        assert [b.deployCount for b in blocks] == expected_deploy_counts_in_blocks, 'Unexpected deploy counts in blocks'
+
