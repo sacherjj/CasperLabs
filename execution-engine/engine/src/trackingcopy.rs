@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use common::key::Key;
 use common::value::Value;
-use lru_cache::LruCache;
+use linked_hash_map::LinkedHashMap;
 use meter::Meter;
 use parking_lot::Mutex;
 use shared::newtypes::Validated;
@@ -23,19 +23,17 @@ pub enum QueryResult {
 pub struct TrackingCopyCache<M: Meter<Key, Value>> {
     max_cache_size: usize,
     current_cache_size: Mutex<usize>,
-    reads_cached: LruCache<Key, Value>,
+    reads_cached: LinkedHashMap<Key, Value>,
     muts_cached: HashMap<Key, Value>,
     meter: M,
 }
-
-const INIT_CACHE_SIZE: usize = 100;
 
 impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
     pub fn new(cache_size: usize, meter: M) -> TrackingCopyCache<M> {
         TrackingCopyCache {
             max_cache_size: cache_size,
             current_cache_size: Mutex::new(0),
-            reads_cached: LruCache::new(INIT_CACHE_SIZE),
+            reads_cached: LinkedHashMap::new(),
             muts_cached: HashMap::new(),
             meter,
         }
@@ -47,7 +45,7 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
         self.reads_cached.insert(key, value);
         *self.current_cache_size.lock() += element_size;
         while *self.current_cache_size.lock() > self.max_cache_size {
-            match self.reads_cached.remove_lru() {
+            match self.reads_cached.pop_front() {
                 Some((k, v)) => {
                     let element_size = Meter::measure(&self.meter, &k, &v);
                     *self.current_cache_size.lock() -= element_size;
@@ -68,7 +66,7 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
             return Some(value);
         };
 
-        self.reads_cached.get_mut(key).map(|v| {
+        self.reads_cached.get_refresh(key).map(|v| {
             // a hack to downgrade &mut Value to &Value
             let v_imm: &Value = v;
             v_imm

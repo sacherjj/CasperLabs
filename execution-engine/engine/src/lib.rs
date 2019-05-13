@@ -5,7 +5,7 @@ extern crate common;
 extern crate core;
 extern crate failure;
 extern crate itertools;
-extern crate lru_cache;
+extern crate linked_hash_map;
 extern crate parity_wasm;
 extern crate parking_lot;
 extern crate pwasm_utils;
