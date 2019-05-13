@@ -123,7 +123,7 @@ class DockerBase:
 
     @property
     def host_mount_dir(self) -> str:
-        return f'/tmp/resources_{self.docker_tag}_{self.config.number}'
+        return f'/tmp/resources_{self.docker_tag}_{self.config.number}_{self.config.rand_str}'
 
     @property
     def bonds_file(self) -> str:

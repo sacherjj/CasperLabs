@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Mock gRPC server (node) used in Python client's unit test suite.
+Mock gRPC server (node) used in Python client's unit tests suite.
 """
 
 import string

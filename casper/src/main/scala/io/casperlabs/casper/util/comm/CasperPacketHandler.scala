@@ -13,6 +13,7 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.{MonadThrowable, MonadTrans}
@@ -292,6 +293,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      casper <- MultiParentCasper.fromTransportLayer[F](
                                 validatorId,
                                 blockMessage,
+                                ProtoUtil.preStateHash(blockMessage),
+                                transforms,
                                 shardId
                               )
                      _   <- MultiParentCasperRef[F].set(casper)
@@ -591,11 +594,14 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    _            <- Log[F].info("Valid ApprovedBlock received!")
                    blockMessage = b.candidate.flatMap(_.block).get
                    dag          <- BlockDagStorage[F].getRepresentation
-                   effects <- ExecEngineUtil.effectsForBlock[F](
-                               blockMessage,
-                               dag
-                             )
-                   (_, transforms) = effects
+                   parents      <- ProtoUtil.unsafeGetParents[F](blockMessage)
+                   merged       <- ExecEngineUtil.merge[F](parents, dag)
+                   prestate     <- ExecEngineUtil.computePrestate[F](merged)
+                   transforms <- ExecEngineUtil.effectsForBlock[F](
+                                  blockMessage,
+                                  prestate,
+                                  dag
+                                )
                    _ <- BlockStore[F].put(
                          blockMessage.blockHash,
                          blockMessage,
@@ -606,6 +612,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                               .fromTransportLayer[F](
                                 validatorId,
                                 blockMessage,
+                                prestate,
+                                transforms,
                                 shardId
                               )
                  } yield Option(casper)

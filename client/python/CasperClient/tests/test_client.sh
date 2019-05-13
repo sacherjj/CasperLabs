@@ -9,9 +9,9 @@ set -o xtrace
 
 CL_GRPC_PORT_EXTERNAL=40401 #3477
 CLI="$HOME/CasperLabs/client/target/universal/stage/bin/casperlabs-client -- --host localhost --port $CL_GRPC_PORT_EXTERNAL "
-CLI="./casper_client.py"
+CLI="../casper_client/casper_client.py"
 
-RESOURCES_PATH=../../../integration-testing/resources/
+RESOURCES_PATH=../../../../integration-testing/resources/
 
 # Subcommand: deploy - Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.
 #   -f, --from  <arg>        Purse address that will be used to pay for the

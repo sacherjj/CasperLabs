@@ -91,7 +91,9 @@ class DockerNode(LoggingDockerBase):
             auto_remove=False,
             detach=True,
             mem_limit=self.config.mem_limit,
-            ports={f'{self.GRPC_PORT}/tcp': self.config.grpc_port},  # Exposing grpc for Python Client
+            # If multiple tests are running in drone, local ports are duplicated.  Need a solution to this
+            # Prior to implementing the python client.
+            # ports={f'{self.GRPC_PORT}/tcp': self.config.grpc_port},  # Exposing grpc for Python Client
             network=self.network,
             volumes=self.volumes,
             command=commands,

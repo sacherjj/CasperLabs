@@ -77,7 +77,7 @@ package object transport {
 
       commTmpFolder <- {
         val folder = conf.server.dataDir.resolve("tmp").resolve("comm")
-        (folder.deleteDirectory[Task]() *> folder.pure[Task]).toEffect
+        (folder.deleteDirectory[Task]().whenA(folder.toFile.exists()) *> folder.pure[Task]).toEffect
       }
 
       transport = {

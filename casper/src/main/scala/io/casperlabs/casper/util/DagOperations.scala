@@ -81,15 +81,11 @@ object DagOperations {
     * @return A map from uncommon ancestor blocks to BitSets, where a block B is
     *         and ancestor of starting block with index i if B's BitSet contains i.
     */
-  def uncommonAncestors[F[_]: Monad](
-      blocks: IndexedSeq[BlockMetadata],
-      dag: BlockDagRepresentation[F]
-  )(
-      implicit topoSort: Ordering[BlockMetadata]
-  ): F[Map[BlockMetadata, BitSet]] = {
-    val commonSet = BitSet(0 until blocks.length: _*)
-    def parents(b: BlockMetadata): F[List[BlockMetadata]] =
-      b.parents.traverse(b => dag.lookup(b).map(_.get))
+  def abstractUncommonAncestors[F[_]: Monad, A: Ordering](
+      start: IndexedSeq[A],
+      parents: A => F[List[A]]
+  ): F[Map[A, BitSet]] = {
+    val commonSet                      = BitSet(0 until start.length: _*)
     def isCommon(set: BitSet): Boolean = set == commonSet
 
     // Initialize the algorithm with each starting block being an ancestor of only itself
@@ -97,9 +93,9 @@ object DagOperations {
     // and each starting block in the priority queue. Note that the priority queue is
     // using the provided topological sort for the blocks, this guarantees we will be traversing
     // the DAG in a way which respects the causal (parent/child) ordering of blocks.
-    val initMap = blocks.zipWithIndex.map { case (b, i) => b -> BitSet(i) }.toMap
-    val q       = new mutable.PriorityQueue[BlockMetadata]()
-    q.enqueue(blocks: _*)
+    val initMap = start.zipWithIndex.map { case (b, i) => b -> BitSet(i) }.toMap
+    val q       = new mutable.PriorityQueue[A]()
+    q.enqueue(start: _*)
 
     // Main loop for the algorithm. The loop terminates when
     // `uncommonEnqueued` is empty because it means there are no
@@ -108,10 +104,10 @@ object DagOperations {
     // when the queue itself is empty because blocks that are common ancestors can
     // still exist in the queue.
     def loop(
-        currMap: Map[BlockMetadata, BitSet],
-        enqueued: HashSet[BlockMetadata],
-        uncommonEnqueued: Set[BlockMetadata]
-    ): F[Map[BlockMetadata, BitSet]] =
+        currMap: Map[A, BitSet],
+        enqueued: HashSet[A],
+        uncommonEnqueued: Set[A]
+    ): F[Map[A, BitSet]] =
       if (uncommonEnqueued.isEmpty) currMap.pure[F]
       else {
         // Pull the next block from the queue
@@ -174,7 +170,7 @@ object DagOperations {
         }
       }
 
-    val startingSet = HashSet(blocks: _*)
+    val startingSet = HashSet(start: _*)
     // Kick off the main loop with the initial map, noting
     // that all starting blocks are enqueued and all starting
     // blocks are presently uncommon (they are only known to
@@ -183,6 +179,18 @@ object DagOperations {
     loop(initMap, startingSet, startingSet).map(_.filter {
       case (_, set) => !isCommon(set)
     })
+  }
+
+  def uncommonAncestors[F[_]: Monad](
+      blocks: IndexedSeq[BlockMetadata],
+      dag: BlockDagRepresentation[F]
+  )(
+      implicit topoSort: Ordering[BlockMetadata]
+  ): F[Map[BlockMetadata, BitSet]] = {
+    def parents(b: BlockMetadata): F[List[BlockMetadata]] =
+      b.parents.traverse(b => dag.lookup(b).map(_.get))
+
+    abstractUncommonAncestors[F, BlockMetadata](blocks, parents)
   }
 
   //Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.

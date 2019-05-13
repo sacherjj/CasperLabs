@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Python CasperLabs client unit test suite.
+Python CasperLabs client unit tests suite.
 
 The tests are very rudimentary currently. They only check that
 correct objects are sent to the server. 
@@ -8,12 +8,11 @@ correct objects are sent to the server.
 
 import os
 from concurrent import futures
-from casper_client import CasperClient
-import grpc
-import CasperMessage_pb2
-import CasperMessage_pb2_grpc
-import mock_server
 import pytest
+
+from CasperClient.casper_client import CasperClient, CasperMessage_pb2_grpc, CasperMessage_pb2
+from CasperClient.tests import mock_server
+import grpc
 
 RESOURCES_PATH = "../../../integration-testing/resources/"
 
@@ -25,6 +24,7 @@ HASH = 'd9d087fe5d22dbfa1bacb57d6da8d509f7191a216cee6a971de32463ff0f284f'
 
 client = CasperClient()
 client.port = mock_server.CL_GRPC_PORT_EXTERNAL
+
 
 @pytest.fixture()
 def mock_server_setup(request):
@@ -78,6 +78,7 @@ def test_queryState(mock_server_setup):
     except Exception as e:
         # See NODE-451.
         pass
+
 
 def test_showMainChain(mock_server_setup):
     response = client.showMainChain(depth=10)
