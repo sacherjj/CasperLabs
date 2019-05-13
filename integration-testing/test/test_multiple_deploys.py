@@ -46,7 +46,7 @@ branch out and be only 4 levels deep
 """
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture
 def timeout(command_line_options_fixture):
     return command_line_options_fixture.node_startup_timeout
 
@@ -83,7 +83,7 @@ def parse_show_blocks(s):
     return [parse_block(b) for b in blocks]
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def nodes(command_line_options_fixture, docker_client_fixture, timeout, bootstrap_contract_path = 'helloname.wasm'):
     with conftest.testing_context(command_line_options_fixture, docker_client_fixture,
                                   bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=PREGENERATED_KEYPAIRS[1:]) as context:
@@ -121,22 +121,13 @@ class DeployThread(threading.Thread):
 
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
 
-                         # All nodes except bootstrap deploy whole batches of contracts followed by propose.
+                         # Nodes deploy one or more contracts followed by propose.
 
-                         # Case 1.
-                         # Only first helloname.wasm will not fail to get deployed and proposed. 
+                         # Only first helloname.wasm will not fail to be deployed and proposed. 
                          # Propose only picks out one of the deploys because
                          # it is not allowed to pick deploys that conflict (write the same key) any more.
                          # helloworld.wasm fails because helloname.wasm was not deployed yet.
-                         ([['helloname.wasm','helloname.wasm','helloworld.wasm']],      [1, 1, 1, 0]),
-
-                         # Case 2.
-                         ([['helloname.wasm'], ['helloworld.wasm']],  [1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
-                        
-                         # Case 3.
-                         ([['counterdefine.wasm', 'helloname.wasm', 'mailinglistdefine.wasm'],
-                           ['countercall.wasm', 'helloworld.wasm', 'mailinglistcall.wasm']],
-                          [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0])
+                         ([['helloname.wasm','helloname.wasm','helloworld.wasm']], [1, 1, 1, 0]),
 ])
 # Curently nodes is a network of three bootstrap connected nodes.
 def test_multiple_deploys_at_once(nodes, timeout,
