@@ -292,11 +292,7 @@ where
             match self.context.read_gs(&key)? {
                 None => Err(Error::KeyNotFound(key)),
                 Some(value) => {
-                    if let Value::Contract {
-                        contract,
-                        protocol_version,
-                    } = value
-                    {
+                    if let Value::Contract(contract) = value {
                         let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
                         let module = parity_wasm::deserialize_buffer(contract.bytes())?;
 
@@ -304,7 +300,7 @@ where
                             args,
                             module,
                             contract.urefs_lookup().clone(),
-                            protocol_version,
+                            contract.protocol_version(),
                         ))
                     } else {
                         Err(Error::FunctionNotFound(format!(
@@ -343,9 +339,12 @@ where
         fn_bytes: Vec<u8>,
         urefs: BTreeMap<String, Key>,
     ) -> Result<[u8; 32], Error> {
-        let contract = common::value::contract::Contract::new(fn_bytes, urefs);
-        let value = Value::from_contract(contract, self.context.protocol_version());
-        let new_hash = self.context.store_contract(value)?;
+        let contract = common::value::contract::Contract::new(
+            fn_bytes,
+            urefs,
+            self.context.protocol_version(),
+        );
+        let new_hash = self.context.store_contract(contract.into())?;
         Ok(new_hash)
     }
 

@@ -345,7 +345,7 @@ fn make_known_urefs() -> BTreeMap<String, Key> {
 
 fn make_contract() -> Contract {
     let known_urefs = make_known_urefs();
-    Contract::new(vec![0u8; 1024], known_urefs)
+    Contract::new(vec![0u8; 1024], known_urefs, 1)
 }
 
 fn make_account() -> Account {
@@ -477,12 +477,12 @@ fn deserialize_value_account(b: &mut Bencher) {
 }
 #[bench]
 fn serialize_value_contract(b: &mut Bencher) {
-    let value = Value::from_contract(make_contract(), 1);
+    let value = Value::Contract(make_contract());
     b.iter(|| value.to_bytes());
 }
 #[bench]
 fn deserialize_value_contract(b: &mut Bencher) {
-    let data = Value::from_contract(make_contract(), 1).to_bytes().unwrap();
+    let data = Value::Contract(make_contract()).to_bytes().unwrap();
     b.iter(|| Value::from_bytes(&data));
 }
 

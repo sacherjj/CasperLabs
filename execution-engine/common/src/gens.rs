@@ -55,8 +55,11 @@ pub fn account_arb() -> impl Strategy<Value = Account> {
 }
 
 pub fn contract_arb() -> impl Strategy<Value = Contract> {
-    uref_map_arb(20).prop_flat_map(|urefs| {
-        vec(any::<u8>(), 1..1000).prop_map(move |body| Contract::new(body, urefs.clone()))
+    any::<u64>().prop_flat_map(move |u64arb| {
+        uref_map_arb(20).prop_flat_map(move |urefs| {
+            vec(any::<u8>(), 1..1000)
+                .prop_map(move |body| Contract::new(body, urefs.clone(), u64arb))
+        })
     })
 }
 
@@ -81,12 +84,7 @@ pub fn value_arb() -> impl Strategy<Value = Value> {
         (vec(any::<String>(), 1..500).prop_map(Value::ListString)),
         ("\\PC*", key_arb()).prop_map(|(n, k)| Value::NamedKey(n, k)),
         account_arb().prop_map(Value::Account),
-        any::<u64>().prop_flat_map(move |protocol_version| contract_arb().prop_map(
-            move |contract| Value::Contract {
-                contract,
-                protocol_version
-            }
-        ),),
+        contract_arb().prop_map(Value::Contract),
         u128_arb().prop_map(Value::UInt128),
         u256_arb().prop_map(Value::UInt256),
         u512_arb().prop_map(Value::UInt512)

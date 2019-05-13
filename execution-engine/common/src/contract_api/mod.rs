@@ -119,7 +119,8 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
 /// an unforgable reference.
 pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
     let bytes = fn_bytes_by_name(name);
-    Contract::new(bytes, known_urefs)
+    let protocol_version = unsafe { ext_ffi::protocol_version };
+    Contract::new(bytes, known_urefs, protocol_version)
 }
 
 /// Gets the serialized bytes of an exported function (see `fn_by_name`), then
@@ -139,9 +140,7 @@ pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Contrac
 /// Finds function by the name and stores it at the unforgable name.
 pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: UPointer<Contract>) {
     let contract = fn_by_name(name, known_urefs);
-    let protocol_version = unsafe { ext_ffi::protocol_version };
-    let value = Value::from_contract(contract, protocol_version);
-    write_untyped(&uref.into(), &value);
+    write(uref, contract);
 }
 
 /// Return the i-th argument passed to the host for the current module

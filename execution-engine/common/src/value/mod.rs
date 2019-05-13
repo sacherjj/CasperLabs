@@ -27,10 +27,7 @@ pub enum Value {
     ListString(Vec<String>),
     NamedKey(String, Key),
     Account(account::Account),
-    Contract {
-        contract: contract::Contract,
-        protocol_version: u64,
-    },
+    Contract(contract::Contract),
 }
 
 const INT32_ID: u8 = 0;
@@ -112,14 +109,10 @@ impl ToBytes for Value {
                 result.append(&mut bytes);
                 Ok(result)
             }
-            Value::Contract {
-                contract,
-                protocol_version,
-            } => {
+            Contract(contract) => {
                 let mut result = Vec::new();
                 result.push(CONTRACT_ID);
                 result.append(&mut contract.to_bytes()?);
-                result.append(&mut protocol_version.to_bytes()?);
                 Ok(result)
             }
             NamedKey(n, k) => {
@@ -188,14 +181,7 @@ impl FromBytes for Value {
             }
             CONTRACT_ID => {
                 let (contract, rem): (contract::Contract, &[u8]) = FromBytes::from_bytes(rest)?;
-                let (protocol_version, rest): (u64, &[u8]) = FromBytes::from_bytes(rem)?;
-                Ok((
-                    Value::Contract {
-                        contract,
-                        protocol_version,
-                    },
-                    rest,
-                ))
+                Ok((Contract(contract), rem))
             }
             NAMEDKEY_ID => {
                 let (name, rem1): (String, &[u8]) = FromBytes::from_bytes(rest)?;
@@ -212,20 +198,6 @@ impl FromBytes for Value {
 }
 
 impl Value {
-    /// Creates a new Value with an exiting contract value, and a
-    /// protocol version.
-    ///
-    /// Before this conversion was implicit with a From trait, unfortunately
-    /// this now has to be explicit as `protocol_version` attribute was added.
-    ///
-    /// * `contract` - An existing contract instance
-    /// * `protocol_version` - Version of the protocol
-    pub fn from_contract(contract: contract::Contract, protocol_version: u64) -> Value {
-        Value::Contract {
-            contract,
-            protocol_version,
-        }
-    }
     pub fn type_string(&self) -> String {
         match self {
             Int32(_) => String::from("Int32"),
@@ -236,7 +208,7 @@ impl Value {
             String(_) => String::from("String"),
             ByteArray(_) => String::from("ByteArray"),
             Account(_) => String::from("Account"),
-            Value::Contract { .. } => String::from("Contract"),
+            Contract(_) => String::from("Contract"),
             NamedKey(_, _) => String::from("NamedKey"),
             ListString(_) => String::from("List[String]"),
         }
@@ -281,6 +253,7 @@ from_try_from_impl!(Vec<i32>, ListInt32);
 from_try_from_impl!(Vec<String>, ListString);
 from_try_from_impl!(String, String);
 from_try_from_impl!(account::Account, Account);
+from_try_from_impl!(contract::Contract, Contract);
 
 impl From<(String, Key)> for Value {
     fn from(tuple: (String, Key)) -> Self {
