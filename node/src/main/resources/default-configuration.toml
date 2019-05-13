@@ -47,7 +47,7 @@ use-gossiping = false
 relay-factor = 2
 
 # Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes.
-relay-saturation = 100
+relay-saturation = 90
 
 ## Use this flag to clear the blockStore and blockDagStorage
 clean-block-storage = false
