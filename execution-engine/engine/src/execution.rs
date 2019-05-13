@@ -11,10 +11,9 @@ use storage::transform::TypeMismatch;
 use trackingcopy::TrackingCopy;
 use wasmi::memory_units::Pages;
 use wasmi::{
-    Error as InterpreterError, Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalInstance,
-    GlobalRef, HostError, ImportsBuilder, MemoryDescriptor, MemoryInstance, MemoryRef,
-    ModuleImportResolver, ModuleInstance, ModuleRef, RuntimeArgs, RuntimeValue, Signature, Trap,
-    ValueType,
+    Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
+    MemoryDescriptor, MemoryInstance, MemoryRef, ModuleImportResolver, ModuleInstance, ModuleRef,
+    RuntimeArgs, RuntimeValue, Signature, Trap, ValueType,
 };
 
 use argsparser::Args;
@@ -436,6 +435,7 @@ const GAS_FUNC_INDEX: usize = 13;
 const HAS_UREF_FUNC_INDEX: usize = 14;
 const ADD_UREF_FUNC_INDEX: usize = 15;
 const STORE_FN_INDEX: usize = 16;
+const PROTOCOL_VERSION_FUNC_INDEX: usize = 17;
 
 impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
 where
@@ -618,6 +618,8 @@ where
                 Ok(None)
             }
 
+            PROTOCOL_VERSION_FUNC_INDEX => Ok(Some(self.context.protocol_version().into())),
+
             _ => panic!("unknown function index"),
         }
     }
@@ -626,18 +628,18 @@ where
 pub struct RuntimeModuleImportResolver {
     memory: RefCell<Option<MemoryRef>>,
     max_memory: u32,
-    protocol_version: u64,
 }
 
-impl RuntimeModuleImportResolver {
-    pub fn new(protocol_version: u64) -> RuntimeModuleImportResolver {
+impl Default for RuntimeModuleImportResolver {
+    fn default() -> Self {
         RuntimeModuleImportResolver {
             memory: RefCell::new(None),
             max_memory: 256,
-            protocol_version,
         }
     }
+}
 
+impl RuntimeModuleImportResolver {
     pub fn mem_ref(&self) -> Result<MemoryRef, Error> {
         let maybe_mem: &Option<MemoryRef> = &self.memory.borrow();
         match maybe_mem {
@@ -722,6 +724,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 5][..], None),
                 STORE_FN_INDEX,
             ),
+            "protocol_version" => FuncInstance::alloc_host(
+                Signature::new(vec![], Some(ValueType::I64)),
+                PROTOCOL_VERSION_FUNC_INDEX,
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",
@@ -758,32 +764,11 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             ))
         }
     }
-    fn resolve_global(
-        &self,
-        field_name: &str,
-        _global_type: &GlobalDescriptor,
-    ) -> Result<GlobalRef, InterpreterError> {
-        let global_ref = match field_name {
-            "protocol_version" => {
-                // Expose a `protocol_version` as immutable variable
-                GlobalInstance::alloc(self.protocol_version.into(), false)
-            }
-            _ => {
-                return Err(InterpreterError::Instantiation(
-                    "Tried to import global variable with wrong name".to_owned(),
-                ))
-            }
-        };
-        Ok(global_ref)
-    }
 }
 
-fn instance_and_memory(
-    parity_module: Module,
-    protocol_version: u64,
-) -> Result<(ModuleRef, MemoryRef), Error> {
+fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), Error> {
     let module = wasmi::Module::from_parity_wasm_module(parity_module)?;
-    let resolver = RuntimeModuleImportResolver::new(protocol_version);
+    let resolver = RuntimeModuleImportResolver::default();
     let mut imports = ImportsBuilder::new();
     imports.push_resolver("env", &resolver);
     let instance = ModuleInstance::new(&module, &imports)?.assert_no_start();
@@ -806,7 +791,7 @@ fn sub_call<R: StateReader<Key, Value>>(
 where
     R::Error: Into<Error>,
 {
-    let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
+    let (instance, memory) = instance_and_memory(parity_module.clone())?;
     let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
     let rng = ChaChaRng::from_rng(current_runtime.context.rng().clone()).map_err(Error::Rng)?;
     let mut runtime = Runtime {
@@ -929,10 +914,7 @@ impl Executor<Module> for WasmiExecutor {
         R::Error: Into<Error>,
     {
         let acct_key = Key::Account(account_addr);
-        let (instance, memory) = on_fail_charge!(
-            instance_and_memory(parity_module.clone(), protocol_version),
-            0
-        );
+        let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
         #[allow(unreachable_code)]
         let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid), 0);
         let value = on_fail_charge! {

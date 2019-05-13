@@ -25,6 +25,7 @@ const ALLOWED_IMPORTS: &[&str] = &[
     "get_uref",
     "has_uref_name",
     "add_uref",
+    "protocol_version",
 ];
 
 const MEM_PAGES: u32 = 128;
