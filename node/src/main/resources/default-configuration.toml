@@ -111,7 +111,11 @@ secure-random-non-blocking = false
 # Can be inferred from the private key for some signature algorithms.
 # validator-public-key =
 
-# Base16 encoding of the private key to use for signing a proposed blocks.
+# Path to the base-64 encoded public key to use for signing a proposed blocks.
+# Can be inferred from the private key for some signature algorithms.
+# validator-public-key-path =
+
+# base-64 encoding of the private key to use for signing a proposed blocks.
 # It is not recommended to use in production since private key could be revealed through the process table.
 # Use the `validator-private-key-path` instead.
 # validator-private-key =

@@ -394,6 +394,13 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val casperValidatorPublicKeyPath =
+      gen[Path](
+        "Path to the base-64 encoded public key to use for signing a proposed blocks." +
+          s"Can be inferred from the private key for some signature algorithms."
+      )
+
+    @scallop
     val casperValidatorPrivateKey =
       gen[String](
         "Base16 encoding of the private key to use for signing a proposed blocks. " +
