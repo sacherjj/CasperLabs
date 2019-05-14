@@ -170,10 +170,12 @@ object ExecEngineUtil {
   type TransformMap = Seq[TransformEntry]
   implicit val TransformMapMonoid: Monoid[TransformMap] = new Monoid[TransformMap] {
     def combine(t1: TransformMap, t2: TransformMap): TransformMap = t1 ++ t2
-    def empty: TransformMap                                       = Nil
+
+    def empty: TransformMap = Nil
   }
 
-  sealed trait MergeResult[+T, +A] { self =>
+  sealed trait MergeResult[+T, +A] {
+    self =>
     def parents: Vector[A] = self match {
       case MergeResult.EmptyMerge            => Vector.empty[A]
       case MergeResult.Result(head, _, tail) => head +: tail
@@ -184,8 +186,11 @@ object ExecEngineUtil {
       case MergeResult.Result(_, t, _) => Some(t)
     }
   }
+
   object MergeResult {
+
     case object EmptyMerge extends MergeResult[Nothing, Nothing]
+
     case class Result[T, A](
         firstParent: A,
         nonFirstParentsCombinedEffect: T,
@@ -193,6 +198,7 @@ object ExecEngineUtil {
     ) extends MergeResult[T, A]
 
     def empty[T, A]: MergeResult[T, A] = EmptyMerge
+
     def result[T, A](
         firstParent: A,
         nonFirstParentsCombinedEffect: T,
@@ -202,14 +208,15 @@ object ExecEngineUtil {
 
   /** Computes the largest commuting sub-set of blocks from the `candidateParents` along with an effect which
     * can be used to find the combined post-state of those commuting blocks.
+    *
     * @tparam F effect type (a la tagless final)
     * @tparam T type for transforms (i.e. effects deploys create when executed)
     * @tparam A type for "blocks". Order must be a topological order of the DAG blocks form
     * @tparam K type for keys specifying what a transform is applied to (equal to ipc.Key in production)
     * @param candidates "blocks" to attempt to merge
-    * @param parents function for computing the parents of a "block" (equal to _.parents in production)
-    * @param effect function for computing the transforms of a block (looks up the transaforms from the blockstore in production)
-    * @param toOps function for converting transforms into the OpMap, which is then used for commutativity checking
+    * @param parents    function for computing the parents of a "block" (equal to _.parents in production)
+    * @param effect     function for computing the transforms of a block (looks up the transaforms from the blockstore in production)
+    * @param toOps      function for converting transforms into the OpMap, which is then used for commutativity checking
     * @return an instance of the MergeResult class. It is either an `EmptyMerge` (which only happens when `candidates` is empty)
     *         or a `Result` which contains the "first parent" (the who's post-state will be used to apply the effects to obtain
     *         the merged post-state), the combined effect of all parents apart from the first (i.e. this effect will give

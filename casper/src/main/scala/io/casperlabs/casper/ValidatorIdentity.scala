@@ -9,7 +9,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.Signature
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.codec.Base64
-import io.casperlabs.casper.util.SignatureAlgorithms
+import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.shared.{Log, LogSource}
 
 import scala.io.Source
@@ -18,12 +18,14 @@ import scala.language.higherKinds
 final case class ValidatorIdentity(
     publicKey: Keys.PublicKeyA,
     privateKey: Keys.PrivateKey,
-    sigAlgorithm: String
+    signatureAlgorithm: SignatureAlgorithm
 ) {
-  def signature(data: Array[Byte]): Signature = {
-    val sig = SignatureAlgorithms.lookup(sigAlgorithm)(data, privateKey)
-    Signature(ByteString.copyFrom(publicKey), sigAlgorithm, ByteString.copyFrom(sig))
-  }
+  def signature(data: Array[Byte]): Signature =
+    Signature(
+      ByteString.copyFrom(publicKey),
+      signatureAlgorithm.name,
+      ByteString.copyFrom(signatureAlgorithm.sign(data, privateKey))
+    )
 }
 
 object ValidatorIdentity {
@@ -48,7 +50,7 @@ object ValidatorIdentity {
             .pure[F], {
           case (privateKey, publicKey, sa) =>
             Log[F].info(s"Validator identity: ${Base64.encode(publicKey)}") >>
-              ValidatorIdentity(publicKey, privateKey, sa.name).some.pure[F]
+              ValidatorIdentity(publicKey, privateKey, sa).some.pure[F]
         }
       )
 

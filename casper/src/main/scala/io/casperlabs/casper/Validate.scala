@@ -13,19 +13,17 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyA, PublicKeyBS, Signature}
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
+import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 import scala.util.{Success, Try}
 
 object Validate {
-  type PublicKey   = Array[Byte]
   type Data        = Array[Byte]
-  type Signature   = Array[Byte]
   type BlockHeight = Long
 
   type RaiseValidationError[F[_]] = FunctorRaise[F, InvalidBlock]
@@ -44,18 +42,18 @@ object Validate {
 
   final case class ValidateErrorWrapper(status: InvalidBlock) extends Exception
 
-  val DRIFT                                                                    = 15000 // 15 seconds
-  private implicit val logSource: LogSource                                    = LogSource(this.getClass)
-  val signatureVerifiers: Map[String, (Data, Signature, PublicKey) => Boolean] =
-    // NOTE: This is the mirror of `SignatureAlgorithms`.
-    Map(
-      "ed25519"   -> Ed25519.verify,
-      "secp256k1" -> Secp256k1.verify
-    )
+  val DRIFT                                 = 15000 // 15 seconds
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
+  def signatureVerifiers(sigAlgorithm: String): Option[(Data, Signature, PublicKeyA) => Boolean] =
+    sigAlgorithm match {
+      case SignatureAlgorithm(sa) => Some((data, sig, pub) => sa.verify(data, sig, pub))
+      case _                      => None
+    }
 
   def signature(d: Data, sig: protocol.Signature): Boolean =
-    signatureVerifiers.get(sig.algorithm).fold(false) { verify =>
-      verify(d, sig.sig.toByteArray, sig.publicKey.toByteArray)
+    signatureVerifiers(sig.algorithm).fold(false) { verify =>
+      verify(d, Signature(sig.sig.toByteArray), PublicKey(sig.publicKey.toByteArray))
     }
 
   def ignore(b: BlockMessage, reason: String): String =
@@ -63,7 +61,7 @@ object Validate {
 
   def approvedBlock[F[_]: Applicative: Log](
       a: ApprovedBlock,
-      requiredValidators: Set[ByteString]
+      requiredValidators: Set[PublicKeyBS]
   ): F[Boolean] = {
     val maybeSigData = for {
       c     <- a.candidate
@@ -77,9 +75,9 @@ object Validate {
         val validatedSigs =
           (for {
             s      <- a.sigs
-            verify <- signatureVerifiers.get(s.algorithm)
+            verify <- signatureVerifiers(s.algorithm)
             pk     = s.publicKey
-            if verify(sigData, s.sig.toByteArray, pk.toByteArray)
+            if verify(sigData, Signature(s.sig.toByteArray), PublicKey(pk.toByteArray))
           } yield pk).toSet
 
         if (validatedSigs.size >= requiredSigs && requiredValidators.forall(validatedSigs.contains))
@@ -97,10 +95,15 @@ object Validate {
   }
 
   def blockSignature[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] =
-    signatureVerifiers
-      .get(b.sigAlgorithm)
+    signatureVerifiers(b.sigAlgorithm)
       .map(verify => {
-        Try(verify(b.blockHash.toByteArray, b.sig.toByteArray, b.sender.toByteArray)) match {
+        Try(
+          verify(
+            b.blockHash.toByteArray,
+            Signature(b.sig.toByteArray),
+            PublicKey(b.sender.toByteArray)
+          )
+        ) match {
           case Success(true) => true.pure[F]
           case _             => Log[F].warn(ignore(b, "signature is invalid.")).map(_ => false)
         }
@@ -111,14 +114,13 @@ object Validate {
     }
 
   def deploySignature[F[_]: Applicative: Log](d: consensus.Deploy): F[Boolean] =
-    signatureVerifiers
-      .get(d.getSignature.sigAlgorithm)
+    signatureVerifiers(d.getSignature.sigAlgorithm)
       .map { verify =>
         Try {
           verify(
             d.deployHash.toByteArray,
-            d.getSignature.sig.toByteArray,
-            d.getHeader.accountPublicKey.toByteArray
+            Signature(d.getSignature.sig.toByteArray),
+            PublicKey(d.getHeader.accountPublicKey.toByteArray)
           )
         } match {
           case Success(true) =>

@@ -2,55 +2,43 @@ package io.casperlabs.casper.helper
 
 import java.nio.file.Path
 
-import cats.data.EitherT
-import cats.effect.{Concurrent, Timer}
+import cats.Monad
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.{Concurrent, Timer}
 import cats.implicits._
-import cats.{Applicative, ApplicativeError, Defer, Id, Monad}
 import cats.temp.par.Par
-import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
   CasperPacketHandlerImpl,
   CasperPacketHandlerInternal
 }
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
-import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.protocol.routing._
 import io.casperlabs.comm.rp.Connect
 import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.comm.rp.HandleMessages.handle
+import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.p2p.effects.PacketHandler
-import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Cell, Log, Time}
-import io.casperlabs.smartcontracts.ExecutionEngineService
-import monix.eval.Task
-import monix.execution.Scheduler
 
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
-import scala.util.Random
 
 class TransportLayerCasperTestNode[F[_]](
     local: Node,
     tle: TransportLayerTestImpl[F],
     genesis: BlockMessage,
     transforms: Seq[TransformEntry],
-    sk: Array[Byte],
+    sk: PrivateKey,
     blockDagDir: Path,
     blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
@@ -125,7 +113,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   def standaloneF[F[_]](
       genesis: BlockMessage,
       transforms: Seq[TransformEntry],
-      sk: Array[Byte],
+      sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   )(
@@ -173,7 +161,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   }
 
   def networkF[F[_]](
-      sks: IndexedSeq[Array[Byte]],
+      sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,

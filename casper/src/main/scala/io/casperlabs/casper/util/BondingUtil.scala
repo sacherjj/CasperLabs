@@ -1,16 +1,12 @@
 package io.casperlabs.casper.util
 
-import cats.effect.{Concurrent, Resource, Sync}
-import cats.implicits._
-import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.hash.{Blake2b256, Keccak256}
-import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
-import io.casperlabs.shared.PathOps.RichPath
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
-import cats.Id
+import cats.effect.{Resource, Sync}
+import cats.implicits._
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import monix.execution.Scheduler

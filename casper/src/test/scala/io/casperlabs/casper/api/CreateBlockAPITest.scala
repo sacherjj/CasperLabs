@@ -1,31 +1,28 @@
 package io.casperlabs.casper.api
 
-import scala.concurrent.duration._
 import cats.Monad
 import cats.data.EitherT
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import io.casperlabs.casper._
-import io.casperlabs.casper.helper.{
-  HashSetCasperTestNode,
-  TransportLayerCasperTestNode,
-  TransportLayerCasperTestNodeFactory
-}, HashSetCasperTestNode.Effect
-import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util._
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.crypto.signatures.Ed25519
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.shared.Time
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper._
+import io.casperlabs.casper.helper.{HashSetCasperTestNode, TransportLayerCasperTestNodeFactory}
+import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.util._
+import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.p2p.EffectsTestInstances._
+import io.casperlabs.shared.Time
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
+
+import scala.concurrent.duration._
 
 class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCasperTestNodeFactory {
   import HashSetCasperTest._
