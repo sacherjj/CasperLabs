@@ -25,7 +25,6 @@ pub trait Preprocessor<A> {
     fn preprocess(&self, module_bytes: &[u8]) -> Result<A, PreprocessingError>;
 }
 
-// TODO(mateusz.gorski): Add `protocol_version` field (EE-285).
 pub struct WasmiPreprocessor {
     wasm_costs: WasmCosts,
     // Number of memory pages.
