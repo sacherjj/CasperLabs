@@ -14,6 +14,7 @@ data-dir = "/tmp"
 max-num-of-connections = 1
 max-message-size = 1
 chunk-size = 1
+use-gossiping = true
 relay-factor = 1
 relay-saturation = 1
 clean-block-storage = false

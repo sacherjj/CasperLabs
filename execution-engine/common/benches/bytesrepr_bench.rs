@@ -345,7 +345,7 @@ fn make_known_urefs() -> BTreeMap<String, Key> {
 
 fn make_contract() -> Contract {
     let known_urefs = make_known_urefs();
-    Contract::new(vec![0u8; 1024], known_urefs)
+    Contract::new(vec![0u8; 1024], known_urefs, 1)
 }
 
 fn make_account() -> Account {

@@ -1,4 +1,4 @@
-package io.casperlabs.casper.util.rholang
+package io.casperlabs.casper.util
 
 import io.casperlabs.casper.protocol._
 import io.casperlabs.models.{InternalProcessedDeploy, Succeeded, UnknownFailure}

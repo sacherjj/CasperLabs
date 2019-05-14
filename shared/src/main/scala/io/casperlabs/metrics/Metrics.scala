@@ -3,6 +3,8 @@ package io.casperlabs.metrics
 import cats._
 import cats.data._
 import cats.implicits._
+import cats.syntax._
+import cats.effect.Bracket
 import io.casperlabs.catscontrib._
 import Catscontrib._
 
@@ -23,10 +25,15 @@ trait Metrics[F[_]] {
 
   def decrementGauge(name: String, delta: Long = 1)(implicit ev: Metrics.Source): F[Unit]
 
+  def gauge[A](name: String, delta: Long = 1)(
+      block: F[A]
+  )(implicit ev: Metrics.Source, B: Bracket[F, Throwable]): F[A] =
+    B.guarantee(incrementGauge(name, delta) *> block)(decrementGauge(name, delta))
+
   // Histogram
   def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit]
 
-  def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A]
+  def timer[A](name: String)(block: F[A])(implicit ev: Metrics.Source): F[A]
 }
 
 object Metrics extends MetricsInstances {
@@ -43,7 +50,7 @@ object Metrics extends MetricsInstances {
     def decrementGauge(name: String, delta: Long)(implicit ev: Metrics.Source): F[Unit] = ().pure[F]
     def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit] =
       ().pure[F]
-    def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A] = block
+    def timer[A](name: String)(block: F[A])(implicit ev: Metrics.Source): F[A] = block
   }
 
   import shapeless.tag.@@
@@ -89,9 +96,9 @@ sealed abstract class MetricsInstances {
       ): EitherT[F, E, Unit] =
         EitherT.liftF(evF.record(name, count))
 
-      def timer[A](name: String, block: EitherT[F, E, A])(
+      def timer[A](name: String)(block: EitherT[F, E, A])(
           implicit ev: Metrics.Source
       ): EitherT[F, E, A] =
-        EitherT(evF.timer(name, block.value))
+        EitherT(evF.timer(name)(block.value))
     }
 }

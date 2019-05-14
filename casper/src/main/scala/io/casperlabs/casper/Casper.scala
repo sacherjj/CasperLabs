@@ -54,13 +54,18 @@ object MultiParentCasper extends MultiParentCasperInstances {
 sealed abstract class MultiParentCasperInstances {
 
   private def init[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: ExecutionEngineService](
-      genesis: BlockMessage
+      genesis: BlockMessage,
+      genesisPreState: StateHash,
+      genesisEffects: ExecEngineUtil.TransformMap
   ) =
     for {
       // Initialize DAG storage with genesis block in case it is empty
-      _                   <- BlockDagStorage[F].insert(genesis)
-      dag                 <- BlockDagStorage[F].getRepresentation
-      _                   <- Sync[F].rethrow(ExecEngineUtil.validateBlockCheckpoint[F](genesis, dag))
+      _   <- BlockDagStorage[F].insert(genesis)
+      dag <- BlockDagStorage[F].getRepresentation
+      _ <- {
+        implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
+        Validate.transactions[F](genesis, dag, genesisPreState, genesisEffects)
+      }
       blockProcessingLock <- Semaphore[F](1)
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()
@@ -71,9 +76,11 @@ sealed abstract class MultiParentCasperInstances {
   def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
+      genesisPreState: StateHash,
+      genesisEffects: ExecEngineUtil.TransformMap,
       shardId: String
   ): F[MultiParentCasper[F]] =
-    init(genesis) map {
+    init(genesis, genesisPreState, genesisEffects) map {
       case (blockProcessingLock, casperState) =>
         implicit val state = casperState
         new MultiParentCasperImpl[F](
@@ -90,11 +97,12 @@ sealed abstract class MultiParentCasperInstances {
   def fromGossipServices[F[_]: Concurrent: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService](
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
-      shardId: String
-  )(
+      genesisPreState: StateHash,
+      genesisEffects: ExecEngineUtil.TransformMap,
+      shardId: String,
       relaying: gossiping.Relaying[F]
   ): F[MultiParentCasper[F]] =
-    init(genesis) map {
+    init(genesis, genesisPreState, genesisEffects) map {
       case (blockProcessingLock, casperState) =>
         implicit val state = casperState
         new MultiParentCasperImpl[F](

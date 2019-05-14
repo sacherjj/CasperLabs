@@ -20,7 +20,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerInternal
 }
 import io.casperlabs.casper.util.comm.TransportLayerTestImpl
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
@@ -87,7 +87,7 @@ abstract class HashSetCasperTestNode[F[_]](
     // pre-population removed from internals of Casper
     blockStore.put(genesis.blockHash, genesis, Seq.empty) *>
       blockDagStorage.getRepresentation.flatMap { dag =>
-        ExecEngineUtil
+        ExecutionEngineServiceStub
           .validateBlockCheckpoint[F](
             genesis,
             dag

@@ -13,6 +13,7 @@ import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.{Bootstrap, SynchronizationError}
 import io.casperlabs.comm.gossiping.InitialSynchronizationSpec.TestFixture
 import io.casperlabs.shared.Log.NOPLog
+import io.casperlabs.metrics.Metrics
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.Atomic
@@ -178,6 +179,7 @@ class InitialSynchronizationSpec
 
 object InitialSynchronizationSpec extends ArbitraryConsensus {
   implicit val logNoOp = new NOPLog[Task]
+  implicit val metris  = new Metrics.MetricsNOP[Task]
 
   class MockNodeDiscovery(nodes: List[Node]) extends NodeDiscovery[Task] {
     def discover                    = ???

@@ -19,6 +19,10 @@ import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.ipc.ProtocolVersion
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
+import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
+import io.casperlabs.casper.helper.HashSetCasperTestNode
+import io.casperlabs.casper.util.execengine.DeploysCheckpoint
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
@@ -210,10 +214,11 @@ class ValidateTest
       for {
         _     <- createChain[Task](1)
         block <- blockDagStorage.lookupByIdUnsafe(0)
-        _ <- Validate.blockNumber[Task](block.withBlockNumber(1)).attempt shouldBeF Left(
+        dag   <- blockDagStorage.getRepresentation
+        _ <- Validate.blockNumber[Task](block.withBlockNumber(1), dag).attempt shouldBeF Left(
               InvalidBlockNumber
             )
-        _      <- Validate.blockNumber[Task](block) shouldBeF Unit
+        _      <- Validate.blockNumber[Task](block, dag) shouldBeF Unit
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no parents") should be(true)
       } yield result
@@ -223,15 +228,16 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       val n = 6
       for {
-        _ <- createChain[Task](n)
-        _ <- blockDagStorage.lookupByIdUnsafe(0) >>= Validate.blockNumber[Task]
-        _ <- blockDagStorage.lookupByIdUnsafe(1) >>= Validate.blockNumber[Task]
-        _ <- blockDagStorage.lookupByIdUnsafe(2) >>= Validate.blockNumber[Task]
-        _ <- blockDagStorage.lookupByIdUnsafe(3) >>= Validate.blockNumber[Task]
-        _ <- blockDagStorage.lookupByIdUnsafe(4) >>= Validate.blockNumber[Task]
-        _ <- blockDagStorage.lookupByIdUnsafe(5) >>= Validate.blockNumber[Task]
+        _   <- createChain[Task](n)
+        dag <- blockDagStorage.getRepresentation
+        _   <- blockDagStorage.lookupByIdUnsafe(0) >>= (b => Validate.blockNumber[Task](b, dag))
+        _   <- blockDagStorage.lookupByIdUnsafe(1) >>= (b => Validate.blockNumber[Task](b, dag))
+        _   <- blockDagStorage.lookupByIdUnsafe(2) >>= (b => Validate.blockNumber[Task](b, dag))
+        _   <- blockDagStorage.lookupByIdUnsafe(3) >>= (b => Validate.blockNumber[Task](b, dag))
+        _   <- blockDagStorage.lookupByIdUnsafe(4) >>= (b => Validate.blockNumber[Task](b, dag))
+        _   <- blockDagStorage.lookupByIdUnsafe(5) >>= (b => Validate.blockNumber[Task](b, dag))
         _ <- (0 until n).toList.forallM[Task] { i =>
-              (blockDagStorage.lookupByIdUnsafe(i) >>= Validate.blockNumber[Task])
+              (blockDagStorage.lookupByIdUnsafe(i) >>= (b => Validate.blockNumber[Task](b, dag)))
                 .map(_ => true)
             } shouldBeF true
         result = log.warns should be(Nil)
@@ -239,25 +245,26 @@ class ValidateTest
   }
 
   it should "correctly validate a multiparent block where the parents have different block numbers" in withStorage {
-    implicit blockStore => _ =>
+    implicit blockStore => implicit blockDagStorage =>
       def createBlockWithNumber(
           n: Long,
           parentHashes: Seq[ByteString] = Nil
       ): Task[BlockMessage] = {
-        val blockWithNumber = BlockMessage.defaultInstance.withBlockNumber(n)
+        val blockWithNumber = BlockMessage().withBlockNumber(n)
         val header          = blockWithNumber.getHeader.withParentsHashList(parentHashes)
         val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
         val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
-
-        blockStore.put(hash, block, Seq.empty) *> block.pure[Task]
+        blockStore.put(hash, block, Seq.empty) *> blockDagStorage.insert(block) *> block.pure[Task]
       }
 
       for {
-        b1 <- createBlockWithNumber(3)
-        b2 <- createBlockWithNumber(7)
-        b3 <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
-        _  <- Validate.blockNumber[Task](b3) shouldBeF Unit
-        result <- Validate.blockNumber[Task](b3.withBlockNumber(4)).attempt shouldBeF Left(
+        _   <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
+        b1  <- createBlockWithNumber(3)
+        b2  <- createBlockWithNumber(7)
+        b3  <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
+        dag <- blockDagStorage.getRepresentation
+        _   <- Validate.blockNumber[Task](b3, dag) shouldBeF Unit
+        result <- Validate.blockNumber[Task](b3.withBlockNumber(4), dag).attempt shouldBeF Left(
                    InvalidBlockNumber
                  )
       } yield result
@@ -374,18 +381,18 @@ class ValidateTest
                    dag <- blockDagStorage.getRepresentation
 
                    // Valid
-                   _ <- Validate.parents[Task](b0, b0, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b1, b0, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b2, b0, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b3, b0, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b4, b0, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b5, b0, b0.blockHash, dag)
-                   _ <- Validate.parents[Task](b6, b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b0, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b1, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b2, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b3, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b4, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b5, b0.blockHash, dag)
+                   _ <- Validate.parents[Task](b6, b0.blockHash, dag)
 
                    // Not valid
-                   _ <- Validate.parents[Task](b7, b0, b0.blockHash, dag).attempt
-                   _ <- Validate.parents[Task](b8, b0, b0.blockHash, dag).attempt
-                   _ <- Validate.parents[Task](b9, b0, b0.blockHash, dag).attempt
+                   _ <- Validate.parents[Task](b7, b0.blockHash, dag).attempt
+                   _ <- Validate.parents[Task](b8, b0.blockHash, dag).attempt
+                   _ <- Validate.parents[Task](b9, b0.blockHash, dag).attempt
 
                    _ = log.warns should have size (3)
                    result = log.warns.forall(
@@ -586,7 +593,7 @@ class ValidateTest
       for {
         _   <- casperSmartContractsApi.setBonds(bonds)
         dag <- blockDagStorage.getRepresentation
-        _ <- ExecEngineUtil
+        _ <- ExecutionEngineServiceStub
               .validateBlockCheckpoint[Task](
                 genesis,
                 dag
@@ -681,4 +688,94 @@ class ValidateTest
                ) shouldBeF true
     } yield result
   }
+
+  "validateTransactions" should "return InvalidPreStateHash when preStateHash of block is not correct" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      implicit val executionEngineService: ExecutionEngineService[Task] =
+        HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
+      val contract = ByteString.copyFromUtf8("some contract")
+
+      val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1)
+      val b1DeploysWithCost      = prepareDeploys(Vector(contract), 2)
+      val b2DeploysWithCost      = prepareDeploys(Vector(contract), 1)
+      val b3DeploysWithCost      = prepareDeploys(Vector.empty, 5)
+      val invalidHash            = ByteString.copyFromUtf8("invalid")
+
+      for {
+        genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
+        b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+        b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+        // set wrong preStateHash for b3
+        b3 <- createBlock[Task](
+               Seq(b1.blockHash, b2.blockHash),
+               deploys = b3DeploysWithCost,
+               preStateHash = invalidHash
+             )
+        dag <- blockDagStorage.getRepresentation
+
+        // calls Validate.transactions internally
+        postState <- ExecutionEngineServiceStub.validateBlockCheckpoint[Task](
+                      b3,
+                      dag
+                    )
+      } yield postState shouldBe Left(Validate.ValidateErrorWrapper(InvalidPreStateHash))
+  }
+
+  it should "return InvalidPostStateHash when postStateHash of block is not correct" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      implicit val executionEngineService: ExecutionEngineService[Task] =
+        HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
+      val deploys = Vector(ByteString.EMPTY)
+        .map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      val processedDeploys = deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
+      val invalidHash      = ByteString.copyFromUtf8("invalid")
+      for {
+        genesis <- createBlock[Task](
+                    Seq.empty,
+                    deploys = processedDeploys,
+                    postStateHash = invalidHash
+                  )
+        dag <- blockDagStorage.getRepresentation
+        // calls Validate.transactions internally
+        validateResult <- ExecutionEngineServiceStub.validateBlockCheckpoint[Task](
+                           genesis,
+                           dag
+                         )
+      } yield validateResult shouldBe Left(Validate.ValidateErrorWrapper(InvalidPostStateHash))
+  }
+
+  it should "return a checkpoint with the right hash for a valid block" in withStorage {
+    implicit val executionEngineService: ExecutionEngineService[Task] =
+      HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
+    implicit blockStore => implicit blockDagStorage =>
+      val deploys =
+        Vector(
+          ByteString.EMPTY
+        ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+
+      for {
+        dag1 <- blockDagStorage.getRepresentation
+        deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
+                              ExecEngineUtil.MergeResult.empty,
+                              deploys,
+                              ProtocolVersion(1)
+                            )
+        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _) = deploysCheckpoint
+        block <- createBlock[Task](
+                  Seq.empty,
+                  deploys = processedDeploys,
+                  postStateHash = computedPostStateHash,
+                  preStateHash = preStateHash
+                )
+        dag2 <- blockDagStorage.getRepresentation
+
+        // calls Validate.transactions internally
+        validateResult <- ExecutionEngineServiceStub.validateBlockCheckpoint[Task](
+                           block,
+                           dag2
+                         )
+        Right(postStateHash) = validateResult
+      } yield postStateHash should be(computedPostStateHash)
+  }
+
 }

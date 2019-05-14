@@ -12,11 +12,11 @@ import ServiceError.{NotFound, Unauthenticated, Unavailable}
 import io.casperlabs.comm.TestRuntime
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-
 import monix.eval.Task
 import monix.execution.{ExecutionModel, Scheduler}
 import monix.reactive.Observable
@@ -1155,6 +1155,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
     ): Resource[Task, GossipingGrpcMonix.GossipServiceStub] = {
       val port             = getFreePort
       val serverCert       = TestCert.generate
+      implicit val metrics = new Metrics.MetricsNOP[Task]
       implicit val logTask = new Log.NOPLog[Task]
       implicit val logId   = new Log.NOPLog[Id]
 

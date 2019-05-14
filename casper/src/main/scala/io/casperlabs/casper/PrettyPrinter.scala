@@ -41,6 +41,11 @@ object PrettyPrinter {
       }
   }
 
+  private def buildString(v: Option[ipc.ProtocolVersion]): String = v match {
+    case None          => "No protocol version"
+    case Some(version) => s"${version}"
+  }
+
   private def buildString(nk: ipc.NamedKey): String = nk match {
     case ipc.NamedKey(_, None)         => "EmptyNamedKey"
     case ipc.NamedKey(name, Some(key)) => s"NamedKey($name, ${buildString(key)})"
@@ -51,8 +56,8 @@ object PrettyPrinter {
     case ipc.Value.ValueInstance.Account(ipc.Account(pk, nonce, urefs)) =>
       s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}})"
     case ipc.Value.ValueInstance.ByteArr(bytes) => s"ByteArray(${buildString(bytes)})"
-    case ipc.Value.ValueInstance.Contract(ipc.Contract(body, urefs)) =>
-      s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}})"
+    case ipc.Value.ValueInstance.Contract(ipc.Contract(body, urefs, protocolVersion)) =>
+      s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}}, ${buildString(protocolVersion)})"
     case ipc.Value.ValueInstance.IntList(ipc.IntList(list))       => s"List(${list.mkString(",")})"
     case ipc.Value.ValueInstance.Integer(i)                       => s"Int32($i)"
     case ipc.Value.ValueInstance.NamedKey(nk)                     => buildString(nk)

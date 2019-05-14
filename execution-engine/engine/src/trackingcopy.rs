@@ -211,7 +211,7 @@ mod tests {
     use common::gens::*;
     use common::key::{AccessRights, Key};
     use common::value::{Account, Contract, Value};
-    use storage::global_state::inmem::InMemGS;
+    use storage::global_state::in_memory::InMemoryGlobalState;
     use storage::global_state::StateReader;
     use storage::op::Op;
     use storage::transform::Transform;
@@ -507,7 +507,7 @@ mod tests {
     proptest! {
         #[test]
         fn query_empty_path(k in key_arb(), missing_key in key_arb(), v in value_arb()) {
-            let gs = InMemGS::new(iter::once((k, v.clone())).collect());
+            let gs = InMemoryGlobalState::from_pairs(&[(k, v.to_owned())]).unwrap();
             let mut tc = TrackingCopy::new(gs);
             let empty_path = Vec::new();
             if let Ok(QueryResult::Success(result)) = tc.query(k, &empty_path) {
@@ -531,16 +531,15 @@ mod tests {
             body in vec(any::<u8>(), 1..1000), // contract body
             hash in u8_slice_32(), // hash for contract key
         ) {
-            let mut map = BTreeMap::new();
-            map.insert(k, v.clone());
-
             let mut known_urefs = BTreeMap::new();
             known_urefs.insert(name.clone(), k);
-            let contract: Value = Contract::new(body, known_urefs).into();
+            let contract: Value = Contract::new(body, known_urefs, 1).into();
             let contract_key = Key::Hash(hash);
-            map.insert(contract_key, contract);
 
-            let gs = InMemGS::new(map);
+            let gs = InMemoryGlobalState::from_pairs(&[
+                (k, v.to_owned()),
+                (contract_key, contract),
+            ]).unwrap();
             let mut tc = TrackingCopy::new(gs);
             let path = vec!(name.clone());
             if let Ok(QueryResult::Success(result)) = tc.query(contract_key, &path) {
@@ -566,9 +565,6 @@ mod tests {
             nonce in any::<u64>(), // account nonce
             address in u8_slice_20(), // address for account key
         ) {
-            let mut map = BTreeMap::new();
-            map.insert(k, v.clone());
-
             let known_urefs = iter::once((name.clone(), k)).collect();
             let account = Account::new(
                 pk,
@@ -576,9 +572,11 @@ mod tests {
                 known_urefs,
             );
             let account_key = Key::Account(address);
-            map.insert(account_key, Value::Account(account));
 
-            let gs = InMemGS::new(map);
+            let gs = InMemoryGlobalState::from_pairs(&[
+                (k, v.to_owned()),
+                (account_key, Value::Account(account)),
+            ]).unwrap();
             let mut tc = TrackingCopy::new(gs);
             let path = vec!(name.clone());
             if let Ok(QueryResult::Success(result)) = tc.query(account_key, &path) {
@@ -605,15 +603,11 @@ mod tests {
             body in vec(any::<u8>(), 1..1000), //contract body
             hash in u8_slice_32(), // hash for contract key
         ) {
-            let mut map = BTreeMap::new();
-            map.insert(k, v.clone());
-
             // create contract which knows about value
             let mut contract_known_urefs = BTreeMap::new();
             contract_known_urefs.insert(state_name.clone(), k);
-            let contract: Value = Contract::new(body, contract_known_urefs).into();
+            let contract: Value = Contract::new(body, contract_known_urefs, 1).into();
             let contract_key = Key::Hash(hash);
-            map.insert(contract_key, contract);
 
             // create account which knows about contract
             let mut account_known_urefs = BTreeMap::new();
@@ -624,9 +618,12 @@ mod tests {
                 account_known_urefs,
             );
             let account_key = Key::Account(address);
-            map.insert(account_key, Value::Account(account));
 
-            let gs = InMemGS::new(map);
+            let gs = InMemoryGlobalState::from_pairs(&[
+                (k, v.to_owned()),
+                (contract_key, contract),
+                (account_key, Value::Account(account)),
+            ]).unwrap();
             let mut tc = TrackingCopy::new(gs);
             let path = vec!(contract_name, state_name);
             if let Ok(QueryResult::Success(result)) = tc.query(account_key, &path) {

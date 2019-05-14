@@ -213,7 +213,7 @@ package object effects {
           }
         }
 
-      def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A] =
+      def timer[A](name: String)(block: F[A])(implicit ev: Metrics.Source): F[A] =
         m.getOrElseUpdate(source(name), Kamon.timer(source(name))) match {
           case c: metric.Timer =>
             for {
@@ -225,7 +225,7 @@ package object effects {
         }
     }
 
-  def grpc(
+  def diagnosticsService(
       implicit nodeDiscovery: NodeDiscovery[Task],
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],

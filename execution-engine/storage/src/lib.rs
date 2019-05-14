@@ -13,6 +13,7 @@ extern crate wasmi;
 #[cfg(test)]
 extern crate proptest;
 
+extern crate core;
 #[cfg(test)]
 extern crate tempfile;
 

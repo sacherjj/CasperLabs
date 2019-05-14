@@ -17,6 +17,12 @@ from .cl_node.common import KeyPair, TestingContext
 from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from .cl_node.casperlabsnode import docker_network_with_started_bootstrap, HOST_GENESIS_DIR, HOST_MOUNT_DIR
 
+from .cl_node.casperlabs_network import (
+    OneNodeNetwork,
+    TwoNodeNetwork,
+    ThreeNodeNetwork,
+)
+
 
 if TYPE_CHECKING:
     from docker.client import DockerClient
@@ -112,8 +118,8 @@ def create_genesis_folder() -> None:
             shutil.rmtree(HOST_GENESIS_DIR)
         os.makedirs(HOST_GENESIS_DIR)
     except Exception as ex:
-        sys.exit(1)
         logging.exception(f"An exception occured while creating the folder {HOST_GENESIS_DIR}: {ex}")
+        sys.exit(1)
 
 
 def create_bonds_file(validator_keys: List[KeyPair]) -> str:
@@ -161,8 +167,29 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
     yield context
 
 
-@pytest.yield_fixture(scope='module')
+@pytest.fixture(scope='module')
 def started_standalone_bootstrap_node(command_line_options_fixture, docker_client_fixture):
     with testing_context(command_line_options_fixture, docker_client_fixture) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
             yield bootstrap_node
+
+
+@pytest.fixture()
+def one_node_network(docker_client_fixture):
+    with OneNodeNetwork(docker_client_fixture) as onn:
+        onn.create_cl_network()
+        yield onn
+
+
+@pytest.fixture()
+def two_node_network(docker_client_fixture):
+    with TwoNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
+@pytest.fixture()
+def three_node_network(docker_client_fixture):
+    with ThreeNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
