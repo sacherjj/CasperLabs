@@ -2,10 +2,9 @@ extern crate parity_wasm;
 extern crate pwasm_utils;
 extern crate vm;
 
-use parity_wasm::elements::{self, deserialize_buffer, Error as ParityWasmError, Module};
+use parity_wasm::elements::{deserialize_buffer, Error as ParityWasmError, Module};
 use pwasm_utils::{externalize_mem, inject_gas_counter, rules};
 use std::error::Error;
-use std::iter::Iterator;
 use vm::wasm_costs::WasmCosts;
 
 const MEM_PAGES: u32 = 128;
@@ -54,8 +53,7 @@ impl Preprocessor<Module> for WasmiPreprocessor {
     fn preprocess(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
         let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
         let deserialized_module = deserialize_buffer(module_bytes).map_err(from_parity_err)?;
-        let mut ext_mod = externalize_mem(deserialized_module, None, self.mem_pages);
-        remove_memory_export(&mut ext_mod)?;
+        let ext_mod = externalize_mem(deserialized_module, None, self.mem_pages);
         let gas_mod = inject_gas_counters(ext_mod, &self.wasm_costs)?;
         let module =
             pwasm_utils::stack_height::inject_limiter(gas_mod, self.wasm_costs.max_stack_height)
