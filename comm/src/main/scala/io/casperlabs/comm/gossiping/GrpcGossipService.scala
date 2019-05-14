@@ -1,16 +1,19 @@
 package io.casperlabs.comm.gossiping
 
+import cats._
 import cats.effect._
-import io.casperlabs.casper.consensus.BlockSummary
+import cats.implicits._
+import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
+import io.casperlabs.comm.ServiceError.{DeadlineExceeded, Unauthenticated}
 import io.casperlabs.comm.auth.Principal
 import io.casperlabs.comm.grpc.ContextKeys
-import io.casperlabs.comm.ServiceError.{DeadlineExceeded, NotFound, Unauthenticated}
 import io.casperlabs.shared.ObservableOps._
 import monix.eval.{Task, TaskLift, TaskLike}
 import monix.reactive.Observable
 import monix.tail.Iterant
-import scala.concurrent.duration.FiniteDuration
+
 import scala.concurrent.TimeoutException
+import scala.concurrent.duration.FiniteDuration
 
 /** Adapt the GossipService to Monix generated interfaces. */
 object GrpcGossipService {
@@ -68,35 +71,54 @@ object GrpcGossipService {
             case ex: TimeoutException =>
               Observable.raiseError(DeadlineExceeded(ex.getMessage))
           }
+
+      def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
+        TaskLike[F].toTask(service.getGenesisCandidate(request))
+
+      def addApproval(request: AddApprovalRequest): Task[Empty] =
+        TaskLike[F].toTask(service.addApproval(request))
     }
 
   /** Create the internal interface from the Monix specific instance,
     * to be used as the "client side", i.e. to request data from another peer. */
-  def toGossipService[F[_]: Sync: TaskLift: ObservableIterant](
-      stub: GossipingGrpcMonix.GossipService
+  def toGossipService[F[_]: Sync: TaskLift: TaskLike: ObservableIterant](
+      stub: GossipingGrpcMonix.GossipService,
+      // Can inject a callback to close the faulty channel.
+      onError: PartialFunction[Throwable, F[Unit]] = PartialFunction.empty
   ): GossipService[F] =
     new GossipService[F] {
+      private def withErrorCallback[T](obs: Observable[T]): Iterant[F, T] =
+        obs.doOnErrorF(onError orElse { case _ => ().pure[F] }).toIterant
+
+      private def withErrorCallback[T](task: Task[T]): F[T] =
+        task.to[F].onError(onError)
 
       /** Notify the callee about new blocks. */
       def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
-        stub.newBlocks(request).to[F]
+        withErrorCallback(stub.newBlocks(request))
 
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
-        stub.streamAncestorBlockSummaries(request).toIterant
+        withErrorCallback(stub.streamAncestorBlockSummaries(request))
 
       def streamDagTipBlockSummaries(
           request: StreamDagTipBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
-        stub.streamDagTipBlockSummaries(request).toIterant
+        withErrorCallback(stub.streamDagTipBlockSummaries(request))
 
       def streamBlockSummaries(
           request: StreamBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
-        stub.streamBlockSummaries(request).toIterant
+        withErrorCallback(stub.streamBlockSummaries(request))
 
       def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
-        stub.getBlockChunked(request).toIterant
+        withErrorCallback(stub.getBlockChunked(request))
+
+      def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
+        withErrorCallback(stub.getGenesisCandidate(request))
+
+      def addApproval(request: AddApprovalRequest): F[Empty] =
+        withErrorCallback(stub.addApproval(request))
     }
 }

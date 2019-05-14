@@ -13,6 +13,7 @@ import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.Log.NOPLog
+import io.casperlabs.metrics.Metrics
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler.Implicits.global
@@ -77,6 +78,22 @@ class RelayingSpec
               } yield asked.get() shouldBe relayFactor
           }
         }
+      "not gossip to more than 'relay factor' number of peers that responded positively" in
+        forAll(genListNode, genHash) { (peers: List[Node], hash: ByteString) =>
+          val relayFactor  = Random.nextInt(peers.size) + 1
+          val responses    = peers.map(_ => Random.nextBoolean)
+          val responseIter = responses.iterator
+          TestFixture(
+            relayFactor,
+            100,
+            peers,
+            acceptOrFailure = _ => synchronized(responseIter.next.some)
+          ) { (relaying, asked, _) =>
+            for {
+              _ <- relaying.relay(List(hash))
+            } yield responses.take(asked.get()).count(identity) should be <= relayFactor
+          }
+        }
       "not stop gossiping if received an error" in
         forAll(genListNode, genHash) { (peers: List[Node], hash: ByteString) =>
           val log = new LogStub[Task]()
@@ -115,36 +132,16 @@ object RelayingSpec {
   }
 
   private val noOpLog: Log[Task] = new NOPLog[Task]
-
-  def summaryOf(block: Block): BlockSummary =
-    BlockSummary()
-      .withBlockHash(block.blockHash)
-      .withHeader(block.getHeader)
-      .withSignature(block.getSignature)
-
-  class GossipServiceMock extends GossipService[Task] {
-    override def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] = ???
-
-    override def streamAncestorBlockSummaries(
-        request: StreamAncestorBlockSummariesRequest): Iterant[Task, BlockSummary] = ???
-
-    override def streamDagTipBlockSummaries(
-        request: StreamDagTipBlockSummariesRequest): Iterant[Task, BlockSummary] = ???
-
-    override def streamBlockSummaries(
-        request: StreamBlockSummariesRequest): Iterant[Task, BlockSummary] = ???
-
-    /** Get a full block in chunks, optionally compressed, so that it can be transferred over the wire. */
-    override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] = ???
-  }
+  implicit val metrics           = new Metrics.MetricsNOP[Task]
 
   object TestFixture {
-    def apply(relayFactor: Int,
-              relaySaturation: Int,
-              peers: List[Node],
-              acceptOrFailure: Node => Option[Boolean],
-              log: Log[Task] = noOpLog)(
-        test: (Relaying[Task], AtomicInt, AtomicInt) => Task[Unit]): Unit = {
+    def apply(
+        relayFactor: Int,
+        relaySaturation: Int,
+        peers: List[Node],
+        acceptOrFailure: Node => Option[Boolean],
+        log: Log[Task] = noOpLog
+    )(test: (Relaying[Task], AtomicInt, AtomicInt) => Task[Unit]): Unit = {
       val nd = new NodeDiscovery[Task] {
         override def discover: Task[Unit]                           = ???
         override def lookup(id: NodeIdentifier): Task[Option[Node]] = ???
@@ -170,28 +167,27 @@ object RelayingSpec {
           new GossipService[Task] {
             override def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
               acceptOrFailure(peer).fold(
-                Task.raiseError[NewBlocksResponse](new RuntimeException("Boom")))(accepted =>
-                Task.now(NewBlocksResponse(accepted)))
+                Task.raiseError[NewBlocksResponse](new RuntimeException("Boom"))
+              )(accepted => Task.now(NewBlocksResponse(accepted)))
 
             override def streamAncestorBlockSummaries(
-                request: StreamAncestorBlockSummariesRequest): Iterant[Task, BlockSummary] = ???
-
-            override def streamDagTipBlockSummaries(
-                request: StreamDagTipBlockSummariesRequest): Iterant[Task, BlockSummary] = ???
-
-            override def streamBlockSummaries(
-                request: StreamBlockSummariesRequest): Iterant[Task, BlockSummary] = ???
-
-            /** Get a full block in chunks, optionally compressed, so that it can be transferred over the wire. */
-            override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] =
+                request: StreamAncestorBlockSummariesRequest
+            ) = ???
+            override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest) =
               ???
-        }
+            override def streamBlockSummaries(request: StreamBlockSummariesRequest) = ???
+            override def getBlockChunked(request: GetBlockChunkedRequest)           = ???
+            override def addApproval(request: AddApprovalRequest)                   = ???
+            override def getGenesisCandidate(request: GetGenesisCandidateRequest)   = ???
+          }
 
       val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)(
         Sync[Task],
         Par.fromParallel(CatsParallelForTask),
         log,
-        ask)
+        metrics,
+        ask
+      )
       test(relayingImpl, asked, maxConcurrentRequests).runSyncUnsafe(5.seconds)
     }
   }

@@ -10,14 +10,16 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.protocol.{DeployData, _}
 import io.casperlabs.casper.util.implicits._
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.ski.id
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.ipc
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{Log, Time}
 
 import scala.collection.immutable
+import scala.util.control.NonFatal
 
 object ProtoUtil {
   /*
@@ -46,7 +48,7 @@ object ProtoUtil {
       } yield result
     }
 
-  def getMainChainUntilDepth[F[_]: Monad: BlockStore](
+  def getMainChainUntilDepth[F[_]: MonadThrowable: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
       depth: Int
@@ -75,15 +77,16 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  // TODO: instead of throwing Exception use MonadError.raiseError
-  def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
+  def unsafeGetBlock[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
       maybeBlock <- BlockStore[F].getBlockMessage(hash)
-      block = maybeBlock match {
-        case Some(b) => b
-        case None =>
-          throw new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
-      }
+      block <- maybeBlock match {
+                case Some(b) => b.pure[F]
+                case None =>
+                  MonadThrowable[F].raiseError(
+                    new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+                  )
+              }
     } yield block
 
   def creatorJustification(block: BlockMessage): Option[Justification] =
@@ -236,7 +239,7 @@ object ProtoUtil {
   def parentHashes(b: BlockMessage): Seq[ByteString] =
     b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
-  def unsafeGetParents[F[_]: Monad: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
+  def unsafeGetParents[F[_]: MonadThrowable: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }
@@ -274,85 +277,6 @@ object ProtoUtil {
       ps <- bd.state
     } yield ps.blockNumber).getOrElse(0L)
 
-  /*
-   * Two blocks conflict if they both use the same deploy in different histories
-   *
-   * TODO: Update the logic of this function to make use of the trace logs and
-   * say that two blocks don't conflict if they act on disjoint sets of channels
-   */
-  def conflicts[F[_]: Monad: BlockStore: Log](
-      b1: BlockMessage,
-      b2: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDagRepresentation[F]
-  ): F[Boolean] =
-    for {
-      gca <- DagOperations.greatestCommonAncestorF[F](b1, b2, genesis, dag)
-      result <- if (gca == b1 || gca == b2) {
-                 //blocks which already exist in each other's chains do not conflict
-                 false.pure[F]
-               } else {
-                 // Gather for each deploy which blocks it appears in.
-                 def getDeploys(b: BlockMessage): F[Map[DeployData, Set[ByteString]]] =
-                   for {
-                     bAncestors <- DagOperations
-                                    .bfTraverseF[F, BlockMessage](List(b))(
-                                      ProtoUtil.unsafeGetParents[F]
-                                    )
-                                    .takeWhile(_ != gca)
-                                    .toList
-                     deploys = bAncestors
-                       .flatMap { b =>
-                         val deploys =
-                           b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[DeployData])
-                         deploys.map(_ -> b.blockHash)
-                       }
-                       .groupBy { case (d, b) => d }
-                       .map { case (d, xs) => d -> xs.map(_._2).toSet }
-                       .toMap
-                   } yield deploys
-
-                 for {
-                   b1Deploys <- getDeploys(b1)
-                   b2Deploys <- getDeploys(b2)
-                   // Find deploys that appear in multiple blocks.
-                   conflicts = (b1Deploys.keySet ++ b2Deploys.keySet).filter { d =>
-                     val fromB1 = b1Deploys.getOrElse(d, Set.empty)
-                     val fromB2 = b2Deploys.getOrElse(d, Set.empty)
-                     (fromB1 union fromB2).size > 1
-                   }
-                   _ <- if (conflicts.nonEmpty) {
-                         Log[F].debug(
-                           s"Block ${PrettyPrinter.buildString(b1.blockHash)} conflicts ${PrettyPrinter
-                             .buildString(b2.blockHash)} on ${conflicts.size} deploys."
-                         )
-                       } else ().pure[F]
-                 } yield conflicts.nonEmpty
-               }
-    } yield result
-
-  def chooseNonConflicting[F[_]: Monad: BlockStore: Log](
-      blockHashes: Seq[BlockHash],
-      genesis: BlockMessage,
-      dag: BlockDagRepresentation[F]
-  ): F[Seq[BlockMessage]] = {
-    def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
-      conflicts[F](_, b, genesis, dag).map(b => !b)
-
-    for {
-      blocks <- blockHashes.toList.traverse(hash => ProtoUtil.unsafeGetBlock[F](hash))
-      result <- blocks
-                 .foldM(List.empty[BlockMessage]) {
-                   case (acc, b) =>
-                     Monad[F].ifM(acc.forallM(nonConflicting(b)))(
-                       (b :: acc).pure[F],
-                       acc.pure[F]
-                     )
-                 }
-                 .map(_.reverse)
-    } yield result
-  }
-
   def toJustification(
       latestMessages: collection.Map[Validator, BlockMetadata]
   ): Seq[Justification] =
@@ -371,7 +295,7 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: Monad: BlockStore](
+  def toLatestMessage[F[_]: MonadThrowable: BlockStore](
       justifications: Seq[Justification],
       dag: BlockDagRepresentation[F]
   ): F[immutable.Map[Validator, BlockMetadata]] =
@@ -394,7 +318,7 @@ object ProtoUtil {
   def blockHeader(
       body: Body,
       parentHashes: Seq[ByteString],
-      version: Long,
+      protocolVersion: Long,
       timestamp: Long
   ): Header =
     Header()
@@ -402,7 +326,7 @@ object ProtoUtil {
       .withPostStateHash(protoHash(body.state.get))
       .withDeploysHash(protoSeqHash(body.deploys))
       .withDeployCount(body.deploys.size)
-      .withVersion(version)
+      .withProtocolVersion(protocolVersion)
       .withTimestamp(timestamp)
 
   def unsignedBlockProto(
@@ -421,11 +345,13 @@ object ProtoUtil {
       .withShardId(shardId)
   }
 
+  // TODO: Why isn't the shard ID part of this?
   def hashUnsignedBlock(header: Header, justifications: Seq[Justification]): BlockHash = {
     val items = header.toByteArray +: justifications.map(_.toByteArray)
     hashByteArrays(items: _*)
   }
 
+  // TODO: Why isn't the justifications part of this?
   def hashSignedBlock(
       header: Header,
       sender: ByteString,
@@ -475,8 +401,6 @@ object ProtoUtil {
     } yield signedBlock
   }
 
-  def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
-
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
@@ -509,11 +433,6 @@ object ProtoUtil {
       gasLimit = gasLimit
     )
 
-  def compiledSourceDeploy(
-      timestamp: Long,
-      gasLimit: Long
-  ): DeployData = ???
-
   def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): DeployData =
     DeployData(
       user = ByteString.EMPTY,
@@ -523,8 +442,11 @@ object ProtoUtil {
       gasLimit = gasLimit
     )
 
-  def termDeployNow(sessionCode: ByteString): DeployData =
-    sourceDeploy(sessionCode, System.currentTimeMillis(), Integer.MAX_VALUE)
+  // https://casperlabs.atlassian.net/browse/EE-283
+  // We are hardcoding exchange rate for DEV NET at 10:1
+  // (1 token buys you 10 units of gas).
+  // Later, post DEV NET, conversion rate will be part of a deploy.
+  val GAS_PRICE = 10
 
   def deployDataToEEDeploy(dd: DeployData): ipc.Deploy = ipc.Deploy(
     address = dd.address,
@@ -532,7 +454,7 @@ object ProtoUtil {
     session = dd.session.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
     payment = dd.payment.map { case DeployCode(code, args) => ipc.DeployCode(code, args) },
     gasLimit = dd.gasLimit,
-    gasPrice = dd.gasPrice,
+    gasPrice = GAS_PRICE,
     nonce = dd.nonce
   )
 

@@ -1,36 +1,27 @@
 package io.casperlabs.casper.util.comm
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Concurrent
 import cats.implicits._
-import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.{protocol, ValidatorIdentity}
+import io.casperlabs.casper.ValidatorIdentity
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProcessedDeployUtil, ProtoUtil}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.RPConfAsk
-import io.casperlabs.comm.transport.{Blob, TransportLayer}
-import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.ipc
-import io.casperlabs.ipc.{DeployResult, TransformEntry}
 import io.casperlabs.models.InternalProcessedDeploy
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import monix.eval.Task
-import monix.execution.Scheduler
 
-import scala.concurrent.duration.Duration
 import scala.util.Try
 
 /**
@@ -152,15 +143,20 @@ object BlockApproverProtocol {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
       deploys                   = blockDeploys.map(_.deploy)
+      protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
+        postState.blockNumber
+      )
       processedDeploys <- EitherT(
                            ExecutionEngineService[F].exec(
                              ExecutionEngineService[F].emptyStateHash,
-                             deploys.map(ProtoUtil.deployDataToEEDeploy)
+                             deploys.map(ProtoUtil.deployDataToEEDeploy),
+                             protocolVersion
                            )
                          ).leftMap(_.getMessage)
-      deployEffects    = ExecEngineUtil.processedDeployEffects(deploys zip processedDeploys)
-      commutingEffects = ExecEngineUtil.findCommutingEffects(deployEffects)
-      transforms       = commutingEffects.unzip._1.flatMap(_.transformMap)
+      deployEffects = ExecEngineUtil.findCommutingEffects(
+        ExecEngineUtil.processedDeployEffects(deploys zip processedDeploys)
+      )
+      transforms = ExecEngineUtil.extractTransforms(deployEffects)
       postStateHash <- EitherT(
                         ExecutionEngineService[F]
                           .commit(ExecutionEngineService[F].emptyStateHash, transforms)

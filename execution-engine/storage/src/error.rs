@@ -1,4 +1,5 @@
 use common::bytesrepr;
+use history::trie_store::in_memory;
 use lmdb;
 use wasmi;
 
@@ -31,5 +32,14 @@ impl From<bytesrepr::Error> for Error {
 impl<T> From<std::sync::PoisonError<T>> for Error {
     fn from(_e: std::sync::PoisonError<T>) -> Self {
         Error::PoisonError
+    }
+}
+
+impl From<in_memory::Error> for Error {
+    fn from(error: in_memory::Error) -> Self {
+        match error {
+            in_memory::Error::BytesRepr(error) => Error::BytesRepr(error),
+            in_memory::Error::PoisonError => Error::PoisonError,
+        }
     }
 }

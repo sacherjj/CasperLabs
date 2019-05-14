@@ -25,7 +25,7 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import io.casperlabs.shared.StoreType
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import cats.effect.Sync
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -178,7 +178,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             _ <- BlockStore[Task]
                   .put(genesis.blockHash, genesis, transforms)
             dag <- blockDagStorage.getRepresentation
-            maybePostGenesisStateHash <- ExecEngineUtil
+            maybePostGenesisStateHash <- ExecutionEngineServiceStub
                                           .validateBlockCheckpoint[Task](
                                             genesis,
                                             dag

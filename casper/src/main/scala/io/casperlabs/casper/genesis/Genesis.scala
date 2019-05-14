@@ -11,14 +11,11 @@ import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
-import io.casperlabs.casper.util.Sorting
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.rholang.ProcessedDeployUtil
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, Sorting}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
-import io.casperlabs.ipc
-import io.casperlabs.ipc.{DeployResult, TransformEntry}
 import io.casperlabs.shared.{Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -59,26 +56,29 @@ object Genesis {
       startHash: StateHash
   ): F[BlockMsgWithTransform] =
     for {
+      _ <- Log[F].debug(s"Processing ${blessedTerms.size} blessed contracts...")
       processedDeploys <- MonadError[F, Throwable].rethrow(
                            ExecutionEngineService[F]
-                             .exec(startHash, blessedTerms.map(deployDataToEEDeploy))
+                             .exec(
+                               startHash,
+                               blessedTerms.map(deployDataToEEDeploy),
+                               CasperLabsProtocolVersions.thresholdsVersionMap.fromBlockMessage(
+                                 initial
+                               )
+                             )
                          )
-      deployEffects = ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
-
-      // Todo We shouldn't need to do any commutivity checking for the genesis block.
+      // TODO: We shouldn't need to do any commutivity checking for the genesis block.
       // Either we make it a "SEQ" block (which is not a feature that exists yet)
       // or there should be a single deploy containing all the blessed contracts.
-      commutingEffects = ExecEngineUtil.findCommutingEffects(deployEffects)
-      deploysForBlock = deployEffects.collect {
-        case (deploy, Some((_, cost))) => {
-          protocol.ProcessedDeploy(
-            Some(deploy),
-            cost,
-            false
+      deployEffects = ExecEngineUtil.findCommutingEffects(
+        ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
+      )
+      _               <- Log[F].debug(s"Selected ${deployEffects.size} non-conflicing blessed contracts.")
+      deploysForBlock = ExecEngineUtil.extractProcessedDepoys(deployEffects)
+      transforms      = ExecEngineUtil.extractTransforms(deployEffects)
+      _ <- Log[F].debug(
+            s"Commiting blessed deploy effects onto starting hash ${Base16.encode(startHash.toByteArray)}..."
           )
-        }
-      }
-      transforms = commutingEffects.unzip._1.flatMap(_.transformMap)
       postStateHash <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F].commit(startHash, transforms)
                       )
@@ -88,11 +88,11 @@ object Genesis {
       } yield
         ps.withPreStateHash(ExecutionEngineService[F].emptyStateHash)
           .withPostStateHash(postStateHash)
-      version       = initial.header.get.version
-      timestamp     = initial.header.get.timestamp
-      body          = Body(state = stateWithContracts, deploys = deploysForBlock)
-      header        = blockHeader(body, List.empty[ByteString], version, timestamp)
-      unsignedBlock = unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+      protocolVersion = initial.header.get.protocolVersion
+      timestamp       = initial.header.get.timestamp
+      body            = Body(state = stateWithContracts, deploys = deploysForBlock)
+      header          = blockHeader(body, List.empty[ByteString], protocolVersion, timestamp)
+      unsignedBlock   = unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
     } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
 
   def withoutContracts(

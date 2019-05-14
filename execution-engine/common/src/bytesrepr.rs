@@ -420,7 +420,7 @@ where
     }
 }
 
-impl ToBytes for str {
+impl ToBytes for &str {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         if self.len() >= u32::max_value() as usize - U32_SIZE {
             return Err(Error::OutOfMemoryError);
@@ -438,9 +438,9 @@ impl ToBytes for str {
 mod proptests {
     // Bring the macros and other important things into scope.
     use crate::gens::*;
+    use crate::test_utils::test_serialization_roundtrip;
     use proptest::collection::vec;
     use proptest::prelude::*;
-    use crate::test_utils::test_serialization_roundtrip;
 
     proptest! {
 

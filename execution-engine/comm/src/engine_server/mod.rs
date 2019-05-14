@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::convert::TryInto;
+use std::fmt::Debug;
 use std::marker::{Send, Sync};
 
 use common::key::Key;
@@ -6,10 +9,8 @@ use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::trackingcopy::QueryResult;
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
+use mappings::*;
 use shared::newtypes::Blake2bHash;
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::fmt::Debug;
 use storage::history::*;
 use storage::transform::Transform;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
@@ -17,8 +18,6 @@ use wasm_prep::{Preprocessor, WasmiPreprocessor};
 pub mod ipc;
 pub mod ipc_grpc;
 pub mod mappings;
-
-use mappings::*;
 
 // Idea is that Engine will represent the core of the execution engine project.
 // It will act as an entry point for execution of Wasm binaries.
@@ -93,12 +92,20 @@ where
         p: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
         let executor = WasmiExecutor;
-        let preprocessor = WasmiPreprocessor;
+        // TODO(mateusz.gorski): Use `protocol_version` and `WasmiPreprocessor::from_protocol_version`.
+        let preprocessor: WasmiPreprocessor = Default::default();
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = p.get_parent_state_hash().try_into().unwrap();
         let deploys = p.get_deploys();
-        let deploys_result: Result<Vec<DeployResult>, RootNotFound> =
-            run_deploys(&self, &executor, &preprocessor, prestate_hash, deploys);
+        let protocol_version = p.get_protocol_version();
+        let deploys_result: Result<Vec<DeployResult>, RootNotFound> = run_deploys(
+            &self,
+            &executor,
+            &preprocessor,
+            prestate_hash,
+            deploys,
+            protocol_version,
+        );
         match deploys_result {
             Ok(deploy_results) => {
                 let mut exec_response = ipc::ExecResponse::new();
@@ -175,6 +182,7 @@ fn run_deploys<A, H, E, P>(
     preprocessor: &P,
     prestate_hash: Blake2bHash,
     deploys: &[ipc::Deploy],
+    protocol_version: &ProtocolVersion,
 ) -> Result<Vec<DeployResult>, RootNotFound>
 where
     H: History,
@@ -211,6 +219,7 @@ where
                     nonce,
                     prestate_hash,
                     gas_limit,
+                    protocol_version.get_version(),
                     executor,
                     preprocessor,
                 )

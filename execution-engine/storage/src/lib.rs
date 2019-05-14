@@ -15,9 +15,10 @@ extern crate proptest;
 
 #[cfg(test)]
 extern crate tempfile;
+extern crate core;
 
 pub mod error;
-pub mod gs;
+pub mod global_state;
 pub mod history;
 pub mod op;
 pub mod transform;

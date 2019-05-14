@@ -10,13 +10,6 @@ message Signature {
     bytes sig = 2;
 }
 
-// Code (either session or payment) to be deployed to the platform.
-// Includes both binary instructions (wasm) and optionally, arguments
-// to those instructions encoded via our ABI
-message DeployCode {
-    bytes code = 1; // wasm byte code
-    bytes args = 2; // ABI-encoded arguments
-}
 
 // A smart contract invocation, singed by the account that sent it.
 message Deploy {
@@ -44,9 +37,17 @@ message Deploy {
 
     message Body {
         // Wasm code of the smart contract to be executed.
-        DeployCode session = 1;
+        Code session = 1;
         // Wasm code that transfers some tokens to the validators as payment in exchange to run the Deploy.
-        DeployCode payment = 2;
+        Code payment = 2;
+    }
+
+    // Code (either session or payment) to be deployed to the platform.
+    // Includes both binary instructions (wasm) and optionally, arguments
+    // to those instructions encoded via our ABI
+    message Code {
+        bytes code = 1; // wasm byte code
+        bytes args = 2; // ABI-encoded arguments
     }
 }
 
@@ -75,11 +76,13 @@ message Block {
         // Hash of the body structure as a whole.
         bytes body_hash = 4;
         uint64 timestamp = 5;
-        uint64 version = 6;
+        uint64 protocol_version = 6;
         uint32 deploy_count = 7;
         string chain_id = 8;
         uint32 validator_block_seq_num = 9;
         bytes validator_public_key = 10;
+        // Distance from Genesis.
+        uint32 rank = 11;
     }
 
     message Body {
@@ -110,4 +113,27 @@ message Block {
 message Bond {
     bytes validator_public_key = 1;
     uint64 stake = 2;
+}
+
+
+// To allow nodes in the beginning to verify that they are joining the right network,
+// while there is no DAG to look at, they disseminate approvals for the Genesis candidate
+// until it gathers enough support for individual nodes to pass their thresholds and
+// transition to processing blocks and deploys.
+// Nodes should persist this value to be able to retrieve it later even if in case all nodes are restarted.
+message GenesisCandidate {
+    // The hash of the Genesis block, which should reflect the effects of executing
+    // the block that was compiled according to the published specification.
+    // The Genesis block is special in that it is not signed by any one validator:
+    // all the signatures are going to be missing, all the public key fields empty,
+    // including those that would sign the deploys in the body.
+    bytes block_hash = 1;
+
+    // Approvals from bonded validators with signatures over the `block_hash`.
+    repeated Approval approvals = 2;
+}
+
+message Approval {
+    bytes validator_public_key = 1;
+    Signature signature = 2;
 }

@@ -14,7 +14,7 @@ use clap::{App, Arg};
 use execution_engine::engine::{EngineState, ExecutionResult, RootNotFound};
 use execution_engine::execution::WasmiExecutor;
 use shared::newtypes::Blake2bHash;
-use storage::gs::inmem::InMemHist;
+use storage::global_state::in_memory::InMemoryGlobalState;
 use storage::history::CommitResult;
 use wasm_prep::WasmiPreprocessor;
 
@@ -82,8 +82,6 @@ fn main() {
         address
     };
 
-    let mut state_hash: Blake2bHash = [0u8; 32].into();
-
     let gas_limit: u64 = matches
         .value_of("gas-limit")
         .and_then(|v| v.parse::<u64>().ok())
@@ -92,16 +90,20 @@ fn main() {
     // TODO: move to arg parser
     let timestamp: u64 = 100_000;
     let nonce: u64 = 1;
+    let protocol_version: u64 = 1;
 
     // let path = std::path::Path::new("./tmp/");
     // TODO: Better error handling?
-    //    let gs = LmdbGs::new(&path).unwrap();
-    let init_state = storage::gs::mocked_account(account_addr);
-    let gs = InMemHist::new_initialized(&state_hash, init_state);
-    let engine_state = EngineState::new(gs);
+    //    let global_state = LmdbGs::new(&path).unwrap();
+    let init_state = storage::global_state::mocked_account(account_addr);
+    let global_state =
+        InMemoryGlobalState::from_pairs(&init_state).expect("Could not create global state");
+    let mut state_hash: Blake2bHash = global_state.root_hash;
+    let engine_state = EngineState::new(global_state);
 
     let wasmi_executor = WasmiExecutor;
-    let wasmi_preprocessor = WasmiPreprocessor;
+    // TODO(mateusz.gorski): Use `protocol_version` and `WasmiPreprocessor::from_protocol_version`.
+    let wasmi_preprocessor: WasmiPreprocessor = Default::default();
 
     for wasm_bytes in wasm_files.iter() {
         println!("Pre state hash: {:?}", state_hash);
@@ -113,6 +115,7 @@ fn main() {
             nonce,
             state_hash,
             gas_limit,
+            protocol_version,
             &wasmi_executor,
             &wasmi_preprocessor,
         );

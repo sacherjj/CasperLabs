@@ -3,7 +3,7 @@ package io.casperlabs.blockstorage
 import java.nio.file.{Path, Paths, StandardCopyOption}
 import java.nio.{BufferUnderflowException, ByteBuffer}
 
-import cats.{Monad, MonadError}
+import cats.{Apply, Monad, MonadError}
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
@@ -11,18 +11,21 @@ import cats.mtl.MonadState
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
+import io.casperlabs.blockstorage.BlockDagStorage.MeteredBlockDagStorage
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, parentHashes}
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
+import io.casperlabs.blockstorage.util.{fileIO, BlockMessageUtil, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{Log, LogSource}
 
@@ -43,7 +46,7 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
     blockMetadataCrc: Crc32[F]
 )
 
-final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] private (
+class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] private (
     lock: Semaphore[F],
     latestMessagesDataFilePath: Path,
     latestMessagesCrcFilePath: Path,
@@ -218,7 +221,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
   private def updateLatestMessagesCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile("casperlabs-block-dag-file-storage-latest-messages-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, latestMessagesCrcFilePath)
     } yield ()
@@ -231,15 +234,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
       latestMessages                <- (state >> 'latestMessages).get
       latestMessagesLogOutputStream <- (state >> 'latestMessagesLogOutputStream).get
       _                             <- latestMessagesLogOutputStream.close
-      tmpSquashedData <- createTemporaryFile(
-                          "casperlabs-block-dag-store-latest-messages-",
-                          "-squashed-data"
-                        )
-      tmpSquashedCrc <- createTemporaryFile(
-                         "casperlabs-block-dag-store-latest-messages-",
-                         "-squashed-crc"
-                       )
-      dataByteBuffer = ByteBuffer.allocate(64 * latestMessages.size)
+      tmpSquashedData               <- createSameDirectoryTemporaryFile(latestMessagesDataFilePath)
+      tmpSquashedCrc                <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
+      dataByteBuffer                = ByteBuffer.allocate(64 * latestMessages.size)
       _ <- latestMessages.toList.traverse_ {
             case (validator, blockHash) =>
               Sync[F].delay {
@@ -287,7 +284,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
   private def updateDataLookupCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile[F]("casperlabs-block-dag-file-storage-data-lookup-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(blockMetadataCrcPath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, blockMetadataCrcPath)
     } yield ()
@@ -361,7 +358,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError]
             }
           }
       _ <- updateLatestMessagesFile(
-            (newValidators + block.sender).toList,
+            newValidatorsWithSender.toList,
             block.blockHash
           )
       _ <- updateDataLookupFile(blockMetadata)
@@ -663,7 +660,7 @@ object BlockDagFileStorage {
                }
     } yield result
 
-  def create[F[_]: Concurrent: Log: BlockStore](
+  def create[F[_]: Concurrent: Log: BlockStore: Metrics](
       config: Config
   ): F[BlockDagFileStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
@@ -734,7 +731,7 @@ object BlockDagFileStorage {
     } yield res
   }
 
-  def createEmptyFromGenesis[F[_]: Concurrent: Log: BlockStore](
+  def createEmptyFromGenesis[F[_]: Concurrent: Log: BlockStore: Metrics](
       config: Config,
       genesis: BlockMessage
   ): F[BlockDagFileStorage[F]] = {
@@ -796,7 +793,7 @@ object BlockDagFileStorage {
       config: Config,
       lock: Semaphore[F],
       state: BlockDagFileStorageState[F]
-  ) =
+  )(implicit met: Metrics[F]) =
     state.useStateByRef[F](
       new BlockDagFileStorage[F](
         lock,
@@ -806,6 +803,28 @@ object BlockDagFileStorage {
         config.blockMetadataLogPath,
         config.blockMetadataCrcPath,
         _
-      )
+      ) with MeteredBlockDagStorage[F] {
+        override implicit val m: Metrics[F] = met
+        override implicit val ms: Source    = Metrics.Source(BlockDagStorageMetricsSource, "file")
+        override implicit val a: Apply[F]   = Concurrent[F]
+      }
     )
+
+  def apply[F[_]: Concurrent: Log: RaiseIOError: Metrics](
+      dataDir: Path,
+      dagStoragePath: Path,
+      blockStore: BlockStore[F]
+  ): Resource[F, BlockDagStorage[F]] =
+    Resource.make {
+      for {
+        _         <- fileIO.makeDirectory(dagStoragePath)
+        dagConfig = BlockDagFileStorage.Config(dagStoragePath)
+        storage <- BlockDagFileStorage.create(dagConfig)(
+                    Concurrent[F],
+                    Log[F],
+                    blockStore,
+                    Metrics[F]
+                  )
+      } yield storage
+    }(_.close()).widen
 }

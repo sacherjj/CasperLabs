@@ -3,7 +3,11 @@ package io.casperlabs.casper.util.comm
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
-import io.casperlabs.casper.helper.HashSetCasperTestNode
+import io.casperlabs.casper.helper.{
+  HashSetCasperTestNode,
+  TransportLayerCasperTestNode,
+  TransportLayerCasperTestNodeFactory
+}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.TestTime
 import io.casperlabs.casper.util.comm.ApproveBlockProtocolTest.TestFixture
@@ -291,7 +295,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   }
 }
 
-object ApproveBlockProtocolTest {
+object ApproveBlockProtocolTest extends TransportLayerCasperTestNodeFactory {
   def approval(
       c: ApprovedBlockCandidate,
       validatorSk: Array[Byte],
@@ -345,7 +349,7 @@ object ApproveBlockProtocolTest {
     val sigs                                             = Ref.unsafe[Task, Set[Signature]](Set.empty)
     val startTime                                        = System.currentTimeMillis()
 
-    val node = HashSetCasperTestNode.standaloneEff(genesis, transforms, sk)
+    val node = standaloneEff(genesis, transforms, sk)
     val protocol = ApproveBlockProtocol
       .unsafe[Task](
         genesis,

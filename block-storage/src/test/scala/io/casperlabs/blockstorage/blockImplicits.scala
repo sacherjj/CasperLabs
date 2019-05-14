@@ -42,7 +42,7 @@ object blockImplicits {
         .withHeader(
           Header()
             .withParentsHashList(parentsHashList)
-            .withVersion(version)
+            .withProtocolVersion(version)
             .withTimestamp(timestamp)
         )
         .withSender(validator)

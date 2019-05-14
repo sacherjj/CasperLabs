@@ -58,8 +58,10 @@ class ConfigurationSpec
       maxNumOfConnections = 1,
       maxMessageSize = 1,
       chunkSize = 1,
+      useGossiping = true,
       relayFactor = 1,
-      relaySaturation = 1
+      relaySaturation = 1,
+      cleanBlockStorage = false
     )
     val grpcServer = Configuration.GrpcServer(
       host = "test",
@@ -331,7 +333,7 @@ class ConfigurationSpec
             case (Some(a), None)    => a.some
             case (None, Some(b))    => b.some
             case (None, None)       => None
-        }
+          }
       implicit def optionPlain[A: NotSubConfig: NotOption]: Merge[Option[A]] = _ orElse _
     }
 
@@ -424,8 +426,8 @@ class ConfigurationSpec
                   List.empty
                 } else {
                   p.typeclass.flatten(path :+ p.label, p.dereference(v))
-              }
-          )
+                }
+            )
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
       implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
 

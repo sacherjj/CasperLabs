@@ -13,9 +13,10 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.Catscontrib._
-import io.casperlabs.catscontrib.MonadTrans
+import io.casperlabs.catscontrib.{MonadThrowable, MonadTrans}
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.discovery.NodeUtils._
@@ -82,7 +83,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                  bap
                )
              )
-      } yield new CasperPacketHandlerImpl[F](gv)
+      } yield new CasperPacketHandlerImpl[F](gv, validatorId)
     } else if (conf.standalone) {
       for {
         _     <- Log[F].info("Starting in create genesis mode")
@@ -127,7 +128,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
               ).forkAndForget.runToFuture
               ().pure[F]
             }
-      } yield new CasperPacketHandlerImpl[F](standalone)
+      } yield new CasperPacketHandlerImpl[F](standalone, validatorId)
     } else {
       for {
         _ <- Log[F].info("Starting in default mode")
@@ -143,7 +144,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                         validators
                       )
                     )
-        casperPacketHandler = new CasperPacketHandlerImpl[F](bootstrap)
+        casperPacketHandler = new CasperPacketHandlerImpl[F](bootstrap, validatorId)
         _ <- Sync[F].delay {
               implicit val ph: PacketHandler[F] = PacketHandler.pf[F](casperPacketHandler.handle)
               val rb                            = CommUtil.requestApprovedBlock[F](delay)
@@ -289,14 +290,16 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                            blockMessage,
                            transforms
                          )
-                     casper <- MultiParentCasper.hashSetCasper[F](
+                     casper <- MultiParentCasper.fromTransportLayer[F](
                                 validatorId,
                                 blockMessage,
+                                ProtoUtil.preStateHash(blockMessage),
+                                transforms,
                                 shardId
                               )
                      _   <- MultiParentCasperRef[F].set(casper)
                      _   <- Log[F].info("Making a transition to ApprovedBlockRecievedHandler state.")
-                     abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
+                     abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock, validatorId)
                      _   <- capserHandlerInternal.set(abh)
                      _   <- CommUtil.sendForkChoiceTipRequest[F]
                    } yield ()
@@ -351,9 +354,10 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     *
     * In the future it will be possible to create checkpoint with new [[ApprovedBlock]].
     **/
-  class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: Monad: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler](
+  class ApprovedBlockReceivedHandler[F[_]: RPConfAsk: BlockStore: MonadThrowable: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler](
       private val casper: MultiParentCasper[F],
-      approvedBlock: ApprovedBlock
+      approvedBlock: ApprovedBlock,
+      validatorId: Option[ValidatorIdentity]
   ) extends CasperPacketHandlerInternal[F] {
 
     implicit val _casper = casper
@@ -385,7 +389,11 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
             } else {
               for {
                 _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-                _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger[F](peer, _, _))
+                _ <- validatorId.fold(().pure[F]) {
+                      case ValidatorIdentity(publicKey, _, _) =>
+                        handleDoppelganger[F](peer, b, ByteString.copyFrom(publicKey))
+                    }
+                _ <- MultiParentCasper[F].addBlock(b)
               } yield ()
             }
       } yield ()
@@ -436,8 +444,9 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       Log[F].info(s"No approved block available on node ${na.nodeIdentifer}")
   }
 
-  class CasperPacketHandlerImpl[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef](
-      private val cphI: Ref[F, CasperPacketHandlerInternal[F]]
+  class CasperPacketHandlerImpl[F[_]: MonadThrowable: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Metrics: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef](
+      private val cphI: Ref[F, CasperPacketHandlerInternal[F]],
+      validatorId: Option[ValidatorIdentity]
   ) extends CasperPacketHandler[F] {
 
     override def handle(peer: Node): PartialFunction[Packet, F[Unit]] =
@@ -478,7 +487,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                         _ <- Log[F].info(
                               "Making a transition to ApprovedBlockRecievedHandler state."
                             )
-                        abr = new ApprovedBlockReceivedHandler(casperInstance, ab)
+                        abr = new ApprovedBlockReceivedHandler(casperInstance, ab, validatorId)
                         _   <- cphI.set(abr)
                         _   <- CommUtil.sendForkChoiceTipRequest[F]
                       } yield ()
@@ -585,11 +594,14 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    _            <- Log[F].info("Valid ApprovedBlock received!")
                    blockMessage = b.candidate.flatMap(_.block).get
                    dag          <- BlockDagStorage[F].getRepresentation
-                   effects <- ExecEngineUtil.effectsForBlock[F](
-                               blockMessage,
-                               dag
-                             )
-                   (_, transforms) = effects
+                   parents      <- ProtoUtil.unsafeGetParents[F](blockMessage)
+                   merged       <- ExecEngineUtil.merge[F](parents, dag)
+                   prestate     <- ExecEngineUtil.computePrestate[F](merged)
+                   transforms <- ExecEngineUtil.effectsForBlock[F](
+                                  blockMessage,
+                                  prestate,
+                                  dag
+                                )
                    _ <- BlockStore[F].put(
                          blockMessage.blockHash,
                          blockMessage,
@@ -597,9 +609,11 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                        )
                    _ <- LastApprovedBlock[F].set(ApprovedBlockWithTransforms(b, transforms))
                    casper <- MultiParentCasper
-                              .hashSetCasper[F](
+                              .fromTransportLayer[F](
                                 validatorId,
                                 blockMessage,
+                                prestate,
+                                transforms,
                                 shardId
                               )
                  } yield Option(casper)
@@ -613,10 +627,10 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       implicit C: CasperPacketHandler[F]
   ): CasperPacketHandler[T[F, ?]] =
     new CasperPacketHandler[T[F, ?]] {
-      override def handle(peer: Node): PartialFunction[Packet, T[F, Unit]] =
-        PartialFunction { (p: Packet) =>
+      override def handle(peer: Node): PartialFunction[Packet, T[F, Unit]] = {
+        case (p: Packet) =>
           C.handle(peer)(p).liftM[T]
-        }
+      }
     }
 
   private def sendNoApprovedBlockAvailable[F[_]: RPConfAsk: TransportLayer: Monad](

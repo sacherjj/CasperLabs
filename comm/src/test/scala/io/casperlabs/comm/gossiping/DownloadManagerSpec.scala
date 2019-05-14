@@ -3,18 +3,28 @@ package io.casperlabs.comm.gossiping
 import cats.implicits._
 import cats.effect.concurrent.Semaphore
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import eu.timepit.refined._
+import eu.timepit.refined.auto._
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.numeric._
+import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.GossipError
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import java.util.concurrent.atomic.AtomicInteger
+
 import monix.eval.Task
-import monix.execution.Scheduler
+import monix.execution.{ExecutionModel, Scheduler}
 import monix.tail.Iterant
 import org.scalatest._
 import org.scalatest.concurrent._
-import org.scalacheck.{Arbitrary, Gen}, Arbitrary.arbitrary
+import org.scalacheck.{Arbitrary, Gen}
+import Arbitrary.arbitrary
+import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
+import monix.execution.schedulers.TestScheduler
+
 import scala.concurrent.duration._
 
 class DownloadManagerSpec
@@ -43,7 +53,7 @@ class DownloadManagerSpec
     "scheduled to download a section of the DAG" should {
       // Make sure the genesis has more than 1 child so we can download them in parallel. This is easy to check.
       val dag = sample(
-        genBlockDag
+        genBlockDagFromGenesis
           .retryUntil { blocks =>
             (blocks(1).getHeader.parentHashes.toSet & blocks(2).getHeader.parentHashes.toSet).nonEmpty
           }
@@ -85,7 +95,7 @@ class DownloadManagerSpec
                 Task.pure(Some(block)).delayResult(250.millis)
               case other => Task.pure(other)
             }
-        ),
+          ),
         maxParallelDownloads = consensusConfig.dagSize
       ) {
         case (manager, backend) =>
@@ -119,7 +129,7 @@ class DownloadManagerSpec
                 parallelMax.set(math.max(parallelNow.get, parallelMax.get))
                 chunk
               }
-          ),
+            ),
           backend = MockBackend(validate = _ => Task.delay(parallelNow.decrementAndGet()).void),
           maxParallelDownloads = maxParallelDownloads
         ) {
@@ -145,8 +155,10 @@ class DownloadManagerSpec
         }
       }
 
-      "relay blocks only specified to be relayed" in TestFixture(remote = _ => remote,
-                                                                 relaying = relaying) {
+      "relay blocks only specified to be relayed" in TestFixture(
+        remote = _ => remote,
+        relaying = relaying
+      ) {
         case (manager, _) =>
           for {
             ws <- scheduleAll(manager)
@@ -229,7 +241,8 @@ class DownloadManagerSpec
                     maxParallelDownloads = 1,
                     connectToGossip = _ => remote,
                     backend = backend,
-                    relaying = MockRelaying.default
+                    relaying = MockRelaying.default,
+                    retriesConf = RetriesConf.noRetries
                   ).allocated
           (manager, release) = alloc
           _                  <- manager.scheduleDownload(summaryOf(block), source, relay = false)
@@ -251,7 +264,8 @@ class DownloadManagerSpec
                     maxParallelDownloads = 1,
                     connectToGossip = _ => MockGossipService(),
                     backend = MockBackend(),
-                    relaying = MockRelaying.default
+                    relaying = MockRelaying.default,
+                    retriesConf = RetriesConf.noRetries
                   ).allocated
           (manager, release) = alloc
           _                  <- release
@@ -280,7 +294,7 @@ class DownloadManagerSpec
               )
             )
           case _ => MockGossipService(Seq(block))
-      }
+        }
 
       "try to download the block from a different source" in TestFixture(remote = remote) {
         case (manager, backend) =>
@@ -327,7 +341,7 @@ class DownloadManagerSpec
     }
 
     "cannot validate a block" should {
-      val dag    = sample(genBlockDag)
+      val dag    = sample(genBlockDagFromGenesis)
       val remote = MockGossipService(dag)
       def backend =
         MockBackend(_ => Task.raiseError(new java.lang.IllegalArgumentException("Nope.")))
@@ -384,7 +398,46 @@ class DownloadManagerSpec
           }
       }
 
-      "try again later with exponential backoff" in (pending)
+      "try again later with exponential backoff" in {
+        TestFixture(
+          remote = _ => Task.raiseError(io.grpc.Status.UNAVAILABLE.asRuntimeException()),
+          // * -> 1 second -> * -> 2 seconds -> * -> 4 seconds -> fail
+          retriesConf = RetriesConf(3, 1.second, 2.0),
+          timeout = 10.seconds
+        ) {
+          case (manager, _) =>
+            for {
+              w <- manager
+                    .scheduleDownload(summaryOf(block), source, false)
+              _ <- Task.sleep(500.milliseconds)
+              _ <- Task {
+                    log.warns should have size 1
+                    log.warns.last should include("attempt: 1")
+                  }
+              _ <- Task.sleep(1.second)
+              _ <- Task {
+                    log.warns should have size 2
+                    log.warns.last should include("attempt: 2")
+                  }
+              _ <- Task.sleep(2.seconds)
+              _ <- Task {
+                    log.warns should have size 3
+                    log.warns.last should include("attempt: 3")
+                  }
+              _ <- Task.sleep(5.seconds)
+              _ <- Task {
+                    log.warns should have size 3
+                    log.warns.last should include("attempt: 3")
+                    log.causes should have size 1
+                    log.causes.head shouldBe an[DownloadManagerImpl.RetriesFailure]
+                    log.causes.head
+                      .asInstanceOf[DownloadManagerImpl.RetriesFailure]
+                      .getCause shouldBe an[io.grpc.StatusRuntimeException]
+                  }
+              _ <- w.attempt
+            } yield ()
+        }
+      }
     }
 
     "receiving chunks" should {
@@ -467,6 +520,7 @@ class DownloadManagerSpec
 }
 
 object DownloadManagerSpec {
+  implicit val metrics = new Metrics.MetricsNOP[Task]
 
   def summaryOf(block: Block): BlockSummary =
     BlockSummary()
@@ -490,7 +544,9 @@ object DownloadManagerSpec {
         backend: MockBackend = MockBackend.default,
         remote: Node => Task[GossipService[Task]] = _ => MockGossipService.default,
         maxParallelDownloads: Int = 1,
-        relaying: MockRelaying = MockRelaying.default
+        relaying: MockRelaying = MockRelaying.default,
+        retriesConf: RetriesConf = RetriesConf.noRetries,
+        timeout: FiniteDuration = 5.seconds
     )(
         test: TestArgs => Task[Unit]
     )(implicit scheduler: Scheduler, log: Log[Task]): Unit = {
@@ -499,14 +555,15 @@ object DownloadManagerSpec {
         maxParallelDownloads = maxParallelDownloads,
         connectToGossip = remote(_),
         backend = backend,
-        relaying = relaying
+        relaying = relaying,
+        retriesConf = retriesConf
       )
 
       val runTest = managerR.use { manager =>
         test(manager, backend)
       }
 
-      runTest.runSyncUnsafe(5.seconds)
+      runTest.runSyncUnsafe(timeout)
     }
   }
 
@@ -563,6 +620,11 @@ object DownloadManagerSpec {
       def onDownloaded(blockHash: ByteString)  = ???
       def listTips                             = ???
     }
+    private val emptyGenesisApprover = new GenesisApprover[Task] {
+      def getCandidate                                           = ???
+      def addApproval(blockHash: ByteString, approval: Approval) = ???
+      def awaitApproval                                          = ???
+    }
 
     // Used only as a default argument for when we aren't touching the remote service in a test.
     val default = {
@@ -576,6 +638,7 @@ object DownloadManagerSpec {
         synchronizer = emptySynchronizer,
         downloadManager = emptyDownloadManager,
         consensus = emptyConsensus,
+        genesisApprover = emptyGenesisApprover,
         maxChunkSize = 100 * 1024,
         maxParallelBlockDownloads = 100
       )
@@ -602,6 +665,7 @@ object DownloadManagerSpec {
           synchronizer = emptySynchronizer,
           downloadManager = emptyDownloadManager,
           consensus = emptyConsensus,
+          genesisApprover = emptyGenesisApprover,
           maxChunkSize = 100 * 1024,
           blockDownloadSemaphore = semaphore
         ) {

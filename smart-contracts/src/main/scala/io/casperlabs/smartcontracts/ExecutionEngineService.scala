@@ -3,7 +3,6 @@ package io.casperlabs.smartcontracts
 import java.nio.file.Path
 
 import cats.effect.{Resource, Sync}
-import cats.syntax._
 import cats.implicits._
 import cats.{Applicative, Defer}
 import com.google.protobuf.ByteString
@@ -23,7 +22,8 @@ import scala.util.Either
   def emptyStateHash: ByteString
   def exec(
       prestate: ByteString,
-      deploys: Seq[Deploy]
+      deploys: Seq[Deploy],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
   def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
@@ -41,7 +41,11 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
 
   private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
-  override def emptyStateHash: ByteString = ByteString.copyFrom(Array.fill(32)(0.toByte))
+  override def emptyStateHash: ByteString = {
+    val arr: Array[Byte] = Array(86, 34, 94, 200, 7, 200, 168, 251, 27, 186, 60, 15, 247, 221, 85,
+      229, 213, 163, 251, 227, 103, 100, 22, 220, 98, 40, 57, 16, 139, 74, 114, 76).map(_.toByte)
+    ByteString.copyFrom(arr)
+  }
 
   def sendMessage[A, B, R](msg: A, rpc: Stub => A => Task[B])(f: B => R): F[R] =
     rpc(stub)(msg).to[F].map(f(_)).recoverWith {
@@ -58,9 +62,10 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
 
   override def exec(
       prestate: ByteString,
-      deploys: Seq[Deploy]
+      deploys: Seq[Deploy],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Seq[DeployResult]]] =
-    sendMessage(ExecRequest(prestate, deploys), _.exec) {
+    sendMessage(ExecRequest(prestate, deploys, Some(protocolVersion)), _.exec) {
       _.result match {
         case ExecResponse.Result.Success(ExecResult(deployResults)) =>
           Right(deployResults)
@@ -79,13 +84,19 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
       effects: Seq[TransformEntry]
   ): F[Either[Throwable, ByteString]] =
     sendMessage(CommitRequest(prestate, effects), _.commit) {
+      // TODO:
+      // [warn] match may not be exhaustive.
+      // [warn] It would fail on the following inputs: KeyNotFound(_), Overflow(_), TypeMismatch(_)
+      // [warn]       _.result match {
       _.result match {
         case CommitResponse.Result.Success(CommitResult(poststateHash)) =>
           Right(poststateHash)
         case CommitResponse.Result.Empty =>
           Left(new SmartContractEngineError("empty response"))
         case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
-          Left(new SmartContractEngineError(s"Missing pre-state: $hash"))
+          Left(
+            new SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}")
+          )
         case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
           Left(new SmartContractEngineError(s"Error executing transform: $message"))
       }

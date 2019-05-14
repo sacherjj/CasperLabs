@@ -147,7 +147,8 @@ lazy val comm = (project in file("comm"))
       catsCore,
       catsMtl,
       monix,
-      guava
+      guava,
+      refinement
     ),
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
@@ -206,7 +207,7 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(crypto, shared % "compile->compile;test->test")
 
-val nodeAndClientVersion = "0.2"
+val nodeAndClientVersion = "0.3"
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -515,5 +516,6 @@ lazy val casperlabs = (project in file("."))
     models,
     node,
     shared,
-    smartContracts
+    smartContracts,
+    client
   )

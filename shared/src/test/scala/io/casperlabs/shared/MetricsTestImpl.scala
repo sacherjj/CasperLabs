@@ -46,5 +46,5 @@ class MetricsTestImpl[F[_]: Sync] extends Metrics[F] {
       set(name, recordsSeq)(records)
     }
 
-  override def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A] = block
+  override def timer[A](name: String)(block: F[A])(implicit ev: Metrics.Source): F[A] = block
 }

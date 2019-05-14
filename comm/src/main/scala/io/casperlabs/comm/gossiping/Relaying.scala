@@ -1,5 +1,6 @@
 package io.casperlabs.comm.gossiping
 
+import cats.Monad
 import cats.effect._
 import cats.implicits._
 import cats.temp.par._
@@ -7,7 +8,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.comm.gossiping.Utils._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import simulacrum.typeclass
 
@@ -19,9 +21,19 @@ trait Relaying[F[_]] {
 }
 
 object RelayingImpl {
-  def apply[F[_]: Sync: Par: Log: NodeAsk](
+  implicit val metricsSource: Metrics.Source = Metrics.Source(GossipingMetricsSource, "Relaying")
+
+  /** Export base 0 values so we have non-empty series for charts. */
+  def establishMetrics[F[_]: Monad: Metrics] =
+    for {
+      _ <- Metrics[F].incrementCounter("relay_accepted", 0)
+      _ <- Metrics[F].incrementCounter("relay_rejected", 0)
+      _ <- Metrics[F].incrementCounter("relay_failed", 0)
+    } yield ()
+
+  def apply[F[_]: Sync: Par: Log: Metrics: NodeAsk](
       nd: NodeDiscovery[F],
-      connectToGossip: Node => F[GossipService[F]],
+      connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
       relaySaturation: Int
   ): Relaying[F] = {
@@ -37,25 +49,22 @@ object RelayingImpl {
 /**
   * https://techspec.casperlabs.io/technical-details/global-state/communications#picking-nodes-for-gossip
   */
-class RelayingImpl[F[_]: Sync: Par: Log: NodeAsk](
+class RelayingImpl[F[_]: Sync: Par: Log: Metrics: NodeAsk](
     nd: NodeDiscovery[F],
     connectToGossip: Node => F[GossipService[F]],
     relayFactor: Int,
     maxToTry: Int
 ) extends Relaying[F] {
+  import RelayingImpl._
 
   override def relay(hashes: List[ByteString]): F[Unit] = {
-    def loop(hash: ByteString, peers: List[Node], contacted: Int): F[Unit] = {
-      val parallelism = math.min(relayFactor, maxToTry - contacted)
+    def loop(hash: ByteString, peers: List[Node], relayed: Int, contacted: Int): F[Unit] = {
+      val parallelism = math.min(relayFactor - relayed, maxToTry - contacted)
       if (parallelism > 0 && peers.nonEmpty) {
-        val (recipients, rest) = Random.shuffle(peers).splitAt(parallelism)
-        for {
-          results <- recipients.parTraverse(relay(_, hash))
-          _ <- if (results.exists(!_))
-                loop(hash, rest, contacted + recipients.size)
-              else
-                ().pure[F]
-        } yield ()
+        val (recipients, rest) = peers.splitAt(parallelism)
+        recipients.parTraverse(relay(_, hash)) flatMap { results =>
+          loop(hash, rest, relayed + results.count(identity), contacted + recipients.size)
+        }
       } else {
         ().pure[F]
       }
@@ -63,7 +72,7 @@ class RelayingImpl[F[_]: Sync: Par: Log: NodeAsk](
 
     for {
       peers <- nd.alivePeersAscendingDistance
-      _     <- hashes.parTraverse(hash => loop(hash, peers, 0))
+      _     <- hashes.parTraverse(hash => loop(hash, Random.shuffle(peers), 0, 0))
     } yield ()
   }
 
@@ -72,16 +81,16 @@ class RelayingImpl[F[_]: Sync: Par: Log: NodeAsk](
       service  <- connectToGossip(peer)
       local    <- NodeAsk[F].ask
       response <- service.newBlocks(NewBlocksRequest(sender = local.some, blockHashes = List(hash)))
-      msg = if (response.isNew)
-        s"${peer.show} accepted block for downloading ${toStr(hash)}"
+      (msg, counter) = if (response.isNew)
+        s"${peer.show} accepted block ${hex(hash)}" -> "relay_accepted"
       else
-        s"${peer.show} rejected block ${toStr(hash)}"
+        s"${peer.show} rejected block ${hex(hash)}" -> "relay_rejected"
       _ <- Log[F].debug(msg)
+      _ <- Metrics[F].incrementCounter(counter)
     } yield response.isNew).handleErrorWith { e =>
       for {
         _ <- Log[F].debug(s"NewBlocks request failed ${peer.show}, $e")
+        _ <- Metrics[F].incrementCounter("relay_failed")
       } yield false
     }
-
-  private def toStr(hash: ByteString): String = Base16.encode(hash.toByteArray)
 }

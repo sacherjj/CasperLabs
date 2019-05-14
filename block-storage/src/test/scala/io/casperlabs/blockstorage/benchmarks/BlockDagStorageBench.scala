@@ -34,9 +34,11 @@ abstract class BlockDagStorageBench {
 
   @Benchmark
   def insert() =
-    dagStore.insert(
-      StoreBenchSuite.blocksIter.next()._2.blockMessage.get
-    ).runSyncUnsafe()
+    dagStore
+      .insert(
+        StoreBenchSuite.blocksIter.next()._2.blockMessage.get
+      )
+      .runSyncUnsafe()
 }
 
 class FileStorageWithLmdbBlockStoreBench extends BlockDagStorageBench {

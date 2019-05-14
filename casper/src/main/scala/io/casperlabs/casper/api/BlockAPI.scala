@@ -10,12 +10,12 @@ import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.ski._
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b512Random
 import io.casperlabs.graphz._
@@ -82,16 +82,14 @@ object BlockAPI {
                          case Created(block) =>
                            Metrics[F].incrementCounter("create-blocks-success") *>
                              casper
-                               .addBlock(block, ignoreDoppelgangerCheck[F])
+                               .addBlock(block)
                                .map(addResponse(_, block))
                        }
             } yield result
           case false =>
             DeployServiceResponse(success = false, "Error: There is another propose in progress.")
               .pure[F]
-        } { _ =>
-          blockApiLock.release
-        }
+        }(blockApiLock.release.whenA(_))
       },
       errorMessage,
       default = DeployServiceResponse(success = false, s"Error: $errorMessage").pure[F]
@@ -99,7 +97,7 @@ object BlockAPI {
   }
 
   // FIX: Not used at the moment - in RChain it's being used in method like `getListeningName*`
-  private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+  private def getMainChainFromTip[F[_]: MonadThrowable: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[IndexedSeq[BlockMessage]] =
     for {
@@ -139,7 +137,7 @@ object BlockAPI {
   }
 
   // TOOD extract common code from show blocks
-  def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def showBlocks[F[_]: MonadThrowable: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
     val errorMessage =
@@ -161,7 +159,7 @@ object BlockAPI {
     )
   }
 
-  private def getFlattenedBlockInfosUntilDepth[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+  private def getFlattenedBlockInfosUntilDepth[F[_]: MonadThrowable: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int,
       dag: BlockDagRepresentation[F]
   ): F[List[BlockInfoWithoutTuplespace]] =
@@ -176,7 +174,7 @@ object BlockAPI {
                }
     } yield result
 
-  def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def showMainChain[F[_]: MonadThrowable: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
     val errorMessage =
@@ -200,7 +198,7 @@ object BlockAPI {
   }
 
   // TODO: Replace with call to BlockStore
-  def findBlockWithDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def findBlockWithDeploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       user: ByteString,
       timestamp: Long
   ): F[BlockQueryResponse] = {
@@ -234,7 +232,7 @@ object BlockAPI {
     )
   }
 
-  private def findBlockWithDeploy[F[_]: Monad: Log: BlockStore](
+  private def findBlockWithDeploy[F[_]: MonadThrowable: Log: BlockStore](
       blockHashes: Vector[BlockHash],
       user: ByteString,
       timestamp: Long
@@ -293,7 +291,7 @@ object BlockAPI {
     for {
       dag                      <- MultiParentCasper[F].blockDag
       header                   = block.header.getOrElse(Header.defaultInstance)
-      version                  = header.version
+      protocolVersion          = header.protocolVersion
       deployCount              = header.deployCount
       postStateHash            = ProtoUtil.postStateHash(block)
       timestamp                = header.timestamp
@@ -303,7 +301,7 @@ object BlockAPI {
       initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
       blockInfo <- constructor(
                     block,
-                    version,
+                    protocolVersion,
                     deployCount,
                     postStateHash,
                     timestamp,
@@ -324,7 +322,7 @@ object BlockAPI {
 
   private def constructBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,
-      version: Long,
+      protocolVersion: Long,
       deployCount: Int,
       postStateHash: BlockHash,
       timestamp: Long,
@@ -340,7 +338,7 @@ object BlockAPI {
         blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
         blockSize = block.serializedSize.toString,
         blockNumber = ProtoUtil.blockNumber(block),
-        version = version,
+        protocolVersion = protocolVersion,
         deployCount = deployCount,
         tupleSpaceHash = PrettyPrinter.buildStringNoLimit(postStateHash),
         tupleSpaceDump = tsDesc,
@@ -354,7 +352,7 @@ object BlockAPI {
 
   private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,
-      version: Long,
+      protocolVersion: Long,
       deployCount: Int,
       postStateHash: BlockHash,
       timestamp: Long,
@@ -367,7 +365,7 @@ object BlockAPI {
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
       blockSize = block.serializedSize.toString,
       blockNumber = ProtoUtil.blockNumber(block),
-      version = version,
+      protocolVersion = protocolVersion,
       deployCount = deployCount,
       tupleSpaceHash = PrettyPrinter.buildStringNoLimit(postStateHash),
       timestamp = timestamp,
