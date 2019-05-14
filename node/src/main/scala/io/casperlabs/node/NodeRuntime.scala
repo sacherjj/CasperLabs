@@ -337,7 +337,9 @@ class NodeRuntime private[node] (
     conf.server.bootstrap match {
       case None if !conf.casper.standalone =>
         MonadThrowable[F].raiseError(
-          new Exception("Not in standalone mode but there's no bootstrap configured!")
+          new java.lang.IllegalStateException(
+            "Not in standalone mode but there's no bootstrap configured!"
+          )
         )
       case other =>
         other.pure[F]

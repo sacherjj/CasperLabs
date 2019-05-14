@@ -687,6 +687,9 @@ package object gossiping {
   private def unsafeGetBootstrap[F[_]: MonadThrowable](conf: Configuration): Resource[F, Node] =
     Resource.liftF(
       MonadThrowable[F]
-        .fromOption(conf.server.bootstrap, new Exception("Bootstrap node hasn't been configured."))
+        .fromOption(
+          conf.server.bootstrap,
+          new java.lang.IllegalStateException("Bootstrap node hasn't been configured.")
+        )
     )
 }
