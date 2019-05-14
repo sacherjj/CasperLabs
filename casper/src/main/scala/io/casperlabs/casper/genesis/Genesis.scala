@@ -251,52 +251,14 @@ object Genesis {
                       case Success(bonds) =>
                         bonds.pure[F]
                       case Failure(_) =>
-                        Log[F].warn(
-                          s"Bonds file ${file.getPath} cannot be parsed. Falling back on generating random validators."
-                        ) *> newValidators[F](numValidators, genesisPath)
+                        Log[F].warn(s"Bonds file ${file.getPath} cannot be parsed.") *> Map
+                          .empty[Array[Byte], Long]
+                          .pure[F]
                     }
                 case None =>
-                  Log[F].warn(
-                    s"Specified bonds file $bondsFile does not exist. Falling back on generating random validators."
-                  ) *>
-                    newValidators[F](numValidators, genesisPath)
+                  Log[F].warn(s"Specified bonds file $bondsFile does not exist.") *> Map
+                    .empty[Array[Byte], Long]
+                    .pure[F]
               }
     } yield bonds
-
-  private def newValidators[F[_]: Sync: Log](
-      numValidators: Int,
-      genesisPath: Path
-  ): F[Map[Array[Byte], Long]] = {
-    val keys         = Vector.fill(numValidators)(Ed25519.newKeyPair)
-    val (_, pubKeys) = keys.unzip
-    val bonds        = pubKeys.zipWithIndex.toMap.mapValues(_.toLong + 1L)
-    val genBondsFile = genesisPath.resolve(s"bonds.txt").toFile
-
-    val skFiles = Sync[F].delay {
-      genesisPath.toFile.mkdir()
-      keys.foreach { //create files showing the secret key for each public key
-        case (sec, pub) =>
-          val sk      = Base16.encode(sec)
-          val pk      = Base16.encode(pub)
-          val skFile  = genesisPath.resolve(s"$pk.sk").toFile
-          val printer = new PrintWriter(skFile)
-          printer.println(sk)
-          printer.close()
-      }
-    }
-
-    //create bonds file for editing/future use
-    for {
-      _       <- skFiles
-      printer <- Sync[F].delay { new PrintWriter(genBondsFile) }
-      _ <- Foldable[List].foldM[F, (Array[Byte], Long), Unit](bonds.toList, ()) {
-            case (_, (pub, stake)) =>
-              val pk = Base16.encode(pub)
-              Log[F].info(s"Created validator $pk with bond $stake") *>
-                Sync[F].delay { printer.println(s"$pk $stake") }
-          }
-      _ <- Sync[F].delay { printer.close() }
-    } yield bonds
-  }
-
 }
