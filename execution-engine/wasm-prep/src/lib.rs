@@ -83,7 +83,6 @@ impl Preprocessor<Module> for WasmiPreprocessor {
         let module =
             pwasm_utils::stack_height::inject_limiter(gas_mod, self.wasm_costs.max_stack_height)
                 .map_err(|_| StackLimiterError)?;
-        // TODO(mateusz.gorski): Inject global constant that specifies PROTOCOL_VERSION (EE-285)
         Ok(module)
     }
 }
@@ -179,15 +178,3 @@ fn validate_imports(module: &Module, max_mem_pages: u32) -> Result<(), Preproces
         })
 }
 
-fn remove_memory_export(module: &mut Module) -> Result<(), PreprocessingError> {
-    let exports = module.export_section_mut().ok_or(NoExportSection)?;
-    let entries = exports.entries_mut();
-    let mem_pos = entries.iter().position(|e| e.field() == "memory");
-    if let Some(mem_pos) = mem_pos {
-        entries.remove(mem_pos);
-        Ok(())
-    } else {
-        // noop: it is OK if module doesn't export memory section.
-        Ok(())
-    }
-}
