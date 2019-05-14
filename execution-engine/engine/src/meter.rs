@@ -9,7 +9,7 @@ pub mod heap_meter {
 
     impl<K: ByteSize, V: ByteSize> super::Meter<K, V> for HeapSize {
         fn measure(&self, _: &K, v: &V) -> usize {
-            v.byte_size()
+            std::mem::size_of::<V>() + v.byte_size()
         }
     }
 }

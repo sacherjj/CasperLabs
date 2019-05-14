@@ -1,6 +1,6 @@
-use common::bytesrepr::{I32_SIZE, U32_SIZE, U64_SIZE, U8_SIZE};
+use common::bytesrepr::I32_SIZE;
 use common::key::Key;
-use common::value::Value;
+use common::value::{Account, Value};
 use std::collections::btree_map::BTreeMap;
 
 /// Returns byte size of the element.
@@ -17,27 +17,21 @@ impl ByteSize for Key {
 impl ByteSize for Value {
     fn byte_size(&self) -> usize {
         match self {
-            Value::Int32(_) | Value::UInt128(_) | Value::UInt256(_) | Value::UInt512(_) => {
-                std::mem::size_of::<Self>()
-            }
-            Value::ByteArray(vec) => std::mem::size_of::<Self>() + vec.capacity() * U8_SIZE,
-            Value::ListInt32(list) => std::mem::size_of::<Self>() + list.capacity() * I32_SIZE,
-            Value::String(s) => std::mem::size_of::<Self>() + s.byte_size(),
-            Value::ListString(list) => {
-                std::mem::size_of::<Self>() + list.iter().fold(0, |sum, el| sum + el.byte_size())
-            }
-            Value::NamedKey(name, key) => {
-                std::mem::size_of::<Self>() + name.byte_size() + key.byte_size()
-            }
+            Value::Int32(_) | Value::UInt128(_) | Value::UInt256(_) | Value::UInt512(_) => 0,
+            Value::ByteArray(vec) => vec.capacity(),
+            Value::ListInt32(list) => list.capacity() * I32_SIZE,
+            Value::String(s) => s.byte_size(),
+            Value::ListString(list) => list.iter().fold(0, |sum, el| {
+                sum + std::mem::size_of::<String>() + el.byte_size()
+            }),
+            // NOTE: We don't measure `key` as its size will be returned with `std::mem::size_of::<Value>()` call
+            Value::NamedKey(name, _key) => name.byte_size(),
             Value::Account(account) => {
-                std::mem::size_of::<Self>()
-                    + account.pub_key().byte_size()
-                    + account.nonce().byte_size()
-                    + account.urefs_lookup().byte_size()
+                std::mem::size_of::<Account>() + account.urefs_lookup().byte_size()
             }
             Value::Contract(contract) => {
-                std::mem::size_of::<Self>()
-                    + contract.bytes().byte_size()
+                std::mem::size_of::<Account>()
+                    + contract.bytes().len()
                     + contract.urefs_lookup().byte_size()
             }
         }
@@ -47,32 +41,12 @@ impl ByteSize for Value {
 // NOTE: We're ignoring size of the tree's nodes.
 impl<K: ByteSize, V: ByteSize> ByteSize for BTreeMap<K, V> {
     fn byte_size(&self) -> usize {
-        self.iter()
-            .fold(0, |sum, (k, v)| sum + k.byte_size() + v.byte_size())
-    }
-}
-
-impl ByteSize for u8 {
-    fn byte_size(&self) -> usize {
-        U8_SIZE
-    }
-}
-
-impl ByteSize for i32 {
-    fn byte_size(&self) -> usize {
-        I32_SIZE
-    }
-}
-
-impl ByteSize for u32 {
-    fn byte_size(&self) -> usize {
-        U32_SIZE
-    }
-}
-
-impl ByteSize for u64 {
-    fn byte_size(&self) -> usize {
-        U64_SIZE
+        self.iter().fold(0, |sum, (k, v)| {
+            sum + std::mem::size_of::<K>()
+                + k.byte_size()
+                + std::mem::size_of::<V>()
+                + v.byte_size()
+        })
     }
 }
 
