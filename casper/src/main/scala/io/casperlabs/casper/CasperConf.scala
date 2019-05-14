@@ -17,6 +17,7 @@ import scala.util.{Failure, Success, Try}
 
 final case class CasperConf(
     validatorPublicKey: Option[String],
+    validatorPublicKeyPath: Option[Path],
     validatorPrivateKey: Option[String],
     validatorPrivateKeyPath: Option[Path],
     validatorSigAlgorithm: String,
