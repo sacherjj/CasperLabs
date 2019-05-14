@@ -52,7 +52,7 @@ class ConfigurationSpec
         "52.119.8.109",
         1,
         1
-      ),
+      ).some,
       storeType = StoreType.LMDB,
       dataDir = Paths.get("/tmp"),
       maxNumOfConnections = 1,
