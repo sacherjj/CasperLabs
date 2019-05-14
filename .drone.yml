@@ -95,7 +95,6 @@ pipeline:
 
   run-unit-tests:
     <<: *sbtenv
-    group: test
     commands:
       - sbt test
 
