@@ -287,7 +287,7 @@ where
         args_bytes: Vec<u8>,
         urefs_bytes: Vec<u8>,
     ) -> Result<usize, Error> {
-        let (args, module, mut refs) = {
+        let (args, module, mut refs, protocol_version) = {
             match self.context.read_gs(&key)? {
                 None => Err(Error::KeyNotFound(key)),
                 Some(value) => {
@@ -295,7 +295,12 @@ where
                         let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
                         let module = parity_wasm::deserialize_buffer(contract.bytes())?;
 
-                        Ok((args, module, contract.urefs_lookup().clone()))
+                        Ok((
+                            args,
+                            module,
+                            contract.urefs_lookup().clone(),
+                            contract.protocol_version(),
+                        ))
                     } else {
                         Err(Error::FunctionNotFound(format!(
                             "Value at {:?} is not a contract",
@@ -307,7 +312,15 @@ where
         }?;
 
         let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
-        let result = sub_call(module, args, &mut refs, key, self, extra_urefs)?;
+        let result = sub_call(
+            module,
+            args,
+            &mut refs,
+            key,
+            self,
+            extra_urefs,
+            protocol_version,
+        )?;
         self.host_buf = result;
         Ok(self.host_buf.len())
     }
@@ -325,8 +338,12 @@ where
         fn_bytes: Vec<u8>,
         urefs: BTreeMap<String, Key>,
     ) -> Result<[u8; 32], Error> {
-        let contract = Value::Contract(common::value::contract::Contract::new(fn_bytes, urefs));
-        let new_hash = self.context.store_contract(contract)?;
+        let contract = common::value::contract::Contract::new(
+            fn_bytes,
+            urefs,
+            self.context.protocol_version(),
+        );
+        let new_hash = self.context.store_contract(contract.into())?;
         Ok(new_hash)
     }
 
@@ -418,6 +435,7 @@ const GAS_FUNC_INDEX: usize = 13;
 const HAS_UREF_FUNC_INDEX: usize = 14;
 const ADD_UREF_FUNC_INDEX: usize = 15;
 const STORE_FN_INDEX: usize = 16;
+const PROTOCOL_VERSION_FUNC_INDEX: usize = 17;
 
 impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
 where
@@ -600,6 +618,8 @@ where
                 Ok(None)
             }
 
+            PROTOCOL_VERSION_FUNC_INDEX => Ok(Some(self.context.protocol_version().into())),
+
             _ => panic!("unknown function index"),
         }
     }
@@ -620,10 +640,6 @@ impl Default for RuntimeModuleImportResolver {
 }
 
 impl RuntimeModuleImportResolver {
-    pub fn new() -> RuntimeModuleImportResolver {
-        Default::default()
-    }
-
     pub fn mem_ref(&self) -> Result<MemoryRef, Error> {
         let maybe_mem: &Option<MemoryRef> = &self.memory.borrow();
         match maybe_mem {
@@ -708,6 +724,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 5][..], None),
                 STORE_FN_INDEX,
             ),
+            "protocol_version" => FuncInstance::alloc_host(
+                Signature::new(vec![], Some(ValueType::I64)),
+                PROTOCOL_VERSION_FUNC_INDEX,
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",
@@ -748,7 +768,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
 
 fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), Error> {
     let module = wasmi::Module::from_parity_wasm_module(parity_module)?;
-    let resolver = RuntimeModuleImportResolver::new();
+    let resolver = RuntimeModuleImportResolver::default();
     let mut imports = ImportsBuilder::new();
     imports.push_resolver("env", &resolver);
     let instance = ModuleInstance::new(&module, &imports)?.assert_no_start();
@@ -766,6 +786,7 @@ fn sub_call<R: StateReader<Key, Value>>(
     // Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
+    protocol_version: u64,
 ) -> Result<Vec<u8>, Error>
 where
     R::Error: Into<Error>,
@@ -789,6 +810,7 @@ where
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
             rng,
+            protocol_version,
         ),
     };
 
@@ -885,7 +907,7 @@ impl Executor<Module> for WasmiExecutor {
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
-        _protocol_version: u64,
+        protocol_version: u64,
         tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
@@ -928,6 +950,7 @@ impl Executor<Module> for WasmiExecutor {
             gas_counter,
             fn_store_id,
             rng,
+            protocol_version,
         );
         let mut runtime = Runtime::new(memory, parity_module, context);
         on_fail_charge!(

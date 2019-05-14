@@ -102,7 +102,6 @@ fn main() {
     let engine_state = EngineState::new(global_state);
 
     let wasmi_executor = WasmiExecutor;
-    // TODO(mateusz.gorski): Use `protocol_version` and `WasmiPreprocessor::from_protocol_version`.
     let wasmi_preprocessor: WasmiPreprocessor = Default::default();
 
     for wasm_bytes in wasm_files.iter() {

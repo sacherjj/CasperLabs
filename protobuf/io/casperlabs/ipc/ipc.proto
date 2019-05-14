@@ -75,7 +75,7 @@ message ReadOp {}
 message WriteOp {}
 message AddOp {}
 message NoOp {}
- 
+
 message Key {
     oneof key_instance {
         KeyAddress account = 1; // hash of the key of the account, length 20 bytes
@@ -126,7 +126,7 @@ message Value {
         RustBigInt big_int = 9;
     }
 }
- 
+
 message Account {
     bytes pub_key = 1; // Should have 32 elements
     uint64 nonce = 2;
@@ -135,9 +135,10 @@ message Account {
 message Contract {
     bytes body = 1;
     repeated NamedKey known_urefs = 2;
+    ProtocolVersion protocol_version = 3;
 }
- 
- 
+
+
 // Final transformation to the value under the key.
 // It's the outcome of applying all `op`s
 message Transform {
@@ -150,7 +151,7 @@ message Transform {
         TransformAddBigInt add_big_int = 6;
     }
 }
- 
+
 message TransformIdentity {}
 message TransformAddInt32 {
     int32 value = 1;
@@ -171,7 +172,7 @@ message TransformFailure {
         AdditionOverflow overflow = 2;
      }
 }
- 
+
 //Errors which may occur while interacting with global state
 message StorageError {
     oneof error_instance {
@@ -203,12 +204,12 @@ message OpEntry {
     Key key = 1;
     Op operation = 2;
 }
- 
+
 message TransformEntry {
     Key key = 1;
     Transform transform = 2;
 }
- 
+
 // Returned by ExecutionEngine to consensus layer.
 // (Map[Key, Op], Map[Key, Transform]) pair, describes how the deploy modifies the global state.
 // op_map and transform_map should be of equal lengths
@@ -216,7 +217,7 @@ message ExecutionEffect {
     repeated OpEntry op_map = 1;
     repeated TransformEntry transform_map = 2;
 }
- 
+
 //TODO: be more specific about errors
 message DeployError {
     oneof deploy_errors {
@@ -228,7 +229,7 @@ message OutOfGasError {}
 message WasmError {
     string message = 1;
 }
- 
+
 message DeployResult {
     oneof result {
         ExecutionEffect effects = 1;
