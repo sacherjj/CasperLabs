@@ -84,7 +84,7 @@ def parse_show_blocks(s):
 
 
 @pytest.fixture
-def nodes(command_line_options_fixture, docker_client_fixture, timeout, bootstrap_contract_path = 'helloname.wasm'):
+def nodes(command_line_options_fixture, docker_client_fixture, timeout):
     with conftest.testing_context(command_line_options_fixture, docker_client_fixture,
                                   bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=PREGENERATED_KEYPAIRS[1:]) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
@@ -120,16 +120,10 @@ class DeployThread(threading.Thread):
 
 
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
-
-                         # Nodes deploy one or more contracts followed by propose.
-
-                         # Only first helloname.wasm will not fail to be deployed and proposed. 
-                         # Propose only picks out one of the deploys because
-                         # it is not allowed to pick deploys that conflict (write the same key) any more.
-                         # helloworld.wasm fails because helloname.wasm was not deployed yet.
                          ([['helloname.wasm'],['helloworld.wasm']], [1, 1, 1, 1, 1, 1, 0]),
 ])
 # Curently nodes is a network of three bootstrap connected nodes.
+# Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(nodes, timeout,
                                   contract_paths: List[List[str]], expected_deploy_counts_in_blocks):
     deploy_threads = [DeployThread("node" + str(i+1), node, contract_paths)
