@@ -219,7 +219,7 @@ private[configuration] final case class Options private (
     @scallop
     val tlsKey =
       gen[Path](
-        "Path to node's private key PEM file, that is being used for TLS communication.",
+        "Path to node's unencrypted secp256r1 PKCS#8 private key file, that is being used for TLS communication.",
         'k'
       )
 
@@ -254,7 +254,7 @@ private[configuration] final case class Options private (
       gen[Path](
         "Path to plain text file consisting of lines of the form `<pk> <stake>`, " +
           "which defines the bond amounts for each validator at genesis. " +
-          "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
+          "<pk> is the public key (in base-64 encoding) identifying the validator and <stake>" +
           s"is the amount of CSPR they have bonded (an integer). Note: this overrides the --num-validators option."
       )
     @scallop
@@ -269,8 +269,8 @@ private[configuration] final case class Options private (
       gen[Path](
         "Path to plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
           "which defines the CSPR wallets that exist at genesis. " +
-          "<algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1)," +
-          "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
+          "<algorithm> is the algorithm used to verify signatures when using the wallet (currently supported value is only ed25519)," +
+          "<pk> is the public key (in base-64 encoding) identifying the wallet and <revBalance>" +
           s"is the amount of CSPR in the wallet."
       )
     @scallop
@@ -389,28 +389,30 @@ private[configuration] final case class Options private (
     @scallop
     val casperValidatorPublicKey =
       gen[String](
-        "Base16 encoding of the public key to use for signing a proposed blocks. " +
+        "base-64 or PEM encoding of the public key to use for signing a proposed blocks. " +
           s"Can be inferred from the private key for some signature algorithms."
       )
 
     @scallop
     val casperValidatorPublicKeyPath =
       gen[Path](
-        "Path to the base-64 encoded public key to use for signing a proposed blocks." +
+        "base-64 or PEM encoding of the public key to use for signing a proposed blocks." +
           s"Can be inferred from the private key for some signature algorithms."
       )
 
     @scallop
     val casperValidatorPrivateKey =
       gen[String](
-        "Base16 encoding of the private key to use for signing a proposed blocks. " +
+        "base-64 or PEM encoding of the private key to use for signing a proposed blocks. " +
           s"It is not recommended to use in production since private key could be revealed through the process table." +
           "Use the `validator-private-key-path` instead."
       )
 
     @scallop
     val casperValidatorPrivateKeyPath =
-      gen[Path]("Path to the base16 encoded private key to use for signing a proposed blocks.")
+      gen[Path](
+        "Path to the base-64 or PEM encoded private key to use for signing a proposed blocks."
+      )
 
     @scallop
     val casperValidatorSigAlgorithm =

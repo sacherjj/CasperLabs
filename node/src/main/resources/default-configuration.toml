@@ -97,7 +97,7 @@ port-internal = 40402
 # Path to node's X.509 certificate file, that is being used for identification.
 certificate = "$HOME/.casperlabs/node.certificate.pem"
 
-# Path to node's private key PEM file, that is being used for TLS communication.
+# Path to node's unencrypted secp256r1 PKCS#8 private key file, that is being used for TLS communication.
 key = "$HOME/.casperlabs/node.key.pem"
 
 # Use a non blocking secure random instance.
@@ -107,20 +107,20 @@ secure-random-non-blocking = false
 # io.casperlabs.casper.CasperConf
 [casper]
 
-# Base16 encoding of the public key to use for signing a proposed blocks.
+# base-64 or PEM encoding of the public key to use for signing a proposed blocks.
 # Can be inferred from the private key for some signature algorithms.
 # validator-public-key =
 
-# Path to the base-64 encoded public key to use for signing a proposed blocks.
+# Path to the base-64 or PEM encoded public key to use for signing a proposed blocks.
 # Can be inferred from the private key for some signature algorithms.
 # validator-public-key-path =
 
-# base-64 encoding of the private key to use for signing a proposed blocks.
+# base-64 or PEM encoding of the private key to use for signing a proposed blocks.
 # It is not recommended to use in production since private key could be revealed through the process table.
 # Use the `validator-private-key-path` instead.
 # validator-private-key =
 
-# Path to the base16 encoded private key to use for signing a proposed blocks.
+# Path to the base-64 or PEM encoded private key to use for signing a proposed blocks.
 # validator-private-key-path =
 
 # Name of the algorithm to use for signing proposed blocks.
@@ -129,7 +129,7 @@ validator-sig-algorithm = "ed25519"
 
 # Path to plain text file consisting of lines of the form `<pk> <stake>`
 # which defines the bond amounts for each validator at genesis.
-# <pk> is the public key (in base-16 encoding) identifying the validator and
+# <pk> is the public key (in base-64 encoding) identifying the validator and
 # <stake> is the amount of CSPR they have bonded (an integer).
 # Note: this overrides the --num-validators option.
 bonds-file = "$HOME/.casperlabs/genesis/bonds.txt"
@@ -144,8 +144,8 @@ num-validators = 5
 
 # Path to plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`
 # which defines the CSPR wallets that exist at genesis.
-# <algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1),
-# <pk> is the public key (in base-16 encoding) identifying the wallet and
+# <algorithm> is the algorithm used to verify signatures when using the wallet (currently supported value is only ed25519),
+# <pk> is the public key (in base-64 encoding) identifying the wallet and
 # <revBalance> is the amount of CSPR in the wallet.
 wallets-file = "$HOME/.casperlabs/genesis/wallets.txt"
 
