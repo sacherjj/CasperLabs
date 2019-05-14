@@ -119,7 +119,8 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
 /// an unforgable reference.
 pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
     let bytes = fn_bytes_by_name(name);
-    Contract::new(bytes, known_urefs)
+    let protocol_version = unsafe { ext_ffi::protocol_version() };
+    Contract::new(bytes, known_urefs, protocol_version)
 }
 
 /// Gets the serialized bytes of an exported function (see `fn_by_name`), then

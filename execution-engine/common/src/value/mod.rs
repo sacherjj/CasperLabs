@@ -176,8 +176,8 @@ impl FromBytes for Value {
                 Ok((Account(a), rem))
             }
             CONTRACT_ID => {
-                let (c, rem): (contract::Contract, &[u8]) = FromBytes::from_bytes(rest)?;
-                Ok((Contract(c), rem))
+                let (contract, rem): (contract::Contract, &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((Contract(contract), rem))
             }
             NAMEDKEY_ID => {
                 let (name, rem1): (String, &[u8]) = FromBytes::from_bytes(rest)?;
