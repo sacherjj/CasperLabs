@@ -58,7 +58,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val (ethPivKeys, ethPubKeys)    = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val ethAddresses =
-    ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
+    ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.drop(1)).takeRight(20)))
   private val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
   private val bonds       = createBonds(validators)
   private val minimumBond = 100L

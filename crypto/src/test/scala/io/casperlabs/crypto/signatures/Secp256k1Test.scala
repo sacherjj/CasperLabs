@@ -2,14 +2,13 @@ package io.casperlabs.crypto.signatures
 
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Sha256
-import io.casperlabs.crypto.{PrivateKey, PublicKey}
 import org.scalatest.{AppendedClues, BeforeAndAfterEach, FunSpec, Matchers}
 
 class Secp256k1Test extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
   describe("Secp256k1") {
 
     it("verifies the given secp256k1 signature in native code with keypair") {
-      val (PrivateKey(sec), PublicKey(pub)) = Secp256k1.newKeyPair
+      val (sec, pub) = Secp256k1.newKeyPair
       val data                              = Sha256.hash("testing".getBytes)
       val sig                               = Secp256k1.sign(data, sec)
       Secp256k1.verify(data, sig, pub) shouldBe true

@@ -4,11 +4,11 @@ import java.security.KeyPairGenerator
 import java.security.interfaces.ECPrivateKey
 import java.security.spec.ECGenParameterSpec
 
+import com.google.common.base.Strings
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey, PublicKeyA}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.SecureRandomUtil
-import io.casperlabs.crypto.{PrivateKey, PublicKey}
 import org.bitcoin._
-import com.google.common.base.Strings
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 object Secp256k1 {
@@ -22,7 +22,7 @@ object Secp256k1 {
     * @return (private key, public key) pair
     *
     */
-  def newKeyPair: (PrivateKey, PublicKey) = {
+  def newKeyPair: (PrivateKey, PublicKeyA) = {
     val kpg = KeyPairGenerator.getInstance("ECDSA", provider)
     kpg.initialize(new ECGenParameterSpec(curveName), SecureRandomUtil.secureRandomNonBlocking)
     val kp = kpg.generateKeyPair
