@@ -120,7 +120,7 @@ class DeployThread(threading.Thread):
 
 
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
-                         ([['helloname.wasm'],['helloworld.wasm']], [1, 1, 1, 1, 1, 1, 0]),
+                         ([['test_helloname.wasm'],['test_helloworld.wasm']], [1, 1, 1, 1, 1, 1, 0]),
 ])
 # Curently nodes is a network of three bootstrap connected nodes.
 # Nodes deploy one or more contracts followed by propose.
