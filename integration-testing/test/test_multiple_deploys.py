@@ -41,7 +41,7 @@ def create_volume(docker_client) -> str:
 
 
 def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fixture):
-    contract_path = 'helloname.wasm'
+    contract_path = 'test_helloname.wasm'
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3]
     with conftest.testing_context(command_line_options_fixture, docker_client_fixture, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=peers_keypairs) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:

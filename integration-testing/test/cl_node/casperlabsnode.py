@@ -53,11 +53,11 @@ CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
 GRPC_SOCKET_FILE = f"{CL_SOCKETS_DIR}/.casper-node.sock"
 EXECUTION_ENGINE_COMMAND = ".casperlabs/sockets/.casper-node.sock"
 
-HELLO_NAME = "helloname.wasm"
-HELLO_WORLD = "helloworld.wasm"
-COUNTER_CALL = "countercall.wasm"
-MAILING_LIST_CALL = "mailinglistcall.wasm"
-COMBINED_CONTRACT = "combinedcontractsdefine.wasm"
+HELLO_NAME = "test_helloname.wasm"
+HELLO_WORLD = "test_helloworld.wasm"
+COUNTER_CALL = "test_countercall.wasm"
+MAILING_LIST_CALL = "test_mailinglistcall.wasm"
+COMBINED_CONTRACT = "test_combinedcontractsdefine.wasm"
 
 
 HOST_MOUNT_DIR = f"/tmp/resources_{TAG}"
