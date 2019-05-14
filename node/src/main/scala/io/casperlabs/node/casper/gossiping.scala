@@ -415,22 +415,23 @@ package object gossiping {
       approver <- if (conf.casper.standalone) {
                    for {
                      genesis <- Resource.liftF {
-                                 Genesis[F](
-                                   conf.casper.walletsFile,
-                                   conf.casper.minimumBond,
-                                   conf.casper.maximumBond,
-                                   conf.casper.hasFaucet,
-                                   conf.casper.shardId,
-                                   conf.casper.deployTimestamp
-                                 ).map { x =>
-                                   LegacyConversions.toBlock(x.getBlockMessage)
-                                 }
+                                 Log[F].info("Constructing Genesis candidate...") *>
+                                   Genesis[F](
+                                     conf.casper.walletsFile,
+                                     conf.casper.minimumBond,
+                                     conf.casper.maximumBond,
+                                     conf.casper.hasFaucet,
+                                     conf.casper.shardId,
+                                     conf.casper.deployTimestamp
+                                   ).map { x =>
+                                     LegacyConversions.toBlock(x.getBlockMessage)
+                                   }
                                }
 
                      // Store it so others can pull it from the bootstrap node.
                      _ <- Resource.liftF {
                            Log[F].info(
-                             s"Trying to store generated genesis candidate ${genesis.blockHash}..."
+                             s"Trying to store generated Genesis candidate ${genesis.blockHash}..."
                            ) *>
                              validateAndAddBlock(conf.casper.shardId, genesis)
                          }
