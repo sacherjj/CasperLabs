@@ -6,7 +6,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.crypto.Keys.PrivateKey
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 
 import scala.collection.JavaConverters._
@@ -65,7 +66,7 @@ trait ArbitraryConsensus {
 
   protected case class AccountKeys(privateKey: ByteString, publicKey: ByteString) {
     def sign(data: ByteString): Signature = {
-      val sig = Ed25519.sign(data.toByteArray, privateKey.toByteArray)
+      val sig = Ed25519.sign(data.toByteArray, PrivateKey(privateKey.toByteArray))
       Signature("ed25519", ByteString.copyFrom(sig))
     }
   }

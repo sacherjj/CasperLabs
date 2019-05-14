@@ -1,21 +1,21 @@
 package io.casperlabs.casper.genesis
 
-import java.io.{File, PrintWriter}
+import java.io.File
 import java.nio.file.Path
+import java.util.Base64
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.{Applicative, Foldable, Monad, MonadError}
+import cats.{Applicative, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.genesis.contracts._
-import io.casperlabs.casper.protocol
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, Sorting}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyA, PublicKeyBS}
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.shared.{Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -96,12 +96,13 @@ object Genesis {
     } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
 
   def withoutContracts(
-      bonds: Map[Array[Byte], Long],
+      bonds: Map[PublicKeyA, Long],
       version: Long,
       timestamp: Long,
       shardId: String
   ): BlockMessage = {
     import Sorting.byteArrayOrdering
+    import io.casperlabs.crypto.Keys.convertTypeclasses
     //sort to have deterministic order (to get reproducible hash)
     val bondsProto = bonds.toIndexedSeq.sorted.map {
       case (pk, stake) =>
@@ -131,7 +132,7 @@ object Genesis {
     for {
       wallets   <- getWallets[F](walletsPath)
       bonds     <- ExecutionEngineService[F].computeBonds(ExecutionEngineService[F].emptyStateHash)
-      bondsMap  = bonds.map(b => b.validator.toByteArray -> b.stake).toMap
+      bondsMap  = bonds.map(b => PublicKey(b.validator.toByteArray) -> b.stake).toMap
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       initial = withoutContracts(
         bonds = bondsMap,
@@ -181,7 +182,7 @@ object Genesis {
                         .warn(
                           s"Failed to read ${file.getAbsolutePath} for reason: ${ex.getMessage}"
                         )
-                        .map(_ => Seq.empty[PreWallet])
+                        .map(_ => List.empty[PreWallet])
                   }
       } yield wallets
 
@@ -199,9 +200,9 @@ object Genesis {
     } yield wallets
   }
 
-  def getBondedValidators[F[_]: Monad: Sync: Log](bondsFile: Option[String]): F[Set[ByteString]] =
+  def getBondedValidators[F[_]: Monad: Sync: Log](bondsFile: Option[String]): F[Set[PublicKeyBS]] =
     bondsFile match {
-      case None => Set.empty[ByteString].pure[F]
+      case None => Set.empty[PublicKeyBS].pure[F]
       case Some(file) =>
         Sync[F]
           .delay {
@@ -211,7 +212,7 @@ object Genesis {
                 .getLines()
                 .map(line => {
                   val Array(pk, _) = line.trim.split(" ")
-                  ByteString.copyFrom(Base16.decode(pk))
+                  PublicKey(ByteString.copyFrom(Base64.getDecoder.decode(pk)))
                 })
                 .toSet
             }
@@ -229,7 +230,7 @@ object Genesis {
       genesisPath: Path,
       bonds: Path,
       numValidators: Int
-  ): F[Map[Array[Byte], Long]] =
+  ): F[Map[PublicKeyA, Long]] =
     for {
       bondsFile <- toFile[F](bonds)
       bonds <- bondsFile match {
@@ -242,7 +243,7 @@ object Genesis {
                           .getLines()
                           .map(line => {
                             val Array(pk, stake) = line.trim.split(" ")
-                            Base16.decode(pk) -> (stake.toLong)
+                            PublicKey(Base64.getDecoder.decode(pk)) -> (stake.toLong)
                           })
                           .toMap
                       }
@@ -252,12 +253,12 @@ object Genesis {
                         bonds.pure[F]
                       case Failure(_) =>
                         Log[F].warn(s"Bonds file ${file.getPath} cannot be parsed.") *> Map
-                          .empty[Array[Byte], Long]
+                          .empty[PublicKeyA, Long]
                           .pure[F]
                     }
                 case None =>
                   Log[F].warn(s"Specified bonds file $bondsFile does not exist.") *> Map
-                    .empty[Array[Byte], Long]
+                    .empty[PublicKeyA, Long]
                     .pure[F]
               }
     } yield bonds

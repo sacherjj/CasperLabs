@@ -6,46 +6,30 @@ import cats._
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
-import cats.temp.par.Par
 import cats.mtl.DefaultApplicativeAsk
+import cats.temp.par.Par
 import com.google.protobuf.ByteString
-import eu.timepit.refined._
 import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
 import io.casperlabs.blockstorage._
-import io.casperlabs.casper._
-import io.casperlabs.casper.consensus
-import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits._
+import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.CommError.ErrorHandler
-import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
-import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.crypto.Keys.PrivateKey
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Cell, Log, Time}
-import io.casperlabs.smartcontracts.ExecutionEngineService
-import monix.eval.Task
-import monix.execution.Scheduler
-import monix.execution.atomic.AtomicInt
 import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
-import scala.concurrent.duration._
-import scala.util.Random
 
 class GossipServiceCasperTestNode[F[_]](
     local: Node,
     genesis: BlockMessage,
-    sk: Array[Byte],
+    sk: PrivateKey,
     blockDagDir: Path,
     blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
@@ -108,13 +92,13 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
   type TestNode[F[_]] = GossipServiceCasperTestNode[F]
 
-  import HashSetCasperTestNode.peerNode
   import GossipServiceCasperTestNodeFactory._
+  import HashSetCasperTestNode.peerNode
 
   def standaloneF[F[_]](
       genesis: BlockMessage,
       transforms: Seq[TransformEntry],
-      sk: Array[Byte],
+      sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   )(
@@ -170,7 +154,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   }
 
   def networkF[F[_]](
-      sks: IndexedSeq[Array[Byte]],
+      sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
@@ -191,7 +175,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       .zip(sks)
       .map {
         case (node, sk) =>
-          ByteString.copyFrom(Ed25519.toPublic(sk)) -> node
+          ByteString.copyFrom(Ed25519.tryToPublic(sk).get) -> node
       }
       .toMap
 

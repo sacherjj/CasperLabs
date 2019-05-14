@@ -5,12 +5,12 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.casper.protocol.Bond
+import io.casperlabs.casper.Validate
+import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.Validate
+import io.casperlabs.crypto.Keys.PublicKeyA
 import io.casperlabs.ipc._
-import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -18,7 +18,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import scala.util.Either
 
 object ExecutionEngineServiceStub {
-  type Bonds = Map[Array[Byte], Long]
+  type Bonds = Map[PublicKeyA, Long]
 
   implicit def functorRaiseInvalidBlock[F[_]: Sync] = Validate.raiseValidateErrorThroughSync[F]
 
@@ -59,7 +59,7 @@ object ExecutionEngineServiceStub {
     ): F[Either[Throwable, ByteString]] = commitFunc(prestate, effects)
     override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
       computeBondsFunc(hash)
-    override def setBonds(bonds: Map[Array[Byte], Long]): F[Unit] =
+    override def setBonds(bonds: Map[PublicKeyA, Long]): F[Unit] =
       setBondsFunc(bonds)
     override def query(
         state: ByteString,

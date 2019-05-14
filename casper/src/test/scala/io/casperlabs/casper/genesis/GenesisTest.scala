@@ -2,41 +2,28 @@ package io.casperlabs.casper.genesis
 
 import java.io.PrintWriter
 import java.nio.file.{Files, Path, Paths}
+import java.util.Base64
 
-import cats.Id
-import cats.implicits._
+import cats.effect.Sync
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
-import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.casper.helper.{
-  BlockDagStorageFixture,
-  BlockGenerator,
-  BlockUtil,
-  HashSetCasperTestNode
-}
-import io.casperlabs.casper.protocol.{BlockMessage, Bond}
+import io.casperlabs.casper.helper.{BlockDagStorageFixture, HashSetCasperTestNode}
+import io.casperlabs.casper.protocol.Bond
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.catscontrib._
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.shared.PathOps.RichPath
-import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
-import io.casperlabs.shared.StoreType
-import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
-import cats.effect.Sync
-import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
-import io.casperlabs.ipc.TransformEntry
-import io.casperlabs.models.BlockMetadata
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
+import org.scalatest.{FlatSpec, Matchers}
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   import GenesisTest._
 
   val validators = Seq(
-    "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
-    "6bf1b2753501d02d386789506a6d93681d2299c6edfd4455f596b97bc5725968"
+    "KZZwxShJ8aqC6N/lvocsFrYAvwnMiYPgS5A0ETWPLeY=",
+    "a/GydTUB0C04Z4lQam2TaB0imcbt/URV9Za5e8VyWWg="
   ).zipWithIndex
 
   val walletAddresses = Seq(
@@ -153,7 +140,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         _                                       = log.infos.isEmpty should be(true)
         result = validators
           .map {
-            case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
+            case (v, i) => Bond(ByteString.copyFrom(Base64.getDecoder.decode(v)), i.toLong)
           }
           .forall(
             bonds.contains(_)
@@ -170,10 +157,16 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             log: LogStub[Task],
             time: LogicalTime[Task]
         ) =>
+          val bondsFile = genesisPath.resolve("bonds.txt")
+          printBonds(bondsFile.toString)
           implicit val logEff                    = log
           implicit val executionEngineServiceEff = executionEngineService
           for {
-            genesisWithTransform                             <- fromBondsFile(genesisPath)(executionEngineService, log, time)
+            genesisWithTransform <- fromBondsFile(genesisPath, bondsFile)(
+                                     executionEngineService,
+                                     log,
+                                     time
+                                   )
             BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
             _ <- BlockStore[Task]
                   .put(genesis.blockHash, genesis, transforms)
@@ -204,7 +197,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         _                                       = log.infos.length should be(1)
         result = validators
           .map {
-            case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
+            case (v, i) => Bond(ByteString.copyFrom(Base64.getDecoder.decode(v)), i.toLong)
           }
           .forall(
             bonds.contains(_)

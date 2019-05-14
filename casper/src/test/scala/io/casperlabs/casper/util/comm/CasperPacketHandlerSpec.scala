@@ -34,9 +34,10 @@ import io.casperlabs.comm.rp.Connect.{Connections, ConnectionsCell}
 import io.casperlabs.comm.rp.ProtocolHelper
 import io.casperlabs.comm.rp.ProtocolHelper._
 import io.casperlabs.comm.{transport, _}
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Cell
@@ -58,7 +59,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     val deployTimestamp            = 1L
     val BlockMsgWithTransform(Some(genesis), transforms) =
       buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
-    val validatorId       = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
+    val validatorId       = ValidatorIdentity(validatorPk, validatorSk, Ed25519)
     val storageSize: Long = 1024L * 1024
 
     implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](bonds)
@@ -259,7 +260,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
         val fixture = setup()
         import fixture._
 
-        val validators = Set(ByteString.copyFrom(validatorPk))
+        val validators = Set(PublicKey(ByteString.copyFrom(validatorPk)))
 
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
