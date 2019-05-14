@@ -5,8 +5,6 @@ use self::blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::Value;
-use meter::heap_meter::HeapSize;
-use meter::Meter;
 use shared::newtypes::Validated;
 use storage::global_state::{ExecutionEffect, StateReader};
 use storage::transform::TypeMismatch;
@@ -91,12 +89,12 @@ impl From<!> for Error {
 
 impl HostError for Error {}
 
-pub struct Runtime<'a, R: StateReader<Key, Value>, M: Meter<Key, Value>> {
+pub struct Runtime<'a, R: StateReader<Key, Value>> {
     memory: MemoryRef,
     module: Module,
     result: Vec<u8>,
     host_buf: Vec<u8>,
-    context: RuntimeContext<'a, R, M>,
+    context: RuntimeContext<'a, R>,
 }
 
 /// Rename function called `name` in the `module` to `call`.
@@ -115,7 +113,7 @@ pub fn rename_export_to_call(module: &mut Module, name: String) {
     main_export.push_str("call");
 }
 
-impl<'a, R: StateReader<Key, Value>> Runtime<'a, R, HeapSize>
+impl<'a, R: StateReader<Key, Value>> Runtime<'a, R>
 where
     R::Error: Into<Error>,
 {
@@ -123,7 +121,7 @@ where
     pub fn new(
         memory: MemoryRef,
         module: Module,
-        context: RuntimeContext<'a, R, HeapSize>,
+        context: RuntimeContext<'a, R>,
     ) -> Self {
         Runtime {
             memory,
@@ -425,7 +423,7 @@ const HAS_UREF_FUNC_INDEX: usize = 14;
 const ADD_UREF_FUNC_INDEX: usize = 15;
 const STORE_FN_INDEX: usize = 16;
 
-impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R, HeapSize>
+impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
 where
     R::Error: Into<Error>,
 {
@@ -768,7 +766,7 @@ fn sub_call<R: StateReader<Key, Value>>(
     args: Vec<Vec<u8>>,
     refs: &mut BTreeMap<String, Key>,
     key: Key,
-    current_runtime: &mut Runtime<R, HeapSize>,
+    current_runtime: &mut Runtime<R>,
     // Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
@@ -874,7 +872,7 @@ pub trait Executor<A> {
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
-        tc: Rc<RefCell<TrackingCopy<R, HeapSize>>>,
+        tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
         R::Error: Into<Error>;
@@ -892,7 +890,7 @@ impl Executor<Module> for WasmiExecutor {
         nonce: u64,
         gas_limit: u64,
         _protocol_version: u64,
-        tc: Rc<RefCell<TrackingCopy<R, HeapSize>>>,
+        tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
         R::Error: Into<Error>,

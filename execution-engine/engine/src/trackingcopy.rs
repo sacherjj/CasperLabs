@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use common::key::Key;
 use common::value::Value;
 use linked_hash_map::LinkedHashMap;
+use meter::heap_meter::HeapSize;
 use meter::Meter;
 use parking_lot::Mutex;
 use shared::newtypes::Validated;
@@ -20,7 +21,7 @@ pub enum QueryResult {
 /// Keeps track of already accessed keys.
 /// We deliberately separate cached Reads from cached mutations
 /// because we want to invalidate Reads' cache so it doesn't grow too fast.
-pub struct TrackingCopyCache<M: Meter<Key, Value>> {
+pub struct TrackingCopyCache<M> {
     max_cache_size: usize,
     current_cache_size: Mutex<usize>,
     reads_cached: LinkedHashMap<Key, Value>,
@@ -77,9 +78,9 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
     }
 }
 
-pub struct TrackingCopy<R: StateReader<Key, Value>, M: Meter<Key, Value>> {
+pub struct TrackingCopy<R: StateReader<Key, Value>> {
     reader: R,
-    cache: TrackingCopyCache<M>,
+    cache: TrackingCopyCache<HeapSize>,
     ops: HashMap<Key, Op>,
     fns: HashMap<Key, Transform>,
 }
@@ -92,11 +93,11 @@ pub enum AddResult {
     Overflow,
 }
 
-impl<R: StateReader<Key, Value>, M: Meter<Key, Value>> TrackingCopy<R, M> {
-    pub fn new(reader: R, meter: M) -> TrackingCopy<R, M> {
+impl<R: StateReader<Key, Value>> TrackingCopy<R> {
+    pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
-            cache: TrackingCopyCache::new(1024 * 16, meter), //TODO: Should `max_cache_size` be fraction of Wasm memory limit?
+            cache: TrackingCopyCache::new(1024 * 16, HeapSize), //TODO: Should `max_cache_size` be fraction of Wasm memory limit?
             ops: HashMap::new(),
             fns: HashMap::new(),
         }
@@ -280,7 +281,6 @@ mod tests {
     use storage::transform::Transform;
 
     use super::{AddResult, QueryResult, Validated};
-    use meter::count_meter::Count;
     use trackingcopy::TrackingCopy;
 
     struct CountingDb {
@@ -321,7 +321,7 @@ mod tests {
     fn tracking_copy_new() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
-        let tc = TrackingCopy::new(db, Count);
+        let tc = TrackingCopy::new(db);
 
         assert_eq!(tc.cache.is_empty(), true);
         assert_eq!(tc.ops.is_empty(), true);
@@ -332,7 +332,7 @@ mod tests {
     fn tracking_copy_caching() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(Rc::clone(&counter));
-        let mut tc = TrackingCopy::new(db, Count);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         let zero = Value::Int32(0);
@@ -358,7 +358,7 @@ mod tests {
     fn tracking_copy_read() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(Rc::clone(&counter));
-        let mut tc = TrackingCopy::new(db, Count);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         let zero = Value::Int32(0);
@@ -379,7 +379,7 @@ mod tests {
     fn tracking_copy_write() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(Rc::clone(&counter));
-        let mut tc = TrackingCopy::new(db, Count);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         let one = Value::Int32(1);
@@ -417,7 +417,7 @@ mod tests {
     fn tracking_copy_add_i32() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
-        let mut tc = TrackingCopy::new(db, Count);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         let three = Value::Int32(3);
@@ -453,7 +453,7 @@ mod tests {
         // DB now holds an `Account` so that we can test adding a `NamedKey`
         let account = common::value::Account::new([0u8; 32], 0u64, BTreeMap::new());
         let db = CountingDb::new_init(Value::Account(account));
-        let mut tc = TrackingCopy::new(db, Count);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
         let u1 = Key::URef([1u8; 32], AccessRights::READ_WRITE);
         let u2 = Key::URef([2u8; 32], AccessRights::READ_WRITE);
@@ -508,7 +508,7 @@ mod tests {
     fn tracking_copy_rw() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
-        let mut tc = TrackingCopy::new(db, Count);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         // reading then writing should update the op
@@ -528,7 +528,7 @@ mod tests {
     fn tracking_copy_ra() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
-        let mut tc = TrackingCopy::new(db, Count);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         // reading then adding should update the op
@@ -549,7 +549,7 @@ mod tests {
     fn tracking_copy_aw() {
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
-        let mut tc = TrackingCopy::new(db, Count);
+        let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
 
         // adding then writing should update the op
@@ -573,7 +573,7 @@ mod tests {
         #[test]
         fn query_empty_path(k in key_arb(), missing_key in key_arb(), v in value_arb()) {
             let gs = InMemoryGlobalState::from_pairs(&[(k, v.to_owned())]).unwrap();
-            let mut tc = TrackingCopy::new(gs, Count);
+            let mut tc = TrackingCopy::new(gs);
             let empty_path = Vec::new();
             if let Ok(QueryResult::Success(result)) = tc.query(k, &empty_path) {
                 assert_eq!(v, result);
@@ -605,7 +605,7 @@ mod tests {
                 (k, v.to_owned()),
                 (contract_key, contract),
             ]).unwrap();
-            let mut tc = TrackingCopy::new(gs, Count);
+            let mut tc = TrackingCopy::new(gs);
             let path = vec!(name.clone());
             if let Ok(QueryResult::Success(result)) = tc.query(contract_key, &path) {
                 assert_eq!(v, result);
@@ -642,7 +642,7 @@ mod tests {
                 (k, v.to_owned()),
                 (account_key, Value::Account(account)),
             ]).unwrap();
-            let mut tc = TrackingCopy::new(gs, Count);
+            let mut tc = TrackingCopy::new(gs);
             let path = vec!(name.clone());
             if let Ok(QueryResult::Success(result)) = tc.query(account_key, &path) {
                 assert_eq!(v, result);
@@ -689,7 +689,7 @@ mod tests {
                 (contract_key, contract),
                 (account_key, Value::Account(account)),
             ]).unwrap();
-            let mut tc = TrackingCopy::new(gs, Count);
+            let mut tc = TrackingCopy::new(gs);
             let path = vec!(contract_name, state_name);
             if let Ok(QueryResult::Success(result)) = tc.query(account_key, &path) {
                 assert_eq!(v, result);

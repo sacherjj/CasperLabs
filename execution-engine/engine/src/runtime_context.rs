@@ -6,7 +6,6 @@ use common::key::{AccessRights, Key};
 use common::value::account::Account;
 use common::value::Value;
 use execution::Error;
-use meter::Meter;
 use rand::RngCore;
 use rand_chacha::ChaChaRng;
 use shared::newtypes::Validated;
@@ -17,8 +16,8 @@ use storage::global_state::{ExecutionEffect, StateReader};
 use trackingcopy::{AddResult, TrackingCopy};
 
 /// Holds information specific to the deployed contract.
-pub struct RuntimeContext<'a, R: StateReader<Key, Value>, M: Meter<Key, Value>> {
-    state: Rc<RefCell<TrackingCopy<R, M>>>,
+pub struct RuntimeContext<'a, R: StateReader<Key, Value>> {
+    state: Rc<RefCell<TrackingCopy<R>>>,
     // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
@@ -34,13 +33,13 @@ pub struct RuntimeContext<'a, R: StateReader<Key, Value>, M: Meter<Key, Value>> 
     rng: ChaChaRng,
 }
 
-impl<'a, R: StateReader<Key, Value>, M: Meter<Key, Value>> RuntimeContext<'a, R, M>
+impl<'a, R: StateReader<Key, Value>> RuntimeContext<'a, R>
 where
     R::Error: Into<Error>,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        state: Rc<RefCell<TrackingCopy<R, M>>>,
+        state: Rc<RefCell<TrackingCopy<R>>>,
         uref_lookup: &'a mut BTreeMap<String, Key>,
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
@@ -93,7 +92,7 @@ where
         &self.rng
     }
 
-    pub fn state(&self) -> Rc<RefCell<TrackingCopy<R, M>>> {
+    pub fn state(&self) -> Rc<RefCell<TrackingCopy<R>>> {
         Rc::clone(&self.state)
     }
 
@@ -346,7 +345,6 @@ mod tests {
     use common::key::{AccessRights, Key};
     use common::value::{self, Account, Contract, Value};
     use execution::{create_rng, vec_key_rights_to_map};
-    use meter::count_meter::Count;
     use rand::RngCore;
     use rand_chacha::ChaChaRng;
     use std::cell::RefCell;
@@ -361,7 +359,7 @@ mod tests {
     fn mock_tc(
         init_key: Key,
         init_account: &value::Account,
-    ) -> TrackingCopy<InMemoryGlobalState, Count> {
+    ) -> TrackingCopy<InMemoryGlobalState> {
         let mut hist = InMemoryGlobalState::empty().unwrap();
         let root_hash = hist.root_hash;
         let transform = Transform::Write(value::Value::Account(init_account.clone()));
@@ -382,7 +380,7 @@ mod tests {
             .expect("Checkout should not throw errors.")
             .expect("Root hash should exist.");
 
-        TrackingCopy::new(reader, Count)
+        TrackingCopy::new(reader)
     }
 
     fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
@@ -419,7 +417,7 @@ mod tests {
         uref_map: &'a mut BTreeMap<String, Key>,
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         rng: ChaChaRng,
-    ) -> RuntimeContext<'a, InMemoryGlobalState, Count> {
+    ) -> RuntimeContext<'a, InMemoryGlobalState> {
         let tc = mock_tc(base_key, &account);
         RuntimeContext::new(
             Rc::new(RefCell::new(tc)),
@@ -462,7 +460,7 @@ mod tests {
         query: F,
     ) -> Result<T, Error>
     where
-        F: Fn(RuntimeContext<InMemoryGlobalState, Count>) -> Result<T, Error>,
+        F: Fn(RuntimeContext<InMemoryGlobalState>) -> Result<T, Error>,
     {
         let base_acc_addr = [0u8; 20];
         let (key, account) = mock_account(base_acc_addr);

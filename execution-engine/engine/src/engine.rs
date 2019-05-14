@@ -1,7 +1,6 @@
 use common::key::Key;
 use execution::{self, Executor};
 use failure::Fail;
-use meter::heap_meter::HeapSize;
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
 use std::cell::RefCell;
@@ -116,9 +115,9 @@ where
     pub fn tracking_copy(
         &self,
         hash: Blake2bHash,
-    ) -> Result<Option<TrackingCopy<H::Reader, HeapSize>>, Error> {
+    ) -> Result<Option<TrackingCopy<H::Reader>>, Error> {
         match self.state.lock().checkout(hash).map_err(Into::into)? {
-            Some(tc) => Ok(Some(TrackingCopy::new(tc, HeapSize))),
+            Some(tc) => Ok(Some(TrackingCopy::new(tc))),
             None => Ok(None),
         }
     }
