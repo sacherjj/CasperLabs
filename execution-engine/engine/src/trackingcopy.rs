@@ -533,13 +533,12 @@ mod tests {
         ) {
             let mut known_urefs = BTreeMap::new();
             known_urefs.insert(name.clone(), k);
-            let contract = Contract::new(body, known_urefs, 1);
-            let value = Value::Contract(contract);
+            let contract: Value = Contract::new(body, known_urefs, 1).into();
             let contract_key = Key::Hash(hash);
 
             let gs = InMemoryGlobalState::from_pairs(&[
                 (k, v.to_owned()),
-                (contract_key, value),
+                (contract_key, contract),
             ]).unwrap();
             let mut tc = TrackingCopy::new(gs);
             let path = vec!(name.clone());
@@ -607,8 +606,7 @@ mod tests {
             // create contract which knows about value
             let mut contract_known_urefs = BTreeMap::new();
             contract_known_urefs.insert(state_name.clone(), k);
-            let contract = Contract::new(body, contract_known_urefs, 1);
-            let value = Value::Contract(contract);
+            let contract: Value = Contract::new(body, contract_known_urefs, 1).into();
             let contract_key = Key::Hash(hash);
 
             // create account which knows about contract
@@ -623,7 +621,7 @@ mod tests {
 
             let gs = InMemoryGlobalState::from_pairs(&[
                 (k, v.to_owned()),
-                (contract_key, value),
+                (contract_key, contract),
                 (account_key, Value::Account(account)),
             ]).unwrap();
             let mut tc = TrackingCopy::new(gs);

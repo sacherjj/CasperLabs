@@ -9,6 +9,7 @@ use crate::key::{Key, UREF_SIZE};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
+use core::iter;
 use core::mem::size_of;
 
 pub use self::account::Account;
@@ -109,12 +110,7 @@ impl ToBytes for Value {
                 result.append(&mut bytes);
                 Ok(result)
             }
-            Contract(contract) => {
-                let mut result = Vec::new();
-                result.push(CONTRACT_ID);
-                result.append(&mut contract.to_bytes()?);
-                Ok(result)
-            }
+            Contract(c) => Ok(iter::once(CONTRACT_ID).chain(c.to_bytes()?).collect()),
             NamedKey(n, k) => {
                 if n.len() + UREF_SIZE >= u32::max_value() as usize - U32_SIZE - U8_SIZE {
                     return Err(Error::OutOfMemoryError);
