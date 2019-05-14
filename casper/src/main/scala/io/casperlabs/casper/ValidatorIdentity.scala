@@ -1,26 +1,23 @@
 package io.casperlabs.casper
 
-import java.io.{BufferedReader, FileReader}
 import java.nio.file.Path
 
-import cats.Applicative
+import cats.Monad
 import cats.effect.{Resource, Sync}
-import cats.syntax.applicative._
-import cats.syntax.functor._
-import cats.syntax.flatMap._
-import cats.syntax.option._
-import cats.syntax.either._
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.Signature
+import io.casperlabs.crypto.Keys
+import io.casperlabs.crypto.codec.Base64
 import io.casperlabs.casper.util.SignatureAlgorithms
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.{Log, LogSource}
 
+import scala.io.Source
 import scala.language.higherKinds
 
 final case class ValidatorIdentity(
-    publicKey: Array[Byte],
-    privateKey: Array[Byte],
+    publicKey: Keys.PublicKeyA,
+    privateKey: Keys.PrivateKey,
     sigAlgorithm: String
 ) {
   def signature(data: Array[Byte]): Signature = {
@@ -32,30 +29,49 @@ final case class ValidatorIdentity(
 object ValidatorIdentity {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  private def fileContent[F[_]: Sync](path: Path): F[String] = {
-    val openFile = Sync[F].delay(new BufferedReader(new FileReader(path.toFile)))
-    Resource.fromAutoCloseable(openFile).use(br => Sync[F].delay(br.readLine()))
-  }
+  private def fileContent[F[_]: Sync](path: Path): F[String] =
+    Resource
+      .fromAutoCloseable(Sync[F].delay(Source.fromFile(path.toFile)))
+      .use(s => Sync[F].delay(s.mkString))
 
-  private def createValidatorIdentity[F[_]: Applicative](
-      conf: CasperConf,
-      privateKeyBase16: String
-  ) = {
-    val privateKey     = Base16.decode(privateKeyBase16)
-    val maybePublicKey = conf.validatorPublicKey.map(Base16.decode)
-
-    val publicKey =
-      CasperConf.publicKey(maybePublicKey, conf.validatorSigAlgorithm, privateKey)
-
-    ValidatorIdentity(publicKey, privateKey, conf.validatorSigAlgorithm).some.pure[F]
-  }
+  private def createValidatorIdentity[F[_]: Log: Monad](
+      signatureAlgorithm: String,
+      privateKeyRaw: String,
+      maybePublicKeyRaw: Option[String]
+  ): F[Option[ValidatorIdentity]] =
+    Keys
+      .parse(signatureAlgorithm, privateKeyRaw, maybePublicKeyRaw)
+      .fold(
+        parseError =>
+          Log[F]
+            .error(s"Failed to parse keys, ${parseError.errorMessage}") >> none[ValidatorIdentity]
+            .pure[F], {
+          case (privateKey, publicKey, sa) =>
+            Log[F].info(s"Validator identity: ${Base64.encode(publicKey)}") >>
+              ValidatorIdentity(publicKey, privateKey, sa.name).some.pure[F]
+        }
+      )
 
   def fromConfig[F[_]: Sync: Log](conf: CasperConf): F[Option[ValidatorIdentity]] =
     conf.validatorPrivateKey
       .map(_.asLeft[Path])
       .orElse(conf.validatorPrivateKeyPath.map(_.asRight[String])) match {
       case Some(key) =>
-        key.map(fileContent[F]).leftMap(_.pure[F]).merge >>= (createValidatorIdentity(conf, _))
+        val readPublicKey = conf.validatorPublicKey
+          .map(_.asLeft[Path])
+          .orElse(conf.validatorPublicKeyPath.map(_.asRight[String]))
+          .map(_.bimap(_.some.pure[F], p => fileContent(p).map(_.some)).merge)
+          .getOrElse(none[String].pure[F])
+
+        for {
+          privateKey     <- key.bimap(_.pure[F], fileContent[F]).merge
+          maybePublicKey <- readPublicKey
+          maybeValidatorIdentity <- createValidatorIdentity(
+                                     conf.validatorSigAlgorithm,
+                                     privateKey,
+                                     maybePublicKey
+                                   )
+        } yield maybeValidatorIdentity
       case None =>
         Log[F]
           .warn("No private key detected, cannot create validator identification.")
