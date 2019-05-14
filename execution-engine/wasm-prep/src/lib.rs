@@ -32,8 +32,6 @@ pub struct WasmiPreprocessor {
 }
 
 impl WasmiPreprocessor {
-    // TODO(mateusz.gorski): Add from_protocol_version method,
-    // for creating WasmiPreprocessor based on it.
     pub fn new(wasm_costs: WasmCosts, mem_pages: u32) -> WasmiPreprocessor {
         WasmiPreprocessor {
             wasm_costs,

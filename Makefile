@@ -116,7 +116,8 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 # Dockerize the Execution Engine.
 .make/docker-build/execution-engine: \
 		execution-engine/Dockerfile \
-		cargo-native-packager/execution-engine/comm
+		cargo-native-packager/execution-engine/comm \
+		$(RUST_SRC)
 	# Just copy the executable to the container.
 	$(eval RELEASE = execution-engine/target/debian)
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile

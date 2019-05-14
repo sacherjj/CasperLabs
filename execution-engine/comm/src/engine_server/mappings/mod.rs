@@ -78,7 +78,17 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                 let ipc_contr = v.get_contract();
                 let contr_body = ipc_contr.get_body().to_vec();
                 let known_urefs: URefMap = ipc_contr.get_known_urefs().try_into()?;
-                transform_write(common::value::Contract::new(contr_body, known_urefs.0).into())
+                let protocol_version = if ipc_contr.has_protocol_version() {
+                    ipc_contr.get_protocol_version()
+                } else {
+                    return parse_error("Protocol version is not specified".to_string());
+                };
+                let contract = common::value::Contract::new(
+                    contr_body,
+                    known_urefs.0,
+                    protocol_version.version,
+                );
+                transform_write(contract.into())
             } else if v.has_string_list() {
                 let list = v.get_string_list().list.to_vec();
                 transform_write(common::value::Value::ListString(list))
@@ -143,11 +153,14 @@ impl From<common::value::Value> for super::ipc::Value {
                 tv.set_account(acc);
             }
             common::value::Value::Contract(contract) => {
-                let (bytes, known_urefs) = contract.destructure();
+                let (bytes, known_urefs, protocol_version) = contract.destructure();
                 let mut contr = super::ipc::Contract::new();
                 let urefs = URefMap(known_urefs).into();
                 contr.set_body(bytes);
                 contr.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
+                let mut protocol = super::ipc::ProtocolVersion::new();
+                protocol.set_version(protocol_version);
+                contr.set_protocol_version(protocol);
                 tv.set_contract(contr);
             }
         };

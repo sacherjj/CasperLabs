@@ -94,7 +94,9 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
         case CommitResponse.Result.Empty =>
           Left(new SmartContractEngineError("empty response"))
         case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
-          Left(new SmartContractEngineError(s"Missing pre-state: $hash"))
+          Left(
+            new SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}")
+          )
         case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
           Left(new SmartContractEngineError(s"Error executing transform: $message"))
       }

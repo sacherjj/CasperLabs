@@ -15,6 +15,7 @@ from .cl_node.wait import (
     wait_for_requested_for_fork_tip,
     wait_for_sending_approved_block_request,
     wait_for_streamed_packet,
+    wait_for_blocks_count_at_least,
 )
 
 
@@ -47,3 +48,28 @@ def test_persistent_dag_store(command_line_options_fixture, docker_client_fixtur
             wait_for_finalised_hash(network.peers[0], hash_string, context.node_startup_timeout * 3)
             number_of_blocks = 1
             wait_for_metrics_and_assert_blocks_avaialable(network.peers[0], context.node_startup_timeout * 3, number_of_blocks)
+
+
+def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_network):
+    tnn = two_node_network
+    node0, node1 = tnn.docker_nodes
+    for node in (node0, node1):
+        node.deploy_and_propose()
+
+    wait_for_blocks_count_at_least(node0, 3, 4, 10)
+    wait_for_blocks_count_at_least(node1, 3, 4, 10)
+
+    dag0 = node0.vdag(10)
+    dag1 = node1.vdag(10)
+    blocks0 = node0.show_blocks_with_depth(10)
+    blocks1 = node1.show_blocks_with_depth(10)
+
+    for node_num in range(2):
+        tnn.stop_cl_node(node_num)
+    for node_num in range(2):
+        tnn.start_cl_node(node_num)
+
+    assert dag0 == node0.vdag(10)
+    assert dag1 == node1.vdag(10)
+    assert blocks0 == node0.show_blocks_with_depth(10)
+    assert blocks1 == node1.show_blocks_with_depth(10)

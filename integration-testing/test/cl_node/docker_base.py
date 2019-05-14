@@ -12,7 +12,6 @@ from typing import (
     Tuple,
 )
 
-
 from test.cl_node.errors import (
     NonZeroExitCodeError,
     CommandTimeoutError,
@@ -141,6 +140,12 @@ class DockerBase:
     def _get_container(self):
         raise NotImplementedError('No implementation of _get_container')
 
+    def stop(self):
+        self.container.stop()
+
+    def start(self):
+        self.container.start()
+
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.container_name}"
 
@@ -187,12 +192,20 @@ class LoggingDockerBase(DockerBase):
     def __init__(self, config: DockerConfig, socket_volume: str) -> None:
         super().__init__(config, socket_volume)
         self.terminate_background_logging_event = threading.Event()
+        self._start_logging_thread()
+
+    def _start_logging_thread(self):
         self.background_logging = LoggingThread(
             container=self.container,
             logger=logging.getLogger('peers'),
             terminate_thread_event=self.terminate_background_logging_event,
         )
         self.background_logging.start()
+
+    def start(self):
+        super().start()
+        if not self.background_logging.is_alive():
+            self._start_logging_thread()
 
     @property
     def container_type(self) -> str:
