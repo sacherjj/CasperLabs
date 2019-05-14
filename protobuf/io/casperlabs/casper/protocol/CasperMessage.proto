@@ -3,6 +3,9 @@ package io.casperlabs.casper.protocol;
 
 import "google/protobuf/empty.proto";
 
+// REST annotations
+import "google/api/annotations.proto";
+
 // If you are building for other languages "scalapb.proto"
 // can be manually obtained here:
 // https://raw.githubusercontent.com/scalapb/ScalaPB/master/protobuf/scalapb/scalapb.proto
@@ -18,22 +21,63 @@ option (scalapb.options) = {
 // --------- DeployService  --------
 service DeployService {
     rpc DoDeploy (DeployData) returns (DeployServiceResponse) {
+        option (google.api.http) = {
+            put: "/deploy"
+            body: "*"
+        };
     }
+
     rpc createBlock (google.protobuf.Empty) returns (DeployServiceResponse) {
+        option (google.api.http) = {
+            post: "/block"
+            body: "*"
+        };
     }
+
     rpc showBlock (BlockQuery) returns (BlockQueryResponse) {
+        option (google.api.http) = {
+            put: "/show/block"
+            body: "*"
+        };
     }
+
     // Get dag
     rpc visualizeDag(VisualizeDagQuery) returns (VisualizeBlocksResponse) {
+        option (google.api.http) = {
+            put: "/show/dag"
+            body: "*"
+        };
     }
+
     rpc showMainChain (BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {
+        option (google.api.http) = {
+            put: "/show/chain"
+            body: "*"
+        };
     }
+
     rpc showBlocks (BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {
+        option (google.api.http) = {
+            put: "/show/blocks"
+            body: "*"
+        };
     }
+
     rpc findBlockWithDeploy (FindDeployInBlockQuery) returns (BlockQueryResponse) {
+        option (google.api.http) = {
+            put: "/find"
+            body: "*"
+        };
     }
-    rpc queryState (QueryStateRequest) returns (QueryStateResponse) {}
+
+    rpc queryState (QueryStateRequest) returns (QueryStateResponse) {
+        option (google.api.http) = {
+            put: "/query"
+            body: "*"
+        };
+    }
 }
+
 
 message QueryStateRequest {
     string block_hash = 1; //base-16 encoding of block hash
