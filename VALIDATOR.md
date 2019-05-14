@@ -65,55 +65,30 @@ Server is listening on socket: casperlabs-node-data/.caspernode.sock
 
 
 ### Setting up keys
+You'll 2 sets of keys:
+1) `secp256r1` private key encoded in unencrypted `PKCS#8` format and `SHA256 with ECDSA X.509` certificate. 
+These will be used for node-to-node interaction. 
+2) [`ed25519` or `secp256k1`](/DEVELOPER.md/run-the-node). These are used as your validator identity. See the link to how to generate them.
 
-As a validator you'll need a public and private key to sign blocks, and an SSL certificate to provide secure communication with other nodes on the network. You can run the node once to generate these up front.
+#### secp256r1
+[Download and intstall the latest OpenSSL 1.1 version](/DEVELOPER.md/run-the-node)
 
-You'll need to create a directory to hold data. By default this is expected to be at `~/.casperlabs`, but you can provide another location with the `--server-data-dir` option.
-
-```console
-$ casperlabs-node run -s \
-    --server-data-dir casperlabs-node-data \
-    --grpc-socket casperlabs-node-data/.caspernode.sock \
-    --casper-num-validators 1
-
-10:40:19.729 [main] INFO  io.casperlabs.node.Main$ - CasperLabs node (030bb96133ef9a9c31133ab3371937c2388bf5b9)
-10:40:19.736 [main] INFO  io.casperlabs.node.NodeEnvironment$ - Using data dir: /home/aakoshh/projects/casperlabs-node-data
-10:40:19.748 [main] INFO  i.c.c.t.GenerateCertificateIfAbsent - No certificate found at path /home/aakoshh/projects/casperlabs-node-data/node.certificate.pem
-10:40:19.749 [main] INFO  i.c.c.t.GenerateCertificateIfAbsent - Generating a X.509 certificate for the node
-10:40:19.752 [main] INFO  i.c.c.t.GenerateCertificateIfAbsent - Generating a PEM secret key for the node
-...
-10:40:23.788 [main] INFO  i.c.c.util.comm.CasperPacketHandler$ - Starting in create genesis mode
-10:40:24.077 [main] WARN  i.casperlabs.casper.genesis.Genesis$ - Specified bonds file None does not exist. Falling back on generating random validators.
-10:40:24.088 [main] INFO  i.casperlabs.casper.genesis.Genesis$ - Created validator 09c47347913d75b0edb0338d8f34023220af634afa24ae5a6b93f087e24597bd with bond 1
-...
-10:40:24.132 [main] WARN  i.c.casper.ValidatorIdentity$ - No private key detected, cannot create validator identification.
-...
-10:40:24.944 [main] INFO  io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabs://e1af07bebc9f88e399efe816ac06dfc6b82f7783@78.144.212.177?protocol=40400&discovery=40404.
-...
-^C
-$ tree casperlabs-node-data
-casperlabs-node-data
-├── casperlabs-node.log
-├── genesis
-│   ├── 09c47347913d75b0edb0338d8f34023220af634afa24ae5a6b93f087e24597bd.sk
-│   └── bonds.txt
-├── node.certificate.pem
-├── node.key.pem
-└── tmp
-    └── comm
-        ├── 20190222104024_8091beb0_packet.bts
-        └── 20190222104024_f6a0cda2_packet.bts
-
-3 directories, 7 files
+Generate private key:
+```bash
+openssl ecparam -name secp256r1 -genkey -noout -out secp256r1-private.pem
+openssl pkcs8 -topk8 -nocrypt -in secp256r1-private.pem -out secp256r1-private-pkcs8.pem
+rm secp256r1-private.pem
 ```
 
-Once the server starts listening to traffic you can kill it with `Ctrl+C` and see that it creted some files:
-* `node.certificate.pem` and `node.key.pem` are the SSL certificates it's going to use on subsequent starts. They correspond to the address `casperlabs://e1af07bebc9f88e399efe816ac06dfc6b82f7783@78.144.212.177?protocol=40400&discovery=40404` printed in the logs, in particular the value `e1af0...783` is going to the the node ID, which is a hash of its public key.
-* `genesis/09c47347913d75b0edb0338d8f34023220af634afa24ae5a6b93f087e24597bd.sk` is the validator key. The value `9c47347...7bd` is the public key itself, the file content is the private key.
-* `genesis/bonds.txt` will have the public key with a weight in it. In normal mode you'd get the bonds from the bootstrap node and the latest blocks, however currently the node relies on static configuration.
+Generate certificate from the generated private key:
+```bash
+openssl req -new -x509 -key secp256r1-private-pkcs8.pem -out node.cer -days 365
+```
 
-__NOTE__: Your values will be different from the ones shown above.
-
+Now you can them as:
+```bash
+./node/target/universal/stage/bin/casperlabs-node run --tls-certificate node.cer --tls-key secp256r1-private-pkcs8.pem
+```
 
 ### Configuring networking
 
@@ -146,8 +121,8 @@ $ casperlabs-node \
      --server-bootstrap "<bootstrap-node-address>" \
      --server-host <external-ip-address> \
      --server-no-upnp \
-     --casper-validator-public-key 09c47347913d75b0edb0338d8f34023220af634afa24ae5a6b93f087e24597bd \
-     --casper-validator-private-key-path casperlabs-node-data/genesis/09c47347913d75b0edb0338d8f34023220af634afa24ae5a6b93f087e24597bd.sk \
+     --casper-validator-public-key-path casperlabs-node-data/genesis/0/public-key.txt \
+     --casper-validator-private-key-path casperlabs-node-data/genesis/0/private-key.txt \
      --grpc-socket casperlabs-node-data/.caspernode.sock
 ```
 

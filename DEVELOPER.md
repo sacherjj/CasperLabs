@@ -340,10 +340,37 @@ cargo run --bin casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 
 In the root of CasperLabs.
 
-If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/casperlabs-node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
+Firstly, you'll need to generate `ed25519`. 
 
+Download and install the latest version of the [openssl 1.1](https://github.com/openssl/openssl/releases).
+```bash
+cd /tmp
+curl https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz -o openssl.tar.gz
+tar -xzf openssl.tar.gz
+cd openssl-OpenSSL_1_1_1b
+./config
+make
+make test
+make install
 ```
-./node/target/universal/stage/bin/casperlabs-node run --casper-validator-private-key <private key from <public_key>.sk file> --casper-validator-public-key <public_key> -s
+
+You may want to install `openssl` into non-default location, check [INSTALL guide](https://github.com/openssl/openssl/blob/master/INSTALL) for more information.
+
+Generate private key:
+```bash
+openssl genpkey -algorithm Ed25519 -out ed25519-private.pem
+```
+
+Public key:
+```bash
+openssl pkey -in ed25519-private.pem -pubout -out ed25519-public.pem
+```
+
+Now you can use them as:
+```bash
+./node/target/universal/stage/bin/casperlabs-node run -s \
+    --casper-validator-private-key-path ed25519-private.pem \
+    --casper-validator-public-key-path ed25519-public.pem
 ```
 
 ### Deploying data
