@@ -131,9 +131,9 @@ impl Transform {
             AddUInt256(i) => checked_addition(i, v, "UInt256"),
             AddUInt512(i) => checked_addition(i, v, "UInt512"),
             AddKeys(mut keys) => match v {
-                Value::Contract(mut contract) => {
-                    contract.insert_urefs(&mut keys);
-                    Ok(Value::Contract(contract))
+                Value::Contract(mut c) => {
+                    c.insert_urefs(&mut keys);
+                    Ok(c.into())
                 }
                 Value::Account(mut a) => {
                     a.insert_urefs(&mut keys);
