@@ -96,7 +96,6 @@ impl ByteSize for String {
 mod tests {
     use bytesmeter::ByteSize;
     use common::bytesrepr::{I32_SIZE, U64_SIZE, U8_SIZE};
-    use common::value::Value;
     use std::collections::btree_map::BTreeMap;
 
     fn assert_size<T: ByteSize>(el: T, expected: usize) {
