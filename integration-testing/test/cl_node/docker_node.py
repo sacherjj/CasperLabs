@@ -198,8 +198,8 @@ class DockerNode(LoggingDockerBase):
                gas_limit: int = 1000000,
                gas_price: int = 1,
                nonce: int = 0,
-               session_contract: Optional[str]='helloname.wasm',
-               payment_contract: Optional[str]='helloname.wasm') -> str:
+               session_contract: Optional[str]='test_helloname.wasm',
+               payment_contract: Optional[str]='test_helloname.wasm') -> str:
 
         command = " ".join([
             "deploy",
@@ -278,9 +278,9 @@ class DockerNode(LoggingDockerBase):
     #            payment_contract_path=None) -> str:
     #
     #     if session_contract_path is None:
-    #         session_contract_path = f'{self.host_mount_dir}/helloname.wasm'
+    #         session_contract_path = f'{self.host_mount_dir}/test_helloname.wasm'
     #     if payment_contract_path is None:
-    #         payment_contract_path = f'{self.host_mount_dir}/helloname.wasm'
+    #         payment_contract_path = f'{self.host_mount_dir}/test_helloname.wasm'
     #
     #     logging.info(f'PY_CLIENT.deploy(from_address={from_address}, gas_limit={gas_limit}, gas_price={gas_price}, '
     #                  f'payment_contract={payment_contract_path}, session_contract={session_contract_path}, '

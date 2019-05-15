@@ -10,8 +10,8 @@ import pytest
 
 @pytest.mark.parametrize(
     "wasm",
-    ["helloname.wasm",
-     "old_wasm/helloname.wasm"]
+    ["test_helloname.wasm",
+     "old_wasm/test_helloname.wasm"]
 )
 def test_multiple_propose(started_standalone_bootstrap_node, wasm):
     """
