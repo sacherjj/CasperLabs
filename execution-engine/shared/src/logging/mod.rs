@@ -67,6 +67,10 @@ where
     }
 }
 
+lazy_static! {
+    pub(crate) static ref GET_LOGGER: fn(slog::Level) -> slog::Logger = get_logger;
+}
+
 /// factory method to build and return a slog logger configured as a async terminal writer
 fn get_logger(slog_level_filter: Level) -> slog::Logger {
     // temporal dependencies herein; order of nesting drains and filters matters
@@ -99,7 +103,7 @@ fn slog_log<F>(
 
     let slog_level_filter = log_level_filter.into();
 
-    let logger = get_logger(slog_level_filter);
+    let logger = GET_LOGGER(slog_level_filter);
 
     let slog_level = log_level.into();
 
