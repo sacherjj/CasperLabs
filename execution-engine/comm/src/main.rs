@@ -63,6 +63,7 @@ const SERVER_START_EXPECT: &str = "failed to start Execution Engine Server";
 #[allow(dead_code)]
 const SERVER_STOP_MESSAGE: &str = "stopping Execution Engine Server";
 
+// if true expect command line args if false use default values
 static CHECK_ARGS: atomic::AtomicBool = atomic::AtomicBool::new(false);
 
 lazy_static! {

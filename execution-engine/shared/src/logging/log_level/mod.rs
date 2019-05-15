@@ -33,7 +33,11 @@ pub enum LogLevel {
 }
 
 impl LogLevel {
-    pub fn get_priority(self) -> u8 {
+    pub fn get_priority(self) -> LogPriority {
+        LogPriority::new(self)
+    }
+
+    pub fn value(self) -> u8 {
         self as u8
     }
 }
@@ -126,7 +130,7 @@ pub struct LogPriority(u8);
 
 impl LogPriority {
     pub fn new(log_level: LogLevel) -> LogPriority {
-        let priority = log_level.get_priority();
+        let priority = log_level.value();
         LogPriority(priority)
     }
 
@@ -279,13 +283,13 @@ mod tests {
 
     #[test]
     fn should_get_loglevel_priority() {
-        assert_eq!(LogLevel::Warning.get_priority(), 4, "warn should be 4");
+        assert_eq!(LogLevel::Warning.value(), 4, "warn should be 4");
     }
 
     #[test]
     fn should_get_loglevel_item_priority() {
         let ll = LogLevel::Error;
-        assert_eq!(ll.get_priority(), 3, "error should be 3");
+        assert_eq!(ll.value(), 3, "error should be 3");
     }
 
     #[test]
@@ -296,6 +300,6 @@ mod tests {
 
         let priority = lp.value();
 
-        assert_eq!(ll.get_priority(), priority, "priority mismatch");
+        assert_eq!(ll.value(), priority, "priority mismatch");
     }
 }
