@@ -3,7 +3,7 @@ import java.io.File
 import java.nio.file.{Path, Paths}
 
 import com.google.protobuf.ByteString
-import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
+import io.casperlabs.comm.discovery.Node
 import org.scalacheck.{Arbitrary, Gen}
 
 import scala.concurrent.duration._
@@ -25,7 +25,7 @@ trait ArbitraryImplicits {
   }
 
   //There is no way expressing explicit 'false' using CLI options.
-  implicit val optionBooleanGen: Arbitrary[Boolean] = Arbitrary {
+  implicit val booleanGen: Arbitrary[Boolean] = Arbitrary {
     Gen.const(true)
   }
 
