@@ -55,8 +55,6 @@ class NodeRuntime private[node] (
   private[this] val grpcScheduler =
     Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
 
-  private val initPeer = if (conf.casper.standalone) None else Some(conf.server.bootstrap)
-
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
 
   import ApplicativeError_._
@@ -75,7 +73,12 @@ class NodeRuntime private[node] (
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
 
   val main: Effect[Unit] = {
-    val rpConfState         = localPeerNode[Task].flatMap(rpConf[Task]).toEffect
+    val rpConfState = (for {
+      local     <- localPeerNode[Task]
+      bootstrap <- initPeer[Task]
+      conf      <- rpConf[Task](local, bootstrap)
+    } yield conf).toEffect
+
     val logEff: Log[Effect] = Log.eitherTLog(Monad[Task], log)
 
     rpConfState >>= (_.runState { implicit state =>
@@ -89,8 +92,10 @@ class NodeRuntime private[node] (
         metrics                     = diagnostics.effects.metrics[Task]
         metricsEff: Metrics[Effect] = Metrics.eitherT[CommError, Task](Monad[Task], metrics)
 
+        maybeBootstrap <- Resource.liftF(initPeer[Effect])
+
         nodeDiscovery <- effects.nodeDiscovery(id, kademliaPort, conf.server.defaultTimeout.millis)(
-                          initPeer
+                          maybeBootstrap
                         )(
                           grpcScheduler,
                           effects.peerNodeAsk,
@@ -304,11 +309,11 @@ class NodeRuntime private[node] (
         } *> Task.delay(System.exit(1)).as(Right(()))
     )
 
-  private def rpConf[F[_]: Sync](local: Node) =
+  private def rpConf[F[_]: Sync](local: Node, maybeBootstrap: Option[Node]) =
     Ref.of(
       RPConf(
         local,
-        initPeer,
+        maybeBootstrap,
         conf.server.defaultTimeout.millis,
         ClearConnectionsConf(
           conf.server.maxNumOfConnections,
@@ -327,6 +332,19 @@ class NodeRuntime private[node] (
         conf.server.noUpnp,
         id
       )
+
+  private def initPeer[F[_]: MonadThrowable]: F[Option[Node]] =
+    conf.server.bootstrap match {
+      case None if !conf.casper.standalone =>
+        MonadThrowable[F].raiseError(
+          new java.lang.IllegalStateException(
+            "Not in standalone mode but there's no bootstrap configured!"
+          )
+        )
+      case other =>
+        other.pure[F]
+    }
+
 }
 
 object NodeRuntime {

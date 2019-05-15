@@ -184,7 +184,7 @@ package object gossiping {
       }
 
   /** Only meant to be called once the genesis has been approved and the Casper instance created. */
-  private def unsafeGetCasper[F[_]: Sync: MultiParentCasperRef]: F[MultiParentCasper[F]] =
+  private def unsafeGetCasper[F[_]: MonadThrowable: MultiParentCasperRef]: F[MultiParentCasper[F]] =
     MultiParentCasperRef[F].get.flatMap {
       MonadThrowable[F].fromOption(_, Unavailable("Casper is not yet available."))
     }
@@ -447,16 +447,19 @@ package object gossiping {
                                 )
                    } yield approver
                  } else {
-                   GenesisApproverImpl.fromBootstrap(
-                     backend,
-                     NodeDiscovery[F],
-                     connectToGossip,
-                     bootstrap = conf.server.bootstrap,
-                     // TODO: Move to config.
-                     relayFactor = 10,
-                     pollInterval = 30.seconds,
-                     downloadManager = downloadManager
-                   )
+                   for {
+                     bootstrap <- unsafeGetBootstrap[F](conf)
+                     approver <- GenesisApproverImpl.fromBootstrap(
+                                  backend,
+                                  NodeDiscovery[F],
+                                  connectToGossip,
+                                  bootstrap = bootstrap,
+                                  // TODO: Move to config.
+                                  relayFactor = 10,
+                                  pollInterval = 30.seconds,
+                                  downloadManager = downloadManager
+                                )
+                   } yield approver
                  }
     } yield approver
 
@@ -472,14 +475,14 @@ package object gossiping {
                        new SynchronizerImpl.Backend[F] {
                          override def tips: F[List[ByteString]] =
                            for {
-                             casper    <- unsafeGetCasper
+                             casper    <- unsafeGetCasper[F]
                              dag       <- casper.blockDag
                              tipHashes <- casper.estimator(dag)
                            } yield tipHashes.toList
 
                          override def justifications: F[List[ByteString]] =
                            for {
-                             casper <- unsafeGetCasper
+                             casper <- unsafeGetCasper[F]
                              dag    <- casper.blockDag
                              latest <- dag.latestMessageHashes
                            } yield latest.values.toList
@@ -547,7 +550,7 @@ package object gossiping {
                         // so let Casper know about the DAG dependencies up front.
                         for {
                           _      <- Log[F].debug(s"Feeding ${dag.size} pending blocks to Casper.")
-                          casper <- unsafeGetCasper.map(_.asInstanceOf[MultiParentCasperImpl[F]])
+                          casper <- unsafeGetCasper[F].map(_.asInstanceOf[MultiParentCasperImpl[F]])
                           _ <- dag.traverse { summary =>
                                 val partialBlock = consensus
                                   .Block()
@@ -566,7 +569,7 @@ package object gossiping {
 
                       override def listTips =
                         for {
-                          casper    <- unsafeGetCasper
+                          casper    <- unsafeGetCasper[F]
                           dag       <- casper.blockDag
                           tipHashes <- casper.estimator(dag)
                           tips      <- tipHashes.toList.traverse(backend.getBlockSummary(_))
@@ -623,14 +626,13 @@ package object gossiping {
       gossipServiceServer: GossipServiceServer[F],
       connectToGossip: GossipService.Connector[F]
   ): Resource[F, Unit] =
-    if (conf.casper.standalone) Resource.pure(())
-    else {
+    conf.server.bootstrap map { bootstrap =>
       for {
         initialSync <- Resource.pure[F, InitialSynchronization[F]] {
                         new InitialSynchronizationImpl(
                           NodeDiscovery[F],
                           gossipServiceServer,
-                          InitialSynchronizationImpl.Bootstrap(conf.server.bootstrap),
+                          InitialSynchronizationImpl.Bootstrap(bootstrap),
                           // TODO: Move to config
                           selectNodes = (b, ns) => b +: ns.take(5),
                           minSuccessful = 1,
@@ -642,7 +644,7 @@ package object gossiping {
                       }
         _ <- makeFiberResource(initialSync.sync())
       } yield ()
-    }
+    } getOrElse Resource.pure(())
 
   /** The TransportLayer setup prints the number of peers now and then which integration tests
     * may depend upon. We aren't using the `Connect` functionality so have to do it another way. */
@@ -680,4 +682,14 @@ package object gossiping {
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
+
+  // Should only be called in non-stand alone mode.
+  private def unsafeGetBootstrap[F[_]: MonadThrowable](conf: Configuration): Resource[F, Node] =
+    Resource.liftF(
+      MonadThrowable[F]
+        .fromOption(
+          conf.server.bootstrap,
+          new java.lang.IllegalStateException("Bootstrap node hasn't been configured.")
+        )
+    )
 }
