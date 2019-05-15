@@ -33,28 +33,46 @@ impl LogMessage {
         message_template: String,
         properties: BTreeMap<String, String>,
     ) -> LogMessage {
-        let props = MessageProperties::new(properties);
+        let message_version = SemVer::V1_0_0;
+        let process_id = log_settings.process_id;
+        let process_name = log_settings.process_name;
+        let host_name = log_settings.host_name;
+        let timestamp = TimestampRfc3999::default();
+        let log_level_filter = log_settings.log_level_filter;
+        let level = log_level;
+        let priority = LogPriority::new(log_level);
+        let properties = MessageProperties::new(properties);
+        let description = properties.get_formatted_message(&message_template);
 
-        let desc = props.get_formatted_message(&message_template);
-
-        let inner = LogMessageData {
-            message_version: SemVer::V1_0_0,
-            process_id: log_settings.process_id,
-            process_name: log_settings.process_name,
-            host_name: log_settings.host_name,
-            timestamp: TimestampRfc3999::default(),
-            log_level_filter: log_settings.log_level_filter,
-            level: log_level,
-            priority: LogPriority::new(log_level),
-            properties: props,
-            description: desc,
+        let hash = {
+            let mut state = DefaultHasher::new();
+            message_version.hash(&mut state);
+            process_id.hash(&mut state);
+            process_name.hash(&mut state);
+            host_name.hash(&mut state);
+            timestamp.hash(&mut state);
+            level.hash(&mut state);
+            priority.hash(&mut state);
+            description.hash(&mut state);
+            properties.hash(&mut state);
+            state.finish()
         };
 
-        let mut state = DefaultHasher::new();
-        inner.hash(&mut state);
-        let hash = state.finish();
+        let message_id = MessageId::new(hash.to_string());
 
-        inner.transform(MessageId::new(hash.to_string()))
+        LogMessage {
+            message_id,
+            message_version,
+            process_id,
+            process_name,
+            host_name,
+            timestamp,
+            log_level_filter,
+            level,
+            priority,
+            properties,
+            description,
+        }
     }
 
     pub fn new_msg(log_settings: LogSettings, log_level: LogLevel, message: String) -> LogMessage {
@@ -177,52 +195,6 @@ impl MessageProperties {
             }
         }
         buf
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct LogMessageData {
-    pub message_version: SemVer,
-    pub process_id: ProcessId,
-    pub process_name: ProcessName,
-    pub host_name: HostName,
-    pub timestamp: TimestampRfc3999,
-    pub log_level_filter: LogLevelFilter,
-    pub level: LogLevel,
-    pub priority: LogPriority,
-    pub description: String,
-    pub properties: MessageProperties,
-}
-
-impl LogMessageData {
-    fn transform(self, message_id: MessageId) -> LogMessage {
-        LogMessage {
-            message_id,
-            message_version: self.message_version,
-            process_id: self.process_id,
-            process_name: self.process_name,
-            host_name: self.host_name,
-            timestamp: self.timestamp,
-            log_level_filter: self.log_level_filter,
-            level: self.level,
-            priority: self.priority,
-            description: self.description,
-            properties: self.properties,
-        }
-    }
-}
-
-impl Hash for LogMessageData {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.message_version.hash(state);
-        self.process_id.hash(state);
-        self.process_name.hash(state);
-        self.host_name.hash(state);
-        self.timestamp.hash(state);
-        self.level.hash(state);
-        self.priority.hash(state);
-        self.description.hash(state);
-        self.properties.hash(state);
     }
 }
 
