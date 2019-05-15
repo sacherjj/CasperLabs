@@ -82,7 +82,7 @@ pipeline:
       - cd execution-engine/
       - ~/.cargo/bin/cargo test
 
-    run-unit-tests:
+  run-unit-tests:
     <<: *sbtenv
     commands:
       - sbt test
