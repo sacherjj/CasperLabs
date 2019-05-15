@@ -16,6 +16,7 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b512Random
 import io.casperlabs.graphz._
@@ -26,6 +27,16 @@ object BlockAPI {
 
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "block-api")
+
+  private def unsafeWithCasper[F[_]: MonadThrowable: Log: MultiParentCasperRef, A](
+      msg: String
+  )(f: MultiParentCasper[F] => F[A]): F[A] =
+    MultiParentCasperRef
+      .withCasper[F, A](
+        f,
+        msg,
+        MonadThrowable[F].raiseError(Unavailable("Casper instance not available yet."))
+      )
 
   /** Export base 0 values so we have non-empty series for charts. */
   def establishMetrics[F[_]: Monad: Metrics] =
@@ -60,6 +71,24 @@ object BlockAPI {
         errorMessage,
         DeployServiceResponse(success = false, s"Error: $errorMessage").pure[F]
       )
+  }
+
+  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: Metrics](
+      d: consensus.Deploy
+  ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
+    for {
+      _ <- Metrics[F].incrementCounter("deploys")
+      o = LegacyConversions.fromDeploy(d)
+      r <- MultiParentCasper[F].deploy(o)
+      _ <- r match {
+            case Right(_) =>
+              Metrics[F].incrementCounter("deploys-success") *> ().pure[F]
+            case Left(ex: IllegalArgumentException) =>
+              MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
+            case Left(ex) =>
+              MonadThrowable[F].raiseError(ex)
+          }
+    } yield ()
   }
 
   def createBlock[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics](
