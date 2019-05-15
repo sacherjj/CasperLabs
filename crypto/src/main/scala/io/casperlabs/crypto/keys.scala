@@ -34,7 +34,7 @@ object Keys {
 
   def Signature(a: Array[Byte]): Signature = a.asInstanceOf[Signature]
 
-  sealed trait ParseError extends Product with Serializable { self =>
+  sealed trait ParseError { self =>
     def errorMessage: String
     def asParseError: ParseError = self
   }
