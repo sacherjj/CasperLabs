@@ -10,7 +10,6 @@ final case class Deploy(
     port: Int,
     host: String,
     from: String,
-    gasLimit: Long,
     nonce: Long,
     sessionCode: File,
     paymentCode: File
@@ -53,7 +52,6 @@ object Configuration {
           options.port(),
           options.host(),
           options.deploy.from(),
-          options.deploy.gasLimit(),
           options.deploy.nonce(),
           options.deploy.session(),
           options.deploy.payment()

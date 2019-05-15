@@ -40,7 +40,7 @@ object Main {
     configuration match {
       case ShowBlock(_, _, hash)   => DeployRuntime.showBlock(hash)
       case ShowBlocks(_, _, depth) => DeployRuntime.showBlocks(depth)
-      case Deploy(_, _, from, _, nonce, sessionCode, paymentCode) =>
+      case Deploy(_, _, from, nonce, sessionCode, paymentCode) =>
         DeployRuntime.deployFileProgram(from, nonce, sessionCode, paymentCode)
       case _: Propose =>
         DeployRuntime.propose()
