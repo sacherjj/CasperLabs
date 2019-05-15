@@ -41,6 +41,7 @@ pub enum Key {
 }
 
 use Key::*;
+
 impl Key {
     pub fn to_u_ptr<T>(self) -> Option<UPointer<T>> {
         if let URef(id, access_right) = self {
