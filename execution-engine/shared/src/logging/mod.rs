@@ -148,7 +148,7 @@ mod tests {
     use super::*;
     use crate::logging::log_message::LogMessage;
     use crate::logging::log_settings::LogLevelFilter;
-    use std::time::SystemTime;
+    use std::time::{Duration, SystemTime};
 
     const PROC_NAME: &str = "ee-shared-lib-tests";
 
@@ -211,8 +211,6 @@ mod tests {
             "entry_point".to_string(),
             "should_log_with_props_and_template".to_string(),
         );
-
-        use std::time::Duration;
 
         let start = SystemTime::now();
 

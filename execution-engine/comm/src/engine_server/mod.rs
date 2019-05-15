@@ -15,6 +15,10 @@ use storage::history::*;
 use storage::transform::Transform;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
+use shared::logging;
+use shared::logging::log_level;
+use LOG_SETTINGS;
+
 pub mod ipc;
 pub mod ipc_grpc;
 pub mod mappings;
@@ -38,6 +42,7 @@ where
         let state_hash: Blake2bHash = p.get_state_hash().try_into().unwrap();
         match p.get_base_key().try_into() {
             Err(ParsingError(err_msg)) => {
+                log_error(&err_msg);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(err_msg);
                 grpc::SingleResponse::completed(result)
@@ -48,12 +53,14 @@ where
                     Err(storage_error) => {
                         let mut result = ipc::QueryResponse::new();
                         let error = format!("Error during checkout out Trie: {:?}", storage_error);
+                        log_error(&error);
                         result.set_failure(error);
                         grpc::SingleResponse::completed(result)
                     }
                     Ok(None) => {
                         let mut result = ipc::QueryResponse::new();
                         let error = format!("Root not found: {:?}", state_hash);
+                        log_warning(&error);
                         result.set_failure(error);
                         grpc::SingleResponse::completed(result)
                     }
@@ -62,6 +69,7 @@ where
                             Err(err) => {
                                 let mut result = ipc::QueryResponse::new();
                                 let error = format!("{:?}", err);
+                                log_error(&error);
                                 result.set_failure(error);
                                 result
                             }
@@ -69,6 +77,7 @@ where
                             Ok(QueryResult::ValueNotFound(full_path)) => {
                                 let mut result = ipc::QueryResponse::new();
                                 let error = format!("Value not found: {:?}", full_path);
+                                log_warning(&error);
                                 result.set_failure(error);
                                 result
                             }
@@ -114,6 +123,7 @@ where
                 grpc::SingleResponse::completed(exec_response)
             }
             Err(error) => {
+                log_error("deploy results error: RootNotFound");
                 let mut exec_response = ipc::ExecResponse::new();
                 exec_response.set_missing_parent(error);
                 grpc::SingleResponse::completed(exec_response)
@@ -132,6 +142,7 @@ where
             p.get_effects().iter().map(TryInto::try_into).collect();
         match effects_result {
             Err(ParsingError(error_message)) => {
+                log_error(&error_message);
                 let mut res = ipc::CommitResponse::new();
                 let mut err = ipc::PostEffectsError::new();
                 err.set_message(error_message);
@@ -167,8 +178,10 @@ where
                 grpc::SingleResponse::completed(result)
             }
             Err(cause) => {
+                let cause_msg = cause.to_string();
+                log_error(&cause_msg);
                 let mut result = ValidateResponse::new();
-                result.set_failure(cause.to_string());
+                result.set_failure(cause_msg);
                 grpc::SingleResponse::completed(result)
             }
         }
@@ -235,7 +248,7 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
 ) -> grpc::ServerBuilder {
     let socket_path = std::path::Path::new(socket);
     if socket_path.exists() {
-        std::fs::remove_file(socket_path).expect("Remove old socket file.");
+        std::fs::remove_file(socket_path).expect("failed to remove old socket file");
     }
 
     let mut server = grpc::ServerBuilder::new_plain();
@@ -243,4 +256,12 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     server.http.set_cpu_pool_threads(1);
     server.add_service(ipc_grpc::ExecutionEngineServiceServer::new_service_def(e));
     server
+}
+
+fn log_error(message: &str) {
+    logging::log(&*LOG_SETTINGS, log_level::LogLevel::Error, message);
+}
+
+fn log_warning(message: &str) {
+    logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, message);
 }

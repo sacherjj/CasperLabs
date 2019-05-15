@@ -13,4 +13,5 @@ extern crate slog_term;
 pub mod logging;
 pub mod newtypes;
 pub mod semver;
+pub mod socket;
 pub mod test_utils;
