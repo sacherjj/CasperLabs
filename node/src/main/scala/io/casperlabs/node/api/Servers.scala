@@ -71,7 +71,7 @@ object Servers {
               // TODO: Phase DeployService out in favor of CasperService.
               (_: Scheduler) =>
                 for {
-                  inst <- DeployGrpcService.instance(blockApiLock)
+                  inst <- GrpcDeployService.instance(blockApiLock)
                 } yield {
                   CasperMessageGrpcMonix.bindService(inst, grpcExecutor)
                 },
