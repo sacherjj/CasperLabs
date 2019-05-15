@@ -12,7 +12,7 @@ Add link to corresponding JIRA issue.
 
 ### If you are not a member of the core development team, please confirm:
 - [ ] You signed the commit. Merging requires a signature. Please see the [Signing Commits](https://casperlabs.atlassian.net/wiki/spaces/EN/pages/4390963/Signing+Commits) for instructions.
-- [ ] Your GitHub account is also an account with [Drone CI](http://3.16.200.31/). Unit tests will not run on your PR unless you have an account with Drone. Merge requires passed unit tests.
+- [ ] Your GitHub account is also an account with [Drone CI](http://drone.casperlabs.io/). Unit tests will not run on your PR unless you have an account with Drone. Merge requires passed unit tests.
 
 ### Notes
 Optional. Add any notes on caveats, approaches you tried that didn't work, or anything else.
