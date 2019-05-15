@@ -12,7 +12,7 @@ import io.casperlabs.casper.protocol.{DeployData, _}
 import io.casperlabs.casper.util.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.ski.id
-import io.casperlabs.crypto.Keys.{PrivateKey, PublicKeyA}
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
@@ -373,7 +373,7 @@ object ProtoUtil {
   def signBlock[F[_]: Applicative](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      pk: PublicKeyA,
+      pk: PublicKey,
       sk: PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
       shardId: String

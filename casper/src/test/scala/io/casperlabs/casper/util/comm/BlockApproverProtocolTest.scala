@@ -11,7 +11,7 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.transport
-import io.casperlabs.crypto.Keys.{PrivateKey, PublicKeyA}
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.execution.Scheduler
@@ -83,7 +83,7 @@ object BlockApproverProtocolTest extends TransportLayerCasperTestNodeFactory {
       requiredSigs: Int,
       wallets: Seq[PreWallet],
       sk: PrivateKey,
-      bonds: Map[PublicKeyA, Long]
+      bonds: Map[PublicKey, Long]
   ): Effect[(BlockApproverProtocol, TransportLayerCasperTestNode[Effect])] = {
 
     val deployTimestamp = 1L

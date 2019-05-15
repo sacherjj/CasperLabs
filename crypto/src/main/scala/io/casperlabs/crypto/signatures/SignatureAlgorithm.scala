@@ -2,7 +2,7 @@ package io.casperlabs.crypto.signatures
 
 import java.io.StringReader
 
-import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey, PublicKeyA, Signature}
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey, Signature}
 import io.casperlabs.crypto.codec.Base64
 import org.bouncycastle.openssl.PEMKeyPair
 
@@ -25,9 +25,9 @@ sealed trait SignatureAlgorithm {
     * @param pub       The public key which did the signing
     * @return Boolean value of verification
     */
-  def verify(data: Array[Byte], signature: Signature, pub: PublicKeyA): Boolean
+  def verify(data: Array[Byte], signature: Signature, pub: PublicKey): Boolean
 
-  def newKeyPair: (PrivateKey, PublicKeyA)
+  def newKeyPair: (PrivateKey, PublicKey)
 
   /**
     * Create a signature.
@@ -41,13 +41,13 @@ sealed trait SignatureAlgorithm {
   /**
     * Computes public key from secret key
     */
-  def tryToPublic(privateKey: PrivateKey): Option[PublicKeyA]
+  def tryToPublic(privateKey: PrivateKey): Option[PublicKey]
 
   def tryParsePrivateKey(str: String): Option[PrivateKey]
 
-  def tryParsePublicKey(str: String): Option[PublicKeyA]
+  def tryParsePublicKey(str: String): Option[PublicKey]
 
-  def areMatchTogether(publicKey: PublicKeyA, privateKey: PrivateKey): Boolean = {
+  def areMatchTogether(publicKey: PublicKey, privateKey: PrivateKey): Boolean = {
     val a = Array.ofDim[Byte](32)
     Random.nextBytes(a)
     val signature = sign(a, privateKey)
@@ -130,7 +130,7 @@ object SignatureAlgorithm {
       *
       * Example base64: `T81Noks9FR3Qj3mBLn/+Az9UG5bgTAc5yWhAQ6WpFn8=`
       */
-    override def tryParsePublicKey(str: String): Option[PublicKeyA] = {
+    override def tryParsePublicKey(str: String): Option[PublicKey] = {
       val KeyLength = 32
 
       /**
@@ -157,7 +157,7 @@ object SignatureAlgorithm {
       } yield PublicKey(parsed)
     }
 
-    override def newKeyPair: (PrivateKey, PublicKeyA) = {
+    override def newKeyPair: (PrivateKey, PublicKey) = {
       val key = new SigningKey()
       val sec = key.toBytes
       val pub = key.getVerifyKey.toBytes
@@ -167,7 +167,7 @@ object SignatureAlgorithm {
     /**
       * Computes public key from secret key
       */
-    override def tryToPublic(sec: PrivateKey): Option[PublicKeyA] =
+    override def tryToPublic(sec: PrivateKey): Option[PublicKey] =
       try {
         val key = new SigningKey(sec)
         Some(PublicKey(key.getVerifyKey.toBytes))
@@ -183,7 +183,7 @@ object SignatureAlgorithm {
       * @param pub       The public key which did the signing
       * @return Boolean value of verification
       */
-    override def verify(data: Array[Byte], signature: Signature, pub: PublicKeyA): Boolean =
+    override def verify(data: Array[Byte], signature: Signature, pub: PublicKey): Boolean =
       try {
         new VerifyKey(pub).verify(data, signature)
       } catch {
@@ -278,7 +278,7 @@ object SignatureAlgorithm {
       *
       * Example base64: `BFK6dV60mW8hUxjhwkNq4bG5OX/6kr6SXS1pi1zH2BQVERpfIw9QELDvK6Vc7pDaUhEM0M+OwVo7AxJyqr5dXOo=`
       */
-    override def tryParsePublicKey(str: String): Option[PublicKeyA] =
+    override def tryParsePublicKey(str: String): Option[PublicKey] =
       try {
         Base64
           .tryDecode(str.trim)
@@ -301,7 +301,7 @@ object SignatureAlgorithm {
           None
       }
 
-    override def newKeyPair: (PrivateKey, PublicKeyA) = {
+    override def newKeyPair: (PrivateKey, PublicKey) = {
       val kpg = KeyPairGenerator.getInstance("ECDSA", provider)
       kpg.initialize(new ECGenParameterSpec(curveName), SecureRandomUtil.secureRandomNonBlocking)
       val kp = kpg.generateKeyPair
@@ -322,7 +322,7 @@ object SignatureAlgorithm {
       * @param pub       The public key which did the signing
       * @return Boolean value of verification
       */
-    def verify(data: Array[Byte], signature: Signature, pub: PublicKeyA): Boolean =
+    def verify(data: Array[Byte], signature: Signature, pub: PublicKey): Boolean =
       NativeSecp256k1.verify(data, signature, pub)
 
     /**
@@ -353,7 +353,7 @@ object SignatureAlgorithm {
       *
       * @param seckey ECDSA Secret key, 32 bytes
       */
-    def tryToPublic(seckey: PrivateKey): Option[PublicKeyA] =
+    def tryToPublic(seckey: PrivateKey): Option[PublicKey] =
       try {
         Some(PublicKey(NativeSecp256k1.computePubkey(seckey)))
       } catch {

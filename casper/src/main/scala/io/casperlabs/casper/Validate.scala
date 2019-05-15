@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyA, PublicKeyBS, Signature}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
@@ -45,7 +45,7 @@ object Validate {
   val DRIFT                                 = 15000 // 15 seconds
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def signatureVerifiers(sigAlgorithm: String): Option[(Data, Signature, PublicKeyA) => Boolean] =
+  def signatureVerifiers(sigAlgorithm: String): Option[(Data, Signature, PublicKey) => Boolean] =
     sigAlgorithm match {
       case SignatureAlgorithm(sa) => Some((data, sig, pub) => sa.verify(data, sig, pub))
       case _                      => None
