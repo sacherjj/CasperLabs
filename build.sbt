@@ -234,6 +234,7 @@ lazy val node = (project in file("node"))
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
+        "google/api",
         "io/casperlabs/node/api",
       )),
     // Generating into /protobuf because of https://github.com/thesamet/sbt-protoc/issues/8
