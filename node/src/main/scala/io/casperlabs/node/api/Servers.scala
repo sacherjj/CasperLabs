@@ -9,6 +9,7 @@ import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
+import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
@@ -61,21 +62,29 @@ object Servers {
       maxMessageSize: Int,
       grpcExecutor: Scheduler
   )(implicit scheduler: Scheduler): Resource[F, Unit] =
-    GrpcServer(
-      port = port,
-      maxMessageSize = Some(maxMessageSize),
-      services = List(
-        (_: Scheduler) =>
-          for {
-            blockApiLock <- Semaphore[F](1)
-            inst         <- DeployGrpcService.instance(blockApiLock)
-          } yield {
-            CasperMessageGrpcMonix.bindService(inst, grpcExecutor)
-          }
-      )
-    ).void <* Resource.liftF(
-      Log[F].info(s"gRPC deployment service started on port ${port}.")
-    )
+    for {
+      blockApiLock <- Resource.liftF(Semaphore[F](1))
+      _ <- GrpcServer(
+            port = port,
+            maxMessageSize = Some(maxMessageSize),
+            services = List(
+              // TODO: Phase DeployService out in favor of CasperService.
+              (_: Scheduler) =>
+                for {
+                  inst <- DeployGrpcService.instance(blockApiLock)
+                } yield {
+                  CasperMessageGrpcMonix.bindService(inst, grpcExecutor)
+                },
+              (_: Scheduler) =>
+                for {
+                  inst <- GrpcCasperService(blockApiLock)
+                } yield {
+                  CasperGrpcMonix.bindService(inst, grpcExecutor)
+                }
+            )
+          )
+      _ <- Resource.liftF(Log[F].info(s"gRPC deployment service started on port ${port}."))
+    } yield ()
 
   def httpServerR(
       port: Int,
