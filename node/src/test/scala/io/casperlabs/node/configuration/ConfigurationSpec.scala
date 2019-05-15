@@ -8,16 +8,15 @@ import cats.syntax.option._
 import cats.syntax.show._
 import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
-import io.casperlabs.comm.discovery.{Node, NodeIdentifier, NodeUtils}
 import io.casperlabs.comm.discovery.NodeUtils._
+import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.ignore
-import io.casperlabs.node.configuration.MagnoliaArbitrary._
 import io.casperlabs.node.configuration.Utils._
 import io.casperlabs.shared.StoreType
+import org.scalacheck.ScalacheckShapeless._
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import shapeless.<:!<
 
 import scala.concurrent.duration._
 import scala.io.Source
