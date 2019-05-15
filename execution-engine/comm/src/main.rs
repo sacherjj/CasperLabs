@@ -63,8 +63,6 @@ const SERVER_START_EXPECT: &str = "failed to start Execution Engine Server";
 #[allow(dead_code)]
 const SERVER_STOP_MESSAGE: &str = "stopping Execution Engine Server";
 
-static BREAK: atomic::AtomicBool = atomic::AtomicBool::new(false);
-
 static CHECK_ARGS: atomic::AtomicBool = atomic::AtomicBool::new(false);
 
 lazy_static! {
@@ -90,25 +88,26 @@ fn main() {
         socket.remove_file().expect(REMOVING_SOCKET_FILE_EXPECT);
     }
 
-    let server_builder = engine_server::new(socket.as_str(), get_engine_state(matches));
+    let data_dir = get_data_dir(matches);
 
-    let _server = server_builder.build().expect(SERVER_START_EXPECT);
+    let _server = get_grpc_server(&socket, data_dir);
 
-    log_listening_message(socket);
+    log_listening_message(&socket);
 
     // loop indefinitely
     loop {
         std::thread::park();
-        // this is currently unreachable.
-        // TODO: recommend we impl signal capture; SIGINT at the very least.
-        if BREAK.load(atomic::Ordering::SeqCst) {
-            break;
-        }
     }
 
-    log_server_info(SERVER_STOP_MESSAGE);
+    // currently unreachable
+    // TODO: recommend we impl signal capture; SIGINT at the very least.
+    // seems like there are multiple valid / accepted rusty approaches available
+    // https://rust-lang-nursery.github.io/cli-wg/in-depth/signals.html
+
+    //log_server_info(SERVER_STOP_MESSAGE);
 }
 
+/// capture and log panic information.
 fn set_panic_hook() {
     let log_settings_panic = LOG_SETTINGS.clone();
     let hook: Box<dyn Fn(&std::panic::PanicInfo) + 'static + Sync + Send> =
@@ -121,56 +120,12 @@ fn set_panic_hook() {
                     &panic_message,
                 );
             }
+            log_server_info(SERVER_STOP_MESSAGE);
         });
     std::panic::set_hook(hook);
 }
 
-fn get_socket(matches: &ArgMatches) -> socket::Socket {
-    let socket = matches.value_of(ARG_SOCKET).expect(ARG_SOCKET_EXPECT);
-
-    socket::Socket::new(socket.to_owned())
-}
-
-fn get_engine_state(matches: &ArgMatches) -> EngineState<LmdbGlobalState> {
-    let data_dir: PathBuf = {
-        let mut ret = matches.value_of("data-dir").map_or(
-            {
-                let mut dir = home_dir().expect(GET_HOME_DIR_EXPECT);
-                dir.push(DEFAULT_DATA_DIR_RELATIVE);
-                dir
-            },
-            PathBuf::from,
-        );
-        ret.push(GLOBAL_STATE_DIR);
-        fs::create_dir_all(&ret)
-            .unwrap_or_else(|_| panic!("{}: {:?}", CREATE_DATA_DIR_EXPECT, ret));
-        ret
-    };
-
-    let environment = {
-        let ret = LmdbEnvironment::new(&data_dir).expect(LMDB_ENVIRONMENT_EXPECT);
-        Arc::new(ret)
-    };
-
-    let trie_store = {
-        let ret = LmdbTrieStore::new(&environment, None, DatabaseFlags::empty())
-            .expect(LMDB_TRIE_STORE_EXPECT);
-        Arc::new(ret)
-    };
-
-    let global_state = {
-        let init_state = storage::global_state::mocked_account([48u8; 20]);
-        LmdbGlobalState::from_pairs(
-            Arc::clone(&environment),
-            Arc::clone(&trie_store),
-            &init_state,
-        )
-        .expect(LMDB_GLOBAL_STATE_EXPECT)
-    };
-
-    EngineState::new(global_state)
-}
-
+// get command line arguments
 fn get_args() -> ArgMatches<'static> {
     App::new(PROC_NAME)
         .arg(
@@ -198,6 +153,64 @@ fn get_args() -> ArgMatches<'static> {
         .get_matches()
 }
 
+// get value of socket argument
+fn get_socket(matches: &ArgMatches) -> socket::Socket {
+    let socket = matches.value_of(ARG_SOCKET).expect(ARG_SOCKET_EXPECT);
+
+    socket::Socket::new(socket.to_owned())
+}
+
+// get value of data-dir argument
+fn get_data_dir(matches: &ArgMatches) -> PathBuf {
+    let mut buf = matches.value_of(ARG_DATA_DIR).map_or(
+        {
+            let mut dir = home_dir().expect(GET_HOME_DIR_EXPECT);
+            dir.push(DEFAULT_DATA_DIR_RELATIVE);
+            dir
+        },
+        PathBuf::from,
+    );
+    buf.push(GLOBAL_STATE_DIR);
+    fs::create_dir_all(&buf).unwrap_or_else(|_| panic!("{}: {:?}", CREATE_DATA_DIR_EXPECT, buf));
+    buf
+}
+
+// build and return a grpc server
+fn get_grpc_server(socket: &socket::Socket, data_dir: PathBuf) -> grpc::Server {
+    let engine_state = get_engine_state(data_dir);
+
+    engine_server::new(socket.as_str(), engine_state)
+        .build()
+        .expect(SERVER_START_EXPECT)
+}
+
+// init and return engine global state
+fn get_engine_state(data_dir: PathBuf) -> EngineState<LmdbGlobalState> {
+    let environment = {
+        let ret = LmdbEnvironment::new(&data_dir).expect(LMDB_ENVIRONMENT_EXPECT);
+        Arc::new(ret)
+    };
+
+    let trie_store = {
+        let ret = LmdbTrieStore::new(&environment, None, DatabaseFlags::empty())
+            .expect(LMDB_TRIE_STORE_EXPECT);
+        Arc::new(ret)
+    };
+
+    let global_state = {
+        let init_state = storage::global_state::mocked_account([48u8; 20]);
+        LmdbGlobalState::from_pairs(
+            Arc::clone(&environment),
+            Arc::clone(&trie_store),
+            &init_state,
+        )
+        .expect(LMDB_GLOBAL_STATE_EXPECT)
+    };
+
+    EngineState::new(global_state)
+}
+
+// init and return log_settings
 fn get_log_settings() -> log_settings::LogSettings {
     if CHECK_ARGS.load(atomic::Ordering::SeqCst) {
         let matches: &clap::ArgMatches = &*ARG_MATCHES;
@@ -213,6 +226,7 @@ fn get_log_settings() -> log_settings::LogSettings {
     )
 }
 
+// get value of loglevel argument
 fn get_log_level_filter(input: Option<&str>) -> LogLevelFilter {
     let log_level = match input {
         Some(input) => match input {
@@ -228,7 +242,8 @@ fn get_log_level_filter(input: Option<&str>) -> LogLevelFilter {
     log_settings::LogLevelFilter::new(log_level)
 }
 
-fn log_listening_message(socket: shared::socket::Socket) {
+// log listening on socket message
+fn log_listening_message(socket: &socket::Socket) {
     let mut properties: BTreeMap<String, String> = BTreeMap::new();
 
     properties.insert("listener".to_string(), PROC_NAME.to_owned());
@@ -242,6 +257,7 @@ fn log_listening_message(socket: shared::socket::Socket) {
     );
 }
 
+// log server status info messages
 fn log_server_info(message: &str) {
     logging::log(&*LOG_SETTINGS, log_level::LogLevel::Info, message);
 }
