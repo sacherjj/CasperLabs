@@ -23,24 +23,6 @@ pub fn log(log_settings: &LogSettings, log_level: LogLevel, value: &str) {
     slog_log(log_level, log_settings.log_level_filter, log_output_factory);
 }
 
-// log with anything Into<LogMessage>
-pub fn log_graph<T>(value: T)
-where
-    T: Into<LogMessage>,
-{
-    let log_message = value.into();
-
-    let log_settings = log_settings::LogSettings::from(&log_message);
-
-    let log_output_factory = |_: &slog::Record| get_msg(log_message.to_owned(), false);
-
-    slog_log(
-        log_message.level,
-        log_settings.log_level_filter,
-        log_output_factory,
-    );
-}
-
 // log with message format and properties
 pub fn log_props(
     log_settings: &LogSettings,
@@ -146,7 +128,6 @@ fn slog_log<F>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logging::log_message::LogMessage;
     use crate::logging::log_settings::LogLevelFilter;
     use std::time::{Duration, SystemTime};
 
@@ -155,29 +136,20 @@ mod tests {
     //TODO: require an integration test or a custom slog drain to capture log output
     #[test]
     fn should_log_when_level_at_or_above_filter() {
-        let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Error));
+        let log_settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Error));
 
-        let log_message = LogMessage::new_msg(
-            settings.to_owned(),
-            LogLevel::Error,
-            "this is a logmessage".to_owned(),
-        );
-
-        log_graph(log_message);
+        log(&log_settings, LogLevel::Error, "this is a logmessage");
     }
 
     #[test]
     fn should_not_log_when_level_below_filter() {
-        let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Fatal));
+        let log_settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Fatal));
 
-        let log_message = LogMessage::new_msg(
-            settings.to_owned(),
+        log(
+            &log_settings,
             LogLevel::Error,
-            "this should not log as the filter is set to Fatal and this message is Error"
-                .to_owned(),
+            "this should not log as the filter is set to Fatal and this message is Error",
         );
-
-        log_graph(log_message);
     }
 
     #[test]
@@ -195,13 +167,6 @@ mod tests {
         let x = property_logger_test_helper();
 
         log_props(&x.0, x.1, x.2, x.3);
-    }
-
-    #[test]
-    fn should_log_from_tuple() {
-        let x = property_logger_test_helper();
-
-        log_graph(x);
     }
 
     fn property_logger_test_helper() -> (LogSettings, LogLevel, String, BTreeMap<String, String>) {

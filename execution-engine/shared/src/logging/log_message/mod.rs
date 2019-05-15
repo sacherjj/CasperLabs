@@ -97,12 +97,6 @@ impl fmt::Display for LogMessage {
     }
 }
 
-impl From<(LogSettings, LogLevel, String, BTreeMap<String, String>)> for LogMessage {
-    fn from(t: (LogSettings, LogLevel, String, BTreeMap<String, String>)) -> LogMessage {
-        LogMessage::new_props(t.0, t.1, t.2, t.3)
-    }
-}
-
 /// newtype for Rfc3999 formatted timestamp
 #[derive(Clone, Debug, Hash, Serialize)]
 pub struct TimestampRfc3999(String);
