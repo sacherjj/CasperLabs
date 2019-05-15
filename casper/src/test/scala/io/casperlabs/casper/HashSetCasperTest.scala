@@ -13,7 +13,7 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import io.casperlabs.crypto.Keys.PublicKeyA
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.{Blake2b256, Keccak256}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.{Ed25519, Secp256k1}
@@ -1149,15 +1149,15 @@ object HashSetCasperTest {
     MultiParentCasper[Effect].storageContents(postStateHash)
   }
 
-  def createBonds(validators: Seq[PublicKeyA]): Map[PublicKeyA, Long] =
+  def createBonds(validators: Seq[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
-  def createGenesis(bonds: Map[PublicKeyA, Long]): BlockMsgWithTransform =
+  def createGenesis(bonds: Map[PublicKey, Long]): BlockMsgWithTransform =
     buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
 
   def buildGenesis(
       wallets: Seq[PreWallet],
-      bonds: Map[PublicKeyA, Long],
+      bonds: Map[PublicKey, Long],
       minimumBond: Long,
       maximumBond: Long,
       faucetCode: String => String,

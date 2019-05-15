@@ -18,7 +18,7 @@ import io.casperlabs.catscontrib.effect.implicits._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
-import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey, PublicKeyA}
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.ipc.TransformEntry
@@ -240,7 +240,7 @@ object HashSetCasperTestNode {
 
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
   def simpleEEApi[F[_]: Defer: Applicative](
-      initialBonds: Map[PublicKeyA, Long]
+      initialBonds: Map[PublicKey, Long]
   ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
       import ipc._
@@ -298,7 +298,7 @@ object HashSetCasperTestNode {
         )
       override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
         bonds.pure[F]
-      override def setBonds(newBonds: Map[PublicKeyA, Long]): F[Unit] =
+      override def setBonds(newBonds: Map[PublicKey, Long]): F[Unit] =
         Defer[F].defer(Applicative[F].unit.map { _ =>
           bonds = newBonds.map {
             case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)

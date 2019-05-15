@@ -11,7 +11,7 @@ import io.casperlabs.casper.{HashSetCasperTest, LastApprovedBlock}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.rp.Connect.Connections
-import io.casperlabs.crypto.Keys.{PrivateKey, PublicKeyA}
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances._
@@ -296,7 +296,7 @@ object ApproveBlockProtocolTest extends TransportLayerCasperTestNodeFactory {
   def approval(
       c: ApprovedBlockCandidate,
       validatorSk: PrivateKey,
-      validatorPk: PublicKeyA
+      validatorPk: PublicKey
   ): BlockApproval = {
     val sigData = Blake2b256.hash(c.toByteArray)
     val sig     = Ed25519.sign(sigData, validatorSk)

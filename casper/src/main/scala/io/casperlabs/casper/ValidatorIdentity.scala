@@ -16,7 +16,7 @@ import scala.io.Source
 import scala.language.higherKinds
 
 final case class ValidatorIdentity(
-    publicKey: Keys.PublicKeyA,
+    publicKey: Keys.PublicKey,
     privateKey: Keys.PrivateKey,
     signatureAlgorithm: SignatureAlgorithm
 ) {

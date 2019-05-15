@@ -14,7 +14,7 @@ import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, u
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, Sorting}
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyA, PublicKeyBS}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.{Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -96,7 +96,7 @@ object Genesis {
     } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
 
   def withoutContracts(
-      bonds: Map[PublicKeyA, Long],
+      bonds: Map[PublicKey, Long],
       version: Long,
       timestamp: Long,
       shardId: String
@@ -230,7 +230,7 @@ object Genesis {
       genesisPath: Path,
       bonds: Path,
       numValidators: Int
-  ): F[Map[PublicKeyA, Long]] =
+  ): F[Map[PublicKey, Long]] =
     for {
       bondsFile <- toFile[F](bonds)
       bonds <- bondsFile match {
@@ -251,14 +251,16 @@ object Genesis {
                     .flatMap {
                       case Success(bonds) =>
                         bonds.pure[F]
-                      case Failure(_) =>
+                      case Failure(e) =>
+                        println(e)
                         Log[F].warn(s"Bonds file ${file.getPath} cannot be parsed.") *> Map
-                          .empty[PublicKeyA, Long]
+                          .empty[PublicKey, Long]
                           .pure[F]
                     }
                 case None =>
+                  println("EMPTY")
                   Log[F].warn(s"Specified bonds file $bondsFile does not exist.") *> Map
-                    .empty[PublicKeyA, Long]
+                    .empty[PublicKey, Long]
                     .pure[F]
               }
     } yield bonds

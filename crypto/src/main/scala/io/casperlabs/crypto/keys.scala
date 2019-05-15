@@ -10,19 +10,19 @@ object Keys {
   /**
     * Encodes Array[Byte]
     */
-  type PublicKeyA = Array[Byte] @@ PublicKeyTag
+  type PublicKey = Array[Byte] @@ PublicKeyTag
 
   /**
     * Encodes ByteString
     */
   type PublicKeyBS = ByteString @@ PublicKeyTag
 
-  def PublicKey(a: Array[Byte]): PublicKeyA = a.asInstanceOf[PublicKeyA]
+  def PublicKey(a: Array[Byte]): PublicKey = a.asInstanceOf[PublicKey]
 
   def PublicKey(a: ByteString): PublicKeyBS = a.asInstanceOf[PublicKeyBS]
 
-  implicit def convertTypeclasses[F[_]](implicit Typeclass: F[Array[Byte]]): F[PublicKeyA] =
-    Typeclass.asInstanceOf[F[PublicKeyA]]
+  implicit def convertTypeclasses[F[_]](implicit Typeclass: F[Array[Byte]]): F[PublicKey] =
+    Typeclass.asInstanceOf[F[PublicKey]]
 
   sealed trait PrivateKeyTag
   type PrivateKey = Array[Byte] @@ PrivateKeyTag
@@ -59,7 +59,7 @@ object Keys {
     }
   }
 
-  type ParseResult = (PrivateKey, PublicKeyA, SignatureAlgorithm)
+  type ParseResult = (PrivateKey, PublicKey, SignatureAlgorithm)
 
   def parse(
       signatureAlgorithm: String,
