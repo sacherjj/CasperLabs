@@ -67,6 +67,6 @@ object ErrorInterceptor {
   def default(implicit log: Log[Id]) = apply {
     // Don't match anything, let them be turned into internal errors,
     // unless they are already StatusRuntimeExceptions.
-    case _ if false => Status.Code.UNKNOWN
+    PartialFunction.empty
   }
 }
