@@ -123,7 +123,10 @@ object DeployRuntime {
                 consensus.Deploy
                   .Header()
                   .withTimestamp(System.currentTimeMillis)
-                  .withAccountPublicKey(ByteString.copyFromUtf8(from)) //TODO: allow user to specify their public key
+                  // TODO: allow user to specify their public key.
+                  // NOTE: For now using this field to carry over the account address,
+                  // which has been removed from Deploy.
+                  .withAccountPublicKey(ByteString.copyFromUtf8(from))
                   .withNonce(nonce)
               )
               .withBody(
