@@ -16,7 +16,7 @@ use execution_engine::execution::WasmiExecutor;
 use shared::newtypes::Blake2bHash;
 use storage::global_state::in_memory::InMemoryGlobalState;
 use storage::history::CommitResult;
-use wasm_prep::WasmiPreprocessor;
+use wasm_prep::{wasm_costs::WasmCosts, WasmiPreprocessor};
 
 #[derive(Debug)]
 struct Task {
@@ -102,7 +102,13 @@ fn main() {
     let engine_state = EngineState::new(global_state);
 
     let wasmi_executor = WasmiExecutor;
-    let wasmi_preprocessor: WasmiPreprocessor = Default::default();
+    let wasm_costs = WasmCosts::from_version(protocol_version).unwrap_or_else(|| {
+        panic!(
+            "Wasm cost table defined for protocol version: {}",
+            protocol_version
+        )
+    });
+    let wasmi_preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
 
     for wasm_bytes in wasm_files.iter() {
         println!("Pre state hash: {:?}", state_hash);

@@ -24,24 +24,21 @@ pub struct WasmCosts {
 }
 
 impl WasmCosts {
-    pub fn new() -> WasmCosts {
-        Default::default()
-    }
-}
-
-impl Default for WasmCosts {
-    fn default() -> Self {
-        WasmCosts {
-            regular: 1,
-            div: 16,
-            mul: 4,
-            mem: 2,
-            initial_mem: 4096,
-            grow_mem: 8192,
-            memcpy: 1,
-            max_stack_height: 64 * 1024,
-            opcodes_mul: 3,
-            opcodes_div: 8,
+    pub fn from_version(protocol_version: u64) -> Option<WasmCosts> {
+        match protocol_version {
+            1 => Some(WasmCosts {
+                regular: 1,
+                div: 16,
+                mul: 4,
+                mem: 2,
+                initial_mem: 4096,
+                grow_mem: 8192,
+                memcpy: 1,
+                max_stack_height: 64 * 1024,
+                opcodes_mul: 3,
+                opcodes_div: 8,
+            }),
+            _ => None,
         }
     }
 }
