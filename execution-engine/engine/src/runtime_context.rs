@@ -356,10 +356,7 @@ mod tests {
     use storage::transform::Transform;
     use trackingcopy::TrackingCopy;
 
-    fn mock_tc(
-        init_key: Key,
-        init_account: &value::Account,
-    ) -> TrackingCopy<InMemoryGlobalState> {
+    fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {
         let mut hist = InMemoryGlobalState::empty().unwrap();
         let root_hash = hist.root_hash;
         let transform = Transform::Write(value::Value::Account(init_account.clone()));

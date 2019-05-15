@@ -118,11 +118,7 @@ where
     R::Error: Into<Error>,
 {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        memory: MemoryRef,
-        module: Module,
-        context: RuntimeContext<'a, R>,
-    ) -> Self {
+    pub fn new(memory: MemoryRef, module: Module, context: RuntimeContext<'a, R>) -> Self {
         Runtime {
             memory,
             module,
