@@ -237,7 +237,7 @@ lazy val node = (project in file("node"))
         "google/api",
         "io/casperlabs/node/api",
       )),
-    // Generating into /protobuf because of https://github.com/thesamet/sbt-protoc/issues/8
+    // Generating into /protobuf because of a clash with sbt-buildinfo: https://github.com/thesamet/sbt-protoc/issues/8
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf",
       grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
@@ -479,7 +479,19 @@ lazy val client = (project in file("client"))
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
     ),
-    rpmAutoreq := "no"
+    rpmAutoreq := "no",
+    // Generate client stubs for the node API.
+    PB.protoSources in Compile := Seq(protobufDirectory),
+    includeFilter in PB.generate := new SimpleFileFilter(
+      protobufSubDirectoryFilter(
+        "google/api",
+        "io/casperlabs/node/api",
+      )),
+    // Generating into /protobuf because of a clash with sbt-buildinfo: https://github.com/thesamet/sbt-protoc/issues/8
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
+    )
   )
   .dependsOn(crypto, shared, models)
 

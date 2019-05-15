@@ -8,6 +8,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus
 import io.casperlabs.client.configuration.Streaming
 
 import scala.concurrent.duration._
@@ -66,7 +67,6 @@ object DeployRuntime {
               sleep >>
                 subscribe(out, streaming, format, index, prevDag)
             } else {
-              val f = format.name().toLowerCase
               val filename = streaming match {
                 case Streaming.Single => out
                 case Streaming.Multiple =>
@@ -102,7 +102,6 @@ object DeployRuntime {
 
   def deployFileProgram[F[_]: Sync: DeployService](
       from: String,
-      gasLimit: Long,
       nonce: Long,
       sessionCode: File,
       paymentCode: File
@@ -118,14 +117,21 @@ object DeployRuntime {
           readFile(paymentCode)
         ) {
           case (session, payment) =>
-            //TODO: allow user to specify their public key
-            DeployData()
-              .withTimestamp(System.currentTimeMillis())
-              .withSession(DeployCode().withCode(session))
-              .withPayment(DeployCode().withCode(payment))
-              .withAddress(ByteString.copyFromUtf8(from))
-              .withGasLimit(gasLimit)
-              .withNonce(nonce)
+            consensus
+              .Deploy()
+              .withHeader(
+                consensus.Deploy
+                  .Header()
+                  .withTimestamp(System.currentTimeMillis)
+                  .withAccountPublicKey(ByteString.copyFromUtf8(from)) //TODO: allow user to specify their public key
+                  .withNonce(nonce)
+              )
+              .withBody(
+                consensus.Deploy
+                  .Body()
+                  .withSession(consensus.Deploy.Code().withCode(session))
+                  .withPayment(consensus.Deploy.Code().withCode(payment))
+              )
         }
         .flatMap(DeployService[F].deploy)
         .handleError(
