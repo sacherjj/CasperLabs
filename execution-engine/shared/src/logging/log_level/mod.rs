@@ -14,11 +14,11 @@
 use std::cmp::{Ord, Ordering};
 use std::fmt;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// LogLevels to be used in CasperLabs EE logic
 #[repr(u8)] // https://doc.rust-lang.org/1.6.0/nomicon/other-reprs.html
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, Serialize)]
+#[derive(Copy, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum LogLevel {
     /// emergency, alert, critical
     Fatal = 0,
@@ -39,6 +39,10 @@ impl LogLevel {
 
     pub fn value(self) -> u8 {
         self as u8
+    }
+
+    pub fn to_uppercase(self) -> String {
+        (format!("{:?}", self)).to_uppercase()
     }
 }
 
@@ -106,21 +110,21 @@ impl PartialOrd for LogLevel {
     }
 }
 
-impl Into<slog::Level> for LogLevel {
-    fn into(self) -> slog::Level {
-        match self {
-            LogLevel::Fatal => slog::Level::Critical,
-            LogLevel::Error => slog::Level::Error,
-            LogLevel::Warning => slog::Level::Warning,
-            LogLevel::Info => slog::Level::Info,
-            LogLevel::Debug => slog::Level::Debug,
-        }
-    }
-}
-
 impl fmt::Display for LogLevel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_string())
+    }
+}
+
+impl Into<log::Level> for LogLevel {
+    fn into(self) -> log::Level {
+        match self {
+            LogLevel::Fatal => log::Level::Error,
+            LogLevel::Error => log::Level::Error,
+            LogLevel::Warning => log::Level::Warn,
+            LogLevel::Info => log::Level::Info,
+            LogLevel::Debug => log::Level::Debug,
+        }
     }
 }
 
@@ -252,36 +256,6 @@ mod tests {
     }
 
     #[test]
-    fn slog_critical_eq_fatal() {
-        let ll: slog::Level = LogLevel::Fatal.into();
-        assert_eq!(ll, slog::Level::Critical, "Fatal eq Critical");
-    }
-
-    #[test]
-    fn slog_error_eq_error() {
-        let ll: slog::Level = LogLevel::Error.into();
-        assert_eq!(ll, slog::Level::Error, "Error eq Error");
-    }
-
-    #[test]
-    fn slog_warning_eq_warning() {
-        let ll: slog::Level = LogLevel::Warning.into();
-        assert_eq!(ll, slog::Level::Warning, "Warning eq Warning");
-    }
-
-    #[test]
-    fn slog_info_eq_info() {
-        let ll: slog::Level = LogLevel::Info.into();
-        assert_eq!(ll, slog::Level::Info, "Info eq Info");
-    }
-
-    #[test]
-    fn slog_debug_eq_debug() {
-        let ll: slog::Level = LogLevel::Debug.into();
-        assert_eq!(ll, slog::Level::Debug, "Debug eq Debug");
-    }
-
-    #[test]
     fn should_get_loglevel_priority() {
         assert_eq!(LogLevel::Warning.value(), 4, "warn should be 4");
     }
@@ -294,12 +268,52 @@ mod tests {
 
     #[test]
     fn should_get_log_priority_fm_log_level() {
-        let ll = LogLevel::Info;
+        let log_level = LogLevel::Info;
 
-        let lp = LogPriority::new(ll);
+        let log_priority = LogPriority::new(log_level);
 
-        let priority = lp.value();
+        let priority = log_priority.value();
 
-        assert_eq!(ll.value(), priority, "priority mismatch");
+        assert_eq!(log_level.value(), priority, "priority mismatch");
+    }
+
+    #[test]
+    fn should_get_uppercase_label() {
+        let log_level = LogLevel::Info;
+        assert_eq!(
+            log_level.to_uppercase(),
+            "INFO".to_string(),
+            "expected uppercase"
+        );
+    }
+
+    #[test]
+    fn log_error_eq_fatal() {
+        let ll: log::Level = LogLevel::Fatal.into();
+        assert_eq!(ll, log::Level::Error, "Fatal eq Error");
+    }
+
+    #[test]
+    fn log_error_eq_error() {
+        let ll: log::Level = LogLevel::Error.into();
+        assert_eq!(ll, log::Level::Error, "Error eq Error");
+    }
+
+    #[test]
+    fn log_warn_eq_warning() {
+        let ll: log::Level = LogLevel::Warning.into();
+        assert_eq!(ll, log::Level::Warn, "Warn eq Warning");
+    }
+
+    #[test]
+    fn log_info_eq_info() {
+        let ll: log::Level = LogLevel::Info.into();
+        assert_eq!(ll, log::Level::Info, "Info eq Info");
+    }
+
+    #[test]
+    fn log_debug_eq_debug() {
+        let ll: log::Level = LogLevel::Debug.into();
+        assert_eq!(ll, log::Level::Debug, "Debug eq Debug");
     }
 }

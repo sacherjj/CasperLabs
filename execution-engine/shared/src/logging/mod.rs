@@ -1,26 +1,41 @@
 use std::collections::btree_map::BTreeMap;
 
-use serde::Serialize;
-use slog::{Drain, Level, Logger};
-
 use crate::logging::log_level::LogLevel;
 use crate::logging::log_message::LogMessage;
-use crate::logging::log_settings::{LogLevelFilter, LogSettings};
+use crate::logging::log_settings::LogSettings;
+use crate::logging::utils::jsonify;
 
 pub mod log_level;
 pub mod log_message;
 pub mod log_settings;
+pub mod logger;
+pub(crate) mod utils;
 
-// log with basic stir message
+// log with simple stir message
 pub fn log(log_settings: &LogSettings, log_level: LogLevel, value: &str) {
-    let log_output_factory = |_: &slog::Record| {
-        get_msg(
-            LogMessage::new_msg(log_settings.to_owned(), log_level, value.to_owned()),
-            false,
-        )
-    };
+    if log_settings.filter(log_level) {
+        return;
+    }
 
-    slog_log(log_level, log_settings.log_level_filter, log_output_factory);
+    logger::LOGGER_INIT.call_once(|| {
+        log::set_logger(&logger::TERMINAL_LOGGER).expect("TERMINAL_LOGGER should be set");
+        log::set_max_level(log::LevelFilter::Trace);
+    });
+
+    let log_message = LogMessage::new_msg(log_settings.to_owned(), log_level, value.to_owned());
+
+    let json = jsonify(&log_message, false);
+
+    log::log!(
+        log_level.into(),
+        "{timestamp} {loglevel} {priority} {hostname} {facility} payload={payload}",
+        timestamp = log_message.timestamp,
+        loglevel = log_message.log_level.to_uppercase(),
+        priority = log_message.priority.value(),
+        hostname = log_message.host_name.value(),
+        facility = log_message.process_name.snake_case(),
+        payload = json
+    );
 }
 
 // log with message format and properties
@@ -30,99 +45,34 @@ pub fn log_props(
     message_format: String,
     properties: BTreeMap<String, String>,
 ) {
-    let log_level_filter = log_settings.log_level_filter;
-
-    let log_output_factory = move |_: &slog::Record| {
-        get_msg(
-            LogMessage::new_props(
-                log_settings.to_owned(),
-                log_level,
-                message_format.to_owned(),
-                properties.to_owned(),
-            ),
-            false,
-        )
-    };
-
-    slog_log(log_level, log_level_filter, log_output_factory);
-}
-
-/// serializes value to json;
-/// pretty_print: false = inline
-/// pretty_print: true  = pretty printed / multiline
-fn get_msg<T>(value: T, pretty_print: bool) -> String
-where
-    T: Serialize,
-{
-    if pretty_print {
-        match serde_json::to_string_pretty(&value) {
-            Ok(json) => json,
-            Err(_) => "{\"error\": \"encountered error serializing value\"}".to_owned(),
-        }
-    } else {
-        match serde_json::to_string(&value) {
-            Ok(json) => json,
-            Err(_) => "{\"error\": \"encountered error serializing value\"}".to_owned(),
-        }
+    if log_settings.filter(log_level) {
+        return;
     }
-}
 
-/// factory method to build and return a slog logger configured as a async terminal writer
-fn get_logger(slog_level_filter: Level) -> slog::Logger {
-    // temporal dependencies herein; order of nesting drains and filters matters
+    logger::LOGGER_INIT.call_once(|| {
+        log::set_logger(&logger::TERMINAL_LOGGER).expect("TERMINAL_LOGGER should be set");
+        log::set_max_level(log::LevelFilter::Trace);
+    });
 
-    let decorator = slog_term::TermDecorator::new().build();
+    let log_message = LogMessage::new_props(
+        log_settings.to_owned(),
+        log_level,
+        message_format.to_owned(),
+        properties.to_owned(),
+    );
 
-    let drain = slog_term::FullFormat::new(decorator).build().fuse();
+    let json = jsonify(&log_message, false);
 
-    // this is a bit twisted; setting the level filter moves the drain;
-    // it is necessary to call .fuse() on it to allow the composition to continue
-    let filter = slog::LevelFilter::new(drain, slog_level_filter).fuse();
-
-    // the async drain ideally is the outermost drain
-    let drain = slog_async::Async::new(filter).build().fuse();
-
-    Logger::root(drain.fuse(), o!())
-}
-
-fn slog_log<F>(
-    log_level: log_level::LogLevel,
-    log_level_filter: LogLevelFilter,
-    log_output_factory: F,
-) where
-    // The closure takes no input and returns nothing.
-    F: Fn(&slog::Record) -> String,
-{
-    // this formulation and using the level based macros
-    // allows slog to defer execution if log level is below filter level
-    let fnv = slog::FnValue(log_output_factory);
-
-    let slog_level_filter = log_level_filter.into();
-
-    let logger = get_logger(slog_level_filter);
-
-    let slog_level = log_level.into();
-
-    match slog_level {
-        Level::Critical => {
-            crit!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-        Level::Error => {
-            error!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-        Level::Warning => {
-            warn!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-        Level::Info => {
-            info!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-        Level::Trace => {
-            trace!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-        Level::Debug => {
-            debug!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-    }
+    log::log!(
+        log_level.into(),
+        "{timestamp} {loglevel} {priority} {hostname} {facility} payload={payload}",
+        timestamp = log_message.timestamp,
+        loglevel = log_message.log_level.to_uppercase(),
+        priority = log_message.priority.value(),
+        hostname = log_message.host_name.value(),
+        facility = log_message.process_name.snake_case(),
+        payload = json
+    );
 }
 
 #[cfg(test)]

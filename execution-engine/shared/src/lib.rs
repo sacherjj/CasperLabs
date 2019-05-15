@@ -4,11 +4,7 @@ extern crate chrono;
 extern crate common;
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
-extern crate slog;
-extern crate slog_async;
-extern crate slog_json;
-extern crate slog_term;
+extern crate log;
 
 pub mod logging;
 pub mod newtypes;

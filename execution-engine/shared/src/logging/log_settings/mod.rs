@@ -3,7 +3,7 @@ use std::process;
 use serde::Serialize;
 
 use crate::logging::log_level::*;
-use crate::logging::log_message::LogMessage;
+use crate::logging::utils::snakeify;
 
 /// container for logsettings from the host
 #[derive(Clone, Debug, Serialize)]
@@ -25,19 +25,8 @@ impl LogSettings {
     }
 
     /// if lvl is less than settings loglevel, associated msg should be filtered out
-    pub fn filter(&self, lvl: LogLevel) -> bool {
-        lvl < self.log_level_filter.0
-    }
-}
-
-impl From<&LogMessage> for LogSettings {
-    fn from(log_message: &LogMessage) -> LogSettings {
-        LogSettings {
-            log_level_filter: log_message.log_level_filter,
-            process_id: log_message.process_id.clone(),
-            process_name: log_message.process_name.clone(),
-            host_name: log_message.host_name.clone(),
-        }
+    pub fn filter(&self, log_level: LogLevel) -> bool {
+        log_level < self.log_level_filter.0
     }
 }
 
@@ -56,14 +45,14 @@ impl LogLevelFilter {
     }
 }
 
-impl Into<slog::Level> for LogLevelFilter {
-    fn into(self) -> slog::Level {
+impl Into<log::Level> for LogLevelFilter {
+    fn into(self) -> log::Level {
         match self.0 {
-            LogLevel::Fatal => slog::Level::Critical,
-            LogLevel::Error => slog::Level::Error,
-            LogLevel::Warning => slog::Level::Warning,
-            LogLevel::Info => slog::Level::Info,
-            LogLevel::Debug => slog::Level::Debug,
+            LogLevel::Fatal => log::Level::Error,
+            LogLevel::Error => log::Level::Error,
+            LogLevel::Warning => log::Level::Warn,
+            LogLevel::Info => log::Level::Info,
+            LogLevel::Debug => log::Level::Debug,
         }
     }
 }
@@ -95,6 +84,10 @@ impl ProcessName {
     #[allow(dead_code)]
     pub(crate) fn value(&self) -> String {
         self.0.to_owned()
+    }
+
+    pub(crate) fn snake_case(&self) -> String {
+        snakeify(self.0.to_owned())
     }
 }
 

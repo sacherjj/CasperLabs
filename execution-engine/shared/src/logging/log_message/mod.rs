@@ -3,25 +3,27 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Serialize;
 
 use crate::logging::log_level::{LogLevel, LogPriority};
-use crate::logging::log_settings::{HostName, LogLevelFilter, LogSettings, ProcessId, ProcessName};
+use crate::logging::log_settings::{HostName, LogSettings, ProcessId, ProcessName};
 use crate::semver::SemVer;
+
+const MESSAGE_TYPE: &str = "ee-structured";
 
 /// container for log message data
 #[derive(Clone, Debug, Serialize)]
 pub struct LogMessage {
-    pub message_id: MessageId,
-    pub message_version: SemVer,
+    pub timestamp: TimestampRfc3999,
     pub process_id: ProcessId,
     pub process_name: ProcessName,
     pub host_name: HostName,
-    pub timestamp: TimestampRfc3999,
-    pub log_level_filter: LogLevelFilter,
-    pub level: LogLevel,
+    pub log_level: LogLevel,
     pub priority: LogPriority,
+    pub message_type: MessageType,
+    pub message_type_version: SemVer,
+    pub message_id: MessageId,
     pub description: String,
     pub properties: MessageProperties,
 }
@@ -33,25 +35,25 @@ impl LogMessage {
         message_template: String,
         properties: BTreeMap<String, String>,
     ) -> LogMessage {
-        let message_version = SemVer::V1_0_0;
+        let message_type = MessageType::new(MESSAGE_TYPE.to_string());
+        let message_type_version = SemVer::V1_0_0;
         let process_id = log_settings.process_id;
         let process_name = log_settings.process_name;
         let host_name = log_settings.host_name;
         let timestamp = TimestampRfc3999::default();
-        let log_level_filter = log_settings.log_level_filter;
-        let level = log_level;
+        let log_level = log_level;
         let priority = LogPriority::new(log_level);
         let properties = MessageProperties::new(properties);
         let description = properties.get_formatted_message(&message_template);
 
         let hash = {
             let mut state = DefaultHasher::new();
-            message_version.hash(&mut state);
+            message_type_version.hash(&mut state);
             process_id.hash(&mut state);
             process_name.hash(&mut state);
             host_name.hash(&mut state);
             timestamp.hash(&mut state);
-            level.hash(&mut state);
+            log_level.hash(&mut state);
             priority.hash(&mut state);
             description.hash(&mut state);
             properties.hash(&mut state);
@@ -61,17 +63,17 @@ impl LogMessage {
         let message_id = MessageId::new(hash.to_string());
 
         LogMessage {
-            message_id,
-            message_version,
+            timestamp,
             process_id,
             process_name,
             host_name,
-            timestamp,
-            log_level_filter,
-            level,
+            log_level,
             priority,
-            properties,
+            message_type,
+            message_type_version,
+            message_id,
             description,
+            properties,
         }
     }
 
@@ -91,7 +93,7 @@ impl fmt::Display for LogMessage {
             "{timestamp} priority:{priority}|{level} {description}",
             timestamp = self.timestamp,
             priority = self.priority,
-            level = self.level,
+            level = self.log_level,
             description = self.description
         )
     }
@@ -104,7 +106,7 @@ pub struct TimestampRfc3999(String);
 impl Default for TimestampRfc3999 {
     fn default() -> Self {
         let now: DateTime<Utc> = Utc::now();
-        TimestampRfc3999(now.to_rfc3339())
+        TimestampRfc3999(now.to_rfc3339_opts(SecondsFormat::Millis, true))
     }
 }
 
@@ -114,12 +116,12 @@ impl fmt::Display for TimestampRfc3999 {
     }
 }
 
-#[derive(Clone, Debug, Hash, Serialize)]
-pub struct MessageTemplate(String);
+#[derive(Clone, Debug, Serialize)]
+pub struct MessageId(String);
 
-impl MessageTemplate {
-    pub fn new(fmt_template: String) -> Self {
-        MessageTemplate(fmt_template)
+impl MessageId {
+    pub fn new(hash: String) -> MessageId {
+        MessageId(hash)
     }
 
     #[allow(dead_code)]
@@ -128,12 +130,27 @@ impl MessageTemplate {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
-pub struct MessageId(String);
+/// newtype to encapsulate process_name
+#[derive(Clone, Debug, Hash, Serialize)]
+pub struct MessageType(String);
 
-impl MessageId {
-    pub fn new(hash: String) -> MessageId {
-        MessageId(hash)
+impl MessageType {
+    pub fn new(message_type: String) -> MessageType {
+        MessageType(message_type)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn value(&self) -> String {
+        self.0.to_owned()
+    }
+}
+
+#[derive(Clone, Debug, Hash, Serialize)]
+pub struct MessageTemplate(String);
+
+impl MessageTemplate {
+    pub fn new(fmt_template: String) -> Self {
+        MessageTemplate(fmt_template)
     }
 
     #[allow(dead_code)]
@@ -358,7 +375,7 @@ mod tests {
     }
 
     fn should_have_log_level(l: &super::LogMessage) -> bool {
-        l.level <= LogLevel::Fatal && l.level >= LogLevel::Debug
+        l.log_level <= LogLevel::Fatal && l.log_level >= LogLevel::Debug
     }
 
     fn should_have_description(l: &super::LogMessage) -> bool {
