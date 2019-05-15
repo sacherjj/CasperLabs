@@ -55,7 +55,7 @@ object Keys {
     }
     case object UnknownSignatureAlgorithm extends ParseError {
       override def errorMessage: String =
-        "Unknown signature algorithm. Supported values: ed25519, secp256k1"
+        "Unknown signature algorithm. Supported values: ed25519"
     }
   }
 
