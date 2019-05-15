@@ -110,7 +110,9 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 .make/docker-build/integration-testing: \
 		integration-testing/Dockerfile
 	$(eval IT_PATH = integration-testing)
+	cp -r protobuf $(IT_PATH)/
 	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
+	rm -rf $(IT_PATH)/protobuf
 	mkdir -p $(dir $@) && touch $@
 
 # Dockerize the Execution Engine.
