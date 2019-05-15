@@ -1,0 +1,12 @@
+[package]
+name = "test-mailing-list-define"
+version = "0.1.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>"]
+
+[lib]
+name = "test_mailinglistdefine"
+crate-type = ["cdylib"]
+
+[dependencies]
+common = { package = "casperlabs-contract-ffi", version = "0.5.0" }
+
