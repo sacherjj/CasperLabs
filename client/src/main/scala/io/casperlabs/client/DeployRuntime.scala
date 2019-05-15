@@ -10,7 +10,7 @@ import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
 import io.casperlabs.client.configuration.Streaming
-
+import io.casperlabs.crypto.hash.Blake2b256
 import scala.concurrent.duration._
 import scala.language.higherKinds
 import scala.util.Try
@@ -135,6 +135,7 @@ object DeployRuntime {
                   .withSession(consensus.Deploy.Code().withCode(session))
                   .withPayment(consensus.Deploy.Code().withCode(payment))
               )
+              .withHashes
         }
         .flatMap(DeployService[F].deploy)
         .handleError(
@@ -162,5 +163,15 @@ object DeployRuntime {
 
   private def processError(t: Throwable): Throwable =
     Option(t.getCause).getOrElse(t)
+
+  private def hash[T <: scalapb.GeneratedMessage](data: T): ByteString =
+    ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
+
+  implicit class DeployOps(d: consensus.Deploy) {
+    def withHashes = {
+      val h = d.getHeader.withBodyHash(hash(d.getBody))
+      d.withHeader(h).withDeployHash(hash(h))
+    }
+  }
 
 }
