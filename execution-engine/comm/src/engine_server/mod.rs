@@ -92,7 +92,6 @@ where
         p: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
         let executor = WasmiExecutor;
-        // TODO(mateusz.gorski): Use `protocol_version` and `WasmiPreprocessor::from_protocol_version`.
         let preprocessor: WasmiPreprocessor = Default::default();
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = p.get_parent_state_hash().try_into().unwrap();

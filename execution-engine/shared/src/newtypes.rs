@@ -1,5 +1,4 @@
 //! Some newtypes.
-
 use core::array::TryFromSliceError;
 use std::convert::TryFrom;
 use std::ops::Deref;

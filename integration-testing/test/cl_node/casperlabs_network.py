@@ -1,16 +1,23 @@
 import docker
 import logging
 
-from typing import List, Callable, Optional
+from typing import List, Callable
 
 
 from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_node import CasperLabsNode
+from test.cl_node.docker_node import DockerNode
 from test.cl_node.common import random_string
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.wait import (
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,
+    wait_for_peers_count_at_least,
+)
+from test.cl_node.log_watcher import (
+    wait_for_log_watcher,
+    GoodbyeInLogLine,
+    RequestedForkTipFromPeersInLogLine,
 )
 
 
@@ -30,11 +37,11 @@ class CasperLabsNetwork:
         self._created_networks: List[str] = []
 
     @property
-    def node_count(self):
+    def node_count(self) -> int:
         return len(self.cl_nodes)
 
     @property
-    def docker_nodes(self):
+    def docker_nodes(self) -> List[DockerNode]:
         return [cl_node.node for cl_node in self.cl_nodes]
 
     def get_key(self):
@@ -42,7 +49,7 @@ class CasperLabsNetwork:
         self._next_key_number += 1
         return key_pair
 
-    def create_cl_network(self, node_count: Optional[int] = None):
+    def create_cl_network(self, **kwargs):
         """
         Should be implemented with each network class to setup custom nodes and networks.
         """
@@ -74,6 +81,24 @@ class CasperLabsNetwork:
         if network_with_bootstrap:
             config.network = self.cl_nodes[0].node.network
         self._add_cl_node(config)
+
+    def stop_cl_node(self, node_number: int) -> None:
+        self.cl_nodes[node_number].execution_engine.stop()
+        node = self.cl_nodes[node_number].node
+        with wait_for_log_watcher(GoodbyeInLogLine(node.container)):
+            node.stop()
+
+    def start_cl_node(self, node_number: int) -> None:
+        self.cl_nodes[node_number].execution_engine.start()
+        node = self.cl_nodes[node_number].node
+        with wait_for_log_watcher(RequestedForkTipFromPeersInLogLine(node.container), 60):
+            node.start()
+
+    def wait_for_peers(self) -> None:
+        if self.node_count < 2:
+            return
+        for cl_node in self.cl_nodes:
+            wait_for_peers_count_at_least(cl_node.node, self.node_count - 1, cl_node.config.command_timeout)
 
     def wait_method(self, method: Callable, node_number: int) -> None:
         """
@@ -108,7 +133,7 @@ class CasperLabsNetwork:
 class OneNodeNetwork(CasperLabsNetwork):
     """ A single node network with just a bootstrap """
 
-    def create_cl_network(self, node_count=None):
+    def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(self.docker_client,
                               node_private_key=kp.private_key,
@@ -119,7 +144,7 @@ class OneNodeNetwork(CasperLabsNetwork):
 
 class TwoNodeNetwork(CasperLabsNetwork):
 
-    def create_cl_network(self, node_count=None):
+    def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(self.docker_client,
                               node_private_key=kp.private_key,
@@ -131,11 +156,12 @@ class TwoNodeNetwork(CasperLabsNetwork):
         config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
         self.add_cl_node(config)
         self.wait_method(wait_for_approved_block_received_handler_state, 1)
+        self.wait_for_peers()
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):
 
-    def create_cl_network(self, node_count=None):
+    def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(self.docker_client,
                               node_private_key=kp.private_key,
@@ -150,6 +176,7 @@ class ThreeNodeNetwork(CasperLabsNetwork):
 
         for node_number in range(1, 3):
             self.wait_method(wait_for_approved_block_received_handler_state, node_number)
+        self.wait_for_peers()
 
 
 class MultiNodeJoinedNetwork(CasperLabsNetwork):
@@ -169,6 +196,7 @@ class MultiNodeJoinedNetwork(CasperLabsNetwork):
 
         for node_number in range(1, node_count):
             self.wait_method(wait_for_approved_block_received_handler_state, node_number)
+        self.wait_for_peers()
 
 
 if __name__ == '__main__':

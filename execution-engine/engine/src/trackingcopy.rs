@@ -598,7 +598,7 @@ mod tests {
         ) {
             let mut known_urefs = BTreeMap::new();
             known_urefs.insert(name.clone(), k);
-            let contract: Value = Contract::new(body, known_urefs).into();
+            let contract: Value = Contract::new(body, known_urefs, 1).into();
             let contract_key = Key::Hash(hash);
 
             let gs = InMemoryGlobalState::from_pairs(&[
@@ -671,7 +671,7 @@ mod tests {
             // create contract which knows about value
             let mut contract_known_urefs = BTreeMap::new();
             contract_known_urefs.insert(state_name.clone(), k);
-            let contract: Value = Contract::new(body, contract_known_urefs).into();
+            let contract: Value = Contract::new(body, contract_known_urefs, 1).into();
             let contract_key = Key::Hash(hash);
 
             // create account which knows about contract
