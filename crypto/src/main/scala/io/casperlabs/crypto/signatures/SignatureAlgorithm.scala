@@ -70,6 +70,7 @@ object SignatureAlgorithm {
 
   /**
     * Short introduction [[https://ed25519.cr.yp.to]]
+    * Useful link [[https://tools.ietf.org/id/draft-ietf-curdle-pkix-06.html#rfc.section.10.1]]
     */
   object Ed25519 extends SignatureAlgorithm {
 
