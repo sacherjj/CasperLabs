@@ -7,7 +7,8 @@ use pwasm_utils::{externalize_mem, inject_gas_counter, rules};
 use std::error::Error;
 use vm::wasm_costs::WasmCosts;
 
-const MEM_PAGES: u32 = 128;
+//NOTE: size of Wasm memory page is 64 KiB
+const MEM_PAGES: u32 = 64;
 
 #[derive(Debug)]
 pub enum PreprocessingError {
