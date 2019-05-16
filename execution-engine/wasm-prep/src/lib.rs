@@ -7,9 +7,7 @@ use pwasm_utils::{externalize_mem, inject_gas_counter, rules};
 use std::error::Error;
 use vm::wasm_costs::WasmCosts;
 
-#[allow(dead_code)]
-//NOTE(for reference): size of Wasm memory page; 64 kibibytes
-const MEM_PAGE_SIZE: u32 = 65536;
+//NOTE: size of Wasm memory page is 64 KiB
 const MEM_PAGES: u32 = 64;
 
 #[derive(Debug)]
