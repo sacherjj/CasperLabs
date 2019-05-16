@@ -1,27 +1,26 @@
 package io.casperlabs.client.configuration
 import java.io.File
 
-sealed trait Configuration extends Product with Serializable {
-  def port: Int
-  def host: String
-}
+final case class ConnectOptions(
+    host: String,
+    portExternal: Int,
+    portInternal: Int
+)
+
+sealed trait Configuration
 
 final case class Deploy(
-    port: Int,
-    host: String,
     from: String,
     nonce: Long,
     sessionCode: File,
     paymentCode: File
 ) extends Configuration
 
-final case class Propose(port: Int, host: String) extends Configuration
+final case object Propose extends Configuration
 
-final case class ShowBlock(port: Int, host: String, hash: String) extends Configuration
-final case class ShowBlocks(port: Int, host: String, depth: Int)  extends Configuration
+final case class ShowBlock(hash: String) extends Configuration
+final case class ShowBlocks(depth: Int)  extends Configuration
 final case class VisualizeDag(
-    port: Int,
-    host: String,
     depth: Int,
     showJustificationLines: Boolean,
     out: Option[String],
@@ -35,8 +34,6 @@ object Streaming {
 }
 
 final case class Query(
-    port: Int,
-    host: String,
     blockHash: String,
     keyType: String,
     key: String,
@@ -44,31 +41,25 @@ final case class Query(
 ) extends Configuration
 
 object Configuration {
-  def parse(args: Array[String]): Option[Configuration] = {
+  def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
     val options = Options(args)
-    options.subcommand.map {
+    val connect = ConnectOptions(options.host(), options.port(), options.portInternal())
+    val conf = options.subcommand.map {
       case options.deploy =>
         Deploy(
-          options.port(),
-          options.host(),
           options.deploy.from(),
           options.deploy.nonce(),
           options.deploy.session(),
           options.deploy.payment()
         )
       case options.propose =>
-        Propose(
-          options.port(),
-          options.host()
-        )
+        Propose
       case options.showBlock =>
-        ShowBlock(options.port(), options.host(), options.showBlock.hash())
+        ShowBlock(options.showBlock.hash())
       case options.showBlocks =>
-        ShowBlocks(options.port(), options.host(), options.showBlocks.depth())
+        ShowBlocks(options.showBlocks.depth())
       case options.visualizeBlocks =>
         VisualizeDag(
-          options.port(),
-          options.host(),
           options.visualizeBlocks.depth(),
           options.visualizeBlocks.showJustificationLines(),
           options.visualizeBlocks.out.toOption,
@@ -76,13 +67,12 @@ object Configuration {
         )
       case options.query =>
         Query(
-          options.port(),
-          options.host(),
           options.query.blockHash(),
           options.query.keyType(),
           options.query.key(),
           options.query.path()
         )
     }
+    conf map (connect -> _)
   }
 }
