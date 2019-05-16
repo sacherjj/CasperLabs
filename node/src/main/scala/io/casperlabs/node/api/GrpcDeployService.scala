@@ -100,7 +100,7 @@ object GrpcDeployService {
             bq  <- BlockAPI.showBlock[F](BlockQuery(blockHash))
             state <- Concurrent[F]
                       .fromOption(bq.blockInfo, new Exception(s"Block $blockHash not found!"))
-                      .map(_.tupleSpaceHash)
+                      .map(_.globalStateRootHash)
             stateHash        = ByteString.copyFrom(Base16.decode(state))
             possibleResponse <- ExecutionEngineService[F].query(stateHash, key, splitPath(path))
             response         <- Concurrent[F].fromEither(possibleResponse).map(_.toProtoString)
