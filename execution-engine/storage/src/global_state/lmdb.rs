@@ -145,7 +145,15 @@ mod tests {
     use super::*;
     use history::trie_store::operations::{write, WriteResult};
     use lmdb::DatabaseFlags;
+    use shared::os::get_page_size;
     use tempfile::tempdir;
+
+    lazy_static! {
+        static ref TEST_MAP_SIZE: usize = {
+            let page_size = get_page_size().unwrap();
+            page_size * 2560
+        };
+    }
 
     #[derive(Debug, Clone)]
     struct TestPair {
@@ -183,7 +191,9 @@ mod tests {
 
     fn create_test_state() -> LmdbGlobalState {
         let _temp_dir = tempdir().unwrap();
-        let environment = Arc::new(LmdbEnvironment::new(&_temp_dir.path().to_path_buf()).unwrap());
+        let environment = Arc::new(
+            LmdbEnvironment::new(&_temp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap(),
+        );
         let store =
             Arc::new(LmdbTrieStore::new(&environment, None, DatabaseFlags::empty()).unwrap());
         let mut ret = LmdbGlobalState::empty(environment, store).unwrap();

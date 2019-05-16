@@ -6,8 +6,16 @@ use history::trie_store::operations::{read, write, ReadResult, WriteResult};
 use history::trie_store::{Readable, Transaction, TransactionSource, TrieStore};
 use lmdb::DatabaseFlags;
 use shared::newtypes::Blake2bHash;
+use shared::os::get_page_size;
 use tempfile::{tempdir, TempDir};
 use {error, failure};
+
+lazy_static! {
+    static ref TEST_MAP_SIZE: usize = {
+        let page_size = get_page_size().unwrap();
+        page_size * 2560
+    };
+}
 
 const TEST_KEY_LENGTH: usize = 7;
 
@@ -474,7 +482,7 @@ struct LmdbTestContext {
 impl LmdbTestContext {
     fn new(tries: &[HashedTestTrie]) -> Result<Self, failure::Error> {
         let _temp_dir = tempdir()?;
-        let environment = LmdbEnvironment::new(&_temp_dir.path().to_path_buf())?;
+        let environment = LmdbEnvironment::new(&_temp_dir.path().to_path_buf(), *TEST_MAP_SIZE)?;
         let store = LmdbTrieStore::new(&environment, None, DatabaseFlags::empty())?;
         put_tries::<LmdbEnvironment, LmdbTrieStore, error::Error>(&environment, &store, tries)?;
         Ok(LmdbTestContext {
