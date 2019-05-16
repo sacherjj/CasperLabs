@@ -104,7 +104,7 @@ fn main() {
     let wasmi_executor = WasmiExecutor;
     let wasm_costs = WasmCosts::from_version(protocol_version).unwrap_or_else(|| {
         panic!(
-            "Wasm cost table defined for protocol version: {}",
+            "Wasm cost table wasn't defined for protocol version: {}",
             protocol_version
         )
     });
