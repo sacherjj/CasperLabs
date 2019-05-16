@@ -193,3 +193,12 @@ def three_node_network(docker_client_fixture):
     with ThreeNodeNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
         yield tnn
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_keyboard_interrupt(excinfo):
+    docker_client = docker_py.from_env()
+    docker_client.containers.prune()
+    docker_client.volumes.prune()
+    docker_client.networks.prune()
+    pytest.exit("Keyboard Interrupt occurred, So stopping the execution of tests.")

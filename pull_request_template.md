@@ -1,18 +1,15 @@
-## Overview
-Provide a brief description of what this PR does, and why it's needed.
+### Overview
+_Provide a brief description of what this PR does, and why it's needed._
 
-### Which JIRA issue does this PR relate to? If there is not a JIRA issue addressing this work, please create one now and add the link here.
-Add link to corresponding JIRA issue.
+### Which JIRA ticket does this PR relate to?
+_Add the link here. Create a ticket and link it here if one does not exist._
 
-### Complete this checklist before you submit the PR
+### Complete this checklist before you submit this PR
 - [ ] This PR contains no more than 200 lines of code, excluding test code.
-- [ ] This PR meets [CasperLabs development coding standards](https://casperlabs.atlassian.net/wiki/spaces/EN/pages/16842753/Coding+Standards).
-- [ ] If this PR adds a new feature, this PR includes tests related to this feature.
-- [ ] You assigned one person to review this PR
-
-### If you are not a member of the core development team, please confirm:
-- [ ] You signed the commit. Merging requires a signature. Please see the [Signing Commits](https://casperlabs.atlassian.net/wiki/spaces/EN/pages/4390963/Signing+Commits) for instructions.
-- [ ] Your GitHub account is also an account with [Drone CI](http://drone.casperlabs.io/). Unit tests will not run on your PR unless you have an account with Drone. Merge requires passed unit tests.
+- [ ] This PR meets [CasperLabs coding standards](https://casperlabs.atlassian.net/wiki/spaces/EN/pages/16842753/Coding+Standards).
+- [ ] If this PR adds a new feature, it includes tests related to this feature.
+- [ ] You assigned one person to review this PR.
+- [ ] Your GitHub account is linked with our [Drone CI](http://drone.casperlabs.io/) system. This is necessary to run tests on this PR.
 
 ### Notes
-Optional. Add any notes on caveats, approaches you tried that didn't work, or anything else.
+_Optional. Add any notes on caveats, approaches you tried that didn't work, or anything else._

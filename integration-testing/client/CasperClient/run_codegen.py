@@ -41,7 +41,7 @@ download("https://raw.githubusercontent.com/scalapb/ScalaPB/master/protobuf/scal
 copyfile(join(dirname(grpc_tools.__file__), '_proto/google/protobuf/empty.proto'), f'{PROTO_DIR}/empty.proto')
 copyfile(join(dirname(grpc_tools.__file__), '_proto/google/protobuf/descriptor.proto'), f'{PROTO_DIR}/descriptor.proto')
 
-copyfile('../../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto', f'{PROTO_DIR}/CasperMessage.proto')
+copyfile('../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto', f'{PROTO_DIR}/CasperMessage.proto')
 os.system("""perl -p -i -e 's,^import \"google/protobuf/,import ",' proto/*""")
 os.system("""perl -p -i -e 's,^import \"scalapb/,import ",' proto/*""")
 
