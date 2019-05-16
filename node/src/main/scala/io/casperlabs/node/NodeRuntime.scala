@@ -152,24 +152,32 @@ class NodeRuntime private[node] (
         safetyOracle = SafetyOracle
           .cliqueOracle[Effect](Monad[Effect], logEff)
 
+        blockApiLock <- Resource.liftF(Semaphore[Effect](1))
+
         _ <- api.Servers
-              .diagnosticsServerR(
+              .internalServersR(
                 conf.grpc.portInternal,
                 conf.server.maxMessageSize,
-                grpcScheduler
+                grpcScheduler,
+                blockApiLock
               )(
                 logEff,
+                logId,
+                metricsEff,
+                metricsId,
                 nodeDiscovery,
                 jvmMetrics,
                 nodeMetrics,
                 connectionsCell,
+                multiParentCasperRef,
                 scheduler
               )
 
-        _ <- api.Servers.deploymentServerR[Effect](
+        _ <- api.Servers.externalServersR[Effect](
               conf.grpc.portExternal,
               conf.server.maxMessageSize,
-              grpcScheduler
+              grpcScheduler,
+              blockApiLock
             )(
               Concurrent[Effect],
               TaskLike[Effect],
