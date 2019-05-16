@@ -16,9 +16,12 @@ pub struct LogSettings {
 }
 
 impl LogSettings {
-    /// process_name: name or key identifying the current process;
-    ///     should have no spaces or punctuations by convention
-    /// log_level_filter: only log messages with priority >= to this log level will be logged
+    /// # Arguments
+    ///
+    /// * `process_name` - Name or key identifying the current process;
+    ///       should have no spaces or punctuations by convention
+    /// * `log_level_filter` - Only log messages with priority >= to this
+    ///       log level will be logged
     pub fn new(process_name: &str, log_level_filter: LogLevelFilter) -> LogSettings {
         LogSettings {
             log_level_filter,
@@ -52,6 +55,7 @@ impl LogLevelFilter {
 impl Into<log::Level> for LogLevelFilter {
     fn into(self) -> log::Level {
         match self.0 {
+            // log::Level lacks Fatal or Critical; log::Level::Error is its max
             LogLevel::Fatal => log::Level::Error,
             LogLevel::Error => log::Level::Error,
             LogLevel::Warning => log::Level::Warn,

@@ -17,7 +17,6 @@ pub mod engine_server;
 use std::collections::btree_map::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic;
 use std::sync::Arc;
 
 use clap::{App, Arg, ArgMatches};
@@ -67,22 +66,17 @@ const ARG_LOG_LEVEL: &str = "loglevel";
 const ARG_LOG_LEVEL_VALUE: &str = "LOGLEVEL";
 const ARG_LOG_LEVEL_HELP: &str = "[ fatal | error | warning | info | debug ]";
 
-// if true expect command line args if false use default values
-static CHECK_ARGS: atomic::AtomicBool = atomic::AtomicBool::new(false);
-
-// command line args
+// Command line arguments instance
 lazy_static! {
     static ref ARG_MATCHES: clap::ArgMatches<'static> = get_args();
 }
 
-// single log_settings instance for app
+// LogSettings instance to be used within this application
 lazy_static! {
     static ref LOG_SETTINGS: log_settings::LogSettings = get_log_settings();
 }
 
 fn main() {
-    CHECK_ARGS.store(true, atomic::Ordering::SeqCst);
-
     set_panic_hook();
 
     log_server_info(SERVER_START_MESSAGE);
@@ -115,7 +109,7 @@ fn main() {
     //log_server_info(SERVER_STOP_MESSAGE);
 }
 
-/// capture and log panic information.
+/// Sets panic hook for logging panic info
 fn set_panic_hook() {
     let log_settings_panic = LOG_SETTINGS.clone();
     let hook: Box<dyn Fn(&std::panic::PanicInfo) + 'static + Sync + Send> =
@@ -133,7 +127,7 @@ fn set_panic_hook() {
     std::panic::set_hook(hook);
 }
 
-// get command line arguments
+/// Gets command line arguments
 fn get_args() -> ArgMatches<'static> {
     App::new(APP_NAME)
         .arg(
@@ -161,14 +155,14 @@ fn get_args() -> ArgMatches<'static> {
         .get_matches()
 }
 
-// get value of socket argument
+/// Gets value of socket argument
 fn get_socket(matches: &ArgMatches) -> socket::Socket {
     let socket = matches.value_of(ARG_SOCKET).expect(ARG_SOCKET_EXPECT);
 
     socket::Socket::new(socket.to_owned())
 }
 
-// get value of data-dir argument
+/// Gets value of data-dir argument
 fn get_data_dir(matches: &ArgMatches) -> PathBuf {
     let mut buf = matches.value_of(ARG_DATA_DIR).map_or(
         {
@@ -183,7 +177,7 @@ fn get_data_dir(matches: &ArgMatches) -> PathBuf {
     buf
 }
 
-// build and return a grpc server
+/// Builds and returns a gRPC server.
 fn get_grpc_server(socket: &socket::Socket, data_dir: PathBuf) -> grpc::Server {
     let engine_state = get_engine_state(data_dir);
 
@@ -192,7 +186,7 @@ fn get_grpc_server(socket: &socket::Socket, data_dir: PathBuf) -> grpc::Server {
         .expect(SERVER_START_EXPECT)
 }
 
-// init and return engine global state
+/// Builds and returns engine global state
 fn get_engine_state(data_dir: PathBuf) -> EngineState<LmdbGlobalState> {
     let environment = {
         let ret = LmdbEnvironment::new(&data_dir).expect(LMDB_ENVIRONMENT_EXPECT);
@@ -218,23 +212,16 @@ fn get_engine_state(data_dir: PathBuf) -> EngineState<LmdbGlobalState> {
     EngineState::new(global_state)
 }
 
-// init and return log_settings
+/// Builds and returns log_settings
 fn get_log_settings() -> log_settings::LogSettings {
-    if CHECK_ARGS.load(atomic::Ordering::SeqCst) {
-        let matches: &clap::ArgMatches = &*ARG_MATCHES;
+    let matches: &clap::ArgMatches = &*ARG_MATCHES;
 
-        let log_level_filter = get_log_level_filter(matches.value_of(ARG_LOG_LEVEL));
+    let log_level_filter = get_log_level_filter(matches.value_of(ARG_LOG_LEVEL));
 
-        return LogSettings::new(PROC_NAME, log_level_filter);
-    }
-
-    LogSettings::new(
-        PROC_NAME,
-        log_settings::LogLevelFilter::new(LogLevel::Debug),
-    )
+    LogSettings::new(PROC_NAME, log_level_filter)
 }
 
-// get value of loglevel argument
+/// Gets LogLevelFilter
 fn get_log_level_filter(input: Option<&str>) -> LogLevelFilter {
     let log_level = match input {
         Some(input) => match input {
@@ -250,7 +237,7 @@ fn get_log_level_filter(input: Option<&str>) -> LogLevelFilter {
     log_settings::LogLevelFilter::new(log_level)
 }
 
-// log listening on socket message
+/// Logs listening on socket message
 fn log_listening_message(socket: &socket::Socket) {
     let mut properties: BTreeMap<String, String> = BTreeMap::new();
 
@@ -265,7 +252,7 @@ fn log_listening_message(socket: &socket::Socket) {
     );
 }
 
-// log server status info messages
+/// Logs server status info messages
 fn log_server_info(message: &str) {
     logging::log(&*LOG_SETTINGS, log_level::LogLevel::Info, message);
 }

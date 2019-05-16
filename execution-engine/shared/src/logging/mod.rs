@@ -104,6 +104,15 @@ mod tests {
     }
 
     #[test]
+    fn should_log_string() {
+        let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Debug));
+
+        let log_message = String::from("this is a string and it should get logged");
+
+        log(&settings, LogLevel::Debug, &log_message);
+    }
+
+    #[test]
     fn should_log_stir() {
         let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Debug));
         log(

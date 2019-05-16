@@ -41,7 +41,6 @@ impl LogMessage {
         let process_name = log_settings.process_name;
         let host_name = log_settings.host_name;
         let timestamp = TimestampRfc3999::default();
-        let log_level = log_level;
         let priority = LogPriority::new(log_level);
         let properties = MessageProperties::new(properties);
         let description = properties.get_formatted_message(&message_template);
