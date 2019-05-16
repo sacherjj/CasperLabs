@@ -91,7 +91,7 @@ class CasperLabsNetwork:
     def start_cl_node(self, node_number: int) -> None:
         self.cl_nodes[node_number].execution_engine.start()
         node = self.cl_nodes[node_number].node
-        with wait_for_log_watcher(RequestedForkTipFromPeersInLogLine(node.container), 60):
+        with wait_for_log_watcher(RequestedForkTipFromPeersInLogLine(node.container)):
             node.start()
 
     def wait_for_peers(self) -> None:
