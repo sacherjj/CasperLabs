@@ -20,7 +20,7 @@ object GrpcControlService {
       new ControlGrpcMonix.ControlService {
         override def propose(request: ProposeRequest): Task[ProposeResponse] =
           TaskLike[F].toTask {
-            ??? // BlockAPI.propose[F]().map(ProposeResponse().withBlockHash(_))
+            BlockAPI.propose[F](blockApiLock).map(ProposeResponse().withBlockHash(_))
           }
       }
     }

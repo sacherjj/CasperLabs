@@ -16,7 +16,16 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
+import io.casperlabs.comm.ServiceError
+import io.casperlabs.comm.ServiceError.{
+  Aborted,
+  FailedPrecondition,
+  Internal,
+  InvalidArgument,
+  OutOfRange,
+  ResourceExhausted,
+  Unavailable
+}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b512Random
 import io.casperlabs.graphz._
@@ -112,13 +121,18 @@ object BlockAPI {
                              success = false,
                              s"Error while creating block: $err"
                            ).pure[F]
+
                          case Created(block) =>
-                           Metrics[F].incrementCounter("create-blocks-success") *>
-                             casper
-                               .addBlock(block)
-                               .map(addResponse(_, block))
+                           for {
+                             status <- casper.addBlock(block)
+                             res    = addResponse(status, block)
+                             _ <- Metrics[F]
+                                   .incrementCounter("create-blocks-success")
+                                   .whenA(res.success)
+                           } yield res
                        }
             } yield result
+
           case false =>
             DeployServiceResponse(success = false, "Error: There is another propose in progress.")
               .pure[F]
@@ -127,6 +141,56 @@ object BlockAPI {
       errorMessage,
       default = DeployServiceResponse(success = false, s"Error: $errorMessage").pure[F]
     )
+  }
+
+  def propose[F[_]: Sync: MultiParentCasperRef: Log: Metrics](
+      blockApiLock: Semaphore[F]
+  ): F[ByteString] = {
+    def raise[A](ex: ServiceError.Exception): F[ByteString] =
+      MonadThrowable[F].raiseError(ex)
+
+    unsafeWithCasper[F, ByteString]("Could not create block.") { implicit casper =>
+      Sync[F].bracket[Boolean, ByteString](blockApiLock.tryAcquire) {
+        case true =>
+          for {
+            _          <- Metrics[F].incrementCounter("create-blocks")
+            maybeBlock <- casper.createBlock
+            result <- maybeBlock match {
+                       case Created(block) =>
+                         for {
+                           status <- casper.addBlock(block)
+                           res <- status match {
+                                   case _: ValidBlock =>
+                                     block.blockHash.pure[F]
+                                   case _: InvalidBlock =>
+                                     raise(InvalidArgument(s"Invalid block: $status"))
+                                   case BlockException(ex) =>
+                                     raise(Internal(s"Error during block processing: $ex"))
+                                   case Processing =>
+                                     raise(
+                                       Aborted(
+                                         "No action taken since other thread is already processing the block."
+                                       )
+                                     )
+                                 }
+                           _ <- Metrics[F].incrementCounter("create-blocks-success")
+                         } yield res
+
+                       case InternalDeployError(ex) =>
+                         raise(Internal(ex.getMessage))
+
+                       case ReadOnlyMode =>
+                         raise(FailedPrecondition("Node is in read-only mode."))
+
+                       case NoNewDeploys =>
+                         raise(OutOfRange("No new deploys."))
+                     }
+          } yield result
+
+        case false =>
+          raise(Aborted("There is another propose in progress."))
+      }(blockApiLock.release.whenA(_))
+    }
   }
 
   // FIX: Not used at the moment - in RChain it's being used in method like `getListeningName*`
