@@ -28,25 +28,26 @@ services:
     volumes:
       # Volume for a socket to be created and shared with the execution engine.
       - socketvolume:/root/.casperlabs/sockets
-      # Common bonds files. Don't map the .casperlabs directory itself so nodes can create SSL keys.
-      # Using files created by running the node once as described in https://slack-files.com/TDVFB45LG-FFBGDQSBW-bad20239ec
-      # Later all need to agree on the same validators so these are committed to git and mounted.
+      # Common bonds file
       - $PWD/../.casperlabs/genesis:/root/.casperlabs/genesis
+      # Bootstrap node ID
       - $PWD/../.casperlabs/bootstrap:/root/.casperlabs/bootstrap
+      # Node keys
+      - $PWD/../.casperlabs/node-${NODE_NUMBER}:/root/.casperlabs/node
       - $PWD/../template/start-node.sh:/opt/docker/start-node.sh
     networks:
       - casperlabs
     environment:
       HOME: /root
-      # Got the ID from the logs by running the node once. They keys are going to be the same for node-0.
-      # i.e. "Listening for traffic on casperlabs://..."
       BOOTSTRAP_HOSTNAME: node-0
-      CL_VALIDATOR_PUBLIC_KEY: $CL_VALIDATOR_PUBLIC_KEY
-      CL_VALIDATOR_PRIVATE_KEY: $CL_VALIDATOR_PRIVATE_KEY
       CL_GRPC_SOCKET: /root/.casperlabs/sockets/.casper-node.sock
       CL_SERVER_USE_GOSSIPING: $CL_SERVER_USE_GOSSIPING
       CL_SERVER_RELAY_FACTOR: 1
       CL_LOG_LEVEL: $CL_LOG_LEVEL
+      CL_CASPER_VALIDATOR_PUBLIC_KEY_PATH: /root/.casperlabs/node/validator-public.pem
+      CL_CASPER_VALIDATOR_PRIVATE_KEY_PATH: /root/.casperlabs/node/validator-private.pem
+      CL_TLS_CERTIFICATE: /root/.casperlabs/node/node.certificate.pem
+      CL_TLS_KEY: /root/.casperlabs/node/node.key.pem
     entrypoint:
       - sh
       - -c
