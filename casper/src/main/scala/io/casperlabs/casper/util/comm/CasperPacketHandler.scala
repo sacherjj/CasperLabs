@@ -207,6 +207,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       abh                 = new ApprovedBlockReceivedHandler[F](casper, approvedBlock, validatorId)
       validator           <- Ref.of[F, CasperPacketHandlerInternal[F]](abh)
       casperPacketHandler = new CasperPacketHandlerImpl[F](validator, validatorId)
+      _                   <- CommUtil.sendForkChoiceTipRequest[F]
     } yield casperPacketHandler
   }
 

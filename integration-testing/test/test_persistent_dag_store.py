@@ -34,6 +34,7 @@ def test_persistent_dag_store(command_line_options_fixture, docker_client_fixtur
             engine0.start()
             node0.container.start()
             wait_for_node_started(network.peers[0], context.node_startup_timeout * 3, 2)
+            wait_for_requested_for_fork_tip(network.peers[0], context.node_startup_timeout * 3, 2)
             wait_for_connected_to_node(network.bootstrap, network.peers[0].name, context.node_startup_timeout, 2)
             hash_string = deploy_and_propose(network.bootstrap, CONTRACT_NAME)
             wait_for_sending_approved_block_request(network.bootstrap, network.peers[0].name, context.node_startup_timeout)
