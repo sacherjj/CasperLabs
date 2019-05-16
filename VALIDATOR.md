@@ -65,13 +65,55 @@ Server is listening on socket: casperlabs-node-data/.caspernode.sock
 
 
 ### Setting up keys
-You'll 2 sets of keys:
-1) `secp256r1` private key encoded in unencrypted `PKCS#8` format and `SHA256 with ECDSA X.509` certificate. 
-These will be used for node-to-node interaction. 
-2) [`ed25519` or `secp256k1`](/DEVELOPER.md/run-the-node). These are used as your validator identity. See the link to how to generate them.
+1. `secp256r1` (required) private key encoded in unencrypted `PKCS#8` format and `X.509` certificate. Used for node-to-node interaction. 
+2. `ed25519` (optional) private and public keys. Used as a validator identity. If not provided then a node starts in the read-only mode.
+
+#### Prerequisites: OpenSSL
+Download and install the latest version of the [openssl 1.1](https://github.com/openssl/openssl/releases).
+```bash
+cd /tmp
+curl https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz -o openssl.tar.gz
+tar -xzf openssl.tar.gz
+cd openssl-OpenSSL_1_1_1b
+./config
+make
+make test
+make install
+```
+
+#### Prerequisites: sha3sum
+Download and install the latest version of the [sha3sum](https://github.com/maandree/sha3sum).
+
+1. macOS: `brew install sha3sum`
+2. TODO: add other platforms
+
+#### Script
+You may want to use [the script](/docker/gen-keys.sh) which will generate all the keys. The commands below are excerpts from this script. 
+
+#### ed25519
+Generate private key:
+```bash
+openssl genpkey -algorithm Ed25519 -out ed25519-private.pem
+```
+
+Public key:
+```bash
+openssl pkey -in ed25519-private.pem -pubout -out ed25519-public.pem
+```
+
+To obtain your validator ID (used in bonds.txt file which contains a list of initially bonded of validators):
+```bash
+openssl pkey -outform DER -pubout -in ed25519-private.pem | tail -c +13 | openssl base64
+```
+
+Use as:
+```bash
+./node/target/universal/stage/bin/casperlabs-node run -s \
+    --casper-validator-private-key-path ed25519-private.pem \
+    --casper-validator-public-key-path ed25519-public.pem
+```
 
 #### secp256r1
-[Download and intstall the latest OpenSSL 1.1 version](/DEVELOPER.md/run-the-node)
 
 Generate private key:
 ```bash
@@ -80,14 +122,41 @@ openssl pkcs8 -topk8 -nocrypt -in secp256r1-private.pem -out secp256r1-private-p
 rm secp256r1-private.pem
 ```
 
-Generate certificate from the generated private key:
+Obtain node ID from the private key:
 ```bash
-openssl req -new -x509 -key secp256r1-private-pkcs8.pem -out node.cer -days 365
+NODE_ID=$(cat secp256r1-private-pkcs8.pem | \
+    openssl ec -text -noout | \
+    grep pub -A 5 | \
+    tail -n +2 | \
+    tr -d '\n[:space:]:' | \
+    sed 's/^04//' | \
+    keccak-256sum -x -l | \
+    tr -d ' -' | \
+    tail -c 41 | \
+    tr -d '\n')
 ```
 
-Now you can them as:
+Node ID is used for differentiating different nodes and used as an ID in casperlabs nodes' addresses:
+```
+casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40400&discovery=40404
+```
+The address above contains `c0a6c82062461c9b7f9f5c3120f44589393edf31` as a node ID.
+
+Generate certificate from the generated private key. Fill asked questions and enter the above `NODE_ID` as a `Common Name (CN)` 
 ```bash
-./node/target/universal/stage/bin/casperlabs-node run --tls-certificate node.cer --tls-key secp256r1-private-pkcs8.pem
+openssl req \
+	-new \
+	 -x509 \
+	 -key secp256r1-private-pkcs8.pem \
+	 -out node.certificate.pem \
+	 -days 365 \
+```
+
+Now you can use them as:
+```bash
+./node/target/universal/stage/bin/casperlabs-node run \
+    --tls-certificate node.certificate.pem \
+    --tls-key secp256r1-private-pkcs8.pem
 ```
 
 ### Configuring networking
