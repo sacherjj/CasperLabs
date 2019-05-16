@@ -104,44 +104,27 @@ object BlockAPI {
     } yield ()
   }
 
+  // TODO: Eventually remove in favor of `propose`.
   def createBlock[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics](
       blockApiLock: Semaphore[F]
-  ): F[DeployServiceResponse] = {
-    val errorMessage = "Could not create block."
-    MultiParentCasperRef.withCasper[F, DeployServiceResponse](
-      casper => {
-        Sync[F].bracket(blockApiLock.tryAcquire) {
-          case true =>
-            for {
-              _          <- Metrics[F].incrementCounter("create-blocks")
-              maybeBlock <- casper.createBlock
-              result <- maybeBlock match {
-                         case err: NoBlock =>
-                           DeployServiceResponse(
-                             success = false,
-                             s"Error while creating block: $err"
-                           ).pure[F]
-
-                         case Created(block) =>
-                           for {
-                             status <- casper.addBlock(block)
-                             res    = addResponse(status, block)
-                             _ <- Metrics[F]
-                                   .incrementCounter("create-blocks-success")
-                                   .whenA(res.success)
-                           } yield res
-                       }
-            } yield result
-
-          case false =>
-            DeployServiceResponse(success = false, "Error: There is another propose in progress.")
-              .pure[F]
-        }(blockApiLock.release.whenA(_))
-      },
-      errorMessage,
-      default = DeployServiceResponse(success = false, s"Error: $errorMessage").pure[F]
-    )
-  }
+  ): F[DeployServiceResponse] =
+    propose(blockApiLock) map { blockHash =>
+      val hash = PrettyPrinter.buildString(blockHash)
+      DeployServiceResponse(success = true, s"Success! Block $hash created and added.")
+    } handleError {
+      case InvalidArgument(msg) =>
+        DeployServiceResponse(success = false, s"Failure! $msg")
+      case Internal(msg) =>
+        DeployServiceResponse(success = false, msg)
+      case Aborted(msg) =>
+        DeployServiceResponse(success = false, s"Error: $msg")
+      case FailedPrecondition(msg) =>
+        DeployServiceResponse(success = false, s"Error while creating block: $msg")
+      case OutOfRange(msg) =>
+        DeployServiceResponse(success = false, s"Error while creating block: $msg")
+      case Unavailable(msg) =>
+        DeployServiceResponse(success = false, s"Error: Could not create block.")
+    }
 
   def propose[F[_]: Sync: MultiParentCasperRef: Log: Metrics](
       blockApiLock: Semaphore[F]
@@ -484,20 +467,4 @@ object BlockAPI {
       findResult.headOption.flatMap {
         case (_, blockWithTransform) => blockWithTransform.blockMessage
       }
-
-  private def addResponse(status: BlockStatus, block: BlockMessage): DeployServiceResponse =
-    status match {
-      case _: InvalidBlock =>
-        DeployServiceResponse(success = false, s"Failure! Invalid block: $status")
-      case _: ValidBlock =>
-        val hash = PrettyPrinter.buildString(block.blockHash)
-        DeployServiceResponse(success = true, s"Success! Block $hash created and added.")
-      case BlockException(ex) =>
-        DeployServiceResponse(success = false, s"Error during block processing: $ex")
-      case Processing =>
-        DeployServiceResponse(
-          success = false,
-          "No action taken since other thread is already processing the block."
-        )
-    }
 }
