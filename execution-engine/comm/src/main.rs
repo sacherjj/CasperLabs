@@ -56,7 +56,7 @@ fn main() {
                 .short("p")
                 .long("pages")
                 .value_name("NUM")
-                .help("Sets the number of max number of pages to use for lmdb's mmap")
+                .help("Sets the max number of pages to use for lmdb's mmap")
                 .takes_value(true),
         )
         .get_matches();
