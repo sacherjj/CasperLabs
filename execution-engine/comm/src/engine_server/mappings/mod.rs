@@ -6,10 +6,13 @@ use std::convert::{TryFrom, TryInto};
 use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
+use shared::logging;
+use shared::logging::log_level;
 use shared::newtypes::Blake2bHash;
 use storage::{
     global_state, history, history::CommitResult, op, transform, transform::TypeMismatch,
 };
+use LOG_SETTINGS;
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {
@@ -467,6 +470,7 @@ where
 {
     match input {
         Ok(CommitResult::RootNotFound) => {
+            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "RootNotFound");
             let mut root = ipc::RootNotFound::new();
             root.set_hash(prestate_hash.to_vec());
             let mut tmp_res = ipc::CommitResponse::new();
@@ -474,13 +478,29 @@ where
             tmp_res
         }
         Ok(CommitResult::Overflow) => {
+            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "Overflow");
             let overflow = ipc::AdditionOverflow::new();
             let mut tmp_res = ipc::CommitResponse::new();
             tmp_res.set_overflow(overflow);
             tmp_res
         }
         Ok(CommitResult::Success(post_state_hash)) => {
-            println!("Effects applied. New state hash is: {:?}", post_state_hash);
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+
+            properties.insert(
+                "post-state-hash".to_string(),
+                format!("{:?}", post_state_hash),
+            );
+
+            properties.insert("success".to_string(), true.to_string());
+
+            logging::log_props(
+                &*LOG_SETTINGS,
+                log_level::LogLevel::Info,
+                "effects applied; new state hash is: {post-state-hash}".to_owned(),
+                properties,
+            );
+
             let mut commit_result = ipc::CommitResult::new();
             let mut tmp_res = ipc::CommitResponse::new();
             commit_result.set_poststate_hash(post_state_hash.to_vec());
@@ -488,18 +508,21 @@ where
             tmp_res
         }
         Ok(CommitResult::KeyNotFound(key)) => {
+            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "KeyNotFound");
             let mut commit_response = ipc::CommitResponse::new();
             commit_response.set_key_not_found((&key).into());
             commit_response
         }
         Ok(CommitResult::TypeMismatch(type_mismatch)) => {
+            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "TypeMismatch");
             let mut commit_response = ipc::CommitResponse::new();
             commit_response.set_type_mismatch(type_mismatch.into());
             commit_response
         }
         // TODO(mateusz.gorski): We should be more specific about errors here.
         Err(storage_error) => {
-            println!("Error {:?} when applying effects", storage_error);
+            let log_message = format!("storage error {:?} when applying effects", storage_error);
+            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Error, &log_message);
             let mut err = ipc::PostEffectsError::new();
             let mut tmp_res = ipc::CommitResponse::new();
             err.set_message(format!("{:?}", storage_error));

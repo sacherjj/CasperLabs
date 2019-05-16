@@ -12,17 +12,18 @@ pub mod logger;
 pub(crate) mod utils;
 
 // log with simple stir message
-pub fn log(log_settings: &LogSettings, log_level: LogLevel, value: &str) {
+pub fn log(log_settings: &LogSettings, log_level: LogLevel, log_message: &str) {
     if log_settings.filter(log_level) {
         return;
     }
 
     logger::LOGGER_INIT.call_once(|| {
         log::set_logger(&logger::TERMINAL_LOGGER).expect("TERMINAL_LOGGER should be set");
-        log::set_max_level(log::LevelFilter::Trace);
+        log::set_max_level(log::LevelFilter::Debug);
     });
 
-    let log_message = LogMessage::new_msg(log_settings.to_owned(), log_level, value.to_owned());
+    let log_message =
+        LogMessage::new_msg(log_settings.to_owned(), log_level, log_message.to_owned());
 
     let json = jsonify(&log_message, false);
 
@@ -33,7 +34,7 @@ pub fn log(log_settings: &LogSettings, log_level: LogLevel, value: &str) {
         loglevel = log_message.log_level.to_uppercase(),
         priority = log_message.priority.value(),
         hostname = log_message.host_name.value(),
-        facility = log_message.process_name.snake_case(),
+        facility = log_message.process_name.value(),
         payload = json
     );
 }
@@ -51,7 +52,7 @@ pub fn log_props(
 
     logger::LOGGER_INIT.call_once(|| {
         log::set_logger(&logger::TERMINAL_LOGGER).expect("TERMINAL_LOGGER should be set");
-        log::set_max_level(log::LevelFilter::Trace);
+        log::set_max_level(log::LevelFilter::Debug);
     });
 
     let log_message = LogMessage::new_props(
@@ -70,7 +71,7 @@ pub fn log_props(
         loglevel = log_message.log_level.to_uppercase(),
         priority = log_message.priority.value(),
         hostname = log_message.host_name.value(),
-        facility = log_message.process_name.snake_case(),
+        facility = log_message.process_name.value(),
         payload = json
     );
 }

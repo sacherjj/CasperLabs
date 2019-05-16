@@ -14,61 +14,68 @@ extern crate wasm_prep;
 
 pub mod engine_server;
 
+use std::collections::btree_map::BTreeMap;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::atomic;
+use std::sync::Arc;
 
 use clap::{App, Arg, ArgMatches};
 use dirs::home_dir;
 use engine_server::*;
 use execution_engine::engine::EngineState;
 use lmdb::DatabaseFlags;
+
 use shared::logging::log_level::LogLevel;
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
 use shared::logging::{log_level, log_settings};
 use shared::{logging, socket};
-use std::collections::btree_map::BTreeMap;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
 use storage::global_state::lmdb::LmdbGlobalState;
 use storage::history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
-const DEFAULT_DATA_DIR_RELATIVE: &str = ".casperlabs";
-const GLOBAL_STATE_DIR: &str = "global_state";
-
-const GET_HOME_DIR_EXPECT: &str = "Could not get home directory";
-const CREATE_DATA_DIR_EXPECT: &str = "Could not create directory";
-const LMDB_ENVIRONMENT_EXPECT: &str = "Could not create LmdbEnvironment";
-const LMDB_TRIE_STORE_EXPECT: &str = "Could not create LmdbTrieStore";
-const LMDB_GLOBAL_STATE_EXPECT: &str = "Could not create LmdbGlobalState";
-
-const ARG_SOCKET: &str = "socket";
-const ARG_SOCKET_HELP: &str = "socket file";
-const ARG_SOCKET_EXPECT: &str = "socket required";
-const REMOVING_SOCKET_FILE_MESSAGE: &str = "removing old socket file";
-const REMOVING_SOCKET_FILE_EXPECT: &str = "failed to remove old socket file";
-
-const ARG_LOG_LEVEL: &str = "loglevel";
-const ARG_LOG_LEVEL_VALUE: &str = "LOGLEVEL";
-const ARG_LOG_LEVEL_HELP: &str = "[ fatal | error | warning | info | debug ]";
-
-const ARG_DATA_DIR: &str = "data-dir";
-const ARG_DATA_DIR_SHORT: &str = "d";
-const ARG_DATA_DIR_VALUE: &str = "DIR";
-const ARG_DATA_DIR_HELP: &str = "Sets the data directory";
-
-const PROC_NAME: &str = "Execution Engine Server";
+// exe / proc
+const PROC_NAME: &str = "casperlabs-engine-grpc-server";
+const APP_NAME: &str = "Execution Engine Server";
 const SERVER_START_MESSAGE: &str = "starting Execution Engine Server";
 const SERVER_LISTENING_TEMPLATE: &str = "{listener} is listening on socket: {socket}";
 const SERVER_START_EXPECT: &str = "failed to start Execution Engine Server";
 #[allow(dead_code)]
 const SERVER_STOP_MESSAGE: &str = "stopping Execution Engine Server";
 
+// data-dir / lmdb
+const ARG_DATA_DIR: &str = "data-dir";
+const ARG_DATA_DIR_SHORT: &str = "d";
+const ARG_DATA_DIR_VALUE: &str = "DIR";
+const ARG_DATA_DIR_HELP: &str = "Sets the data directory";
+const DEFAULT_DATA_DIR_RELATIVE: &str = ".casperlabs";
+const GLOBAL_STATE_DIR: &str = "global_state";
+const GET_HOME_DIR_EXPECT: &str = "Could not get home directory";
+const CREATE_DATA_DIR_EXPECT: &str = "Could not create directory";
+const LMDB_ENVIRONMENT_EXPECT: &str = "Could not create LmdbEnvironment";
+const LMDB_TRIE_STORE_EXPECT: &str = "Could not create LmdbTrieStore";
+const LMDB_GLOBAL_STATE_EXPECT: &str = "Could not create LmdbGlobalState";
+
+// socket
+const ARG_SOCKET: &str = "socket";
+const ARG_SOCKET_HELP: &str = "socket file";
+const ARG_SOCKET_EXPECT: &str = "socket required";
+const REMOVING_SOCKET_FILE_MESSAGE: &str = "removing old socket file";
+const REMOVING_SOCKET_FILE_EXPECT: &str = "failed to remove old socket file";
+
+// loglevel
+const ARG_LOG_LEVEL: &str = "loglevel";
+const ARG_LOG_LEVEL_VALUE: &str = "LOGLEVEL";
+const ARG_LOG_LEVEL_HELP: &str = "[ fatal | error | warning | info | debug ]";
+
 // if true expect command line args if false use default values
 static CHECK_ARGS: atomic::AtomicBool = atomic::AtomicBool::new(false);
 
+// command line args
 lazy_static! {
     static ref ARG_MATCHES: clap::ArgMatches<'static> = get_args();
 }
+
+// single log_settings instance for app
 lazy_static! {
     static ref LOG_SETTINGS: log_settings::LogSettings = get_log_settings();
 }
@@ -128,7 +135,7 @@ fn set_panic_hook() {
 
 // get command line arguments
 fn get_args() -> ArgMatches<'static> {
-    App::new(PROC_NAME)
+    App::new(APP_NAME)
         .arg(
             Arg::with_name(ARG_LOG_LEVEL)
                 .required(true)

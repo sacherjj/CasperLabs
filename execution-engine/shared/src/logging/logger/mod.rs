@@ -9,7 +9,7 @@ pub(crate) struct TerminalLogger;
 
 impl log::Log for TerminalLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= log::Level::Trace
+        metadata.target().starts_with("shared::logging") && metadata.level() <= log::Level::Trace
     }
 
     fn log(&self, record: &Record) {
@@ -33,18 +33,6 @@ mod tests {
     use crate::logging::utils::jsonify;
 
     const PROC_NAME: &str = "ee-shared-lib-logger-tests";
-
-    //    #[test]
-    //    fn should_log_to_console() {
-    //        log::set_logger(&TERMINAL_LOGGER).expect("TerminalLogger should be set");
-    //        log::set_max_level(log::LevelFilter::Trace);
-    //
-    //        log::trace!("trace");
-    //        log::debug!("debug");
-    //        log::info!("info");
-    //        log::warn!("warn");
-    //        log::error!("err");
-    //    }
 
     #[test]
     fn should_log_structured_message() {
@@ -71,7 +59,7 @@ mod tests {
             loglevel = log_message.log_level.to_uppercase(),
             priority = log_message.priority.value(),
             hostname = log_message.host_name.value(),
-            facility = log_message.process_name.snake_case(),
+            facility = log_message.process_name.value(),
             payload = json
         );
     }

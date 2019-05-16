@@ -19,33 +19,6 @@ where
     }
 }
 
-/// returns a snake_cased version of input
-pub fn snakeify(input: String) -> String {
-    if input.is_empty() {
-        return input;
-    }
-
-    const SEPARATORS: [char; 5] = ['-', '-', '_', ' ', '.'];
-
-    input
-        .trim_start_matches(|c| SEPARATORS.contains(&c))
-        .trim_end_matches(|c| SEPARATORS.contains(&c))
-        .chars()
-        .enumerate()
-        .fold("".to_string(), |mut snake, ci: (_, char)| {
-            let c = ci.1;
-            if SEPARATORS.contains(&c) {
-                snake.push('_');
-            } else if !c.is_uppercase() {
-                snake.push(c);
-            } else {
-                snake.push(c.to_ascii_lowercase());
-            }
-
-            snake
-        })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,19 +80,5 @@ mod tests {
             sermock.eq(&sermock_clone),
             "instances should contain the same data"
         );
-    }
-
-    #[test]
-    fn should_snake_case() {
-        let snakey = snakeify("I am.A-Str6n9e_stRing".to_owned());
-
-        assert_eq!(snakey, "i_am_a_str6n9e_string", "expected snake case")
-    }
-
-    #[test]
-    fn should_trim_snake_case() {
-        let snakey = snakeify(" .-_ I am.A-Str6n9e_stRing .-_ ".to_owned());
-
-        assert_eq!(snakey, "i_am_a_str6n9e_string", "expected snake case")
     }
 }

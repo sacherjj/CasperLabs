@@ -3,18 +3,22 @@ use std::process;
 use serde::Serialize;
 
 use crate::logging::log_level::*;
-use crate::logging::utils::snakeify;
 
 /// container for logsettings from the host
 #[derive(Clone, Debug, Serialize)]
 pub struct LogSettings {
     pub log_level_filter: LogLevelFilter,
     pub process_id: ProcessId,
+    /// contains a string identifying the running process
+    /// by convention should be a single token without whitespace
     pub process_name: ProcessName,
     pub host_name: HostName,
 }
 
 impl LogSettings {
+    /// process_name: name or key identifying the current process;
+    ///     should have no spaces or punctuations by convention
+    /// log_level_filter: only log messages with priority >= to this log level will be logged
     pub fn new(process_name: &str, log_level_filter: LogLevelFilter) -> LogSettings {
         LogSettings {
             log_level_filter,
@@ -84,10 +88,6 @@ impl ProcessName {
     #[allow(dead_code)]
     pub(crate) fn value(&self) -> String {
         self.0.to_owned()
-    }
-
-    pub(crate) fn snake_case(&self) -> String {
-        snakeify(self.0.to_owned())
     }
 }
 
