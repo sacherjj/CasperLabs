@@ -2,6 +2,10 @@ use std::collections::{BTreeMap, HashMap};
 
 use common::key::Key;
 use common::value::Value;
+use linked_hash_map::LinkedHashMap;
+use meter::heap_meter::HeapSize;
+use meter::Meter;
+use parking_lot::Mutex;
 use shared::newtypes::Validated;
 use storage::global_state::{ExecutionEffect, StateReader};
 use storage::op::Op;
@@ -14,9 +18,69 @@ pub enum QueryResult {
     ValueNotFound(String),
 }
 
+/// Keeps track of already accessed keys.
+/// We deliberately separate cached Reads from cached mutations
+/// because we want to invalidate Reads' cache so it doesn't grow too fast.
+pub struct TrackingCopyCache<M> {
+    max_cache_size: usize,
+    current_cache_size: Mutex<usize>,
+    reads_cached: LinkedHashMap<Key, Value>,
+    muts_cached: HashMap<Key, Value>,
+    meter: M,
+}
+
+impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
+    /// Creates instance of `TrackingCopyCache` with specified `max_cache_size`,
+    /// above which least-recently-used elements of the cache are invalidated.
+    /// Measurements of elements' "size" is done with the usage of `Meter` instance.
+    pub fn new(max_cache_size: usize, meter: M) -> TrackingCopyCache<M> {
+        TrackingCopyCache {
+            max_cache_size,
+            current_cache_size: Mutex::new(0),
+            reads_cached: LinkedHashMap::new(),
+            muts_cached: HashMap::new(),
+            meter,
+        }
+    }
+
+    /// Inserts `key` and `value` pair to Read cache.
+    pub fn insert_read(&mut self, key: Key, value: Value) {
+        let element_size = Meter::measure(&self.meter, &key, &value);
+        self.reads_cached.insert(key, value);
+        *self.current_cache_size.lock() += element_size;
+        while *self.current_cache_size.lock() > self.max_cache_size {
+            match self.reads_cached.pop_front() {
+                Some((k, v)) => {
+                    let element_size = Meter::measure(&self.meter, &k, &v);
+                    *self.current_cache_size.lock() -= element_size;
+                }
+                None => break,
+            }
+        }
+    }
+
+    /// Inserts `key` and `value` pair to Write/Add cache.
+    pub fn insert_write(&mut self, key: Key, value: Value) {
+        self.muts_cached.insert(key, value.clone());
+    }
+
+    /// Gets value from `key` in the cache.
+    pub fn get(&mut self, key: &Key) -> Option<&Value> {
+        if let Some(value) = self.muts_cached.get(&key) {
+            return Some(value);
+        };
+
+        self.reads_cached.get_refresh(key).map(|v| &*v)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.reads_cached.is_empty() && self.muts_cached.is_empty()
+    }
+}
+
 pub struct TrackingCopy<R: StateReader<Key, Value>> {
     reader: R,
-    cache: HashMap<Key, Value>,
+    cache: TrackingCopyCache<HeapSize>,
     ops: HashMap<Key, Op>,
     fns: HashMap<Key, Transform>,
 }
@@ -33,7 +97,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
-            cache: HashMap::new(),
+            cache: TrackingCopyCache::new(1024 * 16, HeapSize), //TODO: Should `max_cache_size` be fraction of Wasm memory limit?
             ops: HashMap::new(),
             fns: HashMap::new(),
         }
@@ -44,7 +108,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
             return Ok(Some(value.clone()));
         }
         if let Some(value) = self.reader.read(&**k)? {
-            self.cache.insert(**k, value.clone());
+            self.cache.insert_read(**k, value.clone());
             Ok(Some(value))
         } else {
             Ok(None)
@@ -62,7 +126,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
 
     pub fn write(&mut self, k: Validated<Key>, v: Validated<Value>) {
         let v_local = v.into_raw();
-        let _ = self.cache.insert(*k, v_local.clone());
+        self.cache.insert_write(*k, v_local.clone());
         add(&mut self.ops, *k, Op::Write);
         add(&mut self.fns, *k, Transform::Write(v_local));
     }
@@ -93,7 +157,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                 };
                 match t.clone().apply(curr) {
                     Ok(new_value) => {
-                        let _ = self.cache.insert(*k, new_value);
+                        self.cache.insert_write(*k, new_value);
                         add(&mut self.ops, *k, Op::Add);
                         add(&mut self.fns, *k, t);
                         Ok(AddResult::Success)
@@ -216,7 +280,8 @@ mod tests {
     use storage::op::Op;
     use storage::transform::Transform;
 
-    use super::{AddResult, QueryResult, TrackingCopy, Validated};
+    use super::{AddResult, QueryResult, Validated};
+    use trackingcopy::TrackingCopy;
 
     struct CountingDb {
         count: Rc<Cell<i32>>,
@@ -632,5 +697,42 @@ mod tests {
                 panic!("Query failed when it should not have!");
             }
         }
+    }
+}
+
+#[cfg(test)]
+pub mod tracking_copy_cache {
+    use common::key::Key;
+    use common::value::Value;
+    use meter::count_meter::Count;
+    use trackingcopy::TrackingCopyCache;
+
+    #[test]
+    fn cache_reads_invalidation() {
+        let mut tc_cache = TrackingCopyCache::new(2, Count);
+        let (k1, v1) = (Key::Hash([1u8; 32]), Value::Int32(1));
+        let (k2, v2) = (Key::Hash([2u8; 32]), Value::Int32(2));
+        let (k3, v3) = (Key::Hash([3u8; 32]), Value::Int32(3));
+        tc_cache.insert_read(k1, v1);
+        tc_cache.insert_read(k2, v2.clone());
+        tc_cache.insert_read(k3, v3.clone());
+        assert!(tc_cache.get(&k1).is_none()); // first entry should be invalidated
+        assert_eq!(tc_cache.get(&k2), Some(&v2)); // k2 and k3 should be there
+        assert_eq!(tc_cache.get(&k3), Some(&v3));
+    }
+
+    #[test]
+    fn cache_writes_not_invalidated() {
+        let mut tc_cache = TrackingCopyCache::new(2, Count);
+        let (k1, v1) = (Key::Hash([1u8; 32]), Value::Int32(1));
+        let (k2, v2) = (Key::Hash([2u8; 32]), Value::Int32(2));
+        let (k3, v3) = (Key::Hash([3u8; 32]), Value::Int32(3));
+        tc_cache.insert_write(k1, v1.clone());
+        tc_cache.insert_read(k2, v2.clone());
+        tc_cache.insert_read(k3, v3.clone());
+        // Writes are not subject to cache invalidation
+        assert_eq!(tc_cache.get(&k1), Some(&v1));
+        assert_eq!(tc_cache.get(&k2), Some(&v2)); // k2 and k3 should be there
+        assert_eq!(tc_cache.get(&k3), Some(&v3));
     }
 }

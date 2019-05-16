@@ -16,7 +16,7 @@ import grpc
 
 RESOURCES_PATH = "../../../integration-testing/resources/"
 
-CONTRACT = os.path.join(RESOURCES_PATH, "helloname.wasm")
+CONTRACT = os.path.join(RESOURCES_PATH, "test_helloname.wasm")
 PAYMENT = os.path.join(RESOURCES_PATH, "payment.wasm")
 SESSION = os.path.join(RESOURCES_PATH, "session.wasm")
 
