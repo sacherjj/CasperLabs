@@ -31,7 +31,7 @@ const GLOBAL_STATE_DIR: &str = "global_state";
 // 1 GiB = 1073741824 bytes
 // page size on x86_64 linux = 4096 bytes
 // 1073741824 / 4096 = 262144
-const DEFAULT_PAGES: usize = 262144;
+const DEFAULT_PAGES: usize = 262_144;
 
 const GET_PAGES_EXPECT: &str = "Could not parse pages argument";
 const GET_HOME_DIR_EXPECT: &str = "Could not get home directory";
