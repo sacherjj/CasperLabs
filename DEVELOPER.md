@@ -340,37 +340,12 @@ cargo run --bin casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 
 In the root of CasperLabs.
 
-Firstly, you'll need to generate `ed25519`. 
+[Generate secp256r1 key and X.509 certificate firstly](/VALIDATOR.md/setting-up-keys).
 
-Download and install the latest version of the [openssl 1.1](https://github.com/openssl/openssl/releases).
-```bash
-cd /tmp
-curl https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz -o openssl.tar.gz
-tar -xzf openssl.tar.gz
-cd openssl-OpenSSL_1_1_1b
-./config
-make
-make test
-make install
-```
-
-You may want to install `openssl` into non-default location, check [INSTALL guide](https://github.com/openssl/openssl/blob/master/INSTALL) for more information.
-
-Generate private key:
-```bash
-openssl genpkey -algorithm Ed25519 -out ed25519-private.pem
-```
-
-Public key:
-```bash
-openssl pkey -in ed25519-private.pem -pubout -out ed25519-public.pem
-```
-
-Now you can use them as:
 ```bash
 ./node/target/universal/stage/bin/casperlabs-node run -s \
-    --casper-validator-private-key-path ed25519-private.pem \
-    --casper-validator-public-key-path ed25519-public.pem
+    --tls-certificate node.certificate.pem \
+    --tls-key secp256r1-private-pkcs8.pem
 ```
 
 ### Deploying data
