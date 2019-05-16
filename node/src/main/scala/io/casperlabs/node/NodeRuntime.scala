@@ -9,6 +9,7 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
+import cats.syntax.show._
 import com.olegpy.meow.effects._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
@@ -29,6 +30,7 @@ import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import io.casperlabs.comm.rp._
 import io.casperlabs.comm.transport._
@@ -273,7 +275,10 @@ class NodeRuntime private[node] (
 
     val info: Effect[Unit] =
       if (conf.casper.standalone) Log[Effect].info(s"Starting stand-alone node.")
-      else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
+      else
+        Log[Effect].info(
+          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).getOrElse("n/a")}"
+        )
 
     val fetchLoop: Effect[Unit] =
       for {
