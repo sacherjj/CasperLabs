@@ -25,7 +25,7 @@ import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
-import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
@@ -186,20 +186,20 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
       } yield ()
     )
 
-  def getApprovedBlockTransform(): F[Option[ApprovedBlockWithTransforms]] =
+  def getApprovedBlock(): F[Option[ApprovedBlock]] =
     lock.withPermit(
       readAllBytesFromFile(approvedBlockPath).map {
         case bytes if bytes.isEmpty =>
           None
         case bytes =>
-          Some(ApprovedBlockWithTransforms.parseFrom(bytes))
+          Some(ApprovedBlock.parseFrom(bytes))
       }
     )
 
-  def putApprovedBlockTransform(block: ApprovedBlock, transforms: Seq[TransformEntry]): F[Unit] =
+  def putApprovedBlock(block: ApprovedBlock): F[Unit] =
     lock.withPermit {
       val tmpFile = approvedBlockPath.resolveSibling(approvedBlockPath.getFileName + ".tmp")
-      writeToFile(tmpFile, ApprovedBlockWithTransforms(Some(block), transforms).toByteArray) >>
+      writeToFile(tmpFile, block.toByteArray) >>
         moveFile(tmpFile, approvedBlockPath, StandardCopyOption.ATOMIC_MOVE).as(())
     }
 

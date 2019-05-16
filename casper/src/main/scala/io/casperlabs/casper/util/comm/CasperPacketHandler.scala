@@ -1,12 +1,12 @@
 package io.casperlabs.casper.util.comm
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync}
+import cats.data.OptionT
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
@@ -19,19 +19,18 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.{MonadThrowable, MonadTrans}
 import io.casperlabs.comm.CommError.ErrorHandler
-import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.discovery.NodeUtils._
+import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import io.casperlabs.comm.transport.{Blob, TransportLayer}
 import io.casperlabs.comm.transport
+import io.casperlabs.comm.transport.{Blob, TransportLayer}
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.{Log, LogSource, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -59,16 +58,35 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       executionEngineService: ExecutionEngineService[F],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] = {
-    val handler: F[CasperPacketHandler[F]] = BlockStore[F].getApprovedBlockTransform.flatMap {
-      case Some(approvedBlockWithTransforms)
-          if approvedBlockWithTransforms.approvedBlock.nonEmpty =>
+    val approvedBlockWithTransformsOpt = for {
+      approvedBlockOpt <- BlockStore[F].getApprovedBlock()
+      genesisOpt       = approvedBlockOpt.flatMap(_.candidate.flatMap(_.block))
+      transformsOpt <- genesisOpt match {
+                        case Some(genesis) =>
+                          BlockStore[F].getTransforms(genesis.blockHash)
+                        case None =>
+                          Log[F]
+                            .info(
+                              "can't find transforms from BlockStore for the saved approvedBlock"
+                            ) *> none[Seq[TransformEntry]]
+                            .pure[F]
+                      }
+      re = (approvedBlockOpt, transformsOpt) match {
+        case (Some(approvedBlock), Some(transform)) =>
+          Some(ApprovedBlockWithTransforms(approvedBlock, transform))
+        case _ => None
+      }
+    } yield re
+
+    val handler: F[CasperPacketHandler[F]] = approvedBlockWithTransformsOpt.flatMap {
+      case Some(approvedBlockWithTransforms) =>
         // We have an approved block so the network is already up and so no genesis ceremony needed.
         connectToExistingNetwork[F](conf, approvedBlockWithTransforms)
-      case _ if conf.approveGenesis =>
+      case None if conf.approveGenesis =>
         connectAsGenesisValidator[F](conf)
-      case _ if conf.standalone =>
+      case None if conf.standalone =>
         initBootstrap[F](conf, toTask)
-      case _ =>
+      case None =>
         defaultMode[F](conf, delay, toTask)
     }
     establishMetrics[F] *> handler
@@ -187,7 +205,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       conf: CasperConf,
       approvedBlockWithTransforms: ApprovedBlockWithTransforms
   ): F[CasperPacketHandler[F]] = {
-    val ApprovedBlockWithTransforms(Some(approvedBlock), transforms) =
+    val ApprovedBlockWithTransforms(approvedBlock, transforms) =
       approvedBlockWithTransforms
     val genesis = approvedBlock.candidate.flatMap(_.block).get
     for {
@@ -337,7 +355,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      validatorId,
                      capserHandlerInternal
                    )
-                 case Some(ApprovedBlockWithTransforms(Some(approvedBlock), transforms)) =>
+                 case Some(ApprovedBlockWithTransforms(approvedBlock, transforms)) =>
                    val genesis = approvedBlock.candidate.flatMap(_.block).get
                    for {
                      _ <- insertIntoBlockAndDagStore[F](genesis, transforms, approvedBlock)
@@ -654,7 +672,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                                   dag
                                 )
                    _ <- insertIntoBlockAndDagStore[F](genesis, transforms, b)
-                   _ <- LastApprovedBlock[F].set(ApprovedBlockWithTransforms(Some(b), transforms))
+                   _ <- LastApprovedBlock[F].set(ApprovedBlockWithTransforms(b, transforms))
                    casper <- MultiParentCasper
                               .fromTransportLayer[F](
                                 validatorId,
@@ -678,7 +696,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     for {
       _ <- BlockStore[F].put(genesis.blockHash, genesis, transforms)
       _ <- BlockDagStorage[F].insert(genesis)
-      _ <- BlockStore[F].putApprovedBlockTransform(approvedBlock, transforms)
+      _ <- BlockStore[F].putApprovedBlock(approvedBlock)
     } yield ()
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](

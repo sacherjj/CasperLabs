@@ -7,7 +7,7 @@ import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage}
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.metrics.implicits._
-import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.language.higherKinds
 
@@ -40,9 +40,9 @@ trait BlockStore[F[_]] {
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
     get(blockHash).map(_.isDefined)
 
-  def getApprovedBlockTransform(): F[Option[ApprovedBlockWithTransforms]]
+  def getApprovedBlock(): F[Option[ApprovedBlock]]
 
-  def putApprovedBlockTransform(block: ApprovedBlock, transforms: Seq[TransformEntry]): F[Unit]
+  def putApprovedBlock(block: ApprovedBlock): F[Unit]
 
   def checkpoint(): F[Unit]
 

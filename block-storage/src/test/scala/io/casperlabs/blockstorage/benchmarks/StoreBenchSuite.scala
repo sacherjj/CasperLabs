@@ -34,7 +34,7 @@ import io.casperlabs.ipc.Transform.TransformInstance
 import io.casperlabs.ipc.{DeployCode => _, _}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
-import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
+import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.{metrics, shared}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -191,7 +191,7 @@ object Init {
   def inMemBlockStore = InMemBlockStore.create[Task](
     Monad[Task],
     InMemBlockStore.emptyMapRef[Task].runSyncUnsafe(),
-    Ref[Task].of(none[ApprovedBlockWithTransforms]).runSyncUnsafe(),
+    Ref[Task].of(none[ApprovedBlock]).runSyncUnsafe(),
     metricsNop
   )
 

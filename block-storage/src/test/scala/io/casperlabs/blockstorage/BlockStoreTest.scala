@@ -21,7 +21,7 @@ import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElements
 import io.casperlabs.ipc.{Key, KeyHash, Op, ReadOp, Transform, TransformEntry, TransformIdentity}
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
-import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
+import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -130,7 +130,7 @@ class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val test = for {
       refTask          <- emptyMapRef[Task]
-      approvedBlockRef <- Ref[Task].of(none[ApprovedBlockWithTransforms])
+      approvedBlockRef <- Ref[Task].of(none[ApprovedBlock])
       metrics          = new MetricsNOP[Task]()
       store            = InMemBlockStore.create[Task](Monad[Task], refTask, approvedBlockRef, metrics)
       _                <- store.find(_ => true).map(map => assert(map.isEmpty))
@@ -245,12 +245,12 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
 
       for {
         firstStore          <- createBlockStore(blockStoreDataDir)
-        _                   <- firstStore.putApprovedBlockTransform(approvedBlock, transforEntrys)
+        _                   <- firstStore.putApprovedBlock(approvedBlock)
         _                   <- firstStore.close()
         secondStore         <- createBlockStore(blockStoreDataDir)
-        storedApprovedBlock <- secondStore.getApprovedBlockTransform
+        storedApprovedBlock <- secondStore.getApprovedBlock
         _ = storedApprovedBlock shouldBe Some(
-          ApprovedBlockWithTransforms(Some(approvedBlock), transforEntrys)
+          approvedBlock
         )
         _ <- secondStore.close()
       } yield ()

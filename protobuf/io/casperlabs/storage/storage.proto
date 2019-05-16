@@ -11,8 +11,3 @@ message BlockMsgWithTransform {
     io.casperlabs.casper.protocol.BlockMessage block_message = 1;
     repeated io.casperlabs.ipc.TransformEntry transform_entry = 2;
 }
-
-message ApprovedBlockWithTransforms {
-    io.casperlabs.casper.protocol.ApprovedBlock approvedBlock = 1;
-    repeated io.casperlabs.ipc.TransformEntry transform_entry = 2;
-}

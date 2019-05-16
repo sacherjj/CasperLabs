@@ -14,7 +14,7 @@ import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Resources.withResource
-import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
+import io.casperlabs.storage.BlockMsgWithTransform
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
 import org.lmdbjava._
@@ -97,10 +97,10 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
       }
     }
 
-  def getApprovedBlockTransform(): F[Option[ApprovedBlockWithTransforms]] =
-    none[ApprovedBlockWithTransforms].pure[F]
+  def getApprovedBlock(): F[Option[ApprovedBlock]] =
+    none[ApprovedBlock].pure[F]
 
-  def putApprovedBlockTransform(block: ApprovedBlock, transforms: Seq[TransformEntry]): F[Unit] =
+  def putApprovedBlock(block: ApprovedBlock): F[Unit] =
     ().pure[F]
 
   def checkpoint(): F[Unit] =

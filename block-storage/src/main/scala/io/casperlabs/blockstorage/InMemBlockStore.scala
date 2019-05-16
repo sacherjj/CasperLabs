@@ -9,7 +9,7 @@ import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.{ApprovedBlockWithTransforms, BlockMsgWithTransform}
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.language.higherKinds
 
@@ -17,7 +17,7 @@ class InMemBlockStore[F[_]] private (
     implicit
     monadF: Monad[F],
     refF: Ref[F, Map[BlockHash, BlockMsgWithTransform]],
-    approvedBlockRef: Ref[F, Option[ApprovedBlockWithTransforms]]
+    approvedBlockRef: Ref[F, Option[ApprovedBlock]]
 ) extends BlockStore[F] {
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
@@ -29,11 +29,11 @@ class InMemBlockStore[F[_]] private (
   def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
     refF.update(_ + f)
 
-  def getApprovedBlockTransform(): F[Option[ApprovedBlockWithTransforms]] =
+  def getApprovedBlock(): F[Option[ApprovedBlock]] =
     approvedBlockRef.get
 
-  def putApprovedBlockTransform(block: ApprovedBlock, transforms: Seq[TransformEntry]): F[Unit] =
-    approvedBlockRef.set(Some(ApprovedBlockWithTransforms(Some(block), transforms)))
+  def putApprovedBlock(block: ApprovedBlock): F[Unit] =
+    approvedBlockRef.set(Some(block))
 
   def checkpoint(): F[Unit] =
     ().pure[F]
@@ -50,7 +50,7 @@ object InMemBlockStore {
       implicit
       monadF: Monad[F],
       refF: Ref[F, Map[BlockHash, BlockMsgWithTransform]],
-      approvedBlockRef: Ref[F, Option[ApprovedBlockWithTransforms]],
+      approvedBlockRef: Ref[F, Option[ApprovedBlock]],
       metricsF: Metrics[F]
   ): BlockStore[F] =
     new InMemBlockStore[F] with MeteredBlockStore[F] {
@@ -63,7 +63,7 @@ object InMemBlockStore {
     import io.casperlabs.catscontrib.effect.implicits._
     import io.casperlabs.metrics.Metrics.MetricsNOP
     val refId            = emptyMapRef[Id](syncId)
-    val approvedBlockRef = Ref[Id].of(none[ApprovedBlockWithTransforms])
+    val approvedBlockRef = Ref[Id].of(none[ApprovedBlock])
 
     implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(syncId)
     InMemBlockStore.create(syncId, refId, approvedBlockRef, metrics)
