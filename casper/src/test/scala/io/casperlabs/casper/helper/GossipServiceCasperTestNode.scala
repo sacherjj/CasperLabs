@@ -538,7 +538,7 @@ object GossipServiceCasperTestNodeFactory {
 
     // The following methods are not tested in these suites.
 
-    override def addApproval(request: AddApprovalRequest): F[Empty] = ???
+    override def addApproval(request: AddApprovalRequest): F[Unit] = ???
     override def getGenesisCandidate(
         request: GetGenesisCandidateRequest
     ): F[consensus.GenesisCandidate] = ???

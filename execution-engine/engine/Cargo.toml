@@ -12,7 +12,6 @@ storage = { path = "../storage" }
 common = { path = "../common", features = ["std", "gens"], package = "casperlabs-contract-ffi" }
 failure = "0.1.5"
 wasm-prep = { path = "../wasm-prep" }
-vm = { path = "../vm" }
 clap = "2.32.0"
 parking_lot = "0.7.1"
 rand = "0.6.1"

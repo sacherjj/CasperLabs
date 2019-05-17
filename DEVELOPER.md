@@ -351,7 +351,7 @@ If you're doing it for the first time you don't have private and public keys. Th
 In the root of CasperLabs, run:
 
 ```
-./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 deploy --from 00000000000000000000 --gas-limit 100000000 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
+./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 deploy --from 00000000000000000000 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
 ```
 
 At the moment, payment wasm file is not used so use the same file as for the `--session`.
@@ -508,9 +508,9 @@ This tells `sbt` to run `JMH` benchmarks from the `blockStorage` project with th
 This procedure requires machine with at least 32GB RAM.
 This is a recommended way to run benchmarks.
 
-There is also a properties file which could be use to configure some values: `block-storage/src/test/resources/block-store-benchmark.properties` 
+There is also a properties file which could be use to configure some values: `block-storage/src/test/resources/block-store-benchmark.properties`
 
-For more information about JMH, you can visit JMH project page: http://openjdk.java.net/projects/code-tools/jmh/ 
+For more information about JMH, you can visit JMH project page: http://openjdk.java.net/projects/code-tools/jmh/
 
 ## Description of subprojects
 

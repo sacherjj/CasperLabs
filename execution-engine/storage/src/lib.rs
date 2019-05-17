@@ -11,6 +11,10 @@ extern crate shared;
 extern crate wasmi;
 
 #[cfg(test)]
+#[macro_use]
+extern crate lazy_static;
+
+#[cfg(test)]
 extern crate proptest;
 
 extern crate core;

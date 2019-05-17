@@ -24,7 +24,7 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
+import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, syncId, taskLiftEitherT}
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
@@ -80,6 +80,9 @@ class NodeRuntime private[node] (
     } yield conf).toEffect
 
     val logEff: Log[Effect] = Log.eitherTLog(Monad[Task], log)
+
+    val logId: Log[Id]         = Log.logId
+    val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
 
     rpConfState >>= (_.runState { implicit state =>
       val resources = for {
@@ -176,7 +179,9 @@ class NodeRuntime private[node] (
               safetyOracle,
               blockStore,
               executionEngineService,
-              scheduler
+              scheduler,
+              logId,
+              metricsId
             )
 
         _ <- api.Servers.httpServerR(
@@ -209,7 +214,9 @@ class NodeRuntime private[node] (
                 eitherTApplicativeAsk(effects.peerNodeAsk(state)),
                 multiParentCasperRef,
                 executionEngineService,
-                scheduler
+                scheduler,
+                logId,
+                metricsId
               )
             } else {
               casper.transport.apply(
@@ -310,7 +317,7 @@ class NodeRuntime private[node] (
     )
 
   private def rpConf[F[_]: Sync](local: Node, maybeBootstrap: Option[Node]) =
-    Ref.of(
+    Ref.of[F, RPConf](
       RPConf(
         local,
         maybeBootstrap,

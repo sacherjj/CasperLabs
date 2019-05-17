@@ -54,9 +54,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val gasLimit =
       opt[Long](
         descr =
-          "The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
+          "[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
         validate = _ > 0,
-        required = true
+        required = false // Leaving it here for now so old examples don't complain about its presence.
       )
 
     val gasPrice = opt[Long](

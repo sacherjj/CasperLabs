@@ -4,6 +4,8 @@ import java.util.concurrent.TimeUnit
 
 import com.google.protobuf.empty.Empty
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus
+import io.casperlabs.node.api.casper.{CasperGrpcMonix, DeployRequest}
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
@@ -19,37 +21,35 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
       .maxInboundMessageSize(DefaultMaxMessageSize)
       .build()
 
-  private val stub = CasperMessageGrpcMonix.stub(channel)
+  private val deployServiceStub = CasperMessageGrpcMonix.stub(channel)
+  private val casperServiceStub = CasperGrpcMonix.stub(channel)
 
-  def deploy(d: DeployData): Task[Either[Throwable, String]] =
-    stub.doDeploy(d).map { response =>
-      if (response.success) Right(response.message)
-      else Left(new RuntimeException(response.message))
-    }
+  def deploy(d: consensus.Deploy): Task[Either[Throwable, String]] =
+    casperServiceStub.deploy(DeployRequest().withDeploy(d)).map(_ => "Success!").attempt
 
   def createBlock(): Task[Either[Throwable, String]] =
-    stub.createBlock(Empty()).map { response =>
+    deployServiceStub.createBlock(Empty()).map { response =>
       if (response.success) Right(response.message)
       else Left(new RuntimeException(response.message))
     }
 
   def showBlock(q: BlockQuery): Task[Either[Throwable, String]] =
-    stub.showBlock(q).map { response =>
+    deployServiceStub.showBlock(q).map { response =>
       if (response.status == "Success") Right(response.toProtoString)
       else Left(new RuntimeException(response.status))
     }
 
   def queryState(q: QueryStateRequest): Task[Either[Throwable, String]] =
-    stub
+    deployServiceStub
       .queryState(q)
       .map(_.result)
       .attempt
 
   def visualizeDag(q: VisualizeDagQuery): Task[Either[Throwable, String]] =
-    stub.visualizeDag(q).attempt.map(_.map(_.content))
+    deployServiceStub.visualizeDag(q).attempt.map(_.map(_.content))
 
   def showBlocks(q: BlocksQuery): Task[Either[Throwable, String]] =
-    stub
+    deployServiceStub
       .showBlocks(q)
       .map { bi =>
         s"""

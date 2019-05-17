@@ -6,6 +6,5 @@ members = [
     "engine",
     "shared",
     "storage",
-    "vm",
     "wasm-prep",
 ]

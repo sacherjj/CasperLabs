@@ -54,7 +54,7 @@ package object gossiping {
       port: Int,
       conf: Configuration,
       grpcScheduler: Scheduler
-  )(implicit scheduler: Scheduler): Resource[F, Unit] = {
+  )(implicit scheduler: Scheduler, logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
 
     val cert = Resources.withResource(Source.fromFile(conf.tls.certificate.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(conf.tls.key.toFile))(_.mkString)
@@ -518,11 +518,7 @@ package object gossiping {
       genesisApprover: GenesisApprover[F],
       serverSslContext: SslContext,
       grpcScheduler: Scheduler
-  ): Resource[F, GossipServiceServer[F]] = {
-    implicit val logId = Log.logId
-    implicit val metricsId =
-      diagnostics.effects.metrics[Id](io.casperlabs.catscontrib.effect.implicits.syncId)
-
+  )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, GossipServiceServer[F]] =
     for {
       backend <- Resource.pure[F, GossipServiceServer.Backend[F]] {
                   new GossipServiceServer.Backend[F] {
@@ -617,7 +613,6 @@ package object gossiping {
       }
 
     } yield server
-  }
 
   /** Make the best effort so sync with the bootstrap node and some others.
     * Nothing really depends on this at the moment so just do it in the background. */

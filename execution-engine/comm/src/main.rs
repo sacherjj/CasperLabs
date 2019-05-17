@@ -17,6 +17,7 @@ pub mod engine_server;
 use std::collections::btree_map::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use clap::{App, Arg, ArgMatches};
@@ -28,6 +29,7 @@ use lmdb::DatabaseFlags;
 use shared::logging::log_level::LogLevel;
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
 use shared::logging::{log_level, log_settings};
+use shared::os::get_page_size;
 use shared::{logging, socket};
 use storage::global_state::lmdb::LmdbGlobalState;
 use storage::history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
@@ -53,6 +55,17 @@ const CREATE_DATA_DIR_EXPECT: &str = "Could not create directory";
 const LMDB_ENVIRONMENT_EXPECT: &str = "Could not create LmdbEnvironment";
 const LMDB_TRIE_STORE_EXPECT: &str = "Could not create LmdbTrieStore";
 const LMDB_GLOBAL_STATE_EXPECT: &str = "Could not create LmdbGlobalState";
+
+// pages / lmdb
+const ARG_PAGES: &str = "pages";
+const ARG_PAGES_SHORT: &str = "p";
+const ARG_PAGES_VALUE: &str = "NUM";
+const ARG_PAGES_HELP: &str = "Sets the max number of pages to use for lmdb's mmap";
+const GET_PAGES_EXPECT: &str = "Could not parse pages argument";
+// 1 GiB = 1073741824 bytes
+// page size on x86_64 linux = 4096 bytes
+// 1073741824 / 4096 = 262144
+const DEFAULT_PAGES: usize = 262_144;
 
 // socket
 const ARG_SOCKET: &str = "socket";
@@ -92,7 +105,9 @@ fn main() {
 
     let data_dir = get_data_dir(matches);
 
-    let _server = get_grpc_server(&socket, data_dir);
+    let map_size = get_map_size(matches);
+
+    let _server = get_grpc_server(&socket, data_dir, map_size);
 
     log_listening_message(&socket);
 
@@ -147,6 +162,14 @@ fn get_args() -> ArgMatches<'static> {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name(ARG_PAGES)
+                .short(ARG_PAGES_SHORT)
+                .long(ARG_PAGES)
+                .value_name(ARG_PAGES_VALUE)
+                .help(ARG_PAGES_HELP)
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name(ARG_SOCKET)
                 .required(true)
                 .help(ARG_SOCKET_HELP)
@@ -177,9 +200,19 @@ fn get_data_dir(matches: &ArgMatches) -> PathBuf {
     buf
 }
 
+///  Parses pages argument and returns map size
+fn get_map_size(matches: &ArgMatches) -> usize {
+    let page_size = get_page_size().unwrap();
+    let pages = matches
+        .value_of(ARG_PAGES)
+        .map_or(Ok(DEFAULT_PAGES), usize::from_str)
+        .expect(GET_PAGES_EXPECT);
+    page_size * pages
+}
+
 /// Builds and returns a gRPC server.
-fn get_grpc_server(socket: &socket::Socket, data_dir: PathBuf) -> grpc::Server {
-    let engine_state = get_engine_state(data_dir);
+fn get_grpc_server(socket: &socket::Socket, data_dir: PathBuf, map_size: usize) -> grpc::Server {
+    let engine_state = get_engine_state(data_dir, map_size);
 
     engine_server::new(socket.as_str(), engine_state)
         .build()
@@ -187,9 +220,9 @@ fn get_grpc_server(socket: &socket::Socket, data_dir: PathBuf) -> grpc::Server {
 }
 
 /// Builds and returns engine global state
-fn get_engine_state(data_dir: PathBuf) -> EngineState<LmdbGlobalState> {
+fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGlobalState> {
     let environment = {
-        let ret = LmdbEnvironment::new(&data_dir).expect(LMDB_ENVIRONMENT_EXPECT);
+        let ret = LmdbEnvironment::new(&data_dir, map_size).expect(LMDB_ENVIRONMENT_EXPECT);
         Arc::new(ret)
     };
 
