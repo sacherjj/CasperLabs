@@ -18,8 +18,8 @@ use super::functions::{
     ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
     GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
     GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX,
-    PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SER_FN_FUNC_INDEX,
-    STORE_FN_INDEX, WRITE_FUNC_INDEX,
+    PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, REVERT_FUNC_INDEX,
+    SER_FN_FUNC_INDEX, STORE_FN_INDEX, WRITE_FUNC_INDEX,
 };
 use super::resolvers::create_module_resolver;
 use argsparser::Args;
@@ -57,6 +57,8 @@ pub enum Error {
     Rng(rand::Error),
     Unreachable,
     ResolverError(ResolverError),
+    /// Reverts execution with a reason specified
+    Revert(String),
 }
 
 impl fmt::Display for Error {
@@ -414,6 +416,27 @@ where
         self.host_buf = value_bytes;
         Ok(self.host_buf.len())
     }
+
+    /// Reverts contract execution with a reason specified.
+    pub fn revert(&mut self, reason_ptr: u32, reason_size: u32) -> Trap {
+        // Get bytes of a reason specified by user
+        let data = self
+            .bytes_from_mem(reason_ptr, reason_size as usize)
+            .and_then(|reason_bytes| {
+                let reason: String = deserialize(&reason_bytes).map_err(Error::BytesRepr)?;
+                Ok((reason_bytes, reason))
+            });
+
+        let err = match data {
+            Ok((reason_bytes, reason)) => {
+                self.result = reason_bytes;
+                println!("Reason: {}", reason);
+                Error::Revert(reason)
+            }
+            Err(err) => err,
+        };
+        err.into()
+    }
 }
 
 // Helper function for turning result of lookup into domain values.
@@ -614,6 +637,14 @@ where
             }
 
             PROTOCOL_VERSION_FUNC_INDEX => Ok(Some(self.context.protocol_version().into())),
+
+            REVERT_FUNC_INDEX => {
+                // args(0) = pointer to a string
+                // args(1) = size of string
+                let (reason_ptr, reason_size): (u32, u32) = Args::parse(args)?;
+
+                Err(self.revert(reason_ptr, reason_size))
+            }
 
             _ => panic!("unknown function index"),
         }

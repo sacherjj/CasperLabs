@@ -16,3 +16,4 @@ pub const HAS_UREF_FUNC_INDEX: usize = 14;
 pub const ADD_UREF_FUNC_INDEX: usize = 15;
 pub const STORE_FN_INDEX: usize = 16;
 pub const PROTOCOL_VERSION_FUNC_INDEX: usize = 17;
+pub const REVERT_FUNC_INDEX: usize = 18;
