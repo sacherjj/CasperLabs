@@ -1,43 +1,41 @@
 use std::collections::btree_map::BTreeMap;
 
-use serde::Serialize;
-use slog::{Drain, Level, Logger};
-
 use crate::logging::log_level::LogLevel;
 use crate::logging::log_message::LogMessage;
-use crate::logging::log_settings::{LogLevelFilter, LogSettings};
+use crate::logging::log_settings::LogSettings;
+use crate::logging::utils::jsonify;
 
 pub mod log_level;
 pub mod log_message;
 pub mod log_settings;
+pub mod logger;
+pub(crate) mod utils;
 
-// log with basic stir message
-pub fn log(log_settings: &LogSettings, log_level: LogLevel, value: &str) {
-    let log_output_factory = |_: &slog::Record| {
-        get_msg(
-            LogMessage::new_msg(log_settings.to_owned(), log_level, value.to_owned()),
-            false,
-        )
-    };
+// log with simple stir message
+pub fn log(log_settings: &LogSettings, log_level: LogLevel, log_message: &str) {
+    if log_settings.filter(log_level) {
+        return;
+    }
 
-    slog_log(log_level, log_settings.log_level_filter, log_output_factory);
-}
+    logger::LOGGER_INIT.call_once(|| {
+        log::set_logger(&logger::TERMINAL_LOGGER).expect("TERMINAL_LOGGER should be set");
+        log::set_max_level(log::LevelFilter::Debug);
+    });
 
-// log with anything Into<LogMessage>
-pub fn log_graph<T>(value: T)
-where
-    T: Into<LogMessage>,
-{
-    let log_message = value.into();
+    let log_message =
+        LogMessage::new_msg(log_settings.to_owned(), log_level, log_message.to_owned());
 
-    let log_settings = log_settings::LogSettings::from(&log_message);
+    let json = jsonify(&log_message, false);
 
-    let log_output_factory = |_: &slog::Record| get_msg(log_message.to_owned(), false);
-
-    slog_log(
-        log_message.level,
-        log_settings.log_level_filter,
-        log_output_factory,
+    log::log!(
+        log_level.into(),
+        "{timestamp} {loglevel} {priority} {hostname} {facility} payload={payload}",
+        timestamp = log_message.timestamp,
+        loglevel = log_message.log_level.to_uppercase(),
+        priority = log_message.priority.value(),
+        hostname = log_message.host_name.value(),
+        facility = log_message.process_name.value(),
+        payload = json
     );
 }
 
@@ -48,136 +46,70 @@ pub fn log_props(
     message_format: String,
     properties: BTreeMap<String, String>,
 ) {
-    let log_level_filter = log_settings.log_level_filter;
-
-    let log_output_factory = move |_: &slog::Record| {
-        get_msg(
-            LogMessage::new_props(
-                log_settings.to_owned(),
-                log_level,
-                message_format.to_owned(),
-                properties.to_owned(),
-            ),
-            false,
-        )
-    };
-
-    slog_log(log_level, log_level_filter, log_output_factory);
-}
-
-/// serializes value to json;
-/// pretty_print: false = inline
-/// pretty_print: true  = pretty printed / multiline
-fn get_msg<T>(value: T, pretty_print: bool) -> String
-where
-    T: Serialize,
-{
-    if pretty_print {
-        match serde_json::to_string_pretty(&value) {
-            Ok(json) => json,
-            Err(_) => "{\"error\": \"encountered error serializing value\"}".to_owned(),
-        }
-    } else {
-        match serde_json::to_string(&value) {
-            Ok(json) => json,
-            Err(_) => "{\"error\": \"encountered error serializing value\"}".to_owned(),
-        }
+    if log_settings.filter(log_level) {
+        return;
     }
-}
 
-/// factory method to build and return a slog logger configured as a async terminal writer
-fn get_logger(slog_level_filter: Level) -> slog::Logger {
-    // temporal dependencies herein; order of nesting drains and filters matters
+    logger::LOGGER_INIT.call_once(|| {
+        log::set_logger(&logger::TERMINAL_LOGGER).expect("TERMINAL_LOGGER should be set");
+        log::set_max_level(log::LevelFilter::Debug);
+    });
 
-    let decorator = slog_term::TermDecorator::new().build();
+    let log_message = LogMessage::new_props(
+        log_settings.to_owned(),
+        log_level,
+        message_format.to_owned(),
+        properties.to_owned(),
+    );
 
-    let drain = slog_term::FullFormat::new(decorator).build().fuse();
+    let json = jsonify(&log_message, false);
 
-    // this is a bit twisted; setting the level filter moves the drain;
-    // it is necessary to call .fuse() on it to allow the composition to continue
-    let filter = slog::LevelFilter::new(drain, slog_level_filter).fuse();
-
-    // the async drain ideally is the outermost drain
-    let drain = slog_async::Async::new(filter).build().fuse();
-
-    Logger::root(drain.fuse(), o!())
-}
-
-fn slog_log<F>(
-    log_level: log_level::LogLevel,
-    log_level_filter: LogLevelFilter,
-    log_output_factory: F,
-) where
-    // The closure takes no input and returns nothing.
-    F: Fn(&slog::Record) -> String,
-{
-    // this formulation and using the level based macros
-    // allows slog to defer execution if log level is below filter level
-    let fnv = slog::FnValue(log_output_factory);
-
-    let slog_level_filter = log_level_filter.into();
-
-    let logger = get_logger(slog_level_filter);
-
-    let slog_level = log_level.into();
-
-    match slog_level {
-        Level::Critical => {
-            crit!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-        Level::Error => {
-            error!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-        Level::Warning => {
-            warn!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-        Level::Info => {
-            info!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-        Level::Trace => {
-            trace!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-        Level::Debug => {
-            debug!(logger, "{}", log_level.get_priority(); "json" => fnv);
-        }
-    }
+    log::log!(
+        log_level.into(),
+        "{timestamp} {loglevel} {priority} {hostname} {facility} payload={payload}",
+        timestamp = log_message.timestamp,
+        loglevel = log_message.log_level.to_uppercase(),
+        priority = log_message.priority.value(),
+        hostname = log_message.host_name.value(),
+        facility = log_message.process_name.value(),
+        payload = json
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logging::log_message::LogMessage;
     use crate::logging::log_settings::LogLevelFilter;
-    use std::time::SystemTime;
+    use std::time::{Duration, SystemTime};
 
     const PROC_NAME: &str = "ee-shared-lib-tests";
 
     //TODO: require an integration test or a custom slog drain to capture log output
     #[test]
     fn should_log_when_level_at_or_above_filter() {
-        let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Error));
+        let log_settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Error));
 
-        let log_message = LogMessage::new_msg(
-            settings.to_owned(),
-            LogLevel::Error,
-            "this is a logmessage".to_owned(),
-        );
-
-        log_graph(log_message);
+        log(&log_settings, LogLevel::Error, "this is a logmessage");
     }
 
     #[test]
     fn should_not_log_when_level_below_filter() {
-        let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Fatal));
+        let log_settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Fatal));
 
-        let log_message = LogMessage::new_msg(
-            settings.to_owned(),
+        log(
+            &log_settings,
             LogLevel::Error,
-            "this should not log as the filter is set to Fatal and this message is Error"
-                .to_owned(),
+            "this should not log as the filter is set to Fatal and this message is Error",
         );
+    }
 
-        log_graph(log_message);
+    #[test]
+    fn should_log_string() {
+        let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Debug));
+
+        let log_message = String::from("this is a string and it should get logged");
+
+        log(&settings, LogLevel::Debug, &log_message);
     }
 
     #[test]
@@ -197,13 +129,6 @@ mod tests {
         log_props(&x.0, x.1, x.2, x.3);
     }
 
-    #[test]
-    fn should_log_from_tuple() {
-        let x = property_logger_test_helper();
-
-        log_graph(x);
-    }
-
     fn property_logger_test_helper() -> (LogSettings, LogLevel, String, BTreeMap<String, String>) {
         let mut properties: BTreeMap<String, String> = BTreeMap::new();
 
@@ -211,8 +136,6 @@ mod tests {
             "entry_point".to_string(),
             "should_log_with_props_and_template".to_string(),
         );
-
-        use std::time::Duration;
 
         let start = SystemTime::now();
 
