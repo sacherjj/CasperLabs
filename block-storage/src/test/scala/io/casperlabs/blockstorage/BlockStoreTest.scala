@@ -2,15 +2,23 @@ package io.casperlabs.blockstorage
 
 import cats._
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.InMemBlockStore.emptyMapRef
-import io.casperlabs.casper.protocol.{BlockMessage, Header}
+import io.casperlabs.casper.protocol.{
+  ApprovedBlock,
+  ApprovedBlockCandidate,
+  BlockMessage,
+  Header,
+  Signature
+}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElementsGen}
+import io.casperlabs.ipc.{Key, KeyHash, Op, ReadOp, Transform, TransformEntry, TransformIdentity}
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -121,11 +129,12 @@ trait BlockStoreTest
 class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val test = for {
-      refTask <- emptyMapRef[Task]
-      metrics = new MetricsNOP[Task]()
-      store   = InMemBlockStore.create[Task](Monad[Task], refTask, metrics)
-      _       <- store.find(_ => true).map(map => assert(map.isEmpty))
-      result  <- f(store)
+      refTask          <- emptyMapRef[Task]
+      approvedBlockRef <- Ref[Task].of(none[ApprovedBlock])
+      metrics          = new MetricsNOP[Task]()
+      store            = InMemBlockStore.create[Task](Monad[Task], refTask, approvedBlockRef, metrics)
+      _                <- store.find(_ => true).map(map => assert(map.isEmpty))
+      result           <- f(store)
     } yield result
     test.unsafeRunSync
   }
@@ -223,6 +232,31 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
     }
   }
 
+  "FileLMDBIndexBlockStore" should "persist approved block on restart" in {
+    withStoreLocation { blockStoreDataDir =>
+      val approvedBlock =
+        ApprovedBlock(
+          Some(ApprovedBlockCandidate(Some(BlockMessage()), 1)),
+          List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
+        )
+      val key            = Key(Key.KeyInstance.Hash(KeyHash()))
+      val transform      = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
+      val transforEntrys = Seq(TransformEntry(Some(key), Some(transform)))
+
+      for {
+        firstStore          <- createBlockStore(blockStoreDataDir)
+        _                   <- firstStore.putApprovedBlock(approvedBlock)
+        _                   <- firstStore.close()
+        secondStore         <- createBlockStore(blockStoreDataDir)
+        storedApprovedBlock <- secondStore.getApprovedBlock
+        _ = storedApprovedBlock shouldBe Some(
+          approvedBlock
+        )
+        _ <- secondStore.close()
+      } yield ()
+    }
+  }
+
   it should "persist storage after checkpoint" in {
     forAll(blockElementsGen, minSize(10), sizeRange(10)) { blockStoreElements =>
       withStoreLocation { blockStoreDataDir =>
@@ -282,8 +316,9 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   it should "be able to clean storage and continue to work" in {
     forAll(blockBatchesGen, minSize(5), sizeRange(10)) { blockStoreBatches =>
       withStoreLocation { blockStoreDataDir =>
-        val blocks         = blockStoreBatches.flatten
-        val checkpointsDir = blockStoreDataDir.resolve("checkpoints")
+        val blocks            = blockStoreBatches.flatten
+        val checkpointsDir    = blockStoreDataDir.resolve("checkpoints")
+        val approvedBlockPath = blockStoreDataDir.resolve("approved-block")
         for {
           firstStore <- createBlockStore(blockStoreDataDir)
           _ <- blockStoreBatches.traverse_[Task, Unit](
@@ -297,7 +332,9 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                   firstStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
           _ <- firstStore.find(_ => true).map(_.size shouldEqual blocks.size)
+          _ = approvedBlockPath.toFile.exists() shouldBe true
           _ <- firstStore.clear()
+          _ = approvedBlockPath.toFile.exists() shouldBe false
           _ = checkpointsDir.toFile.list().size shouldBe 0
           _ <- firstStore.find(_ => true).map(_.size shouldEqual 0)
           _ <- blockStoreBatches.traverse_[Task, Unit](
