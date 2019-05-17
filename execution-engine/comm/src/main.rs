@@ -147,7 +147,7 @@ fn get_args() -> ArgMatches<'static> {
     App::new(APP_NAME)
         .arg(
             Arg::with_name(ARG_LOG_LEVEL)
-                .required(true)
+                .required(false)
                 .long(ARG_LOG_LEVEL)
                 .takes_value(true)
                 .value_name(ARG_LOG_LEVEL_VALUE)
