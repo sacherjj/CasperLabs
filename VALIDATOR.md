@@ -190,8 +190,10 @@ $ casperlabs-node \
      --server-bootstrap "<bootstrap-node-address>" \
      --server-host <external-ip-address> \
      --server-no-upnp \
-     --casper-validator-public-key-path casperlabs-node-data/genesis/0/public-key.txt \
-     --casper-validator-private-key-path casperlabs-node-data/genesis/0/private-key.txt \
+     --tls-certificate node.certificate.pem \
+     --tls-key secp256r1-private-pkcs8.pem \
+     --casper-validator-private-key-path ed25519-private.pem \
+     --casper-validator-public-key-path ed25519-public.pem \
      --grpc-socket casperlabs-node-data/.caspernode.sock
 ```
 

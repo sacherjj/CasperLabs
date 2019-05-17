@@ -251,14 +251,12 @@ object Genesis {
                     .flatMap {
                       case Success(bonds) =>
                         bonds.pure[F]
-                      case Failure(e) =>
-                        println(e)
+                      case Failure(_) =>
                         Log[F].warn(s"Bonds file ${file.getPath} cannot be parsed.") *> Map
                           .empty[PublicKey, Long]
                           .pure[F]
                     }
                 case None =>
-                  println("EMPTY")
                   Log[F].warn(s"Specified bonds file $bondsFile does not exist.") *> Map
                     .empty[PublicKey, Long]
                     .pure[F]
