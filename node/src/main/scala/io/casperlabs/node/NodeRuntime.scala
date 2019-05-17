@@ -156,6 +156,20 @@ class NodeRuntime private[node] (
 
         blockApiLock <- Resource.liftF(Semaphore[Effect](1))
 
+        _ <- AutoProposer[Effect](
+              checkInterval = 1.second,
+              maxInterval = 5.seconds,
+              maxCount = 5,
+              blockApiLock = blockApiLock
+            )(
+              Concurrent[Effect],
+              Time.eitherTTime(Monad[Task], effects.time),
+              Timer[Effect],
+              logEff,
+              metricsEff,
+              multiParentCasperRef
+            ).whenA(false)
+
         _ <- api.Servers
               .internalServersR(
                 conf.grpc.portInternal,
