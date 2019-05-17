@@ -2,6 +2,7 @@ package io.casperlabs.node.api
 
 import java.util.concurrent.TimeUnit
 
+import cats.Id
 import cats.effect.{Concurrent, ConcurrentEffect, Resource}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
@@ -9,10 +10,11 @@ import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
+import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
-import io.casperlabs.comm.grpc.GrpcServer
+import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
@@ -60,22 +62,34 @@ object Servers {
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler
-  )(implicit scheduler: Scheduler): Resource[F, Unit] =
-    GrpcServer(
-      port = port,
-      maxMessageSize = Some(maxMessageSize),
-      services = List(
-        (_: Scheduler) =>
-          for {
-            blockApiLock <- Semaphore[F](1)
-            inst         <- DeployGrpcService.instance(blockApiLock)
-          } yield {
-            CasperMessageGrpcMonix.bindService(inst, grpcExecutor)
-          }
-      )
-    ).void <* Resource.liftF(
-      Log[F].info(s"gRPC deployment service started on port ${port}.")
-    )
+  )(implicit scheduler: Scheduler, logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] =
+    for {
+      blockApiLock <- Resource.liftF(Semaphore[F](1))
+      _ <- GrpcServer(
+            port = port,
+            maxMessageSize = Some(maxMessageSize),
+            services = List(
+              // TODO: Phase DeployService out in favor of CasperService.
+              (_: Scheduler) =>
+                for {
+                  inst <- GrpcDeployService.instance(blockApiLock)
+                } yield {
+                  CasperMessageGrpcMonix.bindService(inst, grpcExecutor)
+                },
+              (_: Scheduler) =>
+                for {
+                  inst <- GrpcCasperService(blockApiLock)
+                } yield {
+                  CasperGrpcMonix.bindService(inst, grpcExecutor)
+                }
+            ),
+            interceptors = List(
+              new MetricsInterceptor(),
+              ErrorInterceptor.default
+            )
+          )
+      _ <- Resource.liftF(Log[F].info(s"gRPC deployment service started on port ${port}."))
+    } yield ()
 
   def httpServerR(
       port: Int,

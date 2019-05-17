@@ -26,7 +26,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
-object DeployGrpcService {
+object GrpcDeployService {
   def toKey[F[_]](keyType: String, keyValue: String)(
       implicit appErr: ApplicativeError[F, Throwable]
   ): F[ipc.Key] = {

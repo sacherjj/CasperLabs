@@ -157,28 +157,10 @@ object LegacyConversions {
             protocol
               .ProcessedDeploy()
               .withDeploy(
-                protocol
-                  .DeployData()
-                  .withAddress(x.getDeploy.getHeader.accountPublicKey) // TODO: Once we sign deploys, this needs to be derived.
-                  .withTimestamp(x.getDeploy.getHeader.timestamp)
-                  .withSession(
-                    protocol
-                      .DeployCode()
-                      .withCode(x.getDeploy.getBody.getSession.code)
-                      .withArgs(x.getDeploy.getBody.getSession.args)
-                  )
-                  .withPayment(
-                    protocol
-                      .DeployCode()
-                      .withCode(x.getDeploy.getBody.getPayment.code)
-                      .withArgs(x.getDeploy.getBody.getPayment.args)
-                  )
-                  .withGasLimit(Try(x.errorMessage.toLong).toOption.getOrElse(0L)) // New version doesn't have it.
-                  .withGasPrice(x.getDeploy.getHeader.gasPrice)
-                  .withNonce(x.getDeploy.getHeader.nonce)
-                  .withSigAlgorithm(x.getDeploy.getSignature.sigAlgorithm)
-                  .withSignature(x.getDeploy.getSignature.sig)
-                //.withUser() // We aren't signing deploys yet.
+                fromDeploy(
+                  x.getDeploy,
+                  gasLimit = Try(x.errorMessage.toLong).toOption.getOrElse(0L)
+                )
               )
               .withCost(x.cost)
               .withErrored(x.isError)
@@ -196,4 +178,28 @@ object LegacyConversions {
       .withSigAlgorithm(block.getSignature.sigAlgorithm)
       .withShardId(block.getHeader.chainId)
   }
+
+  def fromDeploy(deploy: consensus.Deploy, gasLimit: Long = 0L): protocol.DeployData =
+    protocol
+      .DeployData()
+      .withAddress(deploy.getHeader.accountPublicKey) // TODO: Once we sign deploys, this needs to be derived.
+      .withTimestamp(deploy.getHeader.timestamp)
+      .withSession(
+        protocol
+          .DeployCode()
+          .withCode(deploy.getBody.getSession.code)
+          .withArgs(deploy.getBody.getSession.args)
+      )
+      .withPayment(
+        protocol
+          .DeployCode()
+          .withCode(deploy.getBody.getPayment.code)
+          .withArgs(deploy.getBody.getPayment.args)
+      )
+      .withGasLimit(gasLimit) // New version doesn't have it.
+      .withGasPrice(deploy.getHeader.gasPrice)
+      .withNonce(deploy.getHeader.nonce)
+      .withSigAlgorithm(deploy.getSignature.sigAlgorithm)
+      .withSignature(deploy.getSignature.sig)
+  //.withUser() // We aren't signing deploys yet.
 }

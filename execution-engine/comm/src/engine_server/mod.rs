@@ -13,6 +13,7 @@ use mappings::*;
 use shared::newtypes::Blake2bHash;
 use storage::history::*;
 use storage::transform::Transform;
+use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 pub mod ipc;
@@ -92,11 +93,13 @@ where
         p: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
         let executor = WasmiExecutor;
-        let preprocessor: WasmiPreprocessor = Default::default();
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = p.get_parent_state_hash().try_into().unwrap();
         let deploys = p.get_deploys();
         let protocol_version = p.get_protocol_version();
+        // TODO: don't unwrap
+        let wasm_costs = WasmCosts::from_version(protocol_version.version).unwrap();
+        let preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
         let deploys_result: Result<Vec<DeployResult>, RootNotFound> = run_deploys(
             &self,
             &executor,

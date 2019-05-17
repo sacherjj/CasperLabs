@@ -8,8 +8,9 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus
 import io.casperlabs.client.configuration.Streaming
-
+import io.casperlabs.crypto.hash.Blake2b256
 import scala.concurrent.duration._
 import scala.language.higherKinds
 import scala.util.Try
@@ -66,7 +67,6 @@ object DeployRuntime {
               sleep >>
                 subscribe(out, streaming, format, index, prevDag)
             } else {
-              val f = format.name().toLowerCase
               val filename = streaming match {
                 case Streaming.Single => out
                 case Streaming.Multiple =>
@@ -102,7 +102,6 @@ object DeployRuntime {
 
   def deployFileProgram[F[_]: Sync: DeployService](
       from: String,
-      gasLimit: Long,
       nonce: Long,
       sessionCode: File,
       paymentCode: File
@@ -118,14 +117,25 @@ object DeployRuntime {
           readFile(paymentCode)
         ) {
           case (session, payment) =>
-            //TODO: allow user to specify their public key
-            DeployData()
-              .withTimestamp(System.currentTimeMillis())
-              .withSession(DeployCode().withCode(session))
-              .withPayment(DeployCode().withCode(payment))
-              .withAddress(ByteString.copyFromUtf8(from))
-              .withGasLimit(gasLimit)
-              .withNonce(nonce)
+            consensus
+              .Deploy()
+              .withHeader(
+                consensus.Deploy
+                  .Header()
+                  .withTimestamp(System.currentTimeMillis)
+                  // TODO: allow user to specify their public key.
+                  // NOTE: For now using this field to carry over the account address,
+                  // which has been removed from Deploy.
+                  .withAccountPublicKey(ByteString.copyFromUtf8(from))
+                  .withNonce(nonce)
+              )
+              .withBody(
+                consensus.Deploy
+                  .Body()
+                  .withSession(consensus.Deploy.Code().withCode(session))
+                  .withPayment(consensus.Deploy.Code().withCode(payment))
+              )
+              .withHashes
         }
         .flatMap(DeployService[F].deploy)
         .handleError(
@@ -153,5 +163,15 @@ object DeployRuntime {
 
   private def processError(t: Throwable): Throwable =
     Option(t.getCause).getOrElse(t)
+
+  private def hash[T <: scalapb.GeneratedMessage](data: T): ByteString =
+    ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
+
+  implicit class DeployOps(d: consensus.Deploy) {
+    def withHashes = {
+      val h = d.getHeader.withBodyHash(hash(d.getBody))
+      d.withHeader(h).withDeployHash(hash(h))
+    }
+  }
 
 }

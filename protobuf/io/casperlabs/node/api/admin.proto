@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package io.casperlabs.node.api.admin;
 
+// TODO: Rename to ControlService.
 service AdminService {
     // While we have the manual proposal option.
     rpc Propose(ProposeRequest) returns (ProposeResponse) {}
@@ -9,4 +10,5 @@ service AdminService {
 
 message ProposeRequest {}
 
+// TODO: Add the ID of the block it created.
 message ProposeResponse {}

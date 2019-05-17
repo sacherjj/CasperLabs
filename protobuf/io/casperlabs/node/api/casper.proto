@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package io.casperlabs.node.api.casper;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "io/casperlabs/casper/consensus/consensus.proto";
+
+// CasperService is the way for user and dApp developer to interact with the system,
+// including deploying contracts, looking at the DAG and querying state.
+service CasperService {
+
+    // Add a deploy to the deploy pool on the node,
+    // to be processed during subsequent block proposals.
+    rpc Deploy(DeployRequest) returns (google.protobuf.Empty) {
+        option (google.api.http) = {
+            put: "/v2/deploys/{deploy.deploy_hash=*}"
+            body: "deploy"
+        };
+    }
+}
+
+message DeployRequest {
+    io.casperlabs.casper.consensus.Deploy deploy = 1;
+}

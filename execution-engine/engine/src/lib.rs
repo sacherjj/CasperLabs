@@ -13,7 +13,6 @@ extern crate rand;
 extern crate rand_chacha;
 extern crate shared;
 extern crate storage;
-extern crate vm;
 extern crate wasm_prep;
 extern crate wasmi;
 

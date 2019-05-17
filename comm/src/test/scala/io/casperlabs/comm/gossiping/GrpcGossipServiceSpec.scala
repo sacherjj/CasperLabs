@@ -1062,7 +1062,7 @@ class GrpcGossipServiceSpec
               Task.now(Right(true))
           }) { stub =>
             stub.addApproval(AddApprovalRequest()).map { res =>
-              res shouldBe Empty()
+              res shouldBe (com.google.protobuf.empty.Empty())
             }
           }
         }
