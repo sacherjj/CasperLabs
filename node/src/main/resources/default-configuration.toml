@@ -23,7 +23,7 @@ no-upnp = false
 default-timeout = 2000
 
 # Bootstrap casperlabs node address for initial seed.
-bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
+# bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"
 
 # Type of Casperlabs space backing store. Valid values are: lmdb, inmem, mixed.
 store-type = "lmdb"

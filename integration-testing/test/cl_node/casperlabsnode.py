@@ -53,11 +53,11 @@ CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
 GRPC_SOCKET_FILE = f"{CL_SOCKETS_DIR}/.casper-node.sock"
 EXECUTION_ENGINE_COMMAND = ".casperlabs/sockets/.casper-node.sock"
 
-HELLO_NAME = "helloname.wasm"
-HELLO_WORLD = "helloworld.wasm"
-COUNTER_CALL = "countercall.wasm"
-MAILING_LIST_CALL = "mailinglistcall.wasm"
-COMBINED_CONTRACT = "combinedcontractsdefine.wasm"
+HELLO_NAME = "test_helloname.wasm"
+HELLO_WORLD = "test_helloworld.wasm"
+COUNTER_CALL = "test_countercall.wasm"
+MAILING_LIST_CALL = "test_mailinglistcall.wasm"
+COMBINED_CONTRACT = "test_combinedcontractsdefine.wasm"
 
 
 HOST_MOUNT_DIR = f"/tmp/resources_{TAG}"
@@ -213,11 +213,17 @@ class Node:
                session: str = None, payment: str = None,
                gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
 
-        session = session if session is not None else HELLO_NAME
-        payment = payment if payment is not None else HELLO_NAME
-        command = (f"--host {self.name} deploy --from {from_address} --gas-limit "
-                   f"{gas_limit} --gas-price  {gas_price} --nonce {nonce} --session=/data/{session} "
+        session = session or CONTRACT_NAME
+        payment = payment or CONTRACT_NAME
+
+        command = (f"--host {self.name} deploy "
+                   f"--from {from_address} "
+                   f"--gas-limit {gas_limit} "
+                   f"--gas-price {gas_price} "
+                   f"--nonce {nonce} "
+                   f"--session=/data/{session} "
                    f"--payment=/data/{payment}")
+
         volumes = {
             HOST_MOUNT_DIR: {
                 "bind": "/data",

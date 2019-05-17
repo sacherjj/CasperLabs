@@ -348,7 +348,7 @@ mod tests {
     extern crate shared;
     extern crate storage;
 
-    use super::{Error, RuntimeContext, TrackingCopy, URefAddr, Validated};
+    use super::{Error, RuntimeContext, URefAddr, Validated};
     use common::key::{AccessRights, Key};
     use common::value::{self, Account, Contract, Value};
     use execution::{create_rng, vec_key_rights_to_map};
@@ -361,6 +361,7 @@ mod tests {
     use storage::global_state::in_memory::InMemoryGlobalState;
     use storage::history::*;
     use storage::transform::Transform;
+    use trackingcopy::TrackingCopy;
 
     fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {
         let mut hist = InMemoryGlobalState::empty().unwrap();

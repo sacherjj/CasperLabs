@@ -6,9 +6,9 @@ kademlia-port = 1
 dynamic-host-address = false
 no-upnp = false
 default-timeout = 1
-bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=1&discovery=1"
 standalone = false
 map-size = 1
+bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=1&discovery=1"
 store-type = "lmdb"
 data-dir = "/tmp"
 max-num-of-connections = 1

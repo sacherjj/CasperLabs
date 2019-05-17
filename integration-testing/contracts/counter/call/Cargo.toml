@@ -1,0 +1,11 @@
+[package]
+name = "test-counter-call"
+version = "0.1.0"
+authors = ["Michael Birch <birchmd@casperlabs.io>"]
+
+[lib]
+name = "test_countercall"
+crate-type = ["cdylib"]
+
+[dependencies]
+common = { package = "casperlabs-contract-ffi", version = "0.5.0" }

@@ -1,13 +1,13 @@
 Feature: Consensus
 
   # Not Implemented
-  Scenario: hello_world.wasm deploy and propose by all nodes and stored in all nodes blockstores
+  Scenario: test_helloworld.wasm deploy and propose by all nodes and stored in all nodes blockstores
      Given: 3 Node Network
-      When: Node-1 Deploys hello_world.wasm
+      When: Node-1 Deploys test_helloworld.wasm
        And: Node-1 Proposes Block A
-       And: Node-2 Deploys hello_world.wasm
+       And: Node-2 Deploys test_helloworld.wasm
        And: Node-2 Proposes Block B
-       And: Node-3 Deploys hello_world.wasm
+       And: Node-3 Deploys test_helloworld.wasm
        And: Node-3 Proposes Block C
       Then: Node-1 has Blocks A, B, C
        And: Node-2 has Blocks A, B, C
