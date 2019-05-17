@@ -55,6 +55,7 @@ approve-genesis = false
 approve-genesis-interval = "1second"
 approve-genesis-duration = "1second"
 deploy-timestamp = 1
+ignore-deploy-signature = false
 
 [blockstorage]
 latest-messages-log-max-size-factor = 1
