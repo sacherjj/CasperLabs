@@ -54,7 +54,7 @@ class DockerConfig:
     number: int = 0
     rand_str: Optional[str] = None
     volumes: Optional[Dict[str, Dict[str, str]]] = None
-    command_timeout: int = 60
+    command_timeout: int = 180
     mem_limit: str = '4G'
     is_bootstrap: bool = False
     bootstrap_address: Optional[str] = None
