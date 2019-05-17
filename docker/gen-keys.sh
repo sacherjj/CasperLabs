@@ -3,10 +3,10 @@ set -e
 
 # Generates all necessary key for a node.
 # Usage:
-# ./gen-keys. <directory where to put keys>
+# ./gen-keys.sh <directory where to put keys>
 #
 # Example:
-# ./gen-keys test-dir
+# ./gen-keys.sh test-dir
 #
 # Will produce:
 #
@@ -63,4 +63,4 @@ openssl req \
 	 -key "$OUTPUT_DIR/node.key.pem" \
 	 -out "$OUTPUT_DIR/node.certificate.pem" \
 	 -days 365 \
-	 -subj "/C=US/ST=CA/L=San-Dieo/O=CasperLabs, LLC/OU=IT Department/CN=$NODE_ID"
+	 -subj "/C=US/ST=CA/L=San-Diego/O=CasperLabs, LLC/OU=IT Department/CN=$NODE_ID"

@@ -6,7 +6,7 @@ import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey, Signature}
 import io.casperlabs.crypto.codec.Base64
 import org.bouncycastle.openssl.PEMKeyPair
 
-import scala.util.Random
+import scala.util.{Random, Try}
 
 /**
   * Useful links:
@@ -188,12 +188,8 @@ object SignatureAlgorithm {
       try {
         new VerifyKey(pub).verify(data, signature)
       } catch {
-        case ex: RuntimeException =>
-          if (ex.getMessage contains "signature was forged or corrupted") {
-            false
-          } else {
-            throw ex
-          }
+        case ex: RuntimeException if ex.getMessage.contains("signature was forged or corrupted") =>
+          false
       }
 
     /**
@@ -355,11 +351,7 @@ object SignatureAlgorithm {
       * @param seckey ECDSA Secret key, 32 bytes
       */
     def tryToPublic(seckey: PrivateKey): Option[PublicKey] =
-      try {
-        Some(PublicKey(NativeSecp256k1.computePubkey(seckey)))
-      } catch {
-        case _: Throwable => None
-      }
+      Try(PublicKey(NativeSecp256k1.computePubkey(seckey))).toOption
   }
 
 }
