@@ -16,6 +16,9 @@ class CasperLabsNode:
         self.node = DockerNode(config, socket_volume=self.socket_volume)
         self.name = f'cl_node-{self.config.number}'
 
+    def logs(self):
+        return self.node.logs()
+
     def create_socket_volume(self) -> str:
         volume_name = f"cl_socket_{random_string(5)}"
         self.config.docker_client.volumes.create(name=volume_name, driver="local")

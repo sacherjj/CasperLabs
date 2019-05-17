@@ -334,7 +334,7 @@ def wait_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> No
 
 
 def wait_for_approved_block_received(network: 'Network', timeout: int) -> None:
-    for peer in network.peers:
+    for peer in network.cl_nodes:
         predicate = ApprovedBlockReceived(peer)
         wait_on_using_wall_clock_time(predicate, timeout)
 
@@ -345,14 +345,14 @@ def wait_for_connected_to_node(node: 'Node', other_node_name: str, timeout: int,
 
 
 def wait_for_started_network(node_startup_timeout: int, network: 'Network'):
-    for peer in network.peers:
+    for peer in network.cl_nodes:
         wait_for_node_started(peer, node_startup_timeout)
 
 
 def wait_for_converged_network(timeout: int, network: 'Network', peer_connections: int):
-    bootstrap_predicate = HasAtLeastPeers(network.bootstrap, len(network.peers))
+    bootstrap_predicate = HasAtLeastPeers(network.bootstrap, len(network.cl_nodes))
     wait_on_using_wall_clock_time(bootstrap_predicate, timeout)
 
-    for peer in network.peers:
+    for peer in network.cl_nodes:
         peer_predicate = HasAtLeastPeers(peer, peer_connections)
         wait_on_using_wall_clock_time(peer_predicate, timeout)
