@@ -1,5 +1,6 @@
 extern crate clap;
 extern crate common;
+extern crate ctrlc;
 extern crate dirs;
 extern crate execution_engine;
 extern crate grpc;
@@ -29,6 +30,8 @@ use shared::logging::log_level::LogLevel;
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
 use shared::logging::{log_level, log_settings};
 use shared::{logging, socket};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use storage::global_state::lmdb::LmdbGlobalState;
 use storage::history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
@@ -66,6 +69,10 @@ const ARG_LOG_LEVEL: &str = "loglevel";
 const ARG_LOG_LEVEL_VALUE: &str = "LOGLEVEL";
 const ARG_LOG_LEVEL_HELP: &str = "[ fatal | error | warning | info | debug ]";
 
+// runnable
+const SIGINT_HANDLE_EXPECT: &str = "Error setting Ctrl-C handler";
+const RUNNABLE_CHECK_INTERVAL_SECONDS: u64 = 3;
+
 // Command line arguments instance
 lazy_static! {
     static ref ARG_MATCHES: clap::ArgMatches<'static> = get_args();
@@ -96,17 +103,15 @@ fn main() {
 
     log_listening_message(&socket);
 
-    // loop indefinitely
-    loop {
-        std::thread::park();
+    let interval = Duration::from_secs(RUNNABLE_CHECK_INTERVAL_SECONDS);
+
+    let runnable = get_sigint_handle();
+
+    while runnable.load(Ordering::SeqCst) {
+        std::thread::park_timeout(interval);
     }
 
-    // currently unreachable
-    // TODO: recommend we impl signal capture; SIGINT at the very least.
-    // seems like there are multiple valid / accepted rusty approaches available
-    // https://rust-lang-nursery.github.io/cli-wg/in-depth/signals.html
-
-    //log_server_info(SERVER_STOP_MESSAGE);
+    log_server_info(SERVER_STOP_MESSAGE);
 }
 
 /// Sets panic hook for logging panic info
@@ -153,6 +158,17 @@ fn get_args() -> ArgMatches<'static> {
                 .index(1),
         )
         .get_matches()
+}
+
+/// Gets SIGINT handle to allow clean exit
+fn get_sigint_handle() -> Arc<AtomicBool> {
+    let handle = Arc::new(AtomicBool::new(true));
+    let h = handle.clone();
+    ctrlc::set_handler(move || {
+        h.store(false, Ordering::SeqCst);
+    })
+    .expect(SIGINT_HANDLE_EXPECT);
+    handle
 }
 
 /// Gets value of socket argument
