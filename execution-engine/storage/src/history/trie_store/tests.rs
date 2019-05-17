@@ -3,6 +3,14 @@ use history::trie::Trie;
 use history::trie::{Pointer, PointerBlock};
 use history::trie_store::{Readable, TrieStore, Writable};
 use shared::newtypes::Blake2bHash;
+use shared::os::get_page_size;
+
+lazy_static! {
+    static ref TEST_MAP_SIZE: usize = {
+        let page_size = get_page_size().unwrap();
+        page_size * 2560
+    };
+}
 
 #[derive(Clone)]
 struct TestData<K, V>(Blake2bHash, Trie<K, V>);
@@ -107,6 +115,7 @@ mod simple {
     use history::trie::Trie;
     use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
     use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+    use history::trie_store::tests::TEST_MAP_SIZE;
     use history::trie_store::{Transaction, TransactionSource, TrieStore};
     use lmdb::DatabaseFlags;
     use shared::newtypes::Blake2bHash;
@@ -150,7 +159,7 @@ mod simple {
     #[test]
     fn lmdb_put_succeeds() {
         let tmp_dir = tempdir().unwrap();
-        let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
+        let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
         let data = &super::create_data()[0..1];
 
@@ -213,7 +222,7 @@ mod simple {
     #[test]
     fn lmdb_put_get_succeeds() {
         let tmp_dir = tempdir().unwrap();
-        let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
+        let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
         let data = &super::create_data()[0..1];
 
@@ -262,7 +271,7 @@ mod simple {
     #[test]
     fn lmdb_put_get_many_succeeds() {
         let tmp_dir = tempdir().unwrap();
-        let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
+        let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
         let data = super::create_data();
 
@@ -333,7 +342,7 @@ mod simple {
     #[test]
     fn lmdb_uncommitted_read_write_txn_does_not_persist() {
         let tmp_dir = tempdir().unwrap();
-        let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
+        let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
         let data = super::create_data();
 
@@ -381,7 +390,7 @@ mod simple {
     #[test]
     fn lmdb_read_write_transaction_does_not_block_read_transaction() {
         let dir = tempdir().unwrap();
-        let env = LmdbEnvironment::new(&dir.path().to_path_buf()).unwrap();
+        let env = LmdbEnvironment::new(&dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
 
         let result: Result<(), error::Error> =
             read_write_transaction_does_not_block_read_transaction(&env);
@@ -437,7 +446,7 @@ mod simple {
     #[test]
     fn lmdb_reads_are_isolated() {
         let dir = tempdir().unwrap();
-        let env = LmdbEnvironment::new(&dir.path().to_path_buf()).unwrap();
+        let env = LmdbEnvironment::new(&dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 
         let result: Result<(), error::Error> = reads_are_isolated(&store, &env);
@@ -497,7 +506,7 @@ mod simple {
     #[test]
     fn lmdb_reads_are_isolated_2() {
         let dir = tempdir().unwrap();
-        let env = LmdbEnvironment::new(&dir.path().to_path_buf()).unwrap();
+        let env = LmdbEnvironment::new(&dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 
         let result: Result<(), error::Error> = reads_are_isolated_2(&store, &env);
@@ -511,6 +520,7 @@ mod concurrent {
     use history::trie::Trie;
     use history::trie_store::in_memory::{InMemoryEnvironment, InMemoryTrieStore};
     use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+    use history::trie_store::tests::TEST_MAP_SIZE;
     use history::trie_store::{Transaction, TransactionSource, TrieStore};
     use std::sync::{Arc, Barrier};
     use std::thread;
@@ -519,7 +529,8 @@ mod concurrent {
     #[test]
     fn lmdb_writer_mutex_does_not_collide_with_readers() {
         let dir = tempdir().unwrap();
-        let env = Arc::new(LmdbEnvironment::new(&dir.path().to_path_buf()).unwrap());
+        let env =
+            Arc::new(LmdbEnvironment::new(&dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap());
         let store = Arc::new(LmdbTrieStore::open(&env, None).unwrap());
         let num_threads = 10;
         let barrier = Arc::new(Barrier::new(num_threads + 1));
@@ -628,6 +639,7 @@ mod proptests {
     use common::value::Value;
     use history::trie::gens::trie_arb;
     use history::trie::Trie;
+    use history::trie_store::tests::TEST_MAP_SIZE;
     use history::trie_store::{Transaction, TransactionSource, TrieStore};
     use lmdb::DatabaseFlags;
     use proptest::collection::vec;
@@ -713,7 +725,7 @@ mod proptests {
         use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
         let tmp_dir = tempdir().unwrap();
-        let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
+        let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 
         let ret = roundtrip_succeeds::<LmdbTrieStore, LmdbEnvironment, error::Error>(
