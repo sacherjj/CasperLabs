@@ -20,7 +20,7 @@ object DeployRuntime {
   def propose[F[_]: Sync: DeployService](): F[Unit] =
     gracefulExit(
       for {
-        response <- DeployService[F].createBlock()
+        response <- DeployService[F].propose()
       } yield response.map(r => s"Response: $r")
     )
 

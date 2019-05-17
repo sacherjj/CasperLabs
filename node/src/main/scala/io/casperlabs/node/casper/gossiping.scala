@@ -648,7 +648,6 @@ package object gossiping {
     def loop(prevPeers: Set[Node]): F[Unit] = {
       // Based on Connecttions.removeConn
       val newPeers = for {
-        _     <- Time[F].sleep(1.minute)
         peers <- NodeDiscovery[F].alivePeersAscendingDistance.map(_.toSet)
         _     <- Log[F].info(s"Peers: ${peers.size}").whenA(peers.size != prevPeers.size)
         _ <- (prevPeers diff peers).toList.traverse { peer =>
@@ -657,9 +656,10 @@ package object gossiping {
         _ <- (peers diff prevPeers).toList.traverse { peer =>
               Log[F].info(s"Connected to ${peer.show}")
             }
+        _ <- Time[F].sleep(15.seconds)
       } yield peers
 
-      newPeers flatMap { peers =>
+      Time[F].sleep(5.seconds) *> newPeers flatMap { peers =>
         loop(peers)
       }
     }

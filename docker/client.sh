@@ -10,9 +10,11 @@ set -e
 #
 # ./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release \
 #     --from 00000000000000000000 \
-#     --gas-limit 100000000 --gas-price 1 \
+#     --gas-price 1 \
 #     --session /data/helloname.wasm \
 #     --payment /data/helloname.wasm
+#
+# ./client.sh node-0 propose
 
 if [ $# -lt 2 ]; then
     echo "usage: ./client.sh <node-id> <command> [OPTION...]" && exit 1
@@ -26,7 +28,7 @@ function run_default() {
     docker run --rm \
         --network casperlabs \
         casperlabs/client:latest \
-        --host $NODE --port 40401 $CMD $@
+        --host $NODE $CMD $@
 }
 
 # cmd vol args
@@ -36,7 +38,7 @@ function run_with_vol() {
         --network casperlabs \
         --volume $VOL:/data \
         casperlabs/client:latest \
-        --host $NODE --port 40401 $CMD $@
+        --host $NODE $CMD $@
 }
 
 

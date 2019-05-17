@@ -29,9 +29,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val port =
     opt[Int](descr = "Port used for external gRPC API.", default = Option(40401))
 
+  val portInternal =
+    opt[Int](descr = "Port used for internal gRPC API.", default = Option(40402))
+
   val host =
     opt[String](
-      descr = "Hostname or IP of node on which gRPC service is running.",
+      descr = "Hostname or IP of node on which the gRPC service is running.",
       required = true
     )
 

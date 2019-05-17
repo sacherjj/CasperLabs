@@ -359,10 +359,12 @@ At the moment, payment wasm file is not used so use the same file as for the `--
 After deploying contract it's not yet executed (its effects are not applied to the global state), so you have to `propose` a block. Run:
 
 ```
-./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 propose
+./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port-internal 40402 propose
 ```
 
 For the demo purposes we have to propose contracts separately because second contract (`hello-name/call`) won't see the changes (in practice it won't be able to call `hello-name/define` contract) from the previous deploy.
+
+Note that propose uses a different port then the deploy because it's considered an operator-only function, it's not part of the same interface.
 
 ### Visualising DAG state
 

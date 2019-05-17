@@ -120,11 +120,17 @@ object ServiceError {
       apply(s"Block ${Base16.encode(blockHash.toByteArray)} could not be found.")
   }
 
-  object Internal         extends StatusError(Status.INTERNAL)
-  object InvalidArgument  extends StatusError(Status.INVALID_ARGUMENT)
-  object Unauthenticated  extends StatusError(Status.UNAUTHENTICATED)
-  object DeadlineExceeded extends StatusError(Status.DEADLINE_EXCEEDED)
-  object Unavailable      extends StatusError(Status.UNAVAILABLE)
+  // NOTE: See https://github.com/grpc/grpc/blob/master/doc/statuscodes.md about when to use which one.
+
+  object Internal           extends StatusError(Status.INTERNAL)
+  object InvalidArgument    extends StatusError(Status.INVALID_ARGUMENT)
+  object Unauthenticated    extends StatusError(Status.UNAUTHENTICATED)
+  object DeadlineExceeded   extends StatusError(Status.DEADLINE_EXCEEDED)
+  object Unavailable        extends StatusError(Status.UNAVAILABLE)
+  object ResourceExhausted  extends StatusError(Status.RESOURCE_EXHAUSTED)
+  object Aborted            extends StatusError(Status.ABORTED)
+  object FailedPrecondition extends StatusError(Status.FAILED_PRECONDITION)
+  object OutOfRange         extends StatusError(Status.OUT_OF_RANGE)
 }
 
 sealed trait GossipError extends NoStackTrace
