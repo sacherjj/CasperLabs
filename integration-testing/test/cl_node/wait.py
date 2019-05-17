@@ -31,11 +31,7 @@ class LogsContainOneOf:
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        logs = self.node.logs()
-        for message in self.messages:
-            if message in logs:
-                return True
-        return False
+        return any(m in self.node.logs() for m in self.messages)
 
 
 class LogsContainMessage:

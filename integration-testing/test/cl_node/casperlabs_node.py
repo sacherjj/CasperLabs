@@ -16,6 +16,7 @@ class CasperLabsNode:
         self.node = DockerNode(config, socket_volume=self.socket_volume)
         self.name = f'cl_node-{self.config.number}'
 
+    @property
     def logs(self):
         return self.node.logs()
 
