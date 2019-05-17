@@ -281,6 +281,12 @@ impl From<&common::key::Key> for super::ipc::Key {
                 key_uref.set_uref(uref.to_vec());
                 k.set_uref(key_uref);
             }
+            common::key::Key::Local { seed, key_hash } => {
+                let mut key_local = super::ipc::KeyLocal::new();
+                key_local.set_seed(seed.to_vec());
+                key_local.set_key_hash(key_hash.to_vec());
+                k.set_local(key_local);
+            },
         }
         k
     }

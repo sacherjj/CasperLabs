@@ -31,6 +31,8 @@ impl AccessRights {
 }
 
 pub const KEY_SIZE: usize = 32;
+pub const LOCAL_SEED_SIZE: usize = 32;
+pub const LOCAL_KEY_HASH_SIZE: usize = 32;
 
 #[repr(C)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
@@ -38,6 +40,10 @@ pub enum Key {
     Account([u8; 20]),
     Hash([u8; 32]),
     URef([u8; 32], AccessRights), //TODO: more bytes?
+    Local {
+        seed: [u8; LOCAL_SEED_SIZE],
+        key_hash: [u8; LOCAL_KEY_HASH_SIZE],
+    },
 }
 
 use Key::*;
@@ -63,9 +69,12 @@ impl Key {
 const ACCOUNT_ID: u8 = 0;
 const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
+const LOCAL_ID: u8 = 3;
+
 const KEY_ID_SIZE: usize = 1; // u8 used to determine the ID
 const ACCESS_RIGHTS_SIZE: usize = 1; // u8 used to tag AccessRights
 pub const UREF_SIZE: usize = U32_SIZE + N32 + KEY_ID_SIZE + ACCESS_RIGHTS_SIZE;
+const LOCAL_SIZE: usize = KEY_ID_SIZE + U32_SIZE + LOCAL_SEED_SIZE + U32_SIZE + LOCAL_KEY_HASH_SIZE;
 
 impl ToBytes for AccessRights {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
@@ -107,6 +116,13 @@ impl ToBytes for Key {
                 result.append(&mut access_rights.to_bytes()?);
                 Ok(result)
             }
+            Local { seed, key_hash } => {
+                let mut result = Vec::with_capacity(LOCAL_SIZE);
+                result.push(LOCAL_ID);
+                result.append(&mut seed.to_bytes()?);
+                result.append(&mut key_hash.to_bytes()?);
+                Ok(result)
+            }
         }
     }
 }
@@ -133,6 +149,11 @@ impl FromBytes for Key {
                 let (rf, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
                 let (access_right, rem2): (AccessRights, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((URef(rf, access_right), rem2))
+            }
+            LOCAL_ID => {
+                let (seed, rest): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
+                let (key_hash, rest): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
+                Ok((Local { seed, key_hash }, rest))
             }
             _ => Err(Error::FormattingError),
         }
@@ -166,17 +187,6 @@ impl ToBytes for Vec<Key> {
                 .flatten(),
         );
         Ok(result)
-    }
-}
-
-impl AsRef<[u8]> for Key {
-    fn as_ref(&self) -> &[u8] {
-        match self {
-            // TODO: need to distinguish between variants?
-            Account(a) => a,
-            Hash(h) => h,
-            URef(u, ..) => u,
-        }
     }
 }
 

@@ -81,6 +81,7 @@ message Key {
         KeyAddress account = 1; // hash of the key of the account, length 20 bytes
         KeyHash hash = 2; // hash of the key of the contract, length 32 bytes
         KeyURef uref = 3; // length 32 bytes TODO: more bytes?
+        KeyLocal local = 4;
     }
 }
 message KeyAddress {
@@ -91,6 +92,10 @@ message KeyHash {
 }
 message KeyURef {
     bytes uref = 1;
+}
+message KeyLocal {
+    bytes seed = 1;
+    bytes key_hash = 2;
 }
 
 // oneof cannot contain `repeated` label

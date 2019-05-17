@@ -2,13 +2,13 @@ use super::URefAddr;
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, ToBytes};
-use common::key::{AccessRights, Key};
+use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
 use common::value::account::Account;
 use common::value::Value;
 use execution::Error;
 use rand::RngCore;
 use rand_chacha::ChaChaRng;
-use shared::newtypes::Validated;
+use shared::newtypes::{Blake2bHash, Validated};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
@@ -117,6 +117,22 @@ where
 
     pub fn base_key(&self) -> Key {
         self.base_key
+    }
+
+    pub fn seed(&self) -> [u8; LOCAL_SEED_SIZE] {
+        match self.base_key {
+            Key::Account(bytes) => {
+                // TODO: remove after EE-333 is merged
+                let mut ret = [0u8; LOCAL_SEED_SIZE];
+                for (index, byte) in bytes.iter().enumerate() {
+                    ret[index] = *byte;
+                }
+                ret
+            }
+            Key::Hash(bytes) => bytes,
+            Key::URef(bytes, _) => bytes,
+            Key::Local { seed, key_hash } => Blake2bHash::new(&[seed, key_hash].concat()).into(),
+        }
     }
 
     pub fn protocol_version(&self) -> u64 {
@@ -301,6 +317,7 @@ where
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
             Key::URef(_, rights) => rights.is_readable(),
+            Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
 
@@ -309,6 +326,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
             Key::URef(_, rights) => rights.is_addable(),
+            Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
 
@@ -317,6 +335,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => false,
             Key::URef(_, rights) => rights.is_writeable(),
+            Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
 
