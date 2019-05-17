@@ -5,6 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import io.casperlabs.comm.discovery.Node
+import io.casperlabs.crypto.hash.Blake2b256
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 
 import scala.collection.JavaConverters._
@@ -54,6 +55,9 @@ trait ArbitraryConsensus {
     }
     loop(10)
   }
+
+  private def protoHash[T <: scalapb.GeneratedMessage](proto: T): ByteString =
+    ByteString.copyFrom(Blake2b256.hash(proto.toByteArray))
 
   val genHash = genBytes(32)
   val genKey  = genBytes(32)
@@ -132,7 +136,6 @@ trait ArbitraryConsensus {
 
   implicit def arbDeploy(implicit c: ConsensusConfig): Arbitrary[Deploy] = Arbitrary {
     for {
-      deployHash       <- genHash
       accountPublicKey <- genKey
       nonce            <- arbitrary[Long]
       timestamp        <- arbitrary[Long]
@@ -142,26 +145,23 @@ trait ArbitraryConsensus {
       sessionCode      <- Gen.choose(0, c.maxSessionCodeBytes).flatMap(genBytes(_))
       paymentCode      <- Gen.choose(0, c.maxPaymentCodeBytes).flatMap(genBytes(_))
       signature        <- arbitrary[Signature]
-    } yield {
-      Deploy()
-        .withDeployHash(deployHash)
-        .withHeader(
-          Deploy
-            .Header()
-            .withAccountPublicKey(accountPublicKey)
-            .withNonce(nonce)
-            .withTimestamp(timestamp)
-            .withGasPrice(gasPrice)
-            .withBodyHash(bodyHash)
-        )
-        .withBody(
-          Deploy
-            .Body()
-            .withSession(Deploy.Code().withCode(sessionCode))
-            .withPayment(Deploy.Code().withCode(paymentCode))
-        )
+      body = Deploy
+        .Body()
+        .withSession(Deploy.Code().withCode(sessionCode))
+        .withPayment(Deploy.Code().withCode(paymentCode))
+      header = Deploy
+        .Header()
+        .withAccountPublicKey(accountPublicKey)
+        .withNonce(nonce)
+        .withTimestamp(timestamp)
+        .withGasPrice(gasPrice)
+        .withBodyHash(protoHash(body))
+      deploy = Deploy()
+        .withDeployHash(protoHash(header))
+        .withHeader(header)
+        .withBody(body)
         .withSignature(signature)
-    }
+    } yield deploy
   }
 
   implicit def arbProcessedDeploy(implicit c: ConsensusConfig): Arbitrary[Block.ProcessedDeploy] =

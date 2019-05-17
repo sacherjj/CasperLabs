@@ -433,6 +433,14 @@ object Validate {
       } yield ()
     }
 
+  def deployHash[F[_]: Monad: Log](d: consensus.Deploy): F[Boolean] = {
+    val bodyHash   = ProtoUtil.protoHash(d.getBody)
+    val deployHash = ProtoUtil.protoHash(d.getHeader)
+    val ok         = bodyHash == d.getHeader.bodyHash && deployHash == d.deployHash
+    Log[F].warn(s"Invalid deploy hash ${PrettyPrinter.buildString(d.deployHash)}").whenA(!ok) *>
+      ok.pure[F]
+  }
+
   def blockHash[F[_]: Monad: RaiseValidationError: Log](
       b: BlockMessage,
       treatAsGenesis: Boolean = false

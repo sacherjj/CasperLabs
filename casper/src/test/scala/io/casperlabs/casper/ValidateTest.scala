@@ -14,6 +14,7 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ExecutionEngineServiceStub}
+import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.ipc.ProtocolVersion
@@ -26,7 +27,7 @@ import io.casperlabs.casper.util.execengine.DeploysCheckpoint
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
-
+import org.scalacheck.Arbitrary.arbitrary
 import scala.collection.immutable.HashMap
 
 class ValidateTest
@@ -632,6 +633,27 @@ class ValidateTest
               genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
             ) shouldBeF false
       } yield ()
+  }
+
+  "Deploy hash validation" should "return false for invalid hashes" in new ArbitraryConsensus {
+    implicit val conf = ConsensusConfig()
+
+    val genDeploy = for {
+      d <- arbitrary[consensus.Deploy]
+      h <- genHash
+    } yield d.withDeployHash(h)
+
+    val deploy = sample(genDeploy)
+
+    Validate.deployHash[Task](deploy) shouldBeF false
+  }
+
+  it should "return true for valid hashes" in new ArbitraryConsensus {
+    implicit val conf = ConsensusConfig()
+
+    val deploy = sample(arbitrary[consensus.Deploy])
+
+    Validate.deployHash[Task](deploy) shouldBeF true
   }
 
   "Block hash format validation" should "fail on invalid hash" in withStorage {
