@@ -18,7 +18,7 @@ impl Default for RuntimeModuleImportResolver {
     fn default() -> Self {
         RuntimeModuleImportResolver {
             memory: RefCell::new(None),
-            max_memory: 256,
+            max_memory: 64,
         }
     }
 }
