@@ -17,8 +17,10 @@ use dirs::home_dir;
 use engine_server::*;
 use execution_engine::engine::EngineState;
 use lmdb::DatabaseFlags;
+use shared::os::get_page_size;
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use storage::global_state::lmdb::LmdbGlobalState;
 use storage::history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
@@ -26,6 +28,12 @@ use storage::history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 const DEFAULT_DATA_DIR_RELATIVE: &str = ".casperlabs";
 const GLOBAL_STATE_DIR: &str = "global_state";
 
+// 1 GiB = 1073741824 bytes
+// page size on x86_64 linux = 4096 bytes
+// 1073741824 / 4096 = 262144
+const DEFAULT_PAGES: usize = 262_144;
+
+const GET_PAGES_EXPECT: &str = "Could not parse pages argument";
 const GET_HOME_DIR_EXPECT: &str = "Could not get home directory";
 const CREATE_DATA_DIR_EXPECT: &str = "Could not create directory";
 const LMDB_ENVIRONMENT_EXPECT: &str = "Could not create LmdbEnvironment";
@@ -41,6 +49,14 @@ fn main() {
                 .long("data-dir")
                 .value_name("DIR")
                 .help("Sets the data directory")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("pages")
+                .short("p")
+                .long("pages")
+                .value_name("NUM")
+                .help("Sets the max number of pages to use for lmdb's mmap")
                 .takes_value(true),
         )
         .get_matches();
@@ -67,8 +83,17 @@ fn main() {
         ret
     };
 
+    let map_size: usize = {
+        let page_size = get_page_size().unwrap();
+        let pages = matches
+            .value_of("pages")
+            .map_or(Ok(DEFAULT_PAGES), usize::from_str)
+            .expect(GET_PAGES_EXPECT);
+        page_size * pages
+    };
+
     let environment = {
-        let ret = LmdbEnvironment::new(&data_dir).expect(LMDB_ENVIRONMENT_EXPECT);
+        let ret = LmdbEnvironment::new(&data_dir, map_size).expect(LMDB_ENVIRONMENT_EXPECT);
         Arc::new(ret)
     };
 

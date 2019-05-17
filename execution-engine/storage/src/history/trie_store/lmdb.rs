@@ -40,7 +40,8 @@
 //! // LMDB-backed implementations, the environment is the source of
 //! // transactions.
 //! let tmp_dir = tempdir().unwrap();
-//! let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf()).unwrap();
+//! let map_size = 4096 * 2560;  // map size should be a multiple of OS page size
+//! let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), map_size).unwrap();
 //! let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 //!
 //! // First let's create a read-write transaction, persist the values, but
@@ -168,8 +169,8 @@ pub struct LmdbEnvironment {
 }
 
 impl LmdbEnvironment {
-    pub fn new(path: &PathBuf) -> Result<Self, error::Error> {
-        let env = Environment::new().open(path)?;
+    pub fn new(path: &PathBuf, map_size: usize) -> Result<Self, error::Error> {
+        let env = Environment::new().set_map_size(map_size).open(path)?;
         let path = path.to_owned();
         Ok(LmdbEnvironment { path, env })
     }
