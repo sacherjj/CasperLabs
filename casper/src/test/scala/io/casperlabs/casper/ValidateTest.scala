@@ -35,13 +35,16 @@ class ValidateTest
     with Matchers
     with BeforeAndAfterEach
     with BlockGenerator
-    with BlockDagStorageFixture {
+    with BlockDagStorageFixture
+    with ArbitraryConsensus {
   implicit val log              = new LogStub[Task]
   implicit val raiseValidateErr = Validate.raiseValidateErrorThroughSync[Task]
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.
   implicit def wrapWithThrowable[A <: InvalidBlock](err: A): Throwable =
     Validate.ValidateErrorWrapper(err)
+
+  implicit val consensusConfig = ConsensusConfig()
 
   val ed25519 = "ed25519"
 
@@ -170,6 +173,21 @@ class ValidateTest
         _      = condition should be(true)
         result = log.warns should be(Nil)
       } yield result
+  }
+
+  "Deploy signature validation" should "return true for valid signatures" in {
+    val deploy = sample(arbitrary[consensus.Deploy])
+    Validate.deploySignature[Task](deploy) shouldBeF true
+  }
+
+  it should "return false for invalid signatures" in {
+    val genDeploy = for {
+      d <- arbitrary[consensus.Deploy]
+      h <- genHash
+    } yield d.withSignature(d.getSignature.withSig(h))
+
+    val deploy = sample(genDeploy)
+    Validate.deploySignature[Task](deploy) shouldBeF true
   }
 
   "Timestamp validation" should "not accept blocks with future time" in withStorage {
@@ -635,24 +653,18 @@ class ValidateTest
       } yield ()
   }
 
-  "Deploy hash validation" should "return false for invalid hashes" in new ArbitraryConsensus {
-    implicit val conf = ConsensusConfig()
-
+  "Deploy hash validation" should "return false for invalid hashes" in {
     val genDeploy = for {
       d <- arbitrary[consensus.Deploy]
       h <- genHash
     } yield d.withDeployHash(h)
 
     val deploy = sample(genDeploy)
-
     Validate.deployHash[Task](deploy) shouldBeF false
   }
 
-  it should "return true for valid hashes" in new ArbitraryConsensus {
-    implicit val conf = ConsensusConfig()
-
+  it should "return true for valid hashes" in {
     val deploy = sample(arbitrary[consensus.Deploy])
-
     Validate.deployHash[Task](deploy) shouldBeF true
   }
 
