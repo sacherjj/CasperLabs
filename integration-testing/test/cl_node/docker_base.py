@@ -64,7 +64,8 @@ class DockerConfig:
             self.rand_str = random_string(5)
 
     def node_command_options(self, server_host: str) -> dict:
-        options = {'--server-host': server_host,
+        options = {'--server-default-timeout': 10000,
+                   '--server-host': server_host,
                    '--casper-validator-private-key': self.node_private_key,
                    '--grpc-socket': '/root/.casperlabs/sockets/.casper-node.sock',
                    '--metrics-prometheus': ''}
