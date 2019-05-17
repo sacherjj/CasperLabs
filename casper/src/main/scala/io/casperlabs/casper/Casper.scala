@@ -59,8 +59,6 @@ sealed abstract class MultiParentCasperInstances {
       genesisEffects: ExecEngineUtil.TransformMap
   ) =
     for {
-      // Initialize DAG storage with genesis block in case it is empty
-      _   <- BlockDagStorage[F].insert(genesis)
       dag <- BlockDagStorage[F].getRepresentation
       _ <- {
         implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
