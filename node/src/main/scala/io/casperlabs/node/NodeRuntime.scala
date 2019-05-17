@@ -157,9 +157,9 @@ class NodeRuntime private[node] (
         blockApiLock <- Resource.liftF(Semaphore[Effect](1))
 
         _ <- AutoProposer[Effect](
-              checkInterval = 1.second,
-              maxInterval = 5.seconds,
-              maxCount = 5,
+              checkInterval = conf.casper.autoProposeCheckInterval,
+              maxInterval = conf.casper.autoProposeMaxInterval,
+              maxCount = conf.casper.autoProposeMaxCount,
               blockApiLock = blockApiLock
             )(
               Concurrent[Effect],
@@ -168,7 +168,7 @@ class NodeRuntime private[node] (
               logEff,
               metricsEff,
               multiParentCasperRef
-            ).whenA(false)
+            ).whenA(conf.casper.autoProposeEnabled)
 
         _ <- api.Servers
               .internalServersR(
