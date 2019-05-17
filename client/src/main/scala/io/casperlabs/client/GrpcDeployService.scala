@@ -50,8 +50,8 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
     controlServiceStub
       .propose(ProposeRequest())
       .map { response =>
-        val hash = Base16.encode(response.blockHash.toByteArray)
-        s"Success! Block $hash created and added."
+        val hash = Base16.encode(response.blockHash.toByteArray).take(10)
+        s"Success! Block $hash... created and added."
       }
       .attempt
 
