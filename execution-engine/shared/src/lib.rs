@@ -4,6 +4,7 @@ extern crate chrono;
 extern crate common;
 #[macro_use]
 extern crate lazy_static;
+extern crate libc;
 #[macro_use]
 extern crate slog;
 extern crate slog_async;
@@ -12,5 +13,6 @@ extern crate slog_term;
 
 pub mod logging;
 pub mod newtypes;
+pub mod os;
 pub mod semver;
 pub mod test_utils;
