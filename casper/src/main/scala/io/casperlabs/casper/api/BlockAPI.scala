@@ -78,7 +78,11 @@ object BlockAPI {
   ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
     for {
       _ <- Metrics[F].incrementCounter("deploys")
-      o = LegacyConversions.fromDeploy(d)
+      // TODO: Remove fake gasLimit when the payment code is implemented.
+      g = if (d.getBody.getPayment.code.isEmpty || d.getBody.getPayment == d.getBody.getSession) {
+        sys.env.get("CL_DEFAULT_GAS_LIMIT").map(_.toLong).getOrElse(100000000L)
+      } else 0L
+      o = LegacyConversions.fromDeploy(d, gasLimit = g)
       r <- MultiParentCasper[F].deploy(o)
       _ <- r match {
             case Right(_) =>
