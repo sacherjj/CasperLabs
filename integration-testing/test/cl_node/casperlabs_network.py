@@ -1,7 +1,7 @@
 import docker
 import logging
 
-from typing import List, Callable
+from typing import List, Callable, Dict
 import dataclasses
 
 
@@ -33,7 +33,8 @@ class CasperLabsNetwork:
     Convention is naming the bootstrap as number 0 and all others increment from that point.
     """
 
-    def __init__(self, docker_client: 'DockerClient'):
+    def __init__(self, docker_client: 'DockerClient', extra_docker_params: Dict = None):
+        self.extra_docker_params = extra_docker_params or {}
         self._next_key_number = 0
         self.docker_client = docker_client
         self.cl_nodes: List[CasperLabsNode] = []
@@ -52,7 +53,7 @@ class CasperLabsNetwork:
         self._next_key_number += 1
         return key_pair
 
-    def create_cl_network(self):
+    def create_cl_network(self, **kwargs):
         """
         Should be implemented with each network class to setup custom nodes and networks.
         """
@@ -128,6 +129,14 @@ class CasperLabsNetwork:
         self.cleanup()
         return True
 
+    def docker_config(self):
+        kp = self.get_key()
+        config = DockerConfig(self.docker_client,
+                              node_private_key=kp.private_key,
+                              node_public_key=kp.public_key)
+
+        return dataclasses.replace(config, **self.extra_docker_params)
+
     def cleanup(self):
         for network_name in self._created_networks:
             self.docker_client.networks.get(network_name).remove()
@@ -135,9 +144,6 @@ class CasperLabsNetwork:
 
 class OneNodeNetwork(CasperLabsNetwork):
     """ A single node network with just a bootstrap """
-
-    def __init__(self, docker_client: 'DockerClient'):
-        super(OneNodeNetwork, self).__init__(docker_client)
 
     def create_cl_network(self):
         kp = self.get_key()
@@ -149,10 +155,6 @@ class OneNodeNetwork(CasperLabsNetwork):
 
 
 class TwoNodeNetwork(CasperLabsNetwork):
-
-    def __init__(self, docker_client: 'DockerClient'):
-        super(TwoNodeNetwork, self).__init__(docker_client)
-
 
     def create_cl_network(self):
         kp = self.get_key()
@@ -170,9 +172,6 @@ class TwoNodeNetwork(CasperLabsNetwork):
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):
-
-    def __init__(self, docker_client: 'DockerClient'):
-        super(ThreeNodeNetwork, self).__init__(docker_client)
 
     def create_cl_network(self):
         kp = self.get_key()
@@ -194,20 +193,9 @@ class ThreeNodeNetwork(CasperLabsNetwork):
 
 class MultiNodeJoinedNetwork(CasperLabsNetwork):
 
-    def __init__(self, n: int, docker_client: 'DockerClient', extra_docker_params = {}):
+    def __init__(self, n: int, docker_client: 'DockerClient', extra_docker_params=None):
         self._n = n
-        self.extra_docker_params = extra_docker_params
-        super(MultiNodeJoinedNetwork, self).__init__(docker_client)
-
-
-    def docker_config(self):
-        kp = self.get_key()
-        config = DockerConfig(self.docker_client,
-                              node_private_key=kp.private_key,
-                              node_public_key=kp.public_key,)
-
-        return dataclasses.replace(config, **self.extra_docker_params)
-        
+        super(MultiNodeJoinedNetwork, self).__init__(docker_client, extra_docker_params)
 
     def create_cl_network(self):
         config = self.docker_config()
