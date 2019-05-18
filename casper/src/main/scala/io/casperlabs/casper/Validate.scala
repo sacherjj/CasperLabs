@@ -763,7 +763,7 @@ object Validate {
   ): F[Unit] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
-      case Some(tuplespaceHash) =>
+      case Some(globalStateRootHash) =>
         if (bonds.toSet == computedBonds.toSet) {
           Applicative[F].unit
         } else {

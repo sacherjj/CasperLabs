@@ -82,7 +82,7 @@ $CLI vdag --depth 10
 #blockSize: "886"
 #blockNumber: 2
 #version: 1
-#tupleSpaceHash: "1cd9b900fb50d052be42bb25d0f4bb47175c3f9b3ba8ea3a5113e191b1c53187"
+#globalStateRootHash: "1cd9b900fb50d052be42bb25d0f4bb47175c3f9b3ba8ea3a5113e191b1c53187"
 #timestamp: 1556269941223
 #faultTolerance: -1.0
 #mainParentHash: "d363e9e6f279deb47783f2ac6cfac87daa778055226effffbe7e932c2189d575"
