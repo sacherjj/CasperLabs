@@ -14,13 +14,13 @@ import monix.eval.{Task, TaskLike}
 
 object GrpcCasperService {
   def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef](
-      blockApiLock: Semaphore[F]
+      ignoreDeploySignature: Boolean
   ): F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       new CasperGrpcMonix.CasperService {
         override def deploy(request: DeployRequest): Task[Empty] =
           TaskLike[F].toTask {
-            BlockAPI.deploy[F](request.getDeploy).map(_ => Empty())
+            BlockAPI.deploy[F](request.getDeploy, ignoreDeploySignature).map(_ => Empty())
           }
       }
     }

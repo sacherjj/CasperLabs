@@ -80,7 +80,8 @@ object Servers {
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
-      blockApiLock: Semaphore[F]
+      blockApiLock: Semaphore[F],
+      ignoreDeploySignature: Boolean
   )(implicit scheduler: Scheduler, logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] =
     GrpcServer(
       port = port,
@@ -88,11 +89,11 @@ object Servers {
       services = List(
         // TODO: Phase DeployService out in favor of CasperService.
         (_: Scheduler) =>
-          GrpcDeployService.instance(blockApiLock) map {
+          GrpcDeployService.instance(blockApiLock, ignoreDeploySignature) map {
             CasperMessageGrpcMonix.bindService(_, grpcExecutor)
           },
         (_: Scheduler) =>
-          GrpcCasperService(blockApiLock) map {
+          GrpcCasperService(ignoreDeploySignature) map {
             CasperGrpcMonix.bindService(_, grpcExecutor)
           }
       ),

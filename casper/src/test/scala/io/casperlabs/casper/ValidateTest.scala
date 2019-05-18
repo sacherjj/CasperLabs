@@ -14,6 +14,7 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ExecutionEngineServiceStub}
+import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.Ed25519
 import io.casperlabs.ipc.ProtocolVersion
@@ -26,7 +27,7 @@ import io.casperlabs.casper.util.execengine.DeploysCheckpoint
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
-
+import org.scalacheck.Arbitrary.arbitrary
 import scala.collection.immutable.HashMap
 
 class ValidateTest
@@ -34,13 +35,16 @@ class ValidateTest
     with Matchers
     with BeforeAndAfterEach
     with BlockGenerator
-    with BlockDagStorageFixture {
+    with BlockDagStorageFixture
+    with ArbitraryConsensus {
   implicit val log              = new LogStub[Task]
   implicit val raiseValidateErr = Validate.raiseValidateErrorThroughSync[Task]
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.
   implicit def wrapWithThrowable[A <: InvalidBlock](err: A): Throwable =
     Validate.ValidateErrorWrapper(err)
+
+  implicit val consensusConfig = ConsensusConfig()
 
   val ed25519 = "ed25519"
 
@@ -169,6 +173,21 @@ class ValidateTest
         _      = condition should be(true)
         result = log.warns should be(Nil)
       } yield result
+  }
+
+  "Deploy signature validation" should "return true for valid signatures" in {
+    val deploy = sample(arbitrary[consensus.Deploy])
+    Validate.deploySignature[Task](deploy) shouldBeF true
+  }
+
+  it should "return false for invalid signatures" in {
+    val genDeploy = for {
+      d <- arbitrary[consensus.Deploy]
+      h <- genHash
+    } yield d.withSignature(d.getSignature.withSig(h))
+
+    val deploy = sample(genDeploy)
+    Validate.deploySignature[Task](deploy) shouldBeF true
   }
 
   "Timestamp validation" should "not accept blocks with future time" in withStorage {
@@ -632,6 +651,21 @@ class ValidateTest
               genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
             ) shouldBeF false
       } yield ()
+  }
+
+  "Deploy hash validation" should "return false for invalid hashes" in {
+    val genDeploy = for {
+      d <- arbitrary[consensus.Deploy]
+      h <- genHash
+    } yield d.withDeployHash(h)
+
+    val deploy = sample(genDeploy)
+    Validate.deployHash[Task](deploy) shouldBeF false
+  }
+
+  it should "return true for valid hashes" in {
+    val deploy = sample(arbitrary[consensus.Deploy])
+    Validate.deployHash[Task](deploy) shouldBeF true
   }
 
   "Block hash format validation" should "fail on invalid hash" in withStorage {

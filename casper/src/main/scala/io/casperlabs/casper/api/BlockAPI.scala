@@ -24,7 +24,8 @@ import io.casperlabs.comm.ServiceError.{
   InvalidArgument,
   OutOfRange,
   ResourceExhausted,
-  Unavailable
+  Unavailable,
+  Unimplemented
 }
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b512Random
@@ -56,12 +57,20 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("create-blocks-success", 0)
     } yield ()
 
-  def deploy[F[_]: Monad: MultiParentCasperRef: Log: Metrics](
-      d: DeployData
+  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: Metrics](
+      d: DeployData,
+      ignoreDeploySignature: Boolean
   ): F[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
       for {
         _ <- Metrics[F].incrementCounter("deploys")
+        _ <- MonadThrowable[F]
+              .raiseError {
+                Unimplemented(
+                  "Signature check on protocol.DeployData is not implemented. Use CasperService."
+                )
+              }
+              .whenA(!ignoreDeploySignature)
         r <- MultiParentCasper[F].deploy(d)
         re <- r match {
                case Right(_) =>
@@ -83,10 +92,20 @@ object BlockAPI {
   }
 
   def deploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: Metrics](
-      d: consensus.Deploy
+      d: consensus.Deploy,
+      ignoreDeploySignature: Boolean
   ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
+    def check(msg: String)(f: F[Boolean]): F[Unit] =
+      f flatMap { ok =>
+        MonadThrowable[F].raiseError(InvalidArgument(msg)).whenA(!ok)
+      }
+
     for {
       _ <- Metrics[F].incrementCounter("deploys")
+      // Doing these here while MultiParentCasper is still using the legacy deploys.
+      _ <- check("Invalid deploy hash.")(Validate.deployHash[F](d))
+      _ <- check("Invalid deploy signature.")(Validate.deploySignature[F](d))
+            .whenA(!ignoreDeploySignature)
       // TODO: Remove fake gasLimit when the payment code is implemented.
       g = if (d.getBody.getPayment.code.isEmpty || d.getBody.getPayment == d.getBody.getSession) {
         sys.env.get("CL_DEFAULT_GAS_LIMIT").map(_.toLong).getOrElse(100000000L)

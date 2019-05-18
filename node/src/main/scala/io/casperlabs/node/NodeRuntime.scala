@@ -179,7 +179,8 @@ class NodeRuntime private[node] (
               conf.grpc.portExternal,
               conf.server.maxMessageSize,
               grpcScheduler,
-              blockApiLock
+              blockApiLock,
+              conf.casper.ignoreDeploySignature
             )(
               Concurrent[Effect],
               TaskLike[Effect],
