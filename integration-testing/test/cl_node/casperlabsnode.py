@@ -388,6 +388,7 @@ def make_bootstrap_node(
         network_name=network,
     )
     container_command_options = {
+        "--server-default-timeout": 10000,
         "--server-host": name,
         "--tls-certificate": "/root/.casperlabs/bootstrap/node.certificate.pem",
         "--tls-key": "/root/.casperlabs/bootstrap/node.key.pem",

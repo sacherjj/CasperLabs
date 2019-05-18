@@ -9,6 +9,7 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
+import cats.syntax.show._
 import com.olegpy.meow.effects._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
@@ -24,11 +25,12 @@ import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, taskLiftEitherT}
+import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, syncId, taskLiftEitherT}
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import io.casperlabs.comm.rp._
 import io.casperlabs.comm.transport._
@@ -80,6 +82,9 @@ class NodeRuntime private[node] (
     } yield conf).toEffect
 
     val logEff: Log[Effect] = Log.eitherTLog(Monad[Task], log)
+
+    val logId: Log[Id]         = Log.logId
+    val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
 
     rpConfState >>= (_.runState { implicit state =>
       val resources = for {
@@ -149,24 +154,32 @@ class NodeRuntime private[node] (
         safetyOracle = SafetyOracle
           .cliqueOracle[Effect](Monad[Effect], logEff)
 
+        blockApiLock <- Resource.liftF(Semaphore[Effect](1))
+
         _ <- api.Servers
-              .diagnosticsServerR(
+              .internalServersR(
                 conf.grpc.portInternal,
                 conf.server.maxMessageSize,
-                grpcScheduler
+                grpcScheduler,
+                blockApiLock
               )(
                 logEff,
+                logId,
+                metricsEff,
+                metricsId,
                 nodeDiscovery,
                 jvmMetrics,
                 nodeMetrics,
                 connectionsCell,
+                multiParentCasperRef,
                 scheduler
               )
 
-        _ <- api.Servers.deploymentServerR[Effect](
+        _ <- api.Servers.externalServersR[Effect](
               conf.grpc.portExternal,
               conf.server.maxMessageSize,
-              grpcScheduler
+              grpcScheduler,
+              blockApiLock
             )(
               Concurrent[Effect],
               TaskLike[Effect],
@@ -176,7 +189,9 @@ class NodeRuntime private[node] (
               safetyOracle,
               blockStore,
               executionEngineService,
-              scheduler
+              scheduler,
+              logId,
+              metricsId
             )
 
         _ <- api.Servers.httpServerR(
@@ -209,7 +224,9 @@ class NodeRuntime private[node] (
                 eitherTApplicativeAsk(effects.peerNodeAsk(state)),
                 multiParentCasperRef,
                 executionEngineService,
-                scheduler
+                scheduler,
+                logId,
+                metricsId
               )
             } else {
               casper.transport.apply(
@@ -258,7 +275,10 @@ class NodeRuntime private[node] (
 
     val info: Effect[Unit] =
       if (conf.casper.standalone) Log[Effect].info(s"Starting stand-alone node.")
-      else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
+      else
+        Log[Effect].info(
+          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).getOrElse("n/a")}"
+        )
 
     val fetchLoop: Effect[Unit] =
       for {
@@ -310,7 +330,7 @@ class NodeRuntime private[node] (
     )
 
   private def rpConf[F[_]: Sync](local: Node, maybeBootstrap: Option[Node]) =
-    Ref.of(
+    Ref.of[F, RPConf](
       RPConf(
         local,
         maybeBootstrap,

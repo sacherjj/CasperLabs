@@ -3,6 +3,7 @@ package io.casperlabs.comm.gossiping
 import cats._
 import cats.effect._
 import cats.implicits._
+import com.google.protobuf.empty.Empty
 import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.{DeadlineExceeded, Unauthenticated}
 import io.casperlabs.comm.auth.Principal
@@ -76,7 +77,7 @@ object GrpcGossipService {
         TaskLike[F].toTask(service.getGenesisCandidate(request))
 
       def addApproval(request: AddApprovalRequest): Task[Empty] =
-        TaskLike[F].toTask(service.addApproval(request))
+        TaskLike[F].toTask(service.addApproval(request).map(_ => Empty()))
     }
 
   /** Create the internal interface from the Monix specific instance,
@@ -118,7 +119,7 @@ object GrpcGossipService {
       def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
         withErrorCallback(stub.getGenesisCandidate(request))
 
-      def addApproval(request: AddApprovalRequest): F[Empty] =
-        withErrorCallback(stub.addApproval(request))
+      def addApproval(request: AddApprovalRequest): F[Unit] =
+        withErrorCallback(stub.addApproval(request).map(_ => ()))
     }
 }

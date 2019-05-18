@@ -54,7 +54,7 @@ class DockerConfig:
     number: int = 0
     rand_str: Optional[str] = None
     volumes: Optional[Dict[str, Dict[str, str]]] = None
-    command_timeout: int = 60
+    command_timeout: int = 180
     mem_limit: str = '4G'
     is_bootstrap: bool = False
     bootstrap_address: Optional[str] = None
@@ -64,7 +64,8 @@ class DockerConfig:
             self.rand_str = random_string(5)
 
     def node_command_options(self, server_host: str) -> dict:
-        options = {'--server-host': server_host,
+        options = {'--server-default-timeout': 10000,
+                   '--server-host': server_host,
                    '--casper-validator-private-key': self.node_private_key,
                    '--grpc-socket': '/root/.casperlabs/sockets/.casper-node.sock',
                    '--metrics-prometheus': ''}

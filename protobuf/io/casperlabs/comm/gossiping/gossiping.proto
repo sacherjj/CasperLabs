@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package io.casperlabs.comm.gossiping;
 
+import "google/protobuf/empty.proto";
 import "io/casperlabs/casper/consensus/consensus.proto";
 import "io/casperlabs/comm/discovery/node.proto";
 
@@ -30,7 +31,7 @@ service GossipService {
 
     // Add a signature to the list of approvals of a given candidate. If the block hash in the request doesn't match
     // the callee's candidate it will return INVALID_ARGUMENT, otherwise add the signature and forward it to its peers.
-    rpc AddApproval(AddApprovalRequest) returns (Empty);
+    rpc AddApproval(AddApprovalRequest) returns (google.protobuf.Empty);
 }
 
 message NewBlocksRequest {
@@ -99,6 +100,3 @@ message Chunk {
         uint32 original_content_length = 3;
     }
 }
-
-// Message equivalent to `google.protobuf.Empty`, but saves pulling in all the dependencies.
-message Empty {}

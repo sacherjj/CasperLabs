@@ -225,8 +225,8 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
   override def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
     rethrow(genesisApprover.getCandidate)
 
-  override def addApproval(request: AddApprovalRequest): F[Empty] =
-    rethrow(genesisApprover.addApproval(request.blockHash, request.getApproval)) *> Empty().pure[F]
+  override def addApproval(request: AddApprovalRequest): F[Unit] =
+    rethrow(genesisApprover.addApproval(request.blockHash, request.getApproval)).void
 
   private def effectiveChunkSize(chunkSize: Int): Int =
     if (0 < chunkSize && chunkSize < maxChunkSize) chunkSize

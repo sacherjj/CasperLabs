@@ -24,7 +24,7 @@ trait GossipService[F[_]] {
 
   def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate]
 
-  def addApproval(request: AddApprovalRequest): F[Empty]
+  def addApproval(request: AddApprovalRequest): F[Unit]
 }
 
 object GossipService {
