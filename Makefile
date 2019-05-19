@@ -229,6 +229,16 @@ execution-engine/target/release/casperlabs-engine-grpc-server: \
 	cargo update && \
 	cargo build --release
 
+# Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
+# There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.
+protobuf/google/api:
+	$(eval DIR = protobuf/google/api)
+	$(eval SRC = https://raw.githubusercontent.com/googleapis/googleapis/master/google/api)
+	mkdir -p $(DIR)
+	cd $(DIR) && \
+	curl -s -O $(SRC)/annotations.proto && \
+	curl -s -O $(SRC)/http.proto
+
 # Miscellaneous tools to install once.
 
 .make/install/protoc:

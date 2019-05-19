@@ -26,7 +26,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
-object DeployGrpcService {
+object GrpcDeployService {
   def toKey[F[_]](keyType: String, keyValue: String)(
       implicit appErr: ApplicativeError[F, Throwable]
   ): F[ipc.Key] = {
@@ -75,7 +75,8 @@ object DeployGrpcService {
     path.split("/").filter(_.nonEmpty)
 
   def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: TaskLike: ExecutionEngineService](
-      blockApiLock: Semaphore[F]
+      blockApiLock: Semaphore[F],
+      ignoreDeploySignature: Boolean
   )(
       implicit worker: Scheduler
   ): F[CasperMessageGrpcMonix.DeployService] = {
@@ -84,7 +85,7 @@ object DeployGrpcService {
         Task.defer(TaskLike[F].toTask(task)).executeOn(worker).attemptAndLog
 
       override def doDeploy(d: DeployData): Task[DeployServiceResponse] =
-        defer(BlockAPI.deploy[F](d))
+        defer(BlockAPI.deploy[F](d, ignoreDeploySignature))
 
       override def createBlock(e: Empty): Task[DeployServiceResponse] =
         defer(BlockAPI.createBlock[F](blockApiLock))
@@ -99,7 +100,7 @@ object DeployGrpcService {
             bq  <- BlockAPI.showBlock[F](BlockQuery(blockHash))
             state <- Concurrent[F]
                       .fromOption(bq.blockInfo, new Exception(s"Block $blockHash not found!"))
-                      .map(_.tupleSpaceHash)
+                      .map(_.globalStateRootHash)
             stateHash        = ByteString.copyFrom(Base16.decode(state))
             possibleResponse <- ExecutionEngineService[F].query(stateHash, key, splitPath(path))
             response         <- Concurrent[F].fromEither(possibleResponse).map(_.toProtoString)

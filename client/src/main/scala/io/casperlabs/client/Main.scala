@@ -21,13 +21,15 @@ object Main {
     val exec =
       for {
         maybeConf <- Task(Configuration.parse(args))
-        _ <- maybeConf.fold(Log[Task].error("Couldn't parse CLI args into configuration")) { conf =>
-              val deployService = new GrpcDeployService(
-                conf.host,
-                conf.port
-              )
-              program(conf)(Sync[Task], deployService, Timer[Task])
-                .doOnFinish(_ => Task(deployService.close()))
+        _ <- maybeConf.fold(Log[Task].error("Couldn't parse CLI args into configuration")) {
+              case (conn, conf) =>
+                val deployService = new GrpcDeployService(
+                  conn.host,
+                  conn.portExternal,
+                  conn.portInternal
+                )
+                program(conf)(Sync[Task], deployService, Timer[Task])
+                  .doOnFinish(_ => Task(deployService.close()))
             }
       } yield ()
 
@@ -38,16 +40,20 @@ object Main {
       configuration: Configuration
   ): F[Unit] =
     configuration match {
-      case ShowBlock(_, _, hash)   => DeployRuntime.showBlock(hash)
-      case ShowBlocks(_, _, depth) => DeployRuntime.showBlocks(depth)
-      case Deploy(_, _, from, gasLimit, nonce, sessionCode, paymentCode) =>
-        DeployRuntime.deployFileProgram(from, gasLimit, nonce, sessionCode, paymentCode)
-      case _: Propose =>
+      case ShowBlock(hash) => DeployRuntime.showBlock(hash)
+
+      case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
+
+      case Deploy(from, nonce, sessionCode, paymentCode) =>
+        DeployRuntime.deployFileProgram(from, nonce, sessionCode, paymentCode)
+
+      case Propose =>
         DeployRuntime.propose()
-      case VisualizeDag(_, _, depth, showJustificationLines, out, streaming) =>
+
+      case VisualizeDag(depth, showJustificationLines, out, streaming) =>
         DeployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
 
-      case Query(_, _, hash, keyType, keyValue, path) =>
+      case Query(hash, keyType, keyValue, path) =>
         DeployRuntime.gracefulExit(
           DeployService[F].queryState(protocol.QueryStateRequest(hash, keyType, keyValue, path))
         )

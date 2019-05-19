@@ -1,11 +1,12 @@
 extern crate parity_wasm;
 extern crate pwasm_utils;
-extern crate vm;
+
+pub mod wasm_costs;
 
 use parity_wasm::elements::{deserialize_buffer, Error as ParityWasmError, Module};
 use pwasm_utils::{externalize_mem, inject_gas_counter, rules};
 use std::error::Error;
-use vm::wasm_costs::WasmCosts;
+use wasm_costs::WasmCosts;
 
 //NOTE: size of Wasm memory page is 64 KiB
 const MEM_PAGES: u32 = 64;
@@ -33,17 +34,11 @@ pub struct WasmiPreprocessor {
 }
 
 impl WasmiPreprocessor {
-    pub fn new(wasm_costs: WasmCosts, mem_pages: u32) -> WasmiPreprocessor {
+    pub fn new(wasm_costs: WasmCosts) -> WasmiPreprocessor {
         WasmiPreprocessor {
             wasm_costs,
-            mem_pages,
+            mem_pages: MEM_PAGES,
         }
-    }
-}
-
-impl Default for WasmiPreprocessor {
-    fn default() -> WasmiPreprocessor {
-        WasmiPreprocessor::new(Default::default(), MEM_PAGES)
     }
 }
 

@@ -29,9 +29,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val port =
     opt[Int](descr = "Port used for external gRPC API.", default = Option(40401))
 
+  val portInternal =
+    opt[Int](descr = "Port used for internal gRPC API.", default = Option(40402))
+
   val host =
     opt[String](
-      descr = "Hostname or IP of node on which gRPC service is running.",
+      descr = "Hostname or IP of node on which the gRPC service is running.",
       required = true
     )
 
@@ -54,9 +57,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val gasLimit =
       opt[Long](
         descr =
-          "The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
+          "[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.",
         validate = _ > 0,
-        required = true
+        required = false // Leaving it here for now so old examples don't complain about its presence.
       )
 
     val gasPrice = opt[Long](

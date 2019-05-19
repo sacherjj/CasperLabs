@@ -13,7 +13,12 @@ use mappings::*;
 use shared::newtypes::Blake2bHash;
 use storage::history::*;
 use storage::transform::Transform;
+use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
+
+use shared::logging;
+use shared::logging::log_level;
+use LOG_SETTINGS;
 
 pub mod ipc;
 pub mod ipc_grpc;
@@ -38,6 +43,7 @@ where
         let state_hash: Blake2bHash = p.get_state_hash().try_into().unwrap();
         match p.get_base_key().try_into() {
             Err(ParsingError(err_msg)) => {
+                logging::log(&*LOG_SETTINGS, log_level::LogLevel::Error, &err_msg);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(err_msg);
                 grpc::SingleResponse::completed(result)
@@ -48,12 +54,14 @@ where
                     Err(storage_error) => {
                         let mut result = ipc::QueryResponse::new();
                         let error = format!("Error during checkout out Trie: {:?}", storage_error);
+                        logging::log(&*LOG_SETTINGS, log_level::LogLevel::Error, &error);
                         result.set_failure(error);
                         grpc::SingleResponse::completed(result)
                     }
                     Ok(None) => {
                         let mut result = ipc::QueryResponse::new();
                         let error = format!("Root not found: {:?}", state_hash);
+                        logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, &error);
                         result.set_failure(error);
                         grpc::SingleResponse::completed(result)
                     }
@@ -62,6 +70,7 @@ where
                             Err(err) => {
                                 let mut result = ipc::QueryResponse::new();
                                 let error = format!("{:?}", err);
+                                logging::log(&*LOG_SETTINGS, log_level::LogLevel::Error, &error);
                                 result.set_failure(error);
                                 result
                             }
@@ -69,6 +78,7 @@ where
                             Ok(QueryResult::ValueNotFound(full_path)) => {
                                 let mut result = ipc::QueryResponse::new();
                                 let error = format!("Value not found: {:?}", full_path);
+                                logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, &error);
                                 result.set_failure(error);
                                 result
                             }
@@ -92,11 +102,13 @@ where
         p: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
         let executor = WasmiExecutor;
-        let preprocessor: WasmiPreprocessor = Default::default();
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = p.get_parent_state_hash().try_into().unwrap();
         let deploys = p.get_deploys();
         let protocol_version = p.get_protocol_version();
+        // TODO: don't unwrap
+        let wasm_costs = WasmCosts::from_version(protocol_version.version).unwrap();
+        let preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
         let deploys_result: Result<Vec<DeployResult>, RootNotFound> = run_deploys(
             &self,
             &executor,
@@ -114,6 +126,11 @@ where
                 grpc::SingleResponse::completed(exec_response)
             }
             Err(error) => {
+                logging::log(
+                    &*LOG_SETTINGS,
+                    log_level::LogLevel::Error,
+                    "deploy results error: RootNotFound",
+                );
                 let mut exec_response = ipc::ExecResponse::new();
                 exec_response.set_missing_parent(error);
                 grpc::SingleResponse::completed(exec_response)
@@ -132,6 +149,7 @@ where
             p.get_effects().iter().map(TryInto::try_into).collect();
         match effects_result {
             Err(ParsingError(error_message)) => {
+                logging::log(&*LOG_SETTINGS, log_level::LogLevel::Error, &error_message);
                 let mut res = ipc::CommitResponse::new();
                 let mut err = ipc::PostEffectsError::new();
                 err.set_message(error_message);
@@ -167,8 +185,10 @@ where
                 grpc::SingleResponse::completed(result)
             }
             Err(cause) => {
+                let cause_msg = cause.to_string();
+                logging::log(&*LOG_SETTINGS, log_level::LogLevel::Error, &cause_msg);
                 let mut result = ValidateResponse::new();
-                result.set_failure(cause.to_string());
+                result.set_failure(cause_msg);
                 grpc::SingleResponse::completed(result)
             }
         }
@@ -235,7 +255,7 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
 ) -> grpc::ServerBuilder {
     let socket_path = std::path::Path::new(socket);
     if socket_path.exists() {
-        std::fs::remove_file(socket_path).expect("Remove old socket file.");
+        std::fs::remove_file(socket_path).expect("failed to remove old socket file");
     }
 
     let mut server = grpc::ServerBuilder::new_plain();

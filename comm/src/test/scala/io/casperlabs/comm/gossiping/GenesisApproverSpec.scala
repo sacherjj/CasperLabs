@@ -448,9 +448,9 @@ object GenesisApproverSpec extends ArbitraryConsensus {
     override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
     override def streamBlockSummaries(
         request: StreamBlockSummariesRequest
-    ): Iterant[Task, BlockSummary]                                     = ???
-    override def getBlockChunked(request: GetBlockChunkedRequest)      = ???
-    override def addApproval(request: AddApprovalRequest): Task[Empty] = ???
+    ): Iterant[Task, BlockSummary]                                    = ???
+    override def getBlockChunked(request: GetBlockChunkedRequest)     = ???
+    override def addApproval(request: AddApprovalRequest): Task[Unit] = ???
     override def getGenesisCandidate(
         request: GetGenesisCandidateRequest
     ): Task[GenesisCandidate] = ???
@@ -473,7 +473,6 @@ object GenesisApproverSpec extends ArbitraryConsensus {
       override def addApproval(request: AddApprovalRequest) = Task.delay {
         synchronized {
           received = received + 1
-          Empty()
         }
       }
     }

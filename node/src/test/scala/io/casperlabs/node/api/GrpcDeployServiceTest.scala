@@ -6,9 +6,9 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
 
-import DeployGrpcService.splitPath
+import GrpcDeployService.splitPath
 
-class DeployGrpcServiceTest extends FlatSpec with EitherValues with Matchers {
+class GrpcCasperService extends FlatSpec with EitherValues with Matchers {
 
   def attemptToKeyTest(
       nBytes: Int,
@@ -87,5 +87,5 @@ class DeployGrpcServiceTest extends FlatSpec with EitherValues with Matchers {
     Base16.encode(Array.fill(length)(util.Random.nextInt(256).toByte))
 
   private def attemptToKey(keyType: String, keyValue: String): Either[Throwable, ipc.Key] =
-    DeployGrpcService.toKey[Task](keyType, keyValue).attempt.runSyncUnsafe()
+    GrpcDeployService.toKey[Task](keyType, keyValue).attempt.runSyncUnsafe()
 }

@@ -250,7 +250,7 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
     def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] = ???
     def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
       ???
-    def addApproval(request: AddApprovalRequest): Task[Empty] = ???
+    def addApproval(request: AddApprovalRequest): Task[Unit] = ???
   }
 
   object TestFixture {
