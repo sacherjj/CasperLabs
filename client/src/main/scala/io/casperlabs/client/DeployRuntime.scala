@@ -11,6 +11,9 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
 import io.casperlabs.client.configuration.Streaming
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.crypto.codec.Base16
+import java.nio.charset.StandardCharsets
 import scala.concurrent.duration._
 import scala.language.higherKinds
 import scala.util.Try
@@ -104,39 +107,64 @@ object DeployRuntime {
       from: String,
       nonce: Long,
       sessionCode: File,
-      paymentCode: File
+      paymentCode: File,
+      maybePublicKey: Option[File],
+      maybePrivateKey: Option[File]
   ): F[Unit] = {
     def readFile(file: File) =
       Sync[F].fromTry(
         Try(ByteString.copyFrom(Files.readAllBytes(file.toPath)))
       )
+
+    // TODO: Update to use Base64 and PEM.
+    def readBase16(file: File) =
+      for {
+        raw   <- readFile(file)
+        str   = new String(raw.toByteArray, StandardCharsets.UTF_8)
+        bytes = Base16.decode(str)
+      } yield bytes
+
+    val deploy = for {
+      session <- readFile(sessionCode)
+      payment <- readFile(paymentCode)
+      privateKey <- maybePrivateKey match {
+                     case Some(file) => readBase16(file)
+                     case None       => Array.empty[Byte].pure[F]
+                   }
+      publicKey <- maybePublicKey match {
+                    case Some(file) => readBase16(file)
+                    case None if privateKey.nonEmpty =>
+                      Ed25519.toPublic(privateKey).pure[F]
+                    case None => Array.empty[Byte].pure[F]
+                  }
+    } yield {
+      val deploy = consensus
+        .Deploy()
+        .withHeader(
+          consensus.Deploy
+            .Header()
+            .withTimestamp(System.currentTimeMillis)
+            // NOTE: For now using this field is also used to carry over the account address,
+            // which has been removed from Deploy. Should eventually disappear from the CLI entirely.
+            .withAccountPublicKey(
+              Option(ByteString.copyFrom(publicKey)).filterNot(_.isEmpty) getOrElse ByteString
+                .copyFromUtf8(from)
+            )
+            .withNonce(nonce)
+        )
+        .withBody(
+          consensus.Deploy
+            .Body()
+            .withSession(consensus.Deploy.Code().withCode(session))
+            .withPayment(consensus.Deploy.Code().withCode(payment))
+        )
+        .withHashes
+
+      Option(privateKey).filterNot(_.isEmpty).map(deploy.sign(_)) getOrElse deploy
+    }
+
     gracefulExit(
-      Apply[F]
-        .map2(
-          readFile(sessionCode),
-          readFile(paymentCode)
-        ) {
-          case (session, payment) =>
-            consensus
-              .Deploy()
-              .withHeader(
-                consensus.Deploy
-                  .Header()
-                  .withTimestamp(System.currentTimeMillis)
-                  // TODO: allow user to specify their public key.
-                  // NOTE: For now using this field to carry over the account address,
-                  // which has been removed from Deploy.
-                  .withAccountPublicKey(ByteString.copyFromUtf8(from))
-                  .withNonce(nonce)
-              )
-              .withBody(
-                consensus.Deploy
-                  .Body()
-                  .withSession(consensus.Deploy.Code().withCode(session))
-                  .withPayment(consensus.Deploy.Code().withCode(payment))
-              )
-              .withHashes
-        }
+      deploy
         .flatMap(DeployService[F].deploy)
         .handleError(
           ex => Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex))
@@ -171,6 +199,16 @@ object DeployRuntime {
     def withHashes = {
       val h = d.getHeader.withBodyHash(hash(d.getBody))
       d.withHeader(h).withDeployHash(hash(h))
+    }
+
+    def sign(privateKey: Array[Byte]) = {
+      val sig = Ed25519.sign(d.deployHash.toByteArray, privateKey)
+      d.withSignature(
+        consensus
+          .Signature()
+          .withSigAlgorithm("ed25519")
+          .withSig(ByteString.copyFrom(sig))
+      )
     }
   }
 
