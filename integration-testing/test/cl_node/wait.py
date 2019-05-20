@@ -271,9 +271,9 @@ def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout: int, nu
     wait_using_wall_clock_time_or_fail(predicate, timeout)
 
 
-def wait_for_count_the_blocks_on_node(node: 'Node', timeout: int, number_of_blocks: int) -> None:
+def wait_for_count_the_blocks_on_node(node: 'Node', timeout_seconds: int = 10, number_of_blocks: int = 1) -> None:
     predicate = TotalBlocksOnNode(node, number_of_blocks)
-    wait_using_wall_clock_time_or_fail(predicate, timeout)
+    wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 
 def wait_using_wall_clock_time_or_fail(predicate: PredicateProtocol, timeout: int) -> None:
