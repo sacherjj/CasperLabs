@@ -15,18 +15,22 @@ import scala.util.control.NonFatal
 
 /** Propose a block automatically whenever a timespan has elapsed or
   * we have more than a certain number of deploys in the buffer. */
-class AutoProposer[F[_]: Concurrent: Time: Timer: Log: Metrics: MultiParentCasperRef](
+class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
     checkInterval: FiniteDuration,
     maxInterval: FiniteDuration,
     maxCount: Int,
     blockApiLock: Semaphore[F]
 ) {
 
-  private val maxElapsedMillis = maxInterval.toMillis
-  private val noDeploys        = Set.empty[DeployData]
-
   private def run(): F[Unit] = {
-    def loop(prevDeploys: Set[DeployData], lastProposeMillis: Long): F[Unit] = {
+    val maxElapsedMillis = maxInterval.toMillis
+
+    def loop(
+        // Deploys we saw a the last auto-proposal.
+        prevDeploys: Set[DeployData],
+        // Time we saw the first new deploy after an auto-proposal.
+        startMillis: Long
+    ): F[Unit] = {
 
       val snapshot = for {
         currentMillis <- Time[F].currentMillis
@@ -34,46 +38,57 @@ class AutoProposer[F[_]: Concurrent: Time: Timer: Log: Metrics: MultiParentCaspe
         // NOTE: Currently the `remainingDeploys` method is private and quite inefficient
         // (easily goes back to Genesis), but in theory we could try to detect orphans and
         // propose again automatically.
-        deploys <- casper.fold(noDeploys.pure[F])(_.bufferedDeploys)
-      } yield (currentMillis, currentMillis - lastProposeMillis, deploys, deploys diff prevDeploys)
+        deploys <- casper.fold(Set.empty[DeployData].pure[F])(_.bufferedDeploys)
+      } yield (currentMillis, currentMillis - startMillis, deploys, deploys diff prevDeploys)
 
       snapshot flatMap {
-        case (currentMillis, elapsedMillis, deploys, newDeploys)
+        // Reset time when we see a new deploy.
+        case (currentMillis, _, _, newDeploys) if newDeploys.nonEmpty && startMillis == 0 =>
+          Time[F].sleep(checkInterval) *>
+            loop(prevDeploys, currentMillis)
+
+        case (_, elapsedMillis, deploys, newDeploys)
             if newDeploys.nonEmpty && (elapsedMillis >= maxElapsedMillis || newDeploys.size >= maxCount) =>
           Log[F].info(
             s"Automatically proposing block after ${elapsedMillis} ms and ${newDeploys.size} new deploys."
           ) *>
-            BlockAPI.createBlock(blockApiLock) *>
-            loop(deploys, currentMillis)
+            tryPropose() *>
+            loop(deploys, 0)
 
         case _ =>
-          Timer[F].sleep(checkInterval) *>
-            loop(prevDeploys, lastProposeMillis)
+          Time[F].sleep(checkInterval) *>
+            loop(prevDeploys, startMillis)
       }
     }
 
-    Time[F].currentMillis flatMap { ms =>
-      loop(noDeploys, ms) onError {
-        case NonFatal(ex) =>
-          Log[F].error(s"Error during auto-proposal of blocks.", ex)
-      }
+    loop(Set.empty, 0) onError {
+      case NonFatal(ex) =>
+        Log[F].error(s"Auto-proposal stopped unexpectedly.", ex)
     }
   }
+
+  private def tryPropose(): F[Unit] =
+    BlockAPI.propose(blockApiLock).flatMap { blockHash =>
+      Log[F].info(s"Auto-proposed block ${PrettyPrinter.buildString(blockHash)}")
+    } handleError {
+      case NonFatal(ex) =>
+        Log[F].error(s"Could not auto-propose block.", ex)
+    }
 }
 
 object AutoProposer {
 
   /** Start the proposal loop in the background. */
-  def apply[F[_]: Concurrent: Time: Timer: Log: Metrics: MultiParentCasperRef](
+  def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
       checkInterval: FiniteDuration,
       maxInterval: FiniteDuration,
       maxCount: Int,
       blockApiLock: Semaphore[F]
-  ): Resource[F, Unit] =
-    Resource[F, Unit] {
+  ): Resource[F, AutoProposer[F]] =
+    Resource[F, AutoProposer[F]] {
       val ap = new AutoProposer(checkInterval, maxInterval, maxCount, blockApiLock)
       Concurrent[F].start(ap.run()) map { fiber =>
-        () -> fiber.cancel
+        ap -> fiber.cancel
       }
     }
 }
