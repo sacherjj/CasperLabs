@@ -57,6 +57,7 @@ pub enum Error {
     Rng(rand::Error),
     Unreachable,
     ResolverError(ResolverError),
+    InvalidNonce,
 }
 
 impl fmt::Display for Error {
@@ -787,6 +788,16 @@ impl Executor<Module> for WasmiExecutor {
             0
         };
         let account = value.as_account();
+
+        // Check the difference of a request nonce and account nonce.
+        if let Some(delta) = nonce.checked_sub(account.nonce()) {
+            // Difference should always be 1 greater than current
+            // nonce for a given account.
+            if delta != 1 {
+                return (Err(Error::InvalidNonce), 0)
+            }
+        }
+
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
