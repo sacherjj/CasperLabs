@@ -316,7 +316,12 @@ package object gossiping {
               }
 
       validatorId <- Resource.liftF {
-                      ValidatorIdentity.fromConfig[F](conf.casper)
+                      for {
+                        id <- ValidatorIdentity.fromConfig[F](conf.casper)
+                        _ <- Log[F].info(
+                              s"Starting ${if (id.nonEmpty) "with" else "without"} a validator identity."
+                            )
+                      } yield id
                     }
 
       maybeApproveBlock = (block: Block) =>

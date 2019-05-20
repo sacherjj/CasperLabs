@@ -156,6 +156,9 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
     tryAddApproval(blockHash, approval) flatMap {
       case Right(Some(newStatus)) =>
         for {
+          _ <- Log[F].info(
+                s"Added new approval; got ${newStatus.candidate.approvals.size} in total."
+              )
           transitioned <- tryTransition(newStatus)
           _            <- Concurrent[F].start(relayApproval(blockHash, approval))
         } yield {
