@@ -420,22 +420,10 @@ where
     /// Reverts contract execution with a reason specified.
     pub fn revert(&mut self, reason_ptr: u32, reason_size: u32) -> Trap {
         // Get bytes of a reason specified by user
-        let data = self
-            .bytes_from_mem(reason_ptr, reason_size as usize)
-            .and_then(|reason_bytes| {
-                let reason: String = deserialize(&reason_bytes).map_err(Error::BytesRepr)?;
-                Ok((reason_bytes, reason))
-            });
-
-        let err = match data {
-            Ok((reason_bytes, reason)) => {
-                self.result = reason_bytes;
-                println!("Reason: {}", reason);
-                Error::Revert(reason)
-            }
+        match self.string_from_mem(reason_ptr, reason_size) {
+            Ok(reason) => Error::Revert(reason).into(),
             Err(err) => err,
-        };
-        err.into()
+        }
     }
 }
 
