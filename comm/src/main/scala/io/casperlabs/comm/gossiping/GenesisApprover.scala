@@ -101,7 +101,7 @@ object GenesisApproverImpl {
       connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
       genesis: Block,
-      approval: Approval
+      maybeApproval: Option[Approval]
   ): Resource[F, GenesisApprover[F]] =
     Resource.liftF {
       for {
@@ -119,7 +119,7 @@ object GenesisApproverImpl {
           relayFactor
         )
         // Gossip, trigger as usual.
-        _ <- approver.addApprovals(genesis.blockHash, List(approval))
+        _ <- approver.addApprovals(genesis.blockHash, maybeApproval.toList)
       } yield approver
     }
 }

@@ -319,16 +319,17 @@ package object gossiping {
                       ValidatorIdentity.fromConfig[F](conf.casper)
                     }
 
-      approveBlock = (block: Block) => {
-        val sig = validatorId.get.signature(block.blockHash.toByteArray)
-        Approval()
-          .withValidatorPublicKey(sig.publicKey)
-          .withSignature(
-            Signature()
-              .withSigAlgorithm(sig.algorithm)
-              .withSig(sig.sig)
-          )
-      }
+      maybeApproveBlock = (block: Block) =>
+        validatorId.map { id =>
+          val sig = id.signature(block.blockHash.toByteArray)
+          Approval()
+            .withValidatorPublicKey(sig.publicKey)
+            .withSignature(
+              Signature()
+                .withSigAlgorithm(sig.algorithm)
+                .withSig(sig.sig)
+            )
+        }
 
       candidateValidator <- Resource.liftF[F, Block => F[Either[Throwable, Option[Approval]]]] {
                              if (conf.casper.approveGenesis) {
@@ -363,7 +364,7 @@ package object gossiping {
                                        Left(InvalidArgument(msg))
 
                                      case Right(()) =>
-                                       Right(validatorId.map(_ => approveBlock(block)))
+                                       Right(maybeApproveBlock(block))
                                    }
                                  }
                                }
@@ -443,7 +444,7 @@ package object gossiping {
                                   // TODO: Move to config.
                                   relayFactor = 10,
                                   genesis = genesis,
-                                  approval = approveBlock(genesis)
+                                  maybeApproval = maybeApproveBlock(genesis)
                                 )
                    } yield approver
                  } else {
