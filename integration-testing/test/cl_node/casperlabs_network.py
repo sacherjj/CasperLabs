@@ -2,7 +2,6 @@ import docker
 import logging
 
 from typing import List, Callable, Dict
-import dataclasses
 
 
 from test.cl_node.docker_base import DockerConfig
@@ -26,9 +25,7 @@ class CasperLabsNetwork:
     """
     CasperLabsNetwork is the base object for a network of 0-many CasperLabNodes.
 
-    A subclass should implement `create_cl_network` to stand up the type of network it needs.
-
-    If a subclass defines a constructor it should call the constructor of `CasperLabsNetwork`.
+    A subclass should implement `_create_cl_network` to stand up the type of network it needs.
 
     Convention is naming the bootstrap as number 0 and all others increment from that point.
     """
@@ -129,14 +126,6 @@ class CasperLabsNetwork:
         self.cleanup()
         return True
 
-    def docker_config(self):
-        kp = self.get_key()
-        config = DockerConfig(self.docker_client,
-                              node_private_key=kp.private_key,
-                              node_public_key=kp.public_key)
-
-        return dataclasses.replace(config, **self.extra_docker_params)
-
     def cleanup(self):
         for network_name in self._created_networks:
             self.docker_client.networks.get(network_name).remove()
@@ -193,21 +182,21 @@ class ThreeNodeNetwork(CasperLabsNetwork):
 
 class MultiNodeJoinedNetwork(CasperLabsNetwork):
 
-    def __init__(self, n: int, docker_client: 'DockerClient', extra_docker_params=None):
-        self._n = n
-        super(MultiNodeJoinedNetwork, self).__init__(docker_client, extra_docker_params)
-
-    def create_cl_network(self):
-        config = self.docker_config()
-        config.network = self.create_docker_network()
+    def create_cl_network(self, node_count=10):
+        kp = self.get_key()
+        config = DockerConfig(self.docker_client,
+                              node_private_key=kp.private_key,
+                              node_public_key=kp.public_key,
+                              network=self.create_docker_network())
         self.add_bootstrap(config)
 
-        for _ in range(1, self._n):
-            self.add_cl_node(self.docker_config())
+        for _ in range(1, node_count):
+            kp = self.get_key()
+            config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
+            self.add_cl_node(config)
 
-        for node_number in range(0, self._n):
+        for node_number in range(1, node_count):
             self.wait_method(wait_for_approved_block_received_handler_state, node_number)
-
         self.wait_for_peers()
 
 
@@ -231,5 +220,6 @@ if __name__ == '__main__':
     # with OneNodeNetwork(docker.from_env()) as onn:
     #     pass
 
-    with MultiNodeJoinedNetwork(docker.from_env(), 10) as net:
+    with MultiNodeJoinedNetwork(docker.from_env()) as net:
+        net.create_cl_network(10)
         time.sleep(10)

@@ -18,7 +18,7 @@ from .cl_node.casperlabsnode import ( extract_block_hash_from_propose_output, )
 import pytest
 from typing import List
 
-from .cl_node.casperlabs_network import MultiNodeJoinedNetwork
+from .cl_node.casperlabs_network import ThreeNodeNetwork
 
 BOOTSTRAP_NODE_KEYS = PREGENERATED_KEYPAIRS[0]
 
@@ -90,23 +90,24 @@ def n(request):
 
 # This fixture will be parametrized so it runs on node set up to use gossiping as well as the old method.
 @pytest.fixture()
-def nodes(n, docker_client_fixture, timeout):
-    with MultiNodeJoinedNetwork(n, docker_client_fixture, extra_docker_params={'is_gossiping': True}) as network:
+def three_nodes(docker_client_fixture, timeout):
+    with ThreeNodeNetwork(docker_client_fixture, extra_docker_params={'is_gossiping': True}) as network:
         network.create_cl_network()
         #wait_for_approved_block_received(network, timeout)
         yield [node.node for node in network.cl_nodes]
 
 
-@pytest.mark.parametrize("n, contract_paths, expected_number_of_blocks", [
+@pytest.mark.parametrize("contract_paths, expected_number_of_blocks", [
 
-                         (3, [['test_helloname.wasm'],['test_helloworld.wasm']], 7),
-                         ], indirect=["n"])
+                         ([['test_helloname.wasm'],['test_helloworld.wasm']], 7),
+
+                         ])
 # Curently nodes is a network of three bootstrap connected nodes.
-def test_block_propagation(nodes, timeout,
+def test_block_propagation(three_nodes, timeout,
                            contract_paths: List[List[str]], expected_number_of_blocks):
 
     deploy_threads = [DeployThread("node" + str(i+1), node, contract_paths)
-                      for i, node in enumerate(nodes)]
+                      for i, node in enumerate(three_nodes)]
 
     for t in deploy_threads:
         t.start()
@@ -114,10 +115,10 @@ def test_block_propagation(nodes, timeout,
     for i in deploy_threads:
         t.join()
 
-    for node in nodes:
+    for node in three_nodes:
         wait_for_blocks_count_at_least(node, expected_number_of_blocks, expected_number_of_blocks * 2, timeout)
 
-    for node in nodes:
+    for node in three_nodes:
         blocks = parse_show_blocks(node.show_blocks_with_depth(expected_number_of_blocks * 100))
         # What propose returns is first 10 characters of block hash, so we can compare only first 10 charcters.
         blocks_hashes = set([b.blockHash[:10] for b in blocks])
