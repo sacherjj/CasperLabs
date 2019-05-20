@@ -296,7 +296,7 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
 
     fn try_from(ipc_key: &super::ipc::Key) -> Result<Self, ParsingError> {
         if ipc_key.has_account() {
-            let mut arr = [0u8; 20];
+            let mut arr = [0u8; 32];
             arr.clone_from_slice(&ipc_key.get_account().account);
             Ok(common::key::Key::Account(arr))
         } else if ipc_key.has_hash() {
@@ -308,7 +308,8 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
             arr.clone_from_slice(&ipc_key.get_uref().uref);
             let access_rights = common::key::AccessRights::from_bits(
                 ipc_key.get_uref().access_rights.value().try_into().unwrap(),
-            ).unwrap();
+            )
+            .unwrap();
             Ok(common::key::Key::URef(arr, access_rights))
         } else {
             parse_error(format!(
@@ -546,6 +547,7 @@ fn wasm_error(msg: String) -> ipc::DeployResult {
 #[cfg(test)]
 mod tests {
     use super::wasm_error;
+    use common::key::AccessRights;
     use common::key::Key;
     use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
     use shared::newtypes::Blake2bHash;
@@ -579,7 +581,10 @@ mod tests {
     fn deploy_result_to_ipc_success() {
         let input_transforms: HashMap<Key, Transform> = {
             let mut tmp_map = HashMap::new();
-            tmp_map.insert(Key::Account([1u8; 20]), Transform::AddInt32(10));
+            tmp_map.insert(
+                Key::URef([1u8; 32], AccessRights::ADD),
+                Transform::AddInt32(10),
+            );
             tmp_map
         };
         let execution_effect: ExecutionEffect =
@@ -640,7 +645,7 @@ mod tests {
         );
         // for the time being all other execution errors are treated in the same way
         let forged_ref_error =
-            execution_engine::execution::Error::ForgedReference(Key::Account([1u8; 20]));
+            execution_engine::execution::Error::ForgedReference(Key::Account([1u8; 32]));
         assert_eq!(test_cost(cost, forged_ref_error), cost);
     }
 }

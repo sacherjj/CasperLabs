@@ -30,12 +30,10 @@ impl AccessRights {
     }
 }
 
-pub const KEY_SIZE: usize = 32;
-
 #[repr(C)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
 pub enum Key {
-    Account([u8; 20]),
+    Account([u8; 32]),
     Hash([u8; 32]),
     URef([u8; 32], AccessRights), //TODO: more bytes?
 }
@@ -88,9 +86,9 @@ impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
             Account(addr) => {
-                let mut result = Vec::with_capacity(25);
+                let mut result = Vec::with_capacity(37);
                 result.push(ACCOUNT_ID);
-                result.append(&mut (20u32).to_bytes()?);
+                result.append(&mut (32u32).to_bytes()?);
                 result.extend(addr);
                 Ok(result)
             }
@@ -117,10 +115,10 @@ impl FromBytes for Key {
         match id {
             ACCOUNT_ID => {
                 let (addr, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rest)?;
-                if addr.len() != 20 {
+                if addr.len() != 32 {
                     Err(Error::FormattingError)
                 } else {
-                    let mut addr_array = [0u8; 20];
+                    let mut addr_array = [0u8; 32];
                     addr_array.copy_from_slice(&addr);
                     Ok((Account(addr_array), rem))
                 }
