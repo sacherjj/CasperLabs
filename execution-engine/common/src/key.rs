@@ -88,8 +88,7 @@ impl ToBytes for Key {
             Account(addr) => {
                 let mut result = Vec::with_capacity(37);
                 result.push(ACCOUNT_ID);
-                result.append(&mut (32u32).to_bytes()?);
-                result.extend(addr);
+                result.append(&mut addr.to_bytes()?);
                 Ok(result)
             }
             Hash(hash) => {
@@ -114,14 +113,10 @@ impl FromBytes for Key {
         let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
         match id {
             ACCOUNT_ID => {
-                let (addr, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rest)?;
-                if addr.len() != 32 {
-                    Err(Error::FormattingError)
-                } else {
-                    let mut addr_array = [0u8; 32];
-                    addr_array.copy_from_slice(&addr);
-                    Ok((Account(addr_array), rem))
-                }
+                let (addr, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
+                let mut addr_array = [0u8; 32];
+                addr_array.copy_from_slice(&addr);
+                Ok((Account(addr_array), rem))
             }
             HASH_ID => {
                 let (hash, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
