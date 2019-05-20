@@ -37,17 +37,17 @@ impl From<[u8; BLAKE2B_DIGEST_LENGTH]> for Blake2bHash {
     }
 }
 
-impl Into<[u8; BLAKE2B_DIGEST_LENGTH]> for Blake2bHash {
-    fn into(self) -> [u8; BLAKE2B_DIGEST_LENGTH] {
-        self.0
-    }
-}
-
 impl<'a> TryFrom<&'a [u8]> for Blake2bHash {
     type Error = TryFromSliceError;
 
     fn try_from(slice: &[u8]) -> Result<Blake2bHash, Self::Error> {
         <[u8; BLAKE2B_DIGEST_LENGTH]>::try_from(slice).map(Blake2bHash)
+    }
+}
+
+impl Into<[u8; BLAKE2B_DIGEST_LENGTH]> for Blake2bHash {
+    fn into(self) -> [u8; BLAKE2B_DIGEST_LENGTH] {
+        self.0
     }
 }
 
