@@ -124,9 +124,7 @@ where
             Key::Account(bytes) => {
                 // TODO: remove after EE-333 is merged
                 let mut ret = [0u8; LOCAL_SEED_SIZE];
-                for (index, byte) in bytes.iter().enumerate() {
-                    ret[index] = *byte;
-                }
+                ret.copy_from_slice(&bytes);
                 ret
             }
             Key::Hash(bytes) => bytes,
