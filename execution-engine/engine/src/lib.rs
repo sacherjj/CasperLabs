@@ -21,6 +21,8 @@ pub mod bytesmeter;
 pub mod engine;
 pub mod execution;
 pub mod meter;
+pub mod functions;
+pub mod resolvers;
 pub mod runtime_context;
 pub mod trackingcopy;
 
