@@ -794,9 +794,18 @@ impl Executor<Module> for WasmiExecutor {
             // Difference should always be 1 greater than current
             // nonce for a given account.
             if delta != 1 {
-                return (Err(Error::InvalidNonce), 0)
+                return (Err(Error::InvalidNonce), 0);
             }
         }
+
+        // let account = account.with_updated_nonce();
+        // tc.borrow_mut().write(validated_key, Validated::new(account.with_updated_nonce(), Validated::valid).unwrap().into());
+        let mut updated_account = account.clone();
+        updated_account.increment_nonce();
+        tc.borrow_mut().write(
+            validated_key,
+            Validated::new(updated_account.into(), Validated::valid).unwrap(),
+        );
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =

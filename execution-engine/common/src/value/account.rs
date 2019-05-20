@@ -39,6 +39,12 @@ impl Account {
     pub fn nonce(&self) -> u64 {
         self.nonce
     }
+
+    /// Consumes instance of account and returns new one
+    /// with old contents but with nonce increased by 1.
+    pub fn increment_nonce(&mut self) {
+        self.nonce += 1;
+    }
 }
 
 impl ToBytes for Account {
@@ -69,4 +75,12 @@ impl FromBytes for Account {
             rem3,
         ))
     }
+}
+
+#[test]
+fn incremented_nonce() {
+    let mut account = Account::new([0u8; 32], 0, BTreeMap::default());
+    assert_eq!(account.nonce(), 0);
+    account.increment_nonce();
+    assert_eq!(account.nonce(), 1);
 }
