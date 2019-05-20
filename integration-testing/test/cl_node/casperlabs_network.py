@@ -1,5 +1,6 @@
 import docker
 import logging
+import dataclasses
 
 from typing import List, Callable, Dict
 
@@ -126,6 +127,13 @@ class CasperLabsNetwork:
         self.cleanup()
         return True
 
+    def _docker_config(self):
+        kp = self.get_key()
+        config = DockerConfig(self.docker_client,
+                              node_private_key=kp.private_key,
+                              node_public_key=kp.public_key)
+        return dataclasses.replace(config, **self.extra_docker_params)
+
     def cleanup(self):
         for network_name in self._created_networks:
             self.docker_client.networks.get(network_name).remove()
@@ -163,17 +171,13 @@ class TwoNodeNetwork(CasperLabsNetwork):
 class ThreeNodeNetwork(CasperLabsNetwork):
 
     def create_cl_network(self):
-        kp = self.get_key()
-        config = DockerConfig(self.docker_client,
-                              node_private_key=kp.private_key,
-                              node_public_key=kp.public_key,
-                              network=self.create_docker_network())
+
+        config = self._docker_config()
+        config.network = self.create_docker_network()
         self.add_bootstrap(config)
 
         for _ in range(1, 3):
-            kp = self.get_key()
-            config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
-            self.add_cl_node(config)
+            self.add_cl_node(self._docker_config())
 
         for node_number in range(1, 3):
             self.wait_method(wait_for_approved_block_received_handler_state, node_number)
