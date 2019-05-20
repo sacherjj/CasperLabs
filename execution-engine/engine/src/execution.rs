@@ -103,7 +103,7 @@ impl From<ResolverError> for Error {
 
 impl HostError for Error {}
 
-pub struct Runtime<'a, R: StateReader<Key, Value>> {
+pub struct Runtime<'a, R> {
     memory: MemoryRef,
     module: Module,
     result: Vec<u8>,

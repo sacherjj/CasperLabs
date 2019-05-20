@@ -16,7 +16,7 @@ use storage::global_state::{ExecutionEffect, StateReader};
 use trackingcopy::{AddResult, TrackingCopy};
 
 /// Holds information specific to the deployed contract.
-pub struct RuntimeContext<'a, R: StateReader<Key, Value>> {
+pub struct RuntimeContext<'a, R> {
     state: Rc<RefCell<TrackingCopy<R>>>,
     // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
