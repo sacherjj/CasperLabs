@@ -70,7 +70,7 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
   private def tryPropose(): F[Unit] =
     BlockAPI.propose(blockApiLock).flatMap { blockHash =>
       Log[F].info(s"Proposed block ${PrettyPrinter.buildString(blockHash)}")
-    } handleError {
+    } handleErrorWith {
       case NonFatal(ex) =>
         Log[F].error(s"Could not propose block.", ex)
     }
@@ -86,9 +86,9 @@ object AutoProposer {
       blockApiLock: Semaphore[F]
   ): Resource[F, AutoProposer[F]] =
     Resource[F, AutoProposer[F]] {
-      val ap = new AutoProposer(checkInterval, maxInterval, maxCount, blockApiLock)
-      Concurrent[F].start(ap.run()) map { fiber =>
-        ap -> fiber.cancel
-      }
+      for {
+        ap    <- Sync[F].delay(new AutoProposer(checkInterval, maxInterval, maxCount, blockApiLock))
+        fiber <- Concurrent[F].start(ap.run())
+      } yield ap -> fiber.cancel
     }
 }
