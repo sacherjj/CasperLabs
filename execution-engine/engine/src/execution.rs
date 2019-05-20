@@ -712,12 +712,21 @@ where
                 // If the "error" was in fact a trap caused by calling `ret` then
                 // this is normal operation and we should return the value captured
                 // in the Runtime result field.
-                if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
-                    //insert extra urefs returned from call
-                    let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
-                        vec_key_rights_to_map(ret_urefs.clone());
-                    current_runtime.context.add_urefs(ret_urefs_map);
-                    return Ok(runtime.result);
+                let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
+                match downcasted_error {
+                    Error::Ret(ref ret_urefs) => {
+                        //insert extra urefs returned from call
+                        let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
+                            vec_key_rights_to_map(ret_urefs.clone());
+                        current_runtime.context.add_urefs(ret_urefs_map);
+                        return Ok(runtime.result);
+                    }
+                    Error::Revert(reason) => {
+                        // Propagate revert as revert, instead of passing it as
+                        // InterpreterError.
+                        return Err(Error::Revert(reason.to_string()));
+                    }
+                    _ => {}
                 }
             }
             Err(Error::Interpreter(e))
