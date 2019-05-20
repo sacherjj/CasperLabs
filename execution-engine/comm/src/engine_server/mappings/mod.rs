@@ -1,8 +1,10 @@
 mod uint;
 
+use protobuf::ProtobufEnum;
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
+use engine_server::ipc::KeyURef_AccessRights;
 use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
@@ -276,12 +278,12 @@ impl From<&common::key::Key> for super::ipc::Key {
                 key_hash.set_key(hash.to_vec());
                 k.set_hash(key_hash);
             }
-            // TODO should ipc representation of a key have an access rights as well?
-            // On one hand it doesn't need it and LMDB won't make any checks of it
-            // but OTOH maybe it should for symmetry?
-            common::key::Key::URef(uref, _) => {
+            common::key::Key::URef(uref, access_rights) => {
                 let mut key_uref = super::ipc::KeyURef::new();
                 key_uref.set_uref(uref.to_vec());
+                key_uref.set_access_rights(
+                    KeyURef_AccessRights::from_i32(access_rights.bits().into()).unwrap(),
+                );
                 k.set_uref(key_uref);
             }
         }
@@ -304,11 +306,10 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
         } else if ipc_key.has_uref() {
             let mut arr = [0u8; 32];
             arr.clone_from_slice(&ipc_key.get_uref().uref);
-            // TODO: What to do about access rights here?
-            Ok(common::key::Key::URef(
-                arr,
-                common::key::AccessRights::READ_ADD_WRITE,
-            ))
+            let access_rights = common::key::AccessRights::from_bits(
+                ipc_key.get_uref().access_rights.value().try_into().unwrap(),
+            ).unwrap();
+            Ok(common::key::Key::URef(arr, access_rights))
         } else {
             parse_error(format!(
                 "ipc Key couldn't be parsed to any Key: {:?}",
