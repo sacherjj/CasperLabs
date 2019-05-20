@@ -14,7 +14,7 @@ import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 /** Propose a block automatically whenever a timespan has elapsed or
-  * we have more than a certain number of deploys in the buffer. */
+  * we have more than a certain number of new deploys in the buffer. */
 class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
     checkInterval: FiniteDuration,
     maxInterval: FiniteDuration,
@@ -26,7 +26,7 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
     val maxElapsedMillis = maxInterval.toMillis
 
     def loop(
-        // Deploys we saw a the last auto-proposal.
+        // Deploys we saw at the last auto-proposal.
         prevDeploys: Set[DeployData],
         // Time we saw the first new deploy after an auto-proposal.
         startMillis: Long
@@ -50,7 +50,7 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
         case (_, elapsedMillis, deploys, newDeploys)
             if newDeploys.nonEmpty && (elapsedMillis >= maxElapsedMillis || newDeploys.size >= maxCount) =>
           Log[F].info(
-            s"Automatically proposing block after ${elapsedMillis} ms and ${newDeploys.size} new deploys."
+            s"Proposing block after ${elapsedMillis} ms and ${newDeploys.size} new deploys."
           ) *>
             tryPropose() *>
             loop(deploys, 0)
@@ -69,10 +69,10 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
 
   private def tryPropose(): F[Unit] =
     BlockAPI.propose(blockApiLock).flatMap { blockHash =>
-      Log[F].info(s"Auto-proposed block ${PrettyPrinter.buildString(blockHash)}")
+      Log[F].info(s"Proposed block ${PrettyPrinter.buildString(blockHash)}")
     } handleError {
       case NonFatal(ex) =>
-        Log[F].error(s"Could not auto-propose block.", ex)
+        Log[F].error(s"Could not propose block.", ex)
     }
 }
 

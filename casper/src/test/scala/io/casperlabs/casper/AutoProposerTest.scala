@@ -97,7 +97,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   ) { _ => implicit casperRef =>
     val defectiveCasper = new MockMultiParentCasper[Task]() {
       override def createBlock: Task[CreateBlockStatus] =
-        throw new RuntimeException("No can do!")
+        throw new RuntimeException("Oh no!")
     }
     for {
       _      <- MultiParentCasperRef[Task].set(defectiveCasper)
