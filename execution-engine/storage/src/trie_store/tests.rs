@@ -113,12 +113,14 @@ where
 }
 
 mod simple {
-    use super::TestData;
-    use common::bytesrepr::ToBytes;
-    use error;
     use lmdb::DatabaseFlags;
-    use shared::newtypes::Blake2bHash;
     use tempfile::tempdir;
+
+    use common::bytesrepr::ToBytes;
+    use shared::newtypes::Blake2bHash;
+
+    use super::TestData;
+    use error;
     use trie::Trie;
     use trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
     use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
