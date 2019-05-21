@@ -5,20 +5,21 @@ authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mat
 
 [dependencies]
 blake2 = "0.8"
-wasmi = "0.4.2"
-parity-wasm = "0.31"
-pwasm-utils = "0.6"
-storage = { path = "../storage" }
+clap = "2.32.0"
 common = { path = "../common", features = ["std", "gens"], package = "casperlabs-contract-ffi" }
 failure = "0.1.5"
-wasm-prep = { path = "../wasm-prep" }
-clap = "2.32.0"
 parking_lot = "0.7.1"
 rand = "0.6.1"
 rand_chacha = "0.1.1"
-shared = { path = "../shared" }
 itertools = "0.8.0"
+lazy_static = "1.3.0"
 linked-hash-map = "0.5.2"
+parity-wasm = "0.31"
+pwasm-utils = "0.6"
+shared = { path = "../shared" }
+storage = { path = "../storage" }
+wasmi = "0.4.2"
+wasm-prep = { path = "../wasm-prep" }
 
 [dev-dependencies]
 matches = "0.1.8"
