@@ -6,13 +6,25 @@ use self::alloc_util::*;
 use self::pointers::*;
 use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::ext_ffi;
-use crate::key::{Key, UREF_SIZE};
+use crate::key::{Key, LOCAL_KEY_HASH_SIZE, LOCAL_SEED_SIZE, UREF_SIZE};
 use crate::value::{Contract, Value};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
+use blake2::digest::{Input, VariableOutput};
+use blake2::VarBlake2b;
 use core::convert::{TryFrom, TryInto};
+
+/// Creates a 32-byte BLAKE2b hash digest from a given a piece of data
+fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_HASH_SIZE] {
+    let mut ret = [0u8; LOCAL_KEY_HASH_SIZE];
+    // Safe to unwrap here because our digest length is constant and valid
+    let mut hasher = VarBlake2b::new(LOCAL_KEY_HASH_SIZE).unwrap();
+    hasher.input(bytes);
+    hasher.variable_result(|hash| ret.clone_from_slice(hash));
+    ret
+}
 
 /// Read value under the key in the global state
 pub fn read<T>(u_ptr: UPointer<T>) -> T
@@ -22,6 +34,28 @@ where
     let key: Key = u_ptr.into();
     let value = read_untyped(&key);
     value
+        .try_into()
+        .map_err(|_| "T could not be derived from Value")
+        .unwrap()
+}
+
+/// Reads the value at the given key the context-local partition of global state
+pub fn read_local<K, V>(key: K) -> V
+where
+    K: ToBytes,
+    V: TryFrom<Value>,
+{
+    let seed: [u8; LOCAL_SEED_SIZE] = {
+        let mut ret = [0u8; LOCAL_SEED_SIZE];
+        unsafe { ext_ffi::seed(ret.as_mut_ptr()) };
+        ret
+    };
+    let key_hash: [u8; LOCAL_KEY_HASH_SIZE] = {
+        let key_bytes = key.to_bytes().unwrap();
+        hash(&key_bytes)
+    };
+    let key = Key::Local { seed, key_hash };
+    read_untyped(&key)
         .try_into()
         .map_err(|_| "T could not be derived from Value")
         .unwrap()
@@ -49,6 +83,25 @@ where
     let key = u_ptr.into();
     let value = t.into();
     write_untyped(&key, &value)
+}
+
+/// Writes the given value at the given key in the context-local partition of global state
+pub fn write_local<K, V>(key: K, value: V)
+where
+    K: ToBytes,
+    V: Into<Value>,
+{
+    let seed: [u8; LOCAL_SEED_SIZE] = {
+        let mut ret = [0u8; LOCAL_SEED_SIZE];
+        unsafe { ext_ffi::seed(ret.as_mut_ptr()) };
+        ret
+    };
+    let key_hash: [u8; LOCAL_KEY_HASH_SIZE] = {
+        let key_bytes = key.to_bytes().unwrap();
+        hash(&key_bytes)
+    };
+    let key = Key::Local { seed, key_hash };
+    write_untyped(&key, &value.into());
 }
 
 fn write_untyped(key: &Key, value: &Value) {
