@@ -72,20 +72,45 @@ Server is listening on socket: casperlabs-node-data/.caspernode.sock
 Download and install the latest version of the [openssl 1.1](https://github.com/openssl/openssl/releases).
 ```bash
 cd /tmp
-curl https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz -o openssl.tar.gz
+curl -L https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz -o openssl.tar.gz
 tar -xzf openssl.tar.gz
 cd openssl-OpenSSL_1_1_1b
 ./config
 make
 make test
-make install
+sudo make install
+export LD_LIBRARY_PATH=/usr/local/lib
 ```
+
+To continue to have working lib folder, consider adding last line to bottom of `.bashrc` or relevent file with:
+
+`echo "export LD_LIBRARY_PATH=/use/local/lib" >> ~/.bashrc`
 
 #### Prerequisites: sha3sum
 Download and install the latest version of the [sha3sum](https://github.com/maandree/sha3sum).
 
 1. macOS: `brew install sha3sum`
-2. TODO: add other platforms
+2. Ubunt 18.04: 
+    
+ Build libkeccak:
+
+```bash
+cd /tmp
+git clone https://github.com/maandree/libkeccak.git
+cd libkeccak
+make
+sudo make install
+```
+
+ Build sha3sum:
+
+```bash
+cd /tmp
+git clone https://github.com/maandree/sha3sum.git
+cd sha3sum
+make
+sudo make install
+```
 
 #### Script
 You may want to use [the script](/docker/gen-keys.sh) which will generate all the keys. The commands below are excerpts from this script. 
@@ -145,11 +170,11 @@ The address above contains `c0a6c82062461c9b7f9f5c3120f44589393edf31` as a node 
 Generate certificate from the generated private key. Fill asked questions and enter the above `NODE_ID` as a `Common Name (CN)` 
 ```bash
 openssl req \
-	-new \
-	 -x509 \
-	 -key secp256r1-private-pkcs8.pem \
-	 -out node.certificate.pem \
-	 -days 365 \
+    -new \
+     -x509 \
+     -key secp256r1-private-pkcs8.pem \
+     -out node.certificate.pem \
+     -days 365 \
 ```
 
 Now you can use them as:
