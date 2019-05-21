@@ -831,6 +831,7 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
         Key::URef(raw_addr, rights) => Some((raw_addr, rights)),
         Key::Account(_) => None,
         Key::Hash(_) => None,
+        Key::Local { .. } => None,
     }
 }
 
