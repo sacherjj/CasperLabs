@@ -209,7 +209,7 @@ class Node:
             logging.warning(f"EXITED code={err.exit_status} command='{err.command}' stderr='{err.stderr}'")
             raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
 
-    def deploy(self, from_address: str = "00000000000000000000",
+    def deploy(self, from_address: str = "00000000000000000000000000000000",
                session: str = None, payment: str = None,
                gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
 

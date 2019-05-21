@@ -33,6 +33,7 @@ import io.casperlabs.comm.grpc.{
   SslContexts
 }
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics
@@ -305,19 +306,25 @@ package object gossiping {
                         }
 
       validatorId <- Resource.liftF {
-                      ValidatorIdentity.fromConfig[F](conf.casper)
+                      for {
+                        id <- ValidatorIdentity.fromConfig[F](conf.casper)
+                        _ <- Log[F].info(
+                              s"Starting ${if (id.nonEmpty) "with" else "without"} a validator identity."
+                            )
+                      } yield id
                     }
 
-      approveBlock = (block: Block) => {
-        val sig = validatorId.get.signature(block.blockHash.toByteArray)
-        Approval()
-          .withValidatorPublicKey(sig.publicKey)
-          .withSignature(
-            Signature()
-              .withSigAlgorithm(sig.algorithm)
-              .withSig(sig.sig)
-          )
-      }
+      maybeApproveBlock = (block: Block) =>
+        validatorId.map { id =>
+          val sig = id.signature(block.blockHash.toByteArray)
+          Approval()
+            .withValidatorPublicKey(sig.publicKey)
+            .withSignature(
+              Signature()
+                .withSigAlgorithm(sig.algorithm)
+                .withSig(sig.sig)
+            )
+        }
 
       // Function to read and set the bonds.txt in modes which generate the Genesis locally.
       readBondsFile = {
@@ -366,7 +373,7 @@ package object gossiping {
                                        Left(InvalidArgument(msg))
 
                                      case Right(()) =>
-                                       Right(validatorId.map(_ => approveBlock(block)))
+                                       Right(maybeApproveBlock(block))
                                    }
                                  }
                                }
@@ -382,7 +389,7 @@ package object gossiping {
                                  for {
                                    _ <- Log[F].info("Taking bonds from the Genesis candidate.")
                                    bonds = genesis.getHeader.getState.bonds.map { bond =>
-                                     bond.validatorPublicKey.toByteArray -> bond.stake
+                                     PublicKey(bond.validatorPublicKey.toByteArray) -> bond.stake
                                    }.toMap
                                    _ <- ExecutionEngineService[F].setBonds(bonds)
                                  } yield none[Approval].asRight[Throwable]
@@ -454,7 +461,7 @@ package object gossiping {
                                   // TODO: Move to config.
                                   relayFactor = 10,
                                   genesis = genesis,
-                                  approval = approveBlock(genesis)
+                                  maybeApproval = maybeApproveBlock(genesis)
                                 )
                    } yield approver
                  } else {

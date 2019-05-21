@@ -387,8 +387,8 @@ mod tests {
         TrackingCopy::new(reader)
     }
 
-    fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
-        let account = value::account::Account::new([0u8; 32], 0, BTreeMap::new());
+    fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
+        let account = value::account::Account::new(addr, 0, BTreeMap::new());
         let key = Key::Account(addr);
 
         (key, account)
@@ -396,7 +396,7 @@ mod tests {
 
     // create random account key.
     fn random_account_key<G: RngCore>(entropy_source: &mut G) -> Key {
-        let mut key = [0u8; 20];
+        let mut key = [0u8; 32];
         entropy_source.fill_bytes(&mut key);
         Key::Account(key)
     }
@@ -467,7 +467,7 @@ mod tests {
     where
         F: Fn(RuntimeContext<InMemoryGlobalState>) -> Result<T, Error>,
     {
-        let base_acc_addr = [0u8; 20];
+        let base_acc_addr = [0u8; 32];
         let (key, account) = mock_account(base_acc_addr);
         let mut uref_map = BTreeMap::new();
         let chacha_rng = create_rng(&base_acc_addr, 0, 0);
@@ -696,7 +696,7 @@ mod tests {
     #[test]
     fn contract_key_addable_valid() {
         // Contract key is addable if it is a "base" key - current context of the execution.
-        let base_acc_addr = [0u8; 20];
+        let base_acc_addr = [0u8; 32];
         let (account_key, account) = mock_account(base_acc_addr);
         let mut rng = rand::thread_rng();
         let contract_key = random_contract_key(&mut rng);
@@ -745,7 +745,7 @@ mod tests {
     #[test]
     fn contract_key_addable_invalid() {
         // Contract key is addable if it is a "base" key - current context of the execution.
-        let base_acc_addr = [0u8; 20];
+        let base_acc_addr = [0u8; 32];
         let (account_key, account) = mock_account(base_acc_addr);
         let mut rng = rand::thread_rng();
         let contract_key = random_contract_key(&mut rng);
