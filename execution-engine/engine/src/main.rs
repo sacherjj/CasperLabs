@@ -39,7 +39,7 @@ const ARG_LOG_LEVEL_VALUE: &str = "LOGLEVEL";
 const ARG_LOG_LEVEL_HELP: &str = "[ fatal | error | warning | info | debug ]";
 
 // defaults
-const DEFAULT_ADDRESS: &str = "00000000000000000000";
+const DEFAULT_ADDRESS: &str = "00000000000000000000000000000000";
 const DEFAULT_GAS_LIMIT: &str = "18446744073709551615";
 
 // Command line arguments instance
