@@ -306,10 +306,10 @@ object ProtoUtil {
         } yield acc.updated(validator, BlockMetadata.fromBlock(block))
     }
 
-  def protoHash[A <: { def toByteArray: Array[Byte] }](protoSeq: A*): ByteString =
+  def protoHash[A <: scalapb.GeneratedMessage](protoSeq: A*): ByteString =
     protoSeqHash(protoSeq)
 
-  def protoSeqHash[A <: { def toByteArray: Array[Byte] }](protoSeq: Seq[A]): ByteString =
+  def protoSeqHash[A <: scalapb.GeneratedMessage](protoSeq: Seq[A]): ByteString =
     hashByteArrays(protoSeq.map(_.toByteArray): _*)
 
   def hashByteArrays(items: Array[Byte]*): ByteString =

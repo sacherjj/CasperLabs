@@ -2,11 +2,10 @@ package io.casperlabs.node.api
 
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
+import io.casperlabs.node.api.GrpcDeployService.splitPath
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
-
-import GrpcDeployService.splitPath
 
 class GrpcCasperService extends FlatSpec with EitherValues with Matchers {
 
@@ -37,7 +36,7 @@ class GrpcCasperService extends FlatSpec with EitherValues with Matchers {
   }
 
   it should "convert an address-type key successfully" in {
-    attemptToKeyTest(20, "address", _.isAccount, _.account.get.account.toByteArray)
+    attemptToKeyTest(32, "address", _.isAccount, _.account.get.account.toByteArray)
   }
 
   it should "fail for any invalid key type" in {
@@ -50,7 +49,6 @@ class GrpcCasperService extends FlatSpec with EitherValues with Matchers {
 
   it should "fail if the wrong number of bytes is given for the key type" in {
     val a = util.Random.nextInt(50) + 33 //number > 32
-    val b = 32
     val c = util.Random.nextInt(11) + 21 //number > 20 and < 32
     val d = 20
     val e = util.Random.nextInt(20) //number < 20
@@ -59,14 +57,13 @@ class GrpcCasperService extends FlatSpec with EitherValues with Matchers {
     attemptToKey("uref", randomBytes(a)) shouldBe ('left)
     attemptToKey("address", randomBytes(a)) shouldBe ('left)
 
-    attemptToKey("address", randomBytes(b)) shouldBe ('left)
-
     attemptToKey("hash", randomBytes(c)) shouldBe ('left)
     attemptToKey("uref", randomBytes(c)) shouldBe ('left)
     attemptToKey("address", randomBytes(c)) shouldBe ('left)
 
     attemptToKey("hash", randomBytes(d)) shouldBe ('left)
     attemptToKey("uref", randomBytes(d)) shouldBe ('left)
+    attemptToKey("address", randomBytes(d)) shouldBe ('left)
 
     attemptToKey("hash", randomBytes(e)) shouldBe ('left)
     attemptToKey("uref", randomBytes(e)) shouldBe ('left)

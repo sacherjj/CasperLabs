@@ -110,6 +110,30 @@ object Validate {
       } yield false
     }
 
+  def deploySignature[F[_]: Applicative: Log](d: consensus.Deploy): F[Boolean] =
+    signatureVerifiers
+      .get(d.getSignature.sigAlgorithm)
+      .map { verify =>
+        Try {
+          verify(
+            d.deployHash.toByteArray,
+            d.getSignature.sig.toByteArray,
+            d.getHeader.accountPublicKey.toByteArray
+          )
+        } match {
+          case Success(true) =>
+            true.pure[F]
+          case _ =>
+            Log[F].warn(
+              s"Signature of deploy ${PrettyPrinter.buildString(d.deployHash)} is invalid."
+            ) *> false.pure[F]
+        }
+      } getOrElse {
+      Log[F].warn(
+        s"Signature algorithm ${d.getSignature.sigAlgorithm} of deploy ${PrettyPrinter.buildString(d.deployHash)} is unsupported."
+      ) *> false.pure[F]
+    }
+
   def blockSender[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
@@ -433,6 +457,14 @@ object Validate {
       } yield ()
     }
 
+  def deployHash[F[_]: Monad: Log](d: consensus.Deploy): F[Boolean] = {
+    val bodyHash   = ProtoUtil.protoHash(d.getBody)
+    val deployHash = ProtoUtil.protoHash(d.getHeader)
+    val ok         = bodyHash == d.getHeader.bodyHash && deployHash == d.deployHash
+    Log[F].warn(s"Invalid deploy hash ${PrettyPrinter.buildString(d.deployHash)}").whenA(!ok) *>
+      ok.pure[F]
+  }
+
   def blockHash[F[_]: Monad: RaiseValidationError: Log](
       b: BlockMessage,
       treatAsGenesis: Boolean = false
@@ -731,7 +763,7 @@ object Validate {
   ): F[Unit] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
-      case Some(tuplespaceHash) =>
+      case Some(globalStateRootHash) =>
         if (bonds.toSet == computedBonds.toSet) {
           Applicative[F].unit
         } else {

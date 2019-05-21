@@ -3,35 +3,57 @@ import java.io.Closeable
 import java.util.concurrent.TimeUnit
 
 import com.google.protobuf.empty.Empty
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
 import io.casperlabs.node.api.casper.{CasperGrpcMonix, DeployRequest}
+import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
 import scala.util.Either
 
-class GrpcDeployService(host: String, port: Int) extends DeployService[Task] with Closeable {
+class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
+    extends DeployService[Task]
+    with Closeable {
   private val DefaultMaxMessageSize = 256 * 1024 * 1024
 
-  private val channel: ManagedChannel =
+  private var externalConnected = false
+  private var internalConnected = false
+
+  private lazy val externalChannel: ManagedChannel = {
+    externalConnected = true
     ManagedChannelBuilder
-      .forAddress(host, port)
+      .forAddress(host, portExternal)
       .usePlaintext()
       .maxInboundMessageSize(DefaultMaxMessageSize)
       .build()
+  }
 
-  private val deployServiceStub = CasperMessageGrpcMonix.stub(channel)
-  private val casperServiceStub = CasperGrpcMonix.stub(channel)
+  private lazy val internalChannel: ManagedChannel = {
+    internalConnected = true
+    ManagedChannelBuilder
+      .forAddress(host, portInternal)
+      .usePlaintext()
+      .maxInboundMessageSize(DefaultMaxMessageSize)
+      .build()
+  }
+
+  private lazy val deployServiceStub  = CasperMessageGrpcMonix.stub(externalChannel)
+  private lazy val casperServiceStub  = CasperGrpcMonix.stub(externalChannel)
+  private lazy val controlServiceStub = ControlGrpcMonix.stub(internalChannel)
 
   def deploy(d: consensus.Deploy): Task[Either[Throwable, String]] =
     casperServiceStub.deploy(DeployRequest().withDeploy(d)).map(_ => "Success!").attempt
 
-  def createBlock(): Task[Either[Throwable, String]] =
-    deployServiceStub.createBlock(Empty()).map { response =>
-      if (response.success) Right(response.message)
-      else Left(new RuntimeException(response.message))
-    }
+  def propose(): Task[Either[Throwable, String]] =
+    controlServiceStub
+      .propose(ProposeRequest())
+      .map { response =>
+        val hash = Base16.encode(response.blockHash.toByteArray).take(10)
+        s"Success! Block $hash... created and added."
+      }
+      .attempt
 
   def showBlock(q: BlockQuery): Task[Either[Throwable, String]] =
     deployServiceStub.showBlock(q).map { response =>
@@ -69,12 +91,9 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
       }
 
   override def close(): Unit = {
-    val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
-    if (!terminated) {
-      println(
-        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
-      )
-      channel.awaitTermination(10, TimeUnit.SECONDS)
-    }
+    if (internalConnected)
+      internalChannel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
+    if (externalConnected)
+      externalChannel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
   }
 }

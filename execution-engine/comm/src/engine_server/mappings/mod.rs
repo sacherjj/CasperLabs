@@ -1,15 +1,20 @@
 mod uint;
 
+use protobuf::ProtobufEnum;
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
+use engine_server::ipc::KeyURef_AccessRights;
 use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
+use shared::logging;
+use shared::logging::log_level;
 use shared::newtypes::Blake2bHash;
 use storage::{
     global_state, history, history::CommitResult, op, transform, transform::TypeMismatch,
 };
+use LOG_SETTINGS;
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {
@@ -273,12 +278,12 @@ impl From<&common::key::Key> for super::ipc::Key {
                 key_hash.set_key(hash.to_vec());
                 k.set_hash(key_hash);
             }
-            // TODO should ipc representation of a key have an access rights as well?
-            // On one hand it doesn't need it and LMDB won't make any checks of it
-            // but OTOH maybe it should for symmetry?
-            common::key::Key::URef(uref, _) => {
+            common::key::Key::URef(uref, access_rights) => {
                 let mut key_uref = super::ipc::KeyURef::new();
                 key_uref.set_uref(uref.to_vec());
+                key_uref.set_access_rights(
+                    KeyURef_AccessRights::from_i32(access_rights.bits().into()).unwrap(),
+                );
                 k.set_uref(key_uref);
             }
             common::key::Key::Local { seed, key_hash } => {
@@ -297,7 +302,7 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
 
     fn try_from(ipc_key: &super::ipc::Key) -> Result<Self, ParsingError> {
         if ipc_key.has_account() {
-            let mut arr = [0u8; 20];
+            let mut arr = [0u8; 32];
             arr.clone_from_slice(&ipc_key.get_account().account);
             Ok(common::key::Key::Account(arr))
         } else if ipc_key.has_hash() {
@@ -307,11 +312,11 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
         } else if ipc_key.has_uref() {
             let mut arr = [0u8; 32];
             arr.clone_from_slice(&ipc_key.get_uref().uref);
-            // TODO: What to do about access rights here?
-            Ok(common::key::Key::URef(
-                arr,
-                common::key::AccessRights::READ_ADD_WRITE,
-            ))
+            let access_rights = common::key::AccessRights::from_bits(
+                ipc_key.get_uref().access_rights.value().try_into().unwrap(),
+            )
+            .unwrap();
+            Ok(common::key::Key::URef(arr, access_rights))
         } else {
             parse_error(format!(
                 "ipc Key couldn't be parsed to any Key: {:?}",
@@ -454,7 +459,9 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             err
                         }
                     },
-                    EngineError::Unreachable => panic!("Reached unreachable."),
+                    EngineError::Unreachable => {
+                        panic!("From<ExecutionResult> for ipc::DeployResult reached unreachable.")
+                    }
                 }
             }
         }
@@ -471,6 +478,7 @@ where
 {
     match input {
         Ok(CommitResult::RootNotFound) => {
+            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "RootNotFound");
             let mut root = ipc::RootNotFound::new();
             root.set_hash(prestate_hash.to_vec());
             let mut tmp_res = ipc::CommitResponse::new();
@@ -478,13 +486,29 @@ where
             tmp_res
         }
         Ok(CommitResult::Overflow) => {
+            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "Overflow");
             let overflow = ipc::AdditionOverflow::new();
             let mut tmp_res = ipc::CommitResponse::new();
             tmp_res.set_overflow(overflow);
             tmp_res
         }
         Ok(CommitResult::Success(post_state_hash)) => {
-            println!("Effects applied. New state hash is: {:?}", post_state_hash);
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+
+            properties.insert(
+                "post-state-hash".to_string(),
+                format!("{:?}", post_state_hash),
+            );
+
+            properties.insert("success".to_string(), true.to_string());
+
+            logging::log_props(
+                &*LOG_SETTINGS,
+                log_level::LogLevel::Info,
+                "effects applied; new state hash is: {post-state-hash}".to_owned(),
+                properties,
+            );
+
             let mut commit_result = ipc::CommitResult::new();
             let mut tmp_res = ipc::CommitResponse::new();
             commit_result.set_poststate_hash(post_state_hash.to_vec());
@@ -492,18 +516,21 @@ where
             tmp_res
         }
         Ok(CommitResult::KeyNotFound(key)) => {
+            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "KeyNotFound");
             let mut commit_response = ipc::CommitResponse::new();
             commit_response.set_key_not_found((&key).into());
             commit_response
         }
         Ok(CommitResult::TypeMismatch(type_mismatch)) => {
+            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "TypeMismatch");
             let mut commit_response = ipc::CommitResponse::new();
             commit_response.set_type_mismatch(type_mismatch.into());
             commit_response
         }
         // TODO(mateusz.gorski): We should be more specific about errors here.
         Err(storage_error) => {
-            println!("Error {:?} when applying effects", storage_error);
+            let log_message = format!("storage error {:?} when applying effects", storage_error);
+            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Error, &log_message);
             let mut err = ipc::PostEffectsError::new();
             let mut tmp_res = ipc::CommitResponse::new();
             err.set_message(format!("{:?}", storage_error));
@@ -526,6 +553,7 @@ fn wasm_error(msg: String) -> ipc::DeployResult {
 #[cfg(test)]
 mod tests {
     use super::wasm_error;
+    use common::key::AccessRights;
     use common::key::Key;
     use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
     use shared::newtypes::Blake2bHash;
@@ -559,7 +587,10 @@ mod tests {
     fn deploy_result_to_ipc_success() {
         let input_transforms: HashMap<Key, Transform> = {
             let mut tmp_map = HashMap::new();
-            tmp_map.insert(Key::Account([1u8; 20]), Transform::AddInt32(10));
+            tmp_map.insert(
+                Key::URef([1u8; 32], AccessRights::ADD),
+                Transform::AddInt32(10),
+            );
             tmp_map
         };
         let execution_effect: ExecutionEffect =
@@ -620,7 +651,7 @@ mod tests {
         );
         // for the time being all other execution errors are treated in the same way
         let forged_ref_error =
-            execution_engine::execution::Error::ForgedReference(Key::Account([1u8; 20]));
+            execution_engine::execution::Error::ForgedReference(Key::Account([1u8; 32]));
         assert_eq!(test_cost(cost, forged_ref_error), cost);
     }
 }

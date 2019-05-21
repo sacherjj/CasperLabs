@@ -175,6 +175,22 @@ approve-genesis-duration = "5minutes"
 # Timestamp for the deploys.
 # deploy-timestamp =
 
+# Ignore while client side support for signing deploys is not in place.
+ignore-deploy-signature = true
+
+
+# Enable auto-proposal of blocks.
+auto-propose-enabled = false
+
+# Time between proposal checks.
+auto-propose-check-interval = "1second"
+
+# Time to accumulate deploys before proposing.
+auto-propose-max-interval = "5seconds"
+
+# Number of deploys to accumulate before proposing.
+auto-propose-max-count = 10
+
 
 # io.casperlabs.node.configuration.Configuration.Kamon
 [metrics]

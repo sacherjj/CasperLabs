@@ -30,14 +30,13 @@ impl AccessRights {
     }
 }
 
-pub const KEY_SIZE: usize = 32;
 pub const LOCAL_SEED_SIZE: usize = 32;
 pub const LOCAL_KEY_HASH_SIZE: usize = 32;
 
 #[repr(C)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
 pub enum Key {
-    Account([u8; 20]),
+    Account([u8; 32]),
     Hash([u8; 32]),
     URef([u8; 32], AccessRights), //TODO: more bytes?
     Local {
@@ -97,10 +96,9 @@ impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
             Account(addr) => {
-                let mut result = Vec::with_capacity(25);
+                let mut result = Vec::with_capacity(37);
                 result.push(ACCOUNT_ID);
-                result.append(&mut (20u32).to_bytes()?);
-                result.extend(addr);
+                result.append(&mut addr.to_bytes()?);
                 Ok(result)
             }
             Hash(hash) => {
@@ -132,14 +130,10 @@ impl FromBytes for Key {
         let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
         match id {
             ACCOUNT_ID => {
-                let (addr, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(rest)?;
-                if addr.len() != 20 {
-                    Err(Error::FormattingError)
-                } else {
-                    let mut addr_array = [0u8; 20];
-                    addr_array.copy_from_slice(&addr);
-                    Ok((Account(addr_array), rem))
-                }
+                let (addr, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
+                let mut addr_array = [0u8; 32];
+                addr_array.copy_from_slice(&addr);
+                Ok((Account(addr_array), rem))
             }
             HASH_ID => {
                 let (hash, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;

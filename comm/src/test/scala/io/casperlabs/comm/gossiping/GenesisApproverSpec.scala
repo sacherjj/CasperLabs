@@ -44,6 +44,16 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
         }
       }
     }
+    "started without an approval" should {
+      "not trigger the transition" in {
+        TestFixture.fromGenesis(approve = false) { approver =>
+          approver.awaitApproval.timeout(50.millis).attempt.map { res =>
+            res.isLeft shouldBe true
+            res.left.get shouldBe a[TimeoutException]
+          }
+        }
+      }
+    }
   }
   "fromGenesis" should {
     "create the candidate with the single approval" in {
@@ -535,7 +545,8 @@ object GenesisApproverSpec extends ArbitraryConsensus {
     def fromGenesis(
         environment: MockEnvironment = new MockEnvironment(),
         gossipService: MockGossipService = new MockGossipService(),
-        relayFactor: Int = 0
+        relayFactor: Int = 0,
+        approve: Boolean = true
     )(
         test: GenesisApprover[Task] => Task[Unit]
     )(
@@ -548,8 +559,10 @@ object GenesisApproverSpec extends ArbitraryConsensus {
           connectToGossip = _ => Task.now(gossipService),
           relayFactor,
           genesis,
-          approval = sample(arbitrary[Approval])
+          maybeApproval = sample(arbitrary[Approval])
             .withValidatorPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
+            .some
+            .filter(_ => approve)
         )
         .use(test)
         .runSyncUnsafe(DefaultTimeout)

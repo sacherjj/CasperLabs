@@ -11,6 +11,7 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
 import io.casperlabs.node.api.casper.CasperGrpcMonix
+import io.casperlabs.node.api.control.ControlGrpcMonix
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
@@ -32,64 +33,76 @@ import org.http4s.server.blaze.BlazeBuilder
 
 object Servers {
 
-  def diagnosticsServerR(
+  /** Start a gRPC server with services meant for the operators.
+    * This port shouldn't be exposed to the internet, or some endpoints
+    * should be protected by authentication and an SSL channel. */
+  def internalServersR(
       port: Int,
       maxMessageSize: Int,
-      grpcExecutor: Scheduler
+      grpcExecutor: Scheduler,
+      blockApiLock: Semaphore[Effect]
   )(
       implicit
       log: Log[Effect],
+      logId: Log[Id],
+      metrics: Metrics[Effect],
+      metricsId: Metrics[Id],
       nodeDiscovery: NodeDiscovery[Task],
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
+      multiParentCasperRef: MultiParentCasperRef[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] =
-    GrpcServer(
+    GrpcServer[Effect](
       port = port,
       maxMessageSize = Some(maxMessageSize),
       services = List(
         (_: Scheduler) =>
           Task.delay {
             DiagnosticsGrpcMonix.bindService(diagnosticsService, grpcExecutor)
+          }.toEffect,
+        (_: Scheduler) =>
+          GrpcControlService(blockApiLock) map {
+            ControlGrpcMonix.bindService(_, grpcExecutor)
           }
+      ),
+      interceptors = List(
+        new MetricsInterceptor(),
+        ErrorInterceptor.default
       )
-    ).void.toEffect <* Resource.liftF(
-      Log[Effect].info(s"gRPC diagnostics service started on port ${port}.")
+    ) *> Resource.liftF(
+      Log[Effect].info(s"Internal gRPC services started on port ${port}.")
     )
 
-  def deploymentServerR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: SafetyOracle: BlockStore: ExecutionEngineService](
+  /** Start a gRPC server with services meant for users and dApp developers. */
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: SafetyOracle: BlockStore: ExecutionEngineService](
       port: Int,
       maxMessageSize: Int,
-      grpcExecutor: Scheduler
+      grpcExecutor: Scheduler,
+      blockApiLock: Semaphore[F],
+      ignoreDeploySignature: Boolean
   )(implicit scheduler: Scheduler, logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] =
-    for {
-      blockApiLock <- Resource.liftF(Semaphore[F](1))
-      _ <- GrpcServer(
-            port = port,
-            maxMessageSize = Some(maxMessageSize),
-            services = List(
-              // TODO: Phase DeployService out in favor of CasperService.
-              (_: Scheduler) =>
-                for {
-                  inst <- GrpcDeployService.instance(blockApiLock)
-                } yield {
-                  CasperMessageGrpcMonix.bindService(inst, grpcExecutor)
-                },
-              (_: Scheduler) =>
-                for {
-                  inst <- GrpcCasperService(blockApiLock)
-                } yield {
-                  CasperGrpcMonix.bindService(inst, grpcExecutor)
-                }
-            ),
-            interceptors = List(
-              new MetricsInterceptor(),
-              ErrorInterceptor.default
-            )
-          )
-      _ <- Resource.liftF(Log[F].info(s"gRPC deployment service started on port ${port}."))
-    } yield ()
+    GrpcServer(
+      port = port,
+      maxMessageSize = Some(maxMessageSize),
+      services = List(
+        // TODO: Phase DeployService out in favor of CasperService.
+        (_: Scheduler) =>
+          GrpcDeployService.instance(blockApiLock, ignoreDeploySignature) map {
+            CasperMessageGrpcMonix.bindService(_, grpcExecutor)
+          },
+        (_: Scheduler) =>
+          GrpcCasperService(ignoreDeploySignature) map {
+            CasperGrpcMonix.bindService(_, grpcExecutor)
+          }
+      ),
+      interceptors = List(
+        new MetricsInterceptor(),
+        ErrorInterceptor.default
+      )
+    ) *>
+      Resource.liftF(Log[F].info(s"External gRPC services started on port ${port}."))
 
   def httpServerR(
       port: Int,

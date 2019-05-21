@@ -136,7 +136,7 @@ message BlockInfoWithoutTuplespace {
     int64 blockNumber = 3;
     int64 protocolVersion = 4;
     int32 deployCount = 5;
-    string tupleSpaceHash = 6; // Same as postStateHash of BlockMessage
+    string globalStateRootHash = 6; // Same as postStateHash of BlockMessage
     int64 timestamp = 7;
     float faultTolerance = 8;
     string mainParentHash = 9;
@@ -151,7 +151,7 @@ message BlockInfo {
     int64 blockNumber = 3;
     int64 protocolVersion = 4;
     int32 deployCount = 5;
-    string tupleSpaceHash = 6; // Same as postStateHash of BlockMessage
+    string globalStateRootHash = 6; // Same as postStateHash of BlockMessage
     string tupleSpaceDump = 7;
     int64 timestamp = 8;
     float faultTolerance = 9;

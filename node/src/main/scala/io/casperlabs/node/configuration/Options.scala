@@ -286,6 +286,26 @@ private[configuration] final case class Options private (
       gen[Flag]("True if there should be a public access CSPR faucet in the genesis block.")
 
     @scallop
+    val casperIgnoreDeploySignature =
+      gen[Flag]("Bypass deploy hash and signature validation, for debug purposes.")
+
+    @scallop
+    val casperAutoProposeEnabled =
+      gen[Flag]("Enable auto-proposal of blocks.")
+
+    @scallop
+    val casperAutoProposeCheckInterval =
+      gen[FiniteDuration]("Time between proposal checks.")
+
+    @scallop
+    val casperAutoProposeMaxInterval =
+      gen[FiniteDuration]("Time to accumulate deploys before proposing.")
+
+    @scallop
+    val casperAutoProposeMaxCount =
+      gen[Int]("Number of deploys to accumulate before proposing.")
+
+    @scallop
     val serverBootstrap =
       gen[Node](
         "Bootstrap casperlabs node address for initial seed.",

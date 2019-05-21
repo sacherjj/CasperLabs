@@ -36,7 +36,12 @@ final case class CasperConf(
     approveGenesis: Boolean,
     approveGenesisInterval: FiniteDuration,
     approveGenesisDuration: FiniteDuration,
-    deployTimestamp: Option[Long]
+    deployTimestamp: Option[Long],
+    ignoreDeploySignature: Boolean,
+    autoProposeEnabled: Boolean,
+    autoProposeCheckInterval: FiniteDuration,
+    autoProposeMaxInterval: FiniteDuration,
+    autoProposeMaxCount: Int
 ) extends SubConfig
 
 object CasperConf {

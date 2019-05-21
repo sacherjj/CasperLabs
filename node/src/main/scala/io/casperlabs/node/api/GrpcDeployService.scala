@@ -1,30 +1,28 @@
 package io.casperlabs.node.api
 
-import cats.{ApplicativeError, Id}
 import cats.data.StateT
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.mtl._
 import cats.mtl.implicits._
+import cats.{ApplicativeError, Id}
+import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import io.casperlabs.casper.protocol.{DeployData, DeployServiceResponse, _}
-import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.graphz.{GraphSerializer, Graphz, StringSerializer}
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 import monix.reactive.Observable
-import com.google.protobuf.ByteString
-import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.smartcontracts.ExecutionEngineService
 
 object GrpcDeployService {
   def toKey[F[_]](keyType: String, keyValue: String)(
@@ -54,11 +52,11 @@ object GrpcDeployService {
         }
       case "address" =>
         keyBytes.size match {
-          case 20 => ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes))).pure[F]
+          case 32 => ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes))).pure[F]
           case n =>
             appErr.raiseError(
               new Exception(
-                s"Key of type address must have exactly 20 bytes, $n =/= 20 provided."
+                s"Key of type address must have exactly 32 bytes, $n =/= 32 provided."
               )
             )
         }
@@ -75,7 +73,8 @@ object GrpcDeployService {
     path.split("/").filter(_.nonEmpty)
 
   def instance[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: SafetyOracle: BlockStore: TaskLike: ExecutionEngineService](
-      blockApiLock: Semaphore[F]
+      blockApiLock: Semaphore[F],
+      ignoreDeploySignature: Boolean
   )(
       implicit worker: Scheduler
   ): F[CasperMessageGrpcMonix.DeployService] = {
@@ -84,7 +83,7 @@ object GrpcDeployService {
         Task.defer(TaskLike[F].toTask(task)).executeOn(worker).attemptAndLog
 
       override def doDeploy(d: DeployData): Task[DeployServiceResponse] =
-        defer(BlockAPI.deploy[F](d))
+        defer(BlockAPI.deploy[F](d, ignoreDeploySignature))
 
       override def createBlock(e: Empty): Task[DeployServiceResponse] =
         defer(BlockAPI.createBlock[F](blockApiLock))
@@ -99,7 +98,7 @@ object GrpcDeployService {
             bq  <- BlockAPI.showBlock[F](BlockQuery(blockHash))
             state <- Concurrent[F]
                       .fromOption(bq.blockInfo, new Exception(s"Block $blockHash not found!"))
-                      .map(_.tupleSpaceHash)
+                      .map(_.globalStateRootHash)
             stateHash        = ByteString.copyFrom(Base16.decode(state))
             possibleResponse <- ExecutionEngineService[F].query(stateHash, key, splitPath(path))
             response         <- Concurrent[F].fromEither(possibleResponse).map(_.toProtoString)

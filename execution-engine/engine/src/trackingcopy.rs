@@ -628,7 +628,7 @@ mod tests {
             missing_name in "\\PC*",
             pk in u8_slice_32(), // account public key
             nonce in any::<u64>(), // account nonce
-            address in u8_slice_20(), // address for account key
+            address in u8_slice_32(), // address for account key
         ) {
             let known_urefs = iter::once((name.clone(), k)).collect();
             let account = Account::new(
@@ -664,7 +664,7 @@ mod tests {
             contract_name in "\\PC*", // human-readable name for contract
             pk in u8_slice_32(), // account public key
             nonce in any::<u64>(), // account nonce
-            address in u8_slice_20(), // address for account key
+            address in u8_slice_32(), // address for account key
             body in vec(any::<u8>(), 1..1000), //contract body
             hash in u8_slice_32(), // hash for contract key
         ) {

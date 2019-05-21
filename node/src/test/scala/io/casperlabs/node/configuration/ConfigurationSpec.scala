@@ -87,7 +87,12 @@ class ConfigurationSpec
       approveGenesisInterval = FiniteDuration(1, TimeUnit.SECONDS),
       approveGenesisDuration = FiniteDuration(1, TimeUnit.SECONDS),
       deployTimestamp = 1L.some,
-      genesisPath = Paths.get("/tmp/genesis")
+      genesisPath = Paths.get("/tmp/genesis"),
+      ignoreDeploySignature = false,
+      autoProposeEnabled = false,
+      autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      autoProposeMaxInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      autoProposeMaxCount = 1
     )
     val tls = Tls(
       certificate = Paths.get("/tmp/test"),
