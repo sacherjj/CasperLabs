@@ -213,9 +213,7 @@ fn main() {
         let message_format: String = if success {
             String::from("{pre-state-hash} {gas-cost} {wasm-path} success: {success}")
         } else {
-            String::from(
-                "{pre-state-hash} {gas-cost} {wasm-path} success: {success} error: {error}",
-            )
+            String::from("{pre-state-hash} {gas-cost} {wasm-path} error: {error}")
         };
 
         logging::log_details(log_level, message_format, properties);
