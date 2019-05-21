@@ -237,7 +237,7 @@ mod tests {
     }
 
     lazy_static! {
-        static ref LOG_SETTINGS: LogSettings = get_log_settings();
+        static ref LOG_SETTINGS_TESTS: LogSettings = get_log_settings();
     }
 
     fn get_log_settings() -> LogSettings {
@@ -250,30 +250,30 @@ mod tests {
 
     #[test]
     fn should_set_and_get_log_settings_provider() {
-        set_log_settings_provider(&*LOG_SETTINGS);
+        set_log_settings_provider(&*LOG_SETTINGS_TESTS);
 
         let log_settings_provider = get_log_settings_provider();
 
         assert_eq!(
-            &LOG_SETTINGS.process_id,
+            &LOG_SETTINGS_TESTS.process_id,
             &log_settings_provider.get_process_id(),
             "process_id should be the same",
         );
 
         assert_eq!(
-            &LOG_SETTINGS.host_name,
+            &LOG_SETTINGS_TESTS.host_name,
             &log_settings_provider.get_host_name(),
             "host_name should be the same",
         );
 
         assert_eq!(
-            &LOG_SETTINGS.process_name,
+            &LOG_SETTINGS_TESTS.process_name,
             &log_settings_provider.get_process_name(),
             "process_name should be the same",
         );
 
         assert_eq!(
-            &LOG_SETTINGS.log_level_filter,
+            &LOG_SETTINGS_TESTS.log_level_filter,
             &log_settings_provider.get_log_level_filter(),
             "log_level_filter should be the same",
         );
