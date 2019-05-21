@@ -31,7 +31,7 @@ const APP_NAME: &str = "Execution Engine Standalone";
 const SERVER_START_MESSAGE: &str = "starting Execution Engine Standalone";
 const SERVER_STOP_MESSAGE: &str = "stopping Execution Engine Standalone";
 const SERVER_NO_WASM_MESSAGE: &str = "no wasm files to process";
-const SERVER_NO_GAS_MESSAGE: &str = "no gas available";
+const SERVER_NO_GAS_LIMIT_MESSAGE: &str = "gas limit is 0";
 
 // loglevel
 const ARG_LOG_LEVEL: &str = "loglevel";
@@ -105,7 +105,7 @@ fn main() {
         .expect("Provided gas limit value is not u64.");
 
     if gas_limit == 0 {
-        logging::log_info(SERVER_NO_GAS_MESSAGE);
+        logging::log_info(SERVER_NO_GAS_LIMIT_MESSAGE);
     }
 
     // TODO: move to arg parser
