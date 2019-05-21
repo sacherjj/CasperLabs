@@ -8,9 +8,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.util.byteOps._
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.blockstorage.blockImplicits._
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared
@@ -45,9 +44,13 @@ trait BlockDagStorageTest
           blockElementLookups <- blockElements.traverse {
                                   case BlockMsgWithTransform(Some(b), _) =>
                                     for {
-                                      blockMetadata     <- dag.lookup(b.blockHash)
-                                      latestMessageHash <- dag.latestMessageHash(b.sender)
-                                      latestMessage     <- dag.latestMessage(b.sender)
+                                      blockMetadata <- dag.lookup(b.blockHash)
+                                      latestMessageHash <- dag.latestMessageHash(
+                                                            b.getHeader.validatorPublicKey
+                                                          )
+                                      latestMessage <- dag.latestMessage(
+                                                        b.getHeader.validatorPublicKey
+                                                      )
                                     } yield (blockMetadata, latestMessageHash, latestMessage)
                                 }
           latestMessageHashes <- dag.latestMessageHashes
@@ -169,8 +172,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
                case BlockMsgWithTransform(Some(b), _) =>
                  for {
                    blockMetadata     <- dag.lookup(b.blockHash)
-                   latestMessageHash <- dag.latestMessageHash(b.sender)
-                   latestMessage     <- dag.latestMessage(b.sender)
+                   latestMessageHash <- dag.latestMessageHash(b.getHeader.validatorPublicKey)
+                   latestMessage     <- dag.latestMessage(b.getHeader.validatorPublicKey)
                    children          <- dag.children(b.blockHash)
                    contains          <- dag.contains(b.blockHash)
                  } yield (blockMetadata, latestMessageHash, latestMessage, children, contains)
@@ -183,7 +186,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   private def testLookupElementsResult(
       lookupResult: LookupResult,
-      blockElements: List[BlockMessage],
+      blockElements: List[Block],
       topoSortStartBlockNumber: Long = 0,
       topoSortTailLength: Int = 5
   ): Assertion = {
@@ -191,20 +194,22 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, BlockMetadata]) {
       case (lm, b) =>
         // Ignore empty sender for genesis block
-        if (b.sender != ByteString.EMPTY)
-          lm.updated(b.sender, BlockMetadata.fromBlock(b))
+        if (b.getHeader.validatorPublicKey != ByteString.EMPTY)
+          lm.updated(b.getHeader.validatorPublicKey, BlockMetadata.fromBlock(b))
         else
           lm
     }
     list.zip(blockElements).foreach {
       case ((blockMetadata, latestMessageHash, latestMessage, children, contains), b) =>
         blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
-        latestMessageHash shouldBe realLatestMessages.get(b.sender).map(_.blockHash)
-        latestMessage shouldBe realLatestMessages.get(b.sender)
+        latestMessageHash shouldBe realLatestMessages
+          .get(b.getHeader.validatorPublicKey)
+          .map(_.blockHash)
+        latestMessage shouldBe realLatestMessages.get(b.getHeader.validatorPublicKey)
         children shouldBe
           Some(
             blockElements
-              .filter(_.header.get.parentsHashList.contains(b.blockHash))
+              .filter(_.getHeader.parentHashes.contains(b.blockHash))
               .map(_.blockHash)
               .toSet
           )
@@ -243,7 +248,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       val blockElementsWithGenesis = blockElements match {
         case x :: xs =>
-          val genesis = x.update(_.blockMessage.sender := ByteString.EMPTY)
+          val block = x.getBlockMessage
+          val genesis = x.withBlockMessage(
+            block.withHeader(block.getHeader.withValidatorPublicKey(ByteString.EMPTY))
+          )
           genesis :: xs
         case Nil =>
           Nil

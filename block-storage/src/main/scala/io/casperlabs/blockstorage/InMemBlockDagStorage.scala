@@ -10,11 +10,10 @@ import io.casperlabs.blockstorage.BlockDagStorage.MeteredBlockDagStorage
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
 import io.casperlabs.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import io.casperlabs.blockstorage.util.TopologicalSortUtil
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.Log
 
 import scala.collection.immutable.HashSet
@@ -71,7 +70,7 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
       _              <- lock.release
     } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
 
-  override def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+  override def insert(block: Block): F[BlockDagRepresentation[F]] =
     for {
       _ <- lock.acquire
       _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block)))
@@ -85,16 +84,17 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
       newValidators = bonds(block)
-        .map(_.validator)
+        .map(_.validatorPublicKey)
         .toSet
-        .diff(block.justifications.map(_.validator).toSet)
-      newValidatorsWithSender <- if (block.sender.isEmpty) {
+        .diff(block.getHeader.justifications.map(_.validatorPublicKey).toSet)
+      sender = block.getHeader.validatorPublicKey
+      newValidatorsWithSender <- if (sender.isEmpty) {
                                   // Ignore empty sender for special cases such as genesis block
                                   Log[F].warn(
                                     s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
                                   ) *> newValidators.pure[F]
-                                } else if (block.sender.size() == 32) {
-                                  (newValidators + block.sender).pure[F]
+                                } else if (sender.size == 32) {
+                                  (newValidators + sender).pure[F]
                                 } else {
                                   Sync[F].raiseError[Set[ByteString]](
                                     BlockSenderIsMalformed(block)

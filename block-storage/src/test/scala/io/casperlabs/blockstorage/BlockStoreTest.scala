@@ -7,13 +7,8 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.InMemBlockStore.emptyMapRef
-import io.casperlabs.casper.protocol.{
-  ApprovedBlock,
-  ApprovedBlockCandidate,
-  BlockMessage,
-  Header,
-  Signature
-}
+import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
+import io.casperlabs.casper.consensus.{Block}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
@@ -42,9 +37,10 @@ trait BlockStoreTest
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(100))
 
-  private[this] def toBlockMessage(bh: BlockHash, v: Long, ts: Long): BlockMessage =
-    BlockMessage(blockHash = bh)
-      .withHeader(Header().withProtocolVersion(v).withTimestamp(ts))
+  private[this] def toBlockMessage(bh: BlockHash, v: Long, ts: Long): Block =
+    Block()
+      .withBlockHash(bh)
+      .withHeader(Block.Header().withProtocolVersion(v).withTimestamp(ts))
 
   def withStore[R](f: BlockStore[Task] => Task[R]): R
 
@@ -233,6 +229,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   }
 
   "FileLMDBIndexBlockStore" should "persist approved block on restart" in {
+    import io.casperlabs.casper.protocol.{BlockMessage, Signature}
     withStoreLocation { blockStoreDataDir =>
       val approvedBlock =
         ApprovedBlock(

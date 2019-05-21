@@ -19,14 +19,13 @@ import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.{fileIO, BlockMessageUtil, Crc32, TopologicalSortUtil}
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.{Log, LogSource}
 
 import scala.ref.WeakReference
@@ -301,7 +300,7 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
   def getRepresentation: F[BlockDagRepresentation[F]] =
     lock.withPermit(representation)
 
-  def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+  def insert(block: Block): F[BlockDagRepresentation[F]] =
     lock.withPermit(
       (state >> 'dataLookup).get
         .map(_.contains(block.blockHash))
@@ -311,7 +310,7 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
         ) *> representation
     )
 
-  private def insertBlock(block: BlockMessage) =
+  private def insertBlock(block: Block) =
     for {
       _             <- squashLatestMessagesDataFileIfNeeded()
       blockMetadata = BlockMetadata.fromBlock(block)
@@ -335,16 +334,17 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
       //Block which contains newly bonded validators will not
       //have those validators in its justification
       newValidators = bonds(block)
-        .map(_.validator)
+        .map(_.validatorPublicKey)
         .toSet
-        .diff(block.justifications.map(_.validator).toSet)
-      newValidatorsWithSender <- if (block.sender.isEmpty) {
+        .diff(block.getHeader.justifications.map(_.validatorPublicKey).toSet)
+      sender = block.getHeader.validatorPublicKey
+      newValidatorsWithSender <- if (sender.isEmpty) {
                                   // Ignore empty sender for special cases such as genesis block
                                   Log[F].warn(
                                     s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
                                   ) *> newValidators.pure[F]
-                                } else if (block.sender.size() == 32) {
-                                  (newValidators + block.sender).pure[F]
+                                } else if (sender.size == 32) {
+                                  (newValidators + sender).pure[F]
                                 } else {
                                   Sync[F].raiseError[Set[ByteString]](
                                     BlockSenderIsMalformed(block)
@@ -733,7 +733,7 @@ object BlockDagFileStorage {
 
   def createEmptyFromGenesis[F[_]: Concurrent: Log: BlockStore: Metrics](
       config: Config,
-      genesis: BlockMessage
+      genesis: Block
   ): F[BlockDagFileStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
@@ -741,7 +741,7 @@ object BlockDagFileStorage {
       _                     <- createFile[F](config.latestMessagesLogPath)
       _                     <- createFile[F](config.latestMessagesCrcPath)
       genesisBonds          = BlockMessageUtil.bonds(genesis)
-      initialLatestMessages = genesisBonds.map(_.validator -> genesis.blockHash).toMap
+      initialLatestMessages = genesisBonds.map(_.validatorPublicKey -> genesis.blockHash).toMap
       latestMessagesData = initialLatestMessages
         .foldLeft(ByteString.EMPTY) {
           case (byteString, (validator, blockHash)) =>

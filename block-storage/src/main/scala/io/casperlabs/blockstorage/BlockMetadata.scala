@@ -1,7 +1,8 @@
-package io.casperlabs.models
+package io.casperlabs.blockstorage
 
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus.{Block, Bond}, Block.Justification
+import io.casperlabs.storage.BlockMetadataInternal
 import scalapb.TypeMapper
 
 final case class BlockMetadata(
@@ -23,7 +24,7 @@ object BlockMetadata {
       internal.parents,
       internal.sender,
       internal.justifications,
-      internal.bonds.map(b => b.validator -> b.stake).toMap,
+      internal.bonds.map(b => b.validatorPublicKey -> b.stake).toMap,
       internal.blockNum,
       internal.seqNum
     )
@@ -42,29 +43,16 @@ object BlockMetadata {
   def fromBytes(bytes: Array[Byte]): BlockMetadata =
     typeMapper.toCustom(BlockMetadataInternal.parseFrom(bytes))
 
-  private def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
-    blockMessage.body match {
-      case Some(block) =>
-        block.state match {
-          case Some(state) => weightMap(state)
-          case None        => Map.empty[ByteString, Long]
-        }
-      case None => Map.empty[ByteString, Long]
-    }
-
-  private def weightMap(state: RChainState): Map[ByteString, Long] =
-    state.bonds.map {
-      case Bond(validator, stake) => validator -> stake
-    }.toMap
-
-  def fromBlock(b: BlockMessage): BlockMetadata =
+  def fromBlock(b: Block): BlockMetadata =
     BlockMetadata(
       b.blockHash,
-      b.header.fold(List.empty[ByteString])(_.parentsHashList.toList),
-      b.sender,
-      b.justifications.toList,
-      weightMap(b),
-      b.body.flatMap(_.state.map(_.blockNumber)).getOrElse(0L),
-      b.seqNum
+      b.getHeader.parentHashes.toList,
+      b.getHeader.validatorPublicKey,
+      b.getHeader.justifications.toList,
+      b.getHeader.getState.bonds.map { bond =>
+        bond.validatorPublicKey -> bond.stake
+      }.toMap,
+      b.getHeader.rank,
+      b.getHeader.validatorBlockSeqNum
     )
 }
