@@ -305,19 +305,25 @@ package object gossiping {
                         }
 
       validatorId <- Resource.liftF {
-                      ValidatorIdentity.fromConfig[F](conf.casper)
+                      for {
+                        id <- ValidatorIdentity.fromConfig[F](conf.casper)
+                        _ <- Log[F].info(
+                              s"Starting ${if (id.nonEmpty) "with" else "without"} a validator identity."
+                            )
+                      } yield id
                     }
 
-      approveBlock = (block: Block) => {
-        val sig = validatorId.get.signature(block.blockHash.toByteArray)
-        Approval()
-          .withValidatorPublicKey(sig.publicKey)
-          .withSignature(
-            Signature()
-              .withSigAlgorithm(sig.algorithm)
-              .withSig(sig.sig)
-          )
-      }
+      maybeApproveBlock = (block: Block) =>
+        validatorId.map { id =>
+          val sig = id.signature(block.blockHash.toByteArray)
+          Approval()
+            .withValidatorPublicKey(sig.publicKey)
+            .withSignature(
+              Signature()
+                .withSigAlgorithm(sig.algorithm)
+                .withSig(sig.sig)
+            )
+        }
 
       // Function to read and set the bonds.txt in modes which generate the Genesis locally.
       readBondsFile = {
@@ -366,7 +372,7 @@ package object gossiping {
                                        Left(InvalidArgument(msg))
 
                                      case Right(()) =>
-                                       Right(validatorId.map(_ => approveBlock(block)))
+                                       Right(maybeApproveBlock(block))
                                    }
                                  }
                                }
@@ -454,7 +460,7 @@ package object gossiping {
                                   // TODO: Move to config.
                                   relayFactor = 10,
                                   genesis = genesis,
-                                  approval = approveBlock(genesis)
+                                  maybeApproval = maybeApproveBlock(genesis)
                                 )
                    } yield approver
                  } else {

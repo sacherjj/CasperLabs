@@ -148,11 +148,11 @@ mod tests {
 
     const TEST_PAIRS: [TestPair; 2] = [
         TestPair {
-            key: Key::Account([1u8; 20]),
+            key: Key::Account([1u8; 32]),
             value: Value::Int32(1),
         },
         TestPair {
-            key: Key::Account([2u8; 20]),
+            key: Key::Account([2u8; 32]),
             value: Value::Int32(2),
         },
     ];
@@ -160,15 +160,15 @@ mod tests {
     fn create_test_pairs_updated() -> [TestPair; 3] {
         [
             TestPair {
-                key: Key::Account([1u8; 20]),
+                key: Key::Account([1u8; 32]),
                 value: Value::String("one".to_string()),
             },
             TestPair {
-                key: Key::Account([2u8; 20]),
+                key: Key::Account([2u8; 32]),
                 value: Value::String("two".to_string()),
             },
             TestPair {
-                key: Key::Account([3u8; 20]),
+                key: Key::Account([3u8; 32]),
                 value: Value::Int32(3),
             },
         ]
@@ -265,10 +265,10 @@ mod tests {
     #[test]
     fn initial_state_has_the_expected_hash() {
         let expected_bytes = vec![
-            86u8, 34, 94, 200, 7, 200, 168, 251, 27, 186, 60, 15, 247, 221, 85, 229, 213, 163, 251,
-            227, 103, 100, 22, 220, 98, 40, 57, 16, 139, 74, 114, 76,
+            176u8, 48, 219, 9, 47, 224, 193, 80, 164, 168, 1, 230, 1, 75, 255, 199, 211, 67, 213,
+            61, 31, 192, 211, 77, 59, 244, 219, 236, 53, 253, 100, 159,
         ];
-        let init_state = mocked_account([48u8; 20]);
+        let init_state = mocked_account([48u8; 32]);
         let global_state = InMemoryGlobalState::from_pairs(&init_state).unwrap();
         assert_eq!(expected_bytes, global_state.root_hash.to_vec())
     }

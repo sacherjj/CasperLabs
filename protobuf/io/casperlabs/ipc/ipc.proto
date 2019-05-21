@@ -91,6 +91,19 @@ message KeyHash {
 }
 message KeyURef {
     bytes uref = 1;
+    // NOTE: Numeric values correspond to values of the domain
+    // AccessRights struct.
+    enum AccessRights {
+        UNKNOWN        = 0;
+        READ           = 1;
+        WRITE          = 2;
+        ADD            = 4;
+        READ_ADD       = 5;
+        READ_WRITE     = 3;
+        ADD_WRITE      = 6;
+        READ_ADD_WRITE = 7;
+    }
+    AccessRights access_rights = 2;
 }
 
 // oneof cannot contain `repeated` label
