@@ -16,7 +16,6 @@ pub fn set_log_settings_provider(log_settings_provider: &'static LogSettingsProv
 }
 
 pub(crate) fn get_log_settings_provider() -> &'static LogSettingsProvider {
-    //    unsafe { LOG_SETTINGS_PROVIDER }
     unsafe { LOG_SETTINGS_PROVIDER }
 }
 
