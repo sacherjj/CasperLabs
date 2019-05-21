@@ -3,15 +3,12 @@
 //! See the [in_memory](in_memory/index.html#usage) and
 //! [lmdb](lmdb/index.html#usage) modules for usage examples.
 
-use history::trie::Trie;
 use shared::newtypes::Blake2bHash;
 
-pub mod lmdb;
+use trie::Trie;
 
 pub mod in_memory;
-
-// TODO: remove this annotation
-#[allow(dead_code)]
+pub mod lmdb;
 pub(crate) mod operations;
 
 #[cfg(test)]

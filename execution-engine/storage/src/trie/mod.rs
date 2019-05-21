@@ -1,9 +1,10 @@
 //! Core types for a Merkle Trie
 
-use common::bytesrepr::{self, FromBytes, ToBytes};
-use shared::newtypes::Blake2bHash;
 use std::mem::size_of;
 use std::ops::Deref;
+
+use common::bytesrepr::{self, FromBytes, ToBytes};
+use shared::newtypes::Blake2bHash;
 
 #[cfg(test)]
 pub(crate) mod gens;
@@ -266,8 +267,8 @@ impl<K: FromBytes, V: FromBytes> FromBytes for Trie<K, V> {
 
 pub(crate) mod operations {
     use common::bytesrepr::{self, ToBytes};
-    use history::trie::Trie;
     use shared::newtypes::Blake2bHash;
+    use trie::Trie;
 
     /// Creates a tuple containing an empty root hash and an empty root (a node
     /// with an empty pointer block)

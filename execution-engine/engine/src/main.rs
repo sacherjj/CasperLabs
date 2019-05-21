@@ -13,9 +13,10 @@ use clap::{App, Arg};
 
 use execution_engine::engine::{EngineState, ExecutionResult, RootNotFound};
 use execution_engine::execution::WasmiExecutor;
+use shared::init::mocked_account;
 use shared::newtypes::Blake2bHash;
 use storage::global_state::in_memory::InMemoryGlobalState;
-use storage::history::CommitResult;
+use storage::global_state::CommitResult;
 use wasm_prep::{wasm_costs::WasmCosts, WasmiPreprocessor};
 
 #[derive(Debug)]
@@ -95,7 +96,7 @@ fn main() {
     // let path = std::path::Path::new("./tmp/");
     // TODO: Better error handling?
     //    let global_state = LmdbGs::new(&path).unwrap();
-    let init_state = storage::global_state::mocked_account(account_addr);
+    let init_state = mocked_account(account_addr);
     let global_state =
         InMemoryGlobalState::from_pairs(&init_state).expect("Could not create global state");
     let mut state_hash: Blake2bHash = global_state.root_hash;

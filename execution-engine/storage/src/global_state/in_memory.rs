@@ -1,20 +1,22 @@
-use common::key::Key;
-use common::value::Value;
-use error;
-use global_state::StateReader;
-use history::trie::operations::create_hashed_empty_trie;
-use history::trie::Trie;
-use history::trie_store::in_memory::{
-    self, InMemoryEnvironment, InMemoryReadTransaction, InMemoryTrieStore,
-};
-use history::trie_store::operations::{read, write, ReadResult, WriteResult};
-use history::trie_store::{Transaction, TransactionSource, TrieStore};
-use history::{commit, CommitResult, History};
-use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
-use transform::Transform;
+
+use common::key::Key;
+use common::value::Value;
+use shared::newtypes::Blake2bHash;
+use shared::transform::Transform;
+
+use error;
+use global_state::StateReader;
+use global_state::{commit, CommitResult, History};
+use trie::operations::create_hashed_empty_trie;
+use trie::Trie;
+use trie_store::in_memory::{
+    self, InMemoryEnvironment, InMemoryReadTransaction, InMemoryTrieStore,
+};
+use trie_store::operations::{read, write, ReadResult, WriteResult};
+use trie_store::{Transaction, TransactionSource, TrieStore};
 
 /// Represents a "view" of global state at a particular root hash.
 pub struct InMemoryGlobalState {
@@ -137,8 +139,9 @@ impl History for InMemoryGlobalState {
 
 #[cfg(test)]
 mod tests {
+    use shared::init::mocked_account;
+
     use super::*;
-    use global_state::mocked_account;
 
     #[derive(Debug, Clone)]
     struct TestPair {
