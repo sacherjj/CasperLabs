@@ -56,6 +56,10 @@ approve-genesis-interval = "1second"
 approve-genesis-duration = "1second"
 deploy-timestamp = 1
 ignore-deploy-signature = false
+auto-propose-enabled = false
+auto-propose-check-interval = "1second"
+auto-propose-max-interval = "1second"
+auto-propose-max-count = 1
 
 [blockstorage]
 latest-messages-log-max-size-factor = 1

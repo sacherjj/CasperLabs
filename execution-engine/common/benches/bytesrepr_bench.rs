@@ -221,14 +221,14 @@ fn deserialize_unit(b: &mut Bencher) {
 
 #[bench]
 fn serialize_key_account(b: &mut Bencher) {
-    let account = Key::Account([0u8; 20]);
+    let account = Key::Account([0u8; 32]);
 
     b.iter(|| ToBytes::to_bytes(black_box(&account)))
 }
 
 #[bench]
 fn deserialize_key_account(b: &mut Bencher) {
-    let account = Key::Account([0u8; 20]);
+    let account = Key::Account([0u8; 32]);
     let account_bytes = account.to_bytes().unwrap();
 
     b.iter(|| Key::from_bytes(black_box(&account_bytes)))
@@ -454,12 +454,12 @@ fn deserialize_value_liststring(b: &mut Bencher) {
 }
 #[bench]
 fn serialize_value_namedkey(b: &mut Bencher) {
-    let value = Value::NamedKey("Key".to_string(), Key::Account([0xffu8; 20]));
+    let value = Value::NamedKey("Key".to_string(), Key::Account([0xffu8; 32]));
     b.iter(|| value.to_bytes());
 }
 #[bench]
 fn deserialize_value_namedkey(b: &mut Bencher) {
-    let value = Value::NamedKey("Key".to_string(), Key::Account([0xffu8; 20]))
+    let value = Value::NamedKey("Key".to_string(), Key::Account([0xffu8; 32]))
         .to_bytes()
         .unwrap();
     b.iter(|| Value::from_bytes(&value));

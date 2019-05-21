@@ -37,6 +37,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def lastFinalizedBlock: F[BlockMessage]                             = BlockMessage().pure[F]
   def storageContents(hash: BlockHash): F[String]                     = "".pure[F]
   def fetchDependencies: F[Unit]                                      = ().pure[F]
+  def bufferedDeploys: F[Set[DeployData]]                             = Set.empty.pure[F]
 }
 
 object NoOpsCasperEffect {
