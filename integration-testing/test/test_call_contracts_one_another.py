@@ -1,5 +1,6 @@
 import logging
-
+from itertools import count
+from collections import defaultdict
 from . import conftest
 from .cl_node.casperlabsnode import (
     COMBINED_CONTRACT,
@@ -14,15 +15,18 @@ from .cl_node.casperlabsnode import (
 from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from .cl_node.wait import wait_for_count_the_blocks_on_node
 
+# per node
+nonces = defaultdict(lambda: count(1))
 
 def test_call_contracts_one_another(command_line_options_fixture, docker_client_fixture):
+    nonce = count()    
     with conftest.testing_context(
         command_line_options_fixture,
         docker_client_fixture,
         peers_keypairs=PREGENERATED_KEYPAIRS[1:2]  # will create a 3 node network
     ) as context:
         with complete_network(context) as network:
-            deploy(network.bootstrap, COMBINED_CONTRACT)
+            deploy(network.bootstrap, COMBINED_CONTRACT, nonce=next(nonces[network.bootstrap]))
             propose(network.bootstrap, COMBINED_CONTRACT)
 
             for node in network.nodes:
@@ -31,7 +35,7 @@ def test_call_contracts_one_another(command_line_options_fixture, docker_client_
             for contract_name in (COUNTER_CALL, MAILING_LIST_CALL, HELLO_WORLD):
                 list_of_hashes = []
                 for node in network.nodes:
-                    deploy(node, contract_name)
+                    deploy(node, contract_name, nonce=next(nonces[node]))
                     block_hash = propose(node, contract_name)
                     list_of_hashes.append(block_hash)
                 generated_hashes[contract_name] = list_of_hashes

@@ -788,20 +788,19 @@ impl Executor<Module> for WasmiExecutor {
             0
         };
         let account = value.as_account();
-
         // Check the difference of a request nonce and account nonce.
-        if let Some(delta) = nonce.checked_sub(account.nonce()) {
-            // Difference should always be 1 greater than current
-            // nonce for a given account.
-            if delta != 1 {
-                return (Err(Error::InvalidNonce), 0);
-            }
+        // Since both nonce ant account's nonce are unsigned, so line below performs
+        // a checked subtraction, where underflow (or overflow) would be safe.
+        let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
+        // Difference should always be 1 greater than current nonce for a
+        // given account.
+        if delta != 1 {
+            return (Err(Error::InvalidNonce), 0);
         }
 
-        // let account = account.with_updated_nonce();
-        // tc.borrow_mut().write(validated_key, Validated::new(account.with_updated_nonce(), Validated::valid).unwrap().into());
         let mut updated_account = account.clone();
         updated_account.increment_nonce();
+        // Store updated account with new nonce
         tc.borrow_mut().write(
             validated_key,
             Validated::new(updated_account.into(), Validated::valid).unwrap(),
