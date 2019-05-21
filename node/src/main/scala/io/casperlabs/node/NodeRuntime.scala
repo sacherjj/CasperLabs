@@ -156,6 +156,22 @@ class NodeRuntime private[node] (
 
         blockApiLock <- Resource.liftF(Semaphore[Effect](1))
 
+        // For now just either starting the auto-proposer or not, but ostensibly we
+        // could pass it the flag to run or not and also wire it into the ControlService
+        // so that the operator can turn it on/off on the fly.
+        _ <- AutoProposer[Effect](
+              checkInterval = conf.casper.autoProposeCheckInterval,
+              maxInterval = conf.casper.autoProposeMaxInterval,
+              maxCount = conf.casper.autoProposeMaxCount,
+              blockApiLock = blockApiLock
+            )(
+              Concurrent[Effect],
+              Time.eitherTTime(Monad[Task], effects.time),
+              logEff,
+              metricsEff,
+              multiParentCasperRef
+            ).whenA(conf.casper.autoProposeEnabled)
+
         _ <- api.Servers
               .internalServersR(
                 conf.grpc.portInternal,

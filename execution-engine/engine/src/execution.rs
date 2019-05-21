@@ -9,13 +9,19 @@ use shared::newtypes::Validated;
 use storage::global_state::{ExecutionEffect, StateReader};
 use storage::transform::TypeMismatch;
 use trackingcopy::TrackingCopy;
-use wasmi::memory_units::Pages;
 use wasmi::{
-    Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
-    MemoryDescriptor, MemoryInstance, MemoryRef, ModuleImportResolver, ModuleInstance, ModuleRef,
-    RuntimeArgs, RuntimeValue, Signature, Trap, ValueType,
+    Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
+    ModuleRef, RuntimeArgs, RuntimeValue, Trap,
 };
 
+use super::functions::{
+    ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
+    GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
+    GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX,
+    PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SER_FN_FUNC_INDEX,
+    STORE_FN_INDEX, WRITE_FUNC_INDEX,
+};
+use super::resolvers::create_module_resolver;
 use argsparser::Args;
 use itertools::Itertools;
 use parity_wasm::elements::{Error as ParityWasmError, Module};
@@ -29,6 +35,8 @@ use std::rc::Rc;
 
 use super::runtime_context::RuntimeContext;
 use super::URefAddr;
+use resolvers::error::ResolverError;
+use resolvers::memory_resolver::MemoryResolver;
 
 #[derive(Debug)]
 pub enum Error {
@@ -40,7 +48,6 @@ pub enum Error {
     Overflow,
     InvalidAccess { required: AccessRights },
     ForgedReference(Key),
-    NoImportedMemory,
     ArgIndexOutOfBounds(usize),
     URefNotFound(String),
     FunctionNotFound(String),
@@ -49,6 +56,7 @@ pub enum Error {
     Ret(Vec<Key>),
     Rng(rand::Error),
     Unreachable,
+    ResolverError(ResolverError),
 }
 
 impl fmt::Display for Error {
@@ -84,6 +92,12 @@ impl From<BytesReprError> for Error {
 impl From<!> for Error {
     fn from(_err: !) -> Error {
         Error::Unreachable
+    }
+}
+
+impl From<ResolverError> for Error {
+    fn from(err: ResolverError) -> Error {
+        Error::ResolverError(err)
     }
 }
 
@@ -418,25 +432,6 @@ fn as_usize(u: u32) -> usize {
     u as usize
 }
 
-const WRITE_FUNC_INDEX: usize = 0;
-const READ_FUNC_INDEX: usize = 1;
-const ADD_FUNC_INDEX: usize = 2;
-const NEW_FUNC_INDEX: usize = 3;
-const GET_READ_FUNC_INDEX: usize = 4;
-const SER_FN_FUNC_INDEX: usize = 5;
-const GET_FN_FUNC_INDEX: usize = 6;
-const LOAD_ARG_FUNC_INDEX: usize = 7;
-const GET_ARG_FUNC_INDEX: usize = 8;
-const RET_FUNC_INDEX: usize = 9;
-const GET_CALL_RESULT_FUNC_INDEX: usize = 10;
-const CALL_CONTRACT_FUNC_INDEX: usize = 11;
-const GET_UREF_FUNC_INDEX: usize = 12;
-const GAS_FUNC_INDEX: usize = 13;
-const HAS_UREF_FUNC_INDEX: usize = 14;
-const ADD_UREF_FUNC_INDEX: usize = 15;
-const STORE_FN_INDEX: usize = 16;
-const PROTOCOL_VERSION_FUNC_INDEX: usize = 17;
-
 impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
 where
     R::Error: Into<Error>,
@@ -625,155 +620,17 @@ where
     }
 }
 
-pub struct RuntimeModuleImportResolver {
-    memory: RefCell<Option<MemoryRef>>,
-    max_memory: u32,
-}
-
-impl Default for RuntimeModuleImportResolver {
-    fn default() -> Self {
-        RuntimeModuleImportResolver {
-            memory: RefCell::new(None),
-            max_memory: 256,
-        }
-    }
-}
-
-impl RuntimeModuleImportResolver {
-    pub fn mem_ref(&self) -> Result<MemoryRef, Error> {
-        let maybe_mem: &Option<MemoryRef> = &self.memory.borrow();
-        match maybe_mem {
-            Some(mem) => Ok(mem.clone()),
-            None => Err(Error::NoImportedMemory),
-        }
-    }
-}
-
-impl ModuleImportResolver for RuntimeModuleImportResolver {
-    fn resolve_func(
-        &self,
-        field_name: &str,
-        _signature: &Signature,
-    ) -> Result<FuncRef, InterpreterError> {
-        let func_ref = match field_name {
-            "read_value" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                READ_FUNC_INDEX,
-            ),
-            "serialize_function" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                SER_FN_FUNC_INDEX,
-            ),
-            "write" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], None),
-                WRITE_FUNC_INDEX,
-            ),
-            "get_read" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                GET_READ_FUNC_INDEX,
-            ),
-            "get_function" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                GET_FN_FUNC_INDEX,
-            ),
-            "add" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], None),
-                ADD_FUNC_INDEX,
-            ),
-            "new_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 3][..], None),
-                NEW_FUNC_INDEX,
-            ),
-            "load_arg" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
-                LOAD_ARG_FUNC_INDEX,
-            ),
-            "get_arg" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                GET_ARG_FUNC_INDEX,
-            ),
-            "ret" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], None),
-                RET_FUNC_INDEX,
-            ),
-            "call_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
-                CALL_CONTRACT_FUNC_INDEX,
-            ),
-            "get_call_result" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                GET_CALL_RESULT_FUNC_INDEX,
-            ),
-            "get_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 3][..], None),
-                GET_UREF_FUNC_INDEX,
-            ),
-            "has_uref_name" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                HAS_UREF_FUNC_INDEX,
-            ),
-            "add_uref" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], None),
-                ADD_UREF_FUNC_INDEX,
-            ),
-            "gas" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                GAS_FUNC_INDEX,
-            ),
-            "store_function" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 5][..], None),
-                STORE_FN_INDEX,
-            ),
-            "protocol_version" => FuncInstance::alloc_host(
-                Signature::new(vec![], Some(ValueType::I64)),
-                PROTOCOL_VERSION_FUNC_INDEX,
-            ),
-            _ => {
-                return Err(InterpreterError::Function(format!(
-                    "host module doesn't export function with name {}",
-                    field_name
-                )));
-            }
-        };
-        Ok(func_ref)
-    }
-
-    fn resolve_memory(
-        &self,
-        field_name: &str,
-        descriptor: &MemoryDescriptor,
-    ) -> Result<MemoryRef, InterpreterError> {
-        if field_name == "memory" {
-            let effective_max = descriptor.maximum().unwrap_or(self.max_memory + 1);
-            if descriptor.initial() > self.max_memory || effective_max > self.max_memory {
-                Err(InterpreterError::Instantiation(
-                    "Module requested too much memory".to_owned(),
-                ))
-            } else {
-                // Note: each "page" is 64 KiB
-                let mem = MemoryInstance::alloc(
-                    Pages(descriptor.initial() as usize),
-                    descriptor.maximum().map(|x| Pages(x as usize)),
-                )?;
-                *self.memory.borrow_mut() = Some(mem.clone());
-                Ok(mem)
-            }
-        } else {
-            Err(InterpreterError::Instantiation(
-                "Memory imported under unknown name".to_owned(),
-            ))
-        }
-    }
-}
-
-fn instance_and_memory(parity_module: Module) -> Result<(ModuleRef, MemoryRef), Error> {
+fn instance_and_memory(
+    parity_module: Module,
+    protocol_version: u64,
+) -> Result<(ModuleRef, MemoryRef), Error> {
     let module = wasmi::Module::from_parity_wasm_module(parity_module)?;
-    let resolver = RuntimeModuleImportResolver::default();
+    let resolver = create_module_resolver(protocol_version)?;
     let mut imports = ImportsBuilder::new();
     imports.push_resolver("env", &resolver);
     let instance = ModuleInstance::new(&module, &imports)?.assert_no_start();
 
-    let memory = resolver.mem_ref()?;
+    let memory = resolver.memory_ref()?;
     Ok((instance, memory))
 }
 
@@ -791,7 +648,8 @@ fn sub_call<R: StateReader<Key, Value>>(
 where
     R::Error: Into<Error>,
 {
-    let (instance, memory) = instance_and_memory(parity_module.clone())?;
+    let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
+
     let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
     let rng = ChaChaRng::from_rng(current_runtime.context.rng().clone()).map_err(Error::Rng)?;
     let mut runtime = Runtime {
@@ -914,7 +772,10 @@ impl Executor<Module> for WasmiExecutor {
         R::Error: Into<Error>,
     {
         let acct_key = Key::Account(account_addr);
-        let (instance, memory) = on_fail_charge!(instance_and_memory(parity_module.clone()), 0);
+        let (instance, memory) = on_fail_charge!(
+            instance_and_memory(parity_module.clone(), protocol_version),
+            0
+        );
         #[allow(unreachable_code)]
         let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid), 0);
         let value = on_fail_charge! {

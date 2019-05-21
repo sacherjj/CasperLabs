@@ -220,6 +220,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
         BlockStore[F].contains(block.blockHash)
       )
 
+  override def bufferedDeploys: F[Set[DeployData]] =
+    Cell[F, CasperState].read.map(_.deployBuffer)
+
   /** Add a deploy to the buffer, if the code passes basic validation. */
   def deploy(deployData: DeployData): F[Either[Throwable, Unit]] =
     (deployData.session, deployData.payment) match {
