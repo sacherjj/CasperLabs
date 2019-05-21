@@ -67,6 +67,10 @@ class DockerNode(LoggingDockerBase):
     KADEMLIA_PORT = '40404'
 
     @property
+    def timeout(self):
+        return 180
+
+    @property
     def container_type(self):
         return 'node'
 
