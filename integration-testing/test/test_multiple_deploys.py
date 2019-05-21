@@ -98,7 +98,7 @@ class DeployThread(threading.Thread):
 
 
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
-                         ([['test_helloname.wasm'],['test_helloworld.wasm']], [1, 1, 1, 1, 1, 1, 0]),
+                         ([['test_helloname.wasm'],['test_helloworld.wasm']], [1, 1, 1, 1, 1, 1]),
 ])
 # Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(three_node_network, timeout,
@@ -120,5 +120,7 @@ def test_multiple_deploys_at_once(three_node_network, timeout,
 
     for node in nodes:
         blocks = parse_show_blocks(node.show_blocks_with_depth(len(expected_deploy_counts_in_blocks) * 100))
-        assert [b.deployCount for b in blocks] == expected_deploy_counts_in_blocks, 'Unexpected deploy counts in blocks'
+        n_blocks = len(expected_deploy_counts_in_blocks)
+        assert [b.deployCount for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, \
+               'Unexpected deploy counts in blocks'
 
