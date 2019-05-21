@@ -304,17 +304,6 @@ package object gossiping {
                           CasperConf.parseValidatorsFile[F](conf.casper.knownValidatorsFile)
                         }
 
-      bonds <- Resource.liftF {
-                for {
-                  bonds <- Genesis.getBonds[F](
-                            conf.casper.genesisPath,
-                            conf.casper.bondsFile,
-                            conf.casper.numValidators
-                          )
-                  _ <- ExecutionEngineService[F].setBonds(bonds)
-                } yield bonds
-              }
-
       validatorId <- Resource.liftF {
                       ValidatorIdentity.fromConfig[F](conf.casper)
                     }
@@ -330,6 +319,19 @@ package object gossiping {
           )
       }
 
+      // Function to read and set the bonds.txt in modes which generate the Genesis locally.
+      readBondsFile = {
+        for {
+          _ <- Log[F].info("Taking bonds from file.")
+          bonds <- Genesis.getBonds[F](
+                    conf.casper.genesisPath,
+                    conf.casper.bondsFile,
+                    conf.casper.numValidators
+                  )
+          _ <- ExecutionEngineService[F].setBonds(bonds)
+        } yield bonds
+      }
+
       candidateValidator <- Resource.liftF[F, Block => F[Either[Throwable, Option[Approval]]]] {
                              if (conf.casper.approveGenesis) {
                                // This is the case of a validator that will pull the genesis from the bootstrap, validate and approve it.
@@ -339,6 +341,7 @@ package object gossiping {
                                  timestamp <- conf.casper.deployTimestamp
                                                .fold(Time[F].currentMillis)(_.pure[F])
                                  wallets <- Genesis.getWallets[F](conf.casper.walletsFile)
+                                 bonds   <- readBondsFile
                                  bondsMap = bonds.map {
                                    case (k, v) => ByteString.copyFrom(k) -> v
                                  }
@@ -374,8 +377,16 @@ package object gossiping {
                              } else {
                                // Non-validating nodes. They are okay with everything,
                                // only checking that the required signatures are present.
-                               Log[F].info("Starting in default mode") *>
-                                 ((_: Block) => none[Approval].asRight[Throwable].pure[F]).pure[F]
+                               // In order to not have to circulate the bonds.txt they set it here.
+                               Log[F].info("Starting in default mode") *> { (genesis: Block) =>
+                                 for {
+                                   _ <- Log[F].info("Taking bonds from the Genesis candidate.")
+                                   bonds = genesis.getHeader.getState.bonds.map { bond =>
+                                     bond.validatorPublicKey.toByteArray -> bond.stake
+                                   }.toMap
+                                   _ <- ExecutionEngineService[F].setBonds(bonds)
+                                 } yield none[Approval].asRight[Throwable]
+                               }.pure[F]
                              }
                            }
 
@@ -415,26 +426,26 @@ package object gossiping {
       approver <- if (conf.casper.standalone) {
                    for {
                      genesis <- Resource.liftF {
-                                 Log[F].info("Constructing Genesis candidate...") *>
-                                   Genesis[F](
-                                     conf.casper.walletsFile,
-                                     conf.casper.minimumBond,
-                                     conf.casper.maximumBond,
-                                     conf.casper.hasFaucet,
-                                     conf.casper.shardId,
-                                     conf.casper.deployTimestamp
-                                   ).map { x =>
-                                     LegacyConversions.toBlock(x.getBlockMessage)
-                                   }
+                                 for {
+                                   bonds <- readBondsFile
+                                   _     <- Log[F].info("Constructing Genesis candidate...")
+                                   genesis <- Genesis[F](
+                                               conf.casper.walletsFile,
+                                               conf.casper.minimumBond,
+                                               conf.casper.maximumBond,
+                                               conf.casper.hasFaucet,
+                                               conf.casper.shardId,
+                                               conf.casper.deployTimestamp
+                                             ).map { x =>
+                                               LegacyConversions.toBlock(x.getBlockMessage)
+                                             }
+                                   // Store it so others can pull it from the bootstrap node.
+                                   _ <- Log[F].info(
+                                         s"Trying to store generated Genesis candidate ${genesis.blockHash}..."
+                                       )
+                                   _ <- validateAndAddBlock(conf.casper.shardId, genesis)
+                                 } yield genesis
                                }
-
-                     // Store it so others can pull it from the bootstrap node.
-                     _ <- Resource.liftF {
-                           Log[F].info(
-                             s"Trying to store generated Genesis candidate ${genesis.blockHash}..."
-                           ) *>
-                             validateAndAddBlock(conf.casper.shardId, genesis)
-                         }
 
                      approver <- GenesisApproverImpl.fromGenesis(
                                   backend,
