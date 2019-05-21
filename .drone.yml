@@ -66,6 +66,15 @@ pipeline:
       - ~/.cargo/bin/cargo update
       - ~/.cargo/bin/cargo build
 
+  run-cargo-fmt:
+    <<: *buildenv
+    group: test
+    commands:
+      - cd execution-engine
+      - ~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)
+      - ~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt
+      - ~/.cargo/bin/cargo fmt --all -- --check
+
   run-rust-lints:
     <<: *buildenv
     group: test
