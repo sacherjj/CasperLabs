@@ -251,7 +251,7 @@ fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGloba
     };
 
     let global_state = {
-        let init_state = storage::global_state::mocked_account([48u8; 20]);
+        let init_state = storage::global_state::mocked_account([48u8; 32]);
         LmdbGlobalState::from_pairs(
             Arc::clone(&environment),
             Arc::clone(&trie_store),

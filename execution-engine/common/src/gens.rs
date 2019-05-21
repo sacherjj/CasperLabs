@@ -5,14 +5,6 @@ use alloc::string::String;
 use proptest::collection::{btree_map, vec};
 use proptest::prelude::*;
 
-pub fn u8_slice_20() -> impl Strategy<Value = [u8; 20]> {
-    vec(any::<u8>(), 20).prop_map(|b| {
-        let mut res = [0u8; 20];
-        res.clone_from_slice(b.as_slice());
-        res
-    })
-}
-
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
     vec(any::<u8>(), 32).prop_map(|b| {
         let mut res = [0u8; 32];
@@ -39,7 +31,7 @@ pub fn access_rights_arb() -> impl Strategy<Value = AccessRights> {
 
 pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
-        u8_slice_20().prop_map(Key::Account),
+        u8_slice_32().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
         access_rights_arb()
             .prop_flat_map(|right| { u8_slice_32().prop_map(move |addr| Key::URef(addr, right)) })

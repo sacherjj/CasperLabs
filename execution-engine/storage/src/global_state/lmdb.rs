@@ -166,11 +166,11 @@ mod tests {
 
     const TEST_PAIRS: [TestPair; 2] = [
         TestPair {
-            key: Key::Account([1u8; 20]),
+            key: Key::Account([1u8; 32]),
             value: Value::Int32(1),
         },
         TestPair {
-            key: Key::Account([2u8; 20]),
+            key: Key::Account([2u8; 32]),
             value: Value::Int32(2),
         },
     ];
@@ -178,15 +178,15 @@ mod tests {
     fn create_test_pairs_updated() -> [TestPair; 3] {
         [
             TestPair {
-                key: Key::Account([1u8; 20]),
+                key: Key::Account([1u8; 32]),
                 value: Value::String("one".to_string()),
             },
             TestPair {
-                key: Key::Account([2u8; 20]),
+                key: Key::Account([2u8; 32]),
                 value: Value::String("two".to_string()),
             },
             TestPair {
-                key: Key::Account([3u8; 20]),
+                key: Key::Account([3u8; 32]),
                 value: Value::Int32(3),
             },
         ]

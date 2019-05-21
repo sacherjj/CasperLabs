@@ -30,7 +30,7 @@ CONTRACT=$RESOURCES_PATH/helloname.wasm
 PAYMENT=$RESOURCES_PATH/payment.wasm
 SESSION=$RESOURCES_PATH/session.wasm
 
-$CLI deploy --from 00000000000000000000 --gas-limit 100000000 --gas-price 1 --session $SESSION --payment $CONTRACT
+$CLI deploy --from 00000000000000000000000000000000 --gas-limit 100000000 --gas-price 1 --session $SESSION --payment $CONTRACT
 
 
 # Subcommand: propose - Force a node to propose a block based on its accumulated deploys.

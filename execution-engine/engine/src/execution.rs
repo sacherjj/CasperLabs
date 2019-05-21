@@ -103,7 +103,7 @@ impl From<ResolverError> for Error {
 
 impl HostError for Error {}
 
-pub struct Runtime<'a, R: StateReader<Key, Value>> {
+pub struct Runtime<'a, R> {
     memory: MemoryRef,
     module: Module,
     result: Vec<u8>,
@@ -713,7 +713,7 @@ pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
         .collect()
 }
 
-pub fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng {
+pub fn create_rng(account_addr: &[u8; 32], timestamp: u64, nonce: u64) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let hasher = VarBlake2b::new(32).unwrap();
@@ -743,7 +743,7 @@ pub trait Executor<A> {
         &self,
         parity_module: A,
         args: &[u8],
-        account_addr: [u8; 20],
+        account_addr: [u8; 32],
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
@@ -761,7 +761,7 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        account_addr: [u8; 20],
+        account_addr: [u8; 32],
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,

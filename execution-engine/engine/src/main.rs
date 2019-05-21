@@ -89,8 +89,8 @@ fn main() {
         logging::log_info(SERVER_NO_WASM_MESSAGE);
     }
 
-    let account_addr: [u8; 20] = {
-        let mut address = [48u8; 20];
+    let account_addr: [u8; 32] = {
+        let mut address = [48u8; 32];
         matches
             .value_of("address")
             .map(str::as_bytes)

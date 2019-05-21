@@ -2,9 +2,9 @@ package io.casperlabs.casper
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
+import io.casperlabs.crypto.codec._
 import io.casperlabs.ipc
 import scalapb.GeneratedMessage
-import io.casperlabs.crypto.codec._
 
 object PrettyPrinter {
 
@@ -23,8 +23,9 @@ object PrettyPrinter {
   private def buildString(k: ipc.Key): String = k.keyInstance match {
     case ipc.Key.KeyInstance.Empty                            => "KeyEmpty"
     case ipc.Key.KeyInstance.Account(ipc.KeyAddress(address)) => s"Address(${buildString(address)})"
-    case ipc.Key.KeyInstance.Uref(ipc.KeyURef(id))            => s"URef(${buildString(id)})"
-    case ipc.Key.KeyInstance.Hash(ipc.KeyHash(hash))          => s"Hash(${buildString(hash)})"
+    case ipc.Key.KeyInstance.Uref(ipc.KeyURef(id, accessRights)) =>
+      s"URef(${buildString(id)}, ${buildString(accessRights)})"
+    case ipc.Key.KeyInstance.Hash(ipc.KeyHash(hash)) => s"Hash(${buildString(hash)})"
   }
 
   private def buildString(t: ipc.Transform): String = t.transformInstance match {
@@ -92,6 +93,18 @@ object PrettyPrinter {
 
   def buildString(b: ByteString): String =
     limit(Base16.encode(b.toByteArray), 10)
+
+  private def buildString(a: ipc.KeyURef.AccessRights): String =
+    a match {
+      case ipc.KeyURef.AccessRights.UNKNOWN        => "Unknown"
+      case ipc.KeyURef.AccessRights.READ           => "Read"
+      case ipc.KeyURef.AccessRights.ADD            => "Add"
+      case ipc.KeyURef.AccessRights.WRITE          => "Write"
+      case ipc.KeyURef.AccessRights.ADD_WRITE      => "AddWrite"
+      case ipc.KeyURef.AccessRights.READ_ADD       => "ReadAdd"
+      case ipc.KeyURef.AccessRights.READ_WRITE     => "ReadWrite"
+      case ipc.KeyURef.AccessRights.READ_ADD_WRITE => "ReadAddWrite"
+    }
 
   private def buildString(d: DeployData): String =
     s"Deploy #${d.timestamp}"

@@ -15,10 +15,7 @@ use wasm_prep::Preprocessor;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RootNotFound(pub Blake2bHash);
 
-pub struct EngineState<H>
-where
-    H: History,
-{
+pub struct EngineState<H> {
     // Tracks the "state" of the blockchain (or is an interface to it).
     // I think it should be constrained with a lifetime parameter.
     state: Mutex<H>,
@@ -129,7 +126,7 @@ where
         &self,
         module_bytes: &[u8],
         args: &[u8],
-        address: [u8; 20],
+        address: [u8; 32],
         timestamp: u64,
         nonce: u64,
         prestate_hash: Blake2bHash,

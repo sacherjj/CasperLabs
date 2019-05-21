@@ -215,8 +215,8 @@ where
             let session_contract = deploy.get_session();
             let module_bytes = &session_contract.code;
             let args = &session_contract.args;
-            let address: [u8; 20] = {
-                let mut tmp = [0u8; 20];
+            let address: [u8; 32] = {
+                let mut tmp = [0u8; 32];
                 tmp.copy_from_slice(&deploy.address);
                 tmp
             };
