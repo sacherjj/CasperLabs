@@ -8,7 +8,7 @@ import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.EquivocationRecord.SequenceNumber
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.casper.protocol.{BlockMessage, Bond, Justification}
+import io.casperlabs.casper.consensus.{Block, Bond}, Block.Justification
 import io.casperlabs.casper.util.{DoublyLinkedDag, ProtoUtil}
 import io.casperlabs.casper.util.ProtoUtil.{
   bonds,
@@ -68,11 +68,11 @@ object EquivocationDetector {
 
   def checkEquivocations[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
-      block: BlockMessage,
+      block: Block,
       dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
-      maybeLatestMessageOfCreatorHash <- dag.latestMessageHash(block.sender)
+      maybeLatestMessageOfCreatorHash <- dag.latestMessageHash(block.getHeader.validatorPublicKey)
       maybeCreatorJustification       = creatorJustificationHash(block)
       isNotEquivocation               = maybeCreatorJustification == maybeLatestMessageOfCreatorHash
       _ <- if (isNotEquivocation) {
@@ -81,7 +81,7 @@ object EquivocationDetector {
             FunctorRaise[F, InvalidBlock].raise[Unit](AdmissibleEquivocation)
           } else {
             for {
-              sender <- PrettyPrinter.buildString(block.sender).pure[F]
+              validator <- PrettyPrinter.buildString(block.getHeader.validatorPublicKey).pure[F]
               creatorJustificationHash = PrettyPrinter.buildString(
                 maybeCreatorJustification.getOrElse(ByteString.EMPTY)
               )
@@ -89,7 +89,7 @@ object EquivocationDetector {
                 maybeLatestMessageOfCreatorHash.getOrElse(ByteString.EMPTY)
               )
               _ <- Log[F].warn(
-                    s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator"
+                    s"Ignorable equivocation: validator is $validator, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator"
                   )
               _ <- FunctorRaise[F, InvalidBlock].raise[Unit](IgnorableEquivocation)
             } yield ()
@@ -97,12 +97,12 @@ object EquivocationDetector {
     } yield ()
 
   private def requestedAsDependency(
-      block: BlockMessage,
+      block: Block,
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash]
   ): Boolean =
     blockBufferDependencyDag.parentToChildAdjacencyList.contains(block.blockHash)
 
-  private def creatorJustificationHash(block: BlockMessage): Option[BlockHash] =
+  private def creatorJustificationHash(block: Block): Option[BlockHash] =
     for {
       maybeCreatorJustification <- ProtoUtil.creatorJustification(block)
     } yield maybeCreatorJustification.latestBlockHash
@@ -112,9 +112,9 @@ object EquivocationDetector {
     ?[_],
     InvalidBlock
   ]](
-      block: BlockMessage,
+      block: Block,
       dag: BlockDagRepresentation[F],
-      genesis: BlockMessage
+      genesis: Block
   )(implicit state: Cell[F, CasperState]): F[Unit] =
     Monad[F].ifM(
       isNeglectedEquivocationDetectedWithUpdate[F](
@@ -125,9 +125,9 @@ object EquivocationDetector {
     )(FunctorRaise[F, InvalidBlock].raise[Unit](NeglectedEquivocation), Monad[F].unit)
 
   private def isNeglectedEquivocationDetectedWithUpdate[F[_]: MonadThrowable: BlockStore](
-      block: BlockMessage,
+      block: Block,
       dag: BlockDagRepresentation[F],
-      genesis: BlockMessage
+      genesis: Block
   )(implicit state: Cell[F, CasperState]): F[Boolean] =
     for {
       s <- Cell[F, CasperState].read
@@ -148,10 +148,10 @@ object EquivocationDetector {
     * @return Whether a neglected equivocation was discovered.
     */
   private def updateEquivocationsTracker[F[_]: MonadThrowable: BlockStore](
-      block: BlockMessage,
+      block: Block,
       dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
-      genesis: BlockMessage
+      genesis: Block
   )(implicit state: Cell[F, CasperState]): F[Boolean] =
     for {
       equivocationDiscoveryStatus <- getEquivocationDiscoveryStatus[F](
@@ -181,15 +181,15 @@ object EquivocationDetector {
     } yield neglectedEquivocationDetected
 
   private def getEquivocationDiscoveryStatus[F[_]: MonadThrowable: BlockStore](
-      block: BlockMessage,
+      block: Block,
       dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
-      genesis: BlockMessage
+      genesis: Block
   ): F[EquivocationDiscoveryStatus] = {
     val equivocatingValidator = equivocationRecord.equivocator
-    val latestMessages        = toLatestMessageHashes(block.justifications)
+    val latestMessages        = toLatestMessageHashes(block.getHeader.justifications)
     val maybeEquivocatingValidatorBond =
-      bonds(block).find(_.validator == equivocatingValidator)
+      bonds(block).find(_.validatorPublicKey == equivocatingValidator)
     maybeEquivocatingValidatorBond match {
       case Some(Bond(_, stake)) =>
         getEquivocationDiscoveryStatusForBondedValidator[F](
@@ -212,14 +212,14 @@ object EquivocationDetector {
       equivocationRecord: EquivocationRecord,
       latestMessages: Map[Validator, BlockHash],
       stake: Long,
-      genesis: BlockMessage
+      genesis: Block
   ): F[EquivocationDiscoveryStatus] =
     if (stake > 0L) {
       for {
         equivocationDetectable <- isEquivocationDetectable[F](
                                    latestMessages.toSeq,
                                    equivocationRecord,
-                                   Set.empty[BlockMessage],
+                                   Set.empty[Block],
                                    genesis
                                  )
       } yield
@@ -236,8 +236,8 @@ object EquivocationDetector {
   private def isEquivocationDetectable[F[_]: MonadThrowable: BlockStore](
       latestMessages: Seq[(Validator, BlockHash)],
       equivocationRecord: EquivocationRecord,
-      equivocationChildren: Set[BlockMessage],
-      genesis: BlockMessage
+      equivocationChildren: Set[Block],
+      genesis: Block
   ): F[Boolean] =
     latestMessages match {
       case Nil => false.pure[F]
@@ -254,9 +254,9 @@ object EquivocationDetector {
   private def isEquivocationDetectableAfterViewingBlock[F[_]: MonadThrowable: BlockStore](
       justificationBlockHash: BlockHash,
       equivocationRecord: EquivocationRecord,
-      equivocationChildren: Set[BlockMessage],
+      equivocationChildren: Set[Block],
       remainder: Seq[(Validator, BlockHash)],
-      genesis: BlockMessage
+      genesis: Block
   ): F[Boolean] =
     if (equivocationRecord.equivocationDetectedBlockHashes.contains(justificationBlockHash)) {
       true.pure[F]
@@ -275,10 +275,10 @@ object EquivocationDetector {
 
   private def isEquivocationDetectableThroughChildren[F[_]: MonadThrowable: BlockStore](
       equivocationRecord: EquivocationRecord,
-      equivocationChildren: Set[BlockMessage],
+      equivocationChildren: Set[Block],
       remainder: Seq[(Validator, BlockHash)],
-      justificationBlock: BlockMessage,
-      genesis: BlockMessage
+      justificationBlock: Block,
+      genesis: Block
   ): F[Boolean] = {
     val equivocatingValidator = equivocationRecord.equivocator
     val equivocationBaseBlockSeqNum =
@@ -305,17 +305,17 @@ object EquivocationDetector {
   }
 
   private def maybeAddEquivocationChild[F[_]: MonadThrowable: BlockStore](
-      justificationBlock: BlockMessage,
+      justificationBlock: Block,
       equivocatingValidator: Validator,
       equivocationBaseBlockSeqNum: SequenceNumber,
-      equivocationChildren: Set[BlockMessage],
-      genesis: BlockMessage
-  ): F[Set[BlockMessage]] =
+      equivocationChildren: Set[Block],
+      genesis: Block
+  ): F[Set[Block]] =
     if (justificationBlock.blockHash == genesis.blockHash) {
       equivocationChildren.pure[F]
-    } else if (justificationBlock.sender == equivocatingValidator) {
+    } else if (justificationBlock.getHeader.validatorPublicKey == equivocatingValidator) {
       // This is a special case as the justificationBlock might be the equivocation child
-      if (justificationBlock.seqNum > equivocationBaseBlockSeqNum) {
+      if (justificationBlock.getHeader.validatorBlockSeqNum > equivocationBaseBlockSeqNum) {
         addEquivocationChild[F](
           justificationBlock,
           equivocationBaseBlockSeqNum,
@@ -327,12 +327,13 @@ object EquivocationDetector {
     } else {
       // Latest according to the justificationBlock
       val maybeLatestEquivocatingValidatorBlockHash: Option[BlockHash] =
-        toLatestMessageHashes(justificationBlock.justifications).get(equivocatingValidator)
+        toLatestMessageHashes(justificationBlock.getHeader.justifications)
+          .get(equivocatingValidator)
       maybeLatestEquivocatingValidatorBlockHash match {
         case Some(blockHash) =>
           for {
             latestEquivocatingValidatorBlock <- ProtoUtil.unsafeGetBlock[F](blockHash)
-            updatedEquivocationChildren <- if (latestEquivocatingValidatorBlock.seqNum > equivocationBaseBlockSeqNum) {
+            updatedEquivocationChildren <- if (latestEquivocatingValidatorBlock.getHeader.validatorBlockSeqNum > equivocationBaseBlockSeqNum) {
                                             addEquivocationChild[F](
                                               latestEquivocatingValidatorBlock,
                                               equivocationBaseBlockSeqNum,
@@ -350,10 +351,10 @@ object EquivocationDetector {
     }
 
   private def addEquivocationChild[F[_]: Monad: BlockStore](
-      justificationBlock: BlockMessage,
+      justificationBlock: Block,
       equivocationBaseBlockSeqNum: SequenceNumber,
-      equivocationChildren: Set[BlockMessage]
-  ): F[Set[BlockMessage]] =
+      equivocationChildren: Set[Block]
+  ): F[Set[Block]] =
     for {
       maybeJustificationParentWithSeqNum <- findCreatorJustificationAncestorWithSeqNum[F](
                                              justificationBlock,

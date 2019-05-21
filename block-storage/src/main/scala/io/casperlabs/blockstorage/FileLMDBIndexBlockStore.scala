@@ -134,6 +134,16 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     } yield blockMessage
   }
 
+  override def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
+    lock.withPermit(
+      for {
+        indexEntryOpt <- withReadTxn { txn =>
+                          Option(index.get(txn, blockHash.toDirectByteBuffer))
+                            .map(IndexEntry.load)
+                        }
+      } yield indexEntryOpt.isDefined
+    )
+
   override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     lock.withPermit(
       for {

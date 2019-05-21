@@ -37,7 +37,7 @@ final case object InvalidRepeatDeploy     extends InvalidBlock with Slashable
 final case object InvalidParents          extends InvalidBlock with Slashable
 final case object InvalidFollows          extends InvalidBlock with Slashable
 final case object InvalidSequenceNumber   extends InvalidBlock with Slashable
-final case object InvalidShardId          extends InvalidBlock with Slashable
+final case object InvalidChainId          extends InvalidBlock with Slashable
 final case object JustificationRegression extends InvalidBlock with Slashable
 final case object NeglectedInvalidBlock   extends InvalidBlock with Slashable
 final case object NeglectedEquivocation   extends InvalidBlock with Slashable

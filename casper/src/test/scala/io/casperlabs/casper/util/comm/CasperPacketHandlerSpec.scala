@@ -75,7 +75,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       requiredSigs
     )
     val local: Node = peerNode("src", 40400)
-    val shardId     = "test-shardId"
+    val chainId     = "test-chainId"
 
     implicit val nodeDiscovery = new NodeDiscoveryStub[Task]
     implicit val connectionsCell: ConnectionsCell[Task] =
@@ -121,12 +121,16 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
-            new GenesisValidatorHandler(validatorId, shardId, bap)
+            new GenesisValidatorHandler(validatorId, chainId, bap)
           )
-        val packetHandler     = new CasperPacketHandlerImpl[Task](ref, Some(validatorId))
-        val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+        val packetHandler = new CasperPacketHandlerImpl[Task](ref, Some(validatorId))
+        val expectedCandidate =
+          ApprovedBlockCandidate(Some(LegacyConversions.fromBlock(genesis)), requiredSigs)
 
-        val unapprovedBlock  = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
+        val unapprovedBlock = BlockApproverProtocolTest.createUnapproved(
+          requiredSigs,
+          LegacyConversions.fromBlock(genesis)
+        )
         val unapprovedPacket = BlockApproverProtocolTest.unapprovedToPacket(unapprovedBlock)
         val test = for {
           _             <- packetHandler.handle(local).apply(unapprovedPacket)
@@ -153,7 +157,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
-            new GenesisValidatorHandler(validatorId, shardId, bap)
+            new GenesisValidatorHandler(validatorId, chainId, bap)
           )
         val packetHandler = new CasperPacketHandlerImpl[Task](ref, Some(validatorId))
 
@@ -202,7 +206,7 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
         val test = for {
           sigs <- Ref.of[Task, Set[Signature]](Set.empty)
           abp = ApproveBlockProtocol.unsafe[Task](
-            genesis,
+            LegacyConversions.fromBlock(genesis),
             transforms,
             Set(ByteString.copyFrom(validatorPk)),
             requiredSigns,
@@ -218,14 +222,14 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           c2 = StandaloneCasperHandler
             .approveBlockInterval(
               interval,
-              shardId,
+              chainId,
               Some(validatorId),
               refCasper
             )
             .forkAndForget
             .runToFuture
           blockApproval = ApproveBlockProtocolTest.approval(
-            ApprovedBlockCandidate(Some(genesis), requiredSigns),
+            ApprovedBlockCandidate(Some(LegacyConversions.fromBlock(genesis)), requiredSigns),
             validatorSk,
             validatorPk
           )
@@ -265,12 +269,13 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
           new BootstrapCasperHandler[Task](
-            shardId,
+            chainId,
             Some(validatorId),
             validators
           )
 
-        val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
+        val approvedBlockCandidate =
+          ApprovedBlockCandidate(block = Some(LegacyConversions.fromBlock(genesis)))
 
         val approvedBlock: ApprovedBlock = ApprovedBlock(
           candidate = Some(approvedBlockCandidate),
@@ -326,7 +331,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       val (_, validators)                                  = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
       val bonds                                            = HashSetCasperTest.createBonds(validators)
       val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.createGenesis(bonds)
-      val approvedBlockCandidate                           = ApprovedBlockCandidate(block = Some(genesis))
+      val approvedBlockCandidate =
+        ApprovedBlockCandidate(block = Some(LegacyConversions.fromBlock(genesis)))
       val approvedBlock: ApprovedBlock = ApprovedBlock(
         candidate = Some(approvedBlockCandidate),
         sigs = Seq(

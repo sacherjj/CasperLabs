@@ -51,7 +51,7 @@ object LegacyConversions {
           .withChainId(block.shardId)
           .withValidatorBlockSeqNum(block.seqNum)
           .withValidatorPublicKey(block.sender)
-          .withRank(block.getBody.getState.blockNumber.toInt)
+          .withRank(block.getBody.getState.blockNumber)
       )
       .withSignature(
         consensus
@@ -72,45 +72,7 @@ object LegacyConversions {
           .withDeploys(block.getBody.deploys.map { x =>
             consensus.Block
               .ProcessedDeploy()
-              .withDeploy(
-                consensus
-                  .Deploy()
-                  //.withDeployHash() // Legacy doesn't have it.
-                  .withHeader(
-                    consensus.Deploy
-                      .Header()
-                      // TODO: The client isn't signing the deploy yet, but it's sending an account address.
-                      // Once we sign the deploy, we can derive the account address from it on the way back.
-                      //.withAccountPublicKey(x.getDeploy.user)
-                      .withAccountPublicKey(x.getDeploy.address)
-                      .withNonce(x.getDeploy.nonce)
-                      .withTimestamp(x.getDeploy.timestamp)
-                      //.withBodyHash() // Legacy doesn't have it.
-                      .withGasPrice(x.getDeploy.gasPrice)
-                  )
-                  .withBody(
-                    consensus.Deploy
-                      .Body()
-                      .withSession(
-                        consensus.Deploy
-                          .Code()
-                          .withCode(x.getDeploy.getSession.code)
-                          .withArgs(x.getDeploy.getSession.args)
-                      )
-                      .withPayment(
-                        consensus.Deploy
-                          .Code()
-                          .withCode(x.getDeploy.getPayment.code)
-                          .withArgs(x.getDeploy.getPayment.args)
-                      )
-                  )
-                  .withSignature(
-                    consensus
-                      .Signature()
-                      .withSigAlgorithm(x.getDeploy.sigAlgorithm)
-                      .withSig(x.getDeploy.signature)
-                  )
-              )
+              .withDeploy(toDeploy(x.getDeploy))
               .withCost(x.cost)
               .withIsError(x.errored)
               //.withErrorMessage() // Legacy doesn't have it.
@@ -202,4 +164,43 @@ object LegacyConversions {
       .withSigAlgorithm(deploy.getSignature.sigAlgorithm)
       .withSignature(deploy.getSignature.sig)
   //.withUser() // We aren't signing deploys yet.
+
+  def toDeploy(deploy: protocol.DeployData): consensus.Deploy =
+    consensus
+      .Deploy()
+      //.withDeployHash() // Legacy doesn't have it.
+      .withHeader(
+        consensus.Deploy
+          .Header()
+          // TODO: The client isn't signing the deploy yet, but it's sending an account address.
+          // Once we sign the deploy, we can derive the account address from it on the way back.
+          //.withAccountPublicKey(x.getDeploy.user)
+          .withAccountPublicKey(deploy.address)
+          .withNonce(deploy.nonce)
+          .withTimestamp(deploy.timestamp)
+          //.withBodyHash() // Legacy doesn't have it.
+          .withGasPrice(deploy.gasPrice)
+      )
+      .withBody(
+        consensus.Deploy
+          .Body()
+          .withSession(
+            consensus.Deploy
+              .Code()
+              .withCode(deploy.getSession.code)
+              .withArgs(deploy.getSession.args)
+          )
+          .withPayment(
+            consensus.Deploy
+              .Code()
+              .withCode(deploy.getPayment.code)
+              .withArgs(deploy.getPayment.args)
+          )
+      )
+      .withSignature(
+        consensus
+          .Signature()
+          .withSigAlgorithm(deploy.sigAlgorithm)
+          .withSig(deploy.signature)
+      )
 }

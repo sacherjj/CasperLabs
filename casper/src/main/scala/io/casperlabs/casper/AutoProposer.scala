@@ -4,8 +4,8 @@ import cats._
 import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
-import io.casperlabs.casper.protocol.DeployData
 import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.shared.Time
 import io.casperlabs.shared.Log
@@ -27,7 +27,7 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
 
     def loop(
         // Deploys we saw at the last auto-proposal.
-        prevDeploys: Set[DeployData],
+        prevDeploys: Set[Deploy],
         // Time we saw the first new deploy after an auto-proposal.
         startMillis: Long
     ): F[Unit] = {
@@ -38,7 +38,7 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
         // NOTE: Currently the `remainingDeploys` method is private and quite inefficient
         // (easily goes back to Genesis), but in theory we could try to detect orphans and
         // propose again automatically.
-        deploys <- casper.fold(Set.empty[DeployData].pure[F])(_.bufferedDeploys)
+        deploys <- casper.fold(Set.empty[Deploy].pure[F])(_.bufferedDeploys)
       } yield (currentMillis, currentMillis - startMillis, deploys, deploys diff prevDeploys)
 
       snapshot flatMap {

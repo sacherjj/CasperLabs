@@ -6,8 +6,8 @@ import cats.effect.{Resource, Sync}
 import cats.implicits._
 import cats.{Applicative, Defer}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.Bond
 import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError

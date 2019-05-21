@@ -1,5 +1,6 @@
 package io.casperlabs.casper.util.comm
 
+import io.casperlabs.casper.LegacyConversions
 import io.casperlabs.casper.HashSetCasperTest
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
@@ -28,7 +29,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val bonds                      = Map(validatorPk -> 10L)
     createProtocol(n, Seq.empty, validatorSk, bonds).flatMap {
       case (approver, node) =>
-        val unapproved = createUnapproved(n, node.genesis)
+        val unapproved = createUnapproved(n, LegacyConversions.fromBlock(node.genesis))
         import node._
 
         for {
@@ -50,7 +51,10 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val bonds                      = Map(validatorPk -> 10L)
     createProtocol(n, Seq.empty, validatorSk, bonds).flatMap {
       case (approver, node) =>
-        val differentUnapproved1 = createUnapproved(n / 2, node.genesis)             //wrong number of signatures
+        val differentUnapproved1 = createUnapproved(
+          n / 2,
+          LegacyConversions.fromBlock(node.genesis)
+        ) //wrong number of signatures
         val differentUnapproved2 = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
         import node._
 

@@ -4,7 +4,9 @@ import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.LegacyConversions
 import io.casperlabs.casper.ValidatorIdentity
+import io.casperlabs.casper.consensus
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
@@ -127,6 +129,7 @@ object BlockApproverProtocol {
         faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
         genesisBlessedContracts = Genesis
           .defaultBlessedTerms(timestamp, posParams, wallets, faucetCode)
+          .map(LegacyConversions.fromDeploy(_))
           .toSet
         blockDeploys = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
         _ <- blockDeploys
@@ -143,14 +146,15 @@ object BlockApproverProtocol {
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
-      deploys                   = blockDeploys.map(_.deploy)
+      deploys                   = blockDeploys.map(pd => LegacyConversions.toDeploy(pd.deploy))
       protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
         postState.blockNumber
       )
       processedDeploys <- EitherT(
                            ExecutionEngineService[F].exec(
                              ExecutionEngineService[F].emptyStateHash,
-                             deploys.map(ProtoUtil.deployDataToEEDeploy),
+                             deploys
+                               .map(ProtoUtil.deployDataToEEDeploy),
                              protocolVersion
                            )
                          ).leftMap(_.getMessage)
@@ -175,7 +179,7 @@ object BlockApproverProtocol {
                             )
                         ).leftMap(_.getMessage)
       tuplespaceBondsMap = tuplespaceBonds.map {
-        case Bond(validator, stake) => validator -> stake
+        case consensus.Bond(validator, stake) => validator -> stake
       }.toMap
       _ <- EitherT(
             (tuplespaceBondsMap == bonds)

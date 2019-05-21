@@ -6,7 +6,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus._, Block.ProcessedDeploy
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.{InvalidPostStateHash, InvalidPreStateHash, Validate}
@@ -107,7 +108,7 @@ class ExecEngineUtilTest
 
   def computeSingleProcessedDeploy(
       dag: BlockDagRepresentation[Task],
-      deploy: Seq[DeployData],
+      deploy: Seq[consensus.Deploy],
       protocolVersion: ProtocolVersion = ProtocolVersion(1)
   )(
       implicit blockStore: BlockStore[Task],
@@ -197,7 +198,7 @@ class ExecEngineUtilTest
         mock[Task](
           (_, deploys, _) =>
             Task.now {
-              def getExecutionEffect(deploy: Deploy) = {
+              def getExecutionEffect(deploy: ipc.Deploy) = {
                 val key =
                   Key(Key.KeyInstance.Hash(KeyHash(ByteString.copyFromUtf8(deploy.toProtoString))))
                 val transform     = Transform(Transform.TransformInstance.Identity(TransformIdentity()))
@@ -232,7 +233,7 @@ class ExecEngineUtilTest
        *         genesis
        */
 
-      def step(index: Int, genesis: BlockMessage)(
+      def step(index: Int, genesis: Block)(
           implicit executionEngineService: ExecutionEngineService[Task]
       ) =
         for {

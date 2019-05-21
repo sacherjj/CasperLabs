@@ -9,7 +9,7 @@ import cats.implicits._
 import cats.{Applicative, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.genesis.contracts._
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -33,11 +33,11 @@ object Genesis {
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String
-  ): List[DeployData] =
+  ): List[Deploy] =
     List()
 
   def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
-      initial: BlockMessage,
+      initial: Block,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String,
@@ -51,8 +51,8 @@ object Genesis {
     )
 
   def withContracts[F[_]: Log: ExecutionEngineService: MonadError[?[_], Throwable]](
-      blessedTerms: List[DeployData],
-      initial: BlockMessage,
+      blessedTerms: List[Deploy],
+      initial: Block,
       startHash: StateHash
   ): F[BlockMsgWithTransform] =
     for {
@@ -62,7 +62,7 @@ object Genesis {
                              .exec(
                                startHash,
                                blessedTerms.map(deployDataToEEDeploy),
-                               CasperLabsProtocolVersions.thresholdsVersionMap.fromBlockMessage(
+                               CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(
                                  initial
                                )
                              )
@@ -82,42 +82,56 @@ object Genesis {
       postStateHash <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F].commit(startHash, transforms)
                       )
-      stateWithContracts = for {
-        bd <- initial.body
-        ps <- bd.state
-      } yield
-        ps.withPreStateHash(ExecutionEngineService[F].emptyStateHash)
-          .withPostStateHash(postStateHash)
-      protocolVersion = initial.header.get.protocolVersion
-      timestamp       = initial.header.get.timestamp
-      body            = Body(state = stateWithContracts, deploys = deploysForBlock)
-      header          = blockHeader(body, List.empty[ByteString], protocolVersion, timestamp)
-      unsignedBlock   = unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+      stateWithContracts = initial.getHeader.getState
+        .withPreStateHash(ExecutionEngineService[F].emptyStateHash)
+        .withPostStateHash(postStateHash)
+      body = Block.Body().withDeploys(deploysForBlock)
+      header = blockHeader(
+        body,
+        parentHashes = Nil,
+        justifications = Nil,
+        state = stateWithContracts,
+        rank = initial.getHeader.rank,
+        protocolVersion = initial.getHeader.protocolVersion,
+        timestamp = initial.getHeader.timestamp,
+        chainId = initial.getHeader.chainId
+      )
+      unsignedBlock = unsignedBlockProto(body, header)
     } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
 
   def withoutContracts(
       bonds: Map[PublicKey, Long],
       version: Long,
       timestamp: Long,
-      shardId: String
-  ): BlockMessage = {
+      chainId: String
+  ): Block = {
     import Sorting.byteArrayOrdering
     import io.casperlabs.crypto.Keys.convertTypeclasses
     //sort to have deterministic order (to get reproducible hash)
-    val bondsProto = bonds.toIndexedSeq.sorted.map {
+    val bondsSorted = bonds.toIndexedSeq.sorted.map {
       case (pk, stake) =>
         val validator = ByteString.copyFrom(pk)
         Bond(validator, stake)
     }
 
-    val state = RChainState()
-      .withBlockNumber(0)
-      .withBonds(bondsProto)
-    val body = Body()
-      .withState(state)
-    val header = blockHeader(body, List.empty[ByteString], version, timestamp)
+    val state = Block
+      .GlobalState()
+      .withBonds(bondsSorted)
 
-    unsignedBlockProto(body, header, List.empty[Justification], shardId)
+    val body = Block.Body()
+
+    val header = blockHeader(
+      body,
+      parentHashes = Nil,
+      justifications = Nil,
+      state = state,
+      rank = 0,
+      protocolVersion = version,
+      timestamp = timestamp,
+      chainId = chainId
+    )
+
+    unsignedBlockProto(body, header)
   }
 
   //TODO: Decide on version number and shard identifier
@@ -126,19 +140,19 @@ object Genesis {
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean,
-      shardId: String,
+      chainId: String,
       deployTimestamp: Option[Long]
   ): F[BlockMsgWithTransform] =
     for {
       wallets   <- getWallets[F](walletsPath)
       bonds     <- ExecutionEngineService[F].computeBonds(ExecutionEngineService[F].emptyStateHash)
-      bondsMap  = bonds.map(b => PublicKey(b.validator.toByteArray) -> b.stake).toMap
+      bondsMap  = bonds.map(b => PublicKey(b.validatorPublicKey.toByteArray) -> b.stake).toMap
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       initial = withoutContracts(
         bonds = bondsMap,
         timestamp = 1L,
         version = 1L,
-        shardId = shardId
+        chainId = chainId
       )
       validators = bondsMap.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
       faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
