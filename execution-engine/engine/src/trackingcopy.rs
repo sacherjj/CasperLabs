@@ -78,7 +78,7 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
     }
 }
 
-pub struct TrackingCopy<R: StateReader<Key, Value>> {
+pub struct TrackingCopy<R> {
     reader: R,
     cache: TrackingCopyCache<HeapSize>,
     ops: HashMap<Key, Op>,
