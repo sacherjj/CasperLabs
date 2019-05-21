@@ -291,7 +291,7 @@ impl From<&common::key::Key> for super::ipc::Key {
                 key_local.set_seed(seed.to_vec());
                 key_local.set_key_hash(key_hash.to_vec());
                 k.set_local(key_local);
-            },
+            }
         }
         k
     }
