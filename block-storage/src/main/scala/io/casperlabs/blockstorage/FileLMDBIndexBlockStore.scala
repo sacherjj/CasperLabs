@@ -4,7 +4,7 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file._
 
-import cats.Monad
+import cats.{Applicative, Monad}
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Effect, ExitCase, Resource, Sync}
 import cats.implicits._
