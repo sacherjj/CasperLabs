@@ -99,14 +99,14 @@ fn main() {
 
     log_settings::set_log_settings_provider(&*LOG_SETTINGS);
 
-    log_server_info(SERVER_START_MESSAGE);
+    logging::log_info(SERVER_START_MESSAGE);
 
     let matches: &clap::ArgMatches = &*ARG_MATCHES;
 
     let socket = get_socket(matches);
 
     if socket.file_exists() {
-        log_server_info(REMOVING_SOCKET_FILE_MESSAGE);
+        logging::log_info(REMOVING_SOCKET_FILE_MESSAGE);
         socket.remove_file().expect(REMOVING_SOCKET_FILE_EXPECT);
     }
 
@@ -126,7 +126,7 @@ fn main() {
         std::thread::park_timeout(interval);
     }
 
-    log_server_info(SERVER_STOP_MESSAGE);
+    logging::log_info(SERVER_STOP_MESSAGE);
 }
 
 /// Sets panic hook for logging panic info
@@ -136,15 +136,15 @@ fn set_panic_hook() {
             match panic_info.payload().downcast_ref::<&str>() {
                 Some(s) => {
                     let panic_message = format!("{:?}", s);
-                    logging::log(log_level::LogLevel::Fatal, &panic_message);
+                    logging::log_fatal(&panic_message);
                 }
                 None => {
                     let panic_message = format!("{:?}", panic_info);
-                    logging::log(log_level::LogLevel::Fatal, &panic_message);
+                    logging::log_fatal(&panic_message);
                 }
             }
 
-            log_server_info(SERVER_STOP_MESSAGE);
+            logging::log_info(SERVER_STOP_MESSAGE);
         });
     std::panic::set_hook(hook);
 }
@@ -279,14 +279,9 @@ fn log_listening_message(socket: &socket::Socket) {
     properties.insert("listener".to_string(), PROC_NAME.to_owned());
     properties.insert("socket".to_string(), socket.value());
 
-    logging::log_props(
+    logging::log_details(
         log_level::LogLevel::Info,
         (&*SERVER_LISTENING_TEMPLATE).to_string(),
         properties,
     );
-}
-
-/// Logs server status info messages
-fn log_server_info(message: &str) {
-    logging::log(log_level::LogLevel::Info, message);
 }

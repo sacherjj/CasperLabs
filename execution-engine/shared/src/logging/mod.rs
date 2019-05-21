@@ -10,7 +10,10 @@ pub mod log_settings;
 pub mod logger;
 pub(crate) mod utils;
 
-// log with simple stir message
+/// # Arguments
+///
+/// * `log_level` - log level of the message to be logged
+/// * `log_message` - the message to be logged
 pub fn log(log_level: LogLevel, log_message: &str) {
     let log_settings_provider = log_settings::get_log_settings_provider();
 
@@ -39,8 +42,12 @@ pub fn log(log_level: LogLevel, log_message: &str) {
     );
 }
 
-// log with message format and properties
-pub fn log_props(
+/// # Arguments
+///
+/// * `log_level` - log level of the message to be logged
+/// * `message_format` - a message template to apply over properties by key
+/// * `properties` - a collection of machine readable key / value properties which will be logged
+pub fn log_details(
     log_level: LogLevel,
     message_format: String,
     properties: BTreeMap<String, String>,
@@ -75,6 +82,41 @@ pub fn log_props(
         facility = log_message.process_name.value(),
         payload = json
     );
+}
+
+/// # Arguments
+///
+/// * `log_message` - the message to be logged
+pub fn log_fatal(log_message: &str) {
+    log(LogLevel::Fatal, log_message);
+}
+
+/// # Arguments
+///
+/// * `log_message` - the message to be logged
+pub fn log_error(log_message: &str) {
+    log(LogLevel::Error, log_message);
+}
+
+/// # Arguments
+///
+/// * `log_message` - the message to be logged
+pub fn log_warning(log_message: &str) {
+    log(LogLevel::Warning, log_message);
+}
+
+/// # Arguments
+///
+/// * `log_message` - the message to be logged
+pub fn log_info(log_message: &str) {
+    log(LogLevel::Info, log_message);
+}
+
+/// # Arguments
+///
+/// * `log_message` - the message to be logged
+pub fn log_debug(log_message: &str) {
+    log(LogLevel::Debug, log_message);
 }
 
 #[cfg(test)]
@@ -137,7 +179,7 @@ mod tests {
 
         let x = property_logger_test_helper();
 
-        log_props(x.0, x.1, x.2);
+        log_details(x.0, x.1, x.2);
     }
 
     fn property_logger_test_helper() -> (LogLevel, String, BTreeMap<String, String>) {

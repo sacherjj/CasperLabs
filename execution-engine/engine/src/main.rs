@@ -18,8 +18,8 @@ use execution_engine::engine::{EngineState, ExecutionResult, RootNotFound};
 use execution_engine::execution::WasmiExecutor;
 use shared::logging;
 use shared::logging::log_level::LogLevel;
+use shared::logging::log_settings;
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
-use shared::logging::{log_level, log_settings};
 use shared::newtypes::Blake2bHash;
 use storage::global_state::in_memory::InMemoryGlobalState;
 use storage::history::CommitResult;
@@ -64,7 +64,7 @@ fn main() {
 
     log_settings::set_log_settings_provider(&*LOG_SETTINGS);
 
-    log_server_info(SERVER_START_MESSAGE);
+    logging::log_info(SERVER_START_MESSAGE);
 
     let matches: &clap::ArgMatches = &*ARG_MATCHES;
 
@@ -86,7 +86,7 @@ fn main() {
     };
 
     if wasm_files.is_empty() {
-        log_server_info(SERVER_NO_WASM_MESSAGE);
+        logging::log_info(SERVER_NO_WASM_MESSAGE);
     }
 
     let account_addr: [u8; 20] = {
@@ -105,7 +105,7 @@ fn main() {
         .expect("Provided gas limit value is not u64.");
 
     if gas_limit == 0 {
-        log_server_info(SERVER_NO_GAS_MESSAGE);
+        logging::log_info(SERVER_NO_GAS_MESSAGE);
     }
 
     // TODO: move to arg parser
@@ -218,10 +218,10 @@ fn main() {
             )
         };
 
-        logging::log_props(log_level, message_format, properties);
+        logging::log_details(log_level, message_format, properties);
     }
 
-    log_server_info(SERVER_STOP_MESSAGE);
+    logging::log_info(SERVER_STOP_MESSAGE);
 }
 
 /// Sets panic hook for logging panic info
@@ -231,15 +231,15 @@ fn set_panic_hook() {
             match panic_info.payload().downcast_ref::<&str>() {
                 Some(s) => {
                     let panic_message = format!("{:?}", s);
-                    logging::log(log_level::LogLevel::Fatal, &panic_message);
+                    logging::log_fatal(&panic_message);
                 }
                 None => {
                     let panic_message = format!("{:?}", panic_info);
-                    logging::log(log_level::LogLevel::Fatal, &panic_message);
+                    logging::log_fatal(&panic_message);
                 }
             }
 
-            log_server_info(SERVER_STOP_MESSAGE);
+            logging::log_info(SERVER_STOP_MESSAGE);
         });
     std::panic::set_hook(hook);
 }
@@ -289,9 +289,4 @@ fn get_log_settings() -> log_settings::LogSettings {
     let log_level_filter = LogLevelFilter::from_input(matches.value_of(ARG_LOG_LEVEL));
 
     LogSettings::new(PROC_NAME, log_level_filter)
-}
-
-/// Logs server status info messages
-fn log_server_info(message: &str) {
-    logging::log(log_level::LogLevel::Info, message);
 }
