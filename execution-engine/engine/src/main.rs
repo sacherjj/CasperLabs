@@ -190,6 +190,7 @@ fn main() {
                         );
                     }
                     Err(storage_err) => {
+                        log_level = LogLevel::Error;
                         error_message = format!("{:?}", storage_err);
                     }
                 }
@@ -198,6 +199,7 @@ fn main() {
                 result: Err(error),
                 cost,
             }) => {
+                log_level = LogLevel::Error;
                 properties.insert("gas-cost".to_string(), format!("{:?}", cost));
                 error_message = format!("{:?}", error);
             }
@@ -211,9 +213,9 @@ fn main() {
         }
 
         let message_format: String = if success {
-            String::from("{pre-state-hash} {gas-cost} {wasm-path} success: {success}")
+            String::from("{wasm-path} success: {success} gas_cost: {gas-cost}")
         } else {
-            String::from("{pre-state-hash} {gas-cost} {wasm-path} error: {error}")
+            String::from("{wasm-path} error: {error} gas_cost: {gas-cost}")
         };
 
         logging::log_details(log_level, message_format, properties);
