@@ -2,7 +2,6 @@ use std::collections::btree_map::BTreeMap;
 
 use crate::logging::log_level::LogLevel;
 use crate::logging::log_message::LogMessage;
-use crate::logging::log_settings::LogSettings;
 use crate::logging::utils::jsonify;
 
 pub mod log_level;
@@ -12,8 +11,10 @@ pub mod logger;
 pub(crate) mod utils;
 
 // log with simple stir message
-pub fn log(log_settings: &LogSettings, log_level: LogLevel, log_message: &str) {
-    if log_settings.filter(log_level) {
+pub fn log(log_level: LogLevel, log_message: &str) {
+    let log_settings_provider = log_settings::get_log_settings_provider();
+
+    if log_settings_provider.filter(log_level) {
         return;
     }
 
@@ -22,8 +23,7 @@ pub fn log(log_settings: &LogSettings, log_level: LogLevel, log_message: &str) {
         log::set_max_level(log::LevelFilter::Debug);
     });
 
-    let log_message =
-        LogMessage::new_msg(log_settings.to_owned(), log_level, log_message.to_owned());
+    let log_message = LogMessage::new_msg(log_settings_provider, log_level, log_message.to_owned());
 
     let json = jsonify(&log_message, false);
 
@@ -41,12 +41,13 @@ pub fn log(log_settings: &LogSettings, log_level: LogLevel, log_message: &str) {
 
 // log with message format and properties
 pub fn log_props(
-    log_settings: &LogSettings,
     log_level: LogLevel,
     message_format: String,
     properties: BTreeMap<String, String>,
 ) {
-    if log_settings.filter(log_level) {
+    let log_settings_provider = log_settings::get_log_settings_provider();
+
+    if log_settings_provider.filter(log_level) {
         return;
     }
 
@@ -56,7 +57,7 @@ pub fn log_props(
     });
 
     let log_message = LogMessage::new_props(
-        log_settings.to_owned(),
+        log_settings_provider,
         log_level,
         message_format.to_owned(),
         properties.to_owned(),
@@ -79,57 +80,67 @@ pub fn log_props(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logging::log_settings::LogLevelFilter;
+    use crate::logging::log_settings::{LogLevelFilter, LogSettings};
     use std::time::{Duration, SystemTime};
 
     const PROC_NAME: &str = "ee-shared-lib-tests";
 
-    //TODO: require an integration test or a custom slog drain to capture log output
+    lazy_static! {
+        static ref LOG_SETTINGS: LogSettings = get_log_settings(LogLevel::Info);
+    }
+
+    fn get_log_settings(log_level: LogLevel) -> LogSettings {
+        let log_level_filter = LogLevelFilter::new(log_level);
+
+        LogSettings::new(PROC_NAME, log_level_filter)
+    }
+
     #[test]
     fn should_log_when_level_at_or_above_filter() {
-        let log_settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Error));
+        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
 
-        log(&log_settings, LogLevel::Error, "this is a logmessage");
+        log(LogLevel::Error, "this is a logmessage");
     }
 
     #[test]
     fn should_not_log_when_level_below_filter() {
-        let log_settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Fatal));
+        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
 
         log(
-            &log_settings,
-            LogLevel::Error,
-            "this should not log as the filter is set to Fatal and this message is Error",
+            LogLevel::Debug,
+            "this should not log as the filter is set to Info and this message is Debug",
         );
     }
 
     #[test]
     fn should_log_string() {
-        let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Debug));
+        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
 
         let log_message = String::from("this is a string and it should get logged");
 
-        log(&settings, LogLevel::Debug, &log_message);
+        log(LogLevel::Info, &log_message);
     }
 
     #[test]
     fn should_log_stir() {
-        let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Debug));
+        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
+
         log(
-            &settings,
-            LogLevel::Debug,
-            "this is a stir and it should get logged",
+            LogLevel::Info,
+            "this is a string slice and it should get logged",
         );
     }
 
     #[test]
     fn should_log_with_props_and_template() {
+        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
+
         let x = property_logger_test_helper();
 
-        log_props(&x.0, x.1, x.2, x.3);
+        log_props(x.0, x.1, x.2);
     }
 
-    fn property_logger_test_helper() -> (LogSettings, LogLevel, String, BTreeMap<String, String>) {
+    fn property_logger_test_helper() -> (LogLevel, String, BTreeMap<String, String>) {
         let mut properties: BTreeMap<String, String> = BTreeMap::new();
 
         properties.insert(
@@ -182,8 +193,6 @@ mod tests {
 
         properties.insert("stop".to_string(), format!("{:?}", utc));
 
-        let settings = LogSettings::new(PROC_NAME, LogLevelFilter::new(LogLevel::Debug));
-
         // arbitrary format; any {???} brace encased elements that match a property key will get transcluded in description
         let mut message_format = String::new();
 
@@ -196,6 +205,6 @@ mod tests {
             message_format.push_str("; error: {error}");
         }
 
-        (settings, LogLevel::Info, message_format, properties)
+        (LogLevel::Info, message_format, properties)
     }
 }

@@ -12,7 +12,6 @@ use shared::newtypes::Blake2bHash;
 use storage::{
     global_state, history, history::CommitResult, op, transform, transform::TypeMismatch,
 };
-use LOG_SETTINGS;
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {
@@ -470,7 +469,7 @@ where
 {
     match input {
         Ok(CommitResult::RootNotFound) => {
-            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "RootNotFound");
+            logging::log(log_level::LogLevel::Warning, "RootNotFound");
             let mut root = ipc::RootNotFound::new();
             root.set_hash(prestate_hash.to_vec());
             let mut tmp_res = ipc::CommitResponse::new();
@@ -478,7 +477,7 @@ where
             tmp_res
         }
         Ok(CommitResult::Overflow) => {
-            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "Overflow");
+            logging::log(log_level::LogLevel::Warning, "Overflow");
             let overflow = ipc::AdditionOverflow::new();
             let mut tmp_res = ipc::CommitResponse::new();
             tmp_res.set_overflow(overflow);
@@ -495,7 +494,6 @@ where
             properties.insert("success".to_string(), true.to_string());
 
             logging::log_props(
-                &*LOG_SETTINGS,
                 log_level::LogLevel::Info,
                 "effects applied; new state hash is: {post-state-hash}".to_owned(),
                 properties,
@@ -508,13 +506,13 @@ where
             tmp_res
         }
         Ok(CommitResult::KeyNotFound(key)) => {
-            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "KeyNotFound");
+            logging::log(log_level::LogLevel::Warning, "KeyNotFound");
             let mut commit_response = ipc::CommitResponse::new();
             commit_response.set_key_not_found((&key).into());
             commit_response
         }
         Ok(CommitResult::TypeMismatch(type_mismatch)) => {
-            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "TypeMismatch");
+            logging::log(log_level::LogLevel::Warning, "TypeMismatch");
             let mut commit_response = ipc::CommitResponse::new();
             commit_response.set_type_mismatch(type_mismatch.into());
             commit_response
@@ -522,7 +520,7 @@ where
         // TODO(mateusz.gorski): We should be more specific about errors here.
         Err(storage_error) => {
             let log_message = format!("storage error {:?} when applying effects", storage_error);
-            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Error, &log_message);
+            logging::log(log_level::LogLevel::Error, &log_message);
             let mut err = ipc::PostEffectsError::new();
             let mut tmp_res = ipc::CommitResponse::new();
             err.set_message(format!("{:?}", storage_error));

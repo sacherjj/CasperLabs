@@ -40,7 +40,7 @@ mod tests {
             LogSettings::new(PROC_NAME, LogLevelFilter::new(log_level::LogLevel::Error));
 
         let log_message = log_message::LogMessage::new_msg(
-            log_settings,
+            &log_settings,
             log_level::LogLevel::Info,
             "abc".to_string(),
         );
