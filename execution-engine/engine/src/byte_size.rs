@@ -111,7 +111,7 @@ impl HeapSizeOf for String {
 
 #[cfg(test)]
 mod tests {
-    use bytesmeter::ByteSize;
+    use byte_size::ByteSize;
     use common::key::Key;
     use std::collections::btree_map::BTreeMap;
 

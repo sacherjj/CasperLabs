@@ -4,7 +4,7 @@ pub trait Meter<K, V> {
 }
 
 pub mod heap_meter {
-    use crate::bytesmeter::ByteSize;
+    use crate::byte_size::ByteSize;
     pub struct HeapSize;
 
     impl<K: ByteSize, V: ByteSize> super::Meter<K, V> for HeapSize {
