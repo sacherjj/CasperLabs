@@ -1,16 +1,10 @@
 import threading
 
-from . import conftest
-from .cl_node.casperlabsnode import (
-    Node,
-    bootstrap_connected_peer,
-    docker_network_with_started_bootstrap,
-)
-from .cl_node.common import random_string
-from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
-from .cl_node.wait import (
+from test.cl_node.docker_node import DockerNode
+from test.cl_node.common import random_string
+from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
+from test.cl_node.wait import (
     wait_for_blocks_count_at_least,
-    wait_for_peers_count_at_least,
 )
 
 import pytest
@@ -18,6 +12,7 @@ from typing import List
 
 
 BOOTSTRAP_NODE_KEYS = PREGENERATED_KEYPAIRS[0]
+
 
 def create_volume(docker_client) -> str:
     volume_name = "casperlabs{}".format(random_string(5).lower())
@@ -46,16 +41,11 @@ branch out and be only 4 levels deep
 """
 
 
-@pytest.fixture
-def timeout(command_line_options_fixture):
-    return command_line_options_fixture.node_startup_timeout
-
-
 def parse_value(s):
     try:
         return int(s)
     except ValueError:
-        return s[1:-1] # unquote string
+        return s[1:-1]  # unquote string
 
         
 def parse_line(line):
@@ -83,30 +73,8 @@ def parse_show_blocks(s):
     return [parse_block(b) for b in blocks]
 
 
-@pytest.fixture
-def nodes(command_line_options_fixture, docker_client_fixture, timeout):
-    with conftest.testing_context(command_line_options_fixture, docker_client_fixture,
-                                  bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=PREGENERATED_KEYPAIRS[1:]) as context:
-        with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
-            volume_names = [create_volume(docker_client_fixture) for _ in range(3)]
-            peers = [bootstrap_connected_peer(name = 'bonded-validator-'+str(i+1),
-                                              keypair = PREGENERATED_KEYPAIRS[i+1],
-                                              socket_volume = volume_name,
-                                              context = context,
-                                              bootstrap = bootstrap_node)
-                     for i, volume_name in enumerate(volume_names)]
-            # TODO: change bootstrap_connected_peer so the lines below are not needed
-            with peers[0] as n0, peers[1] as n1, peers[2] as n2:
-                wait_for_peers_count_at_least(bootstrap_node, 3, context.node_startup_timeout)
-                yield [n0, n1, n2]
-
-            # Tear down.
-            for v in volume_names:
-                docker_client_fixture.volumes.get(v).remove(force=True)
-    
-
 class DeployThread(threading.Thread):
-    def __init__(self, name: str, node: Node, batches_of_contracts: List[List[str]]) -> None:
+    def __init__(self, name: str, node: DockerNode, batches_of_contracts: List[List[str]]) -> None:
         threading.Thread.__init__(self)
         self.name = name
         self.node = node
@@ -115,24 +83,26 @@ class DeployThread(threading.Thread):
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
-                assert 'Success' in self.node.deploy(session = contract, payment = contract)
-            self.node.propose()
+                self.node.deploy_and_propose(session_contract=contract)
 
 
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
-                         ([['test_helloname.wasm'],['test_helloworld.wasm']], [1, 1, 1, 1, 1, 1, 0]),
-])
-# Curently nodes is a network of three bootstrap connected nodes.
+                         ([['test_helloname.wasm'], ['test_helloworld.wasm']], [1, 1, 1, 1, 1, 1, 0]),
+                         ])
+# Currently nodes is a network of three bootstrap connected nodes.
 # Nodes deploy one or more contracts followed by propose.
-def test_multiple_deploys_at_once(nodes, timeout,
+def test_multiple_deploys_at_once(three_node_network, timeout,
                                   contract_paths: List[List[str]], expected_deploy_counts_in_blocks):
+    nodes = three_node_network.docker_nodes
+    timeout = nodes[0].config.command_timeout
+
     deploy_threads = [DeployThread("node" + str(i+1), node, contract_paths)
                       for i, node in enumerate(nodes)]
 
     for t in deploy_threads:
         t.start()
 
-    for i in deploy_threads:
+    for t in deploy_threads:
         t.join()
 
     # See COMMENT_EXPECTED_BLOCKS 
@@ -142,4 +112,3 @@ def test_multiple_deploys_at_once(nodes, timeout,
     for node in nodes:
         blocks = parse_show_blocks(node.show_blocks_with_depth(len(expected_deploy_counts_in_blocks) * 100))
         assert [b.deployCount for b in blocks] == expected_deploy_counts_in_blocks, 'Unexpected deploy counts in blocks'
-
