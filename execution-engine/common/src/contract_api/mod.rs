@@ -39,7 +39,7 @@ where
         .unwrap()
 }
 
-/// Reads the value at the given key the context-local partition of global state
+/// Reads the value at the given key in the context-local partition of global state
 pub fn read_local<K, V>(key: K) -> V
 where
     K: ToBytes,
