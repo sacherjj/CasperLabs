@@ -22,7 +22,7 @@ use super::functions::{
     STORE_FN_INDEX, WRITE_FUNC_INDEX,
 };
 use super::resolvers::create_module_resolver;
-use argsparser::Args;
+use args::Args;
 use itertools::Itertools;
 use parity_wasm::elements::{Error as ParityWasmError, Module};
 use rand::SeedableRng;
