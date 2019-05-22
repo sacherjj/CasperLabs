@@ -9,13 +9,16 @@ from .cl_node.casperlabsnode import (
 from .cl_node.common import random_string
 from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from .cl_node.wait import (
+    wait_for_approved_block_received,
     wait_for_blocks_count_at_least,
-    wait_for_peers_count_at_least,
 )
+
+from .cl_node.casperlabsnode import ( extract_block_hash_from_propose_output, )
 
 import pytest
 from typing import List
 
+from .cl_node.casperlabs_network import ThreeNodeNetwork
 
 BOOTSTRAP_NODE_KEYS = PREGENERATED_KEYPAIRS[0]
 
@@ -23,27 +26,6 @@ def create_volume(docker_client) -> str:
     volume_name = "casperlabs{}".format(random_string(5).lower())
     docker_client.volumes.create(name=volume_name, driver="local")
     return volume_name
-
-
-# An explanation given by @Akosh about number of expected blocks.
-# This is why the expected blocks are 4.
-COMMENT_EXPECTED_BLOCKS = """
-I think there is some randomness to it. --depth gives you the last
-layers in the topological sorting of the DAG, which I believe is
-stored by rank.
-I'm not sure about the details, for example if we have
-`G<-B1, G<-B2, B1<-B3` then G is rank 0, B1 and B2 are rank 1 and
-B3 is rank 2. But we could also argue that a depth of 1 should
-return B3 and B2.
-
-Whatever --depth does, the layout of the DAG depends on how the
-gossiping went when you did you proposals. If you did it real slow,
-one by one, then you might have a chain of 8 blocks
-(for example `G<-A1<-B1<-B2<-C1<-B3<-C2<-C3`), all linear;
-but if you did it in perfect parallelism you could have all of them
-branch out and be only 4 levels deep
-(`G<-A1, G<-B1, G<-C1, [A1,B1,C1]<-C2`, etc).
-"""
 
 
 @pytest.fixture
@@ -89,24 +71,43 @@ class DeployThread(threading.Thread):
         self.name = name
         self.node = node
         self.batches_of_contracts = batches_of_contracts 
+        self.deployed_blocks_hashes = set()
+
+    def propose(self):
+        propose_output = self.node.propose()
+        return extract_block_hash_from_propose_output(propose_output)
 
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
                 assert 'Success' in self.node.deploy(session_contract = contract, payment_contract = contract)
-            self.node.propose()
+            block_hash = self.propose()
+            self.deployed_blocks_hashes.add(block_hash)
+
+@pytest.fixture(scope='function')
+def n(request):
+    return request.param
+
+# This fixture will be parametrized so it runs on node set up to use gossiping as well as the old method.
+@pytest.fixture()
+def three_nodes(docker_client_fixture, timeout):
+    with ThreeNodeNetwork(docker_client_fixture, extra_docker_params={'is_gossiping': True}) as network:
+        network.create_cl_network()
+        #wait_for_approved_block_received(network, timeout)
+        yield [node.node for node in network.cl_nodes]
 
 
-@pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
-                         ([['test_helloname.wasm'],['test_helloworld.wasm']], [1, 1, 1, 1, 1, 1]),
-])
-# Nodes deploy one or more contracts followed by propose.
-def test_multiple_deploys_at_once(three_node_network, timeout,
-                                  contract_paths: List[List[str]], expected_deploy_counts_in_blocks):
-    nodes = three_node_network.docker_nodes
+@pytest.mark.parametrize("contract_paths, expected_number_of_blocks", [
+
+                         ([['test_helloname.wasm'],['test_helloworld.wasm']], 7),
+
+                         ])
+# Curently nodes is a network of three bootstrap connected nodes.
+def test_block_propagation(three_nodes, timeout,
+                           contract_paths: List[List[str]], expected_number_of_blocks):
 
     deploy_threads = [DeployThread("node" + str(i+1), node, contract_paths)
-                      for i, node in enumerate(nodes)]
+                      for i, node in enumerate(three_nodes)]
 
     for t in deploy_threads:
         t.start()
@@ -114,13 +115,15 @@ def test_multiple_deploys_at_once(three_node_network, timeout,
     for i in deploy_threads:
         t.join()
 
-    # See COMMENT_EXPECTED_BLOCKS 
-    for node in nodes:
-        wait_for_blocks_count_at_least(node, len(expected_deploy_counts_in_blocks), len(expected_deploy_counts_in_blocks) * 2, timeout)
+    for node in three_nodes:
+        wait_for_blocks_count_at_least(node, expected_number_of_blocks, expected_number_of_blocks * 2, timeout)
 
-    for node in nodes:
-        blocks = parse_show_blocks(node.show_blocks_with_depth(len(expected_deploy_counts_in_blocks) * 100))
-        n_blocks = len(expected_deploy_counts_in_blocks)
-        assert [b.deployCount for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, \
-               'Unexpected deploy counts in blocks'
+    for node in three_nodes:
+        blocks = parse_show_blocks(node.show_blocks_with_depth(expected_number_of_blocks * 100))
+        # What propose returns is first 10 characters of block hash, so we can compare only first 10 charcters.
+        blocks_hashes = set([b.blockHash[:10] for b in blocks])
+        for t in deploy_threads:
+            assert t.deployed_blocks_hashes.issubset(blocks_hashes), \
+                   f"Not all blocks deployed and proposed on {t.name} were propagated to {node.name}"
+        
 

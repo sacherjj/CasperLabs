@@ -58,6 +58,7 @@ class DockerConfig:
     mem_limit: str = '4G'
     is_bootstrap: bool = False
     bootstrap_address: Optional[str] = None
+    is_gossiping: bool = False
 
     def __post_init__(self):
         if self.rand_str is None:
@@ -76,6 +77,8 @@ class DockerConfig:
             options['--server-bootstrap'] = self.bootstrap_address
         if self.node_public_key:
             options['--casper-validator-public-key'] = self.node_public_key
+        if self.is_gossiping:
+            options['--server-use-gossiping'] = ''
         return options
 
     @property
