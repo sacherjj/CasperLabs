@@ -2,21 +2,22 @@ use super::URefAddr;
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
 use common::bytesrepr::{deserialize, ToBytes};
-use common::key::{AccessRights, Key};
+use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
 use common::value::account::Account;
 use common::value::Value;
+use engine::ExecutionEffect;
 use execution::Error;
 use rand::RngCore;
 use rand_chacha::ChaChaRng;
-use shared::newtypes::Validated;
+use shared::newtypes::{Blake2bHash, Validated};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
-use storage::global_state::{ExecutionEffect, StateReader};
+use storage::global_state::StateReader;
 use trackingcopy::{AddResult, TrackingCopy};
 
 /// Holds information specific to the deployed contract.
-pub struct RuntimeContext<'a, R: StateReader<Key, Value>> {
+pub struct RuntimeContext<'a, R> {
     state: Rc<RefCell<TrackingCopy<R>>>,
     // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
@@ -117,6 +118,15 @@ where
 
     pub fn base_key(&self) -> Key {
         self.base_key
+    }
+
+    pub fn seed(&self) -> [u8; LOCAL_SEED_SIZE] {
+        match self.base_key {
+            Key::Account(bytes) => bytes,
+            Key::Hash(bytes) => bytes,
+            Key::URef(bytes, _) => bytes,
+            Key::Local { seed, key_hash } => Blake2bHash::new(&[seed, key_hash].concat()).into(),
+        }
     }
 
     pub fn protocol_version(&self) -> u64 {
@@ -301,6 +311,7 @@ where
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
             Key::URef(_, rights) => rights.is_readable(),
+            Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
 
@@ -309,6 +320,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
             Key::URef(_, rights) => rights.is_addable(),
+            Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
 
@@ -317,6 +329,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => false,
             Key::URef(_, rights) => rights.is_writeable(),
+            Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
 
@@ -354,13 +367,13 @@ mod tests {
     use execution::{create_rng, vec_key_rights_to_map};
     use rand::RngCore;
     use rand_chacha::ChaChaRng;
+    use shared::transform::Transform;
     use std::cell::RefCell;
     use std::collections::{BTreeMap, HashMap, HashSet};
     use std::iter::once;
     use std::rc::Rc;
     use storage::global_state::in_memory::InMemoryGlobalState;
-    use storage::history::*;
-    use storage::transform::Transform;
+    use storage::global_state::{CommitResult, History};
     use trackingcopy::TrackingCopy;
 
     fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {

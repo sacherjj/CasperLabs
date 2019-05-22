@@ -1,10 +1,11 @@
-use common::key::Key;
-use common::value::uint::{CheckedAdd, CheckedSub};
-use common::value::{Value, U128, U256, U512};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt;
 use std::ops::Add;
+
+use common::key::Key;
+use common::value::uint::{CheckedAdd, CheckedSub};
+use common::value::{Value, U128, U256, U512};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct TypeMismatch {
@@ -235,9 +236,11 @@ impl fmt::Display for Transform {
 
 #[cfg(test)]
 mod tests {
-    use crate::transform::{Error, Transform};
-    use common::value::{Value, U128, U256, U512};
     use num::{Bounded, Num};
+
+    use common::value::{Value, U128, U256, U512};
+
+    use super::{Error, Transform};
 
     #[test]
     fn i32_overflow() {

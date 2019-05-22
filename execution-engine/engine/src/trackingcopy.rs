@@ -2,14 +2,14 @@ use std::collections::{BTreeMap, HashMap};
 
 use common::key::Key;
 use common::value::Value;
+use engine::{ExecutionEffect, Op};
 use linked_hash_map::LinkedHashMap;
 use meter::heap_meter::HeapSize;
 use meter::Meter;
 use parking_lot::Mutex;
 use shared::newtypes::Validated;
-use storage::global_state::{ExecutionEffect, StateReader};
-use storage::op::Op;
-use storage::transform::{self, Transform, TypeMismatch};
+use shared::transform::{self, Transform, TypeMismatch};
+use storage::global_state::StateReader;
 use utils::add;
 
 #[derive(Debug)]
@@ -78,7 +78,7 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
     }
 }
 
-pub struct TrackingCopy<R: StateReader<Key, Value>> {
+pub struct TrackingCopy<R> {
     reader: R,
     cache: TrackingCopyCache<HeapSize>,
     ops: HashMap<Key, Op>,
@@ -275,12 +275,12 @@ mod tests {
     use common::gens::*;
     use common::key::{AccessRights, Key};
     use common::value::{Account, Contract, Value};
+    use shared::transform::Transform;
     use storage::global_state::in_memory::InMemoryGlobalState;
     use storage::global_state::StateReader;
-    use storage::op::Op;
-    use storage::transform::Transform;
 
     use super::{AddResult, QueryResult, Validated};
+    use engine::Op;
     use trackingcopy::TrackingCopy;
 
     struct CountingDb {

@@ -7,7 +7,7 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Serialize;
 
 use crate::logging::log_level::{LogLevel, LogPriority};
-use crate::logging::log_settings::{HostName, LogSettings, ProcessId, ProcessName};
+use crate::logging::log_settings::{HostName, LogSettingsProvider, ProcessId, ProcessName};
 use crate::semver::SemVer;
 
 const MESSAGE_TYPE: &str = "ee-structured";
@@ -29,17 +29,20 @@ pub struct LogMessage {
 }
 
 impl LogMessage {
-    pub fn new_props(
-        log_settings: LogSettings,
+    pub fn new_props<T: ?Sized>(
+        log_settings_provider: &T,
         log_level: LogLevel,
         message_template: String,
         properties: BTreeMap<String, String>,
-    ) -> LogMessage {
+    ) -> LogMessage
+    where
+        T: LogSettingsProvider,
+    {
         let message_type = MessageType::new(MESSAGE_TYPE.to_string());
         let message_type_version = SemVer::V1_0_0;
-        let process_id = log_settings.process_id;
-        let process_name = log_settings.process_name;
-        let host_name = log_settings.host_name;
+        let process_id = log_settings_provider.get_process_id();
+        let process_name = log_settings_provider.get_process_name();
+        let host_name = log_settings_provider.get_host_name();
         let timestamp = TimestampRfc3999::default();
         let priority = LogPriority::new(log_level);
         let properties = MessageProperties::new(properties);
@@ -76,12 +79,24 @@ impl LogMessage {
         }
     }
 
-    pub fn new_msg(log_settings: LogSettings, log_level: LogLevel, message: String) -> LogMessage {
+    pub fn new_msg<T: ?Sized>(
+        log_settings_provider: &T,
+        log_level: LogLevel,
+        message: String,
+    ) -> LogMessage
+    where
+        T: LogSettingsProvider,
+    {
         let mut properties = BTreeMap::new();
 
         properties.insert("message".to_owned(), message);
 
-        Self::new_props(log_settings, log_level, "{message}".to_owned(), properties)
+        Self::new_props(
+            log_settings_provider,
+            log_level,
+            "{message}".to_owned(),
+            properties,
+        )
     }
 }
 
@@ -211,10 +226,11 @@ impl MessageProperties {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logging::log_settings;
     use crate::logging::log_settings::LogLevelFilter;
 
     #[test]
-    fn should_format_message_template_defautl_use_case() {
+    fn should_format_message_template_default_use_case() {
         let mut properties: BTreeMap<String, String> = BTreeMap::new();
         properties.insert("message".to_string(), "i am a log message".to_string());
 
@@ -339,9 +355,12 @@ mod tests {
 
     #[test]
     fn should_validate_log_message() {
-        let settings = LogSettings::new("log_message_tests", LogLevelFilter::new(LogLevel::Error));
+        let settings = log_settings::LogSettings::new(
+            "log_message_tests",
+            LogLevelFilter::new(LogLevel::Error),
+        );
 
-        let l = super::LogMessage::new_msg(settings, LogLevel::Error, "test msg".to_owned());
+        let l = super::LogMessage::new_msg(&settings, LogLevel::Error, "test msg".to_owned());
 
         assert!(
             should_have_rfc3339_timestamp(&l),

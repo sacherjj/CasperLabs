@@ -1,9 +1,10 @@
 use common::bytesrepr::ToBytes;
-use history::trie::Trie;
-use history::trie::{Pointer, PointerBlock};
-use history::trie_store::{Readable, TrieStore, Writable};
 use shared::newtypes::Blake2bHash;
 use shared::os::get_page_size;
+
+use trie::Trie;
+use trie::{Pointer, PointerBlock};
+use trie_store::{Readable, TrieStore, Writable};
 
 lazy_static! {
     // 10 MiB = 10485760 bytes
@@ -112,17 +113,19 @@ where
 }
 
 mod simple {
-    use super::TestData;
-    use common::bytesrepr::ToBytes;
-    use error;
-    use history::trie::Trie;
-    use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
-    use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-    use history::trie_store::tests::TEST_MAP_SIZE;
-    use history::trie_store::{Transaction, TransactionSource, TrieStore};
     use lmdb::DatabaseFlags;
-    use shared::newtypes::Blake2bHash;
     use tempfile::tempdir;
+
+    use common::bytesrepr::ToBytes;
+    use shared::newtypes::Blake2bHash;
+
+    use super::TestData;
+    use error;
+    use trie::Trie;
+    use trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
+    use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+    use trie_store::tests::TEST_MAP_SIZE;
+    use trie_store::{Transaction, TransactionSource, TrieStore};
 
     fn put_succeeds<'a, K, V, S, X, E>(
         store: &S,
@@ -519,15 +522,17 @@ mod simple {
 }
 
 mod concurrent {
-    use super::TestData;
-    use history::trie::Trie;
-    use history::trie_store::in_memory::{InMemoryEnvironment, InMemoryTrieStore};
-    use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-    use history::trie_store::tests::TEST_MAP_SIZE;
-    use history::trie_store::{Transaction, TransactionSource, TrieStore};
     use std::sync::{Arc, Barrier};
     use std::thread;
+
     use tempfile::tempdir;
+
+    use super::TestData;
+    use trie::Trie;
+    use trie_store::in_memory::{InMemoryEnvironment, InMemoryTrieStore};
+    use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+    use trie_store::tests::TEST_MAP_SIZE;
+    use trie_store::{Transaction, TransactionSource, TrieStore};
 
     #[test]
     fn lmdb_writer_mutex_does_not_collide_with_readers() {
@@ -636,20 +641,23 @@ mod concurrent {
 }
 
 mod proptests {
-    use super::TestData;
-    use common::bytesrepr::ToBytes;
-    use common::key::Key;
-    use common::value::Value;
-    use history::trie::gens::trie_arb;
-    use history::trie::Trie;
-    use history::trie_store::tests::TEST_MAP_SIZE;
-    use history::trie_store::{Transaction, TransactionSource, TrieStore};
+    use std::ops::RangeInclusive;
+
     use lmdb::DatabaseFlags;
     use proptest::collection::vec;
     use proptest::prelude::proptest;
-    use shared::newtypes::Blake2bHash;
-    use std::ops::RangeInclusive;
     use tempfile::tempdir;
+
+    use common::bytesrepr::ToBytes;
+    use common::key::Key;
+    use common::value::Value;
+    use shared::newtypes::Blake2bHash;
+
+    use super::TestData;
+    use trie::gens::trie_arb;
+    use trie::Trie;
+    use trie_store::tests::TEST_MAP_SIZE;
+    use trie_store::{Transaction, TransactionSource, TrieStore};
 
     const DEFAULT_MIN_LENGTH: usize = 1;
 
@@ -713,7 +721,7 @@ mod proptests {
     }
 
     fn in_memory_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
-        use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
+        use trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
 
         let env = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&env);
@@ -725,7 +733,7 @@ mod proptests {
 
     fn lmdb_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
         use error;
-        use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+        use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
         let tmp_dir = tempdir().unwrap();
         let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();

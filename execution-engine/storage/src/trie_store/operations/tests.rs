@@ -1,14 +1,17 @@
-use common::bytesrepr::{self, FromBytes, ToBytes};
-use history::trie::{Pointer, Trie};
-use history::trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
-use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use history::trie_store::operations::{read, write, ReadResult, WriteResult};
-use history::trie_store::{Readable, Transaction, TransactionSource, TrieStore};
+use failure;
 use lmdb::DatabaseFlags;
+use tempfile::{tempdir, TempDir};
+
+use common::bytesrepr::{self, FromBytes, ToBytes};
 use shared::newtypes::Blake2bHash;
 use shared::os::get_page_size;
-use tempfile::{tempdir, TempDir};
-use {error, failure};
+
+use error;
+use trie::{Pointer, Trie};
+use trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
+use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+use trie_store::operations::{read, write, ReadResult, WriteResult};
+use trie_store::{Readable, Transaction, TransactionSource, TrieStore};
 
 lazy_static! {
     // 10 MiB = 10485760 bytes
@@ -601,7 +604,7 @@ mod read {
 
     use super::*;
     use error;
-    use history::trie_store::in_memory;
+    use trie_store::in_memory;
 
     mod partial_tries {
         //! Here we construct 6 separate "partial" tries, increasing in size
@@ -713,11 +716,12 @@ mod read {
 }
 
 mod scan {
+    use shared::newtypes::Blake2bHash;
+
     use super::*;
     use error;
-    use history::trie_store::in_memory;
-    use history::trie_store::operations::{scan, TrieScan};
-    use shared::newtypes::Blake2bHash;
+    use trie_store::in_memory;
+    use trie_store::operations::{scan, TrieScan};
 
     fn check_scan<'a, R, S, E>(
         environment: &'a R,
@@ -1523,11 +1527,13 @@ mod write {
     }
 }
 mod proptests {
-    use super::*;
+    use std::ops::RangeInclusive;
+
     use proptest::array;
     use proptest::collection::vec;
     use proptest::prelude::{any, proptest, Strategy};
-    use std::ops::RangeInclusive;
+
+    use super::*;
 
     const DEFAULT_MIN_LENGTH: usize = 0;
 

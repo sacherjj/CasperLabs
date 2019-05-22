@@ -45,6 +45,12 @@ impl<'a> TryFrom<&'a [u8]> for Blake2bHash {
     }
 }
 
+impl Into<[u8; BLAKE2B_DIGEST_LENGTH]> for Blake2bHash {
+    fn into(self) -> [u8; BLAKE2B_DIGEST_LENGTH] {
+        self.0
+    }
+}
+
 impl ToBytes for Blake2bHash {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         ToBytes::to_bytes(&self.0)

@@ -1,19 +1,21 @@
-use common::key::Key;
-use common::value::Value;
-use error;
-use global_state::StateReader;
-use history::trie::operations::create_hashed_empty_trie;
-use history::trie::Trie;
-use history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use history::trie_store::operations::{read, write, ReadResult, WriteResult};
-use history::trie_store::{Transaction, TransactionSource, TrieStore};
-use history::{commit, CommitResult, History};
-use lmdb;
-use shared::newtypes::Blake2bHash;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
-use transform::Transform;
+
+use common::key::Key;
+use common::value::Value;
+use lmdb;
+use shared::newtypes::Blake2bHash;
+use shared::transform::Transform;
+
+use error;
+use global_state::StateReader;
+use global_state::{commit, CommitResult, History};
+use trie::operations::create_hashed_empty_trie;
+use trie::Trie;
+use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+use trie_store::operations::{read, write, ReadResult, WriteResult};
+use trie_store::{Transaction, TransactionSource, TrieStore};
 
 /// Represents a "view" of global state at a particular root hash.
 pub struct LmdbGlobalState {
@@ -142,11 +144,13 @@ impl History for LmdbGlobalState {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use history::trie_store::operations::{write, WriteResult};
     use lmdb::DatabaseFlags;
-    use shared::os::get_page_size;
     use tempfile::tempdir;
+
+    use shared::os::get_page_size;
+
+    use super::*;
+    use trie_store::operations::{write, WriteResult};
 
     lazy_static! {
         // 10 MiB = 10485760 bytes

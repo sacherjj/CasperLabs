@@ -5,16 +5,16 @@ use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
 use engine_server::ipc::KeyURef_AccessRights;
-use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
+use execution_engine::engine::{
+    Error as EngineError, ExecutionEffect, ExecutionResult, Op, RootNotFound,
+};
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
 use shared::logging;
 use shared::logging::log_level;
 use shared::newtypes::Blake2bHash;
-use storage::{
-    global_state, history, history::CommitResult, op, transform, transform::TypeMismatch,
-};
-use LOG_SETTINGS;
+use shared::transform::{self, TypeMismatch};
+use storage::global_state::{CommitResult, History};
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {
@@ -286,6 +286,12 @@ impl From<&common::key::Key> for super::ipc::Key {
                 );
                 k.set_uref(key_uref);
             }
+            common::key::Key::Local { seed, key_hash } => {
+                let mut key_local = super::ipc::KeyLocal::new();
+                key_local.set_seed(seed.to_vec());
+                key_local.set_key_hash(key_hash.to_vec());
+                k.set_local(key_local);
+            }
         }
         k
     }
@@ -320,14 +326,14 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
     }
 }
 
-impl From<op::Op> for super::ipc::Op {
-    fn from(op: op::Op) -> super::ipc::Op {
+impl From<Op> for super::ipc::Op {
+    fn from(op: Op) -> super::ipc::Op {
         let mut ipc_op = super::ipc::Op::new();
         match op {
-            op::Op::Read => ipc_op.set_read(super::ipc::ReadOp::new()),
-            op::Op::Write => ipc_op.set_write(super::ipc::WriteOp::new()),
-            op::Op::Add => ipc_op.set_add(super::ipc::AddOp::new()),
-            op::Op::NoOp => ipc_op.set_noop(super::ipc::NoOp::new()),
+            Op::Read => ipc_op.set_read(super::ipc::ReadOp::new()),
+            Op::Write => ipc_op.set_write(super::ipc::WriteOp::new()),
+            Op::Add => ipc_op.set_add(super::ipc::AddOp::new()),
+            Op::NoOp => ipc_op.set_noop(super::ipc::NoOp::new()),
         };
         ipc_op
     }
@@ -351,8 +357,8 @@ impl TryFrom<&super::ipc::TransformEntry> for (common::key::Key, transform::Tran
     }
 }
 
-impl From<global_state::ExecutionEffect> for super::ipc::ExecutionEffect {
-    fn from(ee: global_state::ExecutionEffect) -> super::ipc::ExecutionEffect {
+impl From<ExecutionEffect> for super::ipc::ExecutionEffect {
+    fn from(ee: ExecutionEffect) -> super::ipc::ExecutionEffect {
         let mut eff = super::ipc::ExecutionEffect::new();
         let ipc_ops: Vec<super::ipc::OpEntry> =
             ee.0.iter()
@@ -467,12 +473,12 @@ pub fn grpc_response_from_commit_result<H>(
     input: Result<CommitResult, H::Error>,
 ) -> ipc::CommitResponse
 where
-    H: history::History,
+    H: History,
     H::Error: Into<EngineError> + std::fmt::Debug,
 {
     match input {
         Ok(CommitResult::RootNotFound) => {
-            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "RootNotFound");
+            logging::log_warning("RootNotFound");
             let mut root = ipc::RootNotFound::new();
             root.set_hash(prestate_hash.to_vec());
             let mut tmp_res = ipc::CommitResponse::new();
@@ -480,7 +486,7 @@ where
             tmp_res
         }
         Ok(CommitResult::Overflow) => {
-            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "Overflow");
+            logging::log_warning("Overflow");
             let overflow = ipc::AdditionOverflow::new();
             let mut tmp_res = ipc::CommitResponse::new();
             tmp_res.set_overflow(overflow);
@@ -496,8 +502,7 @@ where
 
             properties.insert("success".to_string(), true.to_string());
 
-            logging::log_props(
-                &*LOG_SETTINGS,
+            logging::log_details(
                 log_level::LogLevel::Info,
                 "effects applied; new state hash is: {post-state-hash}".to_owned(),
                 properties,
@@ -510,13 +515,13 @@ where
             tmp_res
         }
         Ok(CommitResult::KeyNotFound(key)) => {
-            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "KeyNotFound");
+            logging::log_warning("KeyNotFound");
             let mut commit_response = ipc::CommitResponse::new();
             commit_response.set_key_not_found((&key).into());
             commit_response
         }
         Ok(CommitResult::TypeMismatch(type_mismatch)) => {
-            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Warning, "TypeMismatch");
+            logging::log_warning("TypeMismatch");
             let mut commit_response = ipc::CommitResponse::new();
             commit_response.set_type_mismatch(type_mismatch.into());
             commit_response
@@ -524,7 +529,7 @@ where
         // TODO(mateusz.gorski): We should be more specific about errors here.
         Err(storage_error) => {
             let log_message = format!("storage error {:?} when applying effects", storage_error);
-            logging::log(&*LOG_SETTINGS, log_level::LogLevel::Error, &log_message);
+            logging::log_error(&log_message);
             let mut err = ipc::PostEffectsError::new();
             let mut tmp_res = ipc::CommitResponse::new();
             err.set_message(format!("{:?}", storage_error));
@@ -549,12 +554,13 @@ mod tests {
     use super::wasm_error;
     use common::key::AccessRights;
     use common::key::Key;
-    use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
+    use execution_engine::engine::{
+        Error as EngineError, ExecutionEffect, ExecutionResult, RootNotFound,
+    };
     use shared::newtypes::Blake2bHash;
+    use shared::transform::Transform;
     use std::collections::HashMap;
     use std::convert::TryInto;
-    use storage::global_state::ExecutionEffect;
-    use storage::transform::Transform;
 
     // Test that wasm_error function actually returns DeployResult with result set to WasmError
     #[test]

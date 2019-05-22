@@ -195,9 +195,12 @@ lazy val models = (project in file("models"))
     // TODO: As we refactor the interfaces this project should only depend on consensus
     // related models, ones that get stored, passed to client. The client for example
     // shouldn't transitively depend on node-to-node and node-to-EE interfaces.
-    PB.protoSources in Compile := Seq(protobufDirectory),
+    PB.protoSources in Compile := Seq(
+      protobufDirectory
+    ),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
+        "google/api",
         "io/casperlabs/casper/consensus",
         "io/casperlabs/casper/protocol" // TODO: Eventually remove.
       )),

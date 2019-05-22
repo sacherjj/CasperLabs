@@ -84,28 +84,6 @@ def parse_show_blocks(s):
     return [parse_block(b) for b in blocks]
 
 
-@pytest.fixture
-def nodes(command_line_options_fixture, docker_client_fixture, timeout):
-    with conftest.testing_context(command_line_options_fixture, docker_client_fixture,
-                                  bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=PREGENERATED_KEYPAIRS[1:]) as context:
-        with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
-            volume_names = [create_volume(docker_client_fixture) for _ in range(3)]
-            peers = [bootstrap_connected_peer(name = 'bonded-validator-'+str(i+1),
-                                              keypair = PREGENERATED_KEYPAIRS[i+1],
-                                              socket_volume = volume_name,
-                                              context = context,
-                                              bootstrap = bootstrap_node)
-                     for i, volume_name in enumerate(volume_names)]
-            # TODO: change bootstrap_connected_peer so the lines below are not needed
-            with peers[0] as n0, peers[1] as n1, peers[2] as n2:
-                wait_for_peers_count_at_least(bootstrap_node, 3, context.node_startup_timeout)
-                yield [n0, n1, n2]
-
-            # Tear down.
-            for v in volume_names:
-                docker_client_fixture.volumes.get(v).remove(force=True)
-
-
 class DeployThread(threading.Thread):
     def __init__(self, name: str, node: Node, batches_of_contracts: List[List[str]]) -> None:
         threading.Thread.__init__(self)
@@ -116,17 +94,18 @@ class DeployThread(threading.Thread):
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
-                assert 'Success' in self.node.deploy(session = contract, payment = contract)
+                assert 'Success' in self.node.deploy(session_contract = contract, payment_contract = contract)
             self.node.propose()
 
 
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
-                         ([['test_helloname.wasm'],['test_helloworld.wasm']], [1, 1, 1, 1, 1, 1, 0]),
+                         ([['test_helloname.wasm'],['test_helloworld.wasm']], [1, 1, 1, 1, 1, 1]),
 ])
-# Curently nodes is a network of three bootstrap connected nodes.
 # Nodes deploy one or more contracts followed by propose.
-def test_multiple_deploys_at_once(nodes, timeout,
+def test_multiple_deploys_at_once(three_node_network, timeout,
                                   contract_paths: List[List[str]], expected_deploy_counts_in_blocks):
+    nodes = three_node_network.docker_nodes
+
     deploy_threads = [DeployThread("node" + str(i+1), node, contract_paths)
                       for i, node in enumerate(nodes)]
 
@@ -142,4 +121,6 @@ def test_multiple_deploys_at_once(nodes, timeout,
 
     for node in nodes:
         blocks = parse_show_blocks(node.show_blocks_with_depth(len(expected_deploy_counts_in_blocks) * 100))
-        assert [b.deployCount for b in blocks] == expected_deploy_counts_in_blocks, 'Unexpected deploy counts in blocks'
+        n_blocks = len(expected_deploy_counts_in_blocks)
+        assert [b.deployCount for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, \
+               'Unexpected deploy counts in blocks'

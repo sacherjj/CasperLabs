@@ -8,7 +8,7 @@ fn radix_is_256() {
 }
 
 mod pointer_block {
-    use crate::history::trie::*;
+    use trie::*;
 
     /// A defense against changes to [`RADIX`](history::trie::RADIX).
     #[test]
@@ -47,9 +47,11 @@ mod pointer_block {
 }
 
 mod proptests {
-    use history::trie::gens::*;
     use proptest::prelude::proptest;
+
     use shared::test_utils::test_serialization_roundtrip;
+
+    use trie::gens::*;
 
     proptest! {
         #[test]

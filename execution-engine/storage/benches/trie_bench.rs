@@ -11,7 +11,7 @@ use common::bytesrepr::{FromBytes, ToBytes};
 use common::key::Key;
 use common::value::Value;
 use shared::newtypes::Blake2bHash;
-use storage::history::trie::{Pointer, PointerBlock, Trie};
+use storage::trie::{Pointer, PointerBlock, Trie};
 
 #[bench]
 fn serialize_trie_leaf(b: &mut Bencher) {
