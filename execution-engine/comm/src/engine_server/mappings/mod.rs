@@ -460,9 +460,6 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             err
                         }
                     },
-                    EngineError::Unreachable => {
-                        panic!("From<ExecutionResult> for ipc::DeployResult reached unreachable.")
-                    }
                 }
             }
         }
