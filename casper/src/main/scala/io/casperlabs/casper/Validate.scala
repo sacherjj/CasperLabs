@@ -203,10 +203,6 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
       } yield false
-    } else if (b.getHeader.getState.preStateHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block pre state hash is empty."))
-      } yield false
     } else if (b.getHeader.bodyHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))

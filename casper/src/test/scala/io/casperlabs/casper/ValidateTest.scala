@@ -696,12 +696,6 @@ class ValidateTest
               )
             ) shouldBeF false
         _ <- Validate.formatOfFields[Task](
-              genesis.withHeader(
-                genesis.getHeader
-                  .withState(genesis.getHeader.getState.withPreStateHash(ByteString.EMPTY))
-              )
-            ) shouldBeF false
-        _ <- Validate.formatOfFields[Task](
               genesis.withHeader(genesis.getHeader.withBodyHash(ByteString.EMPTY))
             ) shouldBeF false
       } yield ()
@@ -829,7 +823,14 @@ class ValidateTest
                            genesis,
                            dag
                          )
-      } yield validateResult shouldBe Left(Validate.ValidateErrorWrapper(InvalidPostStateHash))
+      } yield {
+        validateResult match {
+          case Left(Validate.ValidateErrorWrapper(InvalidPostStateHash)) =>
+          case Left(Validate.ValidateErrorWrapper(other)) =>
+            fail(s"Expected InvalidPostStateHash, got $other")
+          case other => fail(s"Unexpected result: $other")
+        }
+      }
   }
 
   it should "return a checkpoint with the right hash for a valid block" in withStorage {
