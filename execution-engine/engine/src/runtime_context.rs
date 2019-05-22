@@ -184,7 +184,7 @@ where
 
     pub fn write_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
         let validated_key: Validated<Key> = Validated::new(key, |key| {
-            self.validated_writeable(&key).and(self.validate_key(&key))
+            self.validate_writeable(&key).and(self.validate_key(&key))
         })?;
         let validated_value = Validated::new(value, |value| self.validate_keys(&value))?;
         self.state
@@ -285,7 +285,7 @@ where
         }
     }
 
-    fn validated_addable(&self, key: &Key) -> Result<(), Error> {
+    fn validate_addable(&self, key: &Key) -> Result<(), Error> {
         if self.is_addable(&key) {
             Ok(())
         } else {
@@ -295,7 +295,7 @@ where
         }
     }
 
-    fn validated_writeable(&self, key: &Key) -> Result<(), Error> {
+    fn validate_writeable(&self, key: &Key) -> Result<(), Error> {
         if self.is_writeable(&key) {
             Ok(())
         } else {
@@ -339,7 +339,7 @@ where
     /// then `TypeMismatch` errors is returned.
     pub fn add_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
         let validated_key = Validated::new(key, |k| {
-            self.validated_addable(&k).and(self.validate_key(&k))
+            self.validate_addable(&k).and(self.validate_key(&k))
         })?;
         let validated_value = Validated::new(value, |v| self.validate_keys(&v))?;
         match self.state.borrow_mut().add(validated_key, validated_value) {
@@ -871,7 +871,7 @@ mod tests {
             let mut rng = rand::thread_rng();
             let seed = runtime_context.seed();
             let key = random_local_key(&mut rng, seed);
-            runtime_context.validated_writeable(&key)
+            runtime_context.validate_writeable(&key)
         };
         let query_result = test(known_urefs, query);
         assert!(query_result.is_ok())
@@ -884,7 +884,7 @@ mod tests {
             let mut rng = rand::thread_rng();
             let seed = [1u8; LOCAL_SEED_SIZE];
             let key = random_local_key(&mut rng, seed);
-            runtime_context.validated_writeable(&key)
+            runtime_context.validate_writeable(&key)
         };
         let query_result = test(known_urefs, query);
         assert!(query_result.is_err())
@@ -923,7 +923,7 @@ mod tests {
             let mut rng = rand::thread_rng();
             let seed = runtime_context.seed();
             let key = random_local_key(&mut rng, seed);
-            runtime_context.validated_addable(&key)
+            runtime_context.validate_addable(&key)
         };
         let query_result = test(known_urefs, query);
         assert!(query_result.is_ok())
@@ -936,7 +936,7 @@ mod tests {
             let mut rng = rand::thread_rng();
             let seed = [1u8; LOCAL_SEED_SIZE];
             let key = random_local_key(&mut rng, seed);
-            runtime_context.validated_addable(&key)
+            runtime_context.validate_addable(&key)
         };
         let query_result = test(known_urefs, query);
         assert!(query_result.is_err())
