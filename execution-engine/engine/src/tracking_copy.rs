@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use common::key::Key;
 use common::value::Value;
-use engine::{ExecutionEffect, Op};
+use engine_state::execution_effect::ExecutionEffect;
+use engine_state::op::Op;
 use linked_hash_map::LinkedHashMap;
 use meter::heap_meter::HeapSize;
 use meter::Meter;
@@ -280,7 +281,7 @@ mod tests {
     use storage::global_state::StateReader;
 
     use super::{AddResult, QueryResult, Validated};
-    use engine::Op;
+    use engine_state::op::Op;
     use tracking_copy::TrackingCopy;
 
     struct CountingDb {

@@ -35,7 +35,7 @@ use std::rc::Rc;
 
 use super::runtime_context::RuntimeContext;
 use super::URefAddr;
-use engine::ExecutionEffect;
+use engine_state::execution_effect::ExecutionEffect;
 use resolvers::error::ResolverError;
 use resolvers::memory_resolver::MemoryResolver;
 

@@ -5,7 +5,7 @@ use common::bytesrepr::{deserialize, ToBytes};
 use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
 use common::value::account::Account;
 use common::value::Value;
-use engine::ExecutionEffect;
+use engine_state::execution_effect::ExecutionEffect;
 use execution::Error;
 use rand::RngCore;
 use rand_chacha::ChaChaRng;

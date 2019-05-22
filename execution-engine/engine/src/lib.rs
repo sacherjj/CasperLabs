@@ -16,9 +16,9 @@ extern crate storage;
 extern crate wasm_prep;
 extern crate wasmi;
 
-pub mod engine;
 pub mod args;
 pub mod byte_size;
+pub mod engine_state;
 pub mod execution;
 pub mod functions;
 pub mod meter;

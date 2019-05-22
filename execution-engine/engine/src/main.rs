@@ -14,7 +14,9 @@ use std::iter::Iterator;
 
 use clap::{App, Arg, ArgMatches};
 
-use execution_engine::engine::{EngineState, ExecutionResult, RootNotFound};
+use execution_engine::engine_state::error::RootNotFound;
+use execution_engine::engine_state::execution_result::ExecutionResult;
+use execution_engine::engine_state::EngineState;
 use execution_engine::execution::WasmiExecutor;
 use shared::init::mocked_account;
 use shared::logging;
