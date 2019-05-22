@@ -1,22 +1,51 @@
 use std::process;
-use std::sync::Once;
 
 use serde::Serialize;
 
 use crate::logging::log_level::*;
 
-static mut LOG_SETTINGS_PROVIDER: &'static LogSettingsProvider = &NopLogSettingsProvder;
+use std::cell::RefCell;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-static LOG_SETTINGS_INIT: Once = Once::new();
+thread_local! {
+    static LOG_SETTINGS_PROVIDER: RefCell<&'static LogSettingsProvider> = RefCell::new(&NopLogSettingsProvder);
+
+    static LOG_SETTINGS_INIT:  RefCell<AtomicUsize> = RefCell::new(AtomicUsize::new(0));
+}
+
+const LOG_SETTINGS_UNINITIALIZED: usize = 0;
+const LOG_SETTINGS_INITIALIZING: usize = 1;
+const LOG_SETTINGS_INITIALIZED: usize = 2;
 
 pub fn set_log_settings_provider(log_settings_provider: &'static LogSettingsProvider) {
-    LOG_SETTINGS_INIT.call_once(|| unsafe {
-        LOG_SETTINGS_PROVIDER = log_settings_provider;
-    });
+    match LOG_SETTINGS_INIT.with(|lsi| {
+        lsi.borrow().compare_and_swap(
+            LOG_SETTINGS_UNINITIALIZED,
+            LOG_SETTINGS_INITIALIZING,
+            Ordering::SeqCst,
+        )
+    }) {
+        LOG_SETTINGS_UNINITIALIZED => {
+            LOG_SETTINGS_PROVIDER.with(|f| *f.borrow_mut() = log_settings_provider);
+            LOG_SETTINGS_INIT.with(|lsi| {
+                lsi.borrow()
+                    .store(LOG_SETTINGS_INITIALIZED, Ordering::SeqCst)
+            });
+        }
+        LOG_SETTINGS_INITIALIZING => LOG_SETTINGS_INIT
+            .with(|lsi| while lsi.borrow().load(Ordering::SeqCst) == LOG_SETTINGS_INITIALIZING {}),
+        _ => (),
+    }
 }
 
 pub(crate) fn get_log_settings_provider() -> &'static LogSettingsProvider {
-    unsafe { LOG_SETTINGS_PROVIDER }
+    if LOG_SETTINGS_INIT.with(|lsi| lsi.borrow().load(Ordering::SeqCst) != LOG_SETTINGS_INITIALIZED)
+    {
+        static NOP: NopLogSettingsProvder = NopLogSettingsProvder;
+        &NOP
+    } else {
+        LOG_SETTINGS_PROVIDER.with(|f| *f.borrow())
+    }
 }
 
 /// container for logsettings from the host
@@ -111,6 +140,10 @@ impl LogSettingsProvider for NopLogSettingsProvder {
 pub struct LogLevelFilter(LogLevel);
 
 impl LogLevelFilter {
+    pub const DEFAULT: LogLevelFilter = LogLevelFilter(LogLevel::Info);
+
+    pub const ERROR: LogLevelFilter = LogLevelFilter(LogLevel::Error);
+
     pub fn new(log_level: LogLevel) -> LogLevelFilter {
         LogLevelFilter(log_level)
     }
@@ -218,6 +251,7 @@ fn get_hostname() -> String {
 mod tests {
     use super::*;
     use crate::logging::log_settings::LogSettings;
+    use std::thread;
 
     #[test]
     fn should_get_host_name() {
@@ -237,46 +271,83 @@ mod tests {
     }
 
     lazy_static! {
-        static ref LOG_SETTINGS_TESTS: LogSettings = get_log_settings();
+        static ref LOG_SETTINGS_TESTS: LogSettings =
+            get_log_settings("ee-shared-lib-logger-tests-lhs");
+        static ref LOG_SETTINGS_TESTS_RHS: LogSettings =
+            get_log_settings("ee-shared-lib-logger-tests-rhs");
     }
 
-    fn get_log_settings() -> LogSettings {
-        let process_name = "log_settings_tests";
-
-        let log_level_filter = LogLevelFilter::new(LogLevel::Error);
+    fn get_log_settings(process_name: &str) -> LogSettings {
+        let log_level_filter = LogLevelFilter::ERROR;
 
         LogSettings::new(process_name, log_level_filter)
     }
 
-    #[ignore]
     #[test]
     fn should_set_and_get_log_settings_provider() {
-        set_log_settings_provider(&*LOG_SETTINGS_TESTS);
+        let handle = thread::spawn(move || {
+            set_log_settings_provider(&*LOG_SETTINGS_TESTS);
 
-        let log_settings_provider = get_log_settings_provider();
+            let log_settings_provider = get_log_settings_provider();
 
-        assert_eq!(
-            &LOG_SETTINGS_TESTS.process_id,
-            &log_settings_provider.get_process_id(),
-            "process_id should be the same",
-        );
+            assert_eq!(
+                &LOG_SETTINGS_TESTS.process_id,
+                &log_settings_provider.get_process_id(),
+                "process_id should be the same",
+            );
 
-        assert_eq!(
-            &LOG_SETTINGS_TESTS.host_name,
-            &log_settings_provider.get_host_name(),
-            "host_name should be the same",
-        );
+            assert_eq!(
+                &LOG_SETTINGS_TESTS.host_name,
+                &log_settings_provider.get_host_name(),
+                "host_name should be the same",
+            );
 
-        assert_eq!(
-            &LOG_SETTINGS_TESTS.process_name,
-            &log_settings_provider.get_process_name(),
-            "process_name should be the same",
-        );
+            assert_eq!(
+                &LOG_SETTINGS_TESTS.process_name,
+                &log_settings_provider.get_process_name(),
+                "process_name should be the same",
+            );
 
-        assert_eq!(
-            &LOG_SETTINGS_TESTS.log_level_filter,
-            &log_settings_provider.get_log_level_filter(),
-            "log_level_filter should be the same",
-        );
+            assert_eq!(
+                &LOG_SETTINGS_TESTS.log_level_filter,
+                &log_settings_provider.get_log_level_filter(),
+                "log_level_filter should be the same",
+            );
+        });
+
+        let _r = handle.join();
+    }
+
+    #[test]
+    fn should_init_log_settings_provider_once_per_thread() {
+        let handle1 = thread::spawn(move || {
+            set_log_settings_provider(&*LOG_SETTINGS_TESTS);
+            set_log_settings_provider(&*LOG_SETTINGS_TESTS_RHS);
+
+            let log_settings_provider = get_log_settings_provider();
+
+            assert_eq!(
+                &LOG_SETTINGS_TESTS.process_name,
+                &log_settings_provider.get_process_name(),
+                "process_name should be the same",
+            );
+        });
+
+        let _r = handle1.join();
+
+        let handle2 = thread::spawn(move || {
+            set_log_settings_provider(&*LOG_SETTINGS_TESTS_RHS);
+            set_log_settings_provider(&*LOG_SETTINGS_TESTS);
+
+            let log_settings_provider = get_log_settings_provider();
+
+            assert_eq!(
+                &LOG_SETTINGS_TESTS_RHS.process_name,
+                &log_settings_provider.get_process_name(),
+                "process_name should be the same",
+            );
+        });
+
+        let _r = handle2.join();
     }
 }
