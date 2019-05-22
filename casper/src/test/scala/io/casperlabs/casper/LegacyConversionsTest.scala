@@ -17,10 +17,6 @@ class LegacyConversionsTest extends FlatSpec with ArbitraryConsensus with Matche
       // Some fields are not supported by the legacy one.
       val comp =
         orig
-          .withHeader(
-            // Body hash would have to be a valid serialization from the 2 fields in the old message.
-            orig.getHeader.withBodyHash(ByteString.EMPTY)
-          )
           .withBody(
             orig.getBody.withDeploys(orig.getBody.deploys.map { pd =>
               pd.withDeploy(

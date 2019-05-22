@@ -1,7 +1,7 @@
 package io.casperlabs.casper
 
 import com.google.protobuf.ByteString
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 /** Convert between the message in CasperMessage.proto and consensus.proto while we have both.
   * This is assuming that the storage and validation are still using the protocol.* types,
@@ -37,13 +37,15 @@ object LegacyConversions {
           .withBodyHash(
             // The new structure has body hash, but the old has two separate fields.
             // In order to be able to restore them the `BodyHashes` message was introduced.
-            ByteString.copyFrom(
-              protocol
-                .BodyHashes()
-                .withDeploysHash(block.getHeader.deploysHash)
-                .withStateHash(block.getHeader.postStateHash)
-                .toByteArray
-            )
+            Option(block.getHeader.extraBytes).filterNot(_.isEmpty).getOrElse {
+              ByteString.copyFrom(
+                protocol
+                  .BodyHashes()
+                  .withDeploysHash(block.getHeader.deploysHash)
+                  .withStateHash(block.getHeader.postStateHash)
+                  .toByteArray
+              )
+            }
           )
           .withTimestamp(block.getHeader.timestamp)
           .withProtocolVersion(block.getHeader.protocolVersion)
@@ -85,7 +87,13 @@ object LegacyConversions {
   }
 
   def fromBlock(block: consensus.Block): protocol.BlockMessage = {
-    val bodyHashes = protocol.BodyHashes.parseFrom(block.getHeader.bodyHash.toByteArray)
+    val (deploysHash, stateHash, headerExtraBytes) =
+      Try(protocol.BodyHashes.parseFrom(block.getHeader.bodyHash.toByteArray)) match {
+        case Success(bodyHashes) =>
+          (bodyHashes.deploysHash, bodyHashes.stateHash, ByteString.EMPTY)
+        case Failure(_) =>
+          (ByteString.EMPTY, ByteString.EMPTY, block.getHeader.bodyHash)
+      }
     protocol
       .BlockMessage()
       .withBlockHash(block.blockHash)
@@ -93,11 +101,12 @@ object LegacyConversions {
         protocol
           .Header()
           .withParentsHashList(block.getHeader.parentHashes)
-          .withPostStateHash(bodyHashes.stateHash)
-          .withDeploysHash(bodyHashes.deploysHash)
+          .withPostStateHash(stateHash)
+          .withDeploysHash(deploysHash)
           .withTimestamp(block.getHeader.timestamp)
           .withProtocolVersion(block.getHeader.protocolVersion)
           .withDeployCount(block.getHeader.deployCount)
+          .withExtraBytes(headerExtraBytes)
       )
       .withBody(
         protocol
