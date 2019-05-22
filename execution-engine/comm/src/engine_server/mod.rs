@@ -6,7 +6,7 @@ use std::marker::{Send, Sync};
 use common::key::Key;
 use execution_engine::engine::{EngineState, Error as EngineError};
 use execution_engine::execution::{Executor, WasmiExecutor};
-use execution_engine::trackingcopy::QueryResult;
+use execution_engine::tracking_copy::QueryResult;
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;

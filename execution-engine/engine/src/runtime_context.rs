@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 use storage::global_state::StateReader;
-use trackingcopy::{AddResult, TrackingCopy};
+use tracking_copy::{AddResult, TrackingCopy};
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
@@ -376,7 +376,7 @@ mod tests {
     use std::rc::Rc;
     use storage::global_state::in_memory::InMemoryGlobalState;
     use storage::global_state::{CommitResult, History};
-    use trackingcopy::TrackingCopy;
+    use tracking_copy::TrackingCopy;
 
     fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {
         let mut hist = InMemoryGlobalState::empty().unwrap();

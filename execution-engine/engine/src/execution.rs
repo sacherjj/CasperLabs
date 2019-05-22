@@ -8,7 +8,7 @@ use common::value::Value;
 use shared::newtypes::Validated;
 use shared::transform::TypeMismatch;
 use storage::global_state::StateReader;
-use trackingcopy::TrackingCopy;
+use tracking_copy::TrackingCopy;
 use wasmi::{
     Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
     ModuleRef, RuntimeArgs, RuntimeValue, Trap,

@@ -281,7 +281,7 @@ mod tests {
 
     use super::{AddResult, QueryResult, Validated};
     use engine::Op;
-    use trackingcopy::TrackingCopy;
+    use tracking_copy::TrackingCopy;
 
     struct CountingDb {
         count: Rc<Cell<i32>>,
@@ -705,7 +705,7 @@ pub mod tracking_copy_cache {
     use common::key::Key;
     use common::value::Value;
     use meter::count_meter::Count;
-    use trackingcopy::TrackingCopyCache;
+    use tracking_copy::TrackingCopyCache;
 
     #[test]
     fn cache_reads_invalidation() {

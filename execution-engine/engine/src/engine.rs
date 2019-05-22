@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use storage::global_state::{CommitResult, History};
-use trackingcopy::TrackingCopy;
+use tracking_copy::TrackingCopy;
 use wasm_prep::Preprocessor;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
