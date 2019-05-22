@@ -61,10 +61,9 @@ def casper_propose_and_deploy(network):
         propose(node, HELLO_NAME)
 
 
-def test_casper_propose_and_deploy(command_line_options_fixture, docker_client_fixture):
-    with conftest.testing_context(command_line_options_fixture, docker_client_fixture) as context:
-        with complete_network(context) as network:
-            casper_propose_and_deploy(network)
+def test_casper_propose_and_deploy(three_node_network):
+    for node in three_node_network.docker_nodes:
+        node.deploy_and_propose()
 
 
 def test_convergence(command_line_options_fixture, docker_client_fixture):
