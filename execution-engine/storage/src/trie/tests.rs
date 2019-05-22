@@ -8,6 +8,8 @@ fn radix_is_256() {
 }
 
 mod pointer_block {
+    use shared::newtypes::Blake2bHash;
+
     use trie::*;
 
     /// A defense against changes to [`RADIX`](history::trie::RADIX).

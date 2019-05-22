@@ -7,6 +7,7 @@ import cats.implicits._
 import cats.{Applicative, Defer}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.Bond
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
@@ -27,7 +28,7 @@ import scala.util.Either
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(prestate: ByteString, effects: Seq[TransformEntry]): F[Either[Throwable, ByteString]]
   def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]]
-  def setBonds(bonds: Map[Array[Byte], Long]): F[Unit]
+  def setBonds(bonds: Map[PublicKey, Long]): F[Unit]
   def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
@@ -120,7 +121,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
     bonds.pure[F]
 
   // Todo Pass in the genesis bonds until we have a solution based on the BlockStore.
-  override def setBonds(newBonds: Map[Array[Byte], Long]): F[Unit] =
+  override def setBonds(newBonds: Map[PublicKey, Long]): F[Unit] =
     Defer[F].defer(Applicative[F].pure {
       bonds = newBonds.map {
         case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)

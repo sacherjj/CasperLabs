@@ -5,9 +5,10 @@ use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
 use engine_server::ipc::KeyURef_AccessRights;
-use execution_engine::engine::{
-    Error as EngineError, ExecutionEffect, ExecutionResult, Op, RootNotFound,
-};
+use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
+use execution_engine::engine_state::execution_effect::ExecutionEffect;
+use execution_engine::engine_state::execution_result::ExecutionResult;
+use execution_engine::engine_state::op::Op;
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
 use shared::logging;
@@ -554,9 +555,9 @@ mod tests {
     use super::wasm_error;
     use common::key::AccessRights;
     use common::key::Key;
-    use execution_engine::engine::{
-        Error as EngineError, ExecutionEffect, ExecutionResult, RootNotFound,
-    };
+    use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
+    use execution_engine::engine_state::execution_effect::ExecutionEffect;
+    use execution_engine::engine_state::execution_result::ExecutionResult;
     use shared::newtypes::Blake2bHash;
     use shared::transform::Transform;
     use std::collections::HashMap;

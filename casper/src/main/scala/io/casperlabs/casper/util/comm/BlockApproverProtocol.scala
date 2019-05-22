@@ -17,6 +17,7 @@ import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.RPConfAsk
 import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.models.InternalProcessedDeploy
 import io.casperlabs.shared._
@@ -31,7 +32,7 @@ import scala.util.Try
 class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
-    bonds: Map[Array[Byte], Long],
+    bonds: Map[PublicKey, Long],
     wallets: Seq[PreWallet],
     minimumBond: Long,
     maximumBond: Long,

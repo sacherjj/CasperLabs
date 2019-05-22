@@ -1,43 +1,42 @@
-extern crate blake2;
-
-use self::blake2::digest::VariableOutput;
-use self::blake2::VarBlake2b;
-use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
-use common::key::{AccessRights, Key};
-use common::value::Value;
-use shared::newtypes::Validated;
-use shared::transform::TypeMismatch;
-use storage::global_state::StateReader;
-use trackingcopy::TrackingCopy;
-use wasmi::{
-    Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
-    ModuleRef, RuntimeArgs, RuntimeValue, Trap,
-};
-
-use super::functions::{
-    ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
-    GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
-    GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX,
-    PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX,
-    STORE_FN_INDEX, WRITE_FUNC_INDEX,
-};
-use super::resolvers::create_module_resolver;
-use argsparser::Args;
-use itertools::Itertools;
-use parity_wasm::elements::{Error as ParityWasmError, Module};
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::iter::IntoIterator;
 use std::rc::Rc;
 
-use super::runtime_context::RuntimeContext;
-use super::URefAddr;
-use engine::ExecutionEffect;
+use blake2::digest::VariableOutput;
+use blake2::VarBlake2b;
+use itertools::Itertools;
+use parity_wasm::elements::{Error as ParityWasmError, Module};
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
+use wasmi::{
+    Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
+    ModuleRef, RuntimeArgs, RuntimeValue, Trap,
+};
+
+use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
+use common::key::{AccessRights, Key};
+use common::value::Value;
+use shared::newtypes::Validated;
+use shared::transform::TypeMismatch;
+use storage::global_state::StateReader;
+
+use args::Args;
+use engine_state::execution_effect::ExecutionEffect;
+use functions::{
+    ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
+    GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
+    GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX,
+    PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX,
+    STORE_FN_INDEX, WRITE_FUNC_INDEX,
+};
+use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
 use resolvers::memory_resolver::MemoryResolver;
+use runtime_context::RuntimeContext;
+use tracking_copy::TrackingCopy;
+use URefAddr;
 
 #[derive(Debug)]
 pub enum Error {

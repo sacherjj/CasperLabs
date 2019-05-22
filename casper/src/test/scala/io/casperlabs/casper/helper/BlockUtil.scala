@@ -4,11 +4,12 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.casper.util.ProtoUtil.hashSignedBlock
 import io.casperlabs.casper.util.implicits._
+import io.casperlabs.crypto.Keys.PrivateKey
 
 import scala.util.Random
 
 object BlockUtil {
-  def resignBlock(b: BlockMessage, sk: Array[Byte]): BlockMessage = {
+  def resignBlock(b: BlockMessage, sk: PrivateKey): BlockMessage = {
     val blockHash =
       hashSignedBlock(b.header.get, b.sender, b.sigAlgorithm, b.seqNum, b.shardId, b.extraBytes)
     val sig = ByteString.copyFrom(b.signFunction(blockHash.toByteArray, sk))

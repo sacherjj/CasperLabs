@@ -12,14 +12,15 @@ import io.casperlabs.casper.protocol.{DeployData, _}
 import io.casperlabs.casper.util.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.ski.id
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.models.BlockMetadata
-import io.casperlabs.shared.{Log, Time}
+import io.casperlabs.shared.Time
 
 import scala.collection.immutable
-import scala.util.control.NonFatal
 
 object ProtoUtil {
   /*
@@ -372,9 +373,9 @@ object ProtoUtil {
   def signBlock[F[_]: Applicative](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      pk: Array[Byte],
-      sk: Array[Byte],
-      sigAlgorithm: String,
+      pk: PublicKey,
+      sk: PrivateKey,
+      sigAlgorithm: SignatureAlgorithm,
       shardId: String
   ): F[BlockMessage] = {
 
@@ -387,10 +388,17 @@ object ProtoUtil {
 
     val sender = ByteString.copyFrom(pk)
     for {
-      latestMessageOpt  <- dag.latestMessage(sender)
-      seqNum            = latestMessageOpt.fold(0)(_.seqNum) + 1
-      blockHash         = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
-      sigAlgorithmBlock = block.withSigAlgorithm(sigAlgorithm)
+      latestMessageOpt <- dag.latestMessage(sender)
+      seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+      blockHash = hashSignedBlock(
+        header,
+        sender,
+        sigAlgorithm.name,
+        seqNum,
+        shardId,
+        block.extraBytes
+      )
+      sigAlgorithmBlock = block.withSigAlgorithm(sigAlgorithm.name)
       sig               = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
       signedBlock = sigAlgorithmBlock
         .withSender(sender)

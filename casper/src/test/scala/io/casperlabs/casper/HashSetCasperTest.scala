@@ -8,27 +8,17 @@ import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
-import io.casperlabs.casper.helper.{
-  BlockDagStorageTestFixture,
-  BlockUtil,
-  GossipServiceCasperTestNodeFactory,
-  HashSetCasperTestNode,
-  HashSetCasperTestNodeFactory,
-  TransportLayerCasperTestNode,
-  TransportLayerCasperTestNodeFactory
-}
+import io.casperlabs.casper.helper._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import io.casperlabs.comm.rp.ProtocolHelper.packet
-import io.casperlabs.comm.transport
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.{Blake2b256, Keccak256}
-import io.casperlabs.crypto.signatures.{Ed25519, Secp256k1}
-import io.casperlabs.ipc.TransformEntry
-import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.{Ed25519, Secp256k1}
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -38,8 +28,6 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable
-import scala.concurrent.Await
-import scala.concurrent.duration.Duration
 
 /** Run tests using the TransportLayer. */
 class TransportLayerCasperTest extends HashSetCasperTest with TransportLayerCasperTestNodeFactory
@@ -58,7 +46,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val (ethPivKeys, ethPubKeys)    = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val ethAddresses =
-    ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
+    ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.drop(1)).takeRight(20)))
   private val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
   private val bonds       = createBonds(validators)
   private val minimumBond = 100L
@@ -459,7 +447,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
   it should "not fail if the forkchoice changes after a bonding event" in {
     val localValidators = validatorKeys.take(3)
-    val localBonds      = localValidators.map(Ed25519.toPublic).zip(List(10L, 30L, 5000L)).toMap
+    val localBonds =
+      localValidators.map(Ed25519.tryToPublic(_).get).zip(List(10L, 30L, 5000L)).toMap
     val BlockMsgWithTransform(Some(localGenesis), localTransforms) =
       buildGenesis(Nil, localBonds, 1L, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
     for {
@@ -1135,7 +1124,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
         dag,
         validators(1),
         validatorKeys(1),
-        "ed25519",
+        Ed25519,
         "casperlabs"
       )
     }
@@ -1160,15 +1149,15 @@ object HashSetCasperTest {
     MultiParentCasper[Effect].storageContents(postStateHash)
   }
 
-  def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
+  def createBonds(validators: Seq[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
-  def createGenesis(bonds: Map[Array[Byte], Long]): BlockMsgWithTransform =
+  def createGenesis(bonds: Map[PublicKey, Long]): BlockMsgWithTransform =
     buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
 
   def buildGenesis(
       wallets: Seq[PreWallet],
-      bonds: Map[Array[Byte], Long],
+      bonds: Map[PublicKey, Long],
       minimumBond: Long,
       maximumBond: Long,
       faucetCode: String => String,

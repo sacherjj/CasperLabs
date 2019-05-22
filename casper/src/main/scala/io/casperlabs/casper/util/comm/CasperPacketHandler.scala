@@ -25,6 +25,7 @@ import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.effects.PacketHandler
@@ -273,7 +274,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         _ <- Log[F].info("Received ApprovedBlock message while in GenesisValidatorHandler state.")
         casperO <- onApprovedBlockTransition(
                     ab,
-                    Set(ByteString.copyFrom(validatorId.publicKey)),
+                    Set(PublicKey(ByteString.copyFrom(validatorId.publicKey))),
                     Some(validatorId),
                     shardId
                   )
@@ -383,7 +384,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   private[comm] class BootstrapCasperHandler[F[_]: Concurrent: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: BlockDagStorage: ExecutionEngineService](
       shardId: String,
       validatorId: Option[ValidatorIdentity],
-      validators: Set[ByteString]
+      validators: Set[PublicKeyBS]
   ) extends CasperPacketHandlerInternal[F] {
     private val noop: F[Unit] = Applicative[F].unit
 
@@ -652,7 +653,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
   private def onApprovedBlockTransition[F[_]: Concurrent: Time: ErrorHandler: SafetyOracle: RPConfAsk: TransportLayer: ConnectionsCell: Log: BlockStore: LastApprovedBlock: BlockDagStorage: ExecutionEngineService](
       b: ApprovedBlock,
-      validators: Set[ByteString],
+      validators: Set[PublicKeyBS],
       validatorId: Option[ValidatorIdentity],
       shardId: String
   ): F[Option[MultiParentCasper[F]]] =

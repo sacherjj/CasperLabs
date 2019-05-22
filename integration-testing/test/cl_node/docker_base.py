@@ -57,6 +57,7 @@ class DockerConfig:
     command_timeout: int = 180
     mem_limit: str = '4G'
     is_bootstrap: bool = False
+    is_validator: bool = True
     bootstrap_address: Optional[str] = None
     is_gossiping: bool = False
 
@@ -65,14 +66,17 @@ class DockerConfig:
             self.rand_str = random_string(5)
 
     def node_command_options(self, server_host: str) -> dict:
+        bootstrap_path = '/root/.casperlabs/bootstrap'
         options = {'--server-default-timeout': 10000,
                    '--server-host': server_host,
                    '--casper-validator-private-key': self.node_private_key,
                    '--grpc-socket': '/root/.casperlabs/sockets/.casper-node.sock',
-                   '--metrics-prometheus': ''}
-        if self.is_bootstrap:
-            options['--tls-certificate'] = '/root/.casperlabs/bootstrap/node.certificate.pem'
-            options['--tls-key'] = '/root/.casperlabs/bootstrap/node.key.pem'
+                   '--metrics-prometheus': '',
+                   '--tls-certificate': f'{bootstrap_path}/node-{self.number}.certificate.pem',
+                   '--tls-key': f'{bootstrap_path}/node-{self.number}.key.pem'}
+        # if self.is_validator:
+        #     options['--casper-validator-private-key-path'] = f'{bootstrap_path}/validator-{self.number}-private.pem'
+        #     options['--casper-validator-public-key-path'] = f'{bootstrap_path}/validator-{self.number}-public.pem'
         if self.bootstrap_address:
             options['--server-bootstrap'] = self.bootstrap_address
         if self.node_public_key:

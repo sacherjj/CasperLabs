@@ -19,6 +19,7 @@ from typing import List
 
 BOOTSTRAP_NODE_KEYS = PREGENERATED_KEYPAIRS[0]
 
+
 def create_volume(docker_client) -> str:
     volume_name = "casperlabs{}".format(random_string(5).lower())
     docker_client.volumes.create(name=volume_name, driver="local")
@@ -55,7 +56,7 @@ def parse_value(s):
     try:
         return int(s)
     except ValueError:
-        return s[1:-1] # unquote string
+        return s[1:-1]  # unquote string
 
         
 def parse_line(line):
@@ -111,7 +112,7 @@ def test_multiple_deploys_at_once(three_node_network, timeout,
     for t in deploy_threads:
         t.start()
 
-    for i in deploy_threads:
+    for t in deploy_threads:
         t.join()
 
     # See COMMENT_EXPECTED_BLOCKS 
@@ -123,4 +124,3 @@ def test_multiple_deploys_at_once(three_node_network, timeout,
         n_blocks = len(expected_deploy_counts_in_blocks)
         assert [b.deployCount for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, \
                'Unexpected deploy counts in blocks'
-

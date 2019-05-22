@@ -24,7 +24,7 @@ use std::sync::Arc;
 use clap::{App, Arg, ArgMatches};
 use dirs::home_dir;
 use engine_server::*;
-use execution_engine::engine::EngineState;
+use execution_engine::engine_state::EngineState;
 use lmdb::DatabaseFlags;
 
 use shared::init::mocked_account;

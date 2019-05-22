@@ -33,6 +33,7 @@ import io.casperlabs.comm.grpc.{
   SslContexts
 }
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics
@@ -388,7 +389,7 @@ package object gossiping {
                                  for {
                                    _ <- Log[F].info("Taking bonds from the Genesis candidate.")
                                    bonds = genesis.getHeader.getState.bonds.map { bond =>
-                                     bond.validatorPublicKey.toByteArray -> bond.stake
+                                     PublicKey(bond.validatorPublicKey.toByteArray) -> bond.stake
                                    }.toMap
                                    _ <- ExecutionEngineService[F].setBonds(bonds)
                                  } yield none[Approval].asRight[Throwable]

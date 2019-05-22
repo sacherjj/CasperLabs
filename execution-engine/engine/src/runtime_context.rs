@@ -1,20 +1,23 @@
-use super::URefAddr;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::rc::Rc;
+
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
+use rand::RngCore;
+use rand_chacha::ChaChaRng;
+
 use common::bytesrepr::{deserialize, ToBytes};
 use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
 use common::value::account::Account;
 use common::value::Value;
-use engine::ExecutionEffect;
-use execution::Error;
-use rand::RngCore;
-use rand_chacha::ChaChaRng;
 use shared::newtypes::{Blake2bHash, Validated};
-use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::rc::Rc;
 use storage::global_state::StateReader;
-use trackingcopy::{AddResult, TrackingCopy};
+
+use engine_state::execution_effect::ExecutionEffect;
+use execution::Error;
+use tracking_copy::{AddResult, TrackingCopy};
+use URefAddr;
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
@@ -354,29 +357,24 @@ where
 
 #[cfg(test)]
 mod tests {
-    extern crate common;
-    extern crate failure;
-    extern crate rand;
-    extern crate rand_chacha;
-    extern crate shared;
-    extern crate storage;
-
-    use super::{Error, RuntimeContext, URefAddr, Validated};
-    use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
-    use common::value::{self, Account, Contract, Value};
-    use execution::{create_rng, vec_key_rights_to_map};
-    use rand::RngCore;
-    use rand_chacha::ChaChaRng;
-    use shared::newtypes::Blake2bHash;
-    use shared::transform::Transform;
     use std::cell::RefCell;
-    use std::collections::btree_map::BTreeMap;
-    use std::collections::{HashMap, HashSet};
+    use std::collections::{BTreeMap, HashMap, HashSet};
     use std::iter::once;
     use std::rc::Rc;
+
+    use rand::RngCore;
+    use rand_chacha::ChaChaRng;
+
+    use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
+    use common::value::{self, Account, Contract, Value};
+    use shared::transform::Transform;
     use storage::global_state::in_memory::InMemoryGlobalState;
     use storage::global_state::{CommitResult, History};
-    use trackingcopy::TrackingCopy;
+
+    use super::{Error, RuntimeContext, URefAddr, Validated};
+    use execution::{create_rng, vec_key_rights_to_map};
+    use shared::newtypes::Blake2bHash;
+    use tracking_copy::TrackingCopy;
 
     fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {
         let mut hist = InMemoryGlobalState::empty().unwrap();
