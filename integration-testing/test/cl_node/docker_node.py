@@ -68,6 +68,10 @@ class DockerNode(LoggingDockerBase):
 
     @property
     def timeout(self):
+        """
+        Number of seconds for a node to timeout.
+        :return: int (seconds)
+        """
         return 180
 
     @property
