@@ -29,7 +29,19 @@ class LegacyConversionsTest extends FlatSpec with ArbitraryConsensus with Matche
           )
       val conv = LegacyConversions.fromBlock(comp)
       val back = LegacyConversions.toBlock(conv)
-      back shouldBe comp
+      back.toProtoString shouldBe comp.toProtoString
+    }
+  }
+
+  it should "preserve genesis" in {
+    forAll { (orig: consensus.Block) =>
+      val genesis =
+        orig
+          .withBody(consensus.Block.Body())
+          .clearSignature
+      val conv = LegacyConversions.fromBlock(genesis)
+      val back = LegacyConversions.toBlock(conv)
+      back.toProtoString shouldBe genesis.toProtoString
     }
   }
 

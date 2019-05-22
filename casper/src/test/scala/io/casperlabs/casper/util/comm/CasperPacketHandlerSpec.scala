@@ -363,8 +363,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           _ = assert(casper.store.contains(blockMessage.blockHash))
         } yield ()
 
-        test.unsafeRunSync
         transportLayer.reset()
+        test.unsafeRunSync
       }
 
       "respond to BlockRequest messages" in {
@@ -372,15 +372,19 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           BlockRequest(Base16.encode(genesis.blockHash.toByteArray), genesis.blockHash)
         val requestPacket = Packet(transport.BlockRequest.id, blockRequest.toByteString)
         val test = for {
-          _     <- blockStore.put(genesis.blockHash, genesis, transforms)
-          _     <- casperPacketHandler.handle(local)(requestPacket)
-          head  = transportLayer.requests.head
-          block = packet(local, transport.BlockMessage, genesis.toByteString)
-          _     = assert(head.peer == local && head.msg == block)
+          _    <- blockStore.put(genesis.blockHash, genesis, transforms)
+          _    <- casperPacketHandler.handle(local)(requestPacket)
+          head = transportLayer.requests.head
+          block = packet(
+            local,
+            transport.BlockMessage,
+            LegacyConversions.fromBlock(genesis).toByteString
+          )
+          _ = assert(head.peer == local && head.msg == block)
         } yield ()
 
-        test.unsafeRunSync
         transportLayer.reset()
+        test.unsafeRunSync
       }
 
       "respond to ApprovedBlockRequest messages" in {
@@ -398,8 +402,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           )
         } yield ()
 
-        test.unsafeRunSync
         transportLayer.reset()
+        test.unsafeRunSync
       }
 
       "respond to ForkChoiceTipRequest messages" in {
@@ -413,12 +417,15 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           head = transportLayer.requests.head
           _    = assert(head.peer == local)
           _ = assert(
-            head.msg.message.packet.get == Packet(transport.BlockMessage.id, tip.toByteString)
+            head.msg.message.packet.get == Packet(
+              transport.BlockMessage.id,
+              LegacyConversions.fromBlock(tip).toByteString
+            )
           )
         } yield ()
 
-        test.unsafeRunSync
         transportLayer.reset()
+        test.unsafeRunSync
       }
     }
   }

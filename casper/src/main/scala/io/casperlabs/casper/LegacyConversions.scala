@@ -55,11 +55,13 @@ object LegacyConversions {
           .withValidatorPublicKey(block.sender)
           .withRank(block.getBody.getState.blockNumber)
       )
-      .withSignature(
-        consensus
-          .Signature()
-          .withSigAlgorithm(block.sigAlgorithm)
-          .withSig(block.sig)
+      .copy(
+        signature = Option(
+          consensus
+            .Signature()
+            .withSigAlgorithm(block.sigAlgorithm)
+            .withSig(block.sig)
+        ).filterNot(s => s.sigAlgorithm.isEmpty && s.sig.isEmpty)
       )
 
   def toBlock(block: protocol.BlockMessage): consensus.Block = {
@@ -83,7 +85,7 @@ object LegacyConversions {
               ) // New version doesn't have limit. Preserve it so signatures can be checked.
           })
       )
-      .withSignature(summary.getSignature)
+      .copy(signature = summary.signature)
   }
 
   def fromBlock(block: consensus.Block): protocol.BlockMessage = {
@@ -94,6 +96,7 @@ object LegacyConversions {
         case Failure(_) =>
           (ByteString.EMPTY, ByteString.EMPTY, block.getHeader.bodyHash)
       }
+
     protocol
       .BlockMessage()
       .withBlockHash(block.blockHash)
@@ -145,9 +148,9 @@ object LegacyConversions {
       })
       .withSender(block.getHeader.validatorPublicKey)
       .withSeqNum(block.getHeader.validatorBlockSeqNum)
+      .withShardId(block.getHeader.chainId)
       .withSig(block.getSignature.sig)
       .withSigAlgorithm(block.getSignature.sigAlgorithm)
-      .withShardId(block.getHeader.chainId)
   }
 
   def fromDeploy(deploy: consensus.Deploy, gasLimit: Long = 0L): protocol.DeployData =
