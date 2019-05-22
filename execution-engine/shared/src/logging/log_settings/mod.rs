@@ -248,6 +248,7 @@ mod tests {
         LogSettings::new(process_name, log_level_filter)
     }
 
+    #[ignore]
     #[test]
     fn should_set_and_get_log_settings_provider() {
         set_log_settings_provider(&*LOG_SETTINGS_TESTS);
