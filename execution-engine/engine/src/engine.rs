@@ -3,12 +3,11 @@ use execution::{self, Executor};
 use failure::Fail;
 use parking_lot::Mutex;
 use shared::newtypes::Blake2bHash;
+use shared::transform::Transform;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use storage::global_state::ExecutionEffect;
-use storage::history::*;
-use storage::transform::Transform;
+use storage::global_state::{CommitResult, History};
 use trackingcopy::TrackingCopy;
 use wasm_prep::Preprocessor;
 
@@ -20,6 +19,37 @@ pub struct EngineState<H> {
     // I think it should be constrained with a lifetime parameter.
     state: Mutex<H>,
 }
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum Op {
+    Read,
+    Write,
+    Add,
+    NoOp,
+}
+
+impl std::ops::Add for Op {
+    type Output = Op;
+
+    fn add(self, other: Op) -> Op {
+        match (self, other) {
+            (a, Op::NoOp) => a,
+            (Op::NoOp, b) => b,
+            (Op::Read, Op::Read) => Op::Read,
+            (Op::Add, Op::Add) => Op::Add,
+            _ => Op::Write,
+        }
+    }
+}
+
+impl std::fmt::Display for Op {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug)]
+pub struct ExecutionEffect(pub HashMap<Key, Op>, pub HashMap<Key, Transform>);
 
 pub struct ExecutionResult {
     pub result: Result<ExecutionEffect, Error>,

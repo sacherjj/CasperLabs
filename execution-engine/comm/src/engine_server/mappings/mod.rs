@@ -5,15 +5,16 @@ use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
 use engine_server::ipc::KeyURef_AccessRights;
-use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
+use execution_engine::engine::{
+    Error as EngineError, ExecutionEffect, ExecutionResult, Op, RootNotFound,
+};
 use execution_engine::execution::Error as ExecutionError;
 use ipc;
 use shared::logging;
 use shared::logging::log_level;
 use shared::newtypes::Blake2bHash;
-use storage::{
-    global_state, history, history::CommitResult, op, transform, transform::TypeMismatch,
-};
+use shared::transform::{self, TypeMismatch};
+use storage::global_state::{CommitResult, History};
 
 /// Helper method for turning instances of Value into Transform::Write.
 fn transform_write(v: common::value::Value) -> Result<transform::Transform, ParsingError> {
@@ -325,14 +326,14 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
     }
 }
 
-impl From<op::Op> for super::ipc::Op {
-    fn from(op: op::Op) -> super::ipc::Op {
+impl From<Op> for super::ipc::Op {
+    fn from(op: Op) -> super::ipc::Op {
         let mut ipc_op = super::ipc::Op::new();
         match op {
-            op::Op::Read => ipc_op.set_read(super::ipc::ReadOp::new()),
-            op::Op::Write => ipc_op.set_write(super::ipc::WriteOp::new()),
-            op::Op::Add => ipc_op.set_add(super::ipc::AddOp::new()),
-            op::Op::NoOp => ipc_op.set_noop(super::ipc::NoOp::new()),
+            Op::Read => ipc_op.set_read(super::ipc::ReadOp::new()),
+            Op::Write => ipc_op.set_write(super::ipc::WriteOp::new()),
+            Op::Add => ipc_op.set_add(super::ipc::AddOp::new()),
+            Op::NoOp => ipc_op.set_noop(super::ipc::NoOp::new()),
         };
         ipc_op
     }
@@ -356,8 +357,8 @@ impl TryFrom<&super::ipc::TransformEntry> for (common::key::Key, transform::Tran
     }
 }
 
-impl From<global_state::ExecutionEffect> for super::ipc::ExecutionEffect {
-    fn from(ee: global_state::ExecutionEffect) -> super::ipc::ExecutionEffect {
+impl From<ExecutionEffect> for super::ipc::ExecutionEffect {
+    fn from(ee: ExecutionEffect) -> super::ipc::ExecutionEffect {
         let mut eff = super::ipc::ExecutionEffect::new();
         let ipc_ops: Vec<super::ipc::OpEntry> =
             ee.0.iter()
@@ -472,7 +473,7 @@ pub fn grpc_response_from_commit_result<H>(
     input: Result<CommitResult, H::Error>,
 ) -> ipc::CommitResponse
 where
-    H: history::History,
+    H: History,
     H::Error: Into<EngineError> + std::fmt::Debug,
 {
     match input {
@@ -553,12 +554,13 @@ mod tests {
     use super::wasm_error;
     use common::key::AccessRights;
     use common::key::Key;
-    use execution_engine::engine::{Error as EngineError, ExecutionResult, RootNotFound};
+    use execution_engine::engine::{
+        Error as EngineError, ExecutionEffect, ExecutionResult, RootNotFound,
+    };
     use shared::newtypes::Blake2bHash;
+    use shared::transform::Transform;
     use std::collections::HashMap;
     use std::convert::TryInto;
-    use storage::global_state::ExecutionEffect;
-    use storage::transform::Transform;
 
     // Test that wasm_error function actually returns DeployResult with result set to WasmError
     #[test]

@@ -5,6 +5,7 @@ use common::bytesrepr::{deserialize, ToBytes};
 use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
 use common::value::account::Account;
 use common::value::Value;
+use engine::ExecutionEffect;
 use execution::Error;
 use rand::RngCore;
 use rand_chacha::ChaChaRng;
@@ -12,7 +13,7 @@ use shared::newtypes::{Blake2bHash, Validated};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
-use storage::global_state::{ExecutionEffect, StateReader};
+use storage::global_state::StateReader;
 use trackingcopy::{AddResult, TrackingCopy};
 
 /// Holds information specific to the deployed contract.
@@ -366,13 +367,13 @@ mod tests {
     use execution::{create_rng, vec_key_rights_to_map};
     use rand::RngCore;
     use rand_chacha::ChaChaRng;
+    use shared::transform::Transform;
     use std::cell::RefCell;
     use std::collections::{BTreeMap, HashMap, HashSet};
     use std::iter::once;
     use std::rc::Rc;
     use storage::global_state::in_memory::InMemoryGlobalState;
-    use storage::history::*;
-    use storage::transform::Transform;
+    use storage::global_state::{CommitResult, History};
     use trackingcopy::TrackingCopy;
 
     fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {

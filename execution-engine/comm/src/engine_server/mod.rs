@@ -11,8 +11,8 @@ use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
 use shared::newtypes::Blake2bHash;
-use storage::history::*;
-use storage::transform::Transform;
+use shared::transform::Transform;
+use storage::global_state::History;
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 

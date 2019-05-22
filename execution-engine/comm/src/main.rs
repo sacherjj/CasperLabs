@@ -27,6 +27,7 @@ use engine_server::*;
 use execution_engine::engine::EngineState;
 use lmdb::DatabaseFlags;
 
+use shared::init::mocked_account;
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
 use shared::logging::{log_level, log_settings};
 use shared::os::get_page_size;
@@ -34,7 +35,7 @@ use shared::{logging, socket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use storage::global_state::lmdb::LmdbGlobalState;
-use storage::history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+use storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
 // exe / proc
 const PROC_NAME: &str = "casperlabs-engine-grpc-server";
@@ -251,7 +252,7 @@ fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGloba
     };
 
     let global_state = {
-        let init_state = storage::global_state::mocked_account([48u8; 32]);
+        let init_state = mocked_account([48u8; 32]);
         LmdbGlobalState::from_pairs(
             Arc::clone(&environment),
             Arc::clone(&trie_store),

@@ -1,7 +1,8 @@
 use common::bytesrepr::{self, ToBytes};
-use history::trie::{self, Parents, Pointer, Trie};
-use history::trie_store::{Readable, TrieStore, Writable};
 use shared::newtypes::Blake2bHash;
+
+use trie::{self, Parents, Pointer, Trie};
+use trie_store::{Readable, TrieStore, Writable};
 
 #[cfg(test)]
 mod tests;

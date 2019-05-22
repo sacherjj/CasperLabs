@@ -8,9 +8,9 @@
 //! # extern crate storage;
 //! use common::bytesrepr::ToBytes;
 //! use shared::newtypes::Blake2bHash;
-//! use storage::history::trie::{Pointer, PointerBlock, Trie};
-//! use storage::history::trie_store::{Transaction, TransactionSource, TrieStore};
-//! use storage::history::trie_store::in_memory::{InMemoryEnvironment, InMemoryTrieStore};
+//! use storage::trie::{Pointer, PointerBlock, Trie};
+//! use storage::trie_store::{Transaction, TransactionSource, TrieStore};
+//! use storage::trie_store::in_memory::{InMemoryEnvironment, InMemoryTrieStore};
 //!
 //! // Create some leaves
 //! let leaf_1 = Trie::Leaf { key: vec![0u8, 0, 0], value: b"val_1".to_vec() };
@@ -98,10 +98,12 @@
 //! }
 //! ```
 
-use super::*;
-use common::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
+
+use common::bytesrepr::{self, deserialize, FromBytes, ToBytes};
+
+use super::*;
 
 /// A marker for use in a mutex which represents the capability to perform a
 /// write transaction.
