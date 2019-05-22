@@ -27,7 +27,7 @@ class TimedThread(Thread):
         self.my_call(self.kwargs)
 
     def my_call(self, kwargs):
-        pass
+        raise NotImplementedError()
 
 
 class DeployTimedTread(TimedThread):

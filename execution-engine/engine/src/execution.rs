@@ -18,7 +18,7 @@ use super::functions::{
     ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
     GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
     GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX,
-    PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SER_FN_FUNC_INDEX,
+    PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX,
     STORE_FN_INDEX, WRITE_FUNC_INDEX,
 };
 use super::resolvers::create_module_resolver;
@@ -415,6 +415,15 @@ where
         self.host_buf = value_bytes;
         Ok(self.host_buf.len())
     }
+
+    /// Writes the seed associated with the [`RuntimeContext`] to the given destination
+    /// in runtime memory.
+    fn write_seed(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+        let seed = self.context.seed();
+        self.memory
+            .set(dest_ptr, &seed)
+            .map_err(|e| Error::Interpreter(e).into())
+    }
 }
 
 // Helper function for turning result of lookup into domain values.
@@ -615,6 +624,12 @@ where
             }
 
             PROTOCOL_VERSION_FUNC_INDEX => Ok(Some(self.context.protocol_version().into())),
+
+            SEED_FN_INDEX => {
+                let dest_ptr = Args::parse(args)?;
+                self.write_seed(dest_ptr)?;
+                Ok(None)
+            }
 
             _ => panic!("unknown function index"),
         }
