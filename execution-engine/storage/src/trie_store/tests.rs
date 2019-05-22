@@ -152,14 +152,7 @@ mod simple {
         let store = InMemoryTrieStore::new(&env);
         let data = &super::create_data()[0..1];
 
-        assert!(put_succeeds::<
-            Vec<u8>,
-            Vec<u8>,
-            InMemoryTrieStore,
-            InMemoryEnvironment,
-            in_memory::Error,
-        >(&store, &env, data)
-        .is_ok());
+        assert!(put_succeeds::<_, _, _, _, in_memory::Error>(&store, &env, data).is_ok());
     }
 
     #[test]
@@ -169,12 +162,7 @@ mod simple {
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
         let data = &super::create_data()[0..1];
 
-        assert!(
-            put_succeeds::<Vec<u8>, Vec<u8>, LmdbTrieStore, LmdbEnvironment, error::Error>(
-                &store, &env, data
-            )
-            .is_ok()
-        );
+        assert!(put_succeeds::<_, _, _, _, error::Error>(&store, &env, data).is_ok());
 
         tmp_dir.close().unwrap();
     }
@@ -193,9 +181,9 @@ mod simple {
         E: From<S::Error> + From<X::Error>,
     {
         let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
-        super::put_many::<K, V, X::ReadWriteTransaction, S, E>(&mut txn, store, items)?;
+        super::put_many::<_, _, _, _, E>(&mut txn, store, items)?;
         let keys: Vec<&Blake2bHash> = items.iter().map(|TestData(k, _)| k).collect();
-        let ret = super::get_many::<K, V, X::ReadWriteTransaction, S, E>(&txn, store, &keys);
+        let ret = super::get_many::<_, _, _, _, E>(&txn, store, &keys);
         txn.commit()?;
         ret
     }
@@ -211,17 +199,11 @@ mod simple {
 
         assert_eq!(
             expected,
-            put_get_succeeds::<
-                Vec<u8>,
-                Vec<u8>,
-                InMemoryTrieStore,
-                InMemoryEnvironment,
-                in_memory::Error,
-            >(&store, &env, data)
-            .expect("put_get_succeeds failed")
-            .into_iter()
-            .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
-            .expect("one of the outputs was empty")
+            put_get_succeeds::<_, _, _, _, in_memory::Error>(&store, &env, data)
+                .expect("put_get_succeeds failed")
+                .into_iter()
+                .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
+                .expect("one of the outputs was empty")
         )
     }
 
@@ -237,13 +219,11 @@ mod simple {
 
         assert_eq!(
             expected,
-            put_get_succeeds::<Vec<u8>, Vec<u8>, LmdbTrieStore, LmdbEnvironment, error::Error>(
-                &store, &env, data
-            )
-            .expect("put_get_succeeds failed")
-            .into_iter()
-            .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
-            .expect("one of the outputs was empty")
+            put_get_succeeds::<_, _, _, _, error::Error>(&store, &env, data)
+                .expect("put_get_succeeds failed")
+                .into_iter()
+                .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
+                .expect("one of the outputs was empty")
         );
 
         tmp_dir.close().unwrap();
@@ -260,17 +240,11 @@ mod simple {
 
         assert_eq!(
             expected,
-            put_get_succeeds::<
-                Vec<u8>,
-                Vec<u8>,
-                InMemoryTrieStore,
-                InMemoryEnvironment,
-                in_memory::Error,
-            >(&store, &env, &data)
-            .expect("put_get failed")
-            .into_iter()
-            .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
-            .expect("one of the outputs was empty")
+            put_get_succeeds::<_, _, _, _, in_memory::Error>(&store, &env, &data)
+                .expect("put_get failed")
+                .into_iter()
+                .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
+                .expect("one of the outputs was empty")
         )
     }
 
@@ -286,13 +260,11 @@ mod simple {
 
         assert_eq!(
             expected,
-            put_get_succeeds::<Vec<u8>, Vec<u8>, LmdbTrieStore, LmdbEnvironment, error::Error>(
-                &store, &env, &data
-            )
-            .expect("put_get failed")
-            .into_iter()
-            .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
-            .expect("one of the outputs was empty")
+            put_get_succeeds::<_, _, _, _, error::Error>(&store, &env, &data)
+                .expect("put_get failed")
+                .into_iter()
+                .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
+                .expect("one of the outputs was empty")
         );
 
         tmp_dir.close().unwrap();
@@ -313,12 +285,12 @@ mod simple {
     {
         {
             let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
-            super::put_many::<K, V, X::ReadWriteTransaction, S, E>(&mut txn, store, items)?;
+            super::put_many::<_, _, _, _, E>(&mut txn, store, items)?;
         }
         {
             let txn: X::ReadTransaction = transaction_source.create_read_txn()?;
             let keys: Vec<&Blake2bHash> = items.iter().map(|TestData(k, _)| k).collect();
-            let ret = super::get_many::<K, V, X::ReadTransaction, S, E>(&txn, store, &keys);
+            let ret = super::get_many::<_, _, _, _, E>(&txn, store, &keys);
             txn.commit()?;
             ret
         }
@@ -332,13 +304,9 @@ mod simple {
 
         assert_eq!(
             None,
-            uncommitted_read_write_txn_does_not_persist::<
-                Vec<u8>,
-                Vec<u8>,
-                InMemoryTrieStore,
-                InMemoryEnvironment,
-                in_memory::Error,
-            >(&store, &env, &data)
+            uncommitted_read_write_txn_does_not_persist::<_, _, _, _, in_memory::Error>(
+                &store, &env, &data
+            )
             .expect("uncommitted_read_write_txn_does_not_persist failed")
             .into_iter()
             .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
@@ -354,13 +322,9 @@ mod simple {
 
         assert_eq!(
             None,
-            uncommitted_read_write_txn_does_not_persist::<
-                Vec<u8>,
-                Vec<u8>,
-                LmdbTrieStore,
-                LmdbEnvironment,
-                error::Error,
-            >(&store, &env, &data)
+            uncommitted_read_write_txn_does_not_persist::<_, _, _, _, error::Error>(
+                &store, &env, &data
+            )
             .expect("uncommitted_read_write_txn_does_not_persist failed")
             .into_iter()
             .collect::<Option<Vec<Trie<Vec<u8>, Vec<u8>>>>>()
@@ -387,10 +351,10 @@ mod simple {
     fn in_memory_read_write_transaction_does_not_block_read_transaction() {
         let env = InMemoryEnvironment::new();
 
-        let result: Result<(), in_memory::Error> =
-            read_write_transaction_does_not_block_read_transaction(&env);
-
-        assert!(result.is_ok())
+        assert!(
+            read_write_transaction_does_not_block_read_transaction::<_, in_memory::Error>(&env)
+                .is_ok()
+        )
     }
 
     #[test]
@@ -398,10 +362,9 @@ mod simple {
         let dir = tempdir().unwrap();
         let env = LmdbEnvironment::new(&dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
 
-        let result: Result<(), error::Error> =
-            read_write_transaction_does_not_block_read_transaction(&env);
-
-        assert!(result.is_ok())
+        assert!(
+            read_write_transaction_does_not_block_read_transaction::<_, error::Error>(&env).is_ok()
+        )
     }
 
     fn reads_are_isolated<'a, S, X, E>(store: &S, env: &'a X) -> Result<(), E>
@@ -444,9 +407,7 @@ mod simple {
         let env = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&env);
 
-        let result: Result<(), in_memory::Error> = reads_are_isolated(&store, &env);
-
-        assert!(result.is_ok())
+        assert!(reads_are_isolated::<_, _, in_memory::Error>(&store, &env).is_ok())
     }
 
     #[test]
@@ -455,9 +416,7 @@ mod simple {
         let env = LmdbEnvironment::new(&dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 
-        let result: Result<(), error::Error> = reads_are_isolated(&store, &env);
-
-        assert!(result.is_ok())
+        assert!(reads_are_isolated::<_, _, error::Error>(&store, &env).is_ok())
     }
 
     fn reads_are_isolated_2<'a, S, X, E>(store: &S, env: &'a X) -> Result<(), E>
@@ -504,9 +463,7 @@ mod simple {
         let env = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&env);
 
-        let result: Result<(), in_memory::Error> = reads_are_isolated_2(&store, &env);
-
-        assert!(result.is_ok())
+        assert!(reads_are_isolated_2::<_, _, in_memory::Error>(&store, &env).is_ok())
     }
 
     #[test]
@@ -515,9 +472,7 @@ mod simple {
         let env = LmdbEnvironment::new(&dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 
-        let result: Result<(), error::Error> = reads_are_isolated_2(&store, &env);
-
-        assert!(result.is_ok())
+        assert!(reads_are_isolated_2::<_, _, error::Error>(&store, &env).is_ok())
     }
 }
 
@@ -687,9 +642,9 @@ mod proptests {
         E: From<S::Error> + From<X::Error>,
     {
         let mut txn: X::ReadWriteTransaction = transaction_source.create_read_write_txn()?;
-        super::put_many::<K, V, X::ReadWriteTransaction, S, E>(&mut txn, store, items)?;
+        super::put_many::<_, _, _, _, E>(&mut txn, store, items)?;
         let keys: Vec<&Blake2bHash> = items.iter().map(|TestData(k, _)| k).collect();
-        let result = super::get_many::<K, V, X::ReadWriteTransaction, S, E>(&txn, store, &keys);
+        let result = super::get_many::<_, _, _, _, E>(&txn, store, &keys);
         txn.commit()?;
         result
     }
@@ -710,7 +665,7 @@ mod proptests {
                 .iter()
                 .map(|trie| TestData(Blake2bHash::new(&trie.to_bytes().unwrap()), trie.to_owned()))
                 .collect();
-            roundtrip::<Key, Value, S, X, E>(store, transaction_source, &input_tuples)
+            roundtrip::<_, _, _, _, E>(store, transaction_source, &input_tuples)
                 .expect("roundtrip failed")
                 .into_iter()
                 .collect::<Option<Vec<Trie<Key, Value>>>>()
@@ -726,9 +681,7 @@ mod proptests {
         let env = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&env);
 
-        roundtrip_succeeds::<InMemoryTrieStore, InMemoryEnvironment, in_memory::Error>(
-            &store, &env, inputs,
-        )
+        roundtrip_succeeds::<_, _, in_memory::Error>(&store, &env, inputs)
     }
 
     fn lmdb_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
@@ -739,9 +692,7 @@ mod proptests {
         let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();
         let store = LmdbTrieStore::new(&env, None, DatabaseFlags::empty()).unwrap();
 
-        let ret = roundtrip_succeeds::<LmdbTrieStore, LmdbEnvironment, error::Error>(
-            &store, &env, inputs,
-        );
+        let ret = roundtrip_succeeds::<_, _, error::Error>(&store, &env, inputs);
         tmp_dir.close().unwrap();
         ret
     }

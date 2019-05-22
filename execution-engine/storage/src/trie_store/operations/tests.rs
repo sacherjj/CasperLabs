@@ -490,7 +490,7 @@ impl LmdbTestContext {
         let _temp_dir = tempdir()?;
         let environment = LmdbEnvironment::new(&_temp_dir.path().to_path_buf(), *TEST_MAP_SIZE)?;
         let store = LmdbTrieStore::new(&environment, None, DatabaseFlags::empty())?;
-        put_tries::<LmdbEnvironment, LmdbTrieStore, error::Error>(&environment, &store, tries)?;
+        put_tries::<_, _, error::Error>(&environment, &store, tries)?;
         Ok(LmdbTestContext {
             _temp_dir,
             environment,
@@ -499,11 +499,7 @@ impl LmdbTestContext {
     }
 
     fn update(&self, tries: &[HashedTestTrie]) -> Result<(), failure::Error> {
-        put_tries::<LmdbEnvironment, LmdbTrieStore, error::Error>(
-            &self.environment,
-            &self.store,
-            tries,
-        )?;
+        put_tries::<_, _, error::Error>(&self.environment, &self.store, tries)?;
         Ok(())
     }
 }
@@ -518,20 +514,12 @@ impl InMemoryTestContext {
     fn new(tries: &[HashedTestTrie]) -> Result<Self, failure::Error> {
         let environment = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&environment);
-        put_tries::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
-            &environment,
-            &store,
-            tries,
-        )?;
+        put_tries::<_, _, in_memory::Error>(&environment, &store, tries)?;
         Ok(InMemoryTestContext { environment, store })
     }
 
     fn update(&self, tries: &[HashedTestTrie]) -> Result<(), failure::Error> {
-        put_tries::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
-            &self.environment,
-            &self.store,
-            tries,
-        )?;
+        put_tries::<_, _, in_memory::Error>(&self.environment, &self.store, tries)?;
         Ok(())
     }
 }
@@ -552,8 +540,7 @@ where
 
     for leaf in leaves {
         if let Trie::Leaf { key, value } = leaf {
-            let maybe_value: ReadResult<TestValue> =
-                read::<TestKey, TestValue, T, S, E>(&txn, store, root, key)?;
+            let maybe_value: ReadResult<TestValue> = read::<_, _, _, _, E>(txn, store, root, key)?;
             ret.push(ReadResult::Found(*value) == maybe_value)
         } else {
             panic!("leaves should only contain leaves")
@@ -577,16 +564,12 @@ where
 {
     let txn: R::ReadTransaction = environment.create_read_txn()?;
 
-    assert!(
-        check_leaves_exist::<R::ReadTransaction, S, E>(&txn, store, root, present)?
-            .iter()
-            .all(|b| *b)
-    );
-    assert!(
-        check_leaves_exist::<R::ReadTransaction, S, E>(&txn, store, root, absent)?
-            .iter()
-            .all(|b| !*b)
-    );
+    assert!(check_leaves_exist::<_, _, E>(&txn, store, root, present)?
+        .iter()
+        .all(|b| *b));
+    assert!(check_leaves_exist::<_, _, E>(&txn, store, root, absent)?
+        .iter()
+        .all(|b| !*b));
     txn.commit()?;
     Ok(())
 }
@@ -622,7 +605,7 @@ mod read {
                 let test_leaves = TEST_LEAVES;
                 let (used, unused) = test_leaves.split_at(num_leaves);
 
-                check_leaves::<LmdbEnvironment, LmdbTrieStore, error::Error>(
+                check_leaves::<_, _, error::Error>(
                     &context.environment,
                     &context.store,
                     &root_hash,
@@ -641,7 +624,7 @@ mod read {
                 let test_leaves = TEST_LEAVES;
                 let (used, unused) = test_leaves.split_at(num_leaves);
 
-                check_leaves::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
+                check_leaves::<_, _, in_memory::Error>(
                     &context.environment,
                     &context.store,
                     &root_hash,
@@ -676,7 +659,7 @@ mod read {
                 for (num_leaves, state) in states[..state_index].iter().enumerate() {
                     let test_leaves = TEST_LEAVES;
                     let (used, unused) = test_leaves.split_at(num_leaves);
-                    check_leaves::<LmdbEnvironment, LmdbTrieStore, error::Error>(
+                    check_leaves::<_, _, error::Error>(
                         &context.environment,
                         &context.store,
                         state,
@@ -701,7 +684,7 @@ mod read {
                 for (num_leaves, state) in states[..state_index].iter().enumerate() {
                     let test_leaves = TEST_LEAVES;
                     let (used, unused) = test_leaves.split_at(num_leaves);
-                    check_leaves::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
+                    check_leaves::<_, _, in_memory::Error>(
                         &context.environment,
                         &context.store,
                         state,
@@ -777,7 +760,7 @@ mod scan {
 
                 for leaf in TEST_LEAVES.iter() {
                     let leaf_bytes = leaf.to_bytes().unwrap();
-                    check_scan::<LmdbEnvironment, LmdbTrieStore, error::Error>(
+                    check_scan::<_, _, error::Error>(
                         &context.environment,
                         &context.store,
                         &root_hash,
@@ -796,7 +779,7 @@ mod scan {
 
                 for leaf in TEST_LEAVES.iter() {
                     let leaf_bytes = leaf.to_bytes().unwrap();
-                    check_scan::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
+                    check_scan::<_, _, in_memory::Error>(
                         &context.environment,
                         &context.store,
                         &root_hash,
@@ -824,7 +807,7 @@ mod scan {
                 for state in &states[..state_index] {
                     for leaf in TEST_LEAVES.iter() {
                         let leaf_bytes = leaf.to_bytes().unwrap();
-                        check_scan::<LmdbEnvironment, LmdbTrieStore, error::Error>(
+                        check_scan::<_, _, error::Error>(
                             &context.environment,
                             &context.store,
                             state,
@@ -849,7 +832,7 @@ mod scan {
                 for state in &states[..state_index] {
                     for leaf in TEST_LEAVES.iter() {
                         let leaf_bytes = leaf.to_bytes().unwrap();
-                        check_scan::<InMemoryEnvironment, InMemoryTrieStore, in_memory::Error>(
+                        check_scan::<_, _, in_memory::Error>(
                             &context.environment,
                             &context.store,
                             state,
@@ -887,9 +870,7 @@ mod write {
 
         for leaf in leaves.iter() {
             if let Trie::Leaf { key, value } = leaf {
-                let write_result = write::<TestKey, TestValue, R::ReadWriteTransaction, S, E>(
-                    &mut txn, store, &root_hash, key, value,
-                )?;
+                let write_result = write::<_, _, _, _, E>(&mut txn, store, &root_hash, key, value)?;
                 match write_result {
                     WriteResult::Written(hash) => {
                         root_hash = hash;
@@ -926,7 +907,7 @@ mod write {
 
             // Write set of leaves to the trie
             let hashes =
-                write_leaves::<R, S, E>(environment, store, states.last().unwrap(), &test_leaves)?
+                write_leaves::<_, _, E>(environment, store, states.last().unwrap(), &test_leaves)?
                     .iter()
                     .map(|result| match result {
                         WriteResult::Written(root_hash) => *root_hash,
@@ -940,7 +921,7 @@ mod write {
             // state, and that the set of other leaves is not.
             for (num_leaves, state) in states.iter().enumerate() {
                 let (used, unused) = test_leaves.split_at(num_leaves);
-                check_leaves::<R, S, E>(environment, store, state, used, unused)?;
+                check_leaves::<_, _, E>(environment, store, state, used, unused)?;
             }
 
             Ok(())
@@ -1062,7 +1043,7 @@ mod write {
             E: From<R::Error> + From<S::Error> + From<common::bytesrepr::Error>,
         {
             // Check that the expected set of leaves is in the trie
-            check_leaves::<R, S, E>(
+            check_leaves::<_, _, E>(
                 environment,
                 store,
                 &states[0],
@@ -1071,7 +1052,7 @@ mod write {
             )?;
 
             // Rewrite that set of leaves
-            let write_results = write_leaves::<R, S, E>(
+            let write_results = write_leaves::<_, _, E>(
                 environment,
                 store,
                 &states[0],
@@ -1083,7 +1064,7 @@ mod write {
                 .all(|result| *result == WriteResult::AlreadyExists));
 
             // Check that the expected set of leaves is in the trie
-            check_leaves::<R, S, E>(
+            check_leaves::<_, _, E>(
                 environment,
                 store,
                 &states[0],
@@ -1099,11 +1080,12 @@ mod write {
                 let mut context = LmdbTestContext::new(&tries).unwrap();
                 let states = vec![root_hash];
 
-                noop_writes_to_n_leaf_partial_trie_had_expected_results::<
-                    LmdbEnvironment,
-                    LmdbTrieStore,
-                    error::Error,
-                >(&context.environment, &context.store, &states, num_leaves)
+                noop_writes_to_n_leaf_partial_trie_had_expected_results::<_, _, error::Error>(
+                    &context.environment,
+                    &context.store,
+                    &states,
+                    num_leaves,
+                )
                 .unwrap()
             }
         }
@@ -1115,11 +1097,12 @@ mod write {
                 let mut context = InMemoryTestContext::new(&tries).unwrap();
                 let states = vec![root_hash];
 
-                noop_writes_to_n_leaf_partial_trie_had_expected_results::<
-                    InMemoryEnvironment,
-                    InMemoryTrieStore,
-                    in_memory::Error,
-                >(&context.environment, &context.store, &states, num_leaves)
+                noop_writes_to_n_leaf_partial_trie_had_expected_results::<_, _, in_memory::Error>(
+                    &context.environment,
+                    &context.store,
+                    &states,
+                    num_leaves,
+                )
                 .unwrap();
             }
         }
@@ -1139,7 +1122,7 @@ mod write {
             let mut states = states.to_owned();
 
             // Check that the expected set of leaves is in the trie
-            check_leaves::<R, S, E>(
+            check_leaves::<_, _, E>(
                 environment,
                 store,
                 &states[0],
@@ -1160,7 +1143,7 @@ mod write {
 
                 let root_hash = {
                     let current_root = states.last().unwrap();
-                    let results = write_leaves::<R, S, E>(
+                    let results = write_leaves::<_, _, E>(
                         environment,
                         store,
                         &current_root,
@@ -1176,7 +1159,7 @@ mod write {
                 states.push(root_hash);
 
                 // Check that the expected set of leaves is in the trie
-                check_leaves::<R, S, E>(
+                check_leaves::<_, _, E>(
                     environment,
                     store,
                     states.last().unwrap(),
@@ -1195,11 +1178,7 @@ mod write {
                 let mut context = LmdbTestContext::new(&tries).unwrap();
                 let initial_states = vec![root_hash];
 
-                update_writes_to_n_leaf_partial_trie_had_expected_results::<
-                    LmdbEnvironment,
-                    LmdbTrieStore,
-                    error::Error,
-                >(
+                update_writes_to_n_leaf_partial_trie_had_expected_results::<_, _, error::Error>(
                     &context.environment,
                     &context.store,
                     &initial_states,
@@ -1216,11 +1195,12 @@ mod write {
                 let mut context = InMemoryTestContext::new(&tries).unwrap();
                 let states = vec![root_hash];
 
-                update_writes_to_n_leaf_partial_trie_had_expected_results::<
-                    InMemoryEnvironment,
-                    InMemoryTrieStore,
-                    in_memory::Error,
-                >(&context.environment, &context.store, &states, num_leaves)
+                update_writes_to_n_leaf_partial_trie_had_expected_results::<_, _, in_memory::Error>(
+                    &context.environment,
+                    &context.store,
+                    &states,
+                    num_leaves,
+                )
                 .unwrap()
             }
         }
@@ -1243,7 +1223,7 @@ mod write {
         {
             // Check that the expected set of leaves is in the trie at every state reference
             for (num_leaves, state) in states[..index].iter().enumerate() {
-                check_leaves::<R, S, E>(
+                check_leaves::<_, _, E>(
                     environment,
                     store,
                     state,
@@ -1253,7 +1233,7 @@ mod write {
             }
 
             // Rewrite that set of leaves
-            let write_results = write_leaves::<R, S, E>(
+            let write_results = write_leaves::<_, _, E>(
                 environment,
                 store,
                 states.last().unwrap(),
@@ -1266,7 +1246,7 @@ mod write {
 
             // Check that the expected set of leaves is in the trie at every state reference
             for (num_leaves, state) in states[..index].iter().enumerate() {
-                check_leaves::<R, S, E>(environment, store, state, &TEST_LEAVES[..num_leaves], &[])?
+                check_leaves::<_, _, E>(environment, store, state, &TEST_LEAVES[..num_leaves], &[])?
             }
 
             Ok(())
@@ -1282,11 +1262,12 @@ mod write {
                 context.update(&tries).unwrap();
                 states.push(root_hash);
 
-                noop_writes_to_n_leaf_full_trie_had_expected_results::<
-                    LmdbEnvironment,
-                    LmdbTrieStore,
-                    error::Error,
-                >(&context.environment, &context.store, &states, index)
+                noop_writes_to_n_leaf_full_trie_had_expected_results::<_, _, error::Error>(
+                    &context.environment,
+                    &context.store,
+                    &states,
+                    index,
+                )
                 .unwrap();
             }
         }
@@ -1301,11 +1282,12 @@ mod write {
                 context.update(&tries).unwrap();
                 states.push(root_hash);
 
-                noop_writes_to_n_leaf_full_trie_had_expected_results::<
-                    InMemoryEnvironment,
-                    InMemoryTrieStore,
-                    in_memory::Error,
-                >(&context.environment, &context.store, &states, index)
+                noop_writes_to_n_leaf_full_trie_had_expected_results::<_, _, in_memory::Error>(
+                    &context.environment,
+                    &context.store,
+                    &states,
+                    index,
+                )
                 .unwrap();
             }
         }
@@ -1326,7 +1308,7 @@ mod write {
 
             // Check that the expected set of leaves is in the trie at every state reference
             for (state_index, state) in states.iter().enumerate() {
-                check_leaves::<R, S, E>(
+                check_leaves::<_, _, E>(
                     environment,
                     store,
                     state,
@@ -1336,7 +1318,7 @@ mod write {
             }
 
             // Write set of leaves to the trie
-            let hashes = write_leaves::<R, S, E>(
+            let hashes = write_leaves::<_, _, E>(
                 environment,
                 store,
                 states.last().unwrap(),
@@ -1374,7 +1356,7 @@ mod write {
 
             // Check that the expected set of leaves is in the trie at every state reference
             for (state_index, state) in states.iter().enumerate() {
-                check_leaves::<R, S, E>(environment, store, state, &expected[state_index], &[])?;
+                check_leaves::<_, _, E>(environment, store, state, &expected[state_index], &[])?;
             }
 
             Ok(())
@@ -1390,11 +1372,12 @@ mod write {
                 context.update(&tries).unwrap();
                 states.push(root_hash);
 
-                update_writes_to_n_leaf_full_trie_had_expected_results::<
-                    LmdbEnvironment,
-                    LmdbTrieStore,
-                    error::Error,
-                >(&context.environment, &context.store, &states, num_leaves)
+                update_writes_to_n_leaf_full_trie_had_expected_results::<_, _, error::Error>(
+                    &context.environment,
+                    &context.store,
+                    &states,
+                    num_leaves,
+                )
                 .unwrap()
             }
         }
@@ -1409,11 +1392,12 @@ mod write {
                 context.update(&tries).unwrap();
                 states.push(root_hash);
 
-                update_writes_to_n_leaf_full_trie_had_expected_results::<
-                    InMemoryEnvironment,
-                    InMemoryTrieStore,
-                    in_memory::Error,
-                >(&context.environment, &context.store, &states, num_leaves)
+                update_writes_to_n_leaf_full_trie_had_expected_results::<_, _, in_memory::Error>(
+                    &context.environment,
+                    &context.store,
+                    &states,
+                    num_leaves,
+                )
                 .unwrap()
             }
         }
@@ -1434,7 +1418,7 @@ mod write {
 
             // Check that the expected set of leaves is in the trie at every state reference
             for (state_index, state) in states.iter().enumerate() {
-                check_leaves::<R, S, E>(
+                check_leaves::<_, _, E>(
                     environment,
                     store,
                     state,
@@ -1444,7 +1428,7 @@ mod write {
             }
 
             // Write set of leaves to the trie
-            let hashes = write_leaves::<R, S, E>(
+            let hashes = write_leaves::<_, _, E>(
                 environment,
                 store,
                 states.last().unwrap(),
@@ -1482,7 +1466,7 @@ mod write {
 
             // Check that the expected set of leaves is in the trie at every state reference
             for (state_index, state) in states.iter().enumerate() {
-                check_leaves::<R, S, E>(environment, store, state, &expected[state_index], &[])?;
+                check_leaves::<_, _, E>(environment, store, state, &expected[state_index], &[])?;
             }
             Ok(())
         }
@@ -1498,11 +1482,11 @@ mod write {
                 states.push(root_hash);
             }
 
-            node_writes_to_5_leaf_full_trie_had_expected_results::<
-                LmdbEnvironment,
-                LmdbTrieStore,
-                error::Error,
-            >(&context.environment, &context.store, &states)
+            node_writes_to_5_leaf_full_trie_had_expected_results::<_, _, error::Error>(
+                &context.environment,
+                &context.store,
+                &states,
+            )
             .unwrap()
         }
 
@@ -1517,11 +1501,11 @@ mod write {
                 states.push(root_hash);
             }
 
-            node_writes_to_5_leaf_full_trie_had_expected_results::<
-                InMemoryEnvironment,
-                InMemoryTrieStore,
-                in_memory::Error,
-            >(&context.environment, &context.store, &states)
+            node_writes_to_5_leaf_full_trie_had_expected_results::<_, _, in_memory::Error>(
+                &context.environment,
+                &context.store,
+                &states,
+            )
             .unwrap()
         }
     }
@@ -1569,9 +1553,7 @@ mod proptests {
         let mut txn = environment.create_read_write_txn()?;
 
         for (key, value) in pairs.iter() {
-            match write::<TestKey, TestValue, R::ReadWriteTransaction, S, E>(
-                &mut txn, store, &root_hash, key, value,
-            )? {
+            match write::<_, _, _, _, E>(&mut txn, store, &root_hash, key, value)? {
                 WriteResult::Written(hash) => {
                     root_hash = hash;
                 }
