@@ -7,7 +7,7 @@ object TopologicalSortUtil {
   type BlockSort = Vector[Vector[BlockHash]]
   def update(sort: BlockSort, offset: Long, block: Block): BlockSort = {
     val hash             = block.blockHash
-    val offsetDiff: Long = BlockMessageUtil.blockNumber(block) - offset
+    val offsetDiff: Long = block.getHeader.rank - offset
 
     assert(offsetDiff <= Int.MaxValue)
     val number = offsetDiff.toInt

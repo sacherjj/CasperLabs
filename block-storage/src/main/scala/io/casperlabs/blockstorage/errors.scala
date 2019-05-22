@@ -11,7 +11,7 @@ sealed abstract class StorageError extends Exception
 final case class CheckpointsDoNotStartFromZero(sortedCheckpoints: List[Path]) extends StorageError
 final case class CheckpointsAreNotConsecutive(sortedCheckpoints: List[Path])  extends StorageError
 final case class TopoSortLengthIsTooBig(length: Long)                         extends StorageError
-final case class BlockSenderIsMalformed(block: Block)                         extends StorageError
+final case class BlockValidatorIsMalformed(block: Block)                      extends StorageError
 final case class CheckpointDoesNotExist(offset: Long)                         extends StorageError
 final case object LatestMessagesLogIsMalformed                                extends StorageError
 
@@ -27,8 +27,9 @@ object StorageError {
         s"Checkpoints are not consecutive: ${sortedCheckpoints.mkString(",")}"
       case TopoSortLengthIsTooBig(length) =>
         s"Topological sorting of length $length was requested while maximal length is ${Int.MaxValue}"
-      case BlockSenderIsMalformed(block) =>
-        s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is malformed: ${Base16.encode(block.getHeader.validatorPublicKey.toByteArray)}"
+      case BlockValidatorIsMalformed(block) =>
+        s"Block ${Base16.encode(block.blockHash.toByteArray)} validator is malformed: ${Base16
+          .encode(block.getHeader.validatorPublicKey.toByteArray)}"
       case CheckpointDoesNotExist(offset) =>
         s"Requested a block with block number $offset, but there is no checkpoint for it"
       case LatestMessagesLogIsMalformed =>

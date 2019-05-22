@@ -8,11 +8,11 @@ import scalapb.TypeMapper
 final case class BlockMetadata(
     blockHash: ByteString,
     parents: List[ByteString],
-    sender: ByteString,
+    validatorPublicKey: ByteString,
     justifications: List[Justification],
     weightMap: Map[ByteString, Long],
-    blockNum: Long,
-    seqNum: Int
+    rank: Long,
+    validatorBlockSeqNum: Int
 ) {
   def toByteString = BlockMetadata.typeMapper.toBase(this).toByteString
 }
@@ -22,21 +22,21 @@ object BlockMetadata {
     BlockMetadata(
       internal.blockHash,
       internal.parents,
-      internal.sender,
+      internal.validatorPublicKey,
       internal.justifications,
       internal.bonds.map(b => b.validatorPublicKey -> b.stake).toMap,
-      internal.blockNum,
-      internal.seqNum
+      internal.rank,
+      internal.validatorBlockSeqNum
     )
   } { metadata =>
     BlockMetadataInternal(
       metadata.blockHash,
       metadata.parents,
-      metadata.sender,
+      metadata.validatorPublicKey,
       metadata.justifications,
       metadata.weightMap.map { case (validator, stake) => Bond(validator, stake) }.toList,
-      metadata.blockNum,
-      metadata.seqNum
+      metadata.rank,
+      metadata.validatorBlockSeqNum
     )
   }
 

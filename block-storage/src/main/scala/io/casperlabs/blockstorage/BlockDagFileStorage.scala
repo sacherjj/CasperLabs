@@ -13,12 +13,11 @@ import io.casperlabs.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedD
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockDagStorage.MeteredBlockDagStorage
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, parentHashes}
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO._
 import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.blockstorage.util.{fileIO, BlockMessageUtil, Crc32, TopologicalSortUtil}
+import io.casperlabs.blockstorage.util.{fileIO, Crc32, TopologicalSortUtil}
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.catscontrib.MonadStateOps._
@@ -75,7 +74,7 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
                        blockOpt <- BlockStore[F].getBlockMessage(blockHash)
                        result <- blockOpt match {
                                   case Some(block) =>
-                                    val number = blockNumber(block)
+                                    val number = block.getHeader.rank
                                     if (number >= sortOffset) {
                                       none[Set[BlockHash]].pure[F]
                                     } else {
@@ -320,7 +319,7 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
           )
       _ <- (state >> 'dataLookup).modify(_.updated(block.blockHash, blockMetadata))
       _ <- (state >> 'childMap).modify(
-            parentHashes(block)
+            block.getHeader.parentHashes
               .foldLeft(_) {
                 case (acc, p) =>
                   val currChildren = acc.getOrElse(p, Set.empty[BlockHash])
@@ -333,21 +332,21 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
           )
       //Block which contains newly bonded validators will not
       //have those validators in its justification
-      newValidators = bonds(block)
+      newValidators = block.getHeader.getState.bonds
         .map(_.validatorPublicKey)
         .toSet
         .diff(block.getHeader.justifications.map(_.validatorPublicKey).toSet)
-      sender = block.getHeader.validatorPublicKey
-      newValidatorsWithSender <- if (sender.isEmpty) {
+      validator = block.getHeader.validatorPublicKey
+      newValidatorsWithSender <- if (validator.isEmpty) {
                                   // Ignore empty sender for special cases such as genesis block
                                   Log[F].warn(
-                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} validator is empty"
                                   ) *> newValidators.pure[F]
-                                } else if (sender.size == 32) {
-                                  (newValidators + sender).pure[F]
+                                } else if (validator.size == 32) {
+                                  (newValidators + validator).pure[F]
                                 } else {
                                   Sync[F].raiseError[Set[ByteString]](
-                                    BlockSenderIsMalformed(block)
+                                    BlockValidatorIsMalformed(block)
                                   )
                                 }
       _ <- (state >> 'latestMessages).modify {
@@ -621,7 +620,7 @@ object BlockDagFileStorage {
   ): F[Vector[Vector[BlockHash]]] = {
     val blockMetadatas = dataLookup.map(_._2).toVector
     val indexedTopoSort =
-      blockMetadatas.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector.sortBy(_._1)
+      blockMetadatas.groupBy(_.rank).mapValues(_.map(_.blockHash)).toVector.sortBy(_._1)
     val topoSortInvariant = indexedTopoSort.zipWithIndex.forall {
       case ((readI, _), i) => readI == i
     }
@@ -740,7 +739,7 @@ object BlockDagFileStorage {
       lock                  <- Semaphore[F](1)
       _                     <- createFile[F](config.latestMessagesLogPath)
       _                     <- createFile[F](config.latestMessagesCrcPath)
-      genesisBonds          = BlockMessageUtil.bonds(genesis)
+      genesisBonds          = genesis.getHeader.getState.bonds
       initialLatestMessages = genesisBonds.map(_.validatorPublicKey -> genesis.blockHash).toMap
       latestMessagesData = initialLatestMessages
         .foldLeft(ByteString.EMPTY) {

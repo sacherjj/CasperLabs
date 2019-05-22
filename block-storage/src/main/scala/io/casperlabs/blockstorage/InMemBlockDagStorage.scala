@@ -8,7 +8,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockDagStorage.MeteredBlockDagStorage
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
-import io.casperlabs.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import io.casperlabs.blockstorage.util.TopologicalSortUtil
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.crypto.codec.Base16
@@ -76,28 +75,28 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
       _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block)))
       _ <- childMapRef.update(
             childMap =>
-              parentHashes(block).foldLeft(childMap) {
+              block.getHeader.parentHashes.foldLeft(childMap) {
                 case (acc, p) =>
                   val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
                   acc.updated(p, currChildren + block.blockHash)
               }
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
-      newValidators = bonds(block)
+      newValidators = block.getHeader.getState.bonds
         .map(_.validatorPublicKey)
         .toSet
         .diff(block.getHeader.justifications.map(_.validatorPublicKey).toSet)
-      sender = block.getHeader.validatorPublicKey
-      newValidatorsWithSender <- if (sender.isEmpty) {
+      validator = block.getHeader.validatorPublicKey
+      newValidatorsWithSender <- if (validator.isEmpty) {
                                   // Ignore empty sender for special cases such as genesis block
                                   Log[F].warn(
-                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} validator is empty"
                                   ) *> newValidators.pure[F]
-                                } else if (sender.size == 32) {
-                                  (newValidators + sender).pure[F]
+                                } else if (validator.size == 32) {
+                                  (newValidators + validator).pure[F]
                                 } else {
                                   Sync[F].raiseError[Set[ByteString]](
-                                    BlockSenderIsMalformed(block)
+                                    BlockValidatorIsMalformed(block)
                                   )
                                 }
       _ <- latestMessagesRef.update { latestMessages =>

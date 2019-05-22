@@ -39,7 +39,7 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       dag       <- underlying.getRepresentation
       nextCreatorSeqNum <- dag
                             .latestMessage(block.getHeader.validatorPublicKey)
-                            .map(_.fold(-1)(_.seqNum) + 1)
+                            .map(_.fold(-1)(_.validatorBlockSeqNum) + 1)
       modifiedBlock = block
         .withHeader(
           header
