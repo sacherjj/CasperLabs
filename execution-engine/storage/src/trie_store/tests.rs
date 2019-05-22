@@ -1,20 +1,10 @@
 use common::bytesrepr::ToBytes;
 use shared::newtypes::Blake2bHash;
-use shared::os::get_page_size;
 
 use trie::Trie;
 use trie::{Pointer, PointerBlock};
 use trie_store::{Readable, TrieStore, Writable};
-
-lazy_static! {
-    // 10 MiB = 10485760 bytes
-    // page size on x86_64 linux = 4096 bytes
-    // 10485760 / 4096 = 2560
-    static ref TEST_MAP_SIZE: usize = {
-        let page_size = get_page_size().unwrap();
-        page_size * 2560
-    };
-}
+use TEST_MAP_SIZE;
 
 #[derive(Clone)]
 struct TestData<K, V>(Blake2bHash, Trie<K, V>);

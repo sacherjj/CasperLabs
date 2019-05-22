@@ -4,7 +4,6 @@ use tempfile::{tempdir, TempDir};
 
 use common::bytesrepr::{self, FromBytes, ToBytes};
 use shared::newtypes::Blake2bHash;
-use shared::os::get_page_size;
 
 use error;
 use trie::{Pointer, Trie};
@@ -12,16 +11,7 @@ use trie_store::in_memory::{self, InMemoryEnvironment, InMemoryTrieStore};
 use trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 use trie_store::operations::{read, write, ReadResult, WriteResult};
 use trie_store::{Readable, Transaction, TransactionSource, TrieStore};
-
-lazy_static! {
-    // 10 MiB = 10485760 bytes
-    // page size on x86_64 linux = 4096 bytes
-    // 10485760 / 4096 = 2560
-    static ref TEST_MAP_SIZE: usize = {
-        let page_size = get_page_size().unwrap();
-        page_size * 2560
-    };
-}
+use TEST_MAP_SIZE;
 
 const TEST_KEY_LENGTH: usize = 7;
 
