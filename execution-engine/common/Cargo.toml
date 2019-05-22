@@ -12,6 +12,7 @@ std = ["proptest/std"]
 gens = ["std", "proptest/std"]
 
 [dependencies]
+blake2 = { version = "0.8.0", default-features = false }
 failure = { version = "0.1.5", default-features = false, features = ["failure_derive"] }
 num = { version = "0.2.0", default-features = false }
 wee_alloc = "0.4.3"

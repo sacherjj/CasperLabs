@@ -362,14 +362,16 @@ mod tests {
     extern crate storage;
 
     use super::{Error, RuntimeContext, URefAddr, Validated};
-    use common::key::{AccessRights, Key};
+    use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
     use common::value::{self, Account, Contract, Value};
     use execution::{create_rng, vec_key_rights_to_map};
     use rand::RngCore;
     use rand_chacha::ChaChaRng;
+    use shared::newtypes::Blake2bHash;
     use shared::transform::Transform;
     use std::cell::RefCell;
-    use std::collections::{BTreeMap, HashMap, HashSet};
+    use std::collections::btree_map::BTreeMap;
+    use std::collections::{HashMap, HashSet};
     use std::iter::once;
     use std::rc::Rc;
     use storage::global_state::in_memory::InMemoryGlobalState;
@@ -426,6 +428,13 @@ mod tests {
         let mut key = [0u8; 32];
         entropy_source.fill_bytes(&mut key);
         Key::URef(key, rights)
+    }
+
+    fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SIZE]) -> Key {
+        let mut key = [0u8; 64];
+        entropy_source.fill_bytes(&mut key);
+        let key_hash = Blake2bHash::new(&key).into();
+        Key::Local { seed, key_hash }
     }
 
     fn mock_runtime_context<'a>(
@@ -853,5 +862,83 @@ mod tests {
         let known_urefs = vec_key_rights_to_map(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.add_gs(uref_key, Value::Int32(1)));
         assert_invalid_access(query_result, AccessRights::ADD);
+    }
+
+    #[test]
+    fn local_key_writeable_valid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = runtime_context.seed();
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validated_writeable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_ok())
+    }
+
+    #[test]
+    fn local_key_writeable_invalid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = [1u8; LOCAL_SEED_SIZE];
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validated_writeable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_err())
+    }
+
+    #[test]
+    fn local_key_readable_valid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = runtime_context.seed();
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validate_readable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_ok())
+    }
+
+    #[test]
+    fn local_key_readable_invalid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = [1u8; LOCAL_SEED_SIZE];
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validate_readable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_err())
+    }
+
+    #[test]
+    fn local_key_addable_valid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = runtime_context.seed();
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validated_addable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_ok())
+    }
+
+    #[test]
+    fn local_key_addable_invalid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = [1u8; LOCAL_SEED_SIZE];
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validated_addable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_err())
     }
 }
