@@ -8,7 +8,7 @@ from .cl_node.casperlabsnode import (
 from .cl_node.wait import wait_for_count_the_blocks_on_node
 
 
-def test_call_contracts_one_another(docker_client_fixture, three_node_network):
+def test_call_contracts_one_another(three_node_network):
     tnn = three_node_network
     node0, node1, node2 = tnn.docker_nodes
     node0.deploy_and_propose(session_contract=COMBINED_CONTRACT, payment_contract=COMBINED_CONTRACT)
@@ -25,7 +25,7 @@ def test_call_contracts_one_another(docker_client_fixture, three_node_network):
     for index, counter_hash in enumerate(generated_hashes[COUNTER_CALL]):
         expected_result = index + 1
         output = get_contract_state(
-            docker_client=docker_client_fixture,
+            docker_client=three_node_network.docker_client,
             network_name=tnn.docker_nodes[index].network,
             target_host_name=tnn.docker_nodes[index].name,
             port=40401,
@@ -38,7 +38,7 @@ def test_call_contracts_one_another(docker_client_fixture, three_node_network):
 
     for index, mailing_list_hash in enumerate(generated_hashes[MAILING_LIST_CALL]):
         output = get_contract_state(
-            docker_client=docker_client_fixture,
+            docker_client=three_node_network.docker_client,
             network_name=tnn.docker_nodes[index].network,
             target_host_name=tnn.docker_nodes[index].name,
             port=40401,
@@ -51,7 +51,7 @@ def test_call_contracts_one_another(docker_client_fixture, three_node_network):
 
     for index, hello_world_hash in enumerate(generated_hashes[HELLO_WORLD]):
         output = get_contract_state(
-            docker_client=docker_client_fixture,
+            docker_client=three_node_network.docker_client,
             network_name=tnn.docker_nodes[index].network,
             target_host_name=tnn.docker_nodes[index].name,
             port=40401,
