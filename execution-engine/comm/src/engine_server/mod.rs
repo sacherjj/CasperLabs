@@ -35,64 +35,60 @@ where
 {
     fn query(
         &self,
-        _o: ::grpc::RequestOptions,
-        p: ipc::QueryRequest,
+        _request_options: ::grpc::RequestOptions,
+        query_request: ipc::QueryRequest,
     ) -> grpc::SingleResponse<ipc::QueryResponse> {
         // TODO: don't unwrap
-        let state_hash: Blake2bHash = p.get_state_hash().try_into().unwrap();
-        match p.get_base_key().try_into() {
+        let state_hash: Blake2bHash = query_request.get_state_hash().try_into().unwrap();
+        let path = query_request.get_path();
+        let mut tracking_copy = match self.tracking_copy(state_hash) {
+            Err(storage_error) => {
+                let mut result = ipc::QueryResponse::new();
+                let error = format!("Error during checkout out Trie: {:?}", storage_error);
+                logging::log_error(&error);
+                result.set_failure(error);
+                return grpc::SingleResponse::completed(result);
+            }
+            Ok(None) => {
+                let mut result = ipc::QueryResponse::new();
+                let error = format!("Root not found: {:?}", state_hash);
+                logging::log_warning(&error);
+                result.set_failure(error);
+                return grpc::SingleResponse::completed(result);
+            }
+            Ok(Some(tracking_copy)) => tracking_copy,
+        };
+        let key = match query_request.get_base_key().try_into() {
             Err(ParsingError(err_msg)) => {
                 logging::log_error(&err_msg);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(err_msg);
-                grpc::SingleResponse::completed(result)
+                return grpc::SingleResponse::completed(result);
             }
-            Ok(key) => {
-                let path = p.get_path();
-                match self.tracking_copy(state_hash) {
-                    Err(storage_error) => {
-                        let mut result = ipc::QueryResponse::new();
-                        let error = format!("Error during checkout out Trie: {:?}", storage_error);
-                        logging::log_error(&error);
-                        result.set_failure(error);
-                        grpc::SingleResponse::completed(result)
-                    }
-                    Ok(None) => {
-                        let mut result = ipc::QueryResponse::new();
-                        let error = format!("Root not found: {:?}", state_hash);
-                        logging::log_warning(&error);
-                        result.set_failure(error);
-                        grpc::SingleResponse::completed(result)
-                    }
-                    Ok(Some(mut tc)) => {
-                        let response = match tc.query(key, path) {
-                            Err(err) => {
-                                let mut result = ipc::QueryResponse::new();
-                                let error = format!("{:?}", err);
-                                logging::log_error(&error);
-                                result.set_failure(error);
-                                result
-                            }
-
-                            Ok(QueryResult::ValueNotFound(full_path)) => {
-                                let mut result = ipc::QueryResponse::new();
-                                let error = format!("Value not found: {:?}", full_path);
-                                logging::log_warning(&error);
-                                result.set_failure(error);
-                                result
-                            }
-
-                            Ok(QueryResult::Success(value)) => {
-                                let mut result = ipc::QueryResponse::new();
-                                result.set_success(value.into());
-                                result
-                            }
-                        };
-                        grpc::SingleResponse::completed(response)
-                    }
-                }
+            Ok(key) => key,
+        };
+        let response = match tracking_copy.query(key, path) {
+            Err(err) => {
+                let mut result = ipc::QueryResponse::new();
+                let error = format!("{:?}", err);
+                logging::log_error(&error);
+                result.set_failure(error);
+                result
             }
-        }
+            Ok(QueryResult::ValueNotFound(full_path)) => {
+                let mut result = ipc::QueryResponse::new();
+                let error = format!("Value not found: {:?}", full_path);
+                logging::log_warning(&error);
+                result.set_failure(error);
+                result
+            }
+            Ok(QueryResult::Success(value)) => {
+                let mut result = ipc::QueryResponse::new();
+                result.set_success(value.into());
+                result
+            }
+        };
+        grpc::SingleResponse::completed(response)
     }
 
     fn exec(
