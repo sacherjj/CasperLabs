@@ -1,7 +1,8 @@
+use std::collections::btree_map::BTreeMap;
+
 use common::bytesrepr::I32_SIZE;
 use common::key::Key;
 use common::value::{Account, Contract, Value};
-use std::collections::btree_map::BTreeMap;
 
 /// Returns byte size of the element - both heap size and stack size.
 pub trait ByteSize {
@@ -111,9 +112,11 @@ impl HeapSizeOf for String {
 
 #[cfg(test)]
 mod tests {
-    use byte_size::ByteSize;
-    use common::key::Key;
     use std::collections::btree_map::BTreeMap;
+
+    use common::key::Key;
+
+    use super::ByteSize;
 
     fn assert_byte_size<T: ByteSize>(el: T, expected: usize) {
         assert_eq!(el.byte_size(), expected)

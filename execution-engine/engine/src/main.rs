@@ -1,8 +1,11 @@
+// third-party dependencies
 extern crate clap;
-extern crate common;
-extern crate execution_engine;
 #[macro_use]
 extern crate lazy_static;
+
+// internal dependencies
+extern crate common;
+extern crate execution_engine;
 extern crate shared;
 extern crate storage;
 extern crate wasm_prep;

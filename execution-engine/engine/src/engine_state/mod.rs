@@ -1,22 +1,24 @@
-use common::key::Key;
-use execution::{self, Executor};
-use parking_lot::Mutex;
-use shared::newtypes::Blake2bHash;
-use shared::transform::Transform;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
-use storage::global_state::{CommitResult, History};
-use tracking_copy::TrackingCopy;
-use wasm_prep::Preprocessor;
-
 pub mod error;
 pub mod execution_effect;
 pub mod execution_result;
 pub mod op;
 
-use self::error::{Error, RootNotFound};
-use self::execution_result::ExecutionResult;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use parking_lot::Mutex;
+
+use common::key::Key;
+use shared::newtypes::Blake2bHash;
+use shared::transform::Transform;
+use storage::global_state::{CommitResult, History};
+use wasm_prep::Preprocessor;
+
+use error::{Error, RootNotFound};
+use execution::{self, Executor};
+use execution_result::ExecutionResult;
+use tracking_copy::TrackingCopy;
 
 pub struct EngineState<H> {
     // Tracks the "state" of the blockchain (or is an interface to it).
