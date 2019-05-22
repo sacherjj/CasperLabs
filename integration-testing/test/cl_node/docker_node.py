@@ -72,7 +72,7 @@ class DockerNode(LoggingDockerBase):
         Number of seconds for a node to timeout.
         :return: int (seconds)
         """
-        return 180
+        return self.config.command_timeout
 
     @property
     def container_type(self):
@@ -209,7 +209,8 @@ class DockerNode(LoggingDockerBase):
                session_contract: Optional[str]='test_helloname.wasm',
                payment_contract: Optional[str]='test_helloname.wasm') -> str:
 
-        command = (f"deploy --from {from_address} --gas-limit {gas_limit} --gas-price {gas_price}"
+        command = (f"deploy --from {from_address}"
+                   f" --gas-limit {gas_limit} --gas-price {gas_price}"
                    f" --nonce {nonce} --session=/data/{session_contract}"
                    f" --payment=/data/{payment_contract}")
 
