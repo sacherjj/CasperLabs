@@ -15,9 +15,9 @@ use shared::transform::Transform;
 use storage::global_state::{CommitResult, History};
 use wasm_prep::Preprocessor;
 
-use error::{Error, RootNotFound};
+use self::error::{Error, RootNotFound};
+use self::execution_result::ExecutionResult;
 use execution::{self, Executor};
-use execution_result::ExecutionResult;
 use tracking_copy::TrackingCopy;
 
 pub struct EngineState<H> {
