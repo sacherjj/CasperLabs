@@ -11,9 +11,9 @@
 //! use common::bytesrepr::ToBytes;
 //! use lmdb::DatabaseFlags;
 //! use shared::newtypes::Blake2bHash;
-//! use storage::history::trie::{Pointer, PointerBlock, Trie};
-//! use storage::history::trie_store::{Transaction, TransactionSource, TrieStore};
-//! use storage::history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+//! use storage::trie::{Pointer, PointerBlock, Trie};
+//! use storage::trie_store::{Transaction, TransactionSource, TrieStore};
+//! use storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 //! use tempfile::tempdir;
 //!
 //! // Create some leaves
@@ -106,11 +106,14 @@
 //! tmp_dir.close().unwrap();
 //! ```
 
-use super::*;
-use common::bytesrepr::{deserialize, FromBytes, ToBytes};
-use error;
-use lmdb::{self, Database, DatabaseFlags, Environment, RoTransaction, RwTransaction, WriteFlags};
 use std::path::PathBuf;
+
+use lmdb::{self, Database, DatabaseFlags, Environment, RoTransaction, RwTransaction, WriteFlags};
+
+use common::bytesrepr::{deserialize, FromBytes, ToBytes};
+
+use super::*;
+use error;
 
 impl<'a> Transaction for RoTransaction<'a> {
     type Error = lmdb::Error;

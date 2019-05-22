@@ -6,8 +6,8 @@ use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::Value;
 use shared::newtypes::Validated;
-use storage::global_state::{ExecutionEffect, StateReader};
-use storage::transform::TypeMismatch;
+use shared::transform::TypeMismatch;
+use storage::global_state::StateReader;
 use trackingcopy::TrackingCopy;
 use wasmi::{
     Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
@@ -35,6 +35,7 @@ use std::rc::Rc;
 
 use super::runtime_context::RuntimeContext;
 use super::URefAddr;
+use engine::ExecutionEffect;
 use resolvers::error::ResolverError;
 use resolvers::memory_resolver::MemoryResolver;
 

@@ -1,7 +1,9 @@
-use common::bytesrepr;
-use history::trie_store::in_memory;
 use lmdb;
 use wasmi;
+
+use common::bytesrepr;
+
+use trie_store::in_memory;
 
 #[derive(Debug, Fail, PartialEq, Eq)]
 pub enum Error {

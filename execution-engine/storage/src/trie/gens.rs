@@ -1,11 +1,13 @@
-use super::{Pointer, PointerBlock, Trie};
-use common::gens::{key_arb, value_arb};
-use common::key::Key;
-use common::value::Value;
 use proptest::collection::vec;
 use proptest::option;
 use proptest::prelude::*;
+
+use common::gens::{key_arb, value_arb};
+use common::key::Key;
+use common::value::Value;
 use shared::newtypes::Blake2bHash;
+
+use super::{Pointer, PointerBlock, Trie};
 
 pub fn blake2b_hash_arb() -> impl Strategy<Value = Blake2bHash> {
     vec(any::<u8>(), 0..1000).prop_map(|b| Blake2bHash::new(&b))
