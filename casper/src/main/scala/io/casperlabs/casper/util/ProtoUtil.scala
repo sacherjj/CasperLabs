@@ -364,23 +364,31 @@ object ProtoUtil {
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
-  def basicDeploy[F[_]: Monad: Time](id: Int): F[Deploy] =
-    Time[F].currentMillis.map(
-      now =>
-        Deploy()
-          .withHeader(
-            Deploy
-              .Header()
-              .withAccountPublicKey(ByteString.EMPTY)
-              .withTimestamp(now)
-          )
-          .withBody(
-            Deploy
-              .Body()
-              .withSession(Deploy.Code())
-              .withPayment(Deploy.Code())
-          )
-    )
+  def basicDeploy[F[_]: Monad: Time](
+      id: Int
+  ): F[Deploy] =
+    Time[F].currentMillis.map { now =>
+      basicDeploy(now, ByteString.EMPTY)
+    }
+
+  def basicDeploy(
+      timestamp: Long,
+      sessionCode: ByteString = ByteString.EMPTY
+  ): Deploy = {
+    val b = Deploy
+      .Body()
+      .withSession(Deploy.Code().withCode(sessionCode))
+      .withPayment(Deploy.Code())
+    val h = Deploy
+      .Header()
+      .withAccountPublicKey(ByteString.EMPTY)
+      .withTimestamp(timestamp)
+      .withBodyHash(protoHash(b))
+    Deploy()
+      .withDeployHash(protoHash(h))
+      .withHeader(h)
+      .withBody(b)
+  }
 
   // TODO: it is for testing
   def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[Block.ProcessedDeploy] =
@@ -390,19 +398,7 @@ object ProtoUtil {
     sourceDeploy(ByteString.copyFromUtf8(source), timestamp, gasLimit)
 
   def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): Deploy =
-    Deploy()
-      .withHeader(
-        Deploy
-          .Header()
-          .withAccountPublicKey(ByteString.EMPTY)
-          .withTimestamp(timestamp)
-      )
-      .withBody(
-        Deploy
-          .Body()
-          .withSession(Deploy.Code().withCode(sessionCode))
-          .withPayment(Deploy.Code())
-      )
+    basicDeploy(0, sessionCode)
 
   // https://casperlabs.atlassian.net/browse/EE-283
   // We are hardcoding exchange rate for DEV NET at 10:1
