@@ -373,8 +373,8 @@ mod tests {
 
     use super::{Error, RuntimeContext, URefAddr, Validated};
     use execution::{create_rng, vec_key_rights_to_map};
-    use tracking_copy::TrackingCopy;
     use shared::newtypes::Blake2bHash;
+    use tracking_copy::TrackingCopy;
 
     fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {
         let mut hist = InMemoryGlobalState::empty().unwrap();
