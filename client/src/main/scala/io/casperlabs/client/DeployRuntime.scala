@@ -11,7 +11,8 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
 import io.casperlabs.client.configuration.Streaming
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base16
 import java.nio.charset.StandardCharsets
 import scala.concurrent.duration._
@@ -108,35 +109,38 @@ object DeployRuntime {
       nonce: Long,
       sessionCode: File,
       paymentCode: File,
-      maybePublicKey: Option[File],
-      maybePrivateKey: Option[File]
+      maybePublicKeyFile: Option[File],
+      maybePrivateKeyFile: Option[File]
   ): F[Unit] = {
-    def readFile(file: File) =
+    def readFile(file: File): F[ByteString] =
       Sync[F].fromTry(
         Try(ByteString.copyFrom(Files.readAllBytes(file.toPath)))
       )
 
-    // TODO: Update to use Base64 and PEM.
-    def readBase16(file: File) =
+    def readFileAsString(file: File): F[String] =
       for {
-        raw   <- readFile(file)
-        str   = new String(raw.toByteArray, StandardCharsets.UTF_8)
-        bytes = Base16.decode(str)
-      } yield bytes
+        raw <- readFile(file)
+        str = new String(raw.toByteArray, StandardCharsets.UTF_8)
+      } yield str
 
     val deploy = for {
       session <- readFile(sessionCode)
       payment <- readFile(paymentCode)
-      privateKey <- maybePrivateKey match {
-                     case Some(file) => readBase16(file)
-                     case None       => Array.empty[Byte].pure[F]
-                   }
-      publicKey <- maybePublicKey match {
-                    case Some(file) => readBase16(file)
-                    case None if privateKey.nonEmpty =>
-                      Ed25519.toPublic(privateKey).pure[F]
-                    case None => Array.empty[Byte].pure[F]
-                  }
+      maybePrivateKey <- {
+        maybePrivateKeyFile.fold(none[PrivateKey].pure[F]) { file =>
+          readFileAsString(file).map(Ed25519.tryParsePrivateKey)
+        }
+      }
+      maybePublicKey <- {
+        maybePublicKeyFile.map { file =>
+          // In the future with multiple signatures and recovery the
+          // account public key  can be different then the private key
+          // we sign with, so not checking that they match.
+          readFileAsString(file).map(Ed25519.tryParsePublicKey)
+        } getOrElse {
+          maybePrivateKey.flatMap(Ed25519.tryToPublic).pure[F]
+        }
+      }
     } yield {
       val deploy = consensus
         .Deploy()
@@ -144,11 +148,10 @@ object DeployRuntime {
           consensus.Deploy
             .Header()
             .withTimestamp(System.currentTimeMillis)
-            // NOTE: For now using this field is also used to carry over the account address,
-            // which has been removed from Deploy. Should eventually disappear from the CLI entirely.
             .withAccountPublicKey(
-              Option(ByteString.copyFrom(publicKey)).filterNot(_.isEmpty) getOrElse ByteString
-                .copyFromUtf8(from)
+              // Allowing --from until we explicitly require signing.
+              // It's an account address but there's no other field to carry it.
+              maybePublicKey.map(ByteString.copyFrom(_)) getOrElse ByteString.copyFromUtf8(from)
             )
             .withNonce(nonce)
         )
@@ -160,7 +163,7 @@ object DeployRuntime {
         )
         .withHashes
 
-      Option(privateKey).filterNot(_.isEmpty).map(deploy.sign(_)) getOrElse deploy
+      maybePrivateKey.map(deploy.sign) getOrElse deploy
     }
 
     gracefulExit(
@@ -201,12 +204,12 @@ object DeployRuntime {
       d.withHeader(h).withDeployHash(hash(h))
     }
 
-    def sign(privateKey: Array[Byte]) = {
+    def sign(privateKey: PrivateKey) = {
       val sig = Ed25519.sign(d.deployHash.toByteArray, privateKey)
       d.withSignature(
         consensus
           .Signature()
-          .withSigAlgorithm("ed25519")
+          .withSigAlgorithm(Ed25519.name)
           .withSig(ByteString.copyFrom(sig))
       )
     }
