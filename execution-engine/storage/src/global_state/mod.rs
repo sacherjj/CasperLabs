@@ -3,10 +3,14 @@ pub mod lmdb;
 
 use std::collections::HashMap;
 use std::hash::BuildHasher;
+use std::time::SystemTime;
 
 use common::key::Key;
 use common::value::Value;
-use shared::newtypes::Blake2bHash;
+use shared::capture_duration;
+use shared::capture_elapsed;
+use shared::capture_gauge;
+use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::{self, Transform, TypeMismatch};
 
 use trie::Trie;
@@ -19,7 +23,7 @@ pub trait StateReader<K, V> {
     type Error;
 
     /// Returns the state value from the corresponding key
-    fn read(&self, key: &K) -> Result<Option<V>, Self::Error>;
+    fn read(&self, correlation_id: CorrelationId, key: &K) -> Result<Option<V>, Self::Error>;
 }
 
 #[derive(Debug)]
@@ -51,14 +55,23 @@ pub trait History {
     /// block_hash is used for computing a deterministic and unique keys.
     fn commit(
         &mut self,
+        correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error>;
 }
 
+const GLOBAL_STATE_COMMIT_READS: &str = "global_state_commit_reads";
+const GLOBAL_STATE_COMMIT_WRITES: &str = "global_state_commit_writes";
+const GLOBAL_STATE_COMMIT_DURATION: &str = "global_state_commit_duration";
+const GLOBAL_STATE_COMMIT_READ_DURATION: &str = "global_state_commit_read_duration";
+const GLOBAL_STATE_COMMIT_WRITE_DURATION: &str = "global_state_commit_write_duration";
+const COMMIT: &str = "commit";
+
 pub fn commit<'a, R, S, H, E>(
     environment: &'a R,
     store: &S,
+    correlation_id: CorrelationId,
     prestate_hash: Blake2bHash,
     effects: HashMap<Key, Transform, H>,
 ) -> Result<CommitResult, E>
@@ -78,8 +91,19 @@ where
         return Ok(CommitResult::RootNotFound);
     };
 
+    let start = SystemTime::now();
+    let mut reads: i32 = 0;
+    let mut writes: i32 = 0;
+
     for (key, transform) in effects.into_iter() {
-        let read_result = read::<_, _, _, _, E>(&txn, store, &current_root, &key)?;
+        let read_result = capture_duration!(
+            correlation_id,
+            GLOBAL_STATE_COMMIT_READ_DURATION,
+            COMMIT,
+            read::<_, _, _, _, E>(correlation_id, &txn, store, &current_root, &key)?
+        );
+
+        reads += 1;
 
         let value = match (read_result, transform) {
             (ReadResult::NotFound, Transform::Write(new_value)) => new_value,
@@ -93,9 +117,17 @@ where
             _x @ (ReadResult::RootNotFound, _) => panic!(stringify!(_x._1)),
         };
 
-        match write::<_, _, _, _, E>(&mut txn, store, &current_root, &key, &value)? {
+        let write_result = capture_duration!(
+            correlation_id,
+            GLOBAL_STATE_COMMIT_WRITE_DURATION,
+            COMMIT,
+            write::<_, _, _, _, E>(correlation_id, &mut txn, store, &current_root, &key, &value)?
+        );
+
+        match write_result {
             WriteResult::Written(root_hash) => {
                 current_root = root_hash;
+                writes += 1;
             }
             WriteResult::AlreadyExists => (),
             _x @ WriteResult::RootNotFound => panic!(stringify!(_x)),
@@ -103,5 +135,22 @@ where
     }
 
     txn.commit()?;
+
+    capture_elapsed!(correlation_id, GLOBAL_STATE_COMMIT_DURATION, COMMIT, start);
+
+    capture_gauge!(
+        correlation_id,
+        GLOBAL_STATE_COMMIT_READS,
+        COMMIT,
+        f64::from(reads)
+    );
+
+    capture_gauge!(
+        correlation_id,
+        GLOBAL_STATE_COMMIT_WRITES,
+        COMMIT,
+        f64::from(writes)
+    );
+
     Ok(CommitResult::Success(current_root))
 }

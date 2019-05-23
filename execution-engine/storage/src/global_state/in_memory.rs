@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use common::key::Key;
 use common::value::Value;
-use shared::newtypes::Blake2bHash;
+use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::Transform;
 
 use error;
@@ -55,7 +55,10 @@ impl InMemoryGlobalState {
     }
 
     /// Creates a state from a given set of [`Key`](common::key::key), [`Value`](common::value::Value) pairs
-    pub fn from_pairs(pairs: &[(Key, Value)]) -> Result<Self, error::Error> {
+    pub fn from_pairs(
+        correlation_id: CorrelationId,
+        pairs: &[(Key, Value)],
+    ) -> Result<Self, error::Error> {
         let mut ret = InMemoryGlobalState::empty()?;
         {
             let mut txn = ret.environment.create_read_write_txn()?;
@@ -63,6 +66,7 @@ impl InMemoryGlobalState {
             for (key, value) in pairs {
                 let key = key.normalize();
                 match write::<_, _, _, InMemoryTrieStore, in_memory::Error>(
+                    correlation_id,
                     &mut txn,
                     &ret.store,
                     &current_root,
@@ -86,9 +90,10 @@ impl InMemoryGlobalState {
 impl StateReader<Key, Value> for InMemoryGlobalState {
     type Error = error::Error;
 
-    fn read(&self, key: &Key) -> Result<Option<Value>, Self::Error> {
+    fn read(&self, correlation_id: CorrelationId, key: &Key) -> Result<Option<Value>, Self::Error> {
         let txn = self.environment.create_read_txn()?;
         let ret = match read::<Key, Value, InMemoryReadTransaction, InMemoryTrieStore, Self::Error>(
+            correlation_id,
             &txn,
             self.store.deref(),
             &self.root_hash,
@@ -122,12 +127,14 @@ impl History for InMemoryGlobalState {
 
     fn commit(
         &mut self,
+        correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error> {
         let commit_result = commit::<InMemoryEnvironment, InMemoryTrieStore, _, Self::Error>(
             &self.environment,
             &self.store,
+            correlation_id,
             prestate_hash,
             effects,
         )?;
@@ -143,6 +150,19 @@ mod tests {
     use shared::init::mocked_account;
 
     use super::*;
+    use shared::logging::log_level::LogLevel;
+    use shared::logging::log_settings;
+    use shared::logging::log_settings::{LogLevelFilter, LogSettings};
+
+    lazy_static! {
+        static ref LOG_SETTINGS: LogSettings = get_log_settings(LogLevel::Debug);
+    }
+
+    fn get_log_settings(log_level: LogLevel) -> LogSettings {
+        let log_level_filter = LogLevelFilter::new(log_level);
+
+        LogSettings::new("global_state_in_memory", log_level_filter)
+    }
 
     #[derive(Debug, Clone)]
     struct TestPair {
@@ -180,6 +200,7 @@ mod tests {
 
     fn create_test_state() -> InMemoryGlobalState {
         InMemoryGlobalState::from_pairs(
+            CorrelationId::new(),
             &TEST_PAIRS
                 .iter()
                 .cloned()
@@ -191,10 +212,11 @@ mod tests {
 
     #[test]
     fn reads_from_a_checkout_return_expected_values() {
+        let correlation_id = CorrelationId::new();
         let state = create_test_state();
         let checkout = state.checkout(state.root_hash).unwrap().unwrap();
         for TestPair { key, value } in TEST_PAIRS.iter().cloned() {
-            assert_eq!(Some(value), checkout.read(&key).unwrap());
+            assert_eq!(Some(value), checkout.read(correlation_id, &key).unwrap());
         }
     }
 
@@ -208,6 +230,9 @@ mod tests {
 
     #[test]
     fn commit_updates_state() {
+        let correlation_id = CorrelationId::new();
+        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
+
         let test_pairs_updated = create_test_pairs_updated();
 
         let mut state = create_test_state();
@@ -219,7 +244,7 @@ mod tests {
             .map(|TestPair { key, value }| (key, Transform::Write(value)))
             .collect();
 
-        let updated_hash = match state.commit(root_hash, effects).unwrap() {
+        let updated_hash = match state.commit(correlation_id, root_hash, effects).unwrap() {
             CommitResult::Success(hash) => hash,
             _ => panic!("commit failed"),
         };
@@ -227,12 +252,16 @@ mod tests {
         let updated_checkout = state.checkout(updated_hash).unwrap().unwrap();
 
         for TestPair { key, value } in test_pairs_updated.iter().cloned() {
-            assert_eq!(Some(value), updated_checkout.read(&key).unwrap());
+            assert_eq!(
+                Some(value),
+                updated_checkout.read(correlation_id, &key).unwrap()
+            );
         }
     }
 
     #[test]
     fn commit_updates_state_and_original_state_stays_intact() {
+        let correlation_id = CorrelationId::new();
         let test_pairs_updated = create_test_pairs_updated();
 
         let mut state = create_test_state();
@@ -246,34 +275,43 @@ mod tests {
             tmp
         };
 
-        let updated_hash = match state.commit(root_hash, effects).unwrap() {
+        let updated_hash = match state.commit(correlation_id, root_hash, effects).unwrap() {
             CommitResult::Success(hash) => hash,
             _ => panic!("commit failed"),
         };
 
         let updated_checkout = state.checkout(updated_hash).unwrap().unwrap();
         for TestPair { key, value } in test_pairs_updated.iter().cloned() {
-            assert_eq!(Some(value), updated_checkout.read(&key).unwrap());
+            assert_eq!(
+                Some(value),
+                updated_checkout.read(correlation_id, &key).unwrap()
+            );
         }
 
         let original_checkout = state.checkout(root_hash).unwrap().unwrap();
         for TestPair { key, value } in TEST_PAIRS.iter().cloned() {
-            assert_eq!(Some(value), original_checkout.read(&key).unwrap());
+            assert_eq!(
+                Some(value),
+                original_checkout.read(correlation_id, &key).unwrap()
+            );
         }
         assert_eq!(
             None,
-            original_checkout.read(&test_pairs_updated[2].key).unwrap()
+            original_checkout
+                .read(correlation_id, &test_pairs_updated[2].key)
+                .unwrap()
         );
     }
 
     #[test]
     fn initial_state_has_the_expected_hash() {
+        let correlation_id = CorrelationId::new();
         let expected_bytes = vec![
             213u8, 28, 115, 132, 250, 129, 55, 111, 27, 68, 13, 5, 143, 211, 111, 190, 243, 87,
             140, 228, 21, 158, 179, 104, 240, 16, 70, 251, 167, 153, 156, 43,
         ];
         let init_state = mocked_account([48u8; 32]);
-        let global_state = InMemoryGlobalState::from_pairs(&init_state).unwrap();
+        let global_state = InMemoryGlobalState::from_pairs(correlation_id, &init_state).unwrap();
         assert_eq!(expected_bytes, global_state.root_hash.to_vec())
     }
 }

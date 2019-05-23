@@ -18,7 +18,7 @@ use wasmi::{
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::Value;
-use shared::newtypes::Validated;
+use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
 use storage::global_state::StateReader;
 
@@ -688,6 +688,7 @@ where
             current_runtime.context.fn_store_id(),
             rng,
             protocol_version,
+            current_runtime.context.correlation_id(),
         ),
     };
 
@@ -769,6 +770,7 @@ pub trait Executor<A> {
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
+        correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
@@ -787,6 +789,7 @@ impl Executor<Module> for WasmiExecutor {
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
+        correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> (Result<ExecutionEffect, Error>, u64)
     where
@@ -800,7 +803,7 @@ impl Executor<Module> for WasmiExecutor {
         #[allow(unreachable_code)]
         let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid), 0);
         let value = on_fail_charge! {
-            match tc.borrow_mut().get(&validated_key) {
+            match tc.borrow_mut().get(correlation_id, &validated_key) {
                 Ok(None) => Err(Error::KeyNotFound(acct_key)),
                 Err(error) => Err(error.into()),
                 Ok(Some(value)) => Ok(value)
@@ -833,6 +836,7 @@ impl Executor<Module> for WasmiExecutor {
             fn_store_id,
             rng,
             protocol_version,
+            correlation_id,
         );
         let mut runtime = Runtime::new(memory, parity_module, context);
         on_fail_charge!(

@@ -1,30 +1,29 @@
 use std::collections::btree_map::BTreeMap;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::logging::log_level::LogLevel;
-use crate::logging::log_message::LogMessage;
-use crate::logging::utils::jsonify;
+use crate::logging::log_message::{LogMessage, MessageId};
+use crate::logging::logger::set_terminal_logger;
+use crate::newtypes::CorrelationId;
+use crate::utils::jsonify;
 
 pub mod log_level;
 pub mod log_message;
 pub mod log_settings;
+#[macro_use]
 pub mod logger;
-pub(crate) mod utils;
 
 /// # Arguments
 ///
 /// * `log_level` - log level of the message to be logged
 /// * `log_message` - the message to be logged
-pub fn log(log_level: LogLevel, log_message: &str) {
+pub fn log(log_level: LogLevel, log_message: &str) -> Option<MessageId> {
+    set_terminal_logger();
     let log_settings_provider = log_settings::get_log_settings_provider();
 
     if log_settings_provider.filter(log_level) {
-        return;
+        return None;
     }
-
-    logger::LOGGER_INIT.call_once(|| {
-        log::set_logger(&logger::TERMINAL_LOGGER).expect("TERMINAL_LOGGER should be set");
-        log::set_max_level(log::LevelFilter::Debug);
-    });
 
     let log_message = LogMessage::new_msg(log_settings_provider, log_level, log_message.to_owned());
 
@@ -40,6 +39,8 @@ pub fn log(log_level: LogLevel, log_message: &str) {
         facility = log_message.process_name.value(),
         payload = json
     );
+
+    Some(log_message.message_id)
 }
 
 /// # Arguments
@@ -51,17 +52,13 @@ pub fn log_details(
     log_level: LogLevel,
     message_format: String,
     properties: BTreeMap<String, String>,
-) {
+) -> Option<MessageId> {
+    set_terminal_logger();
     let log_settings_provider = log_settings::get_log_settings_provider();
 
     if log_settings_provider.filter(log_level) {
-        return;
+        return None;
     }
-
-    logger::LOGGER_INIT.call_once(|| {
-        log::set_logger(&logger::TERMINAL_LOGGER).expect("TERMINAL_LOGGER should be set");
-        log::set_max_level(log::LevelFilter::Debug);
-    });
 
     let log_message = LogMessage::new_props(
         log_settings_provider,
@@ -82,6 +79,89 @@ pub fn log_details(
         facility = log_message.process_name.value(),
         payload = json
     );
+
+    Some(log_message.message_id)
+}
+
+/// # Arguments
+///
+/// * `correlation_id` - a shared identifier used to group metrics
+/// * `metric` - the name of the metric
+/// * `tag` - a grouping tag for the metric
+/// * `duration` - in seconds
+pub fn log_duration(
+    correlation_id: CorrelationId,
+    metric: &str,
+    tag: &str,
+    duration: Duration,
+) -> Option<MessageId> {
+    set_terminal_logger();
+    let duration_in_seconds: f64 = duration.as_float_secs();
+
+    log_metric(
+        correlation_id,
+        metric,
+        tag,
+        "duration_in_seconds",
+        duration_in_seconds,
+    )
+}
+
+/// # Arguments
+///
+/// * `correlation_id` - a shared identifier used to group metrics
+/// * `metric` - the name of the metric
+/// * `tag` - a grouping tag for the metric
+/// * `metric_key` - property key for metric's value
+/// * `metric_value` - numeric value of metric
+pub fn log_metric(
+    correlation_id: CorrelationId,
+    metric: &str,
+    tag: &str,
+    metric_key: &str,
+    metric_value: f64,
+) -> Option<MessageId> {
+    set_terminal_logger();
+    let log_settings_provider = log_settings::get_log_settings_provider();
+
+    const METRIC_LOG_LEVEL: LogLevel = LogLevel::Metric;
+
+    if log_settings_provider.filter(METRIC_LOG_LEVEL) {
+        return None;
+    }
+
+    let mut properties: BTreeMap<String, String> = BTreeMap::new();
+
+    let from_epoch = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("UNIX EPOCH ERROR");
+
+    let milliseconds_since_epoch = from_epoch.as_millis() as i64;
+
+    // https://prometheus.io/docs/instrumenting/exposition_formats/
+    let tsd_metric = format!(
+        "{}{{tag=\"{}\", correlation_id=\"{}\"}} {} {:?}",
+        metric,
+        tag,
+        correlation_id.to_string(),
+        metric_value,
+        milliseconds_since_epoch
+    );
+
+    properties.insert("correlation_id".to_string(), correlation_id.to_string());
+
+    properties.insert("time-series-data".to_string(), tsd_metric);
+
+    properties.insert(metric_key.to_string(), format!("{:?}", metric_value));
+
+    properties.insert(
+        "message".to_string(),
+        format!("{} {} {}", metric, tag, metric_value),
+    );
+
+    let message_format = String::from("{message}");
+
+    log_details(METRIC_LOG_LEVEL, message_format, properties)
 }
 
 /// # Arguments
@@ -119,174 +199,60 @@ pub fn log_debug(log_message: &str) {
     log(LogLevel::Debug, log_message);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::logging::log_settings::{
-        get_log_settings_provider, set_log_settings_provider, LogLevelFilter, LogSettings,
-    };
-    use std::thread;
-    use std::time::{Duration, SystemTime};
+/// this macro does not support early return
+#[macro_export]
+macro_rules! capture_duration {
+    ($correlation_id:expr, $metric_name:expr, $tag:expr, $f:expr) => {{
+        let log_settings_provider = $crate::logging::log_settings::get_log_settings_provider();
 
-    const PROC_NAME: &str = "ee-shared-lib-tests";
-
-    lazy_static! {
-        static ref LOG_SETTINGS: LogSettings = get_log_settings(LogLevel::Info);
-    }
-
-    fn get_log_settings(log_level: LogLevel) -> LogSettings {
-        let log_level_filter = LogLevelFilter::new(log_level);
-
-        LogSettings::new(PROC_NAME, log_level_filter)
-    }
-
-    #[test]
-    fn should_log_when_level_at_or_above_filter() {
-        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
-
-        log(LogLevel::Error, "this is a logmessage");
-    }
-
-    #[test]
-    fn should_not_log_when_level_below_filter() {
-        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
-
-        log(
-            LogLevel::Debug,
-            "this should not log as the filter is set to Info and this message is Debug",
-        );
-    }
-
-    #[test]
-    fn should_log_string() {
-        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
-
-        let log_message = String::from("this is a string and it should get logged");
-
-        log(LogLevel::Info, &log_message);
-    }
-
-    #[test]
-    fn should_log_stir() {
-        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
-
-        log(
-            LogLevel::Info,
-            "this is a string slice and it should get logged",
-        );
-    }
-
-    #[test]
-    fn should_log_with_props_and_template() {
-        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
-
-        let x = property_logger_test_helper();
-
-        log_details(x.0, x.1, x.2);
-    }
-
-    #[test]
-    fn should_set_and_get_log_settings_provider() {
-        let log_settings = &*LOG_SETTINGS;
-
-        let handle = thread::spawn(move || {
-            set_log_settings_provider(log_settings);
-
-            let log_settings_provider = get_log_settings_provider();
-
-            assert_eq!(
-                &log_settings.process_id,
-                &log_settings_provider.get_process_id(),
-                "process_id should be the same",
-            );
-
-            assert_eq!(
-                &log_settings.host_name,
-                &log_settings_provider.get_host_name(),
-                "host_name should be the same",
-            );
-
-            assert_eq!(
-                &log_settings.process_name,
-                &log_settings_provider.get_process_name(),
-                "process_name should be the same",
-            );
-
-            assert_eq!(
-                &log_settings.log_level_filter,
-                &log_settings_provider.get_log_level_filter(),
-                "log_level_filter should be the same",
-            );
-        });
-
-        let _r = handle.join();
-    }
-
-    fn property_logger_test_helper() -> (LogLevel, String, BTreeMap<String, String>) {
-        let mut properties: BTreeMap<String, String> = BTreeMap::new();
-
-        properties.insert(
-            "entry_point".to_string(),
-            "should_log_with_props_and_template".to_string(),
-        );
-
-        let start = SystemTime::now();
-
-        let utc = chrono::DateTime::<chrono::Utc>::from(start);
-
-        properties.insert("start".to_string(), format!("{:?}", utc));
-
-        let mut success = false;
-
-        let mut o: Option<Duration> = None;
-
-        if let Ok(elapsed) = start.elapsed() {
-            o = Some(elapsed);
-
-            // simulate logging misc other data items
-            properties.insert("some-flag".to_string(), format!("{flag}", flag = 0));
-            properties.insert("some-code".to_string(), "XYZ".to_string());
-            properties.insert(
-                "some-metric".to_string(),
-                format!("x: {x}|y: {y}", x = 15, y = 10),
-            );
-
-            success = true;
+        if log_settings_provider.filter($crate::logging::log_level::LogLevel::Metric) {
+            $f
         } else {
-            let end = SystemTime::now();
-            match end.duration_since(start) {
-                Ok(d) => o = Some(d),
-                Err(e) => {
-                    properties.insert("error".to_string(), format!("{:?}", e));
-                }
-            }
-        }
+            let start = SystemTime::now();
 
-        if let Some(duration) = o {
-            properties.insert(
-                "duration-in-nanoseconds".to_string(),
-                format!("{:?}", duration.as_nanos()),
+            let result = $f;
+
+            $crate::logging::log_duration(
+                $correlation_id,
+                $metric_name,
+                $tag,
+                start.elapsed().unwrap(),
             );
+
+            result
         }
-
-        properties.insert("successful".to_string(), success.to_string());
-
-        let utc = chrono::DateTime::<chrono::Utc>::from(SystemTime::now());
-
-        properties.insert("stop".to_string(), format!("{:?}", utc));
-
-        // arbitrary format; any {???} brace encased elements that match a property key will get transcluded in description
-        let mut message_format = String::new();
-
-        message_format.push_str(
-            "TRACE: {entry_point} start: {start}; stop: {stop}; \
-             elapsed(ns): {duration-in-nanoseconds}; successful: {successful}",
-        );
-
-        if properties.contains_key("error") {
-            message_format.push_str("; error: {error}");
-        }
-
-        (LogLevel::Info, message_format, properties)
-    }
+    }};
 }
+
+/// this macro logs elapsed time and returns the elapsed duration if log settings allow metrics, otherwise None.
+#[macro_export]
+macro_rules! capture_elapsed {
+    ($correlation_id:expr, $metric_name:expr, $tag:expr, $s:expr) => {{
+        let log_settings_provider = $crate::logging::log_settings::get_log_settings_provider();
+
+        if log_settings_provider.filter($crate::logging::log_level::LogLevel::Metric) {
+            None
+        } else {
+            let elapsed = $s.elapsed().unwrap();
+
+            $crate::logging::log_duration($correlation_id, $metric_name, $tag, elapsed);
+
+            Some(elapsed)
+        }
+    }};
+}
+
+/// this macro logs numerical gauge if log settings allow metrics
+#[macro_export]
+macro_rules! capture_gauge {
+    ($correlation_id:expr, $metric_name:expr, $tag:expr, $metric:expr) => {{
+        let log_settings_provider = $crate::logging::log_settings::get_log_settings_provider();
+
+        if !log_settings_provider.filter($crate::logging::log_level::LogLevel::Metric) {
+            $crate::logging::log_metric($correlation_id, $metric_name, $tag, "gauge", $metric);
+        }
+    }};
+}
+
+#[cfg(test)]
+mod tests;

@@ -26,7 +26,7 @@ use shared::logging;
 use shared::logging::log_level::LogLevel;
 use shared::logging::log_settings;
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
-use shared::newtypes::Blake2bHash;
+use shared::newtypes::{Blake2bHash, CorrelationId};
 use storage::global_state::in_memory::InMemoryGlobalState;
 use storage::global_state::CommitResult;
 use wasm_prep::{wasm_costs::WasmCosts, WasmiPreprocessor};
@@ -123,8 +123,8 @@ fn main() {
     // TODO: Better error handling?
     //    let global_state = LmdbGs::new(&path).unwrap();
     let init_state = mocked_account(account_addr);
-    let global_state =
-        InMemoryGlobalState::from_pairs(&init_state).expect("Could not create global state");
+    let global_state = InMemoryGlobalState::from_pairs(CorrelationId::new(), &init_state)
+        .expect("Could not create global state");
     let mut state_hash: Blake2bHash = global_state.root_hash;
     let engine_state = EngineState::new(global_state);
 
@@ -138,6 +138,7 @@ fn main() {
     let wasmi_preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
 
     for wasm_bytes in wasm_files.iter() {
+        let correlation_id = CorrelationId::new();
         let result = engine_state.run_deploy(
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
@@ -147,6 +148,7 @@ fn main() {
             state_hash,
             gas_limit,
             protocol_version,
+            correlation_id,
             &wasmi_executor,
             &wasmi_preprocessor,
         );
@@ -170,7 +172,7 @@ fn main() {
             }) => {
                 properties.insert("gas-cost".to_string(), format!("{:?}", cost));
 
-                match engine_state.apply_effect(state_hash, effects.1) {
+                match engine_state.apply_effect(correlation_id, state_hash, effects.1) {
                     Ok(CommitResult::RootNotFound) => {
                         log_level = LogLevel::Warning;
                         error_message = format!("root {:?} not found", state_hash);
