@@ -6,7 +6,7 @@ import java.nio.file._
 
 import cats.{Applicative, Monad}
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Effect, ExitCase, Resource, Sync}
+import cats.effect.{Concurrent, ExitCase, Resource, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
@@ -17,12 +17,12 @@ import io.casperlabs.blockstorage.StorageError.StorageErr
 import io.casperlabs.blockstorage.util.byteOps._
 import io.casperlabs.blockstorage.util.fileIO
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.util.fileIO._
-import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage}
+import io.casperlabs.blockstorage.util.fileIO.{IOError, _}
+import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.catscontrib.MonadStateOps._
-import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.LegacyConversions
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -45,6 +45,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     lock: Semaphore[F],
     env: Env[ByteBuffer],
     index: Dbi[ByteBuffer],
+    blockSummaryDB: Dbi[ByteBuffer],
     storagePath: Path,
     approvedBlockPath: Path,
     checkpointsDir: Path,
@@ -184,14 +185,17 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
         _                                  <- randomAccessFile.seek(endOfFileOffset)
         (blockHash, blockMsgWithTransform) = f
         blockMsgWithTransformByteArray     = blockMsgWithTransform.toByteArray
+        blockSummary                       = LegacyConversions.toBlockSummary(blockMsgWithTransform.getBlockMessage)
         _                                  <- randomAccessFile.writeInt(blockMsgWithTransformByteArray.length)
         _                                  <- randomAccessFile.write(blockMsgWithTransformByteArray)
         _ <- withWriteTxn { txn =>
+              val b = blockHash.toDirectByteBuffer
               index.put(
                 txn,
-                blockHash.toDirectByteBuffer,
+                b,
                 currentIndex.toByteString.concat(endOfFileOffset.toByteString).toDirectByteBuffer
               )
+              blockSummaryDB.put(txn, b, blockSummary.toByteString.toDirectByteBuffer)
             }
       } yield ()
     )
@@ -211,6 +215,12 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
       val tmpFile = approvedBlockPath.resolveSibling(approvedBlockPath.getFileName + ".tmp")
       writeToFile(tmpFile, block.toByteArray) >>
         moveFile(tmpFile, approvedBlockPath, StandardCopyOption.ATOMIC_MOVE).as(())
+    }
+
+  override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
+    withReadTxn { txn =>
+      Option(blockSummaryDB.get(txn, blockHash.toDirectByteBuffer))
+        .map(r => BlockSummary.parseFrom(ByteString.copyFrom(r).newCodedInput()))
     }
 
   override def checkpoint(): F[Unit] =
@@ -344,6 +354,9 @@ object FileLMDBIndexBlockStore {
       index <- Sync[F].delay {
                 env.openDbi(s"block_store_index", MDB_CREATE)
               }
+      blockSummaryDB <- Sync[F].delay {
+                         env.openDbi("block_summary_db", MDB_CREATE)
+                       }
       _                            <- createNewFile(approvedBlockPath)
       blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath, RandomAccessIO.ReadWrite)
       sortedCheckpointsEither      <- loadCheckpoints(checkpointsDirPath)
@@ -362,6 +375,7 @@ object FileLMDBIndexBlockStore {
                        lock,
                        env,
                        index,
+                       blockSummaryDB,
                        storagePath,
                        approvedBlockPath,
                        checkpointsDirPath,

@@ -8,6 +8,7 @@ import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.genesis.contracts.Faucet
 import io.casperlabs.casper.helper.{
   BlockDagStorageTestFixture,
@@ -42,6 +43,7 @@ import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Cell
 import io.casperlabs.storage.BlockMsgWithTransform
+import monix.catnap.Semaphore
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{Matchers, WordSpec}
@@ -97,7 +99,9 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockMap         = Ref.unsafe[Task, Map[BlockHash, BlockMsgWithTransform]](Map.empty)
+    implicit val blockSummaryMap  = Ref.unsafe[Task, Map[BlockHash, BlockSummary]](Map.empty)
     implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
+    implicit val lock             = Semaphore[Task](1).unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockStore       = InMemBlockStore.create[Task]
     implicit val blockDagStorage = InMemBlockDagStorage
       .create[Task]

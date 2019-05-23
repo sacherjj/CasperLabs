@@ -8,11 +8,12 @@ import cats.effect.{ExitCase, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
-import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage}
+import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
-import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
+import io.casperlabs.models.LegacyConversions
 import io.casperlabs.shared.Resources.withResource
 import io.casperlabs.storage.BlockMsgWithTransform
 import org.lmdbjava.DbiFlags.MDB_CREATE
@@ -22,7 +23,12 @@ import org.lmdbjava._
 import scala.collection.JavaConverters._
 import scala.language.higherKinds
 
-class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
+class LMDBBlockStore[F[_]] private (
+    val env: Env[ByteBuffer],
+    path: Path,
+    blocks: Dbi[ByteBuffer],
+    blockSummaryDB: Dbi[ByteBuffer]
+)(
     implicit
     syncF: Sync[F]
 ) extends BlockStore[F] {
@@ -74,6 +80,14 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
         blockHash.toDirectByteBuffer,
         blockMsgWithTransform.toByteString.toDirectByteBuffer
       )
+      blockSummaryDB.put(
+        txn,
+        blockHash.toDirectByteBuffer,
+        LegacyConversions
+          .toBlockSummary(blockMsgWithTransform.getBlockMessage)
+          .toByteString
+          .toDirectByteBuffer
+      )
     }
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
@@ -102,6 +116,12 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 
   def putApprovedBlock(block: ApprovedBlock): F[Unit] =
     ().pure[F]
+
+  override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
+    withReadTxn { txn =>
+      Option(blockSummaryDB.get(txn, blockHash.toDirectByteBuffer))
+        .map(r => BlockSummary.parseFrom(ByteString.copyFrom(r).newCodedInput()))
+    }
 
   def checkpoint(): F[Unit] =
     ().pure[F]
@@ -139,9 +159,10 @@ object LMDBBlockStore {
       .setMaxReaders(config.maxReaders)
       .open(config.dir.toFile, flags: _*) //TODO this is a bracket
 
-    val blocks: Dbi[ByteBuffer] = env.openDbi(s"blocks", MDB_CREATE) //TODO this is a bracket
+    val blocks: Dbi[ByteBuffer]         = env.openDbi(s"blocks", MDB_CREATE) //TODO this is a bracket
+    val blockSummaryDB: Dbi[ByteBuffer] = env.openDbi(s"blockSummarys", MDB_CREATE)
 
-    new LMDBBlockStore[F](env, config.dir, blocks) with MeteredBlockStore[F] {
+    new LMDBBlockStore[F](env, config.dir, blocks, blockSummaryDB) with MeteredBlockStore[F] {
       override implicit val m: Metrics[F] = metricsF
       override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "lmdb")
       override implicit val a: Apply[F]   = syncF
@@ -153,9 +174,10 @@ object LMDBBlockStore {
       syncF: Sync[F],
       metricsF: Metrics[F]
   ): BlockStore[F] = {
-    val blocks: Dbi[ByteBuffer] = env.openDbi(s"blocks", MDB_CREATE)
+    val blocks: Dbi[ByteBuffer]         = env.openDbi(s"blocks", MDB_CREATE)
+    val blockSummaryDb: Dbi[ByteBuffer] = env.openDbi(s"blockSummarys", MDB_CREATE)
 
-    new LMDBBlockStore[F](env, path, blocks) with MeteredBlockStore[F] {
+    new LMDBBlockStore[F](env, path, blocks, blockSummaryDb) with MeteredBlockStore[F] {
       override implicit val m: Metrics[F] = metricsF
       override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "lmdb")
       override implicit val a: Apply[F]   = syncF
