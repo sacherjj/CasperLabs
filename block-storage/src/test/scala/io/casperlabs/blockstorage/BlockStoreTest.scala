@@ -139,13 +139,12 @@ trait BlockStoreTest
 class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val test = for {
-      refTask             <- emptyMapRef[Task, BlockMsgWithTransform]
-      blockSummaryRefTask <- emptyMapRef[Task, BlockSummary]
-      approvedBlockRef    <- Ref[Task].of(none[ApprovedBlock])
-      metrics             = new MetricsNOP[Task]()
-      lock                <- Semaphore[Task](1)
+      refTask          <- emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)]
+      approvedBlockRef <- Ref[Task].of(none[ApprovedBlock])
+      metrics          = new MetricsNOP[Task]()
+      lock             <- Semaphore[Task](1)
       store = InMemBlockStore
-        .create[Task](Monad[Task], refTask, blockSummaryRefTask, approvedBlockRef, lock, metrics)
+        .create[Task](Monad[Task], refTask, approvedBlockRef, metrics)
       _      <- store.find(_ => true).map(map => assert(map.isEmpty))
       result <- f(store)
     } yield result

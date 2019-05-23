@@ -98,10 +98,9 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
     implicit val metrics = new MetricsNOP[Task]
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val blockMap         = Ref.unsafe[Task, Map[BlockHash, BlockMsgWithTransform]](Map.empty)
-    implicit val blockSummaryMap  = Ref.unsafe[Task, Map[BlockHash, BlockSummary]](Map.empty)
+    implicit val blockMap =
+      Ref.unsafe[Task, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]](Map.empty)
     implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
-    implicit val lock             = Semaphore[Task](1).unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockStore       = InMemBlockStore.create[Task]
     implicit val blockDagStorage = InMemBlockDagStorage
       .create[Task]

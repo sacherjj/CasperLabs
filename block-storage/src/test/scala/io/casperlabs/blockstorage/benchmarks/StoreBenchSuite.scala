@@ -193,10 +193,8 @@ object Init {
 
   def inMemBlockStore = InMemBlockStore.create[Task](
     Monad[Task],
-    InMemBlockStore.emptyMapRef[Task, BlockMsgWithTransform].runSyncUnsafe(),
-    InMemBlockStore.emptyMapRef[Task, BlockSummary].runSyncUnsafe(),
+    InMemBlockStore.emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)].runSyncUnsafe(),
     Ref[Task].of(none[ApprovedBlock]).runSyncUnsafe(),
-    Semaphore[Task](1).runSyncUnsafe(),
     metricsNop
   )
 

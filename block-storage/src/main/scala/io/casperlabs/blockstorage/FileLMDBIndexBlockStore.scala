@@ -355,7 +355,7 @@ object FileLMDBIndexBlockStore {
                 env.openDbi(s"block_store_index", MDB_CREATE)
               }
       blockSummaryDB <- Sync[F].delay {
-                         env.openDbi("block_summary_db", MDB_CREATE)
+                         env.openDbi("blockSummarys", MDB_CREATE)
                        }
       _                            <- createNewFile(approvedBlockPath)
       blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath, RandomAccessIO.ReadWrite)

@@ -2,7 +2,7 @@ package io.casperlabs.blockstorage
 
 import cats._
 import cats.effect.Sync
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore.{BlockHash, MeteredBlockStore}
 import io.casperlabs.casper.consensus.BlockSummary
@@ -17,25 +17,20 @@ import scala.language.higherKinds
 class InMemBlockStore[F[_]] private (
     implicit
     monadF: Monad[F],
-    refF: Ref[F, Map[BlockHash, BlockMsgWithTransform]],
-    blockSummaryRefF: Ref[F, Map[BlockHash, BlockSummary]],
-    approvedBlockRef: Ref[F, Option[ApprovedBlock]],
-    lock: Semaphore[F]
+    refF: Ref[F, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]],
+    approvedBlockRef: Ref[F, Option[ApprovedBlock]]
 ) extends BlockStore[F] {
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
-    refF.get.map(_.get(blockHash))
+    refF.get.map(_.get(blockHash).map(_._1))
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
-    refF.get.map(_.filterKeys(p).toSeq)
+    refF.get.map(_.filterKeys(p).map {
+      case (k, (b, s)) => (k, b)
+    }.toSeq)
 
   def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
-    lock.withPermit {
-      refF.update(_ + f) *>
-        blockSummaryRefF.update(
-          _ + (f._1 -> LegacyConversions.toBlockSummary(f._2.getBlockMessage))
-        )
-    }
+    refF.update(_ + (f._1 -> (f._2, LegacyConversions.toBlockSummary(f._2.getBlockMessage))))
 
   def getApprovedBlock(): F[Option[ApprovedBlock]] =
     approvedBlockRef.get
@@ -44,7 +39,7 @@ class InMemBlockStore[F[_]] private (
     approvedBlockRef.set(Some(block))
 
   override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
-    blockSummaryRefF.get.map(_.get(blockHash))
+    refF.get.map(_.get(blockHash).map(_._2))
 
   def checkpoint(): F[Unit] =
     ().pure[F]
@@ -60,10 +55,8 @@ object InMemBlockStore {
   def create[F[_]](
       implicit
       monadF: Monad[F],
-      refF: Ref[F, Map[BlockHash, BlockMsgWithTransform]],
-      blockSummaryRefF: Ref[F, Map[BlockHash, BlockSummary]],
+      refF: Ref[F, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]],
       approvedBlockRef: Ref[F, Option[ApprovedBlock]],
-      lock: Semaphore[F],
       metricsF: Metrics[F]
   ): BlockStore[F] =
     new InMemBlockStore[F] with MeteredBlockStore[F] {
