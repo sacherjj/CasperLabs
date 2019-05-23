@@ -29,7 +29,7 @@ class ExecEngineUtilTest
     with BlockGenerator
     with BlockDagStorageFixture {
 
-  implicit val logEff = new LogStub[Task]
+  implicit val logEff = new LogStub[Task]()
 
   implicit val executionEngineService: ExecutionEngineService[Task] =
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)

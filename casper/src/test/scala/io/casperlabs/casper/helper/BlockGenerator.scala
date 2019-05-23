@@ -6,6 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus._, Block.ProcessedDeploy
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.DeploysCheckpoint
@@ -63,8 +64,9 @@ object BlockGenerator {
     val updatedBlockHeader =
       b.getHeader.withState(updatedBlockPostState)
     val updatedBlockBody = b.getBody.withDeploys(processedDeploys)
-    val updatedBlock     = ProtoUtil.unsignedBlockProto(updatedBlockBody, updatedBlockHeader)
     // NOTE: Storing this under the original block hash.
+    val updatedBlock =
+      ProtoUtil.unsignedBlockProto(updatedBlockBody, updatedBlockHeader).withBlockHash(b.blockHash)
     BlockStore[F].put(b.blockHash, updatedBlock, Seq.empty) *>
       IndexedBlockDagStorage[F].inject(id, updatedBlock)
   }
@@ -83,7 +85,6 @@ object BlockGenerator {
         parents.nonEmpty || (parents.isEmpty && b == genesis),
         "Received a different genesis block."
       )
-
       merged <- ExecEngineUtil.merge[F](parents, dag)
       result <- computeDeploysCheckpoint[F](
                  merged,

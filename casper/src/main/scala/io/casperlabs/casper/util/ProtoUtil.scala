@@ -18,6 +18,7 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.shared.Time
+import java.util.NoSuchElementException
 import scala.collection.immutable
 
 object ProtoUtil {
@@ -83,7 +84,9 @@ object ProtoUtil {
                 case Some(b) => b.pure[F]
                 case None =>
                   MonadThrowable[F].raiseError(
-                    new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+                    new NoSuchElementException(
+                      s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}"
+                    )
                   )
               }
     } yield block
@@ -231,6 +234,13 @@ object ProtoUtil {
   def unsafeGetParents[F[_]: MonadThrowable: BlockStore](b: Block): F[List[Block]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
       ProtoUtil.unsafeGetBlock[F](parentHash)
+    } handleErrorWith {
+      case ex: NoSuchElementException =>
+        MonadThrowable[F].raiseError {
+          new NoSuchElementException(
+            s"Could not retrieve parents of ${PrettyPrinter.buildString(b.blockHash)}: ${ex.getMessage}"
+          )
+        }
     }
 
   def containsDeploy(b: Block, accountPublicKey: ByteString, timestamp: Long): Boolean =

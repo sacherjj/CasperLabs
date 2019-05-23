@@ -331,6 +331,7 @@ object ExecEngineUtil {
           toOps
         )
       }
+      // TODO: Aren't these parents already in `candidateParentBlocks`?
       blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
     } yield
       merged.transform.fold(MergeResult.empty[TransformMap, Block])(
