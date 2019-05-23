@@ -5,6 +5,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.LastApprovedBlock.LastApprovedBlock
 import io.casperlabs.casper.helper.TransportLayerCasperTestNodeFactory
 import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.LegacyConversions
 import io.casperlabs.casper.util.TestTime
 import io.casperlabs.casper.util.comm.ApproveBlockProtocolTest.TestFixture
 import io.casperlabs.casper.{HashSetCasperTest, LastApprovedBlock}
@@ -342,14 +343,14 @@ object ApproveBlockProtocolTest extends TransportLayerCasperTestNodeFactory {
     val bonds                                            = HashSetCasperTest.createBonds(Seq(pk))
     val BlockMsgWithTransform(Some(genesis), transforms) = HashSetCasperTest.createGenesis(bonds)
     val validators                                       = validatorsPk.map(ByteString.copyFrom)
-    val candidate                                        = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+    val candidate                                        = ApprovedBlockCandidate(Some(LegacyConversions.fromBlock(genesis)), requiredSigs)
     val sigs                                             = Ref.unsafe[Task, Set[Signature]](Set.empty)
     val startTime                                        = System.currentTimeMillis()
 
     val node = standaloneEff(genesis, transforms, sk)
     val protocol = ApproveBlockProtocol
       .unsafe[Task](
-        genesis,
+        LegacyConversions.fromBlock(genesis),
         transforms,
         validators,
         requiredSigs,

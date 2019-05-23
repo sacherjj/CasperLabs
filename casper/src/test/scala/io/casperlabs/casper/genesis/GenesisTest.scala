@@ -14,6 +14,7 @@ import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -212,7 +213,7 @@ object GenesisTest {
   def mkStoragePath     = Files.createTempDirectory(s"casper-genesis-test-runtime")
   def mkGenesisPath     = Files.createTempDirectory(s"casper-genesis-test")
   val numValidators     = 5
-  val casperlabsShardId = "casperlabs"
+  val casperlabsChainId = "casperlabs"
 
   def fromBondsFile(
       genesisPath: Path,
@@ -230,7 +231,7 @@ object GenesisTest {
                   minimumBond = 1L,
                   maximumBond = Long.MaxValue,
                   faucet = false,
-                  shardId = casperlabsShardId,
+                  chainId = casperlabsChainId,
                   deployTimestamp = Some(System.currentTimeMillis)
                 )
     } yield genesis

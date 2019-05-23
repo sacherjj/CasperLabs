@@ -4,7 +4,7 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file._
 
-import cats.Monad
+import cats.{Applicative, Monad}
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Effect, ExitCase, Resource, Sync}
 import cats.implicits._
@@ -133,6 +133,16 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
                        } yield result
     } yield blockMessage
   }
+
+  override def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
+    lock.withPermit(
+      for {
+        indexEntryOpt <- withReadTxn { txn =>
+                          Option(index.get(txn, blockHash.toDirectByteBuffer))
+                            .map(IndexEntry.load)
+                        }
+      } yield indexEntryOpt.isDefined
+    )
 
   override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     lock.withPermit(

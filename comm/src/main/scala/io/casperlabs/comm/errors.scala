@@ -100,6 +100,7 @@ object CommError {
 sealed trait ServiceError extends NoStackTrace
 object ServiceError {
   // Created class so that in logs it's a bit more readable.
+  // TODO: Provide customer `Serializable` implementation so test can be forked.
   class Exception(status: Status) extends StatusRuntimeException(status) with ServiceError
 
   /** Factory to create and match gRPC errors. */

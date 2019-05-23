@@ -9,7 +9,7 @@ import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage._
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
@@ -60,7 +60,7 @@ object BlockDagStorageTestFixture {
   def writeInitialLatestMessages(
       latestMessagesData: Path,
       latestMessagesCrc: Path,
-      latestMessages: Map[Validator, BlockMessage]
+      latestMessages: Map[Validator, Block]
   ): Unit = {
     val data = latestMessages
       .foldLeft(ByteString.EMPTY) {

@@ -93,7 +93,7 @@ object Estimator {
   ): F[Map[BlockHash, Long]] = {
     def hashParents(hash: BlockHash, lastFinalizedBlockNumber: Long): F[List[BlockHash]] =
       for {
-        currentBlockNumber <- blockDag.lookup(hash).map(_.get.blockNum)
+        currentBlockNumber <- blockDag.lookup(hash).map(_.get.rank)
         result <- if (currentBlockNumber < lastFinalizedBlockNumber)
                    List.empty[BlockHash].pure[F]
                  else
@@ -106,7 +106,7 @@ object Estimator {
         latestBlockHash: BlockHash
     ): F[Map[BlockHash, Long]] =
       for {
-        lastFinalizedBlockNum <- blockDag.lookup(lastFinalizedBlockHash).map(_.get.blockNum)
+        lastFinalizedBlockNum <- blockDag.lookup(lastFinalizedBlockHash).map(_.get.rank)
         result <- DagOperations
                    .bfTraverseF[F, BlockHash](List(latestBlockHash))(
                      hashParents(_, lastFinalizedBlockNum)
@@ -142,7 +142,7 @@ object Estimator {
                     blockMetadataOpt <- blockDag.lookup(childHash)
                     result = blockMetadataOpt match {
                       case Some(blockMetaData)
-                          if blockMetaData.parents.size > 1 && blockMetaData.sender != validator =>
+                          if blockMetaData.parents.size > 1 && blockMetaData.validatorPublicKey != validator =>
                         val currScore       = acc2.getOrElse(childHash, 0L)
                         val validatorWeight = blockMetaData.weightMap.getOrElse(validator, 0L)
                         acc2.updated(childHash, currScore + validatorWeight)

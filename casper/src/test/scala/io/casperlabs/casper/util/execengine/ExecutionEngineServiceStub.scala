@@ -6,8 +6,8 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Validate
-import io.casperlabs.casper.protocol.{BlockMessage, Bond}
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc._
@@ -23,7 +23,7 @@ object ExecutionEngineServiceStub {
   implicit def functorRaiseInvalidBlock[F[_]: Sync] = Validate.raiseValidateErrorThroughSync[F]
 
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ExecutionEngineService](
-      b: BlockMessage,
+      b: Block,
       dag: BlockDagRepresentation[F]
   ): F[Either[Throwable, StateHash]] =
     (for {
