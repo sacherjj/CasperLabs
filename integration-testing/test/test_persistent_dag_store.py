@@ -1,4 +1,3 @@
-import logging
 
 from test import conftest
 from test.cl_node.casperlabsnode import (
@@ -66,6 +65,9 @@ def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_networ
         tnn.stop_cl_node(node_num)
     for node_num in range(2):
         tnn.start_cl_node(node_num)
+
+    wait_for_blocks_count_at_least(node0, 3, 4, 20)
+    wait_for_blocks_count_at_least(node1, 3, 4, 20)
 
     assert dag0 == node0.vdag(10)
     assert dag1 == node1.vdag(10)
