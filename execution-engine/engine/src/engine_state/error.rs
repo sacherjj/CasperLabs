@@ -10,8 +10,6 @@ pub enum Error {
     ExecError(::execution::Error),
     #[fail(display = "Storage error")]
     StorageError(storage::error::Error),
-    #[fail(display = "Unreachable")]
-    Unreachable,
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -53,8 +51,8 @@ impl From<::execution::Error> for Error {
 }
 
 impl From<!> for Error {
-    fn from(_error: !) -> Self {
-        Error::Unreachable
+    fn from(error: !) -> Self {
+        match error {}
     }
 }
 
