@@ -5,7 +5,7 @@ use serde::Serialize;
 use crate::logging::log_level::*;
 
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 
 thread_local! {
     static LOG_SETTINGS_PROVIDER: RefCell<&'static LogSettingsProvider> = RefCell::new(&NopLogSettingsProvder);
@@ -13,39 +13,12 @@ thread_local! {
     static LOG_SETTINGS_INIT:  RefCell<AtomicUsize> = RefCell::new(AtomicUsize::new(0));
 }
 
-const LOG_SETTINGS_UNINITIALIZED: usize = 0;
-const LOG_SETTINGS_INITIALIZING: usize = 1;
-const LOG_SETTINGS_INITIALIZED: usize = 2;
-
 pub fn set_log_settings_provider(log_settings_provider: &'static LogSettingsProvider) {
-    match LOG_SETTINGS_INIT.with(|lsi| {
-        lsi.borrow().compare_and_swap(
-            LOG_SETTINGS_UNINITIALIZED,
-            LOG_SETTINGS_INITIALIZING,
-            Ordering::SeqCst,
-        )
-    }) {
-        LOG_SETTINGS_UNINITIALIZED => {
-            LOG_SETTINGS_PROVIDER.with(|f| *f.borrow_mut() = log_settings_provider);
-            LOG_SETTINGS_INIT.with(|lsi| {
-                lsi.borrow()
-                    .store(LOG_SETTINGS_INITIALIZED, Ordering::SeqCst)
-            });
-        }
-        LOG_SETTINGS_INITIALIZING => LOG_SETTINGS_INIT
-            .with(|lsi| while lsi.borrow().load(Ordering::SeqCst) == LOG_SETTINGS_INITIALIZING {}),
-        _ => (),
-    }
+    LOG_SETTINGS_PROVIDER.with(|f| *f.borrow_mut() = log_settings_provider);
 }
 
 pub(crate) fn get_log_settings_provider() -> &'static LogSettingsProvider {
-    if LOG_SETTINGS_INIT.with(|lsi| lsi.borrow().load(Ordering::SeqCst) != LOG_SETTINGS_INITIALIZED)
-    {
-        static NOP: NopLogSettingsProvder = NopLogSettingsProvder;
-        &NOP
-    } else {
-        LOG_SETTINGS_PROVIDER.with(|f| *f.borrow())
-    }
+    LOG_SETTINGS_PROVIDER.with(|f| *f.borrow())
 }
 
 /// container for logsettings from the host
@@ -316,38 +289,5 @@ mod tests {
         });
 
         let _r = handle.join();
-    }
-
-    #[test]
-    fn should_init_log_settings_provider_once_per_thread() {
-        let handle1 = thread::spawn(move || {
-            set_log_settings_provider(&*LOG_SETTINGS_TESTS);
-            set_log_settings_provider(&*LOG_SETTINGS_TESTS_RHS);
-
-            let log_settings_provider = get_log_settings_provider();
-
-            assert_eq!(
-                &LOG_SETTINGS_TESTS.process_name,
-                &log_settings_provider.get_process_name(),
-                "process_name should be the same",
-            );
-        });
-
-        let _r = handle1.join();
-
-        let handle2 = thread::spawn(move || {
-            set_log_settings_provider(&*LOG_SETTINGS_TESTS_RHS);
-            set_log_settings_provider(&*LOG_SETTINGS_TESTS);
-
-            let log_settings_provider = get_log_settings_provider();
-
-            assert_eq!(
-                &LOG_SETTINGS_TESTS_RHS.process_name,
-                &log_settings_provider.get_process_name(),
-                "process_name should be the same",
-            );
-        });
-
-        let _r = handle2.join();
     }
 }
