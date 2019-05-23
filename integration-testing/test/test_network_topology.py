@@ -1,29 +1,9 @@
-import contextlib
 import logging
-from typing import Generator
 
-from .cl_node.casperlabsnode import (
-    HELLO_NAME,
-    deploy,
-    docker_network_with_started_bootstrap,
-    propose,
-    start_network,
-)
-from .cl_node.common import Network, TestingContext
 from .cl_node.wait import (
     wait_for_block_contains,
-    wait_for_converged_network,
-    wait_for_started_network,
+    wait_for_new_fork_choice_tip_block,
 )
-
-
-@contextlib.contextmanager
-def star_network(context: TestingContext) -> Generator[Network, None, None]:
-    with docker_network_with_started_bootstrap(context) as bootstrap_node:
-        with start_network(context=context, bootstrap=bootstrap_node) as network:
-            wait_for_started_network(context.node_startup_timeout, network)
-            wait_for_converged_network(context.network_converge_timeout, network, 1)
-            yield network
 
 
 def test_metrics_api_socket(two_node_network):
@@ -50,5 +30,11 @@ def test_casper_propose_and_deploy(two_node_network):
         node.deploy_and_propose()
 
 
-def test_convergence(three_node_network):
-    pass
+def test_star_network(star_network):
+    # deploy and propose from one of the star edge nodes.
+    node1 = star_network.docker_nodes[1]
+    block = node1.deploy_and_propose()
+
+    # validate all nodes get block
+    for node in star_network.docker_nodes:
+        wait_for_new_fork_choice_tip_block(node, block, node.timeout)

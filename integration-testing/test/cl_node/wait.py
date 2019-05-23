@@ -45,6 +45,11 @@ class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
         super().__init__(node, 'Making a transition to ApprovedBlockRecievedHandler state.')
 
 
+class NewForkChoiceTipBlock(LogsContainMessage):
+    def __init__(self, node: 'Node', block: str) -> None:
+        super().__init__(node, f'New fork-choice tip is block {block}....')
+
+
 class RegexBlockRequest:
     regex = None
 
@@ -218,6 +223,11 @@ def wait_for_block_contains(node: 'Node', block_hash: str, expected_string: str,
 
 def wait_for_finalised_hash(node: 'Node', hash_string: str, timeout_seconds: int):
     predicate = LastFinalisedHash(node, hash_string)
+    wait_on_using_wall_clock_time(predicate, timeout_seconds)
+
+
+def wait_for_new_fork_choice_tip_block(node: 'Node', block: str, timeout_seconds: int):
+    predicate = NewForkChoiceTipBlock(node, block)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
