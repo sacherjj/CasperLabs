@@ -51,8 +51,8 @@ impl From<::execution::Error> for Error {
 }
 
 impl From<!> for Error {
-    fn from(_error: !) -> Self {
-        unreachable!()
+    fn from(error: !) -> Self {
+        match error {}
     }
 }
 

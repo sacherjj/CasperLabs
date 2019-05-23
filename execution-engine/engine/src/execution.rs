@@ -89,8 +89,8 @@ impl From<BytesReprError> for Error {
 }
 
 impl From<!> for Error {
-    fn from(_err: !) -> Error {
-        unreachable!()
+    fn from(error: !) -> Error {
+        match error {}
     }
 }
 
