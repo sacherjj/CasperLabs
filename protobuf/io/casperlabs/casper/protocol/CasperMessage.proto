@@ -285,6 +285,7 @@ message ProcessedDeploy {
     //TODO PCost previously
     uint64 cost = 2;
     bool errored = 3; //true if deploy encountered a user error
+    bytes extraBytes = 4;
 }
 
 message Body {
@@ -343,4 +344,5 @@ message Bond {
 message BodyHashes {
     bytes deploysHash = 1;
     bytes stateHash = 2;
+    bool dummy = 3;
 }

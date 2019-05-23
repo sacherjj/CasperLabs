@@ -1,6 +1,7 @@
 package io.casperlabs.casper
 
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.util.ProtoUtil
 import scala.util.{Failure, Success, Try}
 
 /** Convert between the message in CasperMessage.proto and consensus.proto while we have both.
@@ -43,6 +44,7 @@ object LegacyConversions {
                   .BodyHashes()
                   .withDeploysHash(block.getHeader.deploysHash)
                   .withStateHash(block.getHeader.postStateHash)
+                  .withDummy(true)
                   .toByteArray
               )
             }
@@ -90,10 +92,13 @@ object LegacyConversions {
 
   def fromBlock(block: consensus.Block): protocol.BlockMessage = {
     val (deploysHash, stateHash, headerExtraBytes) =
-      Try(protocol.BodyHashes.parseFrom(block.getHeader.bodyHash.toByteArray)) match {
-        case Success(bodyHashes) =>
+      Try(protocol.BodyHashes.parseFrom(block.getHeader.bodyHash.toByteArray)).toOption
+        .filter(_.dummy) match {
+        case Some(bodyHashes) =>
+          // `block` was originally created from a BlockMessage by `toBlock`.
           (bodyHashes.deploysHash, bodyHashes.stateHash, ByteString.EMPTY)
-        case Failure(_) =>
+        case None =>
+          // `block` came first, we want to transfer it as a BlockMessage.
           (ByteString.EMPTY, ByteString.EMPTY, block.getHeader.bodyHash)
       }
 
@@ -175,44 +180,45 @@ object LegacyConversions {
       .withNonce(deploy.getHeader.nonce)
       .withSigAlgorithm(deploy.getSignature.sigAlgorithm)
       .withSignature(deploy.getSignature.sig)
-  //.withUser() // We aren't signing deploys yet.
+  //.withUser() // We weren't using signing when this was in use.
 
-  def toDeploy(deploy: protocol.DeployData): consensus.Deploy =
+  def toDeploy(deploy: protocol.DeployData): consensus.Deploy = {
+    val body = consensus.Deploy
+      .Body()
+      .withSession(
+        consensus.Deploy
+          .Code()
+          .withCode(deploy.getSession.code)
+          .withArgs(deploy.getSession.args)
+      )
+      .withPayment(
+        consensus.Deploy
+          .Code()
+          .withCode(deploy.getPayment.code)
+          .withArgs(deploy.getPayment.args)
+      )
+    val header = consensus.Deploy
+      .Header()
+      // The client can either send a public key or an account address here.
+      // If they signed the deploy, we can derive the account address from the key.
+      //.withAccountPublicKey(x.getDeploy.user)
+      .withAccountPublicKey(deploy.address)
+      .withNonce(deploy.nonce)
+      .withTimestamp(deploy.timestamp)
+      .withGasPrice(deploy.gasPrice)
+      .withBodyHash(ProtoUtil.protoHash(body)) // Legacy doesn't have it.
     consensus
       .Deploy()
-      //.withDeployHash() // Legacy doesn't have it.
-      .withHeader(
-        consensus.Deploy
-          .Header()
-          // TODO: The client isn't signing the deploy yet, but it's sending an account address.
-          // Once we sign the deploy, we can derive the account address from it on the way back.
-          //.withAccountPublicKey(x.getDeploy.user)
-          .withAccountPublicKey(deploy.address)
-          .withNonce(deploy.nonce)
-          .withTimestamp(deploy.timestamp)
-          //.withBodyHash() // Legacy doesn't have it.
-          .withGasPrice(deploy.gasPrice)
+      .withDeployHash(ProtoUtil.protoHash(header)) // Legacy doesn't have it.
+      .withHeader(header)
+      .withBody(body)
+      .copy(
+        signature = Option(
+          consensus
+            .Signature()
+            .withSigAlgorithm(deploy.sigAlgorithm)
+            .withSig(deploy.signature)
+        ).filterNot(s => s.sigAlgorithm.isEmpty && s.sig.isEmpty)
       )
-      .withBody(
-        consensus.Deploy
-          .Body()
-          .withSession(
-            consensus.Deploy
-              .Code()
-              .withCode(deploy.getSession.code)
-              .withArgs(deploy.getSession.args)
-          )
-          .withPayment(
-            consensus.Deploy
-              .Code()
-              .withCode(deploy.getPayment.code)
-              .withArgs(deploy.getPayment.args)
-          )
-      )
-      .withSignature(
-        consensus
-          .Signature()
-          .withSigAlgorithm(deploy.sigAlgorithm)
-          .withSig(deploy.signature)
-      )
+  }
 }

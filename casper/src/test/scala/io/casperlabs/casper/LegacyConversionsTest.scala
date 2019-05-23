@@ -19,12 +19,7 @@ class LegacyConversionsTest extends FlatSpec with ArbitraryConsensus with Matche
         orig
           .withBody(
             orig.getBody.withDeploys(orig.getBody.deploys.map { pd =>
-              pd.withDeploy(
-                  pd.getDeploy
-                    .withDeployHash(ByteString.EMPTY)
-                    .withHeader(pd.getDeploy.getHeader.withBodyHash(ByteString.EMPTY))
-                )
-                .withErrorMessage("")
+              pd.withErrorMessage("")
             })
           )
       val conv = LegacyConversions.fromBlock(comp)
