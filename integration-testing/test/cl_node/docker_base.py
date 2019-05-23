@@ -59,7 +59,7 @@ class DockerConfig:
     is_bootstrap: bool = False
     is_validator: bool = True
     bootstrap_address: Optional[str] = None
-    is_gossiping: bool = False
+    is_gossiping: bool = True
 
     def __post_init__(self):
         if self.rand_str is None:

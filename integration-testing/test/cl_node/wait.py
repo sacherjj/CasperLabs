@@ -1,7 +1,7 @@
 import logging
 import re
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import pytest
 import typing_extensions
@@ -9,8 +9,7 @@ import typing_extensions
 from .common import Network, WaitTimeoutError
 
 
-if TYPE_CHECKING:
-    from .casperlabsnode import Node, NonZeroExitCodeError
+from .casperlabsnode import NonZeroExitCodeError
 
 
 class PredicateProtocol(typing_extensions.Protocol):
@@ -35,14 +34,28 @@ class LogsContainMessage:
         return self.node.logs().count(self.message) >= self.times
 
 
+class LogsContainOneOf:
+    def __init__(self, node: 'Node', messages: List[str]) -> None:
+        self.node = node
+        self.messages = messages
+
+    def __str__(self) -> str:
+        args = ', '.join(repr(a) for a in (self.node.name, str(self.messages)))
+        return '<{}({})>'.format(self.__class__.__name__, args)
+
+    def is_satisfied(self) -> bool:
+        return any(m in self.node.logs() for m in self.messages)
+
+
 class NodeStarted(LogsContainMessage):
     def __init__(self, node: 'Node', times: int) -> None:
         super().__init__(node, 'io.casperlabs.node.NodeRuntime - Listening for traffic on casperlabs', times)
 
 
-class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
+class ApprovedBlockReceivedHandlerStateEntered(LogsContainOneOf):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'Making a transition to ApprovedBlockRecievedHandler state.')
+        super().__init__(node, ['Making a transition to ApprovedBlockRecievedHandler state.',
+                                'Making the transition to block processing.'])
 
 
 class RegexBlockRequest:
@@ -70,7 +83,7 @@ class SendingApprovedBlockRequest(RegexBlockRequest):
 
 
 class ConnectedToOtherNode(RegexBlockRequest):
-    regex = r"Connected to casperlabs:"
+    regex = r"(Connected to casperlabs:)|(Listening for traffic on casperlabs:)"
 
     def __init__(self, node: 'Node', node_name: str, times: int) -> None:
         self.times = times
@@ -135,6 +148,8 @@ class HasAtLeastPeers:
         self.node = node
         self.minimum_peers_number = minimum_peers_number
         self.metric_regex = re.compile(r"^casperlabs_comm_rp_connect_peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+        self.new_metric_regex = re.compile(r"^casperlabs_comm_discovery_kademlia_peers (\d+).0\s*$",
+                                           re.MULTILINE | re.DOTALL)
 
     def __str__(self) -> str:
         args = ', '.join(repr(a) for a in (self.node.name, self.minimum_peers_number))
@@ -144,7 +159,9 @@ class HasAtLeastPeers:
         output = self.node.get_metrics_strict()
         match = self.metric_regex.search(output)
         if match is None:
-            return False
+            match = self.new_metric_regex.search(output)
+            if match is None:
+                return False
         peers = int(match[1])
         return peers >= self.minimum_peers_number
 
