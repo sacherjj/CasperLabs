@@ -20,6 +20,7 @@ import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.LegacyConversions
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, Time}
 import monix.tail.Iterant

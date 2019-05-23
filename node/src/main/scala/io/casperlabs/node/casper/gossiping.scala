@@ -50,7 +50,8 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService](
+  def apply[
+      F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService](
       port: Int,
       conf: Configuration,
       grpcScheduler: Scheduler
@@ -143,7 +144,8 @@ package object gossiping {
     } yield cont
 
   /** Validate the genesis candidate or any new block via Casper. */
-  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
+  private def validateAndAddBlock[
+      F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
       shardId: String,
       block: Block
   ): F[Unit] =
@@ -259,7 +261,8 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
+  private def makeDownloadManager[
+      F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F]
@@ -291,7 +294,8 @@ package object gossiping {
         retriesConf = DownloadManagerImpl.RetriesConf.noRetries
       )
 
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService](
+  private def makeGenesisApprover[
+      F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F]
@@ -321,7 +325,7 @@ package object gossiping {
                 .withSigAlgorithm(sig.algorithm)
                 .withSig(sig.sig)
             )
-        }
+      }
 
       // Function to read and set the bonds.txt in modes which generate the Genesis locally.
       readBondsFile = {
@@ -476,7 +480,8 @@ package object gossiping {
                  }
     } yield approver
 
-  private def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: BlockDagStorage](
+  private def makeSynchronizer[
+      F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: BlockDagStorage](
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
@@ -523,7 +528,8 @@ package object gossiping {
   }
 
   /** Create and start the gossip service. */
-  private def makeGossipServiceServer[F[_]: Concurrent: Par: TaskLike: ObservableIterant: Log: Metrics: BlockStore: BlockDagStorage: MultiParentCasperRef](
+  private def makeGossipServiceServer[
+      F[_]: Concurrent: Par: TaskLike: ObservableIterant: Log: Metrics: BlockStore: BlockDagStorage: MultiParentCasperRef](
       port: Int,
       conf: Configuration,
       synchronizer: Synchronizer[F],
@@ -618,7 +624,7 @@ package object gossiping {
                   blockChunkConsumerTimeout = 10.seconds
                 )
                 GossipingGrpcMonix.bindService(svc, scheduler)
-              }
+            }
           ),
           interceptors = List(
             new AuthInterceptor(),

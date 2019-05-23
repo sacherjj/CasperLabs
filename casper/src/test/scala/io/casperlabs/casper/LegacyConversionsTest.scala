@@ -3,6 +3,7 @@ package io.casperlabs.casper
 import com.google.protobuf.ByteString
 import org.scalatest._
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
+import io.casperlabs.models.LegacyConversions
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
 
 class LegacyConversionsTest extends FlatSpec with ArbitraryConsensus with Matchers {
