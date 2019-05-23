@@ -19,16 +19,7 @@ import io.casperlabs.blockstorage.{
   IndexedBlockDagStorage,
   LMDBBlockStore
 }
-import io.casperlabs.casper.protocol.{
-  ApprovedBlock //,
-  // BlockMessage,
-  // Body,
-  // DeployCode,
-  // DeployData,
-  // Header,
-  // Justification,
-  // ProcessedDeploy
-}
+import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.ipc.Key.KeyInstance
 import io.casperlabs.ipc.Transform.TransformInstance

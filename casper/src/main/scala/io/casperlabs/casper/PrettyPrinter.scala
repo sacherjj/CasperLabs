@@ -10,16 +10,6 @@ object PrettyPrinter {
 
   def buildStringNoLimit(b: ByteString): String = Base16.encode(b.toByteArray)
 
-  // def buildStringFromMessage(t: GeneratedMessage): String =
-  //   t match {
-  //     case b: BlockMessage  => buildString(b)
-  //     case d: DeployData    => buildString(d)
-  //     case k: ipc.Key       => buildString(k)
-  //     case t: ipc.Transform => buildString(t)
-  //     case v: ipc.Value     => buildString(v)
-  //     case _                => "Unknown consensus protocol message"
-  //   }
-
   def buildString(k: ipc.Key): String = k.keyInstance match {
     case ipc.Key.KeyInstance.Empty                            => "KeyEmpty"
     case ipc.Key.KeyInstance.Account(ipc.KeyAddress(address)) => s"Address(${buildString(address)})"
