@@ -122,7 +122,10 @@ pub fn log_debug(log_message: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logging::log_settings::{LogLevelFilter, LogSettings};
+    use crate::logging::log_settings::{
+        get_log_settings_provider, set_log_settings_provider, LogLevelFilter, LogSettings,
+    };
+    use std::thread;
     use std::time::{Duration, SystemTime};
 
     const PROC_NAME: &str = "ee-shared-lib-tests";
@@ -180,6 +183,43 @@ mod tests {
         let x = property_logger_test_helper();
 
         log_details(x.0, x.1, x.2);
+    }
+
+    #[test]
+    fn should_set_and_get_log_settings_provider() {
+        let log_settings = &*LOG_SETTINGS;
+
+        let handle = thread::spawn(move || {
+            set_log_settings_provider(log_settings);
+
+            let log_settings_provider = get_log_settings_provider();
+
+            assert_eq!(
+                &log_settings.process_id,
+                &log_settings_provider.get_process_id(),
+                "process_id should be the same",
+            );
+
+            assert_eq!(
+                &log_settings.host_name,
+                &log_settings_provider.get_host_name(),
+                "host_name should be the same",
+            );
+
+            assert_eq!(
+                &log_settings.process_name,
+                &log_settings_provider.get_process_name(),
+                "process_name should be the same",
+            );
+
+            assert_eq!(
+                &log_settings.log_level_filter,
+                &log_settings_provider.get_log_level_filter(),
+                "log_level_filter should be the same",
+            );
+        });
+
+        let _r = handle.join();
     }
 
     fn property_logger_test_helper() -> (LogLevel, String, BTreeMap<String, String>) {
