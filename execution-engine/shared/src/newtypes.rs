@@ -1,15 +1,15 @@
 //! Some newtypes.
+use blake2::digest::{Input, VariableOutput};
 use core::array::TryFromSliceError;
 use std::convert::TryFrom;
+use std::fmt;
 use std::ops::Deref;
 
-use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
+use serde::Serialize;
+use uuid::Uuid;
 
 use common::bytesrepr::{self, FromBytes, ToBytes};
-use serde::Serialize;
-use std::fmt;
-use uuid::Uuid;
 
 const BLAKE2B_DIGEST_LENGTH: usize = 32;
 
