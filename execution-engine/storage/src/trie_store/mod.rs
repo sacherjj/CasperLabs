@@ -2,17 +2,15 @@
 //!
 //! See the [in_memory](in_memory/index.html#usage) and
 //! [lmdb](lmdb/index.html#usage) modules for usage examples.
+pub mod in_memory;
+pub mod lmdb;
+pub(crate) mod operations;
+#[cfg(test)]
+mod tests;
 
 use shared::newtypes::Blake2bHash;
 
 use trie::Trie;
-
-pub mod in_memory;
-pub mod lmdb;
-pub(crate) mod operations;
-
-#[cfg(test)]
-mod tests;
 
 /// A transaction which can be committed or aborted.
 pub trait Transaction: Sized {

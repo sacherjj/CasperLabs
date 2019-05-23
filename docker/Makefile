@@ -17,24 +17,14 @@ clean: down $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down
 # Create a new node environment by linking to the template docker-complse.yml file.
 node-%: .casperlabs
 	$(eval N = $*)
-
-	$(eval KEY_FILE_COUNT = $(shell find .casperlabs -type f -name *.sk | wc -l))
-	[ "$(N)" -lt "$(KEY_FILE_COUNT)" ] || (echo "Can't find keyfile for node-$(N)" && exit 1)
-	$(eval KEY_FILE = $(shell find .casperlabs -type f -name *.sk | sort | tail -n +$$((1+$(N))) | head -n 1))
-
-	mkdir node-$(N)
 	$(eval ENV = node-$(N)/.env)
-
+	mkdir node-$(N)
 	# Copy default env values. Create overrides with `export CL_<name>=<value>` before running `make node-X/up` commands.
 	cp ${PWD}/template/.env $(ENV)
 
 	@# Create an .env file to hold template variables for docker-compose.
 	echo NODE_NUMBER=$(N) >> $(ENV)
 	echo CL_VERSION=$(CL_VERSION) >> $(ENV)
-
-	@# The name of the file is the public key. Content is the private key.
-	echo CL_VALIDATOR_PUBLIC_KEY=$(shell echo "$(KEY_FILE)" | awk -F '[/.]' '{print $$4}') >> $(ENV)
-	echo CL_VALIDATOR_PRIVATE_KEY=$(shell cat "$(KEY_FILE)") >> $(ENV)
 
 	@# Link Dockerfile so we can change it and reapply.
 	@#ln -s ${PWD}/template/docker-compose.yml node-$(N)/docker-compose.yml
@@ -104,42 +94,19 @@ slow:
 
 # Generate keys and bonds.
 .casperlabs:
-	mkdir -p .bootstrap
-	@# The node needs the execution engine to listen on the socket, otherwise it quits before
-	@# it prints the node ID in the logs. In the future (NODE-235 and NODE-237) we'll have
-	@# dedicated CLI entry point to generate keys.
-	docker run --rm -d \
-		--name make-genesis-ee \
-		-v ${PWD}/.bootstrap:/root/.casperlabs \
-		casperlabs/execution-engine:$(CL_VERSION) \
-		/root/.casperlabs/.caspernode.sock
-	@# Start a node to generate keys.
-	docker run --rm -d \
-		--name make-genesis \
-		-v ${PWD}/.bootstrap:/root/.casperlabs \
-		casperlabs/node:$(CL_VERSION) \
-		run -s \
-		--casper-num-validators $(CL_CASPER_NUM_VALIDATORS) \
-		--grpc-socket /root/.casperlabs/.caspernode.sock
-
-	@# Wait until the node is running, so we know it generated the files. Capture the Node ID fromt the logs.
-	NODE_ID=`(docker logs -f make-genesis &) | grep -m 1 "Listening for traffic" | awk -F'[//|@]' '{print $$3}' | grep -e .` && \
-	echo $$NODE_ID > .bootstrap/node-id
-
-	docker stop make-genesis make-genesis-ee
-
-	@# Copy files to where we can mount them separately from.
 	mkdir -p .casperlabs/bootstrap
-	cp -r .bootstrap/genesis .casperlabs
-	cp .bootstrap/node* .casperlabs/bootstrap
-
-	@# Removing genesis created by docker, using docker, due to permissions.
-	docker run --rm \
-		-v ${PWD}/.bootstrap:/root/.casperlabs \
-		--entrypoint sh \
-		casperlabs/node:$(CL_VERSION) \
-		-c "rm -rf /root/.casperlabs/*"
-	rm -rf .bootstrap
+	mkdir -p .casperlabs/genesis
+	mkdir -p .casperlabs/node-0
+	./gen-keys.sh .casperlabs/node-0
+	cp -r .casperlabs/node-0/node-id .casperlabs/bootstrap/node-id
+	(cat .casperlabs/node-0/validator-id; echo " $(CL_CASPER_NUM_VALIDATORS)") >> .casperlabs/genesis/bonds.txt
+	i=1 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
+		mkdir -p .casperlabs/node-$$i ; \
+		./gen-keys.sh .casperlabs/node-$$i ; \
+		BOND=$$(( $(CL_CASPER_NUM_VALIDATORS)+2*$$i )) ; \
+		(cat .casperlabs/node-$$i/validator-id; echo " $$BOND") >> .casperlabs/genesis/bonds.txt ; \
+		((i = i + 1)) ; \
+	done
 
 	@# Check that the files we wanted exist and aren't empty.
 	[ -s .casperlabs/genesis/bonds.txt ]

@@ -9,21 +9,25 @@ import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, HashSetCasperTestNode}
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ExecutionEngineServiceStub}
+import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
+import io.casperlabs.casper.util.execengine.{
+  DeploysCheckpoint,
+  ExecEngineUtil,
+  ExecutionEngineServiceStub
+}
+import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc.ProtocolVersion
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
-import io.casperlabs.casper.helper.HashSetCasperTestNode
-import io.casperlabs.casper.util.execengine.DeploysCheckpoint
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
@@ -97,12 +101,12 @@ class ValidateTest
 
   def signedBlock(
       i: Int
-  )(implicit sk: Array[Byte], blockDagStorage: IndexedBlockDagStorage[Task]): Task[BlockMessage] = {
-    val pk = Ed25519.toPublic(sk)
+  )(implicit sk: PrivateKey, blockDagStorage: IndexedBlockDagStorage[Task]): Task[BlockMessage] = {
+    val pk = Ed25519.tryToPublic(sk).get
     for {
       block  <- blockDagStorage.lookupByIdUnsafe(i)
       dag    <- blockDagStorage.getRepresentation
-      result <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
+      result <- ProtoUtil.signBlock[Task](block, dag, pk, sk, Ed25519, "casperlabs")
     } yield result
   }
 
@@ -438,7 +442,7 @@ class ValidateTest
                         dag,
                         pk,
                         sk,
-                        "ed25519",
+                        Ed25519,
                         "rchain"
                       )
         _ <- Validate
@@ -635,7 +639,7 @@ class ValidateTest
       val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
+        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, Ed25519, "casperlabs")
         _       <- Validate.formatOfFields[Task](genesis) shouldBeF true
         _       <- Validate.formatOfFields[Task](genesis.withBlockHash(ByteString.EMPTY)) shouldBeF false
         _       <- Validate.formatOfFields[Task](genesis.clearHeader) shouldBeF false
@@ -675,7 +679,7 @@ class ValidateTest
         HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
+        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, Ed25519, "casperlabs")
         _       <- Validate.blockHash[Task](genesis) shouldBeF Unit
         result <- Validate
                    .blockHash[Task](
@@ -692,7 +696,7 @@ class ValidateTest
         HashSetCasperTest.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "casperlabs")
+        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, Ed25519, "casperlabs")
         _       <- Validate.deployCount[Task](genesis) shouldBeF Unit
         result <- Validate
                    .deployCount[Task](
@@ -711,7 +715,7 @@ class ValidateTest
     val protocolVersionForGenesisBlock: Long => ProtocolVersion = _ => ProtocolVersion(1)
     for {
       dag     <- blockDagStorage.getRepresentation
-      genesis <- ProtoUtil.signBlock(block, dag, pk, sk, "ed25519", "casperlabs")
+      genesis <- ProtoUtil.signBlock(block, dag, pk, sk, Ed25519, "casperlabs")
       _ <- Validate.version[Task](
             genesis,
             missingProtocolVersionForBlock

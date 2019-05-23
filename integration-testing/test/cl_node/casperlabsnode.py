@@ -102,6 +102,7 @@ class Node:
         self.timeout = timeout
         self.network = network
         self.volume = volume
+        self.next_peer_index = 0
         self.terminate_background_logging_event = threading.Event()
         self.background_logging = LoggingThread(
             container=container,
@@ -112,6 +113,10 @@ class Node:
 
     def __repr__(self) -> str:
         return f'<{self.__class__.__name__}(name={repr(self.name)})>'
+
+    def get_and_inc_next_peer_index(self) -> int:
+        self.next_peer_index += 1
+        return self.next_peer_index
 
     def logs(self) -> str:
         return self.container.logs().decode('utf-8')
@@ -213,8 +218,8 @@ class Node:
                session: str = None, payment: str = None,
                gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0) -> str:
 
-        session = session or CONTRACT_NAME
-        payment = payment or CONTRACT_NAME
+        session = session or HELLO_NAME
+        payment = payment or HELLO_NAME
 
         command = (f"--host {self.name} deploy "
                    f"--from {from_address} "
@@ -530,13 +535,16 @@ def make_peer(
     assert '_' not in name, 'Underscore is not allowed in host name'
     name = make_peer_name(network, name)
     bootstrap_address = bootstrap.get_casperlabsnode_address()
+    number = bootstrap.get_and_inc_next_peer_index()
 
     container_command_options = {
         "--server-bootstrap": bootstrap_address,
         "--casper-validator-private-key": key_pair.private_key,
         "--server-host": name,
         "--metrics-prometheus": "",
-        "--grpc-socket": GRPC_SOCKET_FILE
+        "--grpc-socket": GRPC_SOCKET_FILE,
+        '--tls-certificate': f'/root/.casperlabs/bootstrap/node-{number}.certificate.pem',
+        '--tls-key': f'/root/.casperlabs/bootstrap/node-{number}.key.pem'
     }
 
     volumes = {

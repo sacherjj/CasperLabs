@@ -16,11 +16,20 @@ Contract examples exist in another repo.  Clone https://github.com/CasperLabs/co
 
 `docker-compose` is used to bring up the nodes on the network. Please verify that [docker-compose is installed](https://docs.docker.com/compose/install/) prior to continuing.
 
+## Required: OpenSSL 1.1
+
+`openssl` is used to generate keys and certificates. Please verify that [the latest OpenSSL 1.1 version is installed](https://github.com/openssl/openssl).
+
+## Required: SHA3SUM
+
+`keccak-256sum` is used to generate node TLS certificate. Please verify that [sha3sum is installed](https://github.com/maandree/sha3sum).
+
+
 ## Set up a network
 
 We will create multiple nodes in docker with names such as `node-0`, `node-1` etc. Each will have a corresponding container running the Execution Engine.
 
-The setup process will establish validator keys and bonds in `.casperlabs/genesis` by starting a node instance once up front. By default 10 files are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
+The setup process will establish validator keys in `.casperlabs/node-*` and bonds in `.casperlabs/genesis` by executing [gen-keys.sh](/docker/gen-keys.sh). By default 10 nodes' keys are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
 
 `node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first.
 

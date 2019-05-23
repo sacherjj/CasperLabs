@@ -1,5 +1,6 @@
-use super::error::ResolverError;
 use wasmi::MemoryRef;
+
+use super::error::ResolverError;
 
 /// This trait takes care of returning an instance of allocated memory.
 ///

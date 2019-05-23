@@ -70,6 +70,7 @@ class ConfigurationSpec
     )
     val casper = CasperConf(
       validatorPublicKey = "test".some,
+      validatorPublicKeyPath = Paths.get("/tmp/test").some,
       validatorPrivateKey = "test".some,
       validatorPrivateKeyPath = Paths.get("/tmp/test").some,
       validatorSigAlgorithm = "test",

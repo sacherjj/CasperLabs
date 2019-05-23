@@ -29,13 +29,14 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 
 /**
-  Encapsulates mutable state of the MultiParentCasperImpl
-
-  @param seenBlockHashes - tracks hashes of all blocks seen so far
-  @param blockBuffer
-  @param deployBuffer
-  @param invalidBlockTracker
-  @param equivocationsTracker: Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
+  * Encapsulates mutable state of the MultiParentCasperImpl
+  **
+  *
+  * @param seenBlockHashes      - tracks hashes of all blocks seen so far
+  * @param blockBuffer
+  * @param deployBuffer
+  * @param invalidBlockTracker
+  * @param equivocationsTracker : Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
   */
 final case class CasperState(
     seenBlockHashes: Set[BlockHash] = Set.empty[BlockHash],
@@ -520,6 +521,7 @@ object MultiParentCasperImpl {
         (status, updatedDag) = attemptResult
       } yield (status, updatedDag)
     }
+
     /* Execute the block to get the effects then do some more validation.
      * Save the block if everything checks out.
      * We want to catch equivocations only after we confirm that the block completing
@@ -735,7 +737,9 @@ object MultiParentCasperImpl {
   }
 
   object StatelessExecutor {
+
     case class Context(genesis: BlockMessage, lastFinalizedBlockHash: BlockHash)
+
   }
 
   /** Encapsulating all methods that might use peer-to-peer communication. */
@@ -855,4 +859,5 @@ object MultiParentCasperImpl {
         ().pure[F]
     }
   }
+
 }

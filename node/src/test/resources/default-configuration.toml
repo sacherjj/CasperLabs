@@ -38,6 +38,7 @@ secure-random-non-blocking = false
 
 [casper]
 validator-public-key = "test"
+validator-public-key-path = "/tmp/test"
 validator-private-key = "test"
 validator-private-key-path = "/tmp/test"
 validator-sig-algorithm = "test"

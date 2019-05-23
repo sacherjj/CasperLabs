@@ -18,6 +18,7 @@ trait InitialSynchronization[F[_]] {
 
   /**
     * Synchronizes the node with the last tips.
+    *
     * @return Handle which will be resolved when node is considered to be fully synced
     */
   def sync(): F[F[Unit]]
@@ -27,12 +28,12 @@ trait InitialSynchronization[F[_]] {
   * Synchronizes the node with peers in rounds until [[minSuccessful]] nodes
   * respond successfully in some round.
   *
-  * @param selectNodes Filtering function to select nodes to synchronize with in a round.
-  *                    Second arg is a list of all known peers excluding bootstrap
-  * @param memoizeNodes If true applies [[selectNodes]] function only once and stores results for next rounds
-  *                     Otherwise, invokes it each round
+  * @param selectNodes   Filtering function to select nodes to synchronize with in a round.
+  *                      Second arg is a list of all known peers excluding bootstrap
+  * @param memoizeNodes  If true applies [[selectNodes]] function only once and stores results for next rounds
+  *                      Otherwise, invokes it each round
   * @param minSuccessful Minimal number of successful responses in a round to consider synchronisation as successful
-  * @param roundPeriod Delay between synchronisation rounds
+  * @param roundPeriod   Delay between synchronisation rounds
   */
 class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
     nodeDiscovery: NodeDiscovery[F],

@@ -147,20 +147,9 @@ mod tests {
     use lmdb::DatabaseFlags;
     use tempfile::tempdir;
 
-    use shared::os::get_page_size;
-
     use super::*;
     use trie_store::operations::{write, WriteResult};
-
-    lazy_static! {
-        // 10 MiB = 10485760 bytes
-        // page size on x86_64 linux = 4096 bytes
-        // 10485760 / 4096 = 2560
-        static ref TEST_MAP_SIZE: usize = {
-            let page_size = get_page_size().unwrap();
-            page_size * 2560
-        };
-    }
+    use TEST_MAP_SIZE;
 
     #[derive(Debug, Clone)]
     struct TestPair {

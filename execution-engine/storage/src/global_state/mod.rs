@@ -1,3 +1,6 @@
+pub mod in_memory;
+pub mod lmdb;
+
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 
@@ -9,9 +12,6 @@ use shared::transform::{self, Transform, TypeMismatch};
 use trie::Trie;
 use trie_store::operations::{read, write, ReadResult, WriteResult};
 use trie_store::{Transaction, TransactionSource, TrieStore};
-
-pub mod in_memory;
-pub mod lmdb;
 
 /// A reader of state
 pub trait StateReader<K, V> {
