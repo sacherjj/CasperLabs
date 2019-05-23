@@ -323,7 +323,8 @@ object Validate {
                 _ <- Log[F].warn(
                       ignore(
                         block,
-                        s"found deploy by the same (user, millisecond timestamp) produced in the block(${b.blockHash})"
+                        s"found deploy by the same (user, millisecond timestamp) produced in the block ${PrettyPrinter
+                          .buildString(b.blockHash)}"
                       )
                     )
                 _ <- RaiseValidationError[F].raise[Unit](InvalidRepeatDeploy)

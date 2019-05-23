@@ -245,10 +245,10 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     }
 
   /** Add a deploy to the buffer, to be executed later. */
-  private def addDeploy(Deploy: Deploy): F[Unit] =
+  private def addDeploy(deploy: Deploy): F[Unit] =
     Cell[F, CasperState].modify { s =>
-      s.copy(deployBuffer = s.deployBuffer + Deploy)
-    } *> Log[F].info(s"Received ${PrettyPrinter.buildString(Deploy)}")
+      s.copy(deployBuffer = s.deployBuffer + deploy)
+    } *> Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
 
   /** Return the list of tips. */
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =

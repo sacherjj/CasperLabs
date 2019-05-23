@@ -408,7 +408,7 @@ object ProtoUtil {
     sourceDeploy(ByteString.copyFromUtf8(source), timestamp, gasLimit)
 
   def sourceDeploy(sessionCode: ByteString, timestamp: Long, gasLimit: Long): Deploy =
-    basicDeploy(0, sessionCode)
+    basicDeploy(timestamp, sessionCode)
 
   // https://casperlabs.atlassian.net/browse/EE-283
   // We are hardcoding exchange rate for DEV NET at 10:1

@@ -155,7 +155,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     ).zipWithIndex.map(s => ProtoUtil.sourceDeploy(s._1, start + s._2, Integer.MAX_VALUE))
 
     for {
-      createBlockResult1 <- MultiParentCasper[Effect].deploy(deployDatas.head) *> MultiParentCasper[
+      createBlockResult1 <- MultiParentCasper[Effect].deploy(deployDatas(0)) *> MultiParentCasper[
                              Effect
                            ].createBlock
       Created(signedBlock1) = createBlockResult1

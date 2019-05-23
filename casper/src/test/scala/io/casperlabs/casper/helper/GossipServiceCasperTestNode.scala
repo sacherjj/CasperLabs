@@ -111,7 +111,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     val name               = "standalone"
     val identity           = peerNode(name, 40400)
     val logicalTime        = new LogicalTime[F]
-    implicit val log       = new LogStub[F]()
+    implicit val log       = new LogStub[F](printEnabled = false)
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val nodeAsk   = makeNodeAsk(identity)(concurrentF)
 
