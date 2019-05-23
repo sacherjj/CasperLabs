@@ -11,6 +11,10 @@ import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
 import io.casperlabs.client.configuration.Streaming
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.crypto.codec.Base16
+import java.nio.charset.StandardCharsets
 import scala.concurrent.duration._
 import scala.language.higherKinds
 import scala.util.Try
@@ -104,39 +108,66 @@ object DeployRuntime {
       from: String,
       nonce: Long,
       sessionCode: File,
-      paymentCode: File
+      paymentCode: File,
+      maybePublicKeyFile: Option[File],
+      maybePrivateKeyFile: Option[File]
   ): F[Unit] = {
-    def readFile(file: File) =
+    def readFile(file: File): F[ByteString] =
       Sync[F].fromTry(
         Try(ByteString.copyFrom(Files.readAllBytes(file.toPath)))
       )
-    gracefulExit(
-      Apply[F]
-        .map2(
-          readFile(sessionCode),
-          readFile(paymentCode)
-        ) {
-          case (session, payment) =>
-            consensus
-              .Deploy()
-              .withHeader(
-                consensus.Deploy
-                  .Header()
-                  .withTimestamp(System.currentTimeMillis)
-                  // TODO: allow user to specify their public key.
-                  // NOTE: For now using this field to carry over the account address,
-                  // which has been removed from Deploy.
-                  .withAccountPublicKey(ByteString.copyFromUtf8(from))
-                  .withNonce(nonce)
-              )
-              .withBody(
-                consensus.Deploy
-                  .Body()
-                  .withSession(consensus.Deploy.Code().withCode(session))
-                  .withPayment(consensus.Deploy.Code().withCode(payment))
-              )
-              .withHashes
+
+    def readFileAsString(file: File): F[String] =
+      for {
+        raw <- readFile(file)
+        str = new String(raw.toByteArray, StandardCharsets.UTF_8)
+      } yield str
+
+    val deploy = for {
+      session <- readFile(sessionCode)
+      payment <- readFile(paymentCode)
+      maybePrivateKey <- {
+        maybePrivateKeyFile.fold(none[PrivateKey].pure[F]) { file =>
+          readFileAsString(file).map(Ed25519.tryParsePrivateKey)
         }
+      }
+      maybePublicKey <- {
+        maybePublicKeyFile.map { file =>
+          // In the future with multiple signatures and recovery the
+          // account public key  can be different then the private key
+          // we sign with, so not checking that they match.
+          readFileAsString(file).map(Ed25519.tryParsePublicKey)
+        } getOrElse {
+          maybePrivateKey.flatMap(Ed25519.tryToPublic).pure[F]
+        }
+      }
+    } yield {
+      val deploy = consensus
+        .Deploy()
+        .withHeader(
+          consensus.Deploy
+            .Header()
+            .withTimestamp(System.currentTimeMillis)
+            .withAccountPublicKey(
+              // Allowing --from until we explicitly require signing.
+              // It's an account address but there's no other field to carry it.
+              maybePublicKey.map(ByteString.copyFrom(_)) getOrElse ByteString.copyFromUtf8(from)
+            )
+            .withNonce(nonce)
+        )
+        .withBody(
+          consensus.Deploy
+            .Body()
+            .withSession(consensus.Deploy.Code().withCode(session))
+            .withPayment(consensus.Deploy.Code().withCode(payment))
+        )
+        .withHashes
+
+      maybePrivateKey.map(deploy.sign) getOrElse deploy
+    }
+
+    gracefulExit(
+      deploy
         .flatMap(DeployService[F].deploy)
         .handleError(
           ex => Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex))
@@ -171,6 +202,16 @@ object DeployRuntime {
     def withHashes = {
       val h = d.getHeader.withBodyHash(hash(d.getBody))
       d.withHeader(h).withDeployHash(hash(h))
+    }
+
+    def sign(privateKey: PrivateKey) = {
+      val sig = Ed25519.sign(d.deployHash.toByteArray, privateKey)
+      d.withSignature(
+        consensus
+          .Signature()
+          .withSigAlgorithm(Ed25519.name)
+          .withSig(ByteString.copyFrom(sig))
+      )
     }
   }
 

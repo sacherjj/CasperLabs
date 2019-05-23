@@ -340,7 +340,7 @@ cargo run --bin casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 
 In the root of CasperLabs.
 
-[Generate secp256r1 key and X.509 certificate firstly](/VALIDATOR.md/setting-up-keys).
+[Generate secp256r1 key and X.509 certificate firstly](/VALIDATOR.md#setting-up-keys).
 
 ```bash
 ./node/target/universal/stage/bin/casperlabs-node run -s \
