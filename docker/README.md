@@ -72,7 +72,6 @@ Assuming that you cloned and compiled the [contract-examples](https://github.com
 ```console
 ./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --from 00000000000000000000 \
-     --gas-price 1 \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm
 ```
@@ -96,6 +95,18 @@ Response: Success! Block f876efed8d... created and added.
 ```
 
 If you check the log output, each node should get the block and provide some feedback about the execution as well.
+
+### Signing Deploys
+
+To sign deploy you'll need to [generate and ed25519 keypair](/VALIDATOR.md#setting-up-keys) and save them into `docker/keys`. The `client.sh` script will automatically mount this as a volume and you can pass them as CLI arguments, for example:
+
+```console
+./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
+     --session /data/helloname.wasm \
+     --payment /data/helloname.wasm \
+     --public-key /keys/public.key \
+     --private-key /keys/private.key
+```
 
 ## Monitoring
 
