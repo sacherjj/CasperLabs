@@ -91,7 +91,7 @@ def n(request):
 # This fixture will be parametrized so it runs on node set up to use gossiping as well as the old method.
 @pytest.fixture()
 def three_nodes(docker_client_fixture, timeout):
-    with ThreeNodeNetwork(docker_client_fixture, extra_docker_params={'is_gossiping': True}) as network:
+    with ThreeNodeNetwork(docker_client_fixture, extra_docker_params={'use_new_gossiping': True}) as network:
         network.create_cl_network()
         #wait_for_approved_block_received(network, timeout)
         yield [node.node for node in network.cl_nodes]
