@@ -10,17 +10,7 @@ object PrettyPrinter {
 
   def buildStringNoLimit(b: ByteString): String = Base16.encode(b.toByteArray)
 
-  def buildString(t: GeneratedMessage): String =
-    t match {
-      case b: BlockMessage  => buildString(b)
-      case d: DeployData    => buildString(d)
-      case k: ipc.Key       => buildString(k)
-      case t: ipc.Transform => buildString(t)
-      case v: ipc.Value     => buildString(v)
-      case _                => "Unknown consensus protocol message"
-    }
-
-  private def buildString(k: ipc.Key): String = k.keyInstance match {
+  def buildString(k: ipc.Key): String = k.keyInstance match {
     case ipc.Key.KeyInstance.Empty                            => "KeyEmpty"
     case ipc.Key.KeyInstance.Account(ipc.KeyAddress(address)) => s"Address(${buildString(address)})"
     case ipc.Key.KeyInstance.Uref(ipc.KeyURef(id, accessRights)) =>
@@ -28,7 +18,7 @@ object PrettyPrinter {
     case ipc.Key.KeyInstance.Hash(ipc.KeyHash(hash)) => s"Hash(${buildString(hash)})"
   }
 
-  private def buildString(t: ipc.Transform): String = t.transformInstance match {
+  def buildString(t: ipc.Transform): String = t.transformInstance match {
     case ipc.Transform.TransformInstance.Empty                            => "TransformEmpty"
     case ipc.Transform.TransformInstance.AddI32(ipc.TransformAddInt32(i)) => s"Add($i)"
     case ipc.Transform.TransformInstance.AddKeys(ipc.TransformAddKeys(ks)) =>
@@ -42,17 +32,17 @@ object PrettyPrinter {
       }
   }
 
-  private def buildString(v: Option[ipc.ProtocolVersion]): String = v match {
+  def buildString(v: Option[ipc.ProtocolVersion]): String = v match {
     case None          => "No protocol version"
     case Some(version) => s"${version}"
   }
 
-  private def buildString(nk: ipc.NamedKey): String = nk match {
+  def buildString(nk: ipc.NamedKey): String = nk match {
     case ipc.NamedKey(_, None)         => "EmptyNamedKey"
     case ipc.NamedKey(name, Some(key)) => s"NamedKey($name, ${buildString(key)})"
   }
 
-  private def buildString(v: ipc.Value): String = v.valueInstance match {
+  def buildString(v: ipc.Value): String = v.valueInstance match {
     case ipc.Value.ValueInstance.Empty => "ValueEmpty"
     case ipc.Value.ValueInstance.Account(ipc.Account(pk, nonce, urefs)) =>
       s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}})"
@@ -66,18 +56,20 @@ object PrettyPrinter {
     case ipc.Value.ValueInstance.StringVal(s)                     => s"String($s)"
   }
 
-  private def buildString(b: BlockMessage): String = {
+  def buildString(b: BlockMessage): String =
+    buildString(LegacyConversions.toBlock(b))
+
+  def buildString(b: consensus.Block): String = {
     val blockString = for {
       header     <- b.header
-      mainParent <- header.parentsHashList.headOption
-      body       <- b.body
-      postState  <- body.state
+      mainParent <- header.parentHashes.headOption
+      postState  <- header.state
     } yield
-      s"Block #${postState.blockNumber} (${buildString(b.blockHash)}) " +
-        s"-- Sender ID ${buildString(b.sender)} " +
+      s"Block #${header.rank} (${buildString(b.blockHash)}) " +
+        s"-- Sender ID ${buildString(header.validatorPublicKey)} " +
         s"-- M Parent Hash ${buildString(mainParent)} " +
-        s"-- Contents ${buildString(postState)}" +
-        s"-- Shard ID ${limit(b.shardId, 10)}"
+        s"-- Contents ${buildString(postState.postStateHash)}" +
+        s"-- Shard ID ${limit(header.chainId, 10)}"
     blockString match {
       case Some(str) => str
       case None      => s"Block with missing elements (${buildString(b.blockHash)})"
@@ -106,9 +98,9 @@ object PrettyPrinter {
       case ipc.KeyURef.AccessRights.READ_ADD_WRITE => "ReadAddWrite"
     }
 
-  private def buildString(d: DeployData): String =
-    s"Deploy #${d.timestamp}"
+  def buildString(d: consensus.Deploy): String =
+    s"Deploy #${d.getHeader.timestamp}"
 
-  private def buildString(r: RChainState): String =
-    buildString(r.postStateHash)
+  def buildString(d: DeployData): String =
+    s"Deploy #${d.timestamp}"
 }

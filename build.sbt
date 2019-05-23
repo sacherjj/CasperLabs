@@ -39,7 +39,7 @@ lazy val projectSettings = Seq(
     case None    => Seq()
     case Some(v) => Seq("-source", v, "-target", v)
   }),
-  Test / fork := true,
+  Test / fork := false, // Forking may cause "Reporter closed abruptly..." messages due to non-serializable exceptions.
   Test / parallelExecution := false,
   Test / testForkedParallel := false,
   IntegrationTest / fork := true,

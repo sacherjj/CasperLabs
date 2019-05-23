@@ -14,9 +14,8 @@ import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.genesis.Genesis
-import io.casperlabs.casper.protocol
 import io.casperlabs.casper.LegacyConversions
+import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.comm.BlockApproverProtocol
 import io.casperlabs.catscontrib.MonadThrowable
@@ -151,17 +150,15 @@ package object gossiping {
     MultiParentCasperRef[F].get
       .flatMap {
         case Some(casper) =>
-          casper.addBlock(LegacyConversions.fromBlock(block))
+          casper.addBlock(block)
 
         case None if block.getHeader.parentHashes.isEmpty =>
           for {
-            _        <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
-            state    <- Cell.mvarCell[F, CasperState](CasperState())
-            executor = new MultiParentCasperImpl.StatelessExecutor(shardId)
-            dag      <- BlockDagStorage[F].getRepresentation
-            result <- executor.validateAndAddBlock(None, dag, LegacyConversions.fromBlock(block))(
-                       state
-                     )
+            _           <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
+            state       <- Cell.mvarCell[F, CasperState](CasperState())
+            executor    = new MultiParentCasperImpl.StatelessExecutor(shardId)
+            dag         <- BlockDagStorage[F].getRepresentation
+            result      <- executor.validateAndAddBlock(None, dag, block)(state)
             (status, _) = result
           } yield status
 
@@ -427,7 +424,7 @@ package object gossiping {
         override def getBlock(blockHash: ByteString): F[Option[Block]] =
           BlockStore[F]
             .get(blockHash)
-            .map(_.map(x => LegacyConversions.toBlock(x.getBlockMessage)))
+            .map(_.map(_.getBlockMessage))
       }
 
       approver <- if (conf.casper.standalone) {
@@ -443,9 +440,7 @@ package object gossiping {
                                                conf.casper.hasFaucet,
                                                conf.casper.shardId,
                                                conf.casper.deployTimestamp
-                                             ).map { x =>
-                                               LegacyConversions.toBlock(x.getBlockMessage)
-                                             }
+                                             ).map(_.getBlockMessage)
                                    // Store it so others can pull it from the bootstrap node.
                                    _ <- Log[F].info(
                                          s"Trying to store generated Genesis candidate ${genesis.blockHash}..."
@@ -548,12 +543,19 @@ package object gossiping {
                       // Perhaps the BlockDagStorage can be made to store it? Or the BlockStore could put it into LMDB
                       BlockStore[F]
                         .get(blockHash)
-                        .map(_.map(x => LegacyConversions.toBlockSummary(x.getBlockMessage)))
+                        .map(_.map { x =>
+                          val block = x.getBlockMessage
+                          BlockSummary(
+                            blockHash = block.blockHash,
+                            header = block.header,
+                            signature = block.signature
+                          )
+                        })
 
                     override def getBlock(blockHash: ByteString): F[Option[Block]] =
                       BlockStore[F]
                         .get(blockHash)
-                        .map(_.map(x => LegacyConversions.toBlock(x.getBlockMessage)))
+                        .map(_.map(_.getBlockMessage))
                   }
                 }
 
@@ -571,9 +573,7 @@ package object gossiping {
                                   .withBlockHash(summary.blockHash)
                                   .withHeader(summary.getHeader)
 
-                                casper.addMissingDependencies(
-                                  LegacyConversions.fromBlock(partialBlock)
-                                )
+                                casper.addMissingDependencies(partialBlock)
                               }
                         } yield ()
 

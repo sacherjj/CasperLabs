@@ -11,6 +11,7 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Log, Time}
+import io.casperlabs.casper.consensus._
 import monix.eval.Task
 import monix.execution.Scheduler
 import scala.concurrent.duration._
@@ -21,10 +22,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
 
   implicit val cc = ConsensusConfig()
 
-  def sampleDeployData = {
-    val deploy = sample(arbitrary[consensus.Deploy])
-    LegacyConversions.fromDeploy(deploy)
-  }
+  def sampleDeployData = sample(arbitrary[consensus.Deploy])
 
   behavior of "AutoProposer"
 
@@ -168,16 +166,16 @@ object AutoProposerTest {
 
   class MockMultiParentCasper[F[_]: Sync] extends MultiParentCasper[F] {
 
-    @volatile var deployBuffer  = Set.empty[DeployData]
+    @volatile var deployBuffer  = Set.empty[Deploy]
     @volatile var proposalCount = 0
 
-    override def deploy(deployData: DeployData): F[Either[Throwable, Unit]] =
+    override def deploy(deployData: Deploy): F[Either[Throwable, Unit]] =
       Sync[F].delay {
         deployBuffer = deployBuffer + deployData
         Right(())
       }
 
-    override def bufferedDeploys: F[Set[DeployData]] =
+    override def bufferedDeploys: F[Set[Deploy]] =
       deployBuffer.pure[F]
 
     override def createBlock: F[CreateBlockStatus] =
@@ -186,14 +184,13 @@ object AutoProposerTest {
         ReadOnlyMode
       }
 
-    override def addBlock(block: BlockMessage): F[BlockStatus] = ???
+    override def addBlock(block: Block): F[BlockStatus] = ???
 
-    override def contains(block: BlockMessage): F[Boolean]                            = ???
+    override def contains(block: Block): F[Boolean]                                   = ???
     override def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[ByteString]] = ???
     override def blockDag: F[BlockDagRepresentation[F]]                               = ???
     override def fetchDependencies: F[Unit]                                           = ???
     override def normalizedInitialFault(weights: Map[ByteString, Long]): F[Float]     = ???
-    override def lastFinalizedBlock: F[BlockMessage]                                  = ???
-    override def storageContents(hash: ByteString): F[String]                         = ???
+    override def lastFinalizedBlock: F[Block]                                         = ???
   }
 }

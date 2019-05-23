@@ -75,9 +75,23 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val session =
       opt[File](required = true, descr = "Path to the file with session code", validate = fileCheck)
+
     val payment =
       opt[File](required = true, descr = "Path to the file with payment code", validate = fileCheck)
 
+    val publicKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account public key (Ed25519)",
+        validate = fileCheck
+      )
+
+    val privateKey =
+      opt[File](
+        required = false,
+        descr = "Path to the file with account private key (Ed25519)",
+        validate = fileCheck
+      )
   }
   addSubcommand(deploy)
 

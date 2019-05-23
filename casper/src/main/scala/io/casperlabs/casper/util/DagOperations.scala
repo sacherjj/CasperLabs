@@ -2,12 +2,11 @@ package io.casperlabs.casper.util
 
 import cats.{Eval, Monad}
 import cats.implicits._
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.util.MapHelper.updatedWith
 import io.casperlabs.catscontrib.{ListContrib, MonadThrowable}
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.StreamT
 
 import scala.annotation.tailrec
@@ -199,18 +198,18 @@ object DagOperations {
   //Based on that, we compute by finding the first block from genesis for which there
   //exists a child of that block which is an ancestor of b1 or b2 but not both.
   def greatestCommonAncestorF[F[_]: MonadThrowable: BlockStore](
-      b1: BlockMessage,
-      b2: BlockMessage,
-      genesis: BlockMessage,
+      b1: Block,
+      b2: Block,
+      genesis: Block,
       dag: BlockDagRepresentation[F]
-  ): F[BlockMessage] =
+  ): F[Block] =
     if (b1 == b2) {
       b1.pure[F]
     } else {
       def commonAncestorChild(
-          b: BlockMessage,
-          commonAncestors: Set[BlockMessage]
-      ): F[List[BlockMessage]] =
+          b: Block,
+          commonAncestors: Set[Block]
+      ): F[List[Block]] =
         for {
           childrenHashesOpt      <- dag.children(b.blockHash)
           childrenHashes         = childrenHashesOpt.getOrElse(Set.empty[BlockHash])
@@ -219,10 +218,10 @@ object DagOperations {
         } yield commonAncestorChildren
 
       for {
-        b1Ancestors     <- bfTraverseF[F, BlockMessage](List(b1))(ProtoUtil.unsafeGetParents[F]).toSet
-        b2Ancestors     <- bfTraverseF[F, BlockMessage](List(b2))(ProtoUtil.unsafeGetParents[F]).toSet
+        b1Ancestors     <- bfTraverseF[F, Block](List(b1))(ProtoUtil.unsafeGetParents[F]).toSet
+        b2Ancestors     <- bfTraverseF[F, Block](List(b2))(ProtoUtil.unsafeGetParents[F]).toSet
         commonAncestors = b1Ancestors.intersect(b2Ancestors)
-        gca <- bfTraverseF[F, BlockMessage](List(genesis))(commonAncestorChild(_, commonAncestors))
+        gca <- bfTraverseF[F, Block](List(genesis))(commonAncestorChild(_, commonAncestors))
                 .findF(
                   b =>
                     for {

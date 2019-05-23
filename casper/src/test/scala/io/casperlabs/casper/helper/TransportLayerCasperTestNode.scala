@@ -9,7 +9,9 @@ import cats.implicits._
 import cats.temp.par.Par
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
+import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
   CasperPacketHandlerImpl,
@@ -36,14 +38,14 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 class TransportLayerCasperTestNode[F[_]](
     local: Node,
     tle: TransportLayerTestImpl[F],
-    genesis: BlockMessage,
+    genesis: Block,
     transforms: Seq[TransformEntry],
     sk: PrivateKey,
     blockDagDir: Path,
     blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
-    shardId: String = "casperlabs"
+    chainId: String = "casperlabs"
 )(
     implicit
     concurrentF: Concurrent[F],
@@ -69,18 +71,20 @@ class TransportLayerCasperTestNode[F[_]](
 
   val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
 
-  val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
+  val approvedBlock = ApprovedBlock(
+    candidate = Some(ApprovedBlockCandidate(block = Some(LegacyConversions.fromBlock(genesis))))
+  )
 
   implicit val labF =
     LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
 
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
-      new MultiParentCasperImpl.StatelessExecutor(shardId),
+      new MultiParentCasperImpl.StatelessExecutor(chainId),
       MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
       Some(validatorId),
       genesis,
-      shardId,
+      chainId,
       blockProcessingLock,
       faultToleranceThreshold = faultToleranceThreshold
     )
@@ -111,7 +115,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   import HashSetCasperTestNode.peerNode
 
   def standaloneF[F[_]](
-      genesis: BlockMessage,
+      genesis: Block,
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
@@ -162,7 +166,7 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
   def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
-      genesis: BlockMessage,
+      genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f

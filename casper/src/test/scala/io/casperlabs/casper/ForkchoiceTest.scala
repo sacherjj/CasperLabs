@@ -1,7 +1,7 @@
 package io.casperlabs.casper
 
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.{BlockMessage, Bond}
+import io.casperlabs.casper.consensus.{Block, Bond}
 import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.catscontrib._
 import cats._

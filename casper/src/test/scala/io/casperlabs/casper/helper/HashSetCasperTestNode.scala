@@ -10,7 +10,8 @@ import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
@@ -37,7 +38,7 @@ import scala.util.Random
 abstract class HashSetCasperTestNode[F[_]](
     val local: Node,
     sk: PrivateKey,
-    val genesis: BlockMessage,
+    val genesis: Block,
     val blockDagDir: Path,
     val blockStoreDir: Path
 )(
@@ -54,9 +55,9 @@ abstract class HashSetCasperTestNode[F[_]](
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
-  val bonds = genesis.body
-    .flatMap(_.state.map(_.bonds.map(b => PublicKey(b.validator.toByteArray) -> b.stake).toMap))
-    .getOrElse(Map.empty)
+  val bonds = genesis.getHeader.getState.bonds
+    .map(b => PublicKey(b.validatorPublicKey.toByteArray) -> b.stake)
+    .toMap
 
   implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds)
 
@@ -100,7 +101,7 @@ trait HashSetCasperTestNodeFactory {
   type TestNode[F[_]] <: HashSetCasperTestNode[F]
 
   def standaloneF[F[_]](
-      genesis: BlockMessage,
+      genesis: Block,
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
@@ -114,7 +115,7 @@ trait HashSetCasperTestNodeFactory {
   ): F[TestNode[F]]
 
   def standaloneEff(
-      genesis: BlockMessage,
+      genesis: Block,
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
@@ -131,7 +132,7 @@ trait HashSetCasperTestNodeFactory {
 
   def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
-      genesis: BlockMessage,
+      genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
@@ -144,7 +145,7 @@ trait HashSetCasperTestNodeFactory {
 
   def networkEff(
       sks: IndexedSeq[PrivateKey],
-      genesis: BlockMessage,
+      genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
@@ -156,7 +157,7 @@ trait HashSetCasperTestNodeFactory {
       Timer[Effect]
     )
 
-  protected def initStorage[F[_]: Concurrent: Log: Metrics](genesis: BlockMessage) = {
+  protected def initStorage[F[_]: Concurrent: Log: Metrics](genesis: Block) = {
     val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
     val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
     val env           = Context.env(blockStoreDir, BlockDagStorageTestFixture.mapSize)

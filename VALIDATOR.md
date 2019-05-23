@@ -65,7 +65,7 @@ Server is listening on socket: casperlabs-node-data/.caspernode.sock
 
 
 ### Setting up keys
-1. `secp256r1` (required) private key encoded in unencrypted `PKCS#8` format and `X.509` certificate. Used for node-to-node interaction. 
+1. `secp256r1` (required) private key encoded in unencrypted `PKCS#8` format and `X.509` certificate. Used for node-to-node interaction.
 2. `ed25519` (optional) private and public keys. Used as a validator identity. If not provided then a node starts in the read-only mode.
 
 #### Prerequisites: OpenSSL
@@ -90,8 +90,8 @@ To continue to have working lib folder, consider adding last line to bottom of `
 Download and install the latest version of the [sha3sum](https://github.com/maandree/sha3sum).
 
 1. macOS: `brew install sha3sum`
-2. Ubunt 18.04: 
-    
+2. Ubunt 18.04:
+
  Build libkeccak:
 
 ```bash
@@ -113,7 +113,7 @@ sudo make install
 ```
 
 #### Script
-You may want to use [the script](/docker/gen-keys.sh) which will generate all the keys. The commands below are excerpts from this script. 
+You may want to use [the script](/docker/gen-keys.sh) which will generate all the keys. The commands below are excerpts from this script.
 
 #### ed25519
 Generate private key:
@@ -167,7 +167,7 @@ casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40
 ```
 The address above contains `c0a6c82062461c9b7f9f5c3120f44589393edf31` as a node ID.
 
-Generate certificate from the generated private key. Fill asked questions and enter the above `NODE_ID` as a `Common Name (CN)` 
+Generate certificate from the generated private key. Fill asked questions and enter the above `NODE_ID` as a `Common Name (CN)`
 ```bash
 openssl req \
     -new \
@@ -219,7 +219,8 @@ $ casperlabs-node \
      --tls-key secp256r1-private-pkcs8.pem \
      --casper-validator-private-key-path ed25519-private.pem \
      --casper-validator-public-key-path ed25519-public.pem \
-     --grpc-socket casperlabs-node-data/.caspernode.sock
+     --grpc-socket casperlabs-node-data/.caspernode.sock \
+     --casper-auto-propose-enabled
 ```
 
 

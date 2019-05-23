@@ -11,8 +11,8 @@ import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.blockstorage._
-import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.{consensus, _}
+import io.casperlabs.casper.consensus
+import io.casperlabs.casper._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
@@ -28,13 +28,13 @@ import scala.collection.immutable.Queue
 
 class GossipServiceCasperTestNode[F[_]](
     local: Node,
-    genesis: BlockMessage,
+    genesis: consensus.Block,
     sk: PrivateKey,
     blockDagDir: Path,
     blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
-    shardId: String = "casperlabs",
+    chainId: String = "casperlabs",
     relaying: Relaying[F],
     gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F],
     validatorToNode: Map[ByteString, Node]
@@ -69,11 +69,11 @@ class GossipServiceCasperTestNode[F[_]](
   // - the download manager tries to validate a block
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
-      new MultiParentCasperImpl.StatelessExecutor(shardId),
+      new MultiParentCasperImpl.StatelessExecutor(chainId),
       MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
       Some(validatorId),
       genesis,
-      shardId,
+      chainId,
       blockProcessingLock,
       faultToleranceThreshold = faultToleranceThreshold
     )
@@ -96,7 +96,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   import HashSetCasperTestNode.peerNode
 
   def standaloneF[F[_]](
-      genesis: BlockMessage,
+      genesis: consensus.Block,
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
@@ -111,7 +111,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     val name               = "standalone"
     val identity           = peerNode(name, 40400)
     val logicalTime        = new LogicalTime[F]
-    implicit val log       = new LogStub[F]()
+    implicit val log       = new LogStub[F](printEnabled = false)
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val nodeAsk   = makeNodeAsk(identity)(concurrentF)
 
@@ -155,7 +155,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
   def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
-      genesis: BlockMessage,
+      genesis: consensus.Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
@@ -301,7 +301,7 @@ object GossipServiceCasperTestNodeFactory {
                                    s"Requested missing block ${PrettyPrinter.buildString(block.blockHash)} Now validating."
                                  ) *>
                                    casper
-                                     .addBlock(LegacyConversions.fromBlock(block)) flatMap {
+                                     .addBlock(block) flatMap {
                                    case Valid =>
                                      Log[F].debug(s"Validated and stored block ${PrettyPrinter
                                        .buildString(block.blockHash)}")
@@ -380,7 +380,14 @@ object GossipServiceCasperTestNodeFactory {
                        blockStore
                          .get(blockHash)
                          .map(
-                           _.map(mwt => LegacyConversions.toBlockSummary(mwt.getBlockMessage))
+                           _.map { mwt =>
+                             val b = mwt.getBlockMessage
+                             consensus
+                               .BlockSummary()
+                               .withBlockHash(b.blockHash)
+                               .withHeader(b.getHeader)
+                               .withSignature(b.getSignature)
+                           }
                          )
                      }
 
@@ -390,7 +397,7 @@ object GossipServiceCasperTestNodeFactory {
                        ) *>
                          blockStore
                            .get(blockHash)
-                           .map(_.map(mwt => LegacyConversions.toBlock(mwt.getBlockMessage)))
+                           .map(_.map(mwt => mwt.getBlockMessage))
                    },
                    synchronizer = synchronizer,
                    downloadManager = downloadManager,
@@ -405,7 +412,7 @@ object GossipServiceCasperTestNodeFactory {
                              .withBlockHash(summary.blockHash)
                              .withHeader(summary.getHeader)
 
-                           casper.addMissingDependencies(LegacyConversions.fromBlock(partialBlock))
+                           casper.addMissingDependencies(partialBlock)
                          }.void
 
                      override def onDownloaded(blockHash: ByteString) =

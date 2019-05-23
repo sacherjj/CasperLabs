@@ -17,23 +17,26 @@ class LegacyConversionsTest extends FlatSpec with ArbitraryConsensus with Matche
       // Some fields are not supported by the legacy one.
       val comp =
         orig
-          .withHeader(
-            // Body hash would have to be a valid serialization from the 2 fields in the old message.
-            orig.getHeader.withBodyHash(ByteString.EMPTY)
-          )
           .withBody(
             orig.getBody.withDeploys(orig.getBody.deploys.map { pd =>
-              pd.withDeploy(
-                  pd.getDeploy
-                    .withDeployHash(ByteString.EMPTY)
-                    .withHeader(pd.getDeploy.getHeader.withBodyHash(ByteString.EMPTY))
-                )
-                .withErrorMessage("")
+              pd.withErrorMessage("")
             })
           )
       val conv = LegacyConversions.fromBlock(comp)
       val back = LegacyConversions.toBlock(conv)
-      back shouldBe comp
+      back.toProtoString shouldBe comp.toProtoString
+    }
+  }
+
+  it should "preserve genesis" in {
+    forAll { (orig: consensus.Block) =>
+      val genesis =
+        orig
+          .withBody(consensus.Block.Body())
+          .clearSignature
+      val conv = LegacyConversions.fromBlock(genesis)
+      val back = LegacyConversions.toBlock(conv)
+      back.toProtoString shouldBe genesis.toProtoString
     }
   }
 

@@ -55,7 +55,6 @@ pub enum Error {
     GasLimit,
     Ret(Vec<Key>),
     Rng(rand::Error),
-    Unreachable,
     ResolverError(ResolverError),
 }
 
@@ -90,8 +89,8 @@ impl From<BytesReprError> for Error {
 }
 
 impl From<!> for Error {
-    fn from(_err: !) -> Error {
-        Error::Unreachable
+    fn from(error: !) -> Error {
+        match error {}
     }
 }
 
