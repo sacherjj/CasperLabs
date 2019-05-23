@@ -102,7 +102,7 @@ impl<T: Clone> Deref for Validated<T> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Serialize)]
 pub struct CorrelationId(Uuid);
 
 impl CorrelationId {
@@ -198,7 +198,7 @@ mod tests {
     fn should_support_clone() {
         let correlation_id = CorrelationId::new();
 
-        let cloned = correlation_id.clone();
+        let cloned = correlation_id;
 
         assert_eq!(correlation_id, cloned, "should be cloneable")
     }
