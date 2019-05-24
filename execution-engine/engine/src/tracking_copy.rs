@@ -121,6 +121,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn read(&mut self, k: &Validated<Key>) -> Result<Option<Value>, R::Error> {
         if let Some(value) = self.get(k)? {
             add(&mut self.ops, **k, Op::Read);
+            add(&mut self.fns, **k, Transform::Identity);
             Ok(Some(value))
         } else {
             Ok(None)
