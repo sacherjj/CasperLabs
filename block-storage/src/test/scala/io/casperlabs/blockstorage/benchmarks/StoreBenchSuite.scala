@@ -20,7 +20,7 @@ import io.casperlabs.blockstorage.{
   LMDBBlockStore
 }
 import io.casperlabs.casper.protocol.ApprovedBlock
-import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.ipc.Key.KeyInstance
 import io.casperlabs.ipc.Transform.TransformInstance
 import io.casperlabs.ipc.{DeployCode => _, _}
@@ -193,7 +193,7 @@ object Init {
 
   def inMemBlockStore = InMemBlockStore.create[Task](
     Monad[Task],
-    InMemBlockStore.emptyMapRef[Task].runSyncUnsafe(),
+    InMemBlockStore.emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)].runSyncUnsafe(),
     Ref[Task].of(none[ApprovedBlock]).runSyncUnsafe(),
     metricsNop
   )
