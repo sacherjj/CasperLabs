@@ -1,3 +1,5 @@
+import time
+from itertools import count
 from .cl_node.casperlabsnode import (
     COMBINED_CONTRACT,
     COUNTER_CALL,
@@ -9,9 +11,12 @@ from .cl_node.wait import wait_for_count_the_blocks_on_node
 
 
 def test_call_contracts_one_another(three_node_network):
+    nonce = count(1)
     tnn = three_node_network
     bootstrap, node1, node2 = tnn.docker_nodes
-    bootstrap.deploy_and_propose(session_contract=COMBINED_CONTRACT, payment_contract=COMBINED_CONTRACT)
+    bootstrap.deploy_and_propose(session_contract=COMBINED_CONTRACT,
+                                 payment_contract=COMBINED_CONTRACT,
+                                 nonce=next(nonce))
     for node in tnn.docker_nodes:
         wait_for_count_the_blocks_on_node(node, timeout_seconds=node.timeout, number_of_blocks=1)
     generated_hashes = {}
@@ -19,7 +24,8 @@ def test_call_contracts_one_another(three_node_network):
         list_of_hashes = []
         for node in tnn.docker_nodes:
             block_hash = node.deploy_and_propose(session_contract=contract_name,
-                                                 payment_contract=contract_name)
+                                                 payment_contract=contract_name,
+                                                 nonce=next(nonce))
             list_of_hashes.append(block_hash)
         generated_hashes[contract_name] = list_of_hashes
     for index, counter_hash in enumerate(generated_hashes[COUNTER_CALL]):

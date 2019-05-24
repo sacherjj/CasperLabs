@@ -137,13 +137,13 @@ fn main() {
     });
     let wasmi_preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
 
-    for wasm_bytes in wasm_files.iter() {
+    for (i, wasm_bytes) in wasm_files.iter().enumerate() {
         let result = engine_state.run_deploy(
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
             account_addr,
             timestamp,
-            nonce,
+            i as u64 + 1,
             state_hash,
             gas_limit,
             protocol_version,
