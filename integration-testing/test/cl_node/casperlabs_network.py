@@ -239,10 +239,17 @@ class CustomConnectionNetwork(CasperLabsNetwork):
         for node_number in range(1, node_count):
             self.wait_method(wait_for_approved_block_received_handler_state, node_number)
 
+        # Calculate how many peers should be connected to each node.
+        # Assumes duplicate network connections are not given, else wait_for_peers will time out.
+        peer_counts = [0] * node_count
+        for network in network_connections:
+            for node_num in network:
+                peer_counts[node_num] += len(network) - 1
+
         timeout = self.docker_nodes[0].timeout
-        wait_for_peers_count_at_least(self.docker_nodes[0], node_count - 1, timeout)
-        for node in self.docker_nodes[1:]:
-            wait_for_peers_count_at_least(node, 1, timeout)
+        for node_num, peer_count in enumerate(peer_counts):
+            if peer_count > 0:
+                wait_for_peers_count_at_least(self.docker_nodes[node_num], peer_count, timeout)
 
 
 if __name__ == '__main__':
