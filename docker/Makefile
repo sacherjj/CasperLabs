@@ -8,7 +8,7 @@ REFRESH_TARGETS := ./monitoring/prometheus/refresh-targets.sh
 .SECONDARY:
 
 # Remove all node-N environments.
-clean: down $(shell find . -type d -name "node-*" | awk -F '/' '{print $$2"/down"}')
+clean: down $(shell find . -type d -name "node-*" | grep -v .casperlabs | awk -F '/' '{print $$2"/down"}')
 	docker network rm casperlabs || exit 0
 	rm -rf .casperlabs
 	rm -rf .make
@@ -100,6 +100,7 @@ slow:
 	./gen-keys.sh .casperlabs/node-0
 	cp -r .casperlabs/node-0/node-id .casperlabs/bootstrap/node-id
 	(cat .casperlabs/node-0/validator-id; echo " $(CL_CASPER_NUM_VALIDATORS)") >> .casperlabs/genesis/bonds.txt
+
 	i=1 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
 		mkdir -p .casperlabs/node-$$i ; \
 		./gen-keys.sh .casperlabs/node-$$i ; \
