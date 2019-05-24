@@ -10,9 +10,10 @@ import scala.util.Try
   * and that the consensus.* ones are just used for communication, so hashes don't have to be
   * correct on the new objects, they are purely serving as DTOs. */
 object LegacyConversions {
-  def toBlockSummary(block: protocol.BlockMessage): consensus.BlockSummary =
+
+  def toBlock(block: protocol.BlockMessage): consensus.Block =
     consensus
-      .BlockSummary()
+      .Block()
       .withBlockHash(block.blockHash)
       .withHeader(
         consensus.Block
@@ -58,21 +59,6 @@ object LegacyConversions {
           .withValidatorPublicKey(block.sender)
           .withRank(block.getBody.getState.blockNumber)
       )
-      .copy(
-        signature = Option(
-          consensus
-            .Signature()
-            .withSigAlgorithm(block.sigAlgorithm)
-            .withSig(block.sig)
-        ).filterNot(s => s.sigAlgorithm.isEmpty && s.sig.isEmpty)
-      )
-
-  def toBlock(block: protocol.BlockMessage): consensus.Block = {
-    val summary = toBlockSummary(block)
-    consensus
-      .Block()
-      .withBlockHash(summary.blockHash)
-      .withHeader(summary.getHeader)
       .withBody(
         consensus.Block
           .Body()
@@ -88,8 +74,14 @@ object LegacyConversions {
               ) // New version doesn't have limit. Preserve it so signatures can be checked.
           })
       )
-      .copy(signature = summary.signature)
-  }
+      .copy(
+        signature = Option(
+          consensus
+            .Signature()
+            .withSigAlgorithm(block.sigAlgorithm)
+            .withSig(block.sig)
+        ).filterNot(s => s.sigAlgorithm.isEmpty && s.sig.isEmpty)
+      )
 
   def fromBlock(block: consensus.Block): protocol.BlockMessage = {
     val (deploysHash, stateHash, headerExtraBytes) =

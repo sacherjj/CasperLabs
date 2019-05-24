@@ -373,23 +373,10 @@ object GossipServiceCasperTestNodeFactory {
 
                      override def getBlockSummary(
                          blockHash: ByteString
-                     ): F[Option[consensus.BlockSummary]] = {
+                     ): F[Option[consensus.BlockSummary]] =
                        Log[F].debug(
                          s"Retrieving block summary ${PrettyPrinter.buildString(blockHash)} from storage."
-                       )
-                       blockStore
-                         .get(blockHash)
-                         .map(
-                           _.map { mwt =>
-                             val b = mwt.getBlockMessage
-                             consensus
-                               .BlockSummary()
-                               .withBlockHash(b.blockHash)
-                               .withHeader(b.getHeader)
-                               .withSignature(b.getSignature)
-                           }
-                         )
-                     }
+                       ) *> blockStore.getBlockSummary(blockHash)
 
                      override def getBlock(blockHash: ByteString): F[Option[consensus.Block]] =
                        Log[F].debug(

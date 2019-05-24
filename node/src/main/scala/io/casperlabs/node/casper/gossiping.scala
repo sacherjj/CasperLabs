@@ -539,18 +539,8 @@ package object gossiping {
                       isInDag(blockHash)
 
                     override def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]] =
-                      // TODO: Need a more efficient way to retrieve the summary.
-                      // Perhaps the BlockDagStorage can be made to store it? Or the BlockStore could put it into LMDB
                       BlockStore[F]
-                        .get(blockHash)
-                        .map(_.map { x =>
-                          val block = x.getBlockMessage
-                          BlockSummary(
-                            blockHash = block.blockHash,
-                            header = block.header,
-                            signature = block.signature
-                          )
-                        })
+                        .getBlockSummary(blockHash)
 
                     override def getBlock(blockHash: ByteString): F[Option[Block]] =
                       BlockStore[F]
