@@ -25,6 +25,7 @@ import io.casperlabs.comm.protocol.routing.Packet
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport
 import io.casperlabs.comm.transport.{Blob, TransportLayer}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.effects.PacketHandler
@@ -139,12 +140,10 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                 )
       BlockMsgWithTransform(Some(genesisBlock), genesisTransforms) = genesis
       validatorId                                                  <- ValidatorIdentity.fromConfig[F](conf)
-      bondedValidators = genesisBlock.body
-        .flatMap(_.state.map(_.bonds.map(_.validator).toSet))
-        .getOrElse(Set.empty)
+      bondedValidators                                             = genesisBlock.getHeader.getState.bonds.map(_.validatorPublicKey).toSet
       abp <- ApproveBlockProtocol
               .of[F](
-                genesisBlock,
+                LegacyConversions.fromBlock(genesisBlock),
                 genesisTransforms,
                 bondedValidators,
                 conf.requiredSigs,
@@ -207,7 +206,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   ): F[CasperPacketHandler[F]] = {
     val ApprovedBlockWithTransforms(approvedBlock, transforms) =
       approvedBlockWithTransforms
-    val genesis = approvedBlock.candidate.flatMap(_.block).get
+    val genesis = LegacyConversions.toBlock(approvedBlock.candidate.flatMap(_.block).get)
     for {
       // FIXME: The bonds should probably be taken from the approved block, but that's not implemented.
       bonds       <- Genesis.getBonds[F](conf.genesisPath, conf.bondsFile, conf.numValidators)
@@ -273,7 +272,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         _ <- Log[F].info("Received ApprovedBlock message while in GenesisValidatorHandler state.")
         casperO <- onApprovedBlockTransition(
                     ab,
-                    Set(ByteString.copyFrom(validatorId.publicKey)),
+                    Set(PublicKey(ByteString.copyFrom(validatorId.publicKey))),
                     Some(validatorId),
                     shardId
                   )
@@ -356,7 +355,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      capserHandlerInternal
                    )
                  case Some(ApprovedBlockWithTransforms(approvedBlock, transforms)) =>
-                   val genesis = approvedBlock.candidate.flatMap(_.block).get
+                   val genesis =
+                     LegacyConversions.toBlock(approvedBlock.candidate.flatMap(_.block).get)
                    for {
                      _ <- insertIntoBlockAndDagStore[F](genesis, transforms, approvedBlock)
                      casper <- MultiParentCasper.fromTransportLayer[F](
@@ -383,7 +383,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   private[comm] class BootstrapCasperHandler[F[_]: Concurrent: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: BlockDagStorage: ExecutionEngineService](
       shardId: String,
       validatorId: Option[ValidatorIdentity],
-      validators: Set[ByteString]
+      validators: Set[PublicKeyBS]
   ) extends CasperPacketHandlerInternal[F] {
     private val noop: F[Unit] = Applicative[F].unit
 
@@ -449,7 +449,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     override def handleBlockMessage(peer: Node, b: BlockMessage): F[Unit] =
       for {
         _          <- Metrics[F].incrementCounter("blocks-received")
-        isOldBlock <- MultiParentCasper[F].contains(b)
+        block      = LegacyConversions.toBlock(b)
+        isOldBlock <- MultiParentCasper[F].contains(block)
         _ <- if (isOldBlock) {
               for {
                 _ <- Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
@@ -462,7 +463,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                       case ValidatorIdentity(publicKey, _, _) =>
                         handleDoppelganger[F](peer, b, ByteString.copyFrom(publicKey))
                     }
-                _ <- MultiParentCasper[F].addBlock(b)
+                _ <- MultiParentCasper[F].addBlock(block)
               } yield ()
             }
       } yield ()
@@ -471,7 +472,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       for {
         local      <- RPConfAsk[F].reader(_.local)
         block      <- BlockStore[F].getBlockMessage(br.hash)
-        serialized = block.map(_.toByteString)
+        serialized = block.map(LegacyConversions.fromBlock).map(_.toByteString)
         maybeMsg = serialized.map(
           serializedMessage => Blob(local, Packet(transport.BlockMessage.id, serializedMessage))
         )
@@ -489,12 +490,13 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         fctr: ForkChoiceTipRequest
     ): F[Unit] =
       for {
-        _     <- Log[F].info(s"Received ForkChoiceTipRequest from $peer")
-        tip   <- MultiParentCasper.forkChoiceTip
-        local <- RPConfAsk[F].reader(_.local)
-        msg   = Blob(local, Packet(transport.BlockMessage.id, tip.toByteString))
-        _     <- TransportLayer[F].stream(Seq(peer), msg)
-        _     <- Log[F].info(s"Sending Block ${tip.blockHash} to $peer")
+        _          <- Log[F].info(s"Received ForkChoiceTipRequest from $peer")
+        tip        <- MultiParentCasper.forkChoiceTip
+        local      <- RPConfAsk[F].reader(_.local)
+        serialized = LegacyConversions.fromBlock(tip).toByteString
+        msg        = Blob(local, Packet(transport.BlockMessage.id, serialized))
+        _          <- TransportLayer[F].stream(Seq(peer), msg)
+        _          <- Log[F].info(s"Sending Block ${tip.blockHash} to $peer")
       } yield ()
 
     override def handleApprovedBlockRequest(
@@ -652,7 +654,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
   private def onApprovedBlockTransition[F[_]: Concurrent: Time: ErrorHandler: SafetyOracle: RPConfAsk: TransportLayer: ConnectionsCell: Log: BlockStore: LastApprovedBlock: BlockDagStorage: ExecutionEngineService](
       b: ApprovedBlock,
-      validators: Set[ByteString],
+      validators: Set[PublicKeyBS],
       validatorId: Option[ValidatorIdentity],
       shardId: String
   ): F[Option[MultiParentCasper[F]]] =
@@ -661,7 +663,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       casper <- if (isValid) {
                  for {
                    _        <- Log[F].info("Valid ApprovedBlock received!")
-                   genesis  = b.candidate.flatMap(_.block).get
+                   genesis  = LegacyConversions.toBlock(b.candidate.flatMap(_.block).get)
                    dag      <- BlockDagStorage[F].getRepresentation
                    parents  <- ProtoUtil.unsafeGetParents[F](genesis)
                    merged   <- ExecEngineUtil.merge[F](parents, dag)
@@ -689,7 +691,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     } yield casper
 
   private def insertIntoBlockAndDagStore[F[_]: Sync: ErrorHandler: Log: BlockStore: BlockDagStorage](
-      genesis: BlockMessage,
+      genesis: consensus.Block,
       transforms: Seq[TransformEntry],
       approvedBlock: ApprovedBlock
   ): F[Unit] =

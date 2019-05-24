@@ -1,8 +1,10 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U64_SIZE};
-use crate::key::{Key, KEY_SIZE, UREF_SIZE};
+use crate::key::{Key, UREF_SIZE};
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+
+pub const KEY_SIZE: usize = 32;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Account {

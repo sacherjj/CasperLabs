@@ -13,7 +13,9 @@ final case class Deploy(
     from: String,
     nonce: Long,
     sessionCode: File,
-    paymentCode: File
+    paymentCode: File,
+    publicKey: Option[File],
+    privateKey: Option[File]
 ) extends Configuration
 
 final case object Propose extends Configuration
@@ -50,7 +52,9 @@ object Configuration {
           options.deploy.from(),
           options.deploy.nonce(),
           options.deploy.session(),
-          options.deploy.payment()
+          options.deploy.payment(),
+          options.deploy.publicKey.toOption,
+          options.deploy.privateKey.toOption
         )
       case options.propose =>
         Propose

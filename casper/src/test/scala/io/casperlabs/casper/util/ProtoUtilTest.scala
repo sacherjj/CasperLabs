@@ -3,7 +3,7 @@ package io.casperlabs.casper.util
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus._, Block.Justification
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen.listOfN
@@ -24,7 +24,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
 
   implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
 
-  val blockElementGen: Gen[BlockMessage] =
+  val blockElementGen: Gen[Block] =
     for {
       hash            <- arbitrary[BlockHash]
       version         <- arbitrary[Long]
@@ -32,24 +32,25 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
       parentsHashList <- arbitrary[Seq[BlockHash]]
       justifications  <- arbitrary[Seq[Justification]]
     } yield
-      BlockMessage(blockHash = hash)
-        .withJustifications(justifications)
+      Block(blockHash = hash)
         .withHeader(
-          Header()
-            .withParentsHashList(parentsHashList)
+          Block
+            .Header()
+            .withParentHashes(parentsHashList)
+            .withJustifications(justifications)
             .withProtocolVersion(version)
             .withTimestamp(timestamp)
         )
 
-  implicit val arbitraryBlock: Arbitrary[BlockMessage] = Arbitrary(blockElementGen)
+  implicit val arbitraryBlock: Arbitrary[Block] = Arbitrary(blockElementGen)
 
   "dependenciesHashesOf" should "return hashes of all justifications and parents of a block" in {
     forAll(blockElementGen) { blockElement =>
       val result = ProtoUtil.dependenciesHashesOf(blockElement)
-      val justificationsHashes = blockElement.justifications.map(
+      val justificationsHashes = blockElement.getHeader.justifications.map(
         _.latestBlockHash
       )
-      val parentsHashes = blockElement.header.toSeq.flatMap(_.parentsHashList)
+      val parentsHashes = blockElement.getHeader.parentHashes
       result should contain allElementsOf (justificationsHashes)
       result should contain allElementsOf (parentsHashes)
       result should contain theSameElementsAs ((justificationsHashes ++ parentsHashes).toSet)

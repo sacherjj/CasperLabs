@@ -340,10 +340,12 @@ cargo run --bin casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 
 In the root of CasperLabs.
 
-If you're doing it for the first time you don't have private and public keys. The node can generate that for you: `./node/target/universal/stage/bin/casperlabs-node run -s`. It will create a genesis folder in `~/.casperlabs` directory. Genesis will contain `bonds.txt` file with the list of public keys and a files containing private key for each public key from `bonds.txt`. Choose one public key from `bonds.txt` file and corresponding private key (content) from `~/.casperlabs/genesis/<public_key>.sk`.
+[Generate secp256r1 key and X.509 certificate firstly](/VALIDATOR.md#setting-up-keys).
 
-```
-./node/target/universal/stage/bin/casperlabs-node run --casper-validator-private-key <private key from <public_key>.sk file> --casper-validator-public-key <public_key> -s
+```bash
+./node/target/universal/stage/bin/casperlabs-node run -s \
+    --tls-certificate node.certificate.pem \
+    --tls-key secp256r1-private-pkcs8.pem
 ```
 
 ### Deploying data

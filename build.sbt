@@ -39,7 +39,7 @@ lazy val projectSettings = Seq(
     case None    => Seq()
     case Some(v) => Seq("-source", v, "-target", v)
   }),
-  Test / fork := true,
+  Test / fork := false, // Forking may cause "Reporter closed abruptly..." messages due to non-serializable exceptions.
   Test / parallelExecution := false,
   Test / testForkedParallel := false,
   IntegrationTest / fork := true,
@@ -170,7 +170,8 @@ lazy val crypto = (project in file("crypto"))
     name := "crypto",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
-      bouncyCastle,
+      bouncyProvCastle,
+      bouncyPkixCastle,
       scalacheckNoTest,
       kalium,
       jaxb,
@@ -194,9 +195,12 @@ lazy val models = (project in file("models"))
     // TODO: As we refactor the interfaces this project should only depend on consensus
     // related models, ones that get stored, passed to client. The client for example
     // shouldn't transitively depend on node-to-node and node-to-EE interfaces.
-    PB.protoSources in Compile := Seq(protobufDirectory),
+    PB.protoSources in Compile := Seq(
+      protobufDirectory
+    ),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufSubDirectoryFilter(
+        "google/api",
         "io/casperlabs/casper/consensus",
         "io/casperlabs/casper/protocol" // TODO: Eventually remove.
       )),

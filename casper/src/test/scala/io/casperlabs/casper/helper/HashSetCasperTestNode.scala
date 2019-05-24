@@ -4,56 +4,41 @@ import java.nio.file.Path
 
 import cats.data.EitherT
 import cats.effect.{Concurrent, Timer}
-import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
-import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import cats.temp.par.Par
+import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
-import io.casperlabs.casper.helper.BlockDagStorageTestFixture.mapSize
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.comm.CasperPacketHandler.{
-  ApprovedBlockReceivedHandler,
-  CasperPacketHandlerImpl,
-  CasperPacketHandlerInternal
-}
-import io.casperlabs.casper.util.comm.TransportLayerTestImpl
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
-import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.protocol.routing._
-import io.casperlabs.comm.rp.Connect
-import io.casperlabs.comm.rp.Connect._
-import io.casperlabs.comm.rp.HandleMessages.handle
-import io.casperlabs.crypto.signatures.Ed25519
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.p2p.effects.PacketHandler
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Cell, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
-import monix.execution.Scheduler
 import monix.eval.instances.CatsParallelForTask
+import monix.execution.Scheduler
 
-import scala.collection.mutable
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
 
 /** Base class for test nodes with fields used by tests exposed as public. */
 abstract class HashSetCasperTestNode[F[_]](
     val local: Node,
-    sk: Array[Byte],
-    val genesis: BlockMessage,
+    sk: PrivateKey,
+    val genesis: Block,
     val blockDagDir: Path,
     val blockStoreDir: Path
 )(
@@ -68,11 +53,11 @@ abstract class HashSetCasperTestNode[F[_]](
 
   implicit val casperEff: MultiParentCasperImpl[F]
 
-  val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
+  val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
-  val bonds = genesis.body
-    .flatMap(_.state.map(_.bonds.map(b => b.validator.toByteArray -> b.stake).toMap))
-    .getOrElse(Map.empty)
+  val bonds = genesis.getHeader.getState.bonds
+    .map(b => PublicKey(b.validatorPublicKey.toByteArray) -> b.stake)
+    .toMap
 
   implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds)
 
@@ -116,9 +101,9 @@ trait HashSetCasperTestNodeFactory {
   type TestNode[F[_]] <: HashSetCasperTestNode[F]
 
   def standaloneF[F[_]](
-      genesis: BlockMessage,
+      genesis: Block,
       transforms: Seq[TransformEntry],
-      sk: Array[Byte],
+      sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   )(
@@ -130,9 +115,9 @@ trait HashSetCasperTestNodeFactory {
   ): F[TestNode[F]]
 
   def standaloneEff(
-      genesis: BlockMessage,
+      genesis: Block,
       transforms: Seq[TransformEntry],
-      sk: Array[Byte],
+      sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
   )(
@@ -146,8 +131,8 @@ trait HashSetCasperTestNodeFactory {
     ).value.unsafeRunSync.right.get
 
   def networkF[F[_]](
-      sks: IndexedSeq[Array[Byte]],
-      genesis: BlockMessage,
+      sks: IndexedSeq[PrivateKey],
+      genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
@@ -159,8 +144,8 @@ trait HashSetCasperTestNodeFactory {
   ): F[IndexedSeq[TestNode[F]]]
 
   def networkEff(
-      sks: IndexedSeq[Array[Byte]],
-      genesis: BlockMessage,
+      sks: IndexedSeq[PrivateKey],
+      genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f
@@ -172,7 +157,7 @@ trait HashSetCasperTestNodeFactory {
       Timer[Effect]
     )
 
-  protected def initStorage[F[_]: Concurrent: Log: Metrics](genesis: BlockMessage) = {
+  protected def initStorage[F[_]: Concurrent: Log: Metrics](genesis: Block) = {
     val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
     val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
     val env           = Context.env(blockStoreDir, BlockDagStorageTestFixture.mapSize)
@@ -256,7 +241,7 @@ object HashSetCasperTestNode {
 
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
   def simpleEEApi[F[_]: Defer: Applicative](
-      initialBonds: Map[Array[Byte], Long]
+      initialBonds: Map[PublicKey, Long]
   ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
       import ipc._
@@ -314,7 +299,7 @@ object HashSetCasperTestNode {
         )
       override def computeBonds(hash: ByteString)(implicit log: Log[F]): F[Seq[Bond]] =
         bonds.pure[F]
-      override def setBonds(newBonds: Map[Array[Byte], Long]): F[Unit] =
+      override def setBonds(newBonds: Map[PublicKey, Long]): F[Unit] =
         Defer[F].defer(Applicative[F].unit.map { _ =>
           bonds = newBonds.map {
             case (validator, weight) => Bond(ByteString.copyFrom(validator), weight)

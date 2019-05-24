@@ -3,13 +3,12 @@ package io.casperlabs.blockstorage
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockDagRepresentation.Validator
 import io.casperlabs.blockstorage.BlockStore.BlockHash
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.metrics.{Metered, Metrics}
-import io.casperlabs.models.BlockMetadata
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
-  def insert(block: BlockMessage): F[BlockDagRepresentation[F]]
+  def insert(block: Block): F[BlockDagRepresentation[F]]
   def checkpoint(): F[Unit]
   def clear(): F[Unit]
   def close(): F[Unit]
@@ -21,7 +20,7 @@ object BlockDagStorage {
     abstract override def getRepresentation: F[BlockDagRepresentation[F]] =
       incAndMeasure("representation", super.getRepresentation)
 
-    abstract override def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+    abstract override def insert(block: Block): F[BlockDagRepresentation[F]] =
       incAndMeasure("insert", super.insert(block))
 
     abstract override def checkpoint(): F[Unit] =

@@ -6,11 +6,10 @@ import io.casperlabs.catscontrib._
 import Catscontrib._
 import cats.data.OptionT
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.blockstorage.BlockDagRepresentation
-import io.casperlabs.casper.protocol.Justification
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata}
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.{Clique, DagOperations, ProtoUtil}
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.catscontrib.ski.id
 import io.casperlabs.shared.{Log, StreamT}
 
@@ -138,7 +137,7 @@ sealed abstract class SafetyOracleInstances {
           blockDag.latestMessageHash(validator).flatMap {
             case Some(latestByValidatorHash) =>
               val creatorJustificationOrGenesis = block.justifications
-                .find(_.validator == block.sender)
+                .find(_.validatorPublicKey == block.validatorPublicKey)
                 .fold(block.blockHash)(_.latestBlockHash)
               DagOperations
                 .bfTraverseF[F, BlockHash](List(latestByValidatorHash)) { blockHash =>

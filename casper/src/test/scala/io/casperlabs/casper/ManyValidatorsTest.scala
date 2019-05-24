@@ -8,7 +8,7 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
-import io.casperlabs.casper.protocol.{BlockMessage, Bond}
+import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
@@ -37,7 +37,7 @@ class ManyValidatorsTest
         ByteString.copyFromUtf8(Random.nextString(20)).substring(0, 32)
       )
       .map(Bond(_, 10))
-    val v1 = bonds(0).validator
+    val v1 = bonds(0).validatorPublicKey
 
     val testProgram = for {
       blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)

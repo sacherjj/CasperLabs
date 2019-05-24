@@ -11,12 +11,12 @@ use common::bytesrepr::{FromBytes, ToBytes};
 use common::key::Key;
 use common::value::Value;
 use shared::newtypes::Blake2bHash;
-use storage::history::trie::{Pointer, PointerBlock, Trie};
+use storage::trie::{Pointer, PointerBlock, Trie};
 
 #[bench]
 fn serialize_trie_leaf(b: &mut Bencher) {
     let leaf = Trie::Leaf {
-        key: Key::Account([0; 20]),
+        key: Key::Account([0; 32]),
         value: Value::Int32(42),
     };
     b.iter(|| ToBytes::to_bytes(black_box(&leaf)));
@@ -25,7 +25,7 @@ fn serialize_trie_leaf(b: &mut Bencher) {
 #[bench]
 fn deserialize_trie_leaf(b: &mut Bencher) {
     let leaf = Trie::Leaf {
-        key: Key::Account([0; 20]),
+        key: Key::Account([0; 32]),
         value: Value::Int32(42),
     };
     let leaf_bytes = leaf.to_bytes().unwrap();

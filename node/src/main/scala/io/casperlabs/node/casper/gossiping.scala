@@ -14,9 +14,8 @@ import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
 import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.genesis.Genesis
-import io.casperlabs.casper.protocol
 import io.casperlabs.casper.LegacyConversions
+import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.comm.BlockApproverProtocol
 import io.casperlabs.catscontrib.MonadThrowable
@@ -33,6 +32,7 @@ import io.casperlabs.comm.grpc.{
   SslContexts
 }
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics
@@ -150,17 +150,15 @@ package object gossiping {
     MultiParentCasperRef[F].get
       .flatMap {
         case Some(casper) =>
-          casper.addBlock(LegacyConversions.fromBlock(block))
+          casper.addBlock(block)
 
         case None if block.getHeader.parentHashes.isEmpty =>
           for {
-            _        <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
-            state    <- Cell.mvarCell[F, CasperState](CasperState())
-            executor = new MultiParentCasperImpl.StatelessExecutor(shardId)
-            dag      <- BlockDagStorage[F].getRepresentation
-            result <- executor.validateAndAddBlock(None, dag, LegacyConversions.fromBlock(block))(
-                       state
-                     )
+            _           <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
+            state       <- Cell.mvarCell[F, CasperState](CasperState())
+            executor    = new MultiParentCasperImpl.StatelessExecutor(shardId)
+            dag         <- BlockDagStorage[F].getRepresentation
+            result      <- executor.validateAndAddBlock(None, dag, block)(state)
             (status, _) = result
           } yield status
 
@@ -305,19 +303,25 @@ package object gossiping {
                         }
 
       validatorId <- Resource.liftF {
-                      ValidatorIdentity.fromConfig[F](conf.casper)
+                      for {
+                        id <- ValidatorIdentity.fromConfig[F](conf.casper)
+                        _ <- Log[F].info(
+                              s"Starting ${if (id.nonEmpty) "with" else "without"} a validator identity."
+                            )
+                      } yield id
                     }
 
-      approveBlock = (block: Block) => {
-        val sig = validatorId.get.signature(block.blockHash.toByteArray)
-        Approval()
-          .withValidatorPublicKey(sig.publicKey)
-          .withSignature(
-            Signature()
-              .withSigAlgorithm(sig.algorithm)
-              .withSig(sig.sig)
-          )
-      }
+      maybeApproveBlock = (block: Block) =>
+        validatorId.map { id =>
+          val sig = id.signature(block.blockHash.toByteArray)
+          Approval()
+            .withValidatorPublicKey(sig.publicKey)
+            .withSignature(
+              Signature()
+                .withSigAlgorithm(sig.algorithm)
+                .withSig(sig.sig)
+            )
+        }
 
       // Function to read and set the bonds.txt in modes which generate the Genesis locally.
       readBondsFile = {
@@ -366,7 +370,7 @@ package object gossiping {
                                        Left(InvalidArgument(msg))
 
                                      case Right(()) =>
-                                       Right(validatorId.map(_ => approveBlock(block)))
+                                       Right(maybeApproveBlock(block))
                                    }
                                  }
                                }
@@ -382,7 +386,7 @@ package object gossiping {
                                  for {
                                    _ <- Log[F].info("Taking bonds from the Genesis candidate.")
                                    bonds = genesis.getHeader.getState.bonds.map { bond =>
-                                     bond.validatorPublicKey.toByteArray -> bond.stake
+                                     PublicKey(bond.validatorPublicKey.toByteArray) -> bond.stake
                                    }.toMap
                                    _ <- ExecutionEngineService[F].setBonds(bonds)
                                  } yield none[Approval].asRight[Throwable]
@@ -420,7 +424,7 @@ package object gossiping {
         override def getBlock(blockHash: ByteString): F[Option[Block]] =
           BlockStore[F]
             .get(blockHash)
-            .map(_.map(x => LegacyConversions.toBlock(x.getBlockMessage)))
+            .map(_.map(_.getBlockMessage))
       }
 
       approver <- if (conf.casper.standalone) {
@@ -436,9 +440,7 @@ package object gossiping {
                                                conf.casper.hasFaucet,
                                                conf.casper.shardId,
                                                conf.casper.deployTimestamp
-                                             ).map { x =>
-                                               LegacyConversions.toBlock(x.getBlockMessage)
-                                             }
+                                             ).map(_.getBlockMessage)
                                    // Store it so others can pull it from the bootstrap node.
                                    _ <- Log[F].info(
                                          s"Trying to store generated Genesis candidate ${genesis.blockHash}..."
@@ -454,7 +456,7 @@ package object gossiping {
                                   // TODO: Move to config.
                                   relayFactor = 10,
                                   genesis = genesis,
-                                  approval = approveBlock(genesis)
+                                  maybeApproval = maybeApproveBlock(genesis)
                                 )
                    } yield approver
                  } else {
@@ -541,12 +543,19 @@ package object gossiping {
                       // Perhaps the BlockDagStorage can be made to store it? Or the BlockStore could put it into LMDB
                       BlockStore[F]
                         .get(blockHash)
-                        .map(_.map(x => LegacyConversions.toBlockSummary(x.getBlockMessage)))
+                        .map(_.map { x =>
+                          val block = x.getBlockMessage
+                          BlockSummary(
+                            blockHash = block.blockHash,
+                            header = block.header,
+                            signature = block.signature
+                          )
+                        })
 
                     override def getBlock(blockHash: ByteString): F[Option[Block]] =
                       BlockStore[F]
                         .get(blockHash)
-                        .map(_.map(x => LegacyConversions.toBlock(x.getBlockMessage)))
+                        .map(_.map(_.getBlockMessage))
                   }
                 }
 
@@ -564,9 +573,7 @@ package object gossiping {
                                   .withBlockHash(summary.blockHash)
                                   .withHeader(summary.getHeader)
 
-                                casper.addMissingDependencies(
-                                  LegacyConversions.fromBlock(partialBlock)
-                                )
+                                casper.addMissingDependencies(partialBlock)
                               }
                         } yield ()
 

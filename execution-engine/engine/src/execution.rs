@@ -1,42 +1,42 @@
-extern crate blake2;
-
-use self::blake2::digest::VariableOutput;
-use self::blake2::VarBlake2b;
-use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
-use common::key::{AccessRights, Key};
-use common::value::Value;
-use shared::newtypes::Validated;
-use storage::global_state::{ExecutionEffect, StateReader};
-use storage::transform::TypeMismatch;
-use trackingcopy::TrackingCopy;
-use wasmi::{
-    Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
-    ModuleRef, RuntimeArgs, RuntimeValue, Trap,
-};
-
-use super::functions::{
-    ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
-    GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
-    GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX,
-    PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SER_FN_FUNC_INDEX,
-    STORE_FN_INDEX, WRITE_FUNC_INDEX,
-};
-use super::resolvers::create_module_resolver;
-use argsparser::Args;
-use itertools::Itertools;
-use parity_wasm::elements::{Error as ParityWasmError, Module};
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::iter::IntoIterator;
 use std::rc::Rc;
 
-use super::runtime_context::RuntimeContext;
-use super::URefAddr;
+use blake2::digest::VariableOutput;
+use blake2::VarBlake2b;
+use itertools::Itertools;
+use parity_wasm::elements::{Error as ParityWasmError, Module};
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
+use wasmi::{
+    Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
+    ModuleRef, RuntimeArgs, RuntimeValue, Trap,
+};
+
+use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
+use common::key::{AccessRights, Key};
+use common::value::Value;
+use shared::newtypes::Validated;
+use shared::transform::TypeMismatch;
+use storage::global_state::StateReader;
+
+use args::Args;
+use engine_state::execution_effect::ExecutionEffect;
+use functions::{
+    ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
+    GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
+    GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX,
+    PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX,
+    STORE_FN_INDEX, WRITE_FUNC_INDEX,
+};
+use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
 use resolvers::memory_resolver::MemoryResolver;
+use runtime_context::RuntimeContext;
+use tracking_copy::TrackingCopy;
+use URefAddr;
 
 #[derive(Debug)]
 pub enum Error {
@@ -55,7 +55,6 @@ pub enum Error {
     GasLimit,
     Ret(Vec<Key>),
     Rng(rand::Error),
-    Unreachable,
     ResolverError(ResolverError),
     InvalidNonce,
 }
@@ -91,8 +90,8 @@ impl From<BytesReprError> for Error {
 }
 
 impl From<!> for Error {
-    fn from(_err: !) -> Error {
-        Error::Unreachable
+    fn from(error: !) -> Error {
+        match error {}
     }
 }
 
@@ -104,7 +103,7 @@ impl From<ResolverError> for Error {
 
 impl HostError for Error {}
 
-pub struct Runtime<'a, R: StateReader<Key, Value>> {
+pub struct Runtime<'a, R> {
     memory: MemoryRef,
     module: Module,
     result: Vec<u8>,
@@ -415,6 +414,15 @@ where
         self.host_buf = value_bytes;
         Ok(self.host_buf.len())
     }
+
+    /// Writes the seed associated with the [`RuntimeContext`] to the given destination
+    /// in runtime memory.
+    fn write_seed(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+        let seed = self.context.seed();
+        self.memory
+            .set(dest_ptr, &seed)
+            .map_err(|e| Error::Interpreter(e).into())
+    }
 }
 
 // Helper function for turning result of lookup into domain values.
@@ -616,6 +624,12 @@ where
 
             PROTOCOL_VERSION_FUNC_INDEX => Ok(Some(self.context.protocol_version().into())),
 
+            SEED_FN_INDEX => {
+                let dest_ptr = Args::parse(args)?;
+                self.write_seed(dest_ptr)?;
+                Ok(None)
+            }
+
             _ => panic!("unknown function index"),
         }
     }
@@ -714,7 +728,7 @@ pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
         .collect()
 }
 
-pub fn create_rng(account_addr: &[u8; 20], timestamp: u64, nonce: u64) -> ChaChaRng {
+pub fn create_rng(account_addr: &[u8; 32], timestamp: u64, nonce: u64) -> ChaChaRng {
     let mut seed: [u8; 32] = [0u8; 32];
     let mut data: Vec<u8> = Vec::new();
     let hasher = VarBlake2b::new(32).unwrap();
@@ -744,7 +758,7 @@ pub trait Executor<A> {
         &self,
         parity_module: A,
         args: &[u8],
-        account_addr: [u8; 20],
+        account_addr: [u8; 32],
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
@@ -762,7 +776,7 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        account_addr: [u8; 20],
+        account_addr: [u8; 32],
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
@@ -850,6 +864,7 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
         Key::URef(raw_addr, rights) => Some((raw_addr, rights)),
         Key::Account(_) => None,
         Key::Hash(_) => None,
+        Key::Local { .. } => None,
     }
 }
 

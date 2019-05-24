@@ -1,7 +1,7 @@
 import docker
 import logging
 
-from typing import List, Callable
+from typing import List, Callable, Dict
 
 
 from test.cl_node.docker_base import DockerConfig
@@ -30,7 +30,8 @@ class CasperLabsNetwork:
     Convention is naming the bootstrap as number 0 and all others increment from that point.
     """
 
-    def __init__(self, docker_client: 'DockerClient'):
+    def __init__(self, docker_client: 'DockerClient', extra_docker_params: Dict = None):
+        self.extra_docker_params = extra_docker_params or {}
         self._next_key_number = 0
         self.docker_client = docker_client
         self.cl_nodes: List[CasperLabsNode] = []

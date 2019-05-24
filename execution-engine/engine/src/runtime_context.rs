@@ -1,22 +1,26 @@
-use super::URefAddr;
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
-use common::bytesrepr::{deserialize, ToBytes};
-use common::key::{AccessRights, Key};
-use common::value::account::Account;
-use common::value::Value;
-use execution::Error;
-use rand::RngCore;
-use rand_chacha::ChaChaRng;
-use shared::newtypes::Validated;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
-use storage::global_state::{ExecutionEffect, StateReader};
-use trackingcopy::{AddResult, TrackingCopy};
+
+use blake2::digest::{Input, VariableOutput};
+use blake2::VarBlake2b;
+use rand::RngCore;
+use rand_chacha::ChaChaRng;
+
+use common::bytesrepr::{deserialize, ToBytes};
+use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
+use common::value::account::Account;
+use common::value::Value;
+use shared::newtypes::{Blake2bHash, Validated};
+use storage::global_state::StateReader;
+
+use engine_state::execution_effect::ExecutionEffect;
+use execution::Error;
+use tracking_copy::{AddResult, TrackingCopy};
+use URefAddr;
 
 /// Holds information specific to the deployed contract.
-pub struct RuntimeContext<'a, R: StateReader<Key, Value>> {
+pub struct RuntimeContext<'a, R> {
     state: Rc<RefCell<TrackingCopy<R>>>,
     // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
@@ -119,6 +123,15 @@ where
         self.base_key
     }
 
+    pub fn seed(&self) -> [u8; LOCAL_SEED_SIZE] {
+        match self.base_key {
+            Key::Account(bytes) => bytes,
+            Key::Hash(bytes) => bytes,
+            Key::URef(bytes, _) => bytes,
+            Key::Local { seed, key_hash } => Blake2bHash::new(&[seed, key_hash].concat()).into(),
+        }
+    }
+
     pub fn protocol_version(&self) -> u64 {
         self.protocol_version
     }
@@ -174,7 +187,7 @@ where
 
     pub fn write_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
         let validated_key: Validated<Key> = Validated::new(key, |key| {
-            self.validated_writeable(&key).and(self.validate_key(&key))
+            self.validate_writeable(&key).and(self.validate_key(&key))
         })?;
         let validated_value = Validated::new(value, |value| self.validate_keys(&value))?;
         self.state
@@ -275,7 +288,7 @@ where
         }
     }
 
-    fn validated_addable(&self, key: &Key) -> Result<(), Error> {
+    fn validate_addable(&self, key: &Key) -> Result<(), Error> {
         if self.is_addable(&key) {
             Ok(())
         } else {
@@ -285,7 +298,7 @@ where
         }
     }
 
-    fn validated_writeable(&self, key: &Key) -> Result<(), Error> {
+    fn validate_writeable(&self, key: &Key) -> Result<(), Error> {
         if self.is_writeable(&key) {
             Ok(())
         } else {
@@ -301,6 +314,7 @@ where
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
             Key::URef(_, rights) => rights.is_readable(),
+            Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
 
@@ -309,6 +323,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
             Key::URef(_, rights) => rights.is_addable(),
+            Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
 
@@ -317,6 +332,7 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => false,
             Key::URef(_, rights) => rights.is_writeable(),
+            Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
 
@@ -326,7 +342,7 @@ where
     /// then `TypeMismatch` errors is returned.
     pub fn add_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
         let validated_key = Validated::new(key, |k| {
-            self.validated_addable(&k).and(self.validate_key(&k))
+            self.validate_addable(&k).and(self.validate_key(&k))
         })?;
         let validated_value = Validated::new(value, |v| self.validate_keys(&v))?;
         match self.state.borrow_mut().add(validated_key, validated_value) {
@@ -341,27 +357,24 @@ where
 
 #[cfg(test)]
 mod tests {
-    extern crate common;
-    extern crate failure;
-    extern crate rand;
-    extern crate rand_chacha;
-    extern crate shared;
-    extern crate storage;
-
-    use super::{Error, RuntimeContext, URefAddr, Validated};
-    use common::key::{AccessRights, Key};
-    use common::value::{self, Account, Contract, Value};
-    use execution::{create_rng, vec_key_rights_to_map};
-    use rand::RngCore;
-    use rand_chacha::ChaChaRng;
     use std::cell::RefCell;
     use std::collections::{BTreeMap, HashMap, HashSet};
     use std::iter::once;
     use std::rc::Rc;
+
+    use rand::RngCore;
+    use rand_chacha::ChaChaRng;
+
+    use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
+    use common::value::{self, Account, Contract, Value};
+    use shared::transform::Transform;
     use storage::global_state::in_memory::InMemoryGlobalState;
-    use storage::history::*;
-    use storage::transform::Transform;
-    use trackingcopy::TrackingCopy;
+    use storage::global_state::{CommitResult, History};
+
+    use super::{Error, RuntimeContext, URefAddr, Validated};
+    use execution::{create_rng, vec_key_rights_to_map};
+    use shared::newtypes::Blake2bHash;
+    use tracking_copy::TrackingCopy;
 
     fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {
         let mut hist = InMemoryGlobalState::empty().unwrap();
@@ -387,8 +400,8 @@ mod tests {
         TrackingCopy::new(reader)
     }
 
-    fn mock_account(addr: [u8; 20]) -> (Key, value::Account) {
-        let account = value::account::Account::new([0u8; 32], 0, BTreeMap::new());
+    fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
+        let account = value::account::Account::new(addr, 0, BTreeMap::new());
         let key = Key::Account(addr);
 
         (key, account)
@@ -396,7 +409,7 @@ mod tests {
 
     // create random account key.
     fn random_account_key<G: RngCore>(entropy_source: &mut G) -> Key {
-        let mut key = [0u8; 20];
+        let mut key = [0u8; 32];
         entropy_source.fill_bytes(&mut key);
         Key::Account(key)
     }
@@ -413,6 +426,13 @@ mod tests {
         let mut key = [0u8; 32];
         entropy_source.fill_bytes(&mut key);
         Key::URef(key, rights)
+    }
+
+    fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SIZE]) -> Key {
+        let mut key = [0u8; 64];
+        entropy_source.fill_bytes(&mut key);
+        let key_hash = Blake2bHash::new(&key).into();
+        Key::Local { seed, key_hash }
     }
 
     fn mock_runtime_context<'a>(
@@ -467,7 +487,7 @@ mod tests {
     where
         F: Fn(RuntimeContext<InMemoryGlobalState>) -> Result<T, Error>,
     {
-        let base_acc_addr = [0u8; 20];
+        let base_acc_addr = [0u8; 32];
         let (key, account) = mock_account(base_acc_addr);
         let mut uref_map = BTreeMap::new();
         let chacha_rng = create_rng(&base_acc_addr, 0, 0);
@@ -696,7 +716,7 @@ mod tests {
     #[test]
     fn contract_key_addable_valid() {
         // Contract key is addable if it is a "base" key - current context of the execution.
-        let base_acc_addr = [0u8; 20];
+        let base_acc_addr = [0u8; 32];
         let (account_key, account) = mock_account(base_acc_addr);
         let mut rng = rand::thread_rng();
         let contract_key = random_contract_key(&mut rng);
@@ -745,7 +765,7 @@ mod tests {
     #[test]
     fn contract_key_addable_invalid() {
         // Contract key is addable if it is a "base" key - current context of the execution.
-        let base_acc_addr = [0u8; 20];
+        let base_acc_addr = [0u8; 32];
         let (account_key, account) = mock_account(base_acc_addr);
         let mut rng = rand::thread_rng();
         let contract_key = random_contract_key(&mut rng);
@@ -840,5 +860,83 @@ mod tests {
         let known_urefs = vec_key_rights_to_map(vec![uref_key]);
         let query_result = test(known_urefs, |mut rc| rc.add_gs(uref_key, Value::Int32(1)));
         assert_invalid_access(query_result, AccessRights::ADD);
+    }
+
+    #[test]
+    fn local_key_writeable_valid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = runtime_context.seed();
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validate_writeable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_ok())
+    }
+
+    #[test]
+    fn local_key_writeable_invalid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = [1u8; LOCAL_SEED_SIZE];
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validate_writeable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_err())
+    }
+
+    #[test]
+    fn local_key_readable_valid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = runtime_context.seed();
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validate_readable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_ok())
+    }
+
+    #[test]
+    fn local_key_readable_invalid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = [1u8; LOCAL_SEED_SIZE];
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validate_readable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_err())
+    }
+
+    #[test]
+    fn local_key_addable_valid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = runtime_context.seed();
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validate_addable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_ok())
+    }
+
+    #[test]
+    fn local_key_addable_invalid() {
+        let known_urefs = HashMap::new();
+        let query = |runtime_context: RuntimeContext<InMemoryGlobalState>| {
+            let mut rng = rand::thread_rng();
+            let seed = [1u8; LOCAL_SEED_SIZE];
+            let key = random_local_key(&mut rng, seed);
+            runtime_context.validate_addable(&key)
+        };
+        let query_result = test(known_urefs, query);
+        assert!(query_result.is_err())
     }
 }

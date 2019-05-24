@@ -1,10 +1,13 @@
 //! Some newtypes.
 use core::array::TryFromSliceError;
 use std::convert::TryFrom;
+use std::fmt;
 use std::ops::Deref;
 
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
+use serde::Serialize;
+use uuid::Uuid;
 
 use common::bytesrepr::{self, FromBytes, ToBytes};
 
@@ -42,6 +45,12 @@ impl<'a> TryFrom<&'a [u8]> for Blake2bHash {
 
     fn try_from(slice: &[u8]) -> Result<Blake2bHash, Self::Error> {
         <[u8; BLAKE2B_DIGEST_LENGTH]>::try_from(slice).map(Blake2bHash)
+    }
+}
+
+impl Into<[u8; BLAKE2B_DIGEST_LENGTH]> for Blake2bHash {
+    fn into(self) -> [u8; BLAKE2B_DIGEST_LENGTH] {
+        self.0
     }
 }
 
@@ -90,5 +99,129 @@ impl<T: Clone> Deref for Validated<T> {
 
     fn deref(&self) -> &T {
         &self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Serialize)]
+pub struct CorrelationId(Uuid);
+
+impl CorrelationId {
+    pub fn new() -> CorrelationId {
+        CorrelationId(Uuid::new_v4())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_nil()
+    }
+}
+
+impl fmt::Display for CorrelationId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::logging;
+    use crate::newtypes::CorrelationId;
+    use std::hash::{Hash, Hasher};
+
+    #[test]
+    fn should_be_able_to_generate_correlation_id() {
+        let correlation_id = CorrelationId::new();
+
+        //println!("{}", correlation_id.to_string());
+
+        assert_ne!(
+            correlation_id.to_string(),
+            "00000000-0000-0000-0000-000000000000",
+            "should not be empty value"
+        )
+    }
+
+    #[test]
+    fn should_support_to_string() {
+        let correlation_id = CorrelationId::new();
+
+        let correlation_id_string = correlation_id.to_string();
+
+        assert!(
+            !correlation_id_string.is_empty(),
+            "correlation_id should be produce string"
+        )
+    }
+
+    #[test]
+    fn should_support_to_json() {
+        let correlation_id = CorrelationId::new();
+
+        let correlation_id_json = logging::utils::jsonify(correlation_id, false);
+
+        assert!(
+            !correlation_id_json.is_empty(),
+            "correlation_id should be produce json"
+        )
+    }
+
+    #[test]
+    fn should_support_is_display() {
+        let correlation_id = CorrelationId::new();
+
+        let display = format!("{}", correlation_id);
+
+        assert!(!display.is_empty(), "display should not be empty")
+    }
+
+    #[test]
+    fn should_support_is_empty() {
+        let correlation_id = CorrelationId::new();
+
+        assert!(
+            !correlation_id.is_empty(),
+            "correlation_id should not be empty"
+        )
+    }
+
+    #[test]
+    fn should_create_unique_id_on_new() {
+        let correlation_id_lhs = CorrelationId::new();
+        let correlation_id_rhs = CorrelationId::new();
+
+        assert_ne!(
+            correlation_id_lhs, correlation_id_rhs,
+            "correlation_ids should be distinct"
+        );
+    }
+
+    #[test]
+    fn should_support_clone() {
+        let correlation_id = CorrelationId::new();
+
+        let cloned = correlation_id;
+
+        assert_eq!(correlation_id, cloned, "should be cloneable")
+    }
+
+    #[test]
+    fn should_support_copy() {
+        let correlation_id = CorrelationId::new();
+
+        let cloned = correlation_id;
+
+        assert_eq!(correlation_id, cloned, "should be cloneable")
+    }
+
+    #[test]
+    fn should_support_hash() {
+        let correlation_id = CorrelationId::new();
+
+        let mut state = std::collections::hash_map::DefaultHasher::new();
+
+        correlation_id.hash(&mut state);
+
+        let hash = state.finish();
+
+        assert!(hash > 0, "should be hashable");
     }
 }
