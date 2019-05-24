@@ -204,7 +204,7 @@ class CustomConnectionNetwork(CasperLabsNetwork):
 
     def create_cl_network(self, node_count: int = 3, network_connections: List[List[int]] = None) -> None:
         """
-        Allow creation of a network where all nodes are not connected to node-0.
+        Allow creation of a network where all nodes are not connected to node-0's network and therefore each other.
 
         Ex:  Star Network
 
