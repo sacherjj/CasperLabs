@@ -7,15 +7,13 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.InMemBlockStore.emptyMapRef
+import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElementsGen}
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
-import io.casperlabs.casper.consensus.{Block}
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
-import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElementsGen}
-import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.ipc.{Key, KeyHash, Op, ReadOp, Transform, TransformEntry, TransformIdentity}
-import io.casperlabs.models.LegacyConversions
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -56,7 +54,11 @@ trait BlockStoreTest
                 store.get(block.getBlockMessage.blockHash).map(_ shouldBe Some(block))
                 store
                   .getBlockSummary(block.getBlockMessage.blockHash)
-                  .map(_ shouldBe Some(LegacyConversions.toBlockSummary(block.getBlockMessage)))
+                  .map(
+                    _ shouldBe Some(
+                      block.toBlockSummary
+                    )
+                  )
               }
           result <- store.find(_ => true).map(_.size shouldEqual items.size)
         } yield result
@@ -103,7 +105,7 @@ trait BlockStoreTest
                   store.get(k).map(_ shouldBe Some(v1))
                   store
                     .getBlockSummary(k)
-                    .map(_ shouldBe Some(LegacyConversions.toBlockSummary(v1.getBlockMessage)))
+                    .map(_ shouldBe Some(v1.toBlockSummary))
                 }
               }
           _ <- items.traverse_[Task, Unit] { case (k, _, v2) => store.put(k, v2) }
@@ -112,7 +114,7 @@ trait BlockStoreTest
                   store.get(k).map(_ shouldBe Some(v2))
                   store
                     .getBlockSummary(k)
-                    .map(_ shouldBe Some(LegacyConversions.toBlockSummary(v2.getBlockMessage)))
+                    .map(_ shouldBe Some(v2.toBlockSummary))
               }
           result <- store.find(_ => true).map(_.size shouldEqual items.size)
         } yield result

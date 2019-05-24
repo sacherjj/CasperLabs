@@ -10,7 +10,6 @@ import org.scalacheck.Arbitrary.arbitrary
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.LegacyConversions
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.casper.consensus._
 import monix.eval.Task

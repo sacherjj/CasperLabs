@@ -38,7 +38,6 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b512Random
 import io.casperlabs.graphz._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.LegacyConversions
 import io.casperlabs.shared.Log
 
 object BlockAPI {

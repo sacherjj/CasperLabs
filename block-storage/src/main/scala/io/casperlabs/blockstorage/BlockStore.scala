@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.{Applicative, Apply}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.ApprovedBlock
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.metrics.implicits._

@@ -22,7 +22,6 @@ import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.LegacyConversions
 import io.casperlabs.shared.ByteStringOps._
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -185,7 +184,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
         _                                  <- randomAccessFile.seek(endOfFileOffset)
         (blockHash, blockMsgWithTransform) = f
         blockMsgWithTransformByteArray     = blockMsgWithTransform.toByteArray
-        blockSummary                       = LegacyConversions.toBlockSummary(blockMsgWithTransform.getBlockMessage)
+        blockSummary                       = blockMsgWithTransform.toBlockSummary
         _                                  <- randomAccessFile.writeInt(blockMsgWithTransformByteArray.length)
         _                                  <- randomAccessFile.write(blockMsgWithTransformByteArray)
         _ <- withWriteTxn { txn =>
@@ -355,7 +354,7 @@ object FileLMDBIndexBlockStore {
                 env.openDbi(s"block_store_index", MDB_CREATE)
               }
       blockSummaryDB <- Sync[F].delay {
-                         env.openDbi("blockSummarys", MDB_CREATE)
+                         env.openDbi("blockSummaries", MDB_CREATE)
                        }
       _                            <- createNewFile(approvedBlockPath)
       blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath, RandomAccessIO.ReadWrite)

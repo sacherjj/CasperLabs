@@ -9,7 +9,6 @@ import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.models.LegacyConversions
 import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.language.higherKinds
@@ -30,7 +29,9 @@ class InMemBlockStore[F[_]] private (
     }.toSeq)
 
   def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
-    refF.update(_ + (f._1 -> (f._2, LegacyConversions.toBlockSummary(f._2.getBlockMessage))))
+    refF.update(
+      _ + (f._1 -> (f._2, f._2.toBlockSummary))
+    )
 
   def getApprovedBlock(): F[Option[ApprovedBlock]] =
     approvedBlockRef.get

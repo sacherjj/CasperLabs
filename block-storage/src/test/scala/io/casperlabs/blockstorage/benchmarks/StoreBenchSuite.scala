@@ -20,7 +20,7 @@ import io.casperlabs.blockstorage.{
   LMDBBlockStore
 }
 import io.casperlabs.casper.protocol.ApprovedBlock
-import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.ipc.Key.KeyInstance
 import io.casperlabs.ipc.Transform.TransformInstance
 import io.casperlabs.ipc.{DeployCode => _, _}

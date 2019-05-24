@@ -13,7 +13,6 @@ import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.models.LegacyConversions
 import io.casperlabs.shared.Resources.withResource
 import io.casperlabs.storage.BlockMsgWithTransform
 import org.lmdbjava.DbiFlags.MDB_CREATE
@@ -83,10 +82,7 @@ class LMDBBlockStore[F[_]] private (
       blockSummaryDB.put(
         txn,
         blockHash.toDirectByteBuffer,
-        LegacyConversions
-          .toBlockSummary(blockMsgWithTransform.getBlockMessage)
-          .toByteString
-          .toDirectByteBuffer
+        blockMsgWithTransform.toBlockSummary.toByteString.toDirectByteBuffer
       )
     }
 
@@ -160,7 +156,7 @@ object LMDBBlockStore {
       .open(config.dir.toFile, flags: _*) //TODO this is a bracket
 
     val blocks: Dbi[ByteBuffer]         = env.openDbi(s"blocks", MDB_CREATE) //TODO this is a bracket
-    val blockSummaryDB: Dbi[ByteBuffer] = env.openDbi(s"blockSummarys", MDB_CREATE)
+    val blockSummaryDB: Dbi[ByteBuffer] = env.openDbi(s"blockSummaries", MDB_CREATE)
 
     new LMDBBlockStore[F](env, config.dir, blocks, blockSummaryDB) with MeteredBlockStore[F] {
       override implicit val m: Metrics[F] = metricsF
@@ -175,7 +171,7 @@ object LMDBBlockStore {
       metricsF: Metrics[F]
   ): BlockStore[F] = {
     val blocks: Dbi[ByteBuffer]         = env.openDbi(s"blocks", MDB_CREATE)
-    val blockSummaryDb: Dbi[ByteBuffer] = env.openDbi(s"blockSummarys", MDB_CREATE)
+    val blockSummaryDb: Dbi[ByteBuffer] = env.openDbi(s"blockSummarise", MDB_CREATE)
 
     new LMDBBlockStore[F](env, path, blocks, blockSummaryDb) with MeteredBlockStore[F] {
       override implicit val m: Metrics[F] = metricsF

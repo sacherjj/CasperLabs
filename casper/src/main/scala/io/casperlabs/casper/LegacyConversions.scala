@@ -2,7 +2,8 @@ package io.casperlabs.casper
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.util.ProtoUtil
-import scala.util.{Failure, Success, Try}
+
+import scala.util.Try
 
 /** Convert between the message in CasperMessage.proto and consensus.proto while we have both.
   * This is assuming that the storage and validation are still using the protocol.* types,
