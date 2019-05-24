@@ -101,13 +101,13 @@ slow:
 	cp -r .casperlabs/node-0/node-id .casperlabs/bootstrap/node-id
 	(cat .casperlabs/node-0/validator-id; echo " $(CL_CASPER_NUM_VALIDATORS)") >> .casperlabs/genesis/bonds.txt
 
-	i=1 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
+	bash -c 'i=1 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
 		mkdir -p .casperlabs/node-$$i ; \
 		./gen-keys.sh .casperlabs/node-$$i ; \
 		BOND=$$(( $(CL_CASPER_NUM_VALIDATORS)+2*$$i )) ; \
 		(cat .casperlabs/node-$$i/validator-id; echo " $$BOND") >> .casperlabs/genesis/bonds.txt ; \
 		((i = i + 1)) ; \
-	done
+	done'
 
 	@# Check that the files we wanted exist and aren't empty.
 	[ -s .casperlabs/genesis/bonds.txt ]
