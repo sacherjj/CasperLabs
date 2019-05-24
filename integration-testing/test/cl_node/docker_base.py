@@ -201,6 +201,7 @@ class LoggingDockerBase(DockerBase):
         super().__init__(config, socket_volume)
         self.terminate_background_logging_event = threading.Event()
         self._start_logging_thread()
+        self._truncatedLength = 0
 
     def _start_logging_thread(self):
         self.background_logging = LoggingThread(
@@ -223,7 +224,10 @@ class LoggingDockerBase(DockerBase):
         return super()._get_container()
 
     def logs(self) -> str:
-        return self.container.logs().decode('utf-8')
+        return self.container.logs().decode('utf-8')[self._truncatedLength:]
+
+    def truncate_logs(self):
+        self._truncatedLength = len(self.container.logs().decode('utf-8'))
 
     def cleanup(self):
         super().cleanup()

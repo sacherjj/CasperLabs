@@ -92,6 +92,7 @@ class CasperLabsNetwork:
     def start_cl_node(self, node_number: int) -> None:
         self.cl_nodes[node_number].execution_engine.start()
         node = self.cl_nodes[node_number].node
+        node.truncate_logs()
         node.start()
         wait_for_approved_block_received_handler_state(node, node.config.command_timeout)
 
