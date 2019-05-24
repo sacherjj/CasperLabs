@@ -5,7 +5,7 @@ from .cl_node.casperlabsnode import (
     MAILING_LIST_CALL,
     get_contract_state,
 )
-from .cl_node.wait import wait_for_count_the_blocks_on_node
+from .cl_node.wait import wait_for_blocks_count_at_least
 
 
 def test_call_contracts_one_another(three_node_network):
@@ -13,7 +13,7 @@ def test_call_contracts_one_another(three_node_network):
     bootstrap, node1, node2 = tnn.docker_nodes
     bootstrap.deploy_and_propose(session_contract=COMBINED_CONTRACT, payment_contract=COMBINED_CONTRACT)
     for node in tnn.docker_nodes:
-        wait_for_count_the_blocks_on_node(node, timeout_seconds=node.timeout, number_of_blocks=1)
+        wait_for_blocks_count_at_least(node, 1, 2, node.timeout)
     generated_hashes = {}
     for contract_name in (COUNTER_CALL, MAILING_LIST_CALL, HELLO_WORLD):
         list_of_hashes = []
