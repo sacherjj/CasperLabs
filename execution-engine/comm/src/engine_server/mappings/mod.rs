@@ -411,8 +411,8 @@ impl From<TypeMismatch> for ipc::TypeMismatch {
 impl From<ExecutionResult> for ipc::DeployResult {
     fn from(er: ExecutionResult) -> ipc::DeployResult {
         match er {
-            ExecutionResult {
-                result: Ok(effects),
+            ExecutionResult::Success {
+                effect: effects,
                 cost,
             } => {
                 let mut ipc_ee = effects.into();
@@ -421,8 +421,9 @@ impl From<ExecutionResult> for ipc::DeployResult {
                 deploy_result.set_cost(cost);
                 deploy_result
             }
-            ExecutionResult {
-                result: Err(err),
+            ExecutionResult::Failure {
+                error: err,
+                effect: effects,
                 cost,
             } => {
                 match err {
@@ -594,7 +595,10 @@ mod tests {
         let execution_effect: ExecutionEffect =
             ExecutionEffect(HashMap::new(), input_transforms.clone());
         let cost: u64 = 123;
-        let execution_result: ExecutionResult = ExecutionResult::success(execution_effect, cost);
+        let execution_result: ExecutionResult = ExecutionResult::Success {
+            effect: execution_effect,
+            cost,
+        };
         let mut ipc_deploy_result: super::ipc::DeployResult = execution_result.into();
         assert_eq!(ipc_deploy_result.get_cost(), cost);
 
@@ -612,7 +616,11 @@ mod tests {
     }
 
     fn into_execution_failure<E: Into<EngineError>>(error: E, cost: u64) -> ExecutionResult {
-        ExecutionResult::failure(error.into(), cost)
+        ExecutionResult::Failure {
+            error: error.into(),
+            effect: Default::default(),
+            cost,
+        }
     }
 
     fn test_cost<E: Into<EngineError>>(expected_cost: u64, err: E) -> u64 {

@@ -23,7 +23,7 @@ use shared::transform::TypeMismatch;
 use storage::global_state::StateReader;
 
 use args::Args;
-use engine_state::execution_effect::ExecutionEffect;
+use engine_state::execution_result::ExecutionResult;
 use functions::{
     ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
     GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
@@ -744,9 +744,13 @@ macro_rules! on_fail_charge {
     ($fn:expr, $cost:expr) => {
         match $fn {
             Ok(res) => res,
-            Err(er) => {
-                let mut lambda = || $cost;
-                return (Err(er.into()), lambda());
+            Err(e) => {
+                let exec_err: ::execution::Error = e.into();
+                return ExecutionResult::Failure {
+                    error: exec_err.into(),
+                    effect: Default::default(),
+                    cost: $cost,
+                };
             }
         }
     };
@@ -764,7 +768,7 @@ pub trait Executor<A> {
         gas_limit: u64,
         protocol_version: u64,
         tc: Rc<RefCell<TrackingCopy<R>>>,
-    ) -> (Result<ExecutionEffect, Error>, u64)
+    ) -> ExecutionResult
     where
         R::Error: Into<Error>;
 }
@@ -782,7 +786,7 @@ impl Executor<Module> for WasmiExecutor {
         gas_limit: u64,
         protocol_version: u64,
         tc: Rc<RefCell<TrackingCopy<R>>>,
-    ) -> (Result<ExecutionEffect, Error>, u64)
+    ) -> ExecutionResult
     where
         R::Error: Into<Error>,
     {
@@ -809,7 +813,11 @@ impl Executor<Module> for WasmiExecutor {
         // Difference should always be 1 greater than current nonce for a
         // given account.
         if delta != 1 {
-            return (Err(Error::InvalidNonce), 0);
+            return ExecutionResult::Failure {
+                error: Error::InvalidNonce.into(),
+                effect: Default::default(),
+                cost: 0,
+            };
         }
 
         let mut updated_account = account.clone();
@@ -852,7 +860,10 @@ impl Executor<Module> for WasmiExecutor {
             runtime.context.gas_counter()
         );
 
-        (Ok(runtime.context.effect()), runtime.context.gas_counter())
+        ExecutionResult::Success {
+            effect: runtime.context.effect(),
+            cost: runtime.context.gas_counter(),
+        }
     }
 }
 
@@ -869,52 +880,31 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
 }
 
 #[cfg(test)]
-mod on_fail_charge_macro_tests {
-    struct Counter {
-        pub counter: u32,
-    }
-
-    impl Counter {
-        fn count(&mut self, count: u32) -> u32 {
-            self.counter += count;
-            count
+mod tests {
+    use super::Error;
+    use engine_state::execution_result::ExecutionResult;
+    fn on_fail_charge_test_helper<T>(
+        f: impl Fn() -> Result<T, Error>,
+        error: u64,
+    ) -> ExecutionResult {
+        let _result = on_fail_charge!(f(), error);
+        ExecutionResult::Success {
+            effect: Default::default(),
+            cost: 0,
         }
     }
-
-    fn on_fail_charge_test_helper(
-        counter: &mut Counter,
-        inc_value: u32,
-        input: Result<u32, String>,
-        fallback_value: u32,
-    ) -> (Result<u32, String>, u32) {
-        let res: u32 = on_fail_charge!(input, counter.count(inc_value));
-        (Ok(res), fallback_value)
-    }
-
     #[test]
     fn on_fail_charge_ok_test() {
-        let mut cntr = Counter { counter: 0 };
-        let fallback_value = 9999;
-        let inc_value = 10;
-        let ok_value = Ok(13);
-        let res: (Result<u32, String>, u32) =
-            on_fail_charge_test_helper(&mut cntr, inc_value, ok_value.clone(), fallback_value);
-        assert_eq!(res.0, ok_value);
-        assert_eq!(res.1, fallback_value);
-        assert_eq!(cntr.counter, 0); // test that lambda was NOT executed for the Ok-case
+        match on_fail_charge_test_helper(|| Ok(()), 456) {
+            ExecutionResult::Success { cost, .. } => assert_eq!(cost, 0),
+            ExecutionResult::Failure { .. } => panic!("Should be success"),
+        }
     }
-
     #[test]
     fn on_fail_charge_err_laziness_test() {
-        let mut cntr = Counter { counter: 1 };
-        let fallback_value = 9999;
-        let inc_value = 10;
-        let expected_value = cntr.counter + inc_value;
-        let err = Err("BOOM".to_owned());
-        let res: (Result<u32, String>, u32) =
-            on_fail_charge_test_helper(&mut cntr, inc_value, err.clone(), fallback_value);
-        assert_eq!(res.0, err);
-        assert_eq!(res.1, inc_value);
-        assert_eq!(cntr.counter, expected_value) // test that lambda executed
+        match on_fail_charge_test_helper(|| Err(Error::InvalidNonce) as Result<(), _>, 456) {
+            ExecutionResult::Success { .. } => panic!("Should fail"),
+            ExecutionResult::Failure { cost, .. } => assert_eq!(cost, 456),
+        }
     }
 }

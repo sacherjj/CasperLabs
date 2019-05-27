@@ -64,18 +64,30 @@ where
         preprocessor: &P,
     ) -> Result<ExecutionResult, RootNotFound> {
         let module = match preprocessor.preprocess(module_bytes) {
-            Err(error) => return Ok(ExecutionResult::failure(error.into(), 0)),
+            Err(error) => {
+                return Ok(ExecutionResult::Failure {
+                    error: error.into(),
+                    effect: Default::default(),
+                    cost: 0,
+                })
+            }
             Ok(module) => module,
         };
         let checkout_result = match self.tracking_copy(prestate_hash) {
-            Err(error) => return Ok(ExecutionResult::failure(error, 0)),
+            Err(error) => {
+                return Ok(ExecutionResult::Failure {
+                    error,
+                    effect: Default::default(),
+                    cost: 0,
+                })
+            }
             Ok(checkout_result) => checkout_result,
         };
         let tracking_copy = match checkout_result {
             None => return Err(RootNotFound(prestate_hash)),
             Some(mut tracking_copy) => Rc::new(RefCell::new(tracking_copy)),
         };
-        match executor.exec(
+        Ok(executor.exec(
             module,
             args,
             address,
@@ -84,10 +96,7 @@ where
             gas_limit,
             protocol_version,
             tracking_copy,
-        ) {
-            (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
-            (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),
-        }
+        ))
     }
 
     pub fn apply_effect(
