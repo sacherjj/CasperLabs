@@ -1,10 +1,7 @@
 package io.casperlabs.node.api.graphql
 
 import cats.implicits._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.numeric._
 import fs2.Stream
-import io.casperlabs.casper.consensus.Block
 import io.casperlabs.crypto.codec.Base16
 import sangria.ast.StringValue
 import sangria.schema.{fields, Action, Field, ObjectType, ScalarType, Schema}

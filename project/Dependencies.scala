@@ -34,6 +34,10 @@ object Dependencies {
   val hasher                 = "com.roundeights"            %% "hasher"                         % "1.2.0"
   val http4sBlazeClient      = "org.http4s"                 %% "http4s-blaze-client"            % http4sVersion
   val http4sBlazeServer      = "org.http4s"                 %% "http4s-blaze-server"            % http4sVersion
+  val fs2Http                = ("com.spinoco"                %% "fs2-http"                       % "0.4.1" % "test")
+    .exclude("co.fs2", "fs2-core_2.12")
+    .exclude("co.fs2", "fs2-io_2.12")
+    .exclude("com.github.mpilquist", "simulacrum_2.12")
   val http4sCirce            = "org.http4s"                 %% "http4s-circe"                   % http4sVersion
   val http4sDSL              = "org.http4s"                 %% "http4s-dsl"                     % http4sVersion
   val jaxb                   = "javax.xml.bind"             % "jaxb-api"                        % "2.3.1"

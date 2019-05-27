@@ -234,7 +234,8 @@ lazy val node = (project in file("node"))
         scalaUri,
         scalapbRuntimegGrpc,
         tomlScala,
-        sangria
+        sangria,
+        fs2Http
       ),
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
