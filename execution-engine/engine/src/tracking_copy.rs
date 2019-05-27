@@ -372,8 +372,9 @@ mod tests {
             .unwrap();
         // value read correctly
         assert_eq!(value, zero);
-        // read does not cause any transform
-        assert_eq!(tc.fns.is_empty(), true);
+        // read produces an identity transform
+        assert_eq!(tc.fns.len(), 1);
+        assert_eq!(tc.fns.get(&k), Some(&Transform::Identity));
         // read does produce an op
         assert_eq!(tc.ops.len(), 1);
         assert_eq!(tc.ops.get(&k), Some(&Op::Read));
