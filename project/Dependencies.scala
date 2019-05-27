@@ -4,31 +4,32 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
-  val circeVersion   = "0.10.0"
-  val http4sVersion  = "0.19.0"
+  val circeVersion   = "0.11.1"
+  val http4sVersion  = "0.20.1"
   val kamonVersion   = "1.1.3"
-  val catsVersion    = "1.5.0"
-  val catsMtlVersion = "0.4.0"
+  val catsVersion    = "1.6.0"
+  val catsMtlVersion = "0.5.0"
 
   // format: off
   val julToSlf4j             = "org.slf4j"                  % "jul-to-slf4j"                    % "1.7.25"
   val bitcoinjCore           = "org.bitcoinj"               % "bitcoinj-core"                   % "0.14.6"
-  val bouncyProvCastle           = "org.bouncycastle"           % "bcprov-jdk15on"                  % "1.61"
-  val bouncyPkixCastle           = "org.bouncycastle"           % "bcpkix-jdk15on"                  % "1.61"
+  val bouncyProvCastle           = "org.bouncycastle"           % "bcprov-jdk15on"              % "1.61"
+  val bouncyPkixCastle           = "org.bouncycastle"           % "bcpkix-jdk15on"              % "1.61"
   val catsCore               = "org.typelevel"              %% "cats-core"                      % catsVersion
   val catsPar                = "io.chrisdavenport"          %% "cats-par"                       % "0.2.1"
   val catsLawsTest           = "org.typelevel"              %% "cats-laws"                      % catsVersion % "test"
   val catsLawsTestkitTest    = "org.typelevel"              %% "cats-testkit"                   % catsVersion % "test"
-  val catsEffect             = "org.typelevel"              %% "cats-effect"                    % "1.1.0"
-  val catsEffectLaws         = "org.typelevel"              %% "cats-effect-laws"               % "1.1.0" % "test"
+  val catsEffect             = "org.typelevel"              %% "cats-effect"                    % "1.3.0"
+  val catsEffectLaws         = "org.typelevel"              %% "cats-effect-laws"               % "1.3.0" % "test"
   val catsMtl                = "org.typelevel"              %% "cats-mtl-core"                  % catsMtlVersion
   val catsMtlLawsTest        = "org.typelevel"              %% "cats-mtl-laws"                  % catsMtlVersion % "test"
-  val meowMtl                = "com.olegpy"                 %% "meow-mtl"                       % "0.2.0"
+  val meowMtl                = "com.olegpy"                 %% "meow-mtl"                       % "0.2.1"
   val circeCore              = "io.circe"                   %% "circe-core"                     % circeVersion
   val circeGeneric           = "io.circe"                   %% "circe-generic"                  % circeVersion
   val circeGenericExtras     = "io.circe"                   %% "circe-generic-extras"           % circeVersion
   val circeLiteral           = "io.circe"                   %% "circe-literal"                  % circeVersion
   val circeParser            = "io.circe"                   %% "circe-parser"                   % circeVersion
+  val sangria                = "org.sangria-graphql"        %% "sangria"                        % "1.4.2"
   val guava                  = "com.google.guava"           % "guava"                           % "24.1.1-jre"
   val hasher                 = "com.roundeights"            %% "hasher"                         % "1.2.0"
   val http4sBlazeClient      = "org.http4s"                 %% "http4s-blaze-client"            % http4sVersion
@@ -105,7 +106,8 @@ object Dependencies {
     "com.github.jnr"           % "jnr-ffi"                 % "2.1.7"
   )
 
-  private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8")
+  private val kindProjector    = compilerPlugin("org.spire-math" %% "kind-projector"     % "0.9.8")
+  private val betterMonadicFor = compilerPlugin("com.olegpy"     %% "better-monadic-for" % "0.3.0")
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
@@ -132,7 +134,7 @@ object Dependencies {
     http4sDependencies ++ circeDependencies
 
   val commonDependencies: Seq[ModuleID] =
-    logging ++ testing :+ kindProjector :+ macroParadise
+    logging ++ testing :+ kindProjector :+ macroParadise :+ betterMonadicFor
 
   val gatlingDependencies: Seq[ModuleID] = Seq(
     gatlingFramework,
