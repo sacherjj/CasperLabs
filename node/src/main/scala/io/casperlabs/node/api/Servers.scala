@@ -1,35 +1,34 @@
 package io.casperlabs.node.api
 
-import java.util.concurrent.TimeUnit
-
 import cats.Id
-import cats.effect.{Concurrent, ConcurrentEffect, Resource}
 import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, Resource, Timer}
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
+import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
+import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
+import io.casperlabs.comm.rp.Connect.ConnectionsCell
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.node._
 import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.node.api.control.ControlGrpcMonix
-import io.casperlabs.catscontrib.ski._
-import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
-import io.casperlabs.comm.rp.Connect.ConnectionsCell
-import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
-import io.casperlabs.node.diagnostics.effects.diagnosticsService
 import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
-import io.casperlabs.node._
+import io.casperlabs.node.api.graphql.GraphQL
+import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.diagnostics.effects.diagnosticsService
+import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
 import io.casperlabs.shared._
-import io.grpc.Server
-import io.grpc.netty.NettyServerBuilder
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import kamon.Kamon
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
-import io.casperlabs.smartcontracts.ExecutionEngineService
-import org.http4s.server.blaze.BlazeBuilder
+import org.http4s.implicits._
+import org.http4s.server.Router
+import org.http4s.server.blaze.BlazeServerBuilder
 
 object Servers {
 
@@ -113,8 +112,11 @@ object Servers {
       log: Log[Task],
       nodeDiscovery: NodeDiscovery[Task],
       connectionsCell: ConnectionsCell[Task],
-      scheduler: Scheduler
+      scheduler: Scheduler,
+      T: Timer[Task],
+      C: cats.effect.ConcurrentEffect[Task]
   ): Resource[Effect, Unit] = {
+
     val prometheusReporter = new NewPrometheusReporter()
     val prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
     val metricsRuntime     = new MetricsRuntime[Task](conf, id)
@@ -125,11 +127,16 @@ object Servers {
           } { _ =>
             Task.delay(Kamon.stopAllReporters())
           }
-      _ <- BlazeBuilder[Task]
+      _ <- BlazeServerBuilder[Task]
             .bindHttp(port, "0.0.0.0")
-            .mountService(prometheusService, "/metrics")
-            .mountService(VersionInfo.service, "/version")
-            .mountService(StatusInfo.service, "/status")
+            .withHttpApp(
+              Router(
+                "/metrics" -> prometheusService,
+                "/version" -> VersionInfo.service,
+                "/status"  -> StatusInfo.service,
+                "/graphql" -> GraphQL.service
+              ).orNotFound
+            )
             .resource
       _ <- Resource.liftF(
             Log[Task].info(s"HTTP server started on port ${port}.")

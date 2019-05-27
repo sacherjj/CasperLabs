@@ -3,7 +3,7 @@ package io.casperlabs.node
 import cats._
 import cats.data._
 import cats.effect._
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.mtl.MonadState
 import cats.syntax.applicative._
 import cats.syntax.apply._
@@ -21,6 +21,7 @@ import io.casperlabs.blockstorage.{
 }
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
@@ -41,6 +42,7 @@ import io.casperlabs.p2p.effects._
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
+import monix.eval.instances.CatsConcurrentEffectForTask
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 
@@ -219,7 +221,9 @@ class NodeRuntime private[node] (
               log,
               nodeDiscovery,
               connectionsCell,
-              scheduler
+              scheduler,
+              Timer[Task],
+              new CatsConcurrentEffectForTask()(grpcScheduler, Task.defaultOptions)
             )
 
         _ <- if (conf.server.useGossiping) {
