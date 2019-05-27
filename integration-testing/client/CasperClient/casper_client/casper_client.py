@@ -361,11 +361,13 @@ def command_line_tool():
     parser = Parser()
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
                       [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
-                       [('-g', '--gas-limit'), dict(required=True, type=int, help='The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.')],
+                       [('-g', '--gas-limit'), dict(required=True, type=int, help='[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.')],
                        [('--gas-price',), dict(required=True, type=int, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
                        [('-n', '--nonce'), dict(required=False, type=int, default=0, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=True, type=str, help='Path to the file with payment code')],
-                       [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')]])
+                       [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
+                       [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
+                       [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 
     parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 
