@@ -754,6 +754,19 @@ macro_rules! on_fail_charge {
             }
         }
     };
+    ($fn:expr, $cost:expr, $effect:expr) => {
+        match $fn {
+            Ok(res) => res,
+            Err(e) => {
+                let exec_err: ::execution::Error = e.into();
+                return ExecutionResult::Failure {
+                    error: exec_err.into(),
+                    effect: $effect,
+                    cost: $cost,
+                };
+            }
+        }
+    };
 }
 
 pub trait Executor<A> {
@@ -834,13 +847,19 @@ impl Executor<Module> for WasmiExecutor {
         let rng = create_rng(&account_addr, timestamp, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
+
+        // Snapshot of effects before execution, so in case of error
+        // only nonce update can be returned.
+        let effects_snapshot = tc.borrow().effect();
+
         let arguments: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
         } else {
             // TODO: figure out how this works with the cost model
             // https://casperlabs.atlassian.net/browse/EE-239
-            on_fail_charge!(deserialize(args), 0)
+            on_fail_charge!(deserialize(args), 0, effects_snapshot)
         };
+
         let context = RuntimeContext::new(
             tc,
             &mut uref_lookup_local,
@@ -854,10 +873,12 @@ impl Executor<Module> for WasmiExecutor {
             rng,
             protocol_version,
         );
+
         let mut runtime = Runtime::new(memory, parity_module, context);
         on_fail_charge!(
             instance.invoke_export("call", &[], &mut runtime),
-            runtime.context.gas_counter()
+            runtime.context.gas_counter(),
+            effects_snapshot
         );
 
         ExecutionResult::Success {
@@ -905,6 +926,37 @@ mod tests {
         match on_fail_charge_test_helper(|| Err(Error::InvalidNonce) as Result<(), _>, 456) {
             ExecutionResult::Success { .. } => panic!("Should fail"),
             ExecutionResult::Failure { cost, .. } => assert_eq!(cost, 456),
+        }
+    }
+    #[test]
+    fn on_fail_charge_with_action() {
+        use common::key::Key;
+        use engine_state::execution_effect::ExecutionEffect;
+        use engine_state::op::Op;
+        use shared::transform::Transform;
+        let f = || {
+            let input = Err(Error::InvalidNonce) as Result<(), Error>;
+            let _result = on_fail_charge!(input, 456, {
+                let mut effect = ExecutionEffect::default();
+
+                effect.0.insert(Key::Hash([42u8; 32]), Op::NoOp);
+                effect.1.insert(Key::Hash([42u8; 32]), Transform::Identity);
+
+                effect
+            });
+            ExecutionResult::Success {
+                effect: Default::default(),
+                cost: 0,
+            }
+        };
+        match f() {
+            ExecutionResult::Success { .. } => panic!("Should fail"),
+            ExecutionResult::Failure { cost, effect, .. } => {
+                assert_eq!(cost, 456);
+                // Check if the containers are empty
+                assert_eq!(effect.0.len(), 1);
+                assert_eq!(effect.1.len(), 1);
+            }
         }
     }
 }
