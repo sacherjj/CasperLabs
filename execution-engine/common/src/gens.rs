@@ -41,11 +41,11 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
 }
 
 pub fn public_key_arb() -> impl Strategy<Value = PublicKey> {
-    u8_slice_32().prop_map(|key| key.into())
+    u8_slice_32().prop_map(Into::into)
 }
 
 pub fn weight_arb() -> impl Strategy<Value = Weight> {
-    any::<u8>().prop_map(|weight| Weight::new(weight))
+    any::<u8>().prop_map(Weight::new)
 }
 
 pub fn associated_keys_arb(size: usize) -> impl Strategy<Value = AssociatedKeys> {
@@ -53,7 +53,6 @@ pub fn associated_keys_arb(size: usize) -> impl Strategy<Value = AssociatedKeys>
         let mut associated_keys = AssociatedKeys::empty();
         keys.into_iter().for_each(|(k, v)| {
             associated_keys.add_key(k, v);
-            ()
         });
         associated_keys
     })

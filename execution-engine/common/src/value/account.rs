@@ -77,10 +77,7 @@ impl AssociatedKeys {
     /// Removes key from the associated keys set.
     /// Returns true if value was found in the set prior to the removal, false otherwise.
     pub fn remove_key(&mut self, key: &PublicKey) -> bool {
-        match self.0.remove(key) {
-            Some(_) => true,
-            None => false,
-        }
+        self.0.remove(key).is_some()
     }
 
     pub fn get(&self, key: &PublicKey) -> Option<&Weight> {
@@ -170,7 +167,6 @@ impl FromBytes for AssociatedKeys {
         let mut keys = AssociatedKeys::empty();
         keys_map.into_iter().for_each(|(k, v)| {
             keys.add_key(k, v);
-            ()
         });
         Ok((keys, rem))
     }
