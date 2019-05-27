@@ -82,6 +82,8 @@ print('Run protoc...')
 run_protoc(f'{PROTO_DIR}/empty.proto',
            f'{PROTO_DIR}/descriptor.proto',
            f'{PROTO_DIR}/scalapb.proto',
+           f'{PROTO_DIR}/annotations.proto',
+           f'{PROTO_DIR}/http.proto',
            f'{PROTO_DIR}/CasperMessage.proto')
 
 print('Patch generated Python gRPC modules...')
@@ -89,6 +91,9 @@ modify_files([('from proto import ', 'import '),
               ('import empty_pb2 as empty__pb2', 'from . import empty_pb2 as empty__pb2'),
               ('import scalapb_pb2 as scalapb__pb2', 'from . import scalapb_pb2 as scalapb__pb2'),
               ('import descriptor_pb2 as descriptor__pb2', 'from . import descriptor_pb2 as descriptor__pb2'),
+              ('import annotations_pb2 as annotations__pb2', 'from . import annotations_pb2 as annotations__pb2'),
+              ('import http_pb2 as http__pb2', 'from . import http_pb2 as http__pb2'),
+              ('import CasperMessage_pb2 as CasperMessage__pb2', 'from . import CasperMessage_pb2 as CasperMessage__pb2'),
               ('import CasperMessage_pb2 as proto_dot_CasperMessage__pb2', 'from . import CasperMessage_pb2 as proto_dot_CasperMessage__pb2')],
-            glob.glob('proto/*py'))
+            glob.glob('*pb2*py'))
 
