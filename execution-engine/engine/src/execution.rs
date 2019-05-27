@@ -936,7 +936,7 @@ mod tests {
         use shared::transform::Transform;
         let f = || {
             let input = Err(Error::InvalidNonce) as Result<(), Error>;
-            let _result = on_fail_charge!(input, 456, {
+            on_fail_charge!(input, 456, {
                 let mut effect = ExecutionEffect::default();
 
                 effect.0.insert(Key::Hash([42u8; 32]), Op::NoOp);
