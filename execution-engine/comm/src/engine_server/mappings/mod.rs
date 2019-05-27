@@ -4,6 +4,7 @@ use protobuf::ProtobufEnum;
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
+use common::value::account::{AssociatedKeys, PublicKey, Weight};
 use engine_server::ipc::KeyURef_AccessRights;
 use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
@@ -77,8 +78,24 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                 let mut pub_key = [0u8; 32];
                 let uref_map: URefMap = v.get_account().get_known_urefs().try_into()?;
                 pub_key.clone_from_slice(&v.get_account().pub_key);
-                let account =
-                    common::value::Account::new(pub_key, v.get_account().nonce as u64, uref_map.0);
+                let associated_keys: AssociatedKeys = {
+                    let mut keys = AssociatedKeys::empty();
+                    v.get_account().get_associated_keys().iter().for_each(|k| {
+                        let mut pub_key = [0u8; 32];
+                        pub_key.copy_from_slice(k.get_pub_key());
+                        let weight = k.get_weight() as u8;
+                        // NOTE: we are assuming that `add_key` will always return `true`.
+                        // Meaning we assume that IPC message will always contain correct `AssociatedKeys`.
+                        keys.add_key(PublicKey::new(pub_key), Weight::new(weight));
+                    });
+                    keys
+                };
+                let account = common::value::Account::new(
+                    pub_key,
+                    v.get_account().nonce as u64,
+                    uref_map.0,
+                    associated_keys,
+                );
                 transform_write(common::value::Value::Account(account))
             } else if v.has_contract() {
                 let ipc_contr = v.get_contract();
