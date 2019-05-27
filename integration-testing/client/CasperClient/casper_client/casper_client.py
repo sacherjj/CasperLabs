@@ -7,6 +7,7 @@ import time
 import argparse
 import grpc
 import functools
+import pathlib
 
 from . import CasperMessage_pb2
 from .CasperMessage_pb2_grpc import DeployServiceStub
@@ -101,7 +102,9 @@ class CasperClient:
         self.node = Node()
 
     @guarded
-    def deploy(self, from_addr: bytes, gas_limit: int, gas_price: int, payment: str, session: str, nonce: int=0):
+    def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
+               payment: str = None, session: str = None, nonce: int=0,
+               public_key: str = None, private_key: str = None):
         """
         Deploy a smart contract source file to Casper on an existing running node.
         The deploy will be packaged and sent as a block to the network depending
@@ -115,24 +118,24 @@ class CasperClient:
         :param payment:       Path to the file with payment code.
         :param session:       Path to the file with session code.
         :param nonce:         This allows you to overwrite your own pending
-#                             transactions that use the same nonce.
+                              transactions that use the same nonce.
+        :param public_key:    Path to a file with public key (Ed25519)
+        :param private_key:   Path to a file with private key (Ed25519)
         :return:              deserialized DeployServiceResponse object
         """
+
         data = CasperMessage_pb2.DeployData(
-            address=from_addr,
-            timestamp=int(time.time()),
-            session=read_deploy_code(session),
-            payment=read_deploy_code(payment),
-            gas_limit=gas_limit,
-            gas_price=gas_price,
-            nonce=nonce,
-
-            # TODO: Scala client does not set attributes below
-            #string sig_algorithm = 8; // name of the algorithm used for signing
+            address = from_addr,
+            timestamp = int(time.time()),
+            session = read_deploy_code(session),
+            payment = read_deploy_code(payment),
+            gas_limit = gas_limit,
+            gas_price = gas_price,
+            nonce = nonce,
+            sig_algorithm = "Ed25519",
             #bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
-
-            # TODO: allow user to specify their public key [comment copied from Scala client source]
-            #bytes user = 10; //public key
+            signature = b'', #TODO
+            user = pathlib.Path(public_key).read_bytes(),
         )
         return self.node.DoDeploy(data)
 
