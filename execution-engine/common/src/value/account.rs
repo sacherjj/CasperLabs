@@ -4,6 +4,92 @@ use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+pub enum ActionType {
+    /// Required by deploy execution.
+    Deployment,
+    /// Required when adding/removing associated keys, changing threshold levels.
+    KeyManagement,
+    /// Required when recovering inactive account.
+    InactiveAccountRecovery,
+}
+
+/// Thresholds that has to be met when executing an action of certain type.
+/// Note that `InactiveAccountRecovery` doesn't have a threshold defined here.
+/// It's so that accounts don't change that value as it's system-wide set to 0.
+pub struct ActionThresholds {
+    deployment: Weight,
+    key_management: Weight,
+}
+
+impl ActionThresholds {
+    // NOTE: I chose to not provide one method for setting action thresholds b/c `InactiveAccountRecovery`
+    // threshold is 0. If there was a polymorphic method then trying to set threshold for `InactiveAccountRecovery`
+    // would have to return an error.
+
+    /// Sets new threshold for [ActionType::Deployment].
+    /// Should return an error if setting new threshold for `action_type` breaks one of the invariants.
+    /// Currently, invariant is that `ActionType::Deployment` threshold shouldn't be higher than any other,
+    /// which should be checked both when increasing `Deployment` threshold and decreasing the other.
+    pub fn set_deployment_threshold(&mut self, new_threshold: Weight) -> bool {
+        if new_threshold > self.key_management {
+            false
+        } else {
+            self.deployment = new_threshold;
+            true
+        }
+    }
+
+    /// Sets new threshold for [ActionType::KeyManagement].
+    pub fn set_key_management_threshold(&mut self, new_threshold: Weight) -> bool {
+        if self.deployment < new_threshold {
+            false
+        } else {
+            self.key_management = new_threshold;
+            true
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct BlockTime(u64);
+
+/// Holds information about last usage time of specific action.
+pub struct AccountActivity {
+    // Last time `KeyManagementAction` was used.
+    key_management_last_used: BlockTime,
+    // Last time `Deployment` action was used.
+    deployment_last_used: BlockTime,
+    // Inactivity period set for the account.
+    inactivity_period_limit: BlockTime,
+}
+
+impl AccountActivity {
+    // `current_block_time` value is passed in from the node and is coming from the parent block.
+    // [inactivity_period_limit] block time period after which account is eligible for recovery.
+    pub fn new(
+        current_block_time: BlockTime,
+        inactivity_period_limit: BlockTime,
+    ) -> AccountActivity {
+        AccountActivity {
+            key_management_last_used: current_block_time,
+            deployment_last_used: current_block_time,
+            inactivity_period_limit,
+        }
+    }
+
+    pub fn update_key_management_last_used(&mut self, last_used: BlockTime) {
+        self.key_management_last_used = last_used;
+    }
+
+    pub fn update_deployment_last_used(&mut self, last_used: BlockTime) {
+        self.deployment_last_used = last_used;
+    }
+
+    pub fn update_inactivity_period_limit(&mut self, new_inactivity_period_limit: BlockTime) {
+        self.inactivity_period_limit = new_inactivity_period_limit;
+    }
+}
+
 pub const KEY_SIZE: usize = 32;
 /// Maximum number of associated keys.
 /// Value chosen arbitrary, shouldn't be too large to prevent bloating
