@@ -423,7 +423,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
             }
             ExecutionResult::Failure {
                 error: err,
-                effect: effects,
+                effect,
                 cost,
             } => {
                 match err {
@@ -433,11 +433,13 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     EngineError::StorageError(storage_err) => {
                         let mut err = wasm_error(storage_err.to_string());
                         err.set_cost(cost);
+                        err.set_effects(effect.into());
                         err
                     }
                     EngineError::PreprocessingError(err_msg) => {
                         let mut err = wasm_error(err_msg);
                         err.set_cost(cost);
+                        err.set_effects(effect.into());
                         err
                     }
                     EngineError::ExecError(exec_error) => match exec_error {
@@ -447,17 +449,30 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             deploy_error.set_gasErr(ipc::OutOfGasError::new());
                             deploy_result.set_error(deploy_error);
                             deploy_result.set_cost(cost);
+                            deploy_result.set_effects(effect.into());
                             deploy_result
                         }
                         ExecutionError::KeyNotFound(key) => {
                             let msg = format!("Key {:?} not found.", key);
-                            wasm_error(msg)
+                            let mut err = wasm_error(msg);
+                            err.set_effects(effect.into());
+                            err
+                        }
+                        ExecutionError::InvalidNonce => {
+                            let mut deploy_result = ipc::DeployResult::new();
+                            let mut deploy_error = ipc::DeployError::new();
+                            deploy_error.set_invalidNonceErr(ipc::InvalidNonceError::new());
+                            deploy_result.set_error(deploy_error);
+                            deploy_result.set_effects(effect.into());
+                            deploy_result.set_cost(cost);
+                            deploy_result
                         }
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
                             let msg = format!("{:?}", other);
                             let mut err = wasm_error(msg);
                             err.set_cost(cost);
+                            err.set_effects(effect.into());
                             err
                         }
                     },
