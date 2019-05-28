@@ -182,8 +182,11 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         case Right(transitioned) =>
           transitioned.pure[F]
       }
-    } map {
-      _ contains true
+    } flatMap {
+      case Nil =>
+        statusRef.get flatMap { _.fold(false.pure[F])(tryTransition) }
+      case transitioned =>
+        transitioned.contains(true).pure[F]
     }
 
   /** Get the Genesis candidate from the bootstrap node and keep polling until we can do the transition. */

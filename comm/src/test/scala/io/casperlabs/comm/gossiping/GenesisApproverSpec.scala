@@ -45,11 +45,21 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
       }
     }
     "started without an approval" should {
-      "not trigger the transition" in {
-        TestFixture.fromGenesis(approve = false) { approver =>
+      "not trigger the transition if approvals are needed" in {
+        TestFixture.fromGenesis(approve = false, environment = new MockEnvironment() {
+          override def canTransition(block: Block, signatories: Set[ByteString]) = false
+        }) { approver =>
           approver.awaitApproval.timeout(50.millis).attempt.map { res =>
             res.isLeft shouldBe true
             res.left.get shouldBe a[TimeoutException]
+          }
+        }
+      }
+
+      "trigger the transition if approvals are not needed" in {
+        TestFixture.fromGenesis(approve = false) { approver =>
+          approver.awaitApproval.timeout(50.millis).attempt.map { res =>
+            res.isRight shouldBe true
           }
         }
       }
@@ -242,6 +252,20 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
         } yield {
           r.isRight shouldBe true
           service.received shouldBe 5
+        }
+      }
+    }
+
+    "trigger transition if no approvals are required" in {
+      TestFixture.fromBootstrap(
+        remoteCandidate = () => Task.delay(GenesisCandidate(genesis.blockHash, approvals = Nil)),
+        pollInterval = 10.millis,
+        environment = new MockEnvironment() {
+          override def canTransition(block: Block, signatories: Set[ByteString]) = true
+        }
+      ) { approver =>
+        approver.awaitApproval.timeout(250.millis).map { blockHash =>
+          blockHash shouldBe genesis.blockHash
         }
       }
     }
