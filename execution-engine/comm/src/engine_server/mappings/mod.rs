@@ -439,7 +439,6 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     EngineError::PreprocessingError(err_msg) => {
                         let mut err = wasm_error(err_msg);
                         err.set_cost(cost);
-                        err.set_effects(effect.into());
                         err
                     }
                     EngineError::ExecError(exec_error) => match exec_error {
