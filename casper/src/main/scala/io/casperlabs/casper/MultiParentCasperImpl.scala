@@ -33,14 +33,12 @@ import scala.util.control.NonFatal
   * Encapsulates mutable state of the MultiParentCasperImpl
   **
   *
-  * @param seenBlockHashes      - tracks hashes of all blocks seen so far
   * @param blockBuffer
   * @param deployBuffer
   * @param invalidBlockTracker
   * @param equivocationsTracker : Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
   */
 final case class CasperState(
-    seenBlockHashes: Set[BlockHash] = Set.empty[BlockHash],
     blockBuffer: Set[Block] = Set.empty[Block],
     deployBuffer: Set[Deploy] = Set.empty[Deploy],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
@@ -97,14 +95,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                      } else {
                        // This might be the first time we see this block, or it may not have been added to the state
                        // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
-                       Cell[F, CasperState].modify { s =>
-                         s.copy(
-                           // Take a note that we have seen this block,
-                           // so it won't be required as a dependency any more.
-                           // If the processing were to die though we'd be stuck.
-                           seenBlockHashes = s.seenBlockHashes + blockHash
-                         )
-                       } *> internalAddBlock(block, dag)
+                       internalAddBlock(block, dag)
                      }
           // TODO: Ideally this method would just return the block hashes it created,
           // but for now it does gossiping as well. The methods return the full blocks
@@ -822,12 +813,8 @@ object MultiParentCasperImpl {
             missingDependencies = casperState.dependencyDag
               .childToParentAdjacencyList(block.blockHash)
               .toList
-            missingUnseenDependencies = missingDependencies.filter(
-              blockHash => !casperState.seenBlockHashes.contains(blockHash)
-            )
             // NOTE: Requesting not just unseen dependencies so that something that was originally
             // an `IgnorableEquivocation` can second time be fetched again and be an `AdmissibleEquivocation`.
-            //_ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
             _ <- missingDependencies.traverse(hash => requestMissingDependency(hash))
           } yield ()
       }
