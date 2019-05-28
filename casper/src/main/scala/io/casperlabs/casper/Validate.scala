@@ -124,15 +124,13 @@ object Validate {
       ) *> false.pure[F]
     } else {
       d.approvals.toList.traverse { a =>
-        val publicKey =
-          if (a.approverPublicKey.isEmpty) d.getHeader.accountPublicKey else a.approverPublicKey
         signatureVerifiers(a.getSignature.sigAlgorithm)
           .map { verify =>
             Try {
               verify(
                 d.deployHash.toByteArray,
                 Signature(a.getSignature.sig.toByteArray),
-                PublicKey(publicKey.toByteArray)
+                PublicKey(a.approverPublicKey.toByteArray)
               )
             } match {
               case Success(true) =>
