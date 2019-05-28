@@ -305,9 +305,14 @@ package object gossiping {
       validatorId <- Resource.liftF {
                       for {
                         id <- ValidatorIdentity.fromConfig[F](conf.casper)
-                        _ <- Log[F].info(
-                              s"Starting ${if (id.nonEmpty) "with" else "without"} a validator identity."
-                            )
+                        _ <- id match {
+                              case Some(ValidatorIdentity(publicKey, _, _)) =>
+                                Log[F].info(
+                                  s"Starting with validator identity ${Base16.encode(publicKey)}"
+                                )
+                              case None =>
+                                Log[F].info("Starting without a validator identity.")
+                            }
                       } yield id
                     }
 
