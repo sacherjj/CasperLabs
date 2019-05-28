@@ -170,7 +170,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
           .withSignature(sample(arbitrary[Signature]).withSigAlgorithm("XXX")),
         // Good one.
         sample(arbitrary[Approval])
-          .copy(validatorPublicKey = genesis.getHeader.getState.bonds.head.validatorPublicKey)
+          .withApproverPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
       )
       TestFixture.fromBootstrap(
         remoteCandidate = () =>
@@ -348,7 +348,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
           r1 <- approver.addApproval(genesis.blockHash, correctApproval)
           r2 <- approver.addApproval(
                  genesis.blockHash,
-                 correctApproval.withValidatorPublicKey(
+                 correctApproval.withApproverPublicKey(
                    genesis.getHeader.getState.bonds(1).validatorPublicKey
                  )
                )
@@ -362,7 +362,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
     "accumulate approvals arriving in parallel" in {
       TestFixture.fromGenesis() { approver =>
         val approvals = genesis.getHeader.getState.bonds.tail.map { b =>
-          sample(arbitrary[Approval]).withValidatorPublicKey(b.validatorPublicKey)
+          sample(arbitrary[Approval]).withApproverPublicKey(b.validatorPublicKey)
         }
         for {
           _ <- Task.gatherUnordered(approvals.map(approver.addApproval(genesis.blockHash, _)))
@@ -468,7 +468,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
 
   // Example of an approval that we can use in tests that won't be rejected.
   val correctApproval = sample(arbitrary[Approval])
-    .withValidatorPublicKey(genesis.getHeader.getState.bonds.last.validatorPublicKey)
+    .withApproverPublicKey(genesis.getHeader.getState.bonds.last.validatorPublicKey)
 
   class MockNodeDiscovery(peers: List[Node]) extends NodeDiscovery[Task] {
     override def discover                    = ???
@@ -584,7 +584,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
           relayFactor,
           genesis,
           maybeApproval = sample(arbitrary[Approval])
-            .withValidatorPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
+            .withApproverPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
             .some
             .filter(_ => approve)
         )

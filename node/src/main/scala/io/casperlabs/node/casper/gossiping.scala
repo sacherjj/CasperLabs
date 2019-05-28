@@ -336,7 +336,7 @@ package object gossiping {
         validatorId.map { id =>
           val sig = id.signature(block.blockHash.toByteArray)
           Approval()
-            .withValidatorPublicKey(sig.publicKey)
+            .withApproverPublicKey(sig.publicKey)
             .withSignature(
               Signature()
                 .withSigAlgorithm(sig.algorithm)

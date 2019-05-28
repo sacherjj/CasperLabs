@@ -106,7 +106,7 @@ trait ArbitraryConsensus {
     for {
       pk  <- genKey
       sig <- arbitrary[Signature]
-    } yield Approval().withValidatorPublicKey(pk).withSignature(sig)
+    } yield Approval().withApproverPublicKey(pk).withSignature(sig)
   }
 
   implicit val arbBond: Arbitrary[Bond] = Arbitrary {
@@ -182,7 +182,13 @@ trait ArbitraryConsensus {
         .withDeployHash(deployHash)
         .withHeader(header)
         .withBody(body)
-        .withSignature(signature)
+        .withApprovals(
+          List(
+            Approval()
+              .withApproverPublicKey(header.accountPublicKey)
+              .withSignature(signature)
+          )
+        )
     } yield deploy
   }
 

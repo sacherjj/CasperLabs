@@ -280,13 +280,13 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
       case Some(Status(_, block))
           if !block.getHeader.getState.bonds
             .map(_.validatorPublicKey)
-            .contains(approval.validatorPublicKey) =>
+            .contains(approval.approverPublicKey) =>
         Left(InvalidArgument("The signatory is not one of the bonded validators."))
 
       case _
           if !backend.validateSignature(
             blockHash,
-            approval.validatorPublicKey,
+            approval.approverPublicKey,
             approval.getSignature
           ) =>
         Left(InvalidArgument("Could not validate signature."))
@@ -354,7 +354,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         .delay {
           backend.canTransition(
             status.block,
-            status.candidate.approvals.map(_.validatorPublicKey).toSet
+            status.candidate.approvals.map(_.approverPublicKey).toSet
           )
         }
         .ifM(
