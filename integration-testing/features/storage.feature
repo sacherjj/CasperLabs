@@ -14,7 +14,7 @@ Feature: Storage
   # Figure 6 of Whitepaper
   Scenario: DAG writes of variables over multiple blocks
 
-
+  # Implementation test_persistent_dag_store.py : test_persistent_dag_store
   Scenario: Stop a node in network, and restart it. Assert that it downloads only latest block not the whole DAG.
      Given: 2 Node Network
       When: Node-1 Deploys test_helloworld.wasm
