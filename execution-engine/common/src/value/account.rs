@@ -16,6 +16,7 @@ pub enum ActionType {
 /// Thresholds that has to be met when executing an action of certain type.
 /// Note that `InactiveAccountRecovery` doesn't have a threshold defined here.
 /// It's so that accounts don't change that value as it's system-wide set to 0.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActionThresholds {
     deployment: Weight,
     key_management: Weight,
@@ -41,7 +42,7 @@ impl ActionThresholds {
 
     /// Sets new threshold for [ActionType::KeyManagement].
     pub fn set_key_management_threshold(&mut self, new_threshold: Weight) -> bool {
-        if self.deployment < new_threshold {
+        if self.deployment > new_threshold {
             false
         } else {
             self.key_management = new_threshold;
@@ -50,10 +51,20 @@ impl ActionThresholds {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct BlockTime(u64);
+impl Default for ActionThresholds {
+    fn default() -> Self {
+        ActionThresholds {
+            deployment: Weight::new(1),
+            key_management: Weight::new(1),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BlockTime(pub u64);
 
 /// Holds information about last usage time of specific action.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AccountActivity {
     // Last time `KeyManagementAction` was used.
     key_management_last_used: BlockTime,
@@ -64,6 +75,7 @@ pub struct AccountActivity {
 }
 
 impl AccountActivity {
+    // TODO: We need default for inactivity_period_limit.
     // `current_block_time` value is passed in from the node and is coming from the parent block.
     // [inactivity_period_limit] block time period after which account is eligible for recovery.
     pub fn new(
@@ -177,6 +189,8 @@ pub struct Account {
     nonce: u64,
     known_urefs: BTreeMap<String, Key>,
     associated_keys: AssociatedKeys,
+    action_thresholds: ActionThresholds,
+    account_activity: AccountActivity,
 }
 
 impl Account {
@@ -185,12 +199,16 @@ impl Account {
         nonce: u64,
         known_urefs: BTreeMap<String, Key>,
         associated_keys: AssociatedKeys,
+        action_thresholds: ActionThresholds,
+        account_activity: AccountActivity,
     ) -> Self {
         Account {
             public_key,
             nonce,
             known_urefs,
             associated_keys,
+            action_thresholds,
+            account_activity,
         }
     }
 
@@ -258,22 +276,123 @@ impl FromBytes for AssociatedKeys {
     }
 }
 
+const BLOCKTIME_SIZE: usize = U64_SIZE;
+
+impl ToBytes for BlockTime {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        self.0.to_bytes()
+    }
+}
+
+impl FromBytes for BlockTime {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (time, rem) = FromBytes::from_bytes(bytes)?;
+        Ok((BlockTime(time), rem))
+    }
+}
+
+const DEPLOYMENT_THRESHOLD_ID: u8 = 0;
+const KEY_MANAGEMENT_THRESHOLD_ID: u8 = 1;
+
+impl ToBytes for ActionThresholds {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::with_capacity(2 * (WEIGHT_SIZE + U8_SIZE));
+        result.push(DEPLOYMENT_THRESHOLD_ID);
+        result.extend(&self.deployment.to_bytes()?);
+        result.push(KEY_MANAGEMENT_THRESHOLD_ID);
+        result.extend(&self.key_management.to_bytes()?);
+        Ok(result)
+    }
+}
+
+impl FromBytes for ActionThresholds {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let mut action_thresholds: ActionThresholds = Default::default();
+        let (id_1, rem): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (weight_1, rem2): (Weight, &[u8]) = FromBytes::from_bytes(&rem)?;
+        let (id_2, rem3): (u8, &[u8]) = FromBytes::from_bytes(&rem2)?;
+        let (weight_2, rem4): (Weight, &[u8]) = FromBytes::from_bytes(&rem3)?;
+        match (id_1, id_2) {
+            (DEPLOYMENT_THRESHOLD_ID, KEY_MANAGEMENT_THRESHOLD_ID) => {
+                action_thresholds.set_key_management_threshold(weight_2);
+                action_thresholds.set_deployment_threshold(weight_1);
+                Ok((action_thresholds, rem4))
+            }
+            (KEY_MANAGEMENT_THRESHOLD_ID, DEPLOYMENT_THRESHOLD_ID) => {
+                action_thresholds.set_key_management_threshold(weight_1);
+                action_thresholds.set_deployment_threshold(weight_2);
+                Ok((action_thresholds, rem4))
+            }
+            _ => Err(Error::FormattingError),
+        }
+    }
+}
+
+const KEY_MANAGEMENT_LAST_USED_ID: u8 = 0;
+const DEPLOYMENT_LAST_USED_ID: u8 = 1;
+const INACTIVITY_PERIOD_LIMIT_ID: u8 = 2;
+
+impl ToBytes for AccountActivity {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::with_capacity(3 * (BLOCKTIME_SIZE + U8_SIZE));
+        result.push(KEY_MANAGEMENT_LAST_USED_ID);
+        result.extend(&self.key_management_last_used.to_bytes()?);
+        result.push(DEPLOYMENT_LAST_USED_ID);
+        result.extend(&self.deployment_last_used.to_bytes()?);
+        result.push(INACTIVITY_PERIOD_LIMIT_ID);
+        result.extend(&self.inactivity_period_limit.to_bytes()?);
+        Ok(result)
+    }
+}
+
+fn account_activity_parser_helper<'a>(
+    acc_activity: &mut AccountActivity,
+    bytes: &'a [u8],
+) -> Result<&'a [u8], Error> {
+    let (id, rem) = FromBytes::from_bytes(bytes)?;
+    let (block_time, rest): (BlockTime, &[u8]) = FromBytes::from_bytes(rem)?;
+    match id {
+        KEY_MANAGEMENT_LAST_USED_ID => acc_activity.update_key_management_last_used(block_time),
+        DEPLOYMENT_LAST_USED_ID => acc_activity.update_deployment_last_used(block_time),
+        INACTIVITY_PERIOD_LIMIT_ID => acc_activity.update_inactivity_period_limit(block_time),
+        _ => return Err(Error::FormattingError),
+    };
+    Ok(rest)
+}
+
+impl FromBytes for AccountActivity {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let mut acc_activity = AccountActivity::new(BlockTime(0), BlockTime(0));
+        let rem = account_activity_parser_helper(&mut acc_activity, bytes)?;
+        let rem2 = account_activity_parser_helper(&mut acc_activity, rem)?;
+        let rem3 = account_activity_parser_helper(&mut acc_activity, rem2)?;
+        Ok((acc_activity, rem3))
+    }
+}
+
 impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let action_thresholds_size = 2 * (WEIGHT_SIZE + U8_SIZE);
+        let account_activity_size: usize = 3 * (BLOCKTIME_SIZE + U8_SIZE);
         let associated_keys_size =
             self.associated_keys.0.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
         let known_urefs_size = UREF_SIZE * self.known_urefs.len() + U32_SIZE;
-        if known_urefs_size + associated_keys_size
-            >= u32::max_value() as usize - KEY_SIZE - U64_SIZE
-        {
+        let serialized_account_size = KEY_SIZE // pub key
+            + U64_SIZE // nonce
+            + known_urefs_size
+            + associated_keys_size
+            + action_thresholds_size
+            + account_activity_size;
+        if serialized_account_size >= u32::max_value() as usize {
             return Err(Error::OutOfMemoryError);
         }
-        let mut result: Vec<u8> =
-            Vec::with_capacity(KEY_SIZE + U64_SIZE + known_urefs_size + associated_keys_size);
+        let mut result: Vec<u8> = Vec::with_capacity(serialized_account_size);
         result.extend(&self.public_key.to_bytes()?);
         result.append(&mut self.nonce.to_bytes()?);
         result.append(&mut self.known_urefs.to_bytes()?);
         result.append(&mut self.associated_keys.to_bytes()?);
+        result.append(&mut self.action_thresholds.to_bytes()?);
+        result.append(&mut self.account_activity.to_bytes()?);
         Ok(result)
     }
 }
@@ -284,14 +403,18 @@ impl FromBytes for Account {
         let (nonce, rem2): (u64, &[u8]) = FromBytes::from_bytes(rem1)?;
         let (known_urefs, rem3): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem2)?;
         let (associated_keys, rem4): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem3)?;
+        let (action_thresholds, rem5): (ActionThresholds, &[u8]) = FromBytes::from_bytes(rem4)?;
+        let (account_activity, rem6): (AccountActivity, &[u8]) = FromBytes::from_bytes(rem5)?;
         Ok((
             Account {
                 public_key,
                 nonce,
                 known_urefs,
                 associated_keys,
+                action_thresholds,
+                account_activity,
             },
-            rem4,
+            rem6,
         ))
     }
 }
