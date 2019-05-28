@@ -86,13 +86,14 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                         let weight = k.get_weight() as u8;
                         // NOTE: we are assuming that `add_key` will always return `true`.
                         // Meaning we assume that IPC message will always contain correct `AssociatedKeys`.
-                        keys.add_key(PublicKey::new(pub_key), Weight::new(weight));
+                        keys.add_key(PublicKey::new(pub_key), Weight::new(weight))
+                            .unwrap();
                     });
                     keys
                 };
                 let account = common::value::Account::new(
                     pub_key,
-                    v.get_account().nonce.into(),
+                    v.get_account().nonce,
                     uref_map.0,
                     associated_keys,
                 );
