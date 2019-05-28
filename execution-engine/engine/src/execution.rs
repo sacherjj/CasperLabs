@@ -408,7 +408,7 @@ where
     /// where this data lives in the exported memory (pass its pointer and length).
     pub fn read(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        let value = err_on_missing_key(key, self.context.read_gs(&key))?;
+        let value: Option<Value> = self.context.read_gs(&key)?;
         let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
         self.host_buf = value_bytes;
         Ok(self.host_buf.len())
@@ -421,18 +421,6 @@ where
         self.memory
             .set(dest_ptr, &seed)
             .map_err(|e| Error::Interpreter(e).into())
-    }
-}
-
-// Helper function for turning result of lookup into domain values.
-fn err_on_missing_key<A, E>(key: Key, r: Result<Option<A>, E>) -> Result<A, Error>
-where
-    E: Into<Error>,
-{
-    match r {
-        Ok(None) => Err(Error::KeyNotFound(key)),
-        Err(error) => Err(error.into()),
-        Ok(Some(v)) => Ok(v),
     }
 }
 
