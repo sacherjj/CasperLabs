@@ -44,16 +44,9 @@ clone:
 # exactly the same.
 pipeline:
 
-  sbt-update:
+  sbt-update-compile-test:
     commands:
-      - "sbt update"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
-    image: "casperlabs/buildenv:latest"
-
-  compile:
-    commands:
-      - "sbt compile test:compile doc"
+      - "sbt update compile doc test"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
@@ -94,13 +87,6 @@ pipeline:
     commands:
       - "cd execution-engine/"
       - "~/.cargo/bin/cargo test"
-    image: "casperlabs/buildenv:latest"
-
-  run-unit-tests:
-    commands:
-      - "sbt test"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
 
 # This section of the Pipeline is variable and not always run in all situations.
