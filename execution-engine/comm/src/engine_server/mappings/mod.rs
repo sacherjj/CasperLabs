@@ -129,6 +129,9 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                 let name = nk.get_name().to_string();
                 let key = nk.get_key().try_into()?;
                 transform_write(common::value::Value::NamedKey(name, key))
+            } else if v.has_key() {
+                let key = v.get_key().try_into()?;
+                transform_write(common::value::Value::Key(key))
             } else {
                 parse_error(format!(
                     "TransformEntry write contained unknown value: {:?}",
@@ -175,6 +178,9 @@ impl From<common::value::Value> for super::ipc::Value {
                     nk
                 };
                 tv.set_named_key(named_key);
+            }
+            common::value::Value::Key(key) => {
+                tv.set_key((&key).into());
             }
             common::value::Value::Account(account) => {
                 let mut acc = super::ipc::Account::new();

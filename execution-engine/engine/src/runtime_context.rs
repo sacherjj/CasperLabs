@@ -237,6 +237,7 @@ where
             | Value::String(_)
             | Value::ListString(_) => Ok(()),
             Value::NamedKey(_, key) => self.validate_key(&key),
+            Value::Key(key) => self.validate_key(&key),
             Value::Account(account) => {
                 // This should never happen as accounts can't be created by contracts.
                 // I am putting this here for the sake of completness.
