@@ -70,10 +70,14 @@ copyfile(join(dirname(grpc_tools.__file__), '_proto/google/protobuf/descriptor.p
 copyfile('../../../../protobuf/google/api/http.proto', f'{PROTO_DIR}/http.proto')
 copyfile('../../../../protobuf/google/api/annotations.proto', f'{PROTO_DIR}/annotations.proto')
 copyfile('../../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto', f'{PROTO_DIR}/CasperMessage.proto')
+copyfile('../../../../protobuf/io/casperlabs/casper/consensus/consensus.proto', f'{PROTO_DIR}/consensus.proto')
+copyfile('../../../../protobuf/io/casperlabs/node/api/casper.proto', f'{PROTO_DIR}/casper.proto')
+copyfile('../../../../protobuf/io/casperlabs/node/api/control.proto', f'{PROTO_DIR}/control.proto')
 
 print('Patch proto files...')
 modify_files([('import "google/protobuf/', 'import "'),
               ('import "scalapb/', 'import "'),
+              ('import "io/casperlabs/casper/consensus/', 'import "'),
               ('import "google/api/', 'import "')],
              glob.glob('proto/*'))
 
@@ -84,7 +88,10 @@ run_protoc(f'{PROTO_DIR}/empty.proto',
            f'{PROTO_DIR}/scalapb.proto',
            f'{PROTO_DIR}/annotations.proto',
            f'{PROTO_DIR}/http.proto',
-           f'{PROTO_DIR}/CasperMessage.proto')
+           f'{PROTO_DIR}/CasperMessage.proto',
+           f'{PROTO_DIR}/consensus.proto',
+           f'{PROTO_DIR}/control.proto',
+           f'{PROTO_DIR}/casper.proto')
 
 print('Patch generated Python gRPC modules...')
 modify_files([('from proto import ', 'import '),
@@ -93,7 +100,10 @@ modify_files([('from proto import ', 'import '),
               ('import descriptor_pb2 as descriptor__pb2', 'from . import descriptor_pb2 as descriptor__pb2'),
               ('import annotations_pb2 as annotations__pb2', 'from . import annotations_pb2 as annotations__pb2'),
               ('import http_pb2 as http__pb2', 'from . import http_pb2 as http__pb2'),
+              ('import consensus_pb2 as consensus__pb2', 'from . import consensus_pb2 as consensus__pb2'),
+              ('import casper_pb2 as casper__pb2', 'from . import casper_pb2 as casper__pb2'),
               ('import CasperMessage_pb2 as CasperMessage__pb2', 'from . import CasperMessage_pb2 as CasperMessage__pb2'),
+              ('import control_pb2 as control__pb2', 'from . import control_pb2 as control__pb2'),
               ('import CasperMessage_pb2 as proto_dot_CasperMessage__pb2', 'from . import CasperMessage_pb2 as proto_dot_CasperMessage__pb2')],
             glob.glob('*pb2*py'))
 
