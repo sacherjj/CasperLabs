@@ -171,8 +171,8 @@ object LegacyConversions {
       .withGasLimit(gasLimit) // New version doesn't have it.
       .withGasPrice(deploy.getHeader.gasPrice)
       .withNonce(deploy.getHeader.nonce)
-      .withSigAlgorithm(deploy.getSignature.sigAlgorithm)
-      .withSignature(deploy.getSignature.sig)
+      .withSigAlgorithm(deploy.approvals.headOption.fold("")(_.getSignature.sigAlgorithm))
+      .withSignature(deploy.approvals.headOption.fold(ByteString.EMPTY)(_.getSignature.sig))
   //.withUser() // We weren't using signing when this was in use.
 
   def toDeploy(deploy: protocol.DeployData): consensus.Deploy = {
@@ -190,6 +190,7 @@ object LegacyConversions {
           .withCode(deploy.getPayment.code)
           .withArgs(deploy.getPayment.args)
       )
+
     val header = consensus.Deploy
       .Header()
       // The client can either send a public key or an account address here.
@@ -200,18 +201,24 @@ object LegacyConversions {
       .withTimestamp(deploy.timestamp)
       .withGasPrice(deploy.gasPrice)
       .withBodyHash(ProtoUtil.protoHash(body)) // Legacy doesn't have it.
+
     consensus
       .Deploy()
       .withDeployHash(ProtoUtil.protoHash(header)) // Legacy doesn't have it.
       .withHeader(header)
       .withBody(body)
-      .copy(
-        signature = Option(
+      .withApprovals(
+        List(
           consensus
-            .Signature()
-            .withSigAlgorithm(deploy.sigAlgorithm)
-            .withSig(deploy.signature)
-        ).filterNot(s => s.sigAlgorithm.isEmpty && s.sig.isEmpty)
+            .Approval()
+            .withApproverPublicKey(header.accountPublicKey)
+            .withSignature(
+              consensus
+                .Signature()
+                .withSigAlgorithm(deploy.sigAlgorithm)
+                .withSig(deploy.signature)
+            )
+        ).filterNot(x => x.getSignature.sigAlgorithm.isEmpty && x.getSignature.sig.isEmpty)
       )
   }
 }

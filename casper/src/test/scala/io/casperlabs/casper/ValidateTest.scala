@@ -203,11 +203,42 @@ class ValidateTest
     Validate.deploySignature[Task](deploy) shouldBeF true
   }
 
+  it should "return true if the signature matches the account public key" in {
+    val genDeploy = for {
+      d <- arbitrary[consensus.Deploy]
+    } yield d.withApprovals(d.approvals.map(x => x.withApproverPublicKey(ByteString.EMPTY)))
+
+    val deploy = sample(genDeploy)
+    Validate.deploySignature[Task](deploy) shouldBeF true
+  }
+
+  it should "return false for missing signatures" in {
+    val genDeploy = for {
+      d <- arbitrary[consensus.Deploy]
+    } yield d.withApprovals(Nil)
+
+    val deploy = sample(genDeploy)
+    Validate.deploySignature[Task](deploy) shouldBeF true
+  }
+
   it should "return false for invalid signatures" in {
     val genDeploy = for {
       d <- arbitrary[consensus.Deploy]
       h <- genHash
-    } yield d.withSignature(d.getSignature.withSig(h))
+    } yield d.withApprovals(d.approvals.map(a => a.withSignature(a.getSignature.withSig(h))))
+
+    val deploy = sample(genDeploy)
+    Validate.deploySignature[Task](deploy) shouldBeF true
+  }
+
+  it should "return false if there are valid and invalid signatures mixed" in {
+    val genDeploy = for {
+      d <- arbitrary[consensus.Deploy]
+      h <- genHash
+    } yield
+      d.withApprovals(
+        d.approvals ++ d.approvals.take(1).map(a => a.withSignature(a.getSignature.withSig(h)))
+      )
 
     val deploy = sample(genDeploy)
     Validate.deploySignature[Task](deploy) shouldBeF true

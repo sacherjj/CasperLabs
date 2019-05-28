@@ -10,6 +10,13 @@ message Signature {
     bytes sig = 2;
 }
 
+// A signature together with the corresponding public key that can be used to validate it
+// for situations where the key is not part of the data being signed, which is usually the
+// case where multiple signatures are required.
+message Approval {
+    bytes approver_public_key = 1;
+    Signature signature = 2;
+}
 
 // A smart contract invocation, singed by the account that sent it.
 message Deploy {
@@ -17,8 +24,11 @@ message Deploy {
     bytes deploy_hash = 1;
     Header header = 2;
     Body body = 3;
-    // Signature over `deploy_hash`.
-    Signature signature = 4;
+
+    // Signatures over `deploy_hash` with either the `account_public_key`, or some other keys in case of
+    // multi-sig wallets and account recovery (when the private key corresponding to `account_public_key`
+    // is lost.)
+    repeated Approval approvals = 4;
 
     message Header {
         // Identifying the Account is the key used to sign the Deploy.
@@ -56,7 +66,7 @@ message BlockSummary {
     // blake2b256 hash of the `header`.
     bytes block_hash = 1;
     Block.Header header = 2;
-    // Signature over `block_hash`.
+    // Signature over `block_hash` using `validator_public_key`.
     Signature signature = 3;
 }
 
@@ -131,9 +141,4 @@ message GenesisCandidate {
 
     // Approvals from bonded validators with signatures over the `block_hash`.
     repeated Approval approvals = 2;
-}
-
-message Approval {
-    bytes validator_public_key = 1;
-    Signature signature = 2;
 }
