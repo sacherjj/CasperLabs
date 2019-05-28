@@ -11,7 +11,7 @@ from .cl_node.wait import wait_for_blocks_count_at_least
 def test_call_contracts_one_another(three_node_network):
     """
     Feature file: consensus.feature
-    Scenario: Call contracts deployed a node from another node.
+    Scenario: Call contracts deployed on a node from another node.
     """
     tnn = three_node_network
     bootstrap, node1, node2 = tnn.docker_nodes
