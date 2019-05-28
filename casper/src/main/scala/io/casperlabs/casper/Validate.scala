@@ -703,7 +703,12 @@ object Validate {
                             )
         //TODO: distinguish "internal errors" and "user errors"
         _ <- possiblePostState match {
-              case Left(_) => RaiseValidationError[F].raise[Unit](InvalidTransaction)
+              case Left(ex) =>
+                Log[F].error(
+                  s"Could not commit effects of block ${PrettyPrinter.buildString(block)}: $ex",
+                  ex
+                ) *>
+                  RaiseValidationError[F].raise[Unit](InvalidTransaction)
               case Right(postStateHash) =>
                 if (postStateHash == blockPostState) {
                   Applicative[F].unit
