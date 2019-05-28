@@ -7,7 +7,7 @@ import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.protocol._
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -21,11 +21,12 @@ import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 trait Casper[F[_], A] {
-  def addBlock(block: BlockMessage): F[BlockStatus]
-  def contains(block: BlockMessage): F[Boolean]
-  def deploy(deployData: DeployData): F[Either[Throwable, Unit]]
+  def addBlock(block: Block): F[BlockStatus]
+  def contains(block: Block): F[Boolean]
+  def deploy(deployData: Deploy): F[Either[Throwable, Unit]]
   def estimator(dag: BlockDagRepresentation[F]): F[A]
   def createBlock: F[CreateBlockStatus]
+  def bufferedDeploys: F[Set[Deploy]]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
@@ -35,14 +36,13 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
   // We want the clique oracle to give us a fault tolerance that is greater than
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float]
-  def lastFinalizedBlock: F[BlockMessage]
-  def storageContents(hash: ByteString): F[String]
+  def lastFinalizedBlock: F[Block]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
 
-  def forkChoiceTip[F[_]: MultiParentCasper: MonadThrowable: BlockStore]: F[BlockMessage] =
+  def forkChoiceTip[F[_]: MultiParentCasper: MonadThrowable: BlockStore]: F[Block] =
     for {
       dag       <- MultiParentCasper[F].blockDag
       tipHashes <- MultiParentCasper[F].estimator(dag)
@@ -54,7 +54,7 @@ object MultiParentCasper extends MultiParentCasperInstances {
 sealed abstract class MultiParentCasperInstances {
 
   private def init[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: ExecutionEngineService](
-      genesis: BlockMessage,
+      genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap
   ) =
@@ -73,7 +73,7 @@ sealed abstract class MultiParentCasperInstances {
 
   def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService](
       validatorId: Option[ValidatorIdentity],
-      genesis: BlockMessage,
+      genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
       shardId: String
@@ -94,7 +94,7 @@ sealed abstract class MultiParentCasperInstances {
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
   def fromGossipServices[F[_]: Concurrent: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService](
       validatorId: Option[ValidatorIdentity],
-      genesis: BlockMessage,
+      genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
       shardId: String,

@@ -3,7 +3,8 @@ package io.casperlabs.blockstorage
 import cats.implicits._
 import cats.{Applicative, Apply}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.{ApprovedBlock, BlockMessage}
+import io.casperlabs.casper.protocol.ApprovedBlock
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.metrics.implicits._
@@ -12,7 +13,7 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import scala.language.higherKinds
 
 trait BlockStore[F[_]] {
-  import BlockStore.BlockHash
+  import BlockStore.{BlockHash, BlockMessage}
 
   def put(
       blockMsgWithTransform: BlockMsgWithTransform
@@ -44,6 +45,8 @@ trait BlockStore[F[_]] {
 
   def putApprovedBlock(block: ApprovedBlock): F[Unit]
 
+  def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]]
+
   def checkpoint(): F[Unit]
 
   def clear(): F[Unit]
@@ -52,6 +55,8 @@ trait BlockStore[F[_]] {
 }
 
 object BlockStore {
+  type BlockMessage = Block
+
   trait MeteredBlockStore[F[_]] extends BlockStore[F] with Metered[F] {
 
     abstract override def get(
@@ -63,6 +68,9 @@ object BlockStore {
         p: BlockHash => Boolean
     ): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
       incAndMeasure("find", super.find(p))
+
+    abstract override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
+      incAndMeasure("getBlockSummary", super.getBlockSummary(blockHash))
 
     abstract override def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
       incAndMeasure("put", super.put(f))

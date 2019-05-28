@@ -11,6 +11,7 @@ from typing import (
     Union,
     Tuple,
 )
+from docker import DockerClient
 
 from test.cl_node.errors import (
     NonZeroExitCodeError,
@@ -57,25 +58,32 @@ class DockerConfig:
     command_timeout: int = 180
     mem_limit: str = '4G'
     is_bootstrap: bool = False
+    is_validator: bool = True
     bootstrap_address: Optional[str] = None
+    use_new_gossiping: bool = True
 
     def __post_init__(self):
         if self.rand_str is None:
             self.rand_str = random_string(5)
 
     def node_command_options(self, server_host: str) -> dict:
+        bootstrap_path = '/root/.casperlabs/bootstrap'
         options = {'--server-default-timeout': 10000,
                    '--server-host': server_host,
                    '--casper-validator-private-key': self.node_private_key,
                    '--grpc-socket': '/root/.casperlabs/sockets/.casper-node.sock',
-                   '--metrics-prometheus': ''}
-        if self.is_bootstrap:
-            options['--tls-certificate'] = '/root/.casperlabs/bootstrap/node.certificate.pem'
-            options['--tls-key'] = '/root/.casperlabs/bootstrap/node.key.pem'
+                   '--metrics-prometheus': '',
+                   '--tls-certificate': f'{bootstrap_path}/node-{self.number}.certificate.pem',
+                   '--tls-key': f'{bootstrap_path}/node-{self.number}.key.pem'}
+        # if self.is_validator:
+        #     options['--casper-validator-private-key-path'] = f'{bootstrap_path}/validator-{self.number}-private.pem'
+        #     options['--casper-validator-public-key-path'] = f'{bootstrap_path}/validator-{self.number}-public.pem'
         if self.bootstrap_address:
             options['--server-bootstrap'] = self.bootstrap_address
         if self.node_public_key:
             options['--casper-validator-public-key'] = self.node_public_key
+        if self.use_new_gossiping:
+            options['--server-use-gossiping'] = ''
         return options
 
     @property
@@ -98,6 +106,7 @@ class DockerBase:
     def __init__(self, config: DockerConfig, socket_volume: str) -> None:
         self.config = config
         self.socket_volume = socket_volume
+        self.connected_networks = []
 
         self.docker_tag: str = 'test'
         if os.environ.get(CI_BUILD_NUMBER) is not None:
@@ -137,6 +146,10 @@ class DockerBase:
     @property
     def host_bootstrap_dir(self) -> str:
         return f'{self.host_mount_dir}/bootstrap_certificate'
+
+    @property
+    def docker_client(self) -> DockerClient:
+        return self.config.docker_client
 
     def _get_container(self):
         raise NotImplementedError('No implementation of _get_container')
@@ -180,8 +193,27 @@ class DockerBase:
             raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
         return output
 
+    def network_from_name(self, network_name: str):
+        nets = self.docker_client.networks.list(names=[network_name])
+        if nets:
+            network = nets[0]
+            return network
+        raise Exception(f"Docker network '{network_name}' not found.")
+
+    def connect_to_network(self, network_name: str) -> None:
+        self.connected_networks.append(network_name)
+        network = self.network_from_name(network_name)
+        network.connect(self.container)
+
+    def disconnect_from_network(self, network_name: str) -> None:
+        self.connected_networks.remove(network_name)
+        network = self.network_from_name(network_name)
+        network.disconnect(self.container)
+
     def cleanup(self) -> None:
         if self.container:
+            for network_name in self.connected_networks:
+                self.disconnect_from_network(network_name)
             self.container.remove(force=True, v=True)
 
 
@@ -194,6 +226,7 @@ class LoggingDockerBase(DockerBase):
         super().__init__(config, socket_volume)
         self.terminate_background_logging_event = threading.Event()
         self._start_logging_thread()
+        self._truncatedLength = 0
 
     def _start_logging_thread(self):
         self.background_logging = LoggingThread(
@@ -216,7 +249,10 @@ class LoggingDockerBase(DockerBase):
         return super()._get_container()
 
     def logs(self) -> str:
-        return self.container.logs().decode('utf-8')
+        return self.container.logs().decode('utf-8')[self._truncatedLength:]
+
+    def truncate_logs(self):
+        self._truncatedLength = len(self.container.logs().decode('utf-8'))
 
     def cleanup(self):
         super().cleanup()

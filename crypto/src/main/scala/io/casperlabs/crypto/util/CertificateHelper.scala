@@ -45,29 +45,10 @@ object CertificateHelper {
   def publicAddress(input: Array[Byte]): Array[Byte] =
     Keccak256.hash(input).drop(12)
 
-  def from(certFilePath: String): X509Certificate =
-    fromFile(new File(certFilePath))
-
   def fromFile(certFile: File): X509Certificate = {
     val cf = CertificateFactory.getInstance("X.509")
     val is = new FileInputStream(certFile)
     cf.generateCertificate(is).asInstanceOf[X509Certificate]
-  }
-
-  def readKeyPair(keyFile: File): KeyPair = {
-    import io.casperlabs.shared.Resources._
-    val str = withResource(Source.fromFile(keyFile)) {
-      _.getLines().filter(!_.contains("KEY")).mkString
-    }
-    val spec     = new PKCS8EncodedKeySpec(Base64.getDecoder.decode(str))
-    val kf       = KeyFactory.getInstance("EC")
-    val sk       = kf.generatePrivate(spec).asInstanceOf[ECPrivateKey]
-    val ecSpec   = org.bouncycastle.jce.ECNamedCurveTable.getParameterSpec(EllipticCurveName)
-    val Q        = ecSpec.getG.multiply(sk.getS).normalize()
-    val pubPoint = new ECPoint(Q.getAffineXCoord.toBigInteger, Q.getAffineYCoord.toBigInteger)
-    val pubSpec  = new ECPublicKeySpec(pubPoint, sk.getParams)
-    val pk       = kf.generatePublic(pubSpec)
-    new KeyPair(pk, sk)
   }
 
   def generateKeyPair(useNonBlockingRandom: Boolean): KeyPair = {

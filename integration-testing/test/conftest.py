@@ -21,6 +21,7 @@ from .cl_node.casperlabs_network import (
     OneNodeNetwork,
     TwoNodeNetwork,
     ThreeNodeNetwork,
+    CustomConnectionNetwork,
 )
 
 
@@ -193,6 +194,15 @@ def three_node_network(docker_client_fixture):
     with ThreeNodeNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
         yield tnn
+
+
+@pytest.fixture()
+def star_network(docker_client_fixture):
+    with CustomConnectionNetwork(docker_client_fixture) as ccn:
+        node_count = 4
+        network_connections = [[0, n] for n in range(1, 4)]
+        ccn.create_cl_network(node_count=node_count, network_connections=network_connections)
+        yield ccn
 
 
 @pytest.hookimpl(tryfirst=True)

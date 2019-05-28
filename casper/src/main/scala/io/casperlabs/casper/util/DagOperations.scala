@@ -2,12 +2,11 @@ package io.casperlabs.casper.util
 
 import cats.{Eval, Monad}
 import cats.implicits._
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.util.MapHelper.updatedWith
 import io.casperlabs.catscontrib.{ListContrib, MonadThrowable}
-import io.casperlabs.models.BlockMetadata
 import io.casperlabs.shared.StreamT
 
 import scala.annotation.tailrec
@@ -41,22 +40,22 @@ object DagOperations {
     * B contains i.
     * Example:
     * The DAG looks like:
-    *         b6   b7
-    *        |  \ / |
-    *        b4  b5 |
-    *          \ |  |
-    *            b3 |
-    *            |  |
-    *           b1  b2
-    *            |  /
-    *          genesis
+    * b6   b7
+    * |  \ / |
+    * b4  b5 |
+    * \ |  |
+    * b3 |
+    * |  |
+    * b1  b2
+    * |  /
+    * genesis
     *
     * Calling `uncommonAncestors(Vector(b6, b7), dag)` returns the following map:
     * Map(
-    *   b6 -> BitSet(0),
-    *   b4 -> BitSet(0),
-    *   b7 -> BitSet(1),
-    *   b2 -> BitSet(1)
+    * b6 -> BitSet(0),
+    * b4 -> BitSet(0),
+    * b7 -> BitSet(1),
+    * b2 -> BitSet(1)
     * )
     * This is because in the input the index of b6 is 0 and the index of b7 is 1.
     * Moreover, we can see from the DAG that b4 is an ancestor of b6, but not of b7,
@@ -65,17 +64,18 @@ object DagOperations {
     *
     * `uncommonAncestors(Vector(b2, b4, b5), dag)` returns the following map:
     * Map(
-    *   b2 -> BitSet(0),
-    *   b4 -> Bitset(1),
-    *   b5 -> BitSet(2),
-    *   b3 -> BitSet(1, 2),
-    *   b1 -> BitSet(1, 2)
+    * b2 -> BitSet(0),
+    * b4 -> Bitset(1),
+    * b5 -> BitSet(2),
+    * b3 -> BitSet(1, 2),
+    * b1 -> BitSet(1, 2)
     * )
     * This is because in the input the index of b2 is 0, the index of b4 is 1 and
     * the index of b5 is 2. Blocks b1 and b3 are ancestors of b4 and b5, but not b2.
     * Genesis is not included because it is a common ancestor of all three input blocks.
-    * @param blocks indexed sequence of blocks to determine uncommon ancestors of
-    * @param dag the DAG
+    *
+    * @param blocks   indexed sequence of blocks to determine uncommon ancestors of
+    * @param dag      the DAG
     * @param topoSort topological sort of the DAG, ensures ancestor computation is
     *                 done correctly
     * @return A map from uncommon ancestor blocks to BitSets, where a block B is
@@ -85,7 +85,8 @@ object DagOperations {
       start: IndexedSeq[A],
       parents: A => F[List[A]]
   ): F[Map[A, BitSet]] = {
-    val commonSet                      = BitSet(0 until start.length: _*)
+    val commonSet = BitSet(0 until start.length: _*)
+
     def isCommon(set: BitSet): Boolean = set == commonSet
 
     // Initialize the algorithm with each starting block being an ancestor of only itself
@@ -197,18 +198,18 @@ object DagOperations {
   //Based on that, we compute by finding the first block from genesis for which there
   //exists a child of that block which is an ancestor of b1 or b2 but not both.
   def greatestCommonAncestorF[F[_]: MonadThrowable: BlockStore](
-      b1: BlockMessage,
-      b2: BlockMessage,
-      genesis: BlockMessage,
+      b1: Block,
+      b2: Block,
+      genesis: Block,
       dag: BlockDagRepresentation[F]
-  ): F[BlockMessage] =
+  ): F[Block] =
     if (b1 == b2) {
       b1.pure[F]
     } else {
       def commonAncestorChild(
-          b: BlockMessage,
-          commonAncestors: Set[BlockMessage]
-      ): F[List[BlockMessage]] =
+          b: Block,
+          commonAncestors: Set[Block]
+      ): F[List[Block]] =
         for {
           childrenHashesOpt      <- dag.children(b.blockHash)
           childrenHashes         = childrenHashesOpt.getOrElse(Set.empty[BlockHash])
@@ -217,10 +218,10 @@ object DagOperations {
         } yield commonAncestorChildren
 
       for {
-        b1Ancestors     <- bfTraverseF[F, BlockMessage](List(b1))(ProtoUtil.unsafeGetParents[F]).toSet
-        b2Ancestors     <- bfTraverseF[F, BlockMessage](List(b2))(ProtoUtil.unsafeGetParents[F]).toSet
+        b1Ancestors     <- bfTraverseF[F, Block](List(b1))(ProtoUtil.unsafeGetParents[F]).toSet
+        b2Ancestors     <- bfTraverseF[F, Block](List(b2))(ProtoUtil.unsafeGetParents[F]).toSet
         commonAncestors = b1Ancestors.intersect(b2Ancestors)
-        gca <- bfTraverseF[F, BlockMessage](List(genesis))(commonAncestorChild(_, commonAncestors))
+        gca <- bfTraverseF[F, Block](List(genesis))(commonAncestorChild(_, commonAncestors))
                 .findF(
                   b =>
                     for {

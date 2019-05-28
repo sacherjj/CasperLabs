@@ -1,5 +1,5 @@
-use functions::*;
 use std::cell::RefCell;
+
 use wasmi::memory_units::Pages;
 use wasmi::{
     Error as InterpreterError, FuncRef, MemoryDescriptor, MemoryInstance, Signature, ValueType,
@@ -8,6 +8,7 @@ use wasmi::{FuncInstance, MemoryRef, ModuleImportResolver};
 
 use super::error::ResolverError;
 use super::memory_resolver::MemoryResolver;
+use functions::*;
 
 pub struct RuntimeModuleImportResolver {
     memory: RefCell<Option<MemoryRef>>,

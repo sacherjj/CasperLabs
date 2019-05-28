@@ -1,7 +1,7 @@
 package io.casperlabs.casper
 
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.Bond
+import io.casperlabs.casper.consensus.Bond
 import org.scalatest.{FlatSpec, Matchers}
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import io.casperlabs.casper.helper.BlockGenerator._

@@ -1,5 +1,6 @@
 extern crate clap;
 extern crate common;
+extern crate ctrlc;
 extern crate dirs;
 extern crate execution_engine;
 extern crate grpc;
@@ -23,16 +24,18 @@ use std::sync::Arc;
 use clap::{App, Arg, ArgMatches};
 use dirs::home_dir;
 use engine_server::*;
-use execution_engine::engine::EngineState;
+use execution_engine::engine_state::EngineState;
 use lmdb::DatabaseFlags;
 
-use shared::logging::log_level::LogLevel;
+use shared::init::mocked_account;
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
 use shared::logging::{log_level, log_settings};
 use shared::os::get_page_size;
 use shared::{logging, socket};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use storage::global_state::lmdb::LmdbGlobalState;
-use storage::history::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
+use storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
 // exe / proc
 const PROC_NAME: &str = "casperlabs-engine-grpc-server";
@@ -40,7 +43,6 @@ const APP_NAME: &str = "Execution Engine Server";
 const SERVER_START_MESSAGE: &str = "starting Execution Engine Server";
 const SERVER_LISTENING_TEMPLATE: &str = "{listener} is listening on socket: {socket}";
 const SERVER_START_EXPECT: &str = "failed to start Execution Engine Server";
-#[allow(dead_code)]
 const SERVER_STOP_MESSAGE: &str = "stopping Execution Engine Server";
 
 // data-dir / lmdb
@@ -79,6 +81,10 @@ const ARG_LOG_LEVEL: &str = "loglevel";
 const ARG_LOG_LEVEL_VALUE: &str = "LOGLEVEL";
 const ARG_LOG_LEVEL_HELP: &str = "[ fatal | error | warning | info | debug ]";
 
+// runnable
+const SIGINT_HANDLE_EXPECT: &str = "Error setting Ctrl-C handler";
+const RUNNABLE_CHECK_INTERVAL_SECONDS: u64 = 3;
+
 // Command line arguments instance
 lazy_static! {
     static ref ARG_MATCHES: clap::ArgMatches<'static> = get_args();
@@ -92,14 +98,16 @@ lazy_static! {
 fn main() {
     set_panic_hook();
 
-    log_server_info(SERVER_START_MESSAGE);
+    log_settings::set_log_settings_provider(&*LOG_SETTINGS);
+
+    logging::log_info(SERVER_START_MESSAGE);
 
     let matches: &clap::ArgMatches = &*ARG_MATCHES;
 
     let socket = get_socket(matches);
 
     if socket.file_exists() {
-        log_server_info(REMOVING_SOCKET_FILE_MESSAGE);
+        logging::log_info(REMOVING_SOCKET_FILE_MESSAGE);
         socket.remove_file().expect(REMOVING_SOCKET_FILE_EXPECT);
     }
 
@@ -111,33 +119,33 @@ fn main() {
 
     log_listening_message(&socket);
 
-    // loop indefinitely
-    loop {
-        std::thread::park();
+    let interval = Duration::from_secs(RUNNABLE_CHECK_INTERVAL_SECONDS);
+
+    let runnable = get_sigint_handle();
+
+    while runnable.load(Ordering::SeqCst) {
+        std::thread::park_timeout(interval);
     }
 
-    // currently unreachable
-    // TODO: recommend we impl signal capture; SIGINT at the very least.
-    // seems like there are multiple valid / accepted rusty approaches available
-    // https://rust-lang-nursery.github.io/cli-wg/in-depth/signals.html
-
-    //log_server_info(SERVER_STOP_MESSAGE);
+    logging::log_info(SERVER_STOP_MESSAGE);
 }
 
 /// Sets panic hook for logging panic info
 fn set_panic_hook() {
-    let log_settings_panic = LOG_SETTINGS.clone();
     let hook: Box<dyn Fn(&std::panic::PanicInfo) + 'static + Sync + Send> =
         Box::new(move |panic_info| {
-            if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-                let panic_message = format!("{:?}", s);
-                logging::log(
-                    &log_settings_panic,
-                    log_level::LogLevel::Fatal,
-                    &panic_message,
-                );
+            match panic_info.payload().downcast_ref::<&str>() {
+                Some(s) => {
+                    let panic_message = format!("{:?}", s);
+                    logging::log_fatal(&panic_message);
+                }
+                None => {
+                    let panic_message = format!("{:?}", panic_info);
+                    logging::log_fatal(&panic_message);
+                }
             }
-            log_server_info(SERVER_STOP_MESSAGE);
+
+            logging::log_info(SERVER_STOP_MESSAGE);
         });
     std::panic::set_hook(hook);
 }
@@ -176,6 +184,17 @@ fn get_args() -> ArgMatches<'static> {
                 .index(1),
         )
         .get_matches()
+}
+
+/// Gets SIGINT handle to allow clean exit
+fn get_sigint_handle() -> Arc<AtomicBool> {
+    let handle = Arc::new(AtomicBool::new(true));
+    let h = handle.clone();
+    ctrlc::set_handler(move || {
+        h.store(false, Ordering::SeqCst);
+    })
+    .expect(SIGINT_HANDLE_EXPECT);
+    handle
 }
 
 /// Gets value of socket argument
@@ -233,7 +252,7 @@ fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGloba
     };
 
     let global_state = {
-        let init_state = storage::global_state::mocked_account([48u8; 20]);
+        let init_state = mocked_account([48u8; 32]);
         LmdbGlobalState::from_pairs(
             Arc::clone(&environment),
             Arc::clone(&trie_store),
@@ -249,25 +268,9 @@ fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGloba
 fn get_log_settings() -> log_settings::LogSettings {
     let matches: &clap::ArgMatches = &*ARG_MATCHES;
 
-    let log_level_filter = get_log_level_filter(matches.value_of(ARG_LOG_LEVEL));
+    let log_level_filter = LogLevelFilter::from_input(matches.value_of(ARG_LOG_LEVEL));
 
     LogSettings::new(PROC_NAME, log_level_filter)
-}
-
-/// Gets LogLevelFilter
-fn get_log_level_filter(input: Option<&str>) -> LogLevelFilter {
-    let log_level = match input {
-        Some(input) => match input {
-            "fatal" => LogLevel::Fatal,
-            "error" => LogLevel::Error,
-            "warning" => LogLevel::Warning,
-            "debug" => LogLevel::Debug,
-            _ => LogLevel::Info,
-        },
-        None => log_level::LogLevel::Info,
-    };
-
-    log_settings::LogLevelFilter::new(log_level)
 }
 
 /// Logs listening on socket message
@@ -277,15 +280,9 @@ fn log_listening_message(socket: &socket::Socket) {
     properties.insert("listener".to_string(), PROC_NAME.to_owned());
     properties.insert("socket".to_string(), socket.value());
 
-    logging::log_props(
-        &*LOG_SETTINGS,
+    logging::log_details(
         log_level::LogLevel::Info,
         (&*SERVER_LISTENING_TEMPLATE).to_string(),
         properties,
     );
-}
-
-/// Logs server status info messages
-fn log_server_info(message: &str) {
-    logging::log(&*LOG_SETTINGS, log_level::LogLevel::Info, message);
 }

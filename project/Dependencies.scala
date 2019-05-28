@@ -13,7 +13,8 @@ object Dependencies {
   // format: off
   val julToSlf4j             = "org.slf4j"                  % "jul-to-slf4j"                    % "1.7.25"
   val bitcoinjCore           = "org.bitcoinj"               % "bitcoinj-core"                   % "0.14.6"
-  val bouncyCastle           = "org.bouncycastle"           % "bcprov-jdk15on"                  % "1.60"
+  val bouncyProvCastle           = "org.bouncycastle"           % "bcprov-jdk15on"                  % "1.61"
+  val bouncyPkixCastle           = "org.bouncycastle"           % "bcpkix-jdk15on"                  % "1.61"
   val catsCore               = "org.typelevel"              %% "cats-core"                      % catsVersion
   val catsPar                = "io.chrisdavenport"          %% "cats-par"                       % "0.2.1"
   val catsLawsTest           = "org.typelevel"              %% "cats-laws"                      % catsVersion % "test"

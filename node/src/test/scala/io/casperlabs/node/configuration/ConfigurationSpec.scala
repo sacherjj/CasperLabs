@@ -70,6 +70,7 @@ class ConfigurationSpec
     )
     val casper = CasperConf(
       validatorPublicKey = "test".some,
+      validatorPublicKeyPath = Paths.get("/tmp/test").some,
       validatorPrivateKey = "test".some,
       validatorPrivateKeyPath = Paths.get("/tmp/test").some,
       validatorSigAlgorithm = "test",
@@ -88,7 +89,11 @@ class ConfigurationSpec
       approveGenesisDuration = FiniteDuration(1, TimeUnit.SECONDS),
       deployTimestamp = 1L.some,
       genesisPath = Paths.get("/tmp/genesis"),
-      ignoreDeploySignature = false
+      ignoreDeploySignature = false,
+      autoProposeEnabled = false,
+      autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      autoProposeMaxInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      autoProposeMaxCount = 1
     )
     val tls = Tls(
       certificate = Paths.get("/tmp/test"),

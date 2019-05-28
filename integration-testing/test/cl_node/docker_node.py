@@ -67,6 +67,14 @@ class DockerNode(LoggingDockerBase):
     KADEMLIA_PORT = '40404'
 
     @property
+    def timeout(self):
+        """
+        Number of seconds for a node to timeout.
+        :return: int (seconds)
+        """
+        return self.config.command_timeout
+
+    @property
     def container_type(self):
         return 'node'
 
@@ -194,22 +202,17 @@ class DockerNode(LoggingDockerBase):
             raise NonZeroExitCodeError(command=(command, err.exit_status), exit_code=err.exit_status, output=err.stderr)
 
     def deploy(self,
-               from_address: str = "00000000000000000000",
+               from_address: str = "00000000000000000000000000000000",
                gas_limit: int = 1000000,
                gas_price: int = 1,
                nonce: int = 0,
                session_contract: Optional[str]='test_helloname.wasm',
                payment_contract: Optional[str]='test_helloname.wasm') -> str:
 
-        command = " ".join([
-            "deploy",
-            f"--from {from_address}",
-            f"--gas-limit {gas_limit}",
-            f"--gas-price {gas_price}",
-            f"--nonce {nonce}",
-            f"--session=/data/{session_contract}",
-            f"--payment=/data/{payment_contract}"
-        ])
+        command = (f"deploy --from {from_address}"
+                   f" --gas-limit {gas_limit} --gas-price {gas_price}"
+                   f" --nonce {nonce} --session=/data/{session_contract}"
+                   f" --payment=/data/{payment_contract}")
 
         return self.invoke_client(command)
 
@@ -272,7 +275,7 @@ class DockerNode(LoggingDockerBase):
 
     # Methods for new Python Client that was temp removed.
     #
-    # def deploy(self, from_address: str = "00000000000000000000",
+    # def deploy(self, from_address: str = "00000000000000000000000000000000",
     #            gas_limit: int = 1000000, gas_price: int = 1, nonce: int = 0,
     #            session_contract_path=None,
     #            payment_contract_path=None) -> str:

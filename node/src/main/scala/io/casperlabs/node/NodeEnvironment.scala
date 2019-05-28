@@ -24,7 +24,6 @@ object NodeEnvironment {
       _       <- canCreateDataDir(dataDir)
       _       <- haveAccessToDataDir(dataDir)
       _       <- log.info(s"Using data dir: ${dataDir.getAbsolutePath}").toEffect
-      _       <- transport.generateCertificateIfAbsent[Effect].apply(conf.tls)
       _       <- hasCertificate(conf)
       _       <- hasKey(conf)
       name    <- name(conf)
