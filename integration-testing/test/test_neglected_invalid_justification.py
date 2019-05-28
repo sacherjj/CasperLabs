@@ -43,6 +43,9 @@ class ProposeTimedThread(TimedThread):
 
 
 def test_neglected_invalid_block(three_node_network):
+    """
+    Feature file: neglected_invalid_justification.feature
+    """
     bootstrap, node1, node2 = three_node_network.docker_nodes
     for cycle_count in range(4):
         logging.info(f'DEPLOY_PROPOSE CYCLE COUNT: {cycle_count + 1}')

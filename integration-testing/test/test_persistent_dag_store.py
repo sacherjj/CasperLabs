@@ -23,6 +23,9 @@ from test.cl_node.wait import (
 
 # TODO: Fix finalized hash portion
 def ignore_test_persistent_dag_store(two_node_network):
+    """
+    Feature file: storage.feature
+    """
     node0, node1 = two_node_network.docker_nodes
     for node in two_node_network.docker_nodes:
         node.deploy_and_propose(session_contract=HELLO_NAME)
@@ -48,6 +51,9 @@ def ignore_test_persistent_dag_store(two_node_network):
 
 
 def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_network):
+    """
+    Feature file: storage.feature
+    """
     tnn = two_node_network
     node0, node1 = tnn.docker_nodes
     for node in (node0, node1):

@@ -104,6 +104,9 @@ class DeployThread(threading.Thread):
 # Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(three_node_network, timeout,
                                   contract_paths: List[List[str]], expected_deploy_counts_in_blocks):
+    """
+    Feature file : multiple_simultaneous_deploy.feature
+    """
     nodes = three_node_network.docker_nodes
 
     deploy_threads = [DeployThread("node" + str(i+1), node, contract_paths)
