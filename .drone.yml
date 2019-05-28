@@ -44,7 +44,7 @@ clone:
 # exactly the same.
 pipeline:
 
-  sbt-test:
+  sbt-compile-test:
     commands:
       - "sbt test"
     environment:
@@ -57,11 +57,10 @@ pipeline:
       if echo $STATUS_CHECK | grep -q "modified" ; then echo "$STATUS_CHECK"; exit 1; fi
     image: "casperlabs/buildenv:latest"
 
-  compile-rust:
+  rust-compile-test:
     commands:
       - "cd execution-engine/"
-      - "~/.cargo/bin/cargo update"
-      - "~/.cargo/bin/cargo build"
+      - "~/.cargo/bin/cargo update && ~/.cargo/bin/cargo build && ~/.cargo/bin/cargo test"
     image: "casperlabs/buildenv:latest"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
@@ -81,12 +80,6 @@ pipeline:
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
       - "~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints"
-    image: "casperlabs/buildenv:latest"
-
-  run-rust-tests:
-    commands:
-      - "cd execution-engine/"
-      - "~/.cargo/bin/cargo test"
     image: "casperlabs/buildenv:latest"
 
 # This section of the Pipeline is variable and not always run in all situations.
