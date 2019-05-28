@@ -249,7 +249,7 @@ message WasmError {
     string message = 1;
 }
 message RevertError {
-    string reason = 1;
+    uint32 status = 1;
 }
 
 message DeployResult {

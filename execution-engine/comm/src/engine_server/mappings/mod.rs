@@ -452,11 +452,11 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             let msg = format!("Key {:?} not found.", key);
                             wasm_error(msg)
                         }
-                        ExecutionError::Revert(reason) => {
+                        ExecutionError::Revert(status) => {
                             let mut deploy_result = ipc::DeployResult::new();
                             let mut deploy_error = ipc::DeployError::new();
                             let mut revert_error = ipc::RevertError::new();
-                            revert_error.set_reason(reason);
+                            revert_error.set_status(status);
                             deploy_error.set_revertErr(revert_error);
                             deploy_result.set_error(deploy_error);
                             deploy_result.set_cost(cost);

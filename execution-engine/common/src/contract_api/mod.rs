@@ -280,9 +280,8 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
 
 /// Stops execution of a contract and reverts execution effects
 /// with a given reason.
-pub fn revert(reason: &str) -> ! {
-    let (ptr, size, _bytes) = str_ref_to_ptr(reason);
+pub fn revert(status: u32) -> ! {
     unsafe {
-        ext_ffi::revert(ptr, size);
+        ext_ffi::revert(status);
     }
 }

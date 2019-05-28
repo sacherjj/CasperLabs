@@ -58,8 +58,8 @@ pub enum Error {
     Ret(Vec<Key>),
     Rng(rand::Error),
     ResolverError(ResolverError),
-    /// Reverts execution with a reason specified
-    Revert(String),
+    /// Reverts execution with a provided status
+    Revert(u32),
 }
 
 impl fmt::Display for Error {
@@ -427,13 +427,11 @@ where
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    /// Reverts contract execution with a reason specified.
-    pub fn revert(&mut self, reason_ptr: u32, reason_size: u32) -> Trap {
+    /// Reverts contract execution with a status specified.
+    pub fn revert(&mut self, status: u32) -> Trap {
         // Get bytes of a reason specified by user
-        match self.string_from_mem(reason_ptr, reason_size) {
-            Ok(reason) => Error::Revert(reason).into(),
-            Err(err) => err,
-        }
+        println!("Revert with status {}", status);
+        Error::Revert(status).into()
     }
 }
 
@@ -637,11 +635,10 @@ where
             PROTOCOL_VERSION_FUNC_INDEX => Ok(Some(self.context.protocol_version().into())),
 
             REVERT_FUNC_INDEX => {
-                // args(0) = pointer to a string
-                // args(1) = size of string
-                let (reason_ptr, reason_size): (u32, u32) = Args::parse(args)?;
+                // args(0) = status u32
+                let status = Args::parse(args)?;
 
-                Err(self.revert(reason_ptr, reason_size))
+                Err(self.revert(status))
             }
 
             SEED_FN_INDEX => {
@@ -725,10 +722,10 @@ where
                         current_runtime.context.add_urefs(ret_urefs_map);
                         return Ok(runtime.result);
                     }
-                    Error::Revert(reason) => {
+                    Error::Revert(status) => {
                         // Propagate revert as revert, instead of passing it as
                         // InterpreterError.
-                        return Err(Error::Revert(reason.to_string()));
+                        return Err(Error::Revert(*status));
                     }
                     _ => {}
                 }

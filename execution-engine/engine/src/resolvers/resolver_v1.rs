@@ -114,7 +114,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 PROTOCOL_VERSION_FUNC_INDEX,
             ),
             "revert" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], None),
+                Signature::new(&[ValueType::I32; 1][..], None),
                 REVERT_FUNC_INDEX,
             ),
             _ => {
