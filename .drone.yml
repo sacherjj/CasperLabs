@@ -44,9 +44,9 @@ clone:
 # exactly the same.
 pipeline:
 
-  sbt-update-compile-test:
+  sbt-test:
     commands:
-      - "sbt update compile doc test"
+      - "sbt test"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
