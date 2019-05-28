@@ -110,9 +110,6 @@ object PrettyPrinter {
   private def buildString(at: ipc.Account.ActionThresholds): String =
     s"Deployment threshold ${at.deploymentThreshold}, Key management threshold: ${at.keyManagementThreshold}"
 
-//  keyManagementLastUsed: _root_.scala.Long = 0L,
-//  deploymentLastUsed: _root_.scala.Long = 0L,
-//  inactivityPeriodLimit: _root_.scala.Long = 0L
   private def buildString(ac: ipc.Account.AccountActivity): String =
     s"Last deploy: ${ac.deploymentLastUsed}, last key management change: ${ac.keyManagementLastUsed}, inactivity period limit: ${ac.inactivityPeriodLimit}"
 
