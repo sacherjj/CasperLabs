@@ -13,7 +13,13 @@ import shutil
 import in_place
 import glob
 
-PROTO_DIR = 'proto'
+
+THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
+
+PROTOBUF_DIR = f'{THIS_DIRECTORY}/../../../protobuf'
+PROTO_DIR = f'{THIS_DIRECTORY}/casper_client/proto'
+PACKAGE_DIR = f'{THIS_DIRECTORY}/casper_client'
+
 
 def make_dirs(path):
     try:
@@ -36,17 +42,29 @@ def replace_in_place(pairs, file_name):
             f.write(line)
 
 
+def patch_imports(file_names):
+    print('Patch generated Python gRPC modules...')
+    for file_name in file_names:
+        with in_place.InPlace(file_name) as f:
+            for line in f:
+                words = line.split()
+                if words and words[0] == 'import' and words[-1].endswith('_pb2'):
+                    line = f'from . {line}'
+                f.write(line)
+
+
 def modify_files(pairs, files):
     for file_name in files:
         replace_in_place(pairs, file_name)
 
 
 def run_protoc(*file_names, PROTO_DIR = PROTO_DIR):
+    print('Run protoc...')
     google_proto = join(dirname(grpc_tools.__file__), '_proto')
     for file_name in file_names:
         protoc.main((
             '',
-            f'-I./{PROTO_DIR}',
+            f'-I{PROTO_DIR}',
             '-I' + google_proto,
             '-I.',
             '--python_out=.',
@@ -54,56 +72,45 @@ def run_protoc(*file_names, PROTO_DIR = PROTO_DIR):
             file_name,
         ))
 
-os.chdir('casper_client')
-try: shutil.rmtree(f'{PROTO_DIR}')
-except FileNotFoundError: pass
-
-make_dirs(f'{PROTO_DIR}')
-Path(f'{PROTO_DIR}/__init__.py').touch()
-
-download("https://raw.githubusercontent.com/scalapb/ScalaPB/master/protobuf/scalapb/scalapb.proto",
-         f"{PROTO_DIR}")
-
-copyfile(join(dirname(grpc_tools.__file__), '_proto/google/protobuf/empty.proto'), f'{PROTO_DIR}/empty.proto')
-copyfile(join(dirname(grpc_tools.__file__), '_proto/google/protobuf/descriptor.proto'), f'{PROTO_DIR}/descriptor.proto')
-
-copyfile('../../../../protobuf/google/api/http.proto', f'{PROTO_DIR}/http.proto')
-copyfile('../../../../protobuf/google/api/annotations.proto', f'{PROTO_DIR}/annotations.proto')
-copyfile('../../../../protobuf/io/casperlabs/casper/protocol/CasperMessage.proto', f'{PROTO_DIR}/CasperMessage.proto')
-copyfile('../../../../protobuf/io/casperlabs/casper/consensus/consensus.proto', f'{PROTO_DIR}/consensus.proto')
-copyfile('../../../../protobuf/io/casperlabs/node/api/casper.proto', f'{PROTO_DIR}/casper.proto')
-copyfile('../../../../protobuf/io/casperlabs/node/api/control.proto', f'{PROTO_DIR}/control.proto')
-
-print('Patch proto files...')
-modify_files([('import "google/protobuf/', 'import "'),
-              ('import "scalapb/', 'import "'),
-              ('import "io/casperlabs/casper/consensus/', 'import "'),
-              ('import "google/api/', 'import "')],
-             glob.glob('proto/*'))
 
 
-print('Run protoc...')
-run_protoc(f'{PROTO_DIR}/empty.proto',
-           f'{PROTO_DIR}/descriptor.proto',
-           f'{PROTO_DIR}/scalapb.proto',
-           f'{PROTO_DIR}/annotations.proto',
-           f'{PROTO_DIR}/http.proto',
-           f'{PROTO_DIR}/CasperMessage.proto',
-           f'{PROTO_DIR}/consensus.proto',
-           f'{PROTO_DIR}/control.proto',
-           f'{PROTO_DIR}/casper.proto')
+def collect_proto_files():
+    print('Collect files...')
 
-print('Patch generated Python gRPC modules...')
-modify_files([('from proto import ', 'import '),
-              ('import empty_pb2 as empty__pb2', 'from . import empty_pb2 as empty__pb2'),
-              ('import scalapb_pb2 as scalapb__pb2', 'from . import scalapb_pb2 as scalapb__pb2'),
-              ('import descriptor_pb2 as descriptor__pb2', 'from . import descriptor_pb2 as descriptor__pb2'),
-              ('import annotations_pb2 as annotations__pb2', 'from . import annotations_pb2 as annotations__pb2'),
-              ('import http_pb2 as http__pb2', 'from . import http_pb2 as http__pb2'),
-              ('import consensus_pb2 as consensus__pb2', 'from . import consensus_pb2 as consensus__pb2'),
-              ('import casper_pb2 as casper__pb2', 'from . import casper_pb2 as casper__pb2'),
-              ('import CasperMessage_pb2 as CasperMessage__pb2', 'from . import CasperMessage_pb2 as CasperMessage__pb2'),
-              ('import control_pb2 as control__pb2', 'from . import control_pb2 as control__pb2'),
-              ('import CasperMessage_pb2 as proto_dot_CasperMessage__pb2', 'from . import CasperMessage_pb2 as proto_dot_CasperMessage__pb2')],
-            glob.glob('*pb2*py'))
+    download("https://raw.githubusercontent.com/scalapb/ScalaPB/master/protobuf/scalapb/scalapb.proto",
+             f"{PROTO_DIR}")
 
+    copyfile(join(dirname(grpc_tools.__file__), '_proto/google/protobuf/empty.proto'), f'{PROTO_DIR}/empty.proto')
+    copyfile(join(dirname(grpc_tools.__file__), '_proto/google/protobuf/descriptor.proto'), f'{PROTO_DIR}/descriptor.proto')
+
+    copyfile(f'{PROTOBUF_DIR}/google/api/http.proto', f'{PROTO_DIR}/http.proto')
+    copyfile(f'{PROTOBUF_DIR}/google/api/annotations.proto', f'{PROTO_DIR}/annotations.proto')
+    copyfile(f'{PROTOBUF_DIR}/io/casperlabs/casper/protocol/CasperMessage.proto', f'{PROTO_DIR}/CasperMessage.proto')
+    copyfile(f'{PROTOBUF_DIR}/io/casperlabs/casper/consensus/consensus.proto', f'{PROTO_DIR}/consensus.proto')
+    copyfile(f'{PROTOBUF_DIR}/io/casperlabs/node/api/casper.proto', f'{PROTO_DIR}/casper.proto')
+    copyfile(f'{PROTOBUF_DIR}/io/casperlabs/node/api/control.proto', f'{PROTO_DIR}/control.proto')
+
+
+def patch_proto_files():
+    print('Patch proto files...')
+    modify_files([('import "google/protobuf/', 'import "'),
+                  ('import "scalapb/', 'import "'),
+                  ('import "io/casperlabs/casper/consensus/', 'import "'),
+                  ('import "google/api/', 'import "')],
+                 glob.glob(f'{PROTO_DIR}/*.proto'))
+
+
+def run_codegen():
+    collect_proto_files()
+    patch_proto_files()
+
+    try: shutil.rmtree(f'{PROTO_DIR}')
+    except FileNotFoundError: pass
+    make_dirs(f'{PROTO_DIR}')
+
+    run_protoc(*glob.glob(f'{PROTO_DIR}/.*proto'))
+    patch_imports(glob.glob(f'{PACKAGE_DIR}/*pb2*py'))
+
+
+if __name__ == '__main__':
+    run_codegen()
