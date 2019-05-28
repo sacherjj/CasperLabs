@@ -569,6 +569,13 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "mint-token"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.6.0",
+]
+
+[[package]]
 name = "mio"
 version = "0.6.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"

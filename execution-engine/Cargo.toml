@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "blessed-contracts/mint-token",
     "comm",
     "common",
     "engine",
