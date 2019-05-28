@@ -7,7 +7,9 @@ use common::value::{Account, Value};
 pub fn mocked_account(account_addr: [u8; 32]) -> Vec<(Key, Value)> {
     let associated_keys = {
         let mut associated_keys = AssociatedKeys::empty();
-        associated_keys.add_key(PublicKey::new(account_addr), Weight::new(1));
+        associated_keys
+            .add_key(PublicKey::new(account_addr), Weight::new(1))
+            .unwrap();
         associated_keys
     };
     let account = Account::new(account_addr, 0, BTreeMap::new(), associated_keys);

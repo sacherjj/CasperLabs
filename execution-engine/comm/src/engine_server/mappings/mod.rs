@@ -92,7 +92,7 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                 };
                 let account = common::value::Account::new(
                     pub_key,
-                    v.get_account().nonce as u64,
+                    v.get_account().nonce.into(),
                     uref_map.0,
                     associated_keys,
                 );
