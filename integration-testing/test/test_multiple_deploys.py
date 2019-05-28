@@ -106,6 +106,7 @@ def test_multiple_deploys_at_once(three_node_network, timeout,
                                   contract_paths: List[List[str]], expected_deploy_counts_in_blocks):
     """
     Feature file : multiple_simultaneous_deploy.feature
+    Scenario: Multiple simultaneous deploy after single deploy
     """
     nodes = three_node_network.docker_nodes
 

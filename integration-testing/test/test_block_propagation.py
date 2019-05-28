@@ -107,6 +107,7 @@ def test_block_propagation(three_nodes, timeout,
                            contract_paths: List[List[str]], expected_number_of_blocks):
     """
     Feature file: consensus.feature
+    Scenario: test_helloworld.wasm deploy and propose by all nodes and stored in all nodes blockstores
     """
 
     deploy_threads = [DeployThread("node" + str(i+1), node, contract_paths)

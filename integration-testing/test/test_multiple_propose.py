@@ -15,6 +15,8 @@ import pytest
 )
 def test_multiple_propose(one_node_network, wasm):
     """
+    Feature file: propose.feature
+    Scenario: Single node deploy and multiple propose generates an Exception.
     OP-182: First propose should be success, and subsequent propose calls should throw an error/exception.
     """
     node = one_node_network.docker_nodes[0]

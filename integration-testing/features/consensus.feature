@@ -27,9 +27,7 @@ Feature: Consensus
        And: Node-3 had Blocks A, B, C
 
   # Implemented test_call_contracts_one_another.py : test_call_contracts_one_another
-  Scenario: A node deploys a single wasm file which contains 3 contracts and proposes. All nodes have will have a created single block.
-    Three different contracts will be deployed and proposed from each node calling the 3 different contracts which were part of single
-    wasm file.
+  Scenario: Call contracts deployed a node from another node.
      Given: 3 Node Network
       When: Node-1 Deploys test_combinedcontractsdefine.wasm
        And: Node-1 Proposes Block A
