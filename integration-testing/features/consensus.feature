@@ -1,6 +1,6 @@
 Feature: Consensus
 
-  # Not Implemented
+  # Implemented test_block_propagation.py : test_block_propagation
   Scenario: test_helloworld.wasm deploy and propose by all nodes and stored in all nodes blockstores
      Given: 3 Node Network
       When: Node-1 Deploys test_helloworld.wasm

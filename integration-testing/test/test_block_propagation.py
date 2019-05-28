@@ -102,9 +102,12 @@ def three_nodes(docker_client_fixture, timeout):
                          ([['test_helloname.wasm'],['test_helloworld.wasm']], 7),
 
                          ])
-# Curently nodes is a network of three bootstrap connected nodes.
+# Currently nodes is a network of three bootstrap connected nodes.
 def test_block_propagation(three_nodes, timeout,
                            contract_paths: List[List[str]], expected_number_of_blocks):
+    """
+    Feature file: consensus.feature
+    """
 
     deploy_threads = [DeployThread("node" + str(i+1), node, contract_paths)
                       for i, node in enumerate(three_nodes)]
@@ -120,7 +123,7 @@ def test_block_propagation(three_nodes, timeout,
 
     for node in three_nodes:
         blocks = parse_show_blocks(node.show_blocks_with_depth(expected_number_of_blocks * 100))
-        # What propose returns is first 10 characters of block hash, so we can compare only first 10 charcters.
+        # What propose returns is first 10 characters of block hash, so we can compare only first 10 characters.
         blocks_hashes = set([b.blockHash[:10] for b in blocks])
         for t in deploy_threads:
             assert t.deployed_blocks_hashes.issubset(blocks_hashes), \
