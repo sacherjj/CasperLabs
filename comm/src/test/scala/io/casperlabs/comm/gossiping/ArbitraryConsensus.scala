@@ -330,7 +330,7 @@ trait ArbitraryConsensus {
                               s.getHeader
                                 .withParentHashes(Seq.empty)
                                 .withJustifications(Seq.empty)
-                                .withRank(c.dagDepth - depth)
+                                .withRank((c.dagDepth - depth).toLong)
                             )
                         )
                       )
@@ -349,7 +349,7 @@ trait ArbitraryConsensus {
             newest.getHeader
               .withParentHashes(Seq.empty)
               .withJustifications(Seq.empty)
-              .withRank(c.dagDepth)
+              .withRank(c.dagDepth.toLong)
           )
         ),
         1

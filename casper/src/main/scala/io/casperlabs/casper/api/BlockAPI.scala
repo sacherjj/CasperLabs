@@ -144,7 +144,7 @@ object BlockAPI {
         DeployServiceResponse(success = false, s"Error while creating block: $msg")
       case OutOfRange(msg) =>
         DeployServiceResponse(success = false, s"Error while creating block: $msg")
-      case Unavailable(msg) =>
+      case Unavailable(_) =>
         DeployServiceResponse(success = false, s"Error: Could not create block.")
     }
 
@@ -171,7 +171,7 @@ object BlockAPI {
                                      raise(InvalidArgument(s"Invalid block: $status"))
                                    case BlockException(ex) =>
                                      raise(Internal(s"Error during block processing: $ex"))
-                                   case Processing =>
+                                   case Processing | Processed =>
                                      raise(
                                        Aborted(
                                          "No action taken since other thread is already processing the block."
