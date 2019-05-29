@@ -361,6 +361,29 @@ private[configuration] final case class Options private (
       gen[Int]("Maximum DAG depth to ask in iterative requests during syncing.")
 
     @scallop
+    val serverInitSyncMaxNodes =
+      gen[Int]("Maximum number of nodes to try to sync with initially in a round.")
+
+    @scallop
+    val serverInitSyncMinSuccessful =
+      gen[Int]("Minimum number of successful initial syncs in a round to call it done.")
+
+    @scallop
+    val serverInitSyncMemoizeNodes =
+      gen[Boolean](
+        "Remember the selection of nodes to synchronize with initially, or pick a new set in each round."
+      )
+
+    @scallop
+    val serverInitSyncSkipFailedNodes =
+      gen[Boolean](
+        "Skip nodes which failed previous synchronization attempts or allow them to be tried again."
+      )
+
+    @scallop
+    val serverInitSyncRoundPeriod =
+      gen[FiniteDuration]("Time to wait between initial synchronization attempts.")
+    @scallop
     val serverDownloadMaxParallelBlocks =
       gen[Int]("Maximum number of parallel block downloads initiated by the download manager.")
 

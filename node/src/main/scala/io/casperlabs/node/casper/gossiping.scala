@@ -45,6 +45,7 @@ import monix.eval.TaskLike
 import scala.io.Source
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
+import scala.util.Random
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
@@ -622,8 +623,7 @@ package object gossiping {
               Sync[F].delay {
                 val svc = GrpcGossipService.fromGossipService(
                   server,
-                  // TODO: Move to config.
-                  blockChunkConsumerTimeout = 10.seconds
+                  blockChunkConsumerTimeout = conf.server.relayBlockChunkConsumerTimeout
                 )
                 GossipingGrpcMonix.bindService(svc, scheduler)
               }
@@ -654,12 +654,12 @@ package object gossiping {
                           NodeDiscovery[F],
                           gossipServiceServer,
                           InitialSynchronizationImpl.Bootstrap(bootstrap),
-                          // TODO: Move to config
-                          selectNodes = (b, ns) => b +: ns.take(5),
-                          minSuccessful = 1,
-                          memoizeNodes = false,
-                          skipFailedNodesInNextRounds = false,
-                          roundPeriod = 30.seconds,
+                          selectNodes =
+                            (b, ns) => Random.shuffle(b +: ns).take(conf.server.initSyncMaxNodes),
+                          minSuccessful = conf.server.initSyncMinSuccessful,
+                          memoizeNodes = conf.server.initSyncMemoizeNodes,
+                          skipFailedNodesInNextRounds = conf.server.initSyncSkipFailedNodes,
+                          roundPeriod = conf.server.initSyncRoundPeriod,
                           connector = connectToGossip
                         )
                       }

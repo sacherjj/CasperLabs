@@ -53,7 +53,7 @@ relay-saturation = 90
 approval-relay-factor = 10
 
 # Time to wait between asking the bootstrap node for an updated list of genesis approvals.
-approval-poll-interval = 30seconds
+approval-poll-interval = "30seconds"
 
 # Maximum DAG depth to allow when syncing after a new block notification.
 sync-max-possible-depth = 1000
@@ -67,6 +67,21 @@ sync-max-branching-factor = 1.5
 # Maximum DAG depth to ask in iterative requests during syncing.
 sync-max-depth-ancestors-request = 10
 
+# Maximum number of nodes to try to sync with initially in a round.
+init-sync-max-nodes = 5
+
+# Minimum number of successful initial syncs in a round to call it done.
+init-sync-min-successful = 1
+
+# Remember the selection of nodes to synchronize with initially, or pick a new set in each round.
+init-sync-memoize-nodes = false
+
+# Skip nodes which failed previous synchronization attempts or allow them to be tried again.
+init-sync-skip-failed-nodes = false
+
+# Time to wait between initial synchronization attempts.
+init-sync-round-period = "30second"
+
 # Maximum number of parallel block downloads initiated by the download manager.
 download-max-parallel-blocks = 10
 
@@ -74,7 +89,7 @@ download-max-parallel-blocks = 10
 relay-max-parallel-blocks = 5
 
 # Maximum time to allow a peer downloading a block to consume each chunk.
-relay-block-chunk-consumer-timeout = 10second
+relay-block-chunk-consumer-timeout = "10second"
 
 # Use this flag to clear the blockStore and blockDagStorage
 clean-block-storage = false
