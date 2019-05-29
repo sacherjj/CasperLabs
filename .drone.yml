@@ -158,69 +158,19 @@ pipeline:
         - staging
         - trying
 
-  package-client-deb-universal:
+  package-sbt-artifacts:
     commands:
-      - "sbt client/debian:packageBin client/universal:packageZipTarball"
+      - "sbt client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
       - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
-    image: "casperlabs/buildenv:latest"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    when:
-      branch:
-        - dev
-        - release-*
-        - master
-      event:
-        - push
-        - tag
-
-  package-client-rpm:
-    commands:
-      - "env JAVAC_VERSION=1.8 sbt clean compile doc client/rpm:packageBin"
-      - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
-    image: "casperlabs/buildenv:latest"
-    when:
-      branch:
-        - dev
-        - release-*
-        - master
-      event:
-        - push
-        - tag
-
-  package-node-deb-universal:
-    commands:
-      - "sbt node/debian:packageBin node/universal:packageZipTarball"
-      - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
-    image: "casperlabs/buildenv:latest"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    when:
-      branch:
-        - dev
-        - release-*
-        - master
-      event:
-        - push
-        - tag
-
-  package-node-rpm:
-    commands:
-      - "env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin"
-      - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm artifacts/${DRONE_BRANCH}"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
     when:
       branch:
         - dev
