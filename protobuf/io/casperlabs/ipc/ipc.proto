@@ -146,9 +146,14 @@ message Value {
 }
 
 message Account {
+    message AssociatedKey {
+        bytes pub_key = 1; // Should have 32 elements
+        uint32 weight = 2;
+    }
     bytes pub_key = 1; // Should have 32 elements
     uint64 nonce = 2;
     repeated NamedKey known_urefs = 3;
+    repeated AssociatedKey associated_keys = 4;
 }
 message Contract {
     bytes body = 1;

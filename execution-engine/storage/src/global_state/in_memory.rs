@@ -268,8 +268,8 @@ mod tests {
     #[test]
     fn initial_state_has_the_expected_hash() {
         let expected_bytes = vec![
-            176u8, 48, 219, 9, 47, 224, 193, 80, 164, 168, 1, 230, 1, 75, 255, 199, 211, 67, 213,
-            61, 31, 192, 211, 77, 59, 244, 219, 236, 53, 253, 100, 159,
+            193u8, 151, 167, 126, 241, 141, 9, 163, 43, 169, 238, 19, 93, 87, 183, 131, 99, 160,
+            96, 216, 8, 39, 227, 218, 246, 90, 65, 57, 207, 242, 61, 205,
         ];
         let init_state = mocked_account([48u8; 32]);
         let global_state = InMemoryGlobalState::from_pairs(&init_state).unwrap();
