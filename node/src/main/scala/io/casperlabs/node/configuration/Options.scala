@@ -340,25 +340,25 @@ private[configuration] final case class Options private (
         "Time to wait between asking the bootstrap node for an updated list of genesis approvals."
       )
 
-    // @scallop
-    // val serverSyncMaxPossibleDepth =
-    //   gen[Int]("Maximum DAG depth to allow when syncing after a new block notification.")
+    @scallop
+    val serverSyncMaxPossibleDepth =
+      gen[Int]("Maximum DAG depth to allow when syncing after a new block notification.")
 
-    // @scallop
-    // val syncMinBlockCountToCheckBranchingFactor =
-    //   gen[Int](
-    //     "Minimum DAG depth before we start checking the branching factor for abnormal growth."
-    //   )
+    @scallop
+    val serverSyncMinBlockCountToCheckBranchingFactor =
+      gen[Int](
+        "Minimum DAG depth before we start checking the branching factor for abnormal growth."
+      )
 
-    // @scallop
-    // val syncMaxBranchingFactor =
-    //   gen[Double](
-    //     "Maximum branching factor to allow during syncs before terminating the operation as malicious."
-    //   )
+    @scallop
+    val serverSyncMaxBranchingFactor =
+      gen[Int](
+        "Maximum branching factor to allow during syncs before terminating the operation as malicious."
+      )
 
-    // @scallop
-    // val syncMaxDepthAncestorsRequest =
-    //   gen[Int]("Maximum DAG depth to ask in iterative requests during syncing.")
+    @scallop
+    val serverSyncMaxDepthAncestorsRequest =
+      gen[Int]("Maximum DAG depth to ask in iterative requests during syncing.")
 
     @scallop
     val serverDownloadMaxParallelBlocks =

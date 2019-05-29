@@ -35,7 +35,7 @@ class ConfigurationSpec
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(
-      minSuccessful = 2000,
+      minSuccessful = 500,
       workers = 1
     )
 
@@ -64,10 +64,10 @@ class ConfigurationSpec
       relaySaturation = 1,
       approvalRelayFactor = 1,
       approvalPollInterval = FiniteDuration(1, TimeUnit.SECONDS),
-      // syncMaxPossibleDepth = 1,
-      // syncMinBlockCountToCheckBranchingFactor = 1,
-      // syncMaxBranchingFactor = 1,
-      // syncMaxDepthAncestorsRequest = 1,
+      syncMaxPossibleDepth = 1,
+      syncMinBlockCountToCheckBranchingFactor = 1,
+      syncMaxBranchingFactor = 1,
+      syncMaxDepthAncestorsRequest = 1,
       downloadMaxParallelBlocks = 1,
       cleanBlockStorage = false
     )

@@ -56,16 +56,16 @@ approval-relay-factor = 10
 approval-poll-interval = 30.seconds
 
 # Maximum DAG depth to allow when syncing after a new block notification.
-#sync-max-possible-depth = 1000
+sync-max-possible-depth = 1000
 
 # Minimum DAG depth before we start checking the branching factor for abnormal growth.
-#sync-min-block-count-to-check-branching-factor = 100
+sync-min-block-count-to-check-branching-factor = 100
 
 # Maximum branching factor to allow during syncs before terminating the operation as malicious.
-#sync-max-branching-factor = 1
+sync-max-branching-factor = 1
 
 # Maximum DAG depth to ask in iterative requests during syncing.
-#sync-max-depth-ancestors-request = 10
+sync-max-depth-ancestors-request = 10
 
 # Maximum number of parallel blocks downloads initiated by the download manager.
 download-max-parallel-blocks = 10

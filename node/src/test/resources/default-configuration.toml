@@ -19,10 +19,10 @@ relay-factor = 1
 relay-saturation = 1
 approval-relay-factor = 1
 approval-poll-interval = "1second"
-# sync-max-possible-depth = 1
-# sync-min-block-count-to-check-branching-factor = 1
-# sync-max-branching-factor = 1
-# sync-max-depth-ancestors-request = 1
+sync-max-possible-depth = 1
+sync-min-block-count-to-check-branching-factor = 1
+sync-max-branching-factor = 1
+sync-max-depth-ancestors-request = 1
 download-max-parallel-blocks = 1
 clean-block-storage = false
 
