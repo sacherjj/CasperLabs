@@ -99,6 +99,7 @@ pub fn value_arb() -> impl Strategy<Value = Value> {
         ("\\PC*".prop_map(Value::String)),
         (vec(any::<String>(), 1..500).prop_map(Value::ListString)),
         ("\\PC*", key_arb()).prop_map(|(n, k)| Value::NamedKey(n, k)),
+        key_arb().prop_map(Value::Key),
         account_arb().prop_map(Value::Account),
         contract_arb().prop_map(Value::Contract),
         u128_arb().prop_map(Value::UInt128),

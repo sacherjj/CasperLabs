@@ -279,3 +279,15 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
     };
     deserialize(&res_bytes).unwrap()
 }
+
+/// Checks if all the keys contained in the given `Value`
+/// (rather, thing that can be turned into a `Value`) are
+/// valid, in the sense that all of the urefs (and their access rights)
+/// are known in the current context.
+#[allow(clippy::ptr_arg)]
+pub fn is_valid<T: Into<Value>>(t: T) -> bool {
+    let value = t.into();
+    let (value_ptr, value_size, _bytes) = to_ptr(&value);
+    let result = unsafe { ext_ffi::is_valid(value_ptr, value_size) };
+    result != 0
+}

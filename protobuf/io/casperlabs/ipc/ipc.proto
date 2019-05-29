@@ -142,6 +142,7 @@ message Value {
         StringList string_list = 7;
         NamedKey named_key = 8;
         RustBigInt big_int = 9;
+        Key key = 10;
     }
 }
 

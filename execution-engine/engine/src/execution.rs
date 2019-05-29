@@ -27,9 +27,9 @@ use engine_state::execution_effect::ExecutionEffect;
 use functions::{
     ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
     GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
-    GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX,
-    PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX,
-    STORE_FN_INDEX, WRITE_FUNC_INDEX,
+    GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, IS_VALID_FN_INDEX, LOAD_ARG_FUNC_INDEX,
+    NEW_FUNC_INDEX, PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX,
+    SER_FN_FUNC_INDEX, STORE_FN_INDEX, WRITE_FUNC_INDEX,
 };
 use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
@@ -208,6 +208,12 @@ where
         } else {
             Err(Error::FunctionNotFound(name).into())
         }
+    }
+
+    pub fn value_is_valid(&mut self, value_ptr: u32, value_size: u32) -> Result<bool, Trap> {
+        let value = self.value_from_mem(value_ptr, value_size)?;
+
+        Ok(self.context.validate_keys(&value).is_ok())
     }
 
     /// Load the i-th argument invoked as part of a `sub_call` into
@@ -615,6 +621,18 @@ where
                 let dest_ptr = Args::parse(args)?;
                 self.write_seed(dest_ptr)?;
                 Ok(None)
+            }
+
+            IS_VALID_FN_INDEX => {
+                // args(0) = pointer to value to validate
+                // args(1) = size of value
+                let (value_ptr, value_size) = Args::parse(args)?;
+
+                if self.value_is_valid(value_ptr, value_size)? {
+                    Ok(Some(RuntimeValue::I32(1)))
+                } else {
+                    Ok(Some(RuntimeValue::I32(0)))
+                }
             }
 
             _ => panic!("unknown function index"),
