@@ -215,12 +215,13 @@ fn main() {
     let wasmi_preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
 
     for (i, wasm_bytes) in wasm_files.iter().enumerate() {
+        let nonce = i as u64 + 1;
         let result = engine_state.run_deploy(
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
             account_addr,
             timestamp,
-            i as u64 + 1,
+            nonce,
             state_hash,
             gas_limit,
             protocol_version,
@@ -232,6 +233,7 @@ fn main() {
 
         properties.insert(String::from("pre-state-hash"), format!("{:?}", state_hash));
         properties.insert(String::from("wasm-path"), wasm_bytes.path.to_owned());
+        properties.insert(String::from("nonce"), format!("{}", nonce));
 
         match result {
             Err(RootNotFound(hash)) => {
