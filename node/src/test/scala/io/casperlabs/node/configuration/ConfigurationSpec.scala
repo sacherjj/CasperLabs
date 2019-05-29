@@ -2,10 +2,12 @@ package io.casperlabs.node.configuration
 
 import java.nio.file.{Files, Path, Paths, StandardOpenOption}
 import java.util.concurrent.TimeUnit
-
 import cats.data.Validated.Valid
 import cats.syntax.option._
 import cats.syntax.show._
+import eu.timepit.refined._
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
 import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.discovery.NodeUtils._
@@ -33,7 +35,7 @@ class ConfigurationSpec
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(
-      minSuccessful = 2000,
+      minSuccessful = 500,
       workers = 1
     )
 
@@ -60,6 +62,23 @@ class ConfigurationSpec
       useGossiping = true,
       relayFactor = 1,
       relaySaturation = 1,
+      approvalRelayFactor = 1,
+      approvalPollInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      syncMaxPossibleDepth = 1,
+      syncMinBlockCountToCheckBranchingFactor = 1,
+      syncMaxBranchingFactor = 1.0,
+      syncMaxDepthAncestorsRequest = 1,
+      initSyncMaxNodes = 1,
+      initSyncMinSuccessful = 1,
+      initSyncMemoizeNodes = false,
+      initSyncSkipFailedNodes = false,
+      initSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
+      downloadMaxParallelBlocks = 1,
+      downloadMaxRetries = 1,
+      downloadRetryInitialBackoffPeriod = FiniteDuration(1, TimeUnit.SECONDS),
+      downloadRetryBackoffFactor = 1.0,
+      relayMaxParallelBlocks = 1,
+      relayBlockChunkConsumerTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       cleanBlockStorage = false
     )
     val grpcServer = Configuration.GrpcServer(

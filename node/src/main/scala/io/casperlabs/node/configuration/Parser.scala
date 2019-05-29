@@ -8,7 +8,9 @@ import io.casperlabs.comm.CommError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.shared.StoreType
-
+import eu.timepit.refined._
+import eu.timepit.refined.numeric._
+import eu.timepit.refined.api.Refined
 import scala.concurrent.duration.Duration.Infinite
 import scala.concurrent.duration._
 
@@ -44,6 +46,28 @@ private[configuration] trait ParserImplicits {
     StoreType
       .from(s)
       .fold(s"Failed to parse '$s' as StoreType".asLeft[StoreType])(_.asRight[String])
+
+  implicit val positiveIntParser: Parser[Refined[Int, Positive]] =
+    s =>
+      for {
+        i <- Try(s.toInt).toEither.leftMap(_.getMessage)
+        p <- refineV[Positive](i)
+      } yield p
+
+  implicit val nonNegativeIntParser: Parser[Refined[Int, NonNegative]] =
+    s =>
+      for {
+        i <- Try(s.toInt).toEither.leftMap(_.getMessage)
+        p <- refineV[NonNegative](i)
+      } yield p
+
+  implicit val gte1DoubleParser: Parser[Refined[Double, GreaterEqual[W.`1.0`.T]]] =
+    s =>
+      for {
+        d <- Try(s.toDouble).toEither.leftMap(_.getMessage)
+        w <- refineV[GreaterEqual[W.`1.0`.T]](d)
+      } yield w
+
 }
 
 private[configuration] object Parser {

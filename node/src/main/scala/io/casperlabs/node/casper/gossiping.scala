@@ -45,6 +45,7 @@ import monix.eval.TaskLike
 import scala.io.Source
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
+import scala.util.Random
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
@@ -115,7 +116,7 @@ package object gossiping {
       }
 
       // The StashingSynchronizer will start a fiber to await on the above.
-      synchronizer <- makeSynchronizer(connectToGossip, awaitApproval)
+      synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval)
 
       gossipServiceServer <- makeGossipServiceServer(
                               port,
@@ -273,8 +274,7 @@ package object gossiping {
         .map(x => ByteString.copyFrom(x.publicKey))
         .filterNot(_.isEmpty)
       downloadManager <- DownloadManagerImpl[F](
-                          // TODO: Add to config.
-                          maxParallelDownloads = 10,
+                          maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
                           connectToGossip = connectToGossip,
                           backend = new DownloadManagerImpl.Backend[F] {
                             override def hasBlock(blockHash: ByteString): F[Boolean] =
@@ -298,12 +298,15 @@ package object gossiping {
                             override def storeBlockSummary(
                                 summary: BlockSummary
                             ): F[Unit] =
-                              // TODO: Add separate storage for summaries.
+                              // Storing the block automatically stores the summary as well.
                               ().pure[F]
                           },
                           relaying = relaying,
-                          // TODO: Configure retry.
-                          retriesConf = DownloadManagerImpl.RetriesConf.noRetries
+                          retriesConf = DownloadManagerImpl.RetriesConf(
+                            maxRetries = conf.server.downloadMaxRetries,
+                            initialBackoffPeriod = conf.server.downloadRetryInitialBackoffPeriod,
+                            backoffFactor = conf.server.downloadRetryBackoffFactor
+                          )
                         )
     } yield downloadManager
 
@@ -474,8 +477,7 @@ package object gossiping {
                                   backend,
                                   NodeDiscovery[F],
                                   connectToGossip,
-                                  // TODO: Move to config.
-                                  relayFactor = 10,
+                                  relayFactor = conf.server.approvalRelayFactor,
                                   genesis = genesis,
                                   maybeApproval = maybeApproveBlock(genesis)
                                 )
@@ -488,9 +490,8 @@ package object gossiping {
                                   NodeDiscovery[F],
                                   connectToGossip,
                                   bootstrap = bootstrap,
-                                  // TODO: Move to config.
-                                  relayFactor = 10,
-                                  pollInterval = 30.seconds,
+                                  relayFactor = conf.server.approvalRelayFactor,
+                                  pollInterval = conf.server.approvalPollInterval,
                                   downloadManager = downloadManager
                                 )
                    } yield approver
@@ -498,6 +499,7 @@ package object gossiping {
     } yield approver
 
   private def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: BlockDagStorage](
+      conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
@@ -531,12 +533,12 @@ package object gossiping {
                          override def notInDag(blockHash: ByteString): F[Boolean] =
                            isInDag(blockHash).map(!_)
                        },
-                       // TODO: Move to config.
-                       maxPossibleDepth = 1000,
-                       minBlockCountToCheckBranchingFactor = 100,
+                       maxPossibleDepth = conf.server.syncMaxPossibleDepth,
+                       minBlockCountToCheckBranchingFactor =
+                         conf.server.syncMinBlockCountToCheckBranchingFactor,
                        // Really what we should be looking at is the width at any rank being less than the number of validators.
-                       maxBranchingFactor = 1.5,
-                       maxDepthAncestorsRequest = 10
+                       maxBranchingFactor = conf.server.syncMaxBranchingFactor,
+                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest
                      )
                    }
       stashing <- StashingSynchronizer.wrap(underlying, awaitApproved)
@@ -610,8 +612,7 @@ package object gossiping {
                    consensus,
                    genesisApprover,
                    maxChunkSize = conf.server.chunkSize,
-                   // TODO: Move to config.
-                   maxParallelBlockDownloads = 5
+                   maxParallelBlockDownloads = conf.server.relayMaxParallelBlocks
                  )
                }
 
@@ -625,8 +626,7 @@ package object gossiping {
               Sync[F].delay {
                 val svc = GrpcGossipService.fromGossipService(
                   server,
-                  // TODO: Move to config.
-                  blockChunkConsumerTimeout = 10.seconds
+                  blockChunkConsumerTimeout = conf.server.relayBlockChunkConsumerTimeout
                 )
                 GossipingGrpcMonix.bindService(svc, scheduler)
               }
@@ -657,12 +657,12 @@ package object gossiping {
                           NodeDiscovery[F],
                           gossipServiceServer,
                           InitialSynchronizationImpl.Bootstrap(bootstrap),
-                          // TODO: Move to config
-                          selectNodes = (b, ns) => b +: ns.take(5),
-                          minSuccessful = 1,
-                          memoizeNodes = false,
-                          skipFailedNodesInNextRounds = false,
-                          roundPeriod = 30.seconds,
+                          selectNodes =
+                            (b, ns) => Random.shuffle(b +: ns).take(conf.server.initSyncMaxNodes),
+                          minSuccessful = conf.server.initSyncMinSuccessful,
+                          memoizeNodes = conf.server.initSyncMemoizeNodes,
+                          skipFailedNodesInNextRounds = conf.server.initSyncSkipFailedNodes,
+                          roundPeriod = conf.server.initSyncRoundPeriod,
                           connector = connectToGossip
                         )
                       }
