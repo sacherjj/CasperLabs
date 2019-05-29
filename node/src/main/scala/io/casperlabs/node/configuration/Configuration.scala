@@ -77,6 +77,7 @@ object Configuration extends ParserImplicits {
       syncMaxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
       syncMaxDepthAncestorsRequest: Int Refined Positive,
       downloadMaxParallelBlocks: Int,
+      relayMaxParallelBlocks: Int,
       cleanBlockStorage: Boolean
   ) extends SubConfig
 

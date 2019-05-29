@@ -69,6 +69,7 @@ class ConfigurationSpec
       syncMaxBranchingFactor = 1.0,
       syncMaxDepthAncestorsRequest = 1,
       downloadMaxParallelBlocks = 1,
+      relayMaxParallelBlocks = 1,
       cleanBlockStorage = false
     )
     val grpcServer = Configuration.GrpcServer(

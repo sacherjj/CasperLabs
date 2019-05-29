@@ -24,6 +24,7 @@ sync-min-block-count-to-check-branching-factor = 1
 sync-max-branching-factor = 1.0
 sync-max-depth-ancestors-request = 1
 download-max-parallel-blocks = 1
+relay-max-parallel-blocks = 1
 clean-block-storage = false
 
 [lmdb]

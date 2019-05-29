@@ -67,8 +67,11 @@ sync-max-branching-factor = 1.5
 # Maximum DAG depth to ask in iterative requests during syncing.
 sync-max-depth-ancestors-request = 10
 
-# Maximum number of parallel blocks downloads initiated by the download manager.
+# Maximum number of parallel block downloads initiated by the download manager.
 download-max-parallel-blocks = 10
+
+# Maximum number of parallel block downloads allowed to peers.
+relay-max-parallel-blocks = 5
 
 # Use this flag to clear the blockStore and blockDagStorage
 clean-block-storage = false

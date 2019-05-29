@@ -362,7 +362,11 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverDownloadMaxParallelBlocks =
-      gen[Int]("Maximum number of parallel blocks downloads initiated by the download manager.")
+      gen[Int]("Maximum number of parallel block downloads initiated by the download manager.")
+
+    @scallop
+    val serverRelayMaxParallelBlocks =
+      gen[Int]("Maximum number of parallel block downloads allowed to peers.")
 
     @scallop
     val casperStandalone =

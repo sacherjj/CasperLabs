@@ -608,8 +608,7 @@ package object gossiping {
                    consensus,
                    genesisApprover,
                    maxChunkSize = conf.server.chunkSize,
-                   // TODO: Move to config.
-                   maxParallelBlockDownloads = 5
+                   maxParallelBlockDownloads = conf.server.relayMaxParallelBlocks
                  )
                }
 
