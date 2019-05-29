@@ -1,7 +1,7 @@
 Feature: Verify that simultaneous deploy and propose does not create neglected invalid blocks.
 
 
-  # Implementation test_neglected_invalid_justification.py
+  # Implementation test_neglected_invalid_justification.py : test_neglected_invalid_block
   Scenario: 3 Nodes doing simultaneous deploys and proposes do not have neglected invalid blocks
      Given: ThreeNodeNetwork
       When: Simultaneous node-0.deploy(session="helloname_invalid_just_1.wasm"), node-1.deploy(session="helloname_invalid_just_2.wasm"), node-2.deploy(session="helloname_invalid_just_2.wasm")

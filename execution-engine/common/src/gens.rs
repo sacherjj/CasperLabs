@@ -54,7 +54,7 @@ pub fn associated_keys_arb(size: usize) -> impl Strategy<Value = AssociatedKeys>
     proptest::collection::btree_map(public_key_arb(), weight_arb(), size).prop_map(|keys| {
         let mut associated_keys = AssociatedKeys::empty();
         keys.into_iter().for_each(|(k, v)| {
-            associated_keys.add_key(k, v);
+            associated_keys.add_key(k, v).unwrap();
         });
         associated_keys
     })
@@ -73,7 +73,7 @@ prop_compose! {
         (pub_key in u8_slice_32(), nonce in any::<u64>(), thresholds in action_threshold_arb(),
         account_activity in account_activity_arb(), mut associated_keys in associated_keys_arb(MAX_KEYS - 1), urefs in uref_map_arb(3))
      -> Account {
-            associated_keys.add_key(pub_key.into(), Weight::new(1));
+            associated_keys.add_key(pub_key.into(), Weight::new(1)).unwrap();
             Account::new(
                 pub_key,
                 nonce,

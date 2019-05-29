@@ -27,6 +27,7 @@ import io.casperlabs.ipc.{ProtocolVersion, ValidateRequest}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
+import scala.util.control.NonFatal
 
 /**
   * Encapsulates mutable state of the MultiParentCasperImpl
@@ -569,7 +570,10 @@ object MultiParentCasperImpl {
         blockEffects <- ExecEngineUtil
                          .effectsForBlock[F](block, preStateHash, dag)
                          .recoverWith {
-                           case _ => FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
+                           case NonFatal(ex) =>
+                             Log[F].error(s"Could not calculate effects for block ${PrettyPrinter
+                               .buildString(block)}: $ex", ex) *>
+                               FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                          }
         _ <- Validate.transactions[F](
               block,

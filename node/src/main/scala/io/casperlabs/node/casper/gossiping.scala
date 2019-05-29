@@ -44,6 +44,7 @@ import monix.execution.Scheduler
 import monix.eval.TaskLike
 import scala.io.Source
 import scala.concurrent.duration._
+import scala.util.control.NoStackTrace
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
@@ -177,7 +178,8 @@ package object gossiping {
         case other =>
           Log[F].debug(s"Received invalid block ${show(block.blockHash)}: $other") *>
             MonadThrowable[F].raiseError[Unit](
-              new RuntimeException(s"Non-valid status: $other")
+              // Raise an exception to stop the DownloadManager from progressing with this block.
+              new RuntimeException(s"Non-valid status: $other") with NoStackTrace
             )
       }
 
@@ -264,32 +266,46 @@ package object gossiping {
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F]
   ): Resource[F, DownloadManager[F]] =
-    Resource.liftF(DownloadManagerImpl.establishMetrics[F]) *>
-      DownloadManagerImpl[F](
-        // TODO: Add to config.
-        maxParallelDownloads = 10,
-        connectToGossip = connectToGossip,
-        backend = new DownloadManagerImpl.Backend[F] {
-          override def hasBlock(blockHash: ByteString): F[Boolean] =
-            isInDag(blockHash)
+    for {
+      _           <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
+      validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[F](conf.casper))
+      maybeValidatorPublicKey = validatorId
+        .map(x => ByteString.copyFrom(x.publicKey))
+        .filterNot(_.isEmpty)
+      downloadManager <- DownloadManagerImpl[F](
+                          // TODO: Add to config.
+                          maxParallelDownloads = 10,
+                          connectToGossip = connectToGossip,
+                          backend = new DownloadManagerImpl.Backend[F] {
+                            override def hasBlock(blockHash: ByteString): F[Boolean] =
+                              isInDag(blockHash)
 
-          override def validateBlock(block: Block): F[Unit] =
-            validateAndAddBlock(conf.casper.shardId, block)
+                            override def validateBlock(block: Block): F[Unit] =
+                              maybeValidatorPublicKey
+                                .filter(_ == block.getHeader.validatorPublicKey)
+                                .fold(().pure[F]) { _ =>
+                                  Log[F]
+                                    .warn(
+                                      s"Block ${PrettyPrinter.buildString(block)} seems to be created by a doppelganger using the same validator key!"
+                                    )
+                                } *>
+                                validateAndAddBlock(conf.casper.shardId, block)
 
-          override def storeBlock(block: Block): F[Unit] =
-            // Validation has already stored it.
-            ().pure[F]
+                            override def storeBlock(block: Block): F[Unit] =
+                              // Validation has already stored it.
+                              ().pure[F]
 
-          override def storeBlockSummary(
-              summary: BlockSummary
-          ): F[Unit] =
-            // TODO: Add separate storage for summaries.
-            ().pure[F]
-        },
-        relaying = relaying,
-        // TODO: Configure retry.
-        retriesConf = DownloadManagerImpl.RetriesConf.noRetries
-      )
+                            override def storeBlockSummary(
+                                summary: BlockSummary
+                            ): F[Unit] =
+                              // TODO: Add separate storage for summaries.
+                              ().pure[F]
+                          },
+                          relaying = relaying,
+                          // TODO: Configure retry.
+                          retriesConf = DownloadManagerImpl.RetriesConf.noRetries
+                        )
+    } yield downloadManager
 
   private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStore: BlockDagStorage: MultiParentCasperRef: ExecutionEngineService](
       conf: Configuration,
@@ -305,9 +321,14 @@ package object gossiping {
       validatorId <- Resource.liftF {
                       for {
                         id <- ValidatorIdentity.fromConfig[F](conf.casper)
-                        _ <- Log[F].info(
-                              s"Starting ${if (id.nonEmpty) "with" else "without"} a validator identity."
-                            )
+                        _ <- id match {
+                              case Some(ValidatorIdentity(publicKey, _, _)) =>
+                                Log[F].info(
+                                  s"Starting with validator identity ${Base16.encode(publicKey)}"
+                                )
+                              case None =>
+                                Log[F].info("Starting without a validator identity.")
+                            }
                       } yield id
                     }
 
@@ -315,7 +336,7 @@ package object gossiping {
         validatorId.map { id =>
           val sig = id.signature(block.blockHash.toByteArray)
           Approval()
-            .withValidatorPublicKey(sig.publicKey)
+            .withApproverPublicKey(sig.publicKey)
             .withSignature(
               Signature()
                 .withSigAlgorithm(sig.algorithm)

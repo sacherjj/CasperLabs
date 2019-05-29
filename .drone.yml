@@ -386,3 +386,8 @@ pipeline:
       status:
         - failure
 
+---
+kind: signature
+hmac: 5ed603c7352543986ae7ed83927893e2afd284fb37e8eb556abbb6ed05f1a9de
+
+...

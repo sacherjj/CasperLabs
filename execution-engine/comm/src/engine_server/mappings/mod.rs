@@ -77,19 +77,28 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             } else if v.has_string_val() {
                 transform_write(common::value::Value::String(v.get_string_val().to_string()))
             } else if v.has_account() {
-                let mut pub_key = [0u8; 32];
+                let pub_key = {
+                    let mut tmp = [0u8; 32];
+                    tmp.clone_from_slice(&v.get_account().pub_key);
+                    tmp
+                };
                 let uref_map: URefMap = v.get_account().get_known_urefs().try_into()?;
-                pub_key.clone_from_slice(&v.get_account().pub_key);
                 let associated_keys: AssociatedKeys = {
                     let mut keys = AssociatedKeys::empty();
-                    v.get_account().get_associated_keys().iter().for_each(|k| {
-                        let mut pub_key = [0u8; 32];
-                        pub_key.copy_from_slice(k.get_pub_key());
-                        let weight = k.get_weight() as u8;
-                        // NOTE: we are assuming that `add_key` will always return `true`.
-                        // Meaning we assume that IPC message will always contain correct `AssociatedKeys`.
-                        keys.add_key(PublicKey::new(pub_key), Weight::new(weight));
-                    });
+                    v.get_account()
+                        .get_associated_keys()
+                        .iter()
+                        .try_for_each(|k| {
+                            k.try_into().and_then(|(pub_key, weight)| {
+                                match keys.add_key(pub_key, weight) {
+                                    Err(add_key_failure) => parse_error(format!(
+                                        "Error when parsing associated keys: {:?}",
+                                        add_key_failure
+                                    )),
+                                    Ok(_) => Ok(()),
+                                }
+                            })
+                        })?;
                     keys
                 };
                 let action_thresholds: ActionThresholds = {
@@ -131,7 +140,7 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                 };
                 let account = common::value::Account::new(
                     pub_key,
-                    v.get_account().nonce as u64,
+                    v.get_account().nonce,
                     uref_map.0,
                     associated_keys,
                     action_thresholds,
@@ -320,6 +329,24 @@ impl From<URefMap> for Vec<super::ipc::NamedKey> {
                 nk
             })
             .collect()
+    }
+}
+
+impl TryFrom<&ipc::Account_AssociatedKey> for (PublicKey, Weight) {
+    type Error = ParsingError;
+
+    fn try_from(value: &ipc::Account_AssociatedKey) -> Result<Self, Self::Error> {
+        // Weight is a newtype wrapper around u8 type.
+        if value.get_weight() > u8::max_value().into() {
+            parse_error("Key weight cannot be bigger 256.".to_string())
+        } else {
+            let mut pub_key = [0u8; 32];
+            pub_key.copy_from_slice(value.get_pub_key());
+            Ok((
+                PublicKey::new(pub_key),
+                Weight::new(value.get_weight() as u8),
+            ))
+        }
     }
 }
 

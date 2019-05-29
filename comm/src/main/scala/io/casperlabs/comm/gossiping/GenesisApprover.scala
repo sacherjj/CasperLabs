@@ -182,8 +182,11 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         case Right(transitioned) =>
           transitioned.pure[F]
       }
-    } map {
-      _ contains true
+    } flatMap {
+      case Nil =>
+        statusRef.get flatMap { _.fold(false.pure[F])(tryTransition) }
+      case transitioned =>
+        transitioned.contains(true).pure[F]
     }
 
   /** Get the Genesis candidate from the bootstrap node and keep polling until we can do the transition. */
@@ -277,13 +280,13 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
       case Some(Status(_, block))
           if !block.getHeader.getState.bonds
             .map(_.validatorPublicKey)
-            .contains(approval.validatorPublicKey) =>
+            .contains(approval.approverPublicKey) =>
         Left(InvalidArgument("The signatory is not one of the bonded validators."))
 
       case _
           if !backend.validateSignature(
             blockHash,
-            approval.validatorPublicKey,
+            approval.approverPublicKey,
             approval.getSignature
           ) =>
         Left(InvalidArgument("Could not validate signature."))
@@ -351,7 +354,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         .delay {
           backend.canTransition(
             status.block,
-            status.candidate.approvals.map(_.validatorPublicKey).toSet
+            status.candidate.approvals.map(_.approverPublicKey).toSet
           )
         }
         .ifM(

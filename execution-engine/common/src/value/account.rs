@@ -136,17 +136,10 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
     }
 }
 
-#[allow(dead_code)]
-// Represents a key associated with some account and its weight.
-pub struct AssociatedKey {
-    key: PublicKey,
-    weight: Weight,
-}
-
-impl AssociatedKey {
-    pub fn new(key: PublicKey, weight: Weight) -> AssociatedKey {
-        AssociatedKey { key, weight }
-    }
+#[derive(PartialEq, Eq, Debug)]
+pub enum AddKeyFailure {
+    MaxKeysLimit,
+    DuplicateKey,
 }
 
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
@@ -156,19 +149,24 @@ impl AssociatedKeys {
     pub fn empty() -> AssociatedKeys {
         AssociatedKeys(BTreeMap::new())
     }
+
     pub fn new(key: PublicKey, weight: Weight) -> AssociatedKeys {
         let mut bt: BTreeMap<PublicKey, Weight> = BTreeMap::new();
         bt.insert(key, weight);
         AssociatedKeys(bt)
     }
+
     /// Adds new AssociatedKey to the set.
     /// Returns true if added successfully, false otherwise.
-    pub fn add_key(&mut self, key: PublicKey, weight: Weight) -> bool {
-        if self.0.len() == MAX_KEYS || self.0.contains_key(&key) {
-            false
+    #[allow(clippy::map_entry)]
+    pub fn add_key(&mut self, key: PublicKey, weight: Weight) -> Result<(), AddKeyFailure> {
+        if self.0.len() == MAX_KEYS {
+            Err(AddKeyFailure::MaxKeysLimit)
+        } else if self.0.contains_key(&key) {
+            Err(AddKeyFailure::DuplicateKey)
         } else {
             self.0.insert(key, weight);
-            true
+            Ok(())
         }
     }
 
@@ -270,7 +268,10 @@ impl FromBytes for AssociatedKeys {
         let (keys_map, rem): (BTreeMap<PublicKey, Weight>, &[u8]) = FromBytes::from_bytes(bytes)?;
         let mut keys = AssociatedKeys::empty();
         keys_map.into_iter().for_each(|(k, v)| {
-            keys.add_key(k, v);
+            // NOTE: we're ignoring potential errors (duplicate key, maximum number of elements).
+            // This is safe, for now, as we were the ones that serialized `AssociatedKeys` in the
+            // first place.
+            keys.add_key(k, v).unwrap();
         });
         Ok((keys, rem))
     }
@@ -421,14 +422,16 @@ impl FromBytes for Account {
 
 #[cfg(test)]
 mod tests {
-    use crate::value::account::{AssociatedKeys, PublicKey, Weight, KEY_SIZE, MAX_KEYS};
+    use crate::value::account::{
+        AddKeyFailure, AssociatedKeys, PublicKey, Weight, KEY_SIZE, MAX_KEYS,
+    };
 
     #[test]
     fn associated_keys_add() {
         let mut keys = AssociatedKeys::new([0u8; KEY_SIZE].into(), Weight::new(1));
         let new_pk = PublicKey([1u8; KEY_SIZE]);
         let new_pk_weight = Weight::new(2);
-        assert!(keys.add_key(new_pk.clone(), new_pk_weight.clone()));
+        assert!(keys.add_key(new_pk.clone(), new_pk_weight.clone()).is_ok());
         assert_eq!(keys.get(&new_pk), Some(&new_pk_weight))
     }
 
@@ -438,10 +441,13 @@ mod tests {
         assert_eq!(map.len(), 10);
         let mut keys = {
             let mut tmp = AssociatedKeys::empty();
-            map.for_each(|(key, weight)| assert!(tmp.add_key(key, weight)));
+            map.for_each(|(key, weight)| assert!(tmp.add_key(key, weight).is_ok()));
             tmp
         };
-        assert!(!keys.add_key(PublicKey([100u8; KEY_SIZE]), Weight::new(100)))
+        assert_eq!(
+            keys.add_key(PublicKey([100u8; KEY_SIZE]), Weight::new(100)),
+            Err(AddKeyFailure::MaxKeysLimit)
+        )
     }
 
     #[test]
@@ -449,7 +455,10 @@ mod tests {
         let pk = PublicKey([0u8; KEY_SIZE]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk.clone(), weight.clone());
-        assert!(!keys.add_key(pk.clone(), Weight::new(10)));
+        assert_eq!(
+            keys.add_key(pk.clone(), Weight::new(10)),
+            Err(AddKeyFailure::DuplicateKey)
+        );
         assert_eq!(keys.get(&pk), Some(&weight));
     }
 
