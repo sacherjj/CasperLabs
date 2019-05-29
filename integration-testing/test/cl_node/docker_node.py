@@ -92,7 +92,7 @@ class DockerNode(LoggingDockerBase):
         commands = self.container_command
         logging.info(f'{self.container_name} commands: {commands}')
 
-        env['CL_IGNORE_DEPLOY_SIGNATURE'] = 'false' # TODO: only for testing of signed deploys (OP-269)
+        env['CL_IGNORE_DEPLOY_SIGNATURE'] = 'false' #  for testing of signed deploys (OP-269)
         container = self.config.docker_client.containers.run(
             self.image_name,
             name=self.container_name,
@@ -103,7 +103,7 @@ class DockerNode(LoggingDockerBase):
             # If multiple tests are running in drone, local ports are duplicated.  Need a solution to this
             # Prior to implementing the python client.
             #ports={f'{self.GRPC_PORT}/tcp': self.config.grpc_port},  # Exposing grpc for Python Client
-            ports={'40401/tcp': 40401}, #, '40402/tcp': 40402},  # Exposing grpc for Python Client
+            ports={'40401/tcp': 40401, '40402/tcp': 40402},  # Exposing grpc for Python Client
             network=self.network,
             volumes=self.volumes,
             command=commands,

@@ -13,9 +13,13 @@ import ed25519
 
 from . import CasperMessage_pb2
 from .CasperMessage_pb2_grpc import DeployServiceStub
+from . import casper_pb2
+from .casper_pb2_grpc import CasperServiceStub
+from . import consensus_pb2
 
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 40401
+DEFAULT_INTERNAL_PORT = 40402
 
 
 class InternalError(Exception):
@@ -26,25 +30,6 @@ class InternalError(Exception):
     not have to worry about handling any other exceptions.
     """
     pass
-
-
-def read_deploy_code(filename: str):
-    """
-    Returns DeployCode object as defined in CasperMessage.proto
-    with its attribute code populated with compiled WASM code
-    read from the given file.
-
-    Note: similarly as the Scala client, currently we don't allow 
-    to pass anything in the args (ABI encoded arguments)
-    attribute of DeployCode.
-
-    :param filename: path to file with compiled WASM code
-    :return: a CasperMessage_pb2.DeployCode object
-    """
-    deploy_code = CasperMessage_pb2.DeployCode()
-    with open(filename, "rb") as f:
-        deploy_code.code = f.read()
-        return deploy_code
 
 
 def guarded(function):
@@ -71,37 +56,41 @@ class CasperClient:
     gRPC CasperLabs client.
     """
 
-    def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
+    def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, internal_port: int = DEFAULT_INTERNAL_PORT):
         """
         CasperLabs client's constructor.
 
-        :param host:  Hostname or IP of node on which gRPC service is running
-        :param port:  Port used for external gRPC API
+        :param host:           Hostname or IP of node on which gRPC service is running
+        :param port:           Port used for external gRPC API
+        :param internal_port:  Port used for internal gRPC API
         """
         self.host = host
         self.port = port
+        self.internal_port = internal_port
 
         client = self
 
-        class Node:
-            """
-            Helper class that is used by CasperClient implementation to reduce boilerplate code.
-            """
+        class GRPCService:
+
+            def __init__(self, port, serviceStub):
+                self.port = port
+                self.serviceStub = serviceStub
 
             def __getattr__(self, name):
-                address = client.host + ':' + str(client.port)
+                address = client.host + ':' + str(self.port)
 
                 def f(*args):
                     with grpc.insecure_channel(address) as channel:
-                        return getattr(DeployServiceStub(channel), name)(*args)
+                        return getattr(self.serviceStub(channel), name)(*args)
 
                 def g(*args):
                     with grpc.insecure_channel(address) as channel:
-                        yield from getattr(DeployServiceStub(channel), name[:-1])(*args)
+                        yield from getattr(self.serviceStub(channel), name[:-1])(*args)
 
                 return name.endswith('_') and g or f
 
-        self.node = Node()
+        self.node = GRPCService(self.port, DeployServiceStub)
+        self.casperService = GRPCService(self.port, CasperServiceStub)
 
     @guarded
     def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
@@ -126,7 +115,6 @@ class CasperClient:
         :return:              deserialized DeployServiceResponse object
         """
 
-
         def hash(data: bytes) -> str:
             h = blake2b(digest_size=32)
             h.update(data)
@@ -138,6 +126,27 @@ class CasperClient:
                 signing_key = ed25519.SigningKey(f.read())
                 return signing_key.sign(data, encoding='base16')
 
+        def read_code(filename: str):
+            with open(filename, "rb") as f:
+                return consensus_pb2.Deploy.Code(code=f.read())
+
+        body = consensus_pb2.Deploy.Body(session = read_code(session),
+                                         payment = read_code(payment))
+
+        header = consensus_pb2.Deploy.Header(account_public_key = b'',
+                                             nonce = nonce,
+                                             timestamp = int(time.time()),
+                                             gas_price = gas_price,
+                                             body_hash = b'')
+
+        d = consensus_pb2.Deploy(deploy_hash = b'',
+                                 header = header,
+                                 body = body,
+                                 signature = None)
+
+        data = casper_pb2.DeployRequest(deploy = d)
+
+        """
         data = CasperMessage_pb2.DeployData(
             address = from_addr,
             timestamp = int(time.time()),
@@ -152,7 +161,55 @@ class CasperClient:
             user = public_key and pathlib.Path(public_key).read_bytes(),
         )
         r = self.node.DoDeploy(data)
+        """
+        r = self.casperService.Deploy(data)
         return r
+
+
+        """
+
+// A smart contract invocation, singed by the account that sent it.
+message Deploy {
+    // blake2b256 hash of the `header`.
+    bytes deploy_hash = 1;
+    Header header = 2;
+    Body body = 3;
+    // Signature over `deploy_hash`.
+    Signature signature = 4;
+
+    message Header {
+        // Identifying the Account is the key used to sign the Deploy.
+        bytes account_public_key = 1;
+        // Monotonic nonce of the Account. Only the Deploy with the expected nonce can be executed straight away;
+        // anything higher has to wait until the Account gets into the correct state, i.e. the pending Deploys get
+        // executed on whichever Node they are currently waiting.
+        uint64 nonce = 2;
+        // Current time milliseconds.
+        uint64 timestamp = 3;
+        // Conversion rate between the cost of Wasm opcodes and the tokens sent by the `payment_code`.
+        uint64 gas_price = 4;
+        // Hash of the body structure as a whole.
+        bytes body_hash = 5;
+    }
+
+    message Body {
+        // Wasm code of the smart contract to be executed.
+        Code session = 1;
+        // Wasm code that transfers some tokens to the validators as payment in exchange to run the Deploy.
+        Code payment = 2;
+    }
+
+    // Code (either session or payment) to be deployed to the platform.
+    // Includes both binary instructions (wasm) and optionally, arguments
+    // to those instructions encoded via our ABI
+    message Code {
+        bytes code = 1; // wasm byte code
+        bytes args = 2; // ABI-encoded arguments
+    }
+}
+
+"""
+
 
     @guarded
     def showBlocks(self, depth: int = 1):
@@ -360,6 +417,8 @@ def command_line_tool():
                                      help='Hostname or IP of node on which gRPC service is running.')
             self.parser.add_argument('-p', '--port', required=False, default=DEFAULT_PORT, type=int,
                                      help='Port used for external gRPC API.')
+            self.parser.add_argument('--internal-port', required=False, default=DEFAULT_INTERNAL_PORT, type=int,
+                                     help='Port used for internal gRPC API.')
             self.sp = self.parser.add_subparsers(help='Choose a request')
 
         def addCommand(self, command: str, function, help, arguments):
@@ -374,7 +433,7 @@ def command_line_tool():
                 return 1
 
             args = self.parser.parse_args()
-            return args.function(CasperClient(args.host, args.port), args)
+            return args.function(CasperClient(args.host, args.port, args.internal_port), args)
 
     parser = Parser()
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
