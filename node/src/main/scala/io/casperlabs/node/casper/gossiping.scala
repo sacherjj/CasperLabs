@@ -473,7 +473,7 @@ package object gossiping {
                                   backend,
                                   NodeDiscovery[F],
                                   connectToGossip,
-                                  relayFactor = 10, //conf.server.approvalRelayFactor,
+                                  relayFactor = conf.server.approvalRelayFactor,
                                   genesis = genesis,
                                   maybeApproval = maybeApproveBlock(genesis)
                                 )
@@ -486,8 +486,8 @@ package object gossiping {
                                   NodeDiscovery[F],
                                   connectToGossip,
                                   bootstrap = bootstrap,
-                                  relayFactor = 10, // conf.server.approvalRelayFactor,
-                                  pollInterval = 30.seconds, //conf.server.approvalPollInterval,
+                                  relayFactor = conf.server.approvalRelayFactor,
+                                  pollInterval = conf.server.approvalPollInterval,
                                   downloadManager = downloadManager
                                 )
                    } yield approver

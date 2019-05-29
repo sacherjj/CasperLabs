@@ -330,15 +330,15 @@ private[configuration] final case class Options private (
         "Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes."
       )
 
-    // @scallop
-    // val serverApprovalRelayFactor =
-    //   gen[Int]("Number of nodes to relay genesis approvals to.")
+    @scallop
+    val serverApprovalRelayFactor =
+      gen[Int]("Number of nodes to relay genesis approvals to.")
 
-    // @scallop
-    // val serverApprovalPollInterval =
-    //   gen[FiniteDuration](
-    //     "Time to wait between asking the bootstrap node for an updated list of genesis approvals."
-    //   )
+    @scallop
+    val serverApprovalPollInterval =
+      gen[FiniteDuration](
+        "Time to wait between asking the bootstrap node for an updated list of genesis approvals."
+      )
 
     // @scallop
     // val serverSyncMaxPossibleDepth =
