@@ -671,7 +671,7 @@ where
     let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
 
     let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
-    let rng = ChaChaRng::from_rng(current_runtime.context.rng().clone()).map_err(Error::Rng)?;
+    let rng = ChaChaRng::from_rng(current_runtime.context.rng()).map_err(Error::Rng)?;
     let mut runtime = Runtime {
         memory,
         module: parity_module,

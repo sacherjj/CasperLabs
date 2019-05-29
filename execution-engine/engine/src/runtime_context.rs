@@ -95,8 +95,8 @@ where
         &self.args
     }
 
-    pub fn rng(&self) -> &ChaChaRng {
-        &self.rng
+    pub fn rng(&mut self) -> &mut ChaChaRng {
+        &mut self.rng
     }
 
     pub fn state(&self) -> Rc<RefCell<TrackingCopy<R>>> {
