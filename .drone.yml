@@ -60,7 +60,9 @@ pipeline:
   rust-compile-test:
     commands:
       - "cd execution-engine/"
-      - "~/.cargo/bin/cargo update && ~/.cargo/bin/cargo build && ~/.cargo/bin/cargo test"
+      - "~/.cargo/bin/cargo update"
+      - "~/.cargo/bin/cargo build"
+      - "~/.cargo/bin/cargo test"
     image: "casperlabs/buildenv:latest"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
