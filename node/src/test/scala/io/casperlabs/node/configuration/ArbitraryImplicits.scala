@@ -32,6 +32,11 @@ trait ArbitraryImplicits {
     Gen.const(true)
   }
 
+  // Got into trouble with values like -4.587171438322464E-226
+  implicit val doubleGen: Arbitrary[Double] = Arbitrary {
+    Gen.oneOf(0.1, 0.5, 1.0, 1.5, 2.0, 10.0)
+  }
+
   implicit val nodeGen: Arbitrary[Node] = Arbitrary {
     for {
       n       <- Gen.choose(1, 100)

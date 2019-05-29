@@ -352,7 +352,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverSyncMaxBranchingFactor =
-      gen[Int](
+      gen[Double](
         "Maximum branching factor to allow during syncs before terminating the operation as malicious."
       )
 

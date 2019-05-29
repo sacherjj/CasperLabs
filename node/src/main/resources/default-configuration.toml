@@ -62,7 +62,7 @@ sync-max-possible-depth = 1000
 sync-min-block-count-to-check-branching-factor = 100
 
 # Maximum branching factor to allow during syncs before terminating the operation as malicious.
-sync-max-branching-factor = 1
+sync-max-branching-factor = 1.5
 
 # Maximum DAG depth to ask in iterative requests during syncing.
 sync-max-depth-ancestors-request = 10

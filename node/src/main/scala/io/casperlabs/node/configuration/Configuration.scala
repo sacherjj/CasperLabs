@@ -74,7 +74,7 @@ object Configuration extends ParserImplicits {
       approvalPollInterval: FiniteDuration,
       syncMaxPossibleDepth: Int, // Refined Positive,
       syncMinBlockCountToCheckBranchingFactor: Int,
-      syncMaxBranchingFactor: Int,
+      syncMaxBranchingFactor: Double,
       syncMaxDepthAncestorsRequest: Int,
       downloadMaxParallelBlocks: Int,
       cleanBlockStorage: Boolean

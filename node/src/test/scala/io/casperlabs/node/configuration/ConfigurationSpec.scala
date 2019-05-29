@@ -66,7 +66,7 @@ class ConfigurationSpec
       approvalPollInterval = FiniteDuration(1, TimeUnit.SECONDS),
       syncMaxPossibleDepth = 1,
       syncMinBlockCountToCheckBranchingFactor = 1,
-      syncMaxBranchingFactor = 1,
+      syncMaxBranchingFactor = 1.0,
       syncMaxDepthAncestorsRequest = 1,
       downloadMaxParallelBlocks = 1,
       cleanBlockStorage = false
