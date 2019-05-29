@@ -10,7 +10,7 @@ import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.{Approval, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
-import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.{Bootstrap, SynchronizationError}
+import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.SynchronizationError
 import io.casperlabs.comm.gossiping.InitialSynchronizationSpec.TestFixture
 import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.metrics.Metrics
@@ -49,9 +49,9 @@ class InitialSynchronizationSpec
             nodes,
             tips,
             memoizeNodes = true,
-            selectNodes = { (bootstrap, nodes) =>
+            selectNodes = { nodes =>
               counter.increment()
-              bootstrap :: nodes
+              nodes
             },
             minSuccessful = pos(nodes.size),
             sync = (_, _) => Task.raiseError(new RuntimeException),
@@ -258,8 +258,7 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
         nodes: List[Node],
         tips: List[BlockSummary],
         sync: (Node, Seq[ByteString]) => Task[Boolean] = (_, _) => Task(true),
-        selectNodes: (InitialSynchronizationImpl.Bootstrap, List[Node]) => List[Node] = (b, ns) =>
-          (ns.toSet + b).toList,
+        selectNodes: List[Node] => List[Node] = _.distinct,
         memoizeNodes: Boolean = false,
         minSuccessful: Int Refined Positive = Int.MaxValue,
         skipFailedNodesInNextRounds: Boolean = false,
@@ -270,7 +269,6 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
       val effect = new InitialSynchronizationImpl(
         nodeDiscovery = new MockNodeDiscovery(nodes),
         mockGossipServiceServer,
-        Bootstrap(nodes.head),
         selectNodes,
         memoizeNodes,
         _ => Task(mockGossipService),

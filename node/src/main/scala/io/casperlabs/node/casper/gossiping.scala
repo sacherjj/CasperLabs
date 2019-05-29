@@ -655,25 +655,21 @@ package object gossiping {
       connectToGossip: GossipService.Connector[F],
       isInitialRef: Ref[F, Boolean]
   ): Resource[F, Unit] =
-    conf.server.bootstrap map { bootstrap =>
-      for {
-        initialSync <- Resource.pure[F, InitialSynchronization[F]] {
-                        new InitialSynchronizationImpl(
-                          NodeDiscovery[F],
-                          gossipServiceServer,
-                          InitialSynchronizationImpl.Bootstrap(bootstrap),
-                          selectNodes =
-                            (b, ns) => Random.shuffle(b +: ns).take(conf.server.initSyncMaxNodes),
-                          minSuccessful = conf.server.initSyncMinSuccessful,
-                          memoizeNodes = conf.server.initSyncMemoizeNodes,
-                          skipFailedNodesInNextRounds = conf.server.initSyncSkipFailedNodes,
-                          roundPeriod = conf.server.initSyncRoundPeriod,
-                          connector = connectToGossip
-                        )
-                      }
-        _ <- makeFiberResource(initialSync.sync() >> isInitialRef.set(false))
-      } yield ()
-    } getOrElse Resource.pure(())
+    for {
+      initialSync <- Resource.pure[F, InitialSynchronization[F]] {
+                      new InitialSynchronizationImpl(
+                        NodeDiscovery[F],
+                        gossipServiceServer,
+                        selectNodes = ns => Random.shuffle(ns).take(conf.server.initSyncMaxNodes),
+                        minSuccessful = conf.server.initSyncMinSuccessful,
+                        memoizeNodes = conf.server.initSyncMemoizeNodes,
+                        skipFailedNodesInNextRounds = conf.server.initSyncSkipFailedNodes,
+                        roundPeriod = conf.server.initSyncRoundPeriod,
+                        connector = connectToGossip
+                      )
+                    }
+      _ <- makeFiberResource(initialSync.sync() >> isInitialRef.set(false))
+    } yield ()
 
   /** The TransportLayer setup prints the number of peers now and then which integration tests
     * may depend upon. We aren't using the `Connect` functionality so have to do it another way. */

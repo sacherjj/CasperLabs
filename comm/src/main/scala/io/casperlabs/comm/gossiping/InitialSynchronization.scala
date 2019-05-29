@@ -38,8 +38,7 @@ trait InitialSynchronization[F[_]] {
 class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
     nodeDiscovery: NodeDiscovery[F],
     selfGossipService: GossipServiceServer[F],
-    bootstrap: InitialSynchronizationImpl.Bootstrap,
-    selectNodes: (InitialSynchronizationImpl.Bootstrap, List[Node]) => List[Node],
+    selectNodes: List[Node] => List[Node],
     memoizeNodes: Boolean,
     connector: GossipService.Connector[F],
     minSuccessful: Int Refined Positive,
@@ -84,7 +83,7 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
                     (if (skipFailedNodesInNextRounds) successful else nodes).pure[F]
                   } else {
                     nodeDiscovery.alivePeersAscendingDistance.map { peers =>
-                      val nodes = selectNodes(bootstrap, peers.filterNot(_ == bootstrap))
+                      val nodes = selectNodes(peers)
                       if (skipFailedNodesInNextRounds) {
                         nodes.filterNot(newFailed)
                       } else {
@@ -104,7 +103,7 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
 
     nodeDiscovery.alivePeersAscendingDistance
       .flatMap { peers =>
-        val nodesToSyncWith = selectNodes(bootstrap, peers.filterNot(_ == bootstrap))
+        val nodesToSyncWith = selectNodes(peers)
         loop(nodesToSyncWith, Set.empty)
       }
       .start
@@ -114,15 +113,5 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
 }
 
 object InitialSynchronizationImpl {
-
-  import shapeless.tag.@@
-  import shapeless.tag
-
-  sealed trait BootstrapTag
-
-  type Bootstrap = Node @@ BootstrapTag
-
   final case class SynchronizationError() extends Exception
-
-  def Bootstrap(node: Node): Bootstrap = node.asInstanceOf[Bootstrap]
 }
