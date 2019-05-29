@@ -115,7 +115,7 @@ package object gossiping {
       }
 
       // The StashingSynchronizer will start a fiber to await on the above.
-      synchronizer <- makeSynchronizer(connectToGossip, awaitApproval)
+      synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval)
 
       gossipServiceServer <- makeGossipServiceServer(
                               port,
@@ -273,8 +273,7 @@ package object gossiping {
         .map(x => ByteString.copyFrom(x.publicKey))
         .filterNot(_.isEmpty)
       downloadManager <- DownloadManagerImpl[F](
-                          // TODO: Add to config.
-                          maxParallelDownloads = 10,
+                          maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
                           connectToGossip = connectToGossip,
                           backend = new DownloadManagerImpl.Backend[F] {
                             override def hasBlock(blockHash: ByteString): F[Boolean] =
@@ -298,7 +297,7 @@ package object gossiping {
                             override def storeBlockSummary(
                                 summary: BlockSummary
                             ): F[Unit] =
-                              // TODO: Add separate storage for summaries.
+                              // Storing the block automatically stores the summary as well.
                               ().pure[F]
                           },
                           relaying = relaying,
@@ -474,8 +473,7 @@ package object gossiping {
                                   backend,
                                   NodeDiscovery[F],
                                   connectToGossip,
-                                  // TODO: Move to config.
-                                  relayFactor = 10,
+                                  relayFactor = 10, //conf.server.approvalRelayFactor,
                                   genesis = genesis,
                                   maybeApproval = maybeApproveBlock(genesis)
                                 )
@@ -488,9 +486,8 @@ package object gossiping {
                                   NodeDiscovery[F],
                                   connectToGossip,
                                   bootstrap = bootstrap,
-                                  // TODO: Move to config.
-                                  relayFactor = 10,
-                                  pollInterval = 30.seconds,
+                                  relayFactor = 10, // conf.server.approvalRelayFactor,
+                                  pollInterval = 30.seconds, //conf.server.approvalPollInterval,
                                   downloadManager = downloadManager
                                 )
                    } yield approver
@@ -498,6 +495,7 @@ package object gossiping {
     } yield approver
 
   private def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: BlockDagStorage](
+      conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
@@ -531,12 +529,19 @@ package object gossiping {
                          override def notInDag(blockHash: ByteString): F[Boolean] =
                            isInDag(blockHash).map(!_)
                        },
-                       // TODO: Move to config.
+                       // NOTE: Wanted to add type refinements to the configuration instead,
+                       // but got MatchErrors in the tests.
                        maxPossibleDepth = 1000,
-                       minBlockCountToCheckBranchingFactor = 100,
+                       // refineV[Positive](conf.server.syncMaxPossibleDepth).right.get,
+                       minBlockCountToCheckBranchingFactor = 100, //refineV[NonNegative](
+                       //  conf.server.syncMinBlockCountToCheckBranchingFactor
+                       //).right.get,
                        // Really what we should be looking at is the width at any rank being less than the number of validators.
-                       maxBranchingFactor = 1.5,
+                       maxBranchingFactor = 1.5, //refineV[GreaterEqual[W.`1.0`.T]](
+                       //  conf.server.syncMaxBranchingFactor
+                       //).right.get,
                        maxDepthAncestorsRequest = 10
+                       //refineV[Positive](conf.server.syncMaxDepthAncestorsRequest).right.get
                      )
                    }
       stashing <- StashingSynchronizer.wrap(underlying, awaitApproved)

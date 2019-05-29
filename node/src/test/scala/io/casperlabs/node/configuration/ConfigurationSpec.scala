@@ -2,10 +2,12 @@ package io.casperlabs.node.configuration
 
 import java.nio.file.{Files, Path, Paths, StandardOpenOption}
 import java.util.concurrent.TimeUnit
-
 import cats.data.Validated.Valid
 import cats.syntax.option._
 import cats.syntax.show._
+import eu.timepit.refined._
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
 import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.discovery.NodeUtils._
@@ -60,6 +62,13 @@ class ConfigurationSpec
       useGossiping = true,
       relayFactor = 1,
       relaySaturation = 1,
+      // approvalRelayFactor = 1,
+      // approvalPollInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      // syncMaxPossibleDepth = 1,
+      // syncMinBlockCountToCheckBranchingFactor = 1,
+      // syncMaxBranchingFactor = 1,
+      // syncMaxDepthAncestorsRequest = 1,
+      downloadMaxParallelBlocks = 1,
       cleanBlockStorage = false
     )
     val grpcServer = Configuration.GrpcServer(

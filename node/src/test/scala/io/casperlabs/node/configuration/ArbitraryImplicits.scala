@@ -1,7 +1,10 @@
 package io.casperlabs.node.configuration
+
 import java.io.File
 import java.nio.file.{Path, Paths}
-
+import eu.timepit.refined._
+import eu.timepit.refined.numeric._
+import eu.timepit.refined.api.Refined
 import com.google.protobuf.ByteString
 import io.casperlabs.comm.discovery.Node
 import org.scalacheck.{Arbitrary, Gen}
@@ -45,5 +48,11 @@ trait ArbitraryImplicits {
     for {
       n <- Gen.choose(0, Int.MaxValue)
     } yield FiniteDuration(n.toLong, MILLISECONDS)
+  }
+
+  implicit val positiveIntGen: Arbitrary[Refined[Int, Positive]] = Arbitrary {
+    for {
+      n <- Gen.choose(1, Int.MaxValue)
+    } yield refineV[Positive](n).right.get
   }
 }

@@ -6,6 +6,9 @@ import cats.data.{NonEmptyList, ValidatedNel}
 import cats.syntax.either._
 import cats.syntax.option._
 import cats.syntax.validated._
+import eu.timepit.refined._
+import eu.timepit.refined.numeric._
+import eu.timepit.refined.api.Refined
 import io.casperlabs.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.node.configuration.Utils._
@@ -15,7 +18,7 @@ import io.casperlabs.configuration.{relativeToDataDir, SubConfig}
 import io.casperlabs.shared.StoreType
 import shapeless.<:!<
 import toml.Toml
-
+import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
 
 /**
@@ -67,8 +70,16 @@ object Configuration extends ParserImplicits {
       useGossiping: Boolean,
       relayFactor: Int,
       relaySaturation: Int,
+      // approvalRelayFactor: Int,
+      // approvalPollInterval: FiniteDuration,
+      // syncMaxPossibleDepth: Int, // Refined Positive,
+      // syncMinBlockCountToCheckBranchingFactor: Int,
+      // syncMaxBranchingFactor: Int,
+      // syncMaxDepthAncestorsRequest: Int,
+      downloadMaxParallelBlocks: Int,
       cleanBlockStorage: Boolean
   ) extends SubConfig
+
   case class GrpcServer(
       host: String,
       socket: Path,

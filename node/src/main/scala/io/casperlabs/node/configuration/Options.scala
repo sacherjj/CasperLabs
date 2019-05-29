@@ -330,6 +330,40 @@ private[configuration] final case class Options private (
         "Percentage (in between 0 and 100) of nodes required to have already seen a new block before stopping to try to gossip it to new nodes."
       )
 
+    // @scallop
+    // val serverApprovalRelayFactor =
+    //   gen[Int]("Number of nodes to relay genesis approvals to.")
+
+    // @scallop
+    // val serverApprovalPollInterval =
+    //   gen[FiniteDuration](
+    //     "Time to wait between asking the bootstrap node for an updated list of genesis approvals."
+    //   )
+
+    // @scallop
+    // val serverSyncMaxPossibleDepth =
+    //   gen[Int]("Maximum DAG depth to allow when syncing after a new block notification.")
+
+    // @scallop
+    // val syncMinBlockCountToCheckBranchingFactor =
+    //   gen[Int](
+    //     "Minimum DAG depth before we start checking the branching factor for abnormal growth."
+    //   )
+
+    // @scallop
+    // val syncMaxBranchingFactor =
+    //   gen[Double](
+    //     "Maximum branching factor to allow during syncs before terminating the operation as malicious."
+    //   )
+
+    // @scallop
+    // val syncMaxDepthAncestorsRequest =
+    //   gen[Int]("Maximum DAG depth to ask in iterative requests during syncing.")
+
+    @scallop
+    val serverDownloadMaxParallelBlocks =
+      gen[Int]("Maximum number of parallel blocks downloads initiated by the download manager.")
+
     @scallop
     val casperStandalone =
       gen[Flag](
