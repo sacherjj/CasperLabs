@@ -47,8 +47,6 @@ where
         }
     }
 
-    // TODO run_deploy should perform preprocessing and validation of the deploy.
-    // It should validate the signatures, ocaps etc.
     #[allow(clippy::too_many_arguments)]
     pub fn run_deploy<A, P: Preprocessor<A>, E: Executor<A>>(
         &self,

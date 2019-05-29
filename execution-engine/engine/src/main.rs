@@ -199,9 +199,6 @@ fn main() {
     let timestamp: u64 = 100_000;
     let protocol_version: u64 = 1;
 
-    // let path = std::path::Path::new("./tmp/");
-    // TODO: Better error handling?
-    //    let global_state = LmdbGs::new(&path).unwrap();
     let init_state = mocked_account(account_addr);
     let global_state =
         InMemoryGlobalState::from_pairs(&init_state).expect("Could not create global state");
