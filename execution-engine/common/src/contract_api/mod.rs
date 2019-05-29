@@ -34,7 +34,7 @@ where
     let key: Key = u_ptr.into();
     let value = read_untyped(&key);
     value
-        .unwrap() // TODO: return an Option instead of unwrapping (https://casperlabs.atlassian.net/browse/EE-348)
+        .unwrap() // TODO: return an Option instead of unwrapping (https://casperlabs.atlassian.net/browse/EE-349)
         .try_into()
         .map_err(|_| "T could not be derived from Value")
         .unwrap()
