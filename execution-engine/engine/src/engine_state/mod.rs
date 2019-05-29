@@ -62,23 +62,11 @@ where
         preprocessor: &P,
     ) -> Result<ExecutionResult, RootNotFound> {
         let module = match preprocessor.preprocess(module_bytes) {
-            Err(error) => {
-                return Ok(ExecutionResult::Failure {
-                    error: error.into(),
-                    effect: Default::default(),
-                    cost: 0,
-                })
-            }
+            Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
             Ok(module) => module,
         };
         let checkout_result = match self.tracking_copy(prestate_hash) {
-            Err(error) => {
-                return Ok(ExecutionResult::Failure {
-                    error,
-                    effect: Default::default(),
-                    cost: 0,
-                })
-            }
+            Err(error) => return Ok(ExecutionResult::precondition_failure(error)),
             Ok(checkout_result) => checkout_result,
         };
         let tracking_copy = match checkout_result {

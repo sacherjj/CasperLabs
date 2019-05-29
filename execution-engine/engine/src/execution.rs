@@ -746,11 +746,7 @@ macro_rules! on_fail_charge {
             Ok(res) => res,
             Err(e) => {
                 let exec_err: ::execution::Error = e.into();
-                return ExecutionResult::Failure {
-                    error: exec_err.into(),
-                    effect: Default::default(),
-                    cost: 0,
-                };
+                return ExecutionResult::precondition_failure(exec_err.into());
             }
         }
     };
@@ -830,17 +826,13 @@ impl Executor<Module> for WasmiExecutor {
         };
         let account = value.as_account();
         // Check the difference of a request nonce and account nonce.
-        // Since both nonce ant account's nonce are unsigned, so line below performs
+        // Since both nonce and account's nonce are unsigned, so line below performs
         // a checked subtraction, where underflow (or overflow) would be safe.
         let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
         // Difference should always be 1 greater than current nonce for a
         // given account.
         if delta != 1 {
-            return ExecutionResult::Failure {
-                error: Error::InvalidNonce.into(),
-                effect: Default::default(),
-                cost: 0,
-            };
+            return ExecutionResult::precondition_failure(Error::InvalidNonce.into());
         }
 
         let mut updated_account = account.clone();
