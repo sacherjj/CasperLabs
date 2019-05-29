@@ -15,5 +15,6 @@ grpcio = ">=1.20"
 grpcio-tools = ">=1.20"
 ed25519 = "*"
 in-place = "*"
+pyblake2 = "*"
 
 [dev-packages]

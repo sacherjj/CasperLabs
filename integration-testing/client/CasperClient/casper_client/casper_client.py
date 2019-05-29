@@ -8,6 +8,8 @@ import argparse
 import grpc
 import functools
 import pathlib
+from pyblake2 import blake2b
+import ed25519
 
 from . import CasperMessage_pb2
 from .CasperMessage_pb2_grpc import DeployServiceStub
@@ -124,6 +126,18 @@ class CasperClient:
         :return:              deserialized DeployServiceResponse object
         """
 
+
+        def hash(data: bytes) -> str:
+            h = blake2b(digest_size=32)
+            h.update(data)
+            #return h.digest()
+            return h.hexdigest()
+
+        def sign(data: bytes):
+            with open(private_key,"rb") as f:
+                signing_key = ed25519.SigningKey(f.read())
+                return signing_key.sign(data, encoding='base16')
+
         data = CasperMessage_pb2.DeployData(
             address = from_addr,
             timestamp = int(time.time()),
@@ -132,12 +146,13 @@ class CasperClient:
             gas_limit = gas_limit,
             gas_price = gas_price,
             nonce = nonce,
-            sig_algorithm = "Ed25519",
+            sig_algorithm = "ed25519",
             #bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
             signature = b'', #TODO
-            user = pathlib.Path(public_key).read_bytes(),
+            user = public_key and pathlib.Path(public_key).read_bytes(),
         )
-        return self.node.DoDeploy(data)
+        r = self.node.DoDeploy(data)
+        return r
 
     @guarded
     def showBlocks(self, depth: int = 1):
