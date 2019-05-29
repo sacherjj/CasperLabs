@@ -64,7 +64,7 @@ object Servers {
         (_: Scheduler) =>
           GrpcControlService(blockApiLock) map {
             ControlGrpcMonix.bindService(_, grpcExecutor)
-          }
+        }
       ),
       interceptors = List(
         new MetricsInterceptor(),
@@ -75,7 +75,8 @@ object Servers {
     )
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: SafetyOracle: BlockStore: ExecutionEngineService](
+  def externalServersR[
+      F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: SafetyOracle: BlockStore: ExecutionEngineService](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler,
@@ -90,11 +91,11 @@ object Servers {
         (_: Scheduler) =>
           GrpcDeployService.instance(blockApiLock, ignoreDeploySignature) map {
             CasperMessageGrpcMonix.bindService(_, grpcExecutor)
-          },
+        },
         (_: Scheduler) =>
           GrpcCasperService(ignoreDeploySignature) map {
             CasperGrpcMonix.bindService(_, grpcExecutor)
-          }
+        }
       ),
       interceptors = List(
         new MetricsInterceptor(),
@@ -129,6 +130,7 @@ object Servers {
           }
       _ <- BlazeServerBuilder[Task]
             .bindHttp(port, "0.0.0.0")
+            .withNio2(true)
             .withHttpApp(
               Router(
                 "/metrics" -> prometheusService,
