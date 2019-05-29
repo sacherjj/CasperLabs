@@ -78,6 +78,7 @@ object Configuration extends ParserImplicits {
       syncMaxDepthAncestorsRequest: Int Refined Positive,
       downloadMaxParallelBlocks: Int,
       relayMaxParallelBlocks: Int,
+      relayBlockChunkConsumerTimeout: FiniteDuration,
       cleanBlockStorage: Boolean
   ) extends SubConfig
 

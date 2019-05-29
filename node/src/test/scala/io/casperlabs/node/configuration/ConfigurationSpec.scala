@@ -70,6 +70,7 @@ class ConfigurationSpec
       syncMaxDepthAncestorsRequest = 1,
       downloadMaxParallelBlocks = 1,
       relayMaxParallelBlocks = 1,
+      relayBlockChunkConsumerTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       cleanBlockStorage = false
     )
     val grpcServer = Configuration.GrpcServer(

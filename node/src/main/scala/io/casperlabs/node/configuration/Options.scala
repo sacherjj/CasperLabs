@@ -369,6 +369,9 @@ private[configuration] final case class Options private (
       gen[Int]("Maximum number of parallel block downloads allowed to peers.")
 
     @scallop
+    val serverRelayBlockChunkConsumerTimeout =
+      gen[FiniteDuration]("Maximum time to allow a peer downloading a block to consume each chunk.")
+    @scallop
     val casperStandalone =
       gen[Flag](
         "Start a stand-alone node (no bootstrapping).",
