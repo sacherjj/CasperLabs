@@ -72,10 +72,10 @@ object Configuration extends ParserImplicits {
       relaySaturation: Int,
       approvalRelayFactor: Int,
       approvalPollInterval: FiniteDuration,
-      syncMaxPossibleDepth: Int, // Refined Positive,
-      syncMinBlockCountToCheckBranchingFactor: Int,
-      syncMaxBranchingFactor: Double,
-      syncMaxDepthAncestorsRequest: Int,
+      syncMaxPossibleDepth: Int Refined Positive,
+      syncMinBlockCountToCheckBranchingFactor: Int Refined NonNegative,
+      syncMaxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
+      syncMaxDepthAncestorsRequest: Int Refined Positive,
       downloadMaxParallelBlocks: Int,
       cleanBlockStorage: Boolean
   ) extends SubConfig

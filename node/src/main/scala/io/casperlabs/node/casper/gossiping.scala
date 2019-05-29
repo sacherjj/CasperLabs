@@ -529,19 +529,12 @@ package object gossiping {
                          override def notInDag(blockHash: ByteString): F[Boolean] =
                            isInDag(blockHash).map(!_)
                        },
-                       // NOTE: Wanted to add type refinements to the configuration instead,
-                       // but got MatchErrors in the tests.
-                       maxPossibleDepth = 1000,
-                       // refineV[Positive](conf.server.syncMaxPossibleDepth).right.get,
-                       minBlockCountToCheckBranchingFactor = 100, //refineV[NonNegative](
-                       //  conf.server.syncMinBlockCountToCheckBranchingFactor
-                       //).right.get,
+                       maxPossibleDepth = conf.server.syncMaxPossibleDepth,
+                       minBlockCountToCheckBranchingFactor =
+                         conf.server.syncMinBlockCountToCheckBranchingFactor,
                        // Really what we should be looking at is the width at any rank being less than the number of validators.
-                       maxBranchingFactor = 1.5, //refineV[GreaterEqual[W.`1.0`.T]](
-                       //  conf.server.syncMaxBranchingFactor
-                       //).right.get,
-                       maxDepthAncestorsRequest = 10
-                       //refineV[Positive](conf.server.syncMaxDepthAncestorsRequest).right.get
+                       maxBranchingFactor = conf.server.syncMaxBranchingFactor,
+                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest
                      )
                    }
       stashing <- StashingSynchronizer.wrap(underlying, awaitApproved)
