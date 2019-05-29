@@ -286,9 +286,7 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
 pub fn is_valid<T: Into<Value>>(t: T) -> bool {
     let value = t.into();
     let (value_ptr, value_size, _bytes) = to_ptr(&value);
-    let result = unsafe {
-        ext_ffi::is_valid(value_ptr, value_size)
-    };
+    let result = unsafe { ext_ffi::is_valid(value_ptr, value_size) };
     if result == 0 {
         false
     } else {
