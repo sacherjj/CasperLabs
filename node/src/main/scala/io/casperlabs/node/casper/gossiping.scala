@@ -2,6 +2,7 @@ package io.casperlabs.node.casper
 
 import cats._
 import cats.effect._
+import cats.effect.concurrent._
 import cats.implicits._
 import cats.data.OptionT
 import cats.temp.par.Par
@@ -116,7 +117,8 @@ package object gossiping {
       }
 
       // The StashingSynchronizer will start a fiber to await on the above.
-      synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval)
+      isInitialRef <- Resource.liftF(Ref.of[F, Boolean](true))
+      synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval, isInitialRef)
 
       gossipServiceServer <- makeGossipServiceServer(
                               port,
@@ -129,7 +131,7 @@ package object gossiping {
                             )
 
       // Start syncing with the bootstrap in the background.
-      _ <- makeInitialSynchronization(conf, gossipServiceServer, connectToGossip)
+      _ <- makeInitialSynchronization(conf, gossipServiceServer, connectToGossip, isInitialRef)
 
       // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
       _ <- makePeerCountPrinter
@@ -501,7 +503,8 @@ package object gossiping {
   private def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: BlockDagStorage](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
-      awaitApproved: F[Unit]
+      awaitApproved: F[Unit],
+      isInitialRef: Ref[F, Boolean]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
       _ <- SynchronizerImpl.establishMetrics[F]
@@ -538,7 +541,9 @@ package object gossiping {
                          conf.server.syncMinBlockCountToCheckBranchingFactor,
                        // Really what we should be looking at is the width at any rank being less than the number of validators.
                        maxBranchingFactor = conf.server.syncMaxBranchingFactor,
-                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest
+                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
+                       maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
+                       isInitialRef = isInitialRef
                      )
                    }
       stashing <- StashingSynchronizer.wrap(underlying, awaitApproved)
@@ -643,12 +648,12 @@ package object gossiping {
 
     } yield server
 
-  /** Make the best effort so sync with the bootstrap node and some others.
-    * Nothing really depends on this at the moment so just do it in the background. */
+  /** Initially sync with the bootstrap node and/or some others. */
   private def makeInitialSynchronization[F[_]: Concurrent: Par: Log: Timer: NodeDiscovery](
       conf: Configuration,
       gossipServiceServer: GossipServiceServer[F],
-      connectToGossip: GossipService.Connector[F]
+      connectToGossip: GossipService.Connector[F],
+      isInitialRef: Ref[F, Boolean]
   ): Resource[F, Unit] =
     conf.server.bootstrap map { bootstrap =>
       for {
@@ -666,7 +671,7 @@ package object gossiping {
                           connector = connectToGossip
                         )
                       }
-        _ <- makeFiberResource(initialSync.sync())
+        _ <- makeFiberResource(initialSync.sync() >> isInitialRef.set(false))
       } yield ()
     } getOrElse Resource.pure(())
 
