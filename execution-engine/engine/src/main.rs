@@ -69,49 +69,59 @@ struct Task {
 
 fn apply_effects<H>(
     engine_state: &EngineState<H>,
-    state_hash: &mut Blake2bHash,
+    pre_state_hash: &Blake2bHash,
     effects: ExecutionEffect,
-) -> (LogLevel, String, BTreeMap<String, String>)
+) -> (
+    LogLevel,
+    String,
+    BTreeMap<String, String>,
+    Option<Blake2bHash>,
+)
 where
     H: History,
     H::Error: Into<execution_engine::execution::Error> + Debug,
 {
-    let mut log_level = LogLevel::Info;
-    let mut properties: BTreeMap<String, String> = BTreeMap::new();
-    let mut error_message: String = String::new();
-
-    match engine_state.apply_effect(*state_hash, effects.1) {
+    match engine_state.apply_effect(*pre_state_hash, effects.1) {
         Ok(CommitResult::RootNotFound) => {
-            log_level = LogLevel::Warning;
-            error_message = format!("root {:?} not found", state_hash);
-            properties.insert(String::from("root-hash"), format!("{:?}", state_hash));
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+            let error_message = format!("root {:?} not found", pre_state_hash);
+            properties.insert(String::from("root-hash"), format!("{:?}", pre_state_hash));
+            (LogLevel::Warning, error_message, properties, None)
         }
         Ok(CommitResult::KeyNotFound(key)) => {
-            log_level = LogLevel::Warning;
-            error_message = format!("key {:?} not found", key);
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+            let error_message = format!("key {:?} not found", key);
+            (LogLevel::Warning, error_message, properties, None)
         }
         Ok(CommitResult::TypeMismatch(type_mismatch)) => {
-            log_level = LogLevel::Warning;
-            error_message = format!("type mismatch: {:?} ", type_mismatch);
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+            let error_message = format!("type mismatch: {:?} ", type_mismatch);
+            (LogLevel::Warning, error_message, properties, None)
         }
         Ok(CommitResult::Overflow) => {
-            log_level = LogLevel::Warning;
-            error_message = String::from("overflow during addition");
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+            let error_message = String::from("overflow during addition");
+            (LogLevel::Warning, error_message, properties, None)
         }
         Ok(CommitResult::Success(new_root_hash)) => {
-            *state_hash = new_root_hash; // we need to keep updating the post state hash after each deploy
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
             properties.insert(
                 String::from("post-state-hash"),
                 format!("{:?}", new_root_hash),
             );
+            (
+                LogLevel::Info,
+                String::new(),
+                properties,
+                Some(new_root_hash),
+            )
         }
         Err(storage_err) => {
-            log_level = LogLevel::Error;
-            error_message = format!("{:?}", storage_err);
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+            let error_message = format!("{:?}", storage_err);
+            (LogLevel::Error, error_message, properties, None)
         }
     }
-
-    (log_level, error_message, properties)
 }
 
 fn log_message(
@@ -238,8 +248,10 @@ fn main() {
                 cost,
             }) => {
                 properties.insert("gas-cost".to_string(), format!("{:?}", cost));
-                let (log_level, error_message, mut new_properties) =
-                    apply_effects(&engine_state, &mut state_hash, effects);
+                let (log_level, error_message, mut new_properties, new_state_hash) =
+                    apply_effects(&engine_state, &state_hash, effects);
+
+                new_state_hash.map(|hash| state_hash = hash);
 
                 properties.append(&mut new_properties);
                 log_message(log_level, error_message, properties);
@@ -252,8 +264,10 @@ fn main() {
                 let log_level = LogLevel::Error;
                 properties.insert("gas-cost".to_string(), format!("{:?}", cost));
 
-                let (new_log_level, new_error_message, mut new_properties) =
-                    apply_effects(&engine_state, &mut state_hash, effects);
+                let (new_log_level, new_error_message, mut new_properties, new_state_hash) =
+                    apply_effects(&engine_state, &state_hash, effects);
+
+                new_state_hash.map(|hash| state_hash = hash);
 
                 new_properties.append(&mut properties.clone());
                 log_message(new_log_level, new_error_message, new_properties);
