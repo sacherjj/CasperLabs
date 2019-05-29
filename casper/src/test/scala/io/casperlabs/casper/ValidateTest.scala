@@ -30,9 +30,11 @@ import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
+import monix.execution.Scheduler
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import org.scalacheck.Arbitrary.arbitrary
 import scala.collection.immutable.HashMap
+import scala.concurrent.duration._
 
 class ValidateTest
     extends FlatSpec
@@ -55,6 +57,11 @@ class ValidateTest
   override def beforeEach(): Unit = {
     log.reset()
     timeEff.reset()
+  }
+
+  def withoutStorage(t: => Task[_]) = {
+    import Scheduler.Implicits.global
+    t.runSyncUnsafe(5.seconds)
   }
 
   def createChain[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
@@ -198,19 +205,50 @@ class ValidateTest
       } yield result
   }
 
-  "Deploy signature validation" should "return true for valid signatures" in {
+  "Deploy signature validation" should "return true for valid signatures" in withoutStorage {
     val deploy = sample(arbitrary[consensus.Deploy])
     Validate.deploySignature[Task](deploy) shouldBeF true
   }
 
-  it should "return false for invalid signatures" in {
+  it should "return false if a key in an approval is empty" in withoutStorage {
+    val genDeploy = for {
+      d <- arbitrary[consensus.Deploy]
+    } yield d.withApprovals(d.approvals.map(x => x.withApproverPublicKey(ByteString.EMPTY)))
+
+    val deploy = sample(genDeploy)
+    Validate.deploySignature[Task](deploy) shouldBeF false
+  }
+
+  it should "return false for missing signatures" in withoutStorage {
+    val genDeploy = for {
+      d <- arbitrary[consensus.Deploy]
+    } yield d.withApprovals(Nil)
+
+    val deploy = sample(genDeploy)
+    Validate.deploySignature[Task](deploy) shouldBeF false
+  }
+
+  it should "return false for invalid signatures" in withoutStorage {
     val genDeploy = for {
       d <- arbitrary[consensus.Deploy]
       h <- genHash
-    } yield d.withSignature(d.getSignature.withSig(h))
+    } yield d.withApprovals(d.approvals.map(a => a.withSignature(a.getSignature.withSig(h))))
 
     val deploy = sample(genDeploy)
-    Validate.deploySignature[Task](deploy) shouldBeF true
+    Validate.deploySignature[Task](deploy) shouldBeF false
+  }
+
+  it should "return false if there are valid and invalid signatures mixed" in withoutStorage {
+    val genDeploy = for {
+      d <- arbitrary[consensus.Deploy]
+      h <- genHash
+    } yield
+      d.withApprovals(
+        d.approvals ++ d.approvals.take(1).map(a => a.withSignature(a.getSignature.withSig(h)))
+      )
+
+    val deploy = sample(genDeploy)
+    Validate.deploySignature[Task](deploy) shouldBeF false
   }
 
   "Timestamp validation" should "not accept blocks with future time" in withStorage {

@@ -2,18 +2,18 @@ package io.casperlabs.blockstorage
 
 import cats._
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
 import io.casperlabs.blockstorage.InMemBlockStore.emptyMapRef
+import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElementsGen}
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
-import io.casperlabs.casper.consensus.{Block}
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
-import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElementsGen}
-import io.casperlabs.ipc.{Key, KeyHash, Op, ReadOp, Transform, TransformEntry, TransformIdentity}
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.PathOps._
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -44,7 +44,7 @@ trait BlockStoreTest
 
   def withStore[R](f: BlockStore[Task] => Task[R]): R
 
-  "Block Store" should "return Some(message) on get for a published key" in {
+  "Block Store" should "return Some(message) on get for a published key and return Some(blockSummary) on getSummary" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
       withStore { store =>
         val items = blockStoreElements
@@ -52,6 +52,13 @@ trait BlockStoreTest
           _ <- items.traverse_(store.put)
           _ <- items.traverse[Task, Assertion] { block =>
                 store.get(block.getBlockMessage.blockHash).map(_ shouldBe Some(block))
+                store
+                  .getBlockSummary(block.getBlockMessage.blockHash)
+                  .map(
+                    _ shouldBe Some(
+                      block.toBlockSummary
+                    )
+                  )
               }
           result <- store.find(_ => true).map(_.size shouldEqual items.size)
         } yield result
@@ -94,11 +101,20 @@ trait BlockStoreTest
         for {
           _ <- items.traverse_[Task, Unit] { case (k, v1, _) => store.put(k, v1) }
           _ <- items.traverse_[Task, Assertion] {
-                case (k, v1, _) => store.get(k).map(_ shouldBe Some(v1))
+                case (k, v1, _) => {
+                  store.get(k).map(_ shouldBe Some(v1))
+                  store
+                    .getBlockSummary(k)
+                    .map(_ shouldBe Some(v1.toBlockSummary))
+                }
               }
           _ <- items.traverse_[Task, Unit] { case (k, _, v2) => store.put(k, v2) }
           _ <- items.traverse_[Task, Assertion] {
-                case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2))
+                case (k, _, v2) =>
+                  store.get(k).map(_ shouldBe Some(v2))
+                  store
+                    .getBlockSummary(k)
+                    .map(_ shouldBe Some(v2.toBlockSummary))
               }
           result <- store.find(_ => true).map(_.size shouldEqual items.size)
         } yield result
@@ -125,12 +141,14 @@ trait BlockStoreTest
 class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val test = for {
-      refTask          <- emptyMapRef[Task]
+      refTask          <- emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)]
       approvedBlockRef <- Ref[Task].of(none[ApprovedBlock])
       metrics          = new MetricsNOP[Task]()
-      store            = InMemBlockStore.create[Task](Monad[Task], refTask, approvedBlockRef, metrics)
-      _                <- store.find(_ => true).map(map => assert(map.isEmpty))
-      result           <- f(store)
+      lock             <- Semaphore[Task](1)
+      store = InMemBlockStore
+        .create[Task](Monad[Task], refTask, approvedBlockRef, metrics)
+      _      <- store.find(_ => true).map(map => assert(map.isEmpty))
+      result <- f(store)
     } yield result
     test.unsafeRunSync
   }

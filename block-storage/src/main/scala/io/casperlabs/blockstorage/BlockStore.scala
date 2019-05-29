@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.{Applicative, Apply}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol.ApprovedBlock
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.metrics.implicits._
@@ -45,6 +45,8 @@ trait BlockStore[F[_]] {
 
   def putApprovedBlock(block: ApprovedBlock): F[Unit]
 
+  def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]]
+
   def checkpoint(): F[Unit]
 
   def clear(): F[Unit]
@@ -66,6 +68,9 @@ object BlockStore {
         p: BlockHash => Boolean
     ): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
       incAndMeasure("find", super.find(p))
+
+    abstract override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
+      incAndMeasure("getBlockSummary", super.getBlockSummary(blockHash))
 
     abstract override def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
       incAndMeasure("put", super.put(f))

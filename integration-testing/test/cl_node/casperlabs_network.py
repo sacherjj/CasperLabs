@@ -92,8 +92,9 @@ class CasperLabsNetwork:
     def start_cl_node(self, node_number: int) -> None:
         self.cl_nodes[node_number].execution_engine.start()
         node = self.cl_nodes[node_number].node
-        with wait_for_log_watcher(RequestedForkTipFromPeersInLogLine(node.container)):
-            node.start()
+        node.truncate_logs()
+        node.start()
+        wait_for_approved_block_received_handler_state(node, node.config.command_timeout)
 
     def wait_for_peers(self) -> None:
         if self.node_count < 2:
@@ -198,6 +199,58 @@ class MultiNodeJoinedNetwork(CasperLabsNetwork):
         for node_number in range(1, node_count):
             self.wait_method(wait_for_approved_block_received_handler_state, node_number)
         self.wait_for_peers()
+
+
+class CustomConnectionNetwork(CasperLabsNetwork):
+
+    def create_cl_network(self, node_count: int = 3, network_connections: List[List[int]] = None) -> None:
+        """
+        Allow creation of a network where all nodes are not connected to node-0's network and therefore each other.
+
+        Ex:  Star Network
+
+                     node3
+                       |
+            node1 -- node0 -- node2
+
+            create_cl_network(node_count=4, network_connections=[[0, 1], [0, 2], [0, 3]])
+
+        :param node_count: Number of nodes to create.
+        :param network_connections: A list of lists of node indexes that should be joined.
+        """
+        kp = self.get_key()
+        config = DockerConfig(self.docker_client,
+                              node_private_key=kp.private_key,
+                              node_public_key=kp.public_key,
+                              network=self.create_docker_network())
+        self.add_bootstrap(config)
+
+        for i in range(1, node_count):
+            kp = self.get_key()
+            config = DockerConfig(self.docker_client,
+                                  node_private_key=kp.private_key,
+                                  network=self.create_docker_network())
+            self.add_cl_node(config, network_with_bootstrap=False)
+
+        for network_members in network_connections:
+            network_name = self.create_docker_network()
+            for node_num in network_members:
+                self.docker_nodes[node_num].connect_to_network(network_name)
+
+        for node_number in range(1, node_count):
+            self.wait_method(wait_for_approved_block_received_handler_state, node_number)
+
+        # Calculate how many peers should be connected to each node.
+        # Assumes duplicate network connections are not given, else wait_for_peers will time out.
+        peer_counts = [0] * node_count
+        for network in network_connections:
+            for node_num in network:
+                peer_counts[node_num] += len(network) - 1
+
+        timeout = self.docker_nodes[0].timeout
+        for node_num, peer_count in enumerate(peer_counts):
+            if peer_count > 0:
+                wait_for_peers_count_at_least(self.docker_nodes[node_num], peer_count, timeout)
 
 
 if __name__ == '__main__':

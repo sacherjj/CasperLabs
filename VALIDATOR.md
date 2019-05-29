@@ -86,6 +86,8 @@ To continue to have working lib folder, consider adding last line to bottom of `
 
 `echo "export LD_LIBRARY_PATH=/use/local/lib" >> ~/.bashrc`
 
+You might want to add `/usr/local/ssh/bin` to your `/etc/environment` file so that the right executable is found; check it by running `openssl version`.
+
 #### Prerequisites: sha3sum
 Download and install the latest version of the [sha3sum](https://github.com/maandree/sha3sum).
 
@@ -99,7 +101,7 @@ cd /tmp
 git clone https://github.com/maandree/libkeccak.git
 cd libkeccak
 make
-sudo make install
+sudo make install PREFIX=/usr
 ```
 
  Build sha3sum:

@@ -45,11 +45,21 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
       }
     }
     "started without an approval" should {
-      "not trigger the transition" in {
-        TestFixture.fromGenesis(approve = false) { approver =>
+      "not trigger the transition if approvals are needed" in {
+        TestFixture.fromGenesis(approve = false, environment = new MockEnvironment() {
+          override def canTransition(block: Block, signatories: Set[ByteString]) = false
+        }) { approver =>
           approver.awaitApproval.timeout(50.millis).attempt.map { res =>
             res.isLeft shouldBe true
             res.left.get shouldBe a[TimeoutException]
+          }
+        }
+      }
+
+      "trigger the transition if approvals are not needed" in {
+        TestFixture.fromGenesis(approve = false) { approver =>
+          approver.awaitApproval.timeout(50.millis).attempt.map { res =>
+            res.isRight shouldBe true
           }
         }
       }
@@ -160,7 +170,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
           .withSignature(sample(arbitrary[Signature]).withSigAlgorithm("XXX")),
         // Good one.
         sample(arbitrary[Approval])
-          .copy(validatorPublicKey = genesis.getHeader.getState.bonds.head.validatorPublicKey)
+          .withApproverPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
       )
       TestFixture.fromBootstrap(
         remoteCandidate = () =>
@@ -245,6 +255,20 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
         }
       }
     }
+
+    "trigger transition if no approvals are required" in {
+      TestFixture.fromBootstrap(
+        remoteCandidate = () => Task.delay(GenesisCandidate(genesis.blockHash, approvals = Nil)),
+        pollInterval = 10.millis,
+        environment = new MockEnvironment() {
+          override def canTransition(block: Block, signatories: Set[ByteString]) = true
+        }
+      ) { approver =>
+        approver.awaitApproval.timeout(250.millis).map { blockHash =>
+          blockHash shouldBe genesis.blockHash
+        }
+      }
+    }
   }
 
   "addApproval" should {
@@ -324,7 +348,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
           r1 <- approver.addApproval(genesis.blockHash, correctApproval)
           r2 <- approver.addApproval(
                  genesis.blockHash,
-                 correctApproval.withValidatorPublicKey(
+                 correctApproval.withApproverPublicKey(
                    genesis.getHeader.getState.bonds(1).validatorPublicKey
                  )
                )
@@ -338,7 +362,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
     "accumulate approvals arriving in parallel" in {
       TestFixture.fromGenesis() { approver =>
         val approvals = genesis.getHeader.getState.bonds.tail.map { b =>
-          sample(arbitrary[Approval]).withValidatorPublicKey(b.validatorPublicKey)
+          sample(arbitrary[Approval]).withApproverPublicKey(b.validatorPublicKey)
         }
         for {
           _ <- Task.gatherUnordered(approvals.map(approver.addApproval(genesis.blockHash, _)))
@@ -444,7 +468,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
 
   // Example of an approval that we can use in tests that won't be rejected.
   val correctApproval = sample(arbitrary[Approval])
-    .withValidatorPublicKey(genesis.getHeader.getState.bonds.last.validatorPublicKey)
+    .withApproverPublicKey(genesis.getHeader.getState.bonds.last.validatorPublicKey)
 
   class MockNodeDiscovery(peers: List[Node]) extends NodeDiscovery[Task] {
     override def discover                    = ???
@@ -560,7 +584,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
           relayFactor,
           genesis,
           maybeApproval = sample(arbitrary[Approval])
-            .withValidatorPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
+            .withApproverPublicKey(genesis.getHeader.getState.bonds.head.validatorPublicKey)
             .some
             .filter(_ => approve)
         )

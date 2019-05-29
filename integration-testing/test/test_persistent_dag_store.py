@@ -1,4 +1,3 @@
-import logging
 
 from test import conftest
 from test.cl_node.casperlabsnode import (
@@ -24,6 +23,10 @@ from test.cl_node.wait import (
 
 # TODO: Fix finalized hash portion
 def ignore_test_persistent_dag_store(two_node_network):
+    """
+    Feature file: storage.feature
+    Scenario: Stop a node in network, and restart it. Assert that it downloads only latest block not the whole DAG.
+    """
     node0, node1 = two_node_network.docker_nodes
     for node in two_node_network.docker_nodes:
         node.deploy_and_propose(session_contract=HELLO_NAME)
@@ -49,6 +52,10 @@ def ignore_test_persistent_dag_store(two_node_network):
 
 
 def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_network):
+    """
+    Feature file: storage.feature
+    Scenario: Stop nodes and restart with correct dag and blockstore
+    """
     tnn = two_node_network
     node0, node1 = tnn.docker_nodes
     for node in (node0, node1):
@@ -66,6 +73,9 @@ def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_networ
         tnn.stop_cl_node(node_num)
     for node_num in range(2):
         tnn.start_cl_node(node_num)
+
+    wait_for_blocks_count_at_least(node0, 3, 4, 20)
+    wait_for_blocks_count_at_least(node1, 3, 4, 20)
 
     assert dag0 == node0.vdag(10)
     assert dag1 == node1.vdag(10)

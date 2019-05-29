@@ -2,16 +2,18 @@ package io.casperlabs.casper
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.util.ProtoUtil
-import scala.util.{Failure, Success, Try}
+
+import scala.util.Try
 
 /** Convert between the message in CasperMessage.proto and consensus.proto while we have both.
   * This is assuming that the storage and validation are still using the protocol.* types,
   * and that the consensus.* ones are just used for communication, so hashes don't have to be
   * correct on the new objects, they are purely serving as DTOs. */
 object LegacyConversions {
-  def toBlockSummary(block: protocol.BlockMessage): consensus.BlockSummary =
+
+  def toBlock(block: protocol.BlockMessage): consensus.Block =
     consensus
-      .BlockSummary()
+      .Block()
       .withBlockHash(block.blockHash)
       .withHeader(
         consensus.Block
@@ -57,21 +59,6 @@ object LegacyConversions {
           .withValidatorPublicKey(block.sender)
           .withRank(block.getBody.getState.blockNumber)
       )
-      .copy(
-        signature = Option(
-          consensus
-            .Signature()
-            .withSigAlgorithm(block.sigAlgorithm)
-            .withSig(block.sig)
-        ).filterNot(s => s.sigAlgorithm.isEmpty && s.sig.isEmpty)
-      )
-
-  def toBlock(block: protocol.BlockMessage): consensus.Block = {
-    val summary = toBlockSummary(block)
-    consensus
-      .Block()
-      .withBlockHash(summary.blockHash)
-      .withHeader(summary.getHeader)
       .withBody(
         consensus.Block
           .Body()
@@ -87,8 +74,14 @@ object LegacyConversions {
               ) // New version doesn't have limit. Preserve it so signatures can be checked.
           })
       )
-      .copy(signature = summary.signature)
-  }
+      .copy(
+        signature = Option(
+          consensus
+            .Signature()
+            .withSigAlgorithm(block.sigAlgorithm)
+            .withSig(block.sig)
+        ).filterNot(s => s.sigAlgorithm.isEmpty && s.sig.isEmpty)
+      )
 
   def fromBlock(block: consensus.Block): protocol.BlockMessage = {
     val (deploysHash, stateHash, headerExtraBytes) =
@@ -178,8 +171,8 @@ object LegacyConversions {
       .withGasLimit(gasLimit) // New version doesn't have it.
       .withGasPrice(deploy.getHeader.gasPrice)
       .withNonce(deploy.getHeader.nonce)
-      .withSigAlgorithm(deploy.getSignature.sigAlgorithm)
-      .withSignature(deploy.getSignature.sig)
+      .withSigAlgorithm(deploy.approvals.headOption.fold("")(_.getSignature.sigAlgorithm))
+      .withSignature(deploy.approvals.headOption.fold(ByteString.EMPTY)(_.getSignature.sig))
   //.withUser() // We weren't using signing when this was in use.
 
   def toDeploy(deploy: protocol.DeployData): consensus.Deploy = {
@@ -197,6 +190,7 @@ object LegacyConversions {
           .withCode(deploy.getPayment.code)
           .withArgs(deploy.getPayment.args)
       )
+
     val header = consensus.Deploy
       .Header()
       // The client can either send a public key or an account address here.
@@ -207,18 +201,24 @@ object LegacyConversions {
       .withTimestamp(deploy.timestamp)
       .withGasPrice(deploy.gasPrice)
       .withBodyHash(ProtoUtil.protoHash(body)) // Legacy doesn't have it.
+
     consensus
       .Deploy()
       .withDeployHash(ProtoUtil.protoHash(header)) // Legacy doesn't have it.
       .withHeader(header)
       .withBody(body)
-      .copy(
-        signature = Option(
+      .withApprovals(
+        List(
           consensus
-            .Signature()
-            .withSigAlgorithm(deploy.sigAlgorithm)
-            .withSig(deploy.signature)
-        ).filterNot(s => s.sigAlgorithm.isEmpty && s.sig.isEmpty)
+            .Approval()
+            .withApproverPublicKey(header.accountPublicKey)
+            .withSignature(
+              consensus
+                .Signature()
+                .withSigAlgorithm(deploy.sigAlgorithm)
+                .withSig(deploy.signature)
+            )
+        ).filterNot(x => x.getSignature.sigAlgorithm.isEmpty && x.getSignature.sig.isEmpty)
       )
   }
 }

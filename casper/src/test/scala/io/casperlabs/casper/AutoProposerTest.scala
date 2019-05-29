@@ -14,6 +14,7 @@ import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.casper.consensus._
 import monix.eval.Task
 import monix.execution.Scheduler
+
 import scala.concurrent.duration._
 
 class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {

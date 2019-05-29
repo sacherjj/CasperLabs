@@ -24,7 +24,7 @@ object PrettyPrinter {
     case ipc.Transform.TransformInstance.AddKeys(ipc.TransformAddKeys(ks)) =>
       s"Insert(${ks.map(buildString).mkString(",")})"
     case ipc.Transform.TransformInstance.Failure(_)  => "TransformFailure"
-    case ipc.Transform.TransformInstance.Identity(_) => "Identity"
+    case ipc.Transform.TransformInstance.Identity(_) => "Read"
     case ipc.Transform.TransformInstance.Write(ipc.TransformWrite(mv)) =>
       mv match {
         case None    => "Write(Nothing)"

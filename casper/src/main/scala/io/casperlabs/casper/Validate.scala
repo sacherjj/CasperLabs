@@ -118,26 +118,37 @@ object Validate {
     }
 
   def deploySignature[F[_]: Applicative: Log](d: consensus.Deploy): F[Boolean] =
-    signatureVerifiers(d.getSignature.sigAlgorithm)
-      .map { verify =>
-        Try {
-          verify(
-            d.deployHash.toByteArray,
-            Signature(d.getSignature.sig.toByteArray),
-            PublicKey(d.getHeader.accountPublicKey.toByteArray)
-          )
-        } match {
-          case Success(true) =>
-            true.pure[F]
-          case _ =>
-            Log[F].warn(
-              s"Signature of deploy ${PrettyPrinter.buildString(d.deployHash)} is invalid."
-            ) *> false.pure[F]
-        }
-      } getOrElse {
+    if (d.approvals.isEmpty) {
       Log[F].warn(
-        s"Signature algorithm ${d.getSignature.sigAlgorithm} of deploy ${PrettyPrinter.buildString(d.deployHash)} is unsupported."
+        s"Deploy ${PrettyPrinter.buildString(d.deployHash)} has no signatures."
       ) *> false.pure[F]
+    } else {
+      d.approvals.toList.traverse { a =>
+        signatureVerifiers(a.getSignature.sigAlgorithm)
+          .map { verify =>
+            Try {
+              verify(
+                d.deployHash.toByteArray,
+                Signature(a.getSignature.sig.toByteArray),
+                PublicKey(a.approverPublicKey.toByteArray)
+              )
+            } match {
+              case Success(true) =>
+                true.pure[F]
+              case _ =>
+                Log[F].warn(
+                  s"Signature of deploy ${PrettyPrinter.buildString(d.deployHash)} is invalid."
+                ) *> false.pure[F]
+            }
+          } getOrElse {
+          Log[F].warn(
+            s"Signature algorithm ${a.getSignature.sigAlgorithm} of deploy ${PrettyPrinter
+              .buildString(d.deployHash)} is unsupported."
+          ) *> false.pure[F]
+        }
+      } map {
+        _.forall(identity)
+      }
     }
 
   def blockSender[F[_]: Monad: Log: BlockStore](
@@ -703,7 +714,12 @@ object Validate {
                             )
         //TODO: distinguish "internal errors" and "user errors"
         _ <- possiblePostState match {
-              case Left(_) => RaiseValidationError[F].raise[Unit](InvalidTransaction)
+              case Left(ex) =>
+                Log[F].error(
+                  s"Could not commit effects of block ${PrettyPrinter.buildString(block)}: $ex",
+                  ex
+                ) *>
+                  RaiseValidationError[F].raise[Unit](InvalidTransaction)
               case Right(postStateHash) =>
                 if (postStateHash == blockPostState) {
                   Applicative[F].unit
