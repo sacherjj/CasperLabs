@@ -6,6 +6,7 @@ import cats.effect.implicits._
 import cats.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.node.api.graphql.GraphQLQuery._
+import io.casperlabs.node.api.graphql.ProtocolState.Subscriptions
 import io.casperlabs.node.api.graphql.circe._
 import io.casperlabs.shared.{Log, LogSource}
 import io.circe.parser.parse
@@ -63,14 +64,14 @@ object GraphQL {
     import dsl._
     HttpRoutes.of[F] {
       case req @ GET -> Root if requiredHeaders.forall(h => req.headers.exists(_ === h)) =>
-        handleWebSocket(req, executor, keepAlivePeriod)
+        handleWebSocket(executor, keepAlivePeriod)
       case GET -> Root =>
         StaticFile.fromResource[F]("/graphql-playground.html", ec).getOrElseF(NotFound())
       case req @ POST -> Root =>
         val res: F[Response[F]] = for {
           json  <- req.as[Json]
           query <- Sync[F].fromEither(json.as[GraphQLQuery])
-          res   <- processQuery(query, executor).flatMap(Ok(_))
+          res   <- processHttpQuery(query, executor).flatMap(Ok(_))
         } yield res
 
         res.handleErrorWith {
@@ -82,7 +83,6 @@ object GraphQL {
   }
 
   private def handleWebSocket[F[_]: Concurrent: Timer: Log](
-      req: Request[F],
       executor: Executor[Unit, Unit],
       keepAlivePeriod: FiniteDuration
   )(implicit fs2SubscriptionStream: Fs2SubscriptionStream[F]): F[Response[F]] = {
@@ -98,7 +98,7 @@ object GraphQL {
             WebSocketFrame.Text(
               (GraphQLWebSocketMessage.ConnectionKeepAlive: GraphQLWebSocketMessage).asJson
                 .toString()
-            )
+          )
         )
       val output = queue.dequeue
         .map { m =>
@@ -130,18 +130,30 @@ object GraphQL {
         case WebSocketFrame.Text(raw, _) =>
           parse(raw)
             .flatMap(_.as[GraphQLWebSocketMessage])
-            .fold(e => Stream.raiseError[F](e), m => Stream.emit(m))
+            .fold(
+              e => {
+                val errorMessage =
+                  s"Failed to parse GraphQL WebSocket message: $raw, reason: ${e.getMessage}"
+                Stream
+                  .eval(Log[F].warn(errorMessage) >> queue
+                    .enqueue1(GraphQLWebSocketMessage.ConnectionError(errorMessage)))
+                  .flatMap(_ => Stream.empty.covary[F])
+              },
+              m => Stream.emit[F, GraphQLWebSocketMessage](m)
+            )
+        case _ => Stream.empty.covary[F]
       }
-      .evalMapAccumulate[F, ProtocolState, Unit]((ProtocolState.WaitForInit: ProtocolState)) {
+      .evalMapAccumulate[F, ProtocolState, Unit](ProtocolState.WaitForInit) {
         case (ProtocolState.WaitForInit, GraphQLWebSocketMessage.ConnectionInit) =>
           for {
             _ <- queue.enqueue1(GraphQLWebSocketMessage.ConnectionAck)
             _ <- queue.enqueue1(GraphQLWebSocketMessage.ConnectionKeepAlive)
-          } yield (ProtocolState.WaitForStart, ())
+          } yield (ProtocolState.Active[F](Map.empty), ())
 
-        case (ProtocolState.WaitForStart, GraphQLWebSocketMessage.Start(id, payload)) =>
+        case (ProtocolState.Active(activeSubscriptions),
+              GraphQLWebSocketMessage.Start(id, payload)) =>
           for {
-            fiber <- processSubscription[F](payload, executor)
+            fiber <- processWebSocketQuery[F](payload, executor)
                       .map(json => GraphQLWebSocketMessage.Data(id, json))
                       .onFinalizeCase {
                         case ExitCase.Error(e) =>
@@ -155,16 +167,28 @@ object GraphQL {
                       .toList
                       .void
                       .start
-          } yield (ProtocolState.SendingData(fiber), ())
+          } yield
+            (ProtocolState.Active[F](
+               activeSubscriptions.asInstanceOf[Subscriptions[F]] + ("id" -> fiber)),
+             ())
 
-        case (ProtocolState.SendingData(fiber), GraphQLWebSocketMessage.Stop) =>
+        case (ProtocolState.Active(activeSubscriptions), GraphQLWebSocketMessage.Stop(id)) =>
           for {
-            _ <- fiber.asInstanceOf[Fiber[F, Unit]].cancel.start
-          } yield (ProtocolState.WaitForStart, ())
+            _ <- activeSubscriptions
+                  .asInstanceOf[Subscriptions[F]]
+                  .get(id)
+                  .fold(().pure[F])(_.cancel.start.void)
+          } yield
+            (ProtocolState.Active(activeSubscriptions.asInstanceOf[Subscriptions[F]] - id), ())
 
-        case (ProtocolState.SendingData(fiber), GraphQLWebSocketMessage.ConnectionTerminate) =>
+        case (ProtocolState.Active(activeSubscriptions),
+              GraphQLWebSocketMessage.ConnectionTerminate) =>
           for {
-            _ <- fiber.asInstanceOf[Fiber[F, Unit]].cancel.start
+            _ <- activeSubscriptions
+                  .asInstanceOf[Subscriptions[F]]
+                  .values
+                  .toList
+                  .traverse(_.cancel.start)
             _ <- stopSignal.complete(())
           } yield (ProtocolState.Closed, ())
 
@@ -174,14 +198,15 @@ object GraphQL {
           } yield (ProtocolState.Closed, ())
 
         case (protocolState, message) =>
-          Log[F].warn(s"Unexpected message: $message in state: $protocolState, ignoring") >> (
-            protocolState,
-            ()
-          ).pure[F]
+          val error = s"Unexpected message: $message in state: $protocolState, ignoring"
+          for {
+            _ <- Log[F].warn(error)
+            _ <- queue.enqueue1(GraphQLWebSocketMessage.ConnectionError(error))
+          } yield (protocolState, ())
       }
       .drain
 
-  private def processSubscription[F[_]: MonadThrowable](
+  private def processWebSocketQuery[F[_]: MonadThrowable](
       query: GraphQLQuery,
       executor: Executor[Unit, Unit]
   )(
@@ -193,7 +218,7 @@ object GraphQL {
       .flatMap(queryAst => executor.execute(queryAst, (), ()))
   }
 
-  private def processQuery[F[_]: Async](query: GraphQLQuery, executor: Executor[Unit, Unit])(
+  private def processHttpQuery[F[_]: Async](query: GraphQLQuery, executor: Executor[Unit, Unit])(
       implicit ec: ExecutionContext
   ): F[Json] =
     Async[F]
@@ -206,7 +231,7 @@ object GraphQL {
               .onComplete {
                 case Success(json) => callback(json.asRight[Throwable])
                 case Failure(e)    => callback(e.asLeft[Json])
-              }
+            }
         )
       }
 
