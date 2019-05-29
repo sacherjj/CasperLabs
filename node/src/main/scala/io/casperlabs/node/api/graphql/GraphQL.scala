@@ -65,7 +65,7 @@ object GraphQL {
       case req @ GET -> Root if requiredHeaders.forall(h => req.headers.exists(_ === h)) =>
         handleWebSocket(req, executor, keepAlivePeriod)
       case GET -> Root =>
-        StaticFile.fromResource[F]("/graphql-playgroud.html", ec).getOrElseF(NotFound())
+        StaticFile.fromResource[F]("/graphql-playground.html", ec).getOrElseF(NotFound())
       case req @ POST -> Root =>
         val res: F[Response[F]] = for {
           json  <- req.as[Json]
