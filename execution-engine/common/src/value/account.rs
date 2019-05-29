@@ -58,6 +58,7 @@ impl AssociatedKeys {
     }
     /// Adds new AssociatedKey to the set.
     /// Returns true if added successfully, false otherwise.
+    #[allow(clippy::map_entry)]
     pub fn add_key(&mut self, key: PublicKey, weight: Weight) -> Result<(), AddKeyFailure> {
         if self.0.len() == MAX_KEYS {
             Err(AddKeyFailure::MaxKeysLimit)
@@ -161,7 +162,10 @@ impl FromBytes for AssociatedKeys {
         let (keys_map, rem): (BTreeMap<PublicKey, Weight>, &[u8]) = FromBytes::from_bytes(bytes)?;
         let mut keys = AssociatedKeys::empty();
         keys_map.into_iter().for_each(|(k, v)| {
-            keys.add_key(k, v);
+            // NOTE: we're ignoring potential errors (duplicate key, maximum number of elements).
+            // This is safe, for now, as we were the ones that serialized `AssociatedKeys` in the
+            // first place.
+            keys.add_key(k, v).unwrap();
         });
         Ok((keys, rem))
     }
