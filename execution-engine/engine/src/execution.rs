@@ -906,24 +906,25 @@ mod tests {
     use engine_state::execution_result::ExecutionResult;
     fn on_fail_charge_test_helper<T>(
         f: impl Fn() -> Result<T, Error>,
-        error: u64,
+        success_cost: u64,
+        error_cost: u64,
     ) -> ExecutionResult {
-        let _result = on_fail_charge!(f(), error);
+        let _result = on_fail_charge!(f(), error_cost);
         ExecutionResult::Success {
             effect: Default::default(),
-            cost: 0,
+            cost: success_cost,
         }
     }
     #[test]
     fn on_fail_charge_ok_test() {
-        match on_fail_charge_test_helper(|| Ok(()), 456) {
-            ExecutionResult::Success { cost, .. } => assert_eq!(cost, 0),
+        match on_fail_charge_test_helper(|| Ok(()), 123, 456) {
+            ExecutionResult::Success { cost, .. } => assert_eq!(cost, 123),
             ExecutionResult::Failure { .. } => panic!("Should be success"),
         }
     }
     #[test]
     fn on_fail_charge_err_laziness_test() {
-        match on_fail_charge_test_helper(|| Err(Error::InvalidNonce) as Result<(), _>, 456) {
+        match on_fail_charge_test_helper(|| Err(Error::GasLimit) as Result<(), _>, 123,456) {
             ExecutionResult::Success { .. } => panic!("Should fail"),
             ExecutionResult::Failure { cost, .. } => assert_eq!(cost, 456),
         }
@@ -935,11 +936,11 @@ mod tests {
         use engine_state::op::Op;
         use shared::transform::Transform;
         let f = || {
-            let input = Err(Error::InvalidNonce) as Result<(), Error>;
+            let input: Result<(), Error> = Err(Error::GasLimit);
             on_fail_charge!(input, 456, {
                 let mut effect = ExecutionEffect::default();
 
-                effect.0.insert(Key::Hash([42u8; 32]), Op::NoOp);
+                effect.0.insert(Key::Hash([42u8; 32]), Op::Read);
                 effect.1.insert(Key::Hash([42u8; 32]), Transform::Identity);
 
                 effect
@@ -953,7 +954,7 @@ mod tests {
             ExecutionResult::Success { .. } => panic!("Should fail"),
             ExecutionResult::Failure { cost, effect, .. } => {
                 assert_eq!(cost, 456);
-                // Check if the containers are empty
+                // Check if the containers are non-empty
                 assert_eq!(effect.0.len(), 1);
                 assert_eq!(effect.1.len(), 1);
             }
