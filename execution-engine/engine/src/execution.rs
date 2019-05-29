@@ -212,11 +212,8 @@ where
 
     pub fn is_valid(&mut self, value_ptr: u32, value_size: u32) -> Result<bool, Trap> {
         let value = self.value_from_mem(value_ptr, value_size)?;
-        if let Ok(_) = self.context.validate_keys(&value) {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+
+        Ok( self.context.validate_keys(&value).is_ok() )
     }
 
     /// Load the i-th argument invoked as part of a `sub_call` into
@@ -642,9 +639,8 @@ where
                 // args(0) = pointer to value to validate
                 // args(1) = size of value
                 let (value_ptr, value_size) = Args::parse(args)?;
-                let result = self.is_valid(value_ptr, value_size)?;
 
-                if result {
+                if self.is_valid(value_ptr, value_size)? {
                     Ok(Some(RuntimeValue::I32(1)))
                 } else {
                     Ok(Some(RuntimeValue::I32(0)))
