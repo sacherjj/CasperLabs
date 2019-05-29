@@ -278,47 +278,10 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
     deserialize(&res_bytes).unwrap()
 }
 
-pub enum RevertStatus {
-    /// Reserved for using from within `#[panic_handler]`
-    UnhandledError,
-    /// Reserved for using from within `#[alloc_error_handler]`
-    AllocError,
-    /// User-defined error code
-    User(u32),
-}
-
-impl RevertStatus {
-    pub fn value(&self) -> u32 {
-        match *self {
-            RevertStatus::UnhandledError => 128,
-            RevertStatus::AllocError => 129,
-            RevertStatus::User(value) => {
-                debug_assert!(value > 0, "0 is a reserved status code");
-                debug_assert!(value < 128, "User statuses are limited to 1-127");
-                value
-            }
-        }
-    }
-}
-
-impl From<u32> for RevertStatus {
-    fn from(value: u32) -> RevertStatus {
-        debug_assert!(value > 0, "0 is a reserved status code");
-        debug_assert!(value < 128, "User statuses are limited to 1-127");
-        RevertStatus::User(value)
-    }
-}
-
 /// Stops execution of a contract and reverts execution effects
 /// with a given reason.
-pub fn revert(status: RevertStatus) -> ! {
+pub fn revert(status: u32) -> ! {
     unsafe {
-        ext_ffi::revert(status.value());
+        ext_ffi::revert(status);
     }
-}
-
-#[test]
-fn revert_status() {
-    let status = RevertStatus::from(123);
-    assert_eq!(status.value(), 123);
 }
