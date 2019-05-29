@@ -34,13 +34,14 @@ where
     let key: Key = u_ptr.into();
     let value = read_untyped(&key);
     value
+        .unwrap() // TODO: return an Option instead of unwrapping (https://casperlabs.atlassian.net/browse/EE-349)
         .try_into()
         .map_err(|_| "T could not be derived from Value")
         .unwrap()
 }
 
 /// Reads the value at the given key in the context-local partition of global state
-pub fn read_local<K, V>(key: K) -> V
+pub fn read_local<K, V>(key: K) -> Option<V>
 where
     K: ToBytes,
     V: TryFrom<Value>,
@@ -55,13 +56,14 @@ where
         hash(&key_bytes)
     };
     let key = Key::Local { seed, key_hash };
-    read_untyped(&key)
-        .try_into()
-        .map_err(|_| "T could not be derived from Value")
-        .unwrap()
+    read_untyped(&key).map(|v| {
+        v.try_into()
+            .map_err(|_| "T could not be derived from Value")
+            .unwrap()
+    })
 }
 
-fn read_untyped(key: &Key) -> Value {
+fn read_untyped(key: &Key) -> Option<Value> {
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is
     //      dropped then key_ptr becomes invalid.
 
