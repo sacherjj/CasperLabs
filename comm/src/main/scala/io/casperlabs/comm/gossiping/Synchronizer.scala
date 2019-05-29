@@ -34,6 +34,7 @@ object Synchronizer {
     ) extends SyncError
     final case class Unreachable(summary: BlockSummary, requestedDepth: Int Refined Positive)
         extends SyncError
+    final case class TooMany(hash: ByteString, limit: Int Refined Positive)        extends SyncError
     final case class TooDeep(hashes: Set[ByteString], limit: Int Refined Positive) extends SyncError
     final case class ValidationError(summary: BlockSummary, reason: Throwable)     extends SyncError
     final case class MissingDependencies(missing: Set[ByteString])                 extends SyncError
