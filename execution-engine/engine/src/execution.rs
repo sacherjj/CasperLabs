@@ -741,6 +741,19 @@ pub fn create_rng(account_addr: &[u8; 32], timestamp: u64, nonce: u64) -> ChaCha
 
 #[macro_export]
 macro_rules! on_fail_charge {
+    ($fn:expr) => {
+        match $fn {
+            Ok(res) => res,
+            Err(e) => {
+                let exec_err: ::execution::Error = e.into();
+                return ExecutionResult::Failure {
+                    error: exec_err.into(),
+                    effect: Default::default(),
+                    cost: 0,
+                };
+            }
+        }
+    };
     ($fn:expr, $cost:expr) => {
         match $fn {
             Ok(res) => res,
@@ -804,19 +817,16 @@ impl Executor<Module> for WasmiExecutor {
         R::Error: Into<Error>,
     {
         let acct_key = Key::Account(account_addr);
-        let (instance, memory) = on_fail_charge!(
-            instance_and_memory(parity_module.clone(), protocol_version),
-            0
-        );
+        let (instance, memory) =
+            on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
         #[allow(unreachable_code)]
-        let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid), 0);
+        let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid));
         let value = on_fail_charge! {
             match tc.borrow_mut().get(&validated_key) {
                 Ok(None) => Err(Error::KeyNotFound(acct_key)),
                 Err(error) => Err(error.into()),
                 Ok(Some(value)) => Ok(value)
-            },
-            0
+            }
         };
         let account = value.as_account();
         // Check the difference of a request nonce and account nonce.
