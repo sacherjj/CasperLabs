@@ -53,7 +53,7 @@ relay-saturation = 90
 approval-relay-factor = 10
 
 # Time to wait between asking the bootstrap node for an updated list of genesis approvals.
-approval-poll-interval = "30seconds"
+approval-poll-interval = "30second"
 
 # Maximum DAG depth to allow when syncing after a new block notification.
 sync-max-possible-depth = 1000
@@ -84,6 +84,15 @@ init-sync-round-period = "30second"
 
 # Maximum number of parallel block downloads initiated by the download manager.
 download-max-parallel-blocks = 10
+
+# Maximum number of times to retry to download a block from the same node.
+download-max-retries = 0
+
+# Time to wait before trying to download a failed block again from the same node.
+download-retry-initial-backoff-period = "5second"
+
+# Exponential factor to apply on subsequent wait times before trying to download again.
+download-retry-backoff-factor = 2.0
 
 # Maximum number of parallel block downloads allowed to peers.
 relay-max-parallel-blocks = 5

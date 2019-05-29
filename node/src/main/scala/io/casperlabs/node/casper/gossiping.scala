@@ -302,8 +302,11 @@ package object gossiping {
                               ().pure[F]
                           },
                           relaying = relaying,
-                          // TODO: Configure retry.
-                          retriesConf = DownloadManagerImpl.RetriesConf.noRetries
+                          retriesConf = DownloadManagerImpl.RetriesConf(
+                            maxRetries = conf.server.downloadMaxRetries,
+                            initialBackoffPeriod = conf.server.downloadRetryInitialBackoffPeriod,
+                            backoffFactor = conf.server.downloadRetryBackoffFactor
+                          )
                         )
     } yield downloadManager
 

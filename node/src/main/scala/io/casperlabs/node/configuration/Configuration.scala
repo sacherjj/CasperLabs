@@ -82,6 +82,9 @@ object Configuration extends ParserImplicits {
       initSyncSkipFailedNodes: Boolean,
       initSyncRoundPeriod: FiniteDuration,
       downloadMaxParallelBlocks: Int,
+      downloadMaxRetries: Int Refined NonNegative,
+      downloadRetryInitialBackoffPeriod: FiniteDuration,
+      downloadRetryBackoffFactor: Double Refined GreaterEqual[W.`1.0`.T],
       relayMaxParallelBlocks: Int,
       relayBlockChunkConsumerTimeout: FiniteDuration,
       cleanBlockStorage: Boolean

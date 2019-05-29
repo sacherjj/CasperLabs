@@ -74,6 +74,9 @@ class ConfigurationSpec
       initSyncSkipFailedNodes = false,
       initSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       downloadMaxParallelBlocks = 1,
+      downloadMaxRetries = 1,
+      downloadRetryInitialBackoffPeriod = FiniteDuration(1, TimeUnit.SECONDS),
+      downloadRetryBackoffFactor = 1.0,
       relayMaxParallelBlocks = 1,
       relayBlockChunkConsumerTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       cleanBlockStorage = false

@@ -383,9 +383,25 @@ private[configuration] final case class Options private (
     @scallop
     val serverInitSyncRoundPeriod =
       gen[FiniteDuration]("Time to wait between initial synchronization attempts.")
+
     @scallop
     val serverDownloadMaxParallelBlocks =
       gen[Int]("Maximum number of parallel block downloads initiated by the download manager.")
+    @scallop
+    val serverDownloadMaxRetries =
+      gen[Int]("Maximum number of times to retry to download a block from the same node.")
+
+    @scallop
+    val serverDownloadRetryInitialBackoffPeriod =
+      gen[FiniteDuration](
+        "Time to wait before trying to download a failed block again from the same node."
+      )
+
+    @scallop
+    val serverDownloadRetryBackoffFactor =
+      gen[Double](
+        "Exponential factor to apply on subsequent wait times before trying to download again."
+      )
 
     @scallop
     val serverRelayMaxParallelBlocks =
