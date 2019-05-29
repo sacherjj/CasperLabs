@@ -824,7 +824,18 @@ impl Executor<Module> for WasmiExecutor {
                 Ok(Some(value)) => Ok(value)
             }
         };
-        let account = value.as_account();
+
+        let account = match value {
+            Value::Account(a) => a,
+            other => {
+                return ExecutionResult::precondition_failure(
+                    ::engine_state::error::Error::ExecError(Error::TypeMismatch(
+                        TypeMismatch::new("Account".to_string(), other.type_string()),
+                    )),
+                )
+            }
+        };
+
         // Check the difference of a request nonce and account nonce.
         // Since both nonce and account's nonce are unsigned, so line below performs
         // a checked subtraction, where underflow (or overflow) would be safe.
@@ -926,7 +937,7 @@ mod tests {
     }
     #[test]
     fn on_fail_charge_err_laziness_test() {
-        match on_fail_charge_test_helper(|| Err(Error::GasLimit) as Result<(), _>, 123,456) {
+        match on_fail_charge_test_helper(|| Err(Error::GasLimit) as Result<(), _>, 123, 456) {
             ExecutionResult::Success { .. } => panic!("Should fail"),
             ExecutionResult::Failure { cost, .. } => assert_eq!(cost, 456),
         }

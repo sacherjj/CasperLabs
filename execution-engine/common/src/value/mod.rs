@@ -209,13 +209,6 @@ impl Value {
             ListString(_) => String::from("List[String]"),
         }
     }
-
-    pub fn as_account(&self) -> &account::Account {
-        match self {
-            Account(a) => a,
-            _ => panic!("Not an account: {:?}", self),
-        }
-    }
 }
 
 macro_rules! from_try_from_impl {
