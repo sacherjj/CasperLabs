@@ -2,8 +2,8 @@ package io.casperlabs.node.api.graphql
 
 import cats.syntax.either._
 import io.circe._
-import io.circe.syntax._
 import io.circe.generic.semiauto._
+import io.circe.syntax._
 
 //TODO add support of other fields: operationName, variables
 private[graphql] final case class GraphQLQuery(query: String)
@@ -19,7 +19,6 @@ private[graphql] sealed trait GraphQLWebSocketMessage extends Product with Seria
   def `type`: String
 }
 private[graphql] object GraphQLWebSocketMessage {
-  import GraphQLQuery._
 
   /* Client -> Server */
   final case object ConnectionInit extends GraphQLWebSocketMessage {

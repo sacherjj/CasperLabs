@@ -17,15 +17,7 @@ import fs2.concurrent.Queue
 import org.http4s.circe._
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
-import org.http4s.{
-  Header,
-  Headers,
-  HttpRoutes,
-  MalformedMessageBodyFailure,
-  Request,
-  Response,
-  StaticFile
-}
+import org.http4s.{Header, Headers, HttpRoutes, MalformedMessageBodyFailure, Response, StaticFile}
 import sangria.execution._
 import sangria.parser.QueryParser
 
@@ -98,7 +90,7 @@ object GraphQL {
             WebSocketFrame.Text(
               (GraphQLWebSocketMessage.ConnectionKeepAlive: GraphQLWebSocketMessage).asJson
                 .toString()
-          )
+            )
         )
       val output = queue.dequeue
         .map { m =>
@@ -135,8 +127,10 @@ object GraphQL {
                 val errorMessage =
                   s"Failed to parse GraphQL WebSocket message: $raw, reason: ${e.getMessage}"
                 Stream
-                  .eval(Log[F].warn(errorMessage) >> queue
-                    .enqueue1(GraphQLWebSocketMessage.ConnectionError(errorMessage)))
+                  .eval(
+                    Log[F].warn(errorMessage) >> queue
+                      .enqueue1(GraphQLWebSocketMessage.ConnectionError(errorMessage))
+                  )
                   .flatMap(_ => Stream.empty.covary[F])
               },
               m => Stream.emit[F, GraphQLWebSocketMessage](m)
@@ -150,8 +144,10 @@ object GraphQL {
             _ <- queue.enqueue1(GraphQLWebSocketMessage.ConnectionKeepAlive)
           } yield (ProtocolState.Active[F](Map.empty), ())
 
-        case (ProtocolState.Active(activeSubscriptions),
-              GraphQLWebSocketMessage.Start(id, payload)) =>
+        case (
+            ProtocolState.Active(activeSubscriptions),
+            GraphQLWebSocketMessage.Start(id, payload)
+            ) =>
           for {
             fiber <- processWebSocketQuery[F](payload, executor)
                       .map(json => GraphQLWebSocketMessage.Data(id, json))
@@ -168,9 +164,12 @@ object GraphQL {
                       .void
                       .start
           } yield
-            (ProtocolState.Active[F](
-               activeSubscriptions.asInstanceOf[Subscriptions[F]] + ("id" -> fiber)),
-             ())
+            (
+              ProtocolState.Active[F](
+                activeSubscriptions.asInstanceOf[Subscriptions[F]] + ("id" -> fiber)
+              ),
+              ()
+            )
 
         case (ProtocolState.Active(activeSubscriptions), GraphQLWebSocketMessage.Stop(id)) =>
           for {
@@ -181,8 +180,10 @@ object GraphQL {
           } yield
             (ProtocolState.Active(activeSubscriptions.asInstanceOf[Subscriptions[F]] - id), ())
 
-        case (ProtocolState.Active(activeSubscriptions),
-              GraphQLWebSocketMessage.ConnectionTerminate) =>
+        case (
+            ProtocolState.Active(activeSubscriptions),
+            GraphQLWebSocketMessage.ConnectionTerminate
+            ) =>
           for {
             _ <- activeSubscriptions
                   .asInstanceOf[Subscriptions[F]]
@@ -231,7 +232,7 @@ object GraphQL {
               .onComplete {
                 case Success(json) => callback(json.asRight[Throwable])
                 case Failure(e)    => callback(e.asLeft[Json])
-            }
+              }
         )
       }
 

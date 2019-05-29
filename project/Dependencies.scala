@@ -32,12 +32,8 @@ object Dependencies {
   val sangria                = "org.sangria-graphql"        %% "sangria"                        % "1.4.2"
   val guava                  = "com.google.guava"           % "guava"                           % "24.1.1-jre"
   val hasher                 = "com.roundeights"            %% "hasher"                         % "1.2.0"
-  val http4sBlazeClient      = "org.http4s"                 %% "http4s-blaze-client"            % http4sVersion
   val http4sBlazeServer      = "org.http4s"                 %% "http4s-blaze-server"            % http4sVersion
-  val fs2Http                = ("com.spinoco"                %% "fs2-http"                       % "0.4.1" % "test")
-    .exclude("co.fs2", "fs2-core_2.12")
-    .exclude("co.fs2", "fs2-io_2.12")
-    .exclude("com.github.mpilquist", "simulacrum_2.12")
+  val javaWebsocket          = "org.java-websocket"         % "Java-WebSocket"                  % "1.4.0"
   val http4sCirce            = "org.http4s"                 %% "http4s-circe"                   % http4sVersion
   val http4sDSL              = "org.http4s"                 %% "http4s-dsl"                     % http4sVersion
   val jaxb                   = "javax.xml.bind"             % "jaxb-api"                        % "2.3.1"
@@ -123,7 +119,7 @@ object Dependencies {
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)
 
   private val http4sDependencies: Seq[ModuleID] =
-    Seq(http4sDSL, http4sBlazeServer, http4sBlazeClient, http4sCirce)
+    Seq(http4sDSL, http4sBlazeServer, http4sCirce)
 
   val protobufDependencies: Seq[ModuleID] =
     Seq(scalapbRuntime)
