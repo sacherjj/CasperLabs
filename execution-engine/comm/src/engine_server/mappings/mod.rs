@@ -445,7 +445,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         ExecutionError::GasLimit => {
                             let mut deploy_result = ipc::DeployResult::new();
                             let mut deploy_error = ipc::DeployError::new();
-                            deploy_error.set_gasErr(ipc::OutOfGasError::new());
+                            deploy_error.set_gasErr(ipc::DeployError_OutOfGasError::new());
                             deploy_result.set_error(deploy_error);
                             deploy_result.set_cost(cost);
                             deploy_result.set_effects(effect.into());
@@ -457,10 +457,12 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             err.set_effects(effect.into());
                             err
                         }
-                        ExecutionError::InvalidNonce => {
+                        ExecutionError::InvalidNonce(nonce) => {
                             let mut deploy_result = ipc::DeployResult::new();
                             let mut deploy_error = ipc::DeployError::new();
-                            deploy_error.set_invalidNonceErr(ipc::InvalidNonceError::new());
+                            let mut invalid_nonce = ipc::DeployError_InvalidNonceError::new();
+                            invalid_nonce.set_nonce(nonce);
+                            deploy_error.set_invalidNonceErr(invalid_nonce);
                             deploy_result.set_error(deploy_error);
                             deploy_result.set_effects(effect.into());
                             deploy_result.set_cost(cost);
@@ -555,7 +557,7 @@ where
 fn wasm_error(msg: String) -> ipc::DeployResult {
     let mut deploy_result = ipc::DeployResult::new();
     let mut deploy_error = ipc::DeployError::new();
-    let mut err = ipc::WasmError::new();
+    let mut err = ipc::DeployError_WasmError::new();
     err.set_message(msg.to_owned());
     deploy_error.set_wasmErr(err);
     deploy_result.set_error(deploy_error);

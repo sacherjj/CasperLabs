@@ -56,7 +56,7 @@ pub enum Error {
     Ret(Vec<Key>),
     Rng(rand::Error),
     ResolverError(ResolverError),
-    InvalidNonce,
+    InvalidNonce(u64),
 }
 
 impl fmt::Display for Error {
@@ -843,7 +843,7 @@ impl Executor<Module> for WasmiExecutor {
         // Difference should always be 1 greater than current nonce for a
         // given account.
         if delta != 1 {
-            return ExecutionResult::precondition_failure(Error::InvalidNonce.into());
+            return ExecutionResult::precondition_failure(Error::InvalidNonce(nonce).into());
         }
 
         let mut updated_account = account.clone();
