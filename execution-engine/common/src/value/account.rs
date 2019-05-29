@@ -51,11 +51,13 @@ impl AssociatedKeys {
     pub fn empty() -> AssociatedKeys {
         AssociatedKeys(BTreeMap::new())
     }
+
     pub fn new(key: PublicKey, weight: Weight) -> AssociatedKeys {
         let mut bt: BTreeMap<PublicKey, Weight> = BTreeMap::new();
         bt.insert(key, weight);
         AssociatedKeys(bt)
     }
+
     /// Adds new AssociatedKey to the set.
     /// Returns true if added successfully, false otherwise.
     #[allow(clippy::map_entry)]
