@@ -1,12 +1,12 @@
 package io.casperlabs.client
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
-
+import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
-import io.casperlabs.node.api.casper.{CasperGrpcMonix, DeployRequest}
+import io.casperlabs.node.api.casper.{CasperGrpcMonix, DeployRequest, GetBlockRequest}
 import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
@@ -55,11 +55,14 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
       }
       .attempt
 
-  def showBlock(q: BlockQuery): Task[Either[Throwable, String]] =
-    deployServiceStub.showBlock(q).map { response =>
-      if (response.status == "Success") Right(response.toProtoString)
-      else Left(new RuntimeException(response.status))
-    }
+  def showBlock(hash: String): Task[Either[Throwable, String]] = {
+    val blockHash = ByteString.copyFrom(Base16.decode(hash))
+
+    casperServiceStub
+      .getBlock(GetBlockRequest(blockHash, GetBlockRequest.View.FULL))
+      .map(_.toProtoString)
+      .attempt
+  }
 
   def queryState(q: QueryStateRequest): Task[Either[Throwable, String]] =
     deployServiceStub

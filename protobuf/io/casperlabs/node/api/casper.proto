@@ -40,6 +40,9 @@ message DeployRequest {
 }
 
 message GetBlockRequest {
+	// NOTE: Leaving `block_hash` as bytes so that if you list block summaries then however
+	// the JSON formatter prints it can be substituted back into the URL.
+
 	bytes block_hash = 1;
 	View view = 2;
 
