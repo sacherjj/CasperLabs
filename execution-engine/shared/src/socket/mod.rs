@@ -20,17 +20,11 @@ impl Socket {
         std::path::Path::new(&self.0)
     }
 
-    pub fn file_exists(&self) -> bool {
-        self.get_path().exists()
-    }
-
     pub fn remove_file(&self) -> io::Result<()> {
         let path = self.get_path();
-
-        if !path.exists() {
-            return Ok(());
+        match std::fs::remove_file(path) {
+            Err(ref e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+            result => result,
         }
-
-        std::fs::remove_file(path)
     }
 }
