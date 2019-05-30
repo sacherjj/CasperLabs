@@ -155,24 +155,19 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
       } yield result
     )
 
-  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
+  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
     lock.withPermit(
-      for {
-        filteredIndex <- withReadTxn { txn =>
-                          withResource(index.iterate(txn)) { iterator =>
-                            iterator.asScala
-                              .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
-                              .withFilter { case (key, _) => p(key) }
-                              .map { case (key, value) => (key, IndexEntry.load(value)) }
-                              .toList
-                          }
-                        }
-        result <- filteredIndex.flatTraverse {
-                   case (blockHash, indexEntry) =>
-                     readBlockMsgWithTransform(indexEntry)
-                       .map(block => List(blockHash -> block))
-                 }
-      } yield result
+      withReadTxn { txn =>
+        withResource(index.iterate(txn)) { iterator =>
+          iterator.asScala
+            .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
+            .withFilter { case (key, _) => p(key) }
+            .map { case (key, _) => key }
+            .take(1)
+            .toList
+            .headOption
+        }
+      }
     )
 
   override def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =

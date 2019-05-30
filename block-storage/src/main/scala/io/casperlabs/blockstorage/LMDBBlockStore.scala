@@ -92,18 +92,16 @@ class LMDBBlockStore[F[_]] private (
         .map(r => BlockMsgWithTransform.parseFrom(ByteString.copyFrom(r).newCodedInput()))
     }
 
-  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
+  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
     withReadTxn { txn =>
       withResource(blocks.iterate(txn)) { iterator =>
         iterator.asScala
           .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
           .withFilter { case (key, _) => p(key) }
-          .map {
-            case (key, value) =>
-              val msg = BlockMsgWithTransform.parseFrom(ByteString.copyFrom(value).newCodedInput())
-              (key, msg)
-          }
+          .map { case (key, _) => key }
+          .take(1)
           .toList
+          .headOption
       }
     }
 
