@@ -44,6 +44,15 @@ trait BlockStoreTest
 
   def withStore[R](f: BlockStore[Task] => Task[R]): R
 
+  def checkAllHashes(store: BlockStore[Task], hashes: List[BlockHash]) =
+    hashes.traverse { h =>
+      store.findBlockHash(_ == h).map(h -> _.isDefined)
+    } map { res =>
+      Inspectors.forAll(res) {
+        case (hash, isDefined) => isDefined shouldBe true
+      }
+    }
+
   "Block Store" should "return Some(message) on get for a published key and return Some(blockSummary) on getSummary" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
       withStore { store =>
@@ -58,11 +67,9 @@ trait BlockStoreTest
                       _ shouldBe Some(
                         block.toBlockSummary
                       )
-                    ) *>
-                  store
-                    .findBlockHash(_ == block.getBlockMessage.blockHash)
-                    .map(_ should not be empty)
+                    )
               }
+          _ <- checkAllHashes(store, items.map(_.getBlockMessage.blockHash).toList)
         } yield ()
       }
     }
@@ -119,6 +126,7 @@ trait BlockStoreTest
                     .getBlockSummary(k)
                     .map(_ shouldBe Some(v2.toBlockSummary))
               }
+          _ <- checkAllHashes(store, items.map(_._1).toList)
         } yield ()
       }
     }
@@ -241,6 +249,10 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   secondStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
+          _ <- checkAllHashes(
+                secondStore,
+                blockStoreElements.map(_.getBlockMessage.blockHash).toList
+              )
           _ <- secondStore.close()
         } yield ()
       }
@@ -286,12 +298,20 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   firstStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
+          _ <- checkAllHashes(
+                firstStore,
+                blockStoreElements.map(_.getBlockMessage.blockHash).toList
+              )
           _           <- firstStore.close()
           secondStore <- createBlockStore(blockStoreDataDir)
           _ <- blockStoreElements.traverse[Task, Assertion] {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   secondStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
+          _ <- checkAllHashes(
+                secondStore,
+                blockStoreElements.map(_.getBlockMessage.blockHash).toList
+              )
           _ <- secondStore.close()
         } yield ()
       }
@@ -313,12 +333,20 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   firstStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
+          _ <- checkAllHashes(
+                firstStore,
+                blocks.map(_.getBlockMessage.blockHash).toList
+              )
           _           <- firstStore.close()
           secondStore <- createBlockStore(blockStoreDataDir)
           _ <- blocks.traverse[Task, Assertion] {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   secondStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
+          _ <- checkAllHashes(
+                secondStore,
+                blocks.map(_.getBlockMessage.blockHash).toList
+              )
           _ <- secondStore.close()
         } yield ()
       }
@@ -361,6 +389,10 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   secondStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
+          _ <- checkAllHashes(
+                secondStore,
+                blocks.map(_.getBlockMessage.blockHash).toList
+              )
         } yield ()
       }
     }

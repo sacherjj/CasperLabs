@@ -94,14 +94,8 @@ class LMDBBlockStore[F[_]] private (
 
   override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
     withReadTxn { txn =>
-      withResource(blocks.iterate(txn)) { iterator =>
-        iterator.asScala
-          .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
-          .withFilter { case (key, _) => p(key) }
-          .map { case (key, _) => key }
-          .take(1)
-          .toList
-          .headOption
+      withResource(blocks.iterate(txn)) { it =>
+        it.asScala.map(kv => ByteString.copyFrom(kv.key)).find(p)
       }
     }
 

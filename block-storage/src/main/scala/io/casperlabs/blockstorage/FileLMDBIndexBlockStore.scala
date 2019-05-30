@@ -158,14 +158,8 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
   override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
     lock.withPermit(
       withReadTxn { txn =>
-        withResource(index.iterate(txn)) { iterator =>
-          iterator.asScala
-            .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
-            .withFilter { case (key, _) => p(key) }
-            .map { case (key, _) => key }
-            .take(1)
-            .toList
-            .headOption
+        withResource(index.iterate(txn)) { it =>
+          it.asScala.map(kv => ByteString.copyFrom(kv.key)).find(p)
         }
       }
     )
