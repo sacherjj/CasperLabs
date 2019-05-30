@@ -28,7 +28,6 @@ impl TypeMismatch {
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Error {
     TypeMismatch(TypeMismatch),
-    Overflow,
 }
 
 impl From<TypeMismatch> for Error {

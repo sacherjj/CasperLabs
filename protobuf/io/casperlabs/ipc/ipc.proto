@@ -187,7 +187,7 @@ message AdditionOverflow {}
 message TransformFailure {
     oneof failure_instance {
         TypeMismatch type_mismatch = 1;
-        AdditionOverflow overflow = 2;
+        AdditionOverflow overflow = 2 [ deprecated = true ];
      }
 }
 

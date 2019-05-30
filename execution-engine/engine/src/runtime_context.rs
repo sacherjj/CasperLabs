@@ -350,7 +350,6 @@ where
             Ok(AddResult::Success) => Ok(()),
             Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
             Ok(AddResult::TypeMismatch(type_mismatch)) => Err(Error::TypeMismatch(type_mismatch)),
-            Ok(AddResult::Overflow) => Err(Error::Overflow),
         }
     }
 }
