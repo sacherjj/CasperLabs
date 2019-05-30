@@ -4,7 +4,6 @@ use std::fmt;
 use std::ops::Add;
 
 use common::key::Key;
-use common::value::uint::{CheckedAdd, CheckedSub};
 use common::value::{Value, U128, U256, U512};
 use num::traits::{ToPrimitive, WrappingAdd, WrappingSub};
 

@@ -31,38 +31,6 @@ pub enum UIntParseError {
     InvalidRadix,
 }
 
-/// Trait to allow writing generic functions which use the
-/// `checked_add` function. Can't use num::CheckedAdd because it is
-/// defined using references (e.g. &self) which does not work with the
-/// definitions in uint crate (where U128, etc. come from)
-pub trait CheckedAdd: core::ops::Add<Self, Output = Self> + Sized {
-    fn checked_add(self, v: Self) -> Option<Self>;
-}
-
-/// Trait to allow writing generic functions which use the
-/// `checked_sub` function. Can't use num::CheckedSub because it is
-/// defined using references (e.g. &self) which does not work with the
-/// definitions in uint crate (where U128, etc. come from)
-pub trait CheckedSub: core::ops::Sub<Self, Output = Self> + Sized {
-    fn checked_sub(self, v: Self) -> Option<Self>;
-}
-
-// /// Trait to allow writing generic functions which use the
-// /// `wrapping_add` function. Can't use num::WrappingAdd because it is
-// /// defined using references (e.g. &self) which does not work with the
-// /// definitions in uint crate (where U128, etc. come from)
-// pub trait WrappingAdd: core::ops::Add<Self, Output = Self> + Sized {
-//     fn wrapping_add(self, v: Self) -> Self;
-// }
-
-// /// Trait to allow writing generic functions which use the
-// /// `wrapping_add` function. Can't use num::WrappingAdd because it is
-// /// defined using references (e.g. &self) which does not work with the
-// /// definitions in uint crate (where U128, etc. come from)
-// pub trait WrappingSub: core::ops::Sub<Self, Output = Self> + Sized {
-//     fn wrapping_(self, v: Self) -> Self;
-// }
-
 macro_rules! ser_and_num_impls {
     ($type:ident, $total_bytes:expr) => {
         impl ToBytes for $type {
@@ -124,18 +92,6 @@ macro_rules! ser_and_num_impls {
 
         // Requires Num to be implemented
         impl Unsigned for $type {}
-
-        impl CheckedAdd for $type {
-            fn checked_add(self, v: Self) -> Option<Self> {
-                $type::checked_add(self, v)
-            }
-        }
-
-        impl CheckedSub for $type {
-            fn checked_sub(self, v: Self) -> Option<Self> {
-                $type::checked_sub(self, v)
-            }
-        }
 
         // Additional numeric trait, which also holds for these types
         impl Bounded for $type {
