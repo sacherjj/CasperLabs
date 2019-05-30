@@ -159,7 +159,7 @@ where
     pub fn new_uref(&mut self, value: Value) -> Result<Key, Error> {
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
-        let key = Key::URef(key, AccessRights::READ_ADD_WRITE);
+        let key = Key::URef(key, Some(AccessRights::READ_ADD_WRITE));
         let validated_key = Validated::new(key, Validated::valid)?;
         self.insert_uref(validated_key);
         self.write_gs(key, value)?;
@@ -212,12 +212,20 @@ where
     }
 
     pub fn insert_uref(&mut self, key: Validated<Key>) {
-        if let Key::URef(raw_addr, rights) = *key {
-            let entry_rights = self
-                .known_urefs
-                .entry(raw_addr)
-                .or_insert_with(|| std::iter::empty().collect());
-            entry_rights.insert(rights);
+        match *key {
+            Key::URef(raw_addr, Some(rights)) => {
+                let entry_rights = self
+                    .known_urefs
+                    .entry(raw_addr)
+                    .or_insert_with(|| std::iter::empty().collect());
+                entry_rights.insert(rights);
+            }
+            Key::URef(raw_addr, None) => {
+                self.known_urefs
+                    .entry(raw_addr)
+                    .or_insert_with(|| std::iter::empty().collect());
+            }
+            _ => (),
         }
     }
 
@@ -258,7 +266,7 @@ where
     /// that are less powerful than access rights' of the key in the `known_urefs`.
     pub fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
-            Key::URef(raw_addr, new_rights) => {
+            Key::URef(raw_addr, Some(new_rights)) => {
                 self.known_urefs
                     .get(raw_addr) // Check if the `key` is known
                     .map(|known_rights| {
@@ -314,7 +322,8 @@ where
         match key {
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
-            Key::URef(_, rights) => rights.is_readable(),
+            Key::URef(_, Some(rights)) => rights.is_readable(),
+            Key::URef(_, None) => false,
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -323,7 +332,8 @@ where
     pub fn is_addable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
-            Key::URef(_, rights) => rights.is_addable(),
+            Key::URef(_, Some(rights)) => rights.is_addable(),
+            Key::URef(_, None) => false,
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -332,7 +342,8 @@ where
     pub fn is_writeable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) | Key::Hash(_) => false,
-            Key::URef(_, rights) => rights.is_writeable(),
+            Key::URef(_, Some(rights)) => rights.is_writeable(),
+            Key::URef(_, None) => false,
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -428,7 +439,7 @@ mod tests {
     fn random_uref_key<G: RngCore>(entropy_source: &mut G, rights: AccessRights) -> Key {
         let mut key = [0u8; 32];
         entropy_source.fill_bytes(&mut key);
-        Key::URef(key, rights)
+        Key::URef(key, Some(rights))
     }
 
     fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SIZE]) -> Key {

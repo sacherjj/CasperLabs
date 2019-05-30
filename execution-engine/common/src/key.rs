@@ -38,7 +38,7 @@ pub const LOCAL_KEY_HASH_SIZE: usize = 32;
 pub enum Key {
     Account([u8; 32]),
     Hash([u8; 32]),
-    URef([u8; 32], AccessRights), //TODO: more bytes?
+    URef([u8; 32], Option<AccessRights>), //TODO: more bytes?
     Local {
         seed: [u8; LOCAL_SEED_SIZE],
         key_hash: [u8; LOCAL_KEY_HASH_SIZE],
@@ -61,6 +61,13 @@ impl Key {
             URef(id, rights) => Some(ContractPointer::URef(UPointer::new(id, rights))),
             Hash(id) => Some(ContractPointer::Hash(id)),
             _ => None,
+        }
+    }
+
+    pub fn normalize(self) -> Key {
+        match self {
+            Key::URef(id, _) => Key::URef(id, None),
+            other => other,
         }
     }
 }
@@ -107,11 +114,11 @@ impl ToBytes for Key {
                 result.append(&mut hash.to_bytes()?);
                 Ok(result)
             }
-            URef(rf, access_rights) => {
+            URef(rf, maybe_access_rights) => {
                 let mut result = Vec::with_capacity(UREF_SIZE);
                 result.push(UREF_ID);
                 result.append(&mut rf.to_bytes()?);
-                result.append(&mut access_rights.to_bytes()?);
+                result.append(&mut maybe_access_rights.to_bytes()?);
                 Ok(result)
             }
             Local { seed, key_hash } => {
@@ -141,8 +148,9 @@ impl FromBytes for Key {
             }
             UREF_ID => {
                 let (rf, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
-                let (access_right, rem2): (AccessRights, &[u8]) = FromBytes::from_bytes(rem)?;
-                Ok((URef(rf, access_right), rem2))
+                let (maybe_access_rights, rem2): (Option<AccessRights>, &[u8]) =
+                    FromBytes::from_bytes(rem)?;
+                Ok((URef(rf, maybe_access_rights), rem2))
             }
             LOCAL_ID => {
                 let (seed, rest): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;

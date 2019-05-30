@@ -329,12 +329,17 @@ impl From<&common::key::Key> for super::ipc::Key {
                 key_hash.set_key(hash.to_vec());
                 k.set_hash(key_hash);
             }
-            common::key::Key::URef(uref, access_rights) => {
+            common::key::Key::URef(uref, Some(access_rights)) => {
                 let mut key_uref = super::ipc::KeyURef::new();
                 key_uref.set_uref(uref.to_vec());
                 key_uref.set_access_rights(
                     KeyURef_AccessRights::from_i32(access_rights.bits().into()).unwrap(),
                 );
+                k.set_uref(key_uref);
+            }
+            common::key::Key::URef(uref, None) => {
+                let mut key_uref = super::ipc::KeyURef::new();
+                key_uref.set_uref(uref.to_vec());
                 k.set_uref(key_uref);
             }
             common::key::Key::Local { seed, key_hash } => {
@@ -361,13 +366,24 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
             arr.clone_from_slice(&ipc_key.get_hash().key);
             Ok(common::key::Key::Hash(arr))
         } else if ipc_key.has_uref() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_uref().uref);
-            let access_rights = common::key::AccessRights::from_bits(
-                ipc_key.get_uref().access_rights.value().try_into().unwrap(),
-            )
-            .unwrap();
-            Ok(common::key::Key::URef(arr, access_rights))
+            let ipc_uref = ipc_key.get_uref();
+            let id = {
+                let mut ret = [0u8; 32];
+                ret.clone_from_slice(&ipc_uref.uref);
+                ret
+            };
+            let maybe_access_rights = {
+                let access_rights_value: i32 = ipc_uref.access_rights.value();
+                if access_rights_value != 0 {
+                    let access_rights_bits = access_rights_value.try_into().unwrap();
+                    let access_rights =
+                        common::key::AccessRights::from_bits(access_rights_bits).unwrap();
+                    Some(access_rights)
+                } else {
+                    None
+                }
+            };
+            Ok(common::key::Key::URef(id, maybe_access_rights))
         } else {
             parse_error(format!(
                 "ipc Key couldn't be parsed to any Key: {:?}",
@@ -636,7 +652,7 @@ mod tests {
         let input_transforms: HashMap<Key, Transform> = {
             let mut tmp_map = HashMap::new();
             tmp_map.insert(
-                Key::URef([1u8; 32], AccessRights::ADD),
+                Key::URef([1u8; 32], Some(AccessRights::ADD)),
                 Transform::AddInt32(10),
             );
             tmp_map

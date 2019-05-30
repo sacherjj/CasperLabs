@@ -727,7 +727,9 @@ pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
         .map(|(key, group)| {
             (
                 key,
-                group.map(|(_, x)| x).collect::<HashSet<AccessRights>>(),
+                group
+                    .filter_map(|(_, x)| x)
+                    .collect::<HashSet<AccessRights>>(),
             )
         })
         .collect()
@@ -846,9 +848,9 @@ impl Executor<Module> for WasmiExecutor {
 /// Turns `key` into a `([u8; 32], AccessRights)` tuple.
 /// Returns None if `key` is not `Key::URef` as it wouldn't have `AccessRights` associated with it.
 /// Helper function for creating `known_urefs` associating addresses and corresponding `AccessRights`.
-pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
+pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
     match key {
-        Key::URef(raw_addr, rights) => Some((raw_addr, rights)),
+        Key::URef(raw_addr, maybe_rights) => Some((raw_addr, maybe_rights)),
         Key::Account(_) => None,
         Key::Hash(_) => None,
         Key::Local { .. } => None,
