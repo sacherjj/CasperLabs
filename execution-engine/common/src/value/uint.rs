@@ -14,28 +14,6 @@ mod macro_code {
     construct_uint! {
         pub struct U128(2);
     }
-
-    impl U128 {
-        pub fn wrapping_add(&self, other: U128) -> U128 {
-            let (result, _overflow) = self.overflowing_add(other);
-            result
-        }
-    }
-
-    impl U256 {
-        pub fn wrapping_add(&self, other: U256) -> U256 {
-            let (result, _overflow) = self.overflowing_add(other);
-            result
-        }
-    }
-
-    impl U512 {
-        pub fn wrapping_add(&self, other: U512) -> U512 {
-            let (result, _overflow) = self.overflowing_add(other);
-            result
-        }
-    }
-
 }
 
 pub use self::macro_code::{U128, U256, U512};
@@ -152,6 +130,17 @@ macro_rules! ser_and_num_impls {
                 $type::MAX
             }
         }
+        impl $type {
+            pub fn wrapping_add(&self, other: $type) -> $type {
+                self.overflowing_add(other).0
+            }
+            pub fn wrapping_sub(&self, other: $type) -> $type {
+                self.overflowing_sub(other).0
+            }
+            pub fn wrapping_mul(&self, other: $type) -> $type {
+                self.overflowing_mul(other).0
+            }
+        }
     };
 }
 
@@ -164,6 +153,10 @@ fn wrapping_test_u512() {
     let foo = U512::max_value();
     let bar = foo.wrapping_add(1.into());
     assert_eq!(bar, 0.into());
+
+    let foo = U512::min_value();
+    let bar = foo.wrapping_sub(1.into());
+    assert_eq!(bar, U512::max_value());
 }
 
 #[test]
@@ -171,6 +164,10 @@ fn wrapping_test_u256() {
     let foo = U256::max_value();
     let bar = foo.wrapping_add(1.into());
     assert_eq!(bar, 0.into());
+
+    let foo = U256::min_value();
+    let bar = foo.wrapping_sub(1.into());
+    assert_eq!(bar, U256::max_value());
 }
 
 #[test]
@@ -178,4 +175,8 @@ fn wrapping_test_u128() {
     let foo = U128::max_value();
     let bar = foo.wrapping_add(1.into());
     assert_eq!(bar, 0.into());
+
+    let foo = U128::min_value();
+    let bar = foo.wrapping_sub(1.into());
+    assert_eq!(bar, U128::max_value());
 }
