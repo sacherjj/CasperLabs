@@ -27,16 +27,14 @@ object GrpcCasperService {
             BlockAPI.deploy[F](request.getDeploy, ignoreDeploySignature).map(_ => Empty())
           }
 
-        override def getBlock(request: GetBlockRequest): monix.eval.Task[BlockInfo] =
+        override def getBlockInfo(request: GetBlockInfoRequest): monix.eval.Task[BlockInfo] =
           TaskLike[F].toTask {
             BlockAPI
-              .getBlockInfo[F](request.blockHash, full = request.view == GetBlockRequest.View.FULL)
+              .getBlockInfo[F](
+                request.blockHashBase16,
+                full = request.view == GetBlockInfoRequest.View.FULL
+              )
           }
-
-        override def listBlockDeploys(
-            request: ListBlockDeploysRequest
-        ): monix.eval.Task[ListBlockDeploysResponse] = ???
-
       }
     }
 }

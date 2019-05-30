@@ -21,16 +21,9 @@ service CasperService {
     }
 
     // Get the block summary with extra information about finality.
-    rpc GetBlock(GetBlockRequest) returns (io.casperlabs.casper.consensus.info.BlockInfo) {
+    rpc GetBlockInfo(GetBlockInfoRequest) returns (io.casperlabs.casper.consensus.info.BlockInfo) {
     	option (google.api.http) = {
-    		get: "/v2/blocks/{block_hash=*}"
-    	};
-    }
-
-    // List the processed deploys inside a block.
-    rpc ListBlockDeploys(ListBlockDeploysRequest) returns (ListBlockDeploysResponse) {
-    	option (google.api.http) = {
-    		get: "/v2/blocks/{block_hash=*}/deploys"
+    		get: "/v2/blocks/{block_hash_base16=*}"
     	};
     }
 }
@@ -39,11 +32,10 @@ message DeployRequest {
     io.casperlabs.casper.consensus.Deploy deploy = 1;
 }
 
-message GetBlockRequest {
-	// NOTE: Leaving `block_hash` as bytes so that if you list block summaries then however
-	// the JSON formatter prints it can be substituted back into the URL.
-
-	bytes block_hash = 1;
+message GetBlockInfoRequest {
+	// Either the full or just the first few characters of the block hash in base16 encoding,
+	// so that it works with the client's redacted displays.
+	string block_hash_base16 = 1;
 	View view = 2;
 
 	enum View {
@@ -53,23 +45,4 @@ message GetBlockRequest {
 		// for example the size, number of errors in deploys, etc.
 		FULL = 1;
 	}
-}
-
-message ListBlockDeploysRequest {
-	bytes block_hash = 1;
-	View view = 2;
-	uint32 page_size = 3;
-	string page_token = 4;
-
-	enum View {
-		// Only include the header and the execution results, not the body with the code.
-		BASIC = 0;
-		// Retrieve the full deploy.
-		FULL = 1;
-	}
-}
-
-message ListBlockDeploysResponse {
-	repeated io.casperlabs.casper.consensus.Block.ProcessedDeploy deploys = 1;
-	string next_page_token = 2;
 }
