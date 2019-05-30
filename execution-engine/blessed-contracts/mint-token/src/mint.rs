@@ -68,8 +68,8 @@ mod tests {
             SimpleMint(RefCell::new(BTreeMap::new()), Cell::new(0))
         }
 
-        pub fn balance(&self, id: &u32) -> Option<U512> {
-            self.0.borrow().get(id).map(|r| Cell::get(r))
+        pub fn balance(&self, id: u32) -> Option<U512> {
+            self.0.borrow().get(&id).map(|r| Cell::get(r))
         }
     }
 
@@ -105,11 +105,11 @@ mod tests {
         let purse1 = mint.create(balance1);
         let purse2 = mint.create(balance2).to_dep();
 
-        mint.transfer(purse1.clone(), purse2.clone(), transfer_amount)
+        mint.transfer(purse1, purse2, transfer_amount)
             .expect("transfer errored when it should not.");
 
-        let b1 = mint.balance(&purse1.0).unwrap();
-        let b2 = mint.balance(&purse2.0).unwrap();
+        let b1 = mint.balance(purse1.0).unwrap();
+        let b2 = mint.balance(purse2.0).unwrap();
 
         assert_eq!(balance1 - transfer_amount, b1);
         assert_eq!(balance2 + transfer_amount, b2);
@@ -127,11 +127,11 @@ mod tests {
 
         assert_eq!(
             Err(Error::InsufficientFunds),
-            mint.transfer(purse1.clone(), purse2.clone(), transfer_amount)
+            mint.transfer(purse1, purse2, transfer_amount)
         );
 
-        let b1 = mint.balance(&purse1.0).unwrap();
-        let b2 = mint.balance(&purse2.0).unwrap();
+        let b1 = mint.balance(purse1.0).unwrap();
+        let b2 = mint.balance(purse2.0).unwrap();
 
         // balances remain unchanged
         assert_eq!(balance1, b1);
@@ -145,14 +145,14 @@ mod tests {
         let transfer_amount = U512::from(75);
 
         let purse1 = mint.create(balance1);
-        let purse2 = DepId(purse1.clone().0 + 1);
+        let purse2 = DepId(purse1.0 + 1);
 
         assert_eq!(
             Err(Error::DestNotFound),
-            mint.transfer(purse1.clone(), purse2, transfer_amount)
+            mint.transfer(purse1, purse2, transfer_amount)
         );
 
-        let b1 = mint.balance(&purse1.0).unwrap();
+        let b1 = mint.balance(purse1.0).unwrap();
         // balance remains unchanged
         assert_eq!(balance1, b1);
     }
@@ -164,14 +164,14 @@ mod tests {
         let transfer_amount = U512::from(75);
 
         let purse1 = mint.create(balance1);
-        let purse2 = FullId(purse1.clone().0 + 1);
+        let purse2 = FullId(purse1.0 + 1);
 
         assert_eq!(
             Err(Error::SourceNotFound),
-            mint.transfer(purse2, purse1.clone().to_dep(), transfer_amount)
+            mint.transfer(purse2, purse1.to_dep(), transfer_amount)
         );
 
-        let b1 = mint.balance(&purse1.0).unwrap();
+        let b1 = mint.balance(purse1.0).unwrap();
         // balance remains unchanged
         assert_eq!(balance1, b1);
     }
