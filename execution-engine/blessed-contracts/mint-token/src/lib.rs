@@ -58,7 +58,12 @@ impl Mint<ARef<U512>, RWRef<U512>> for CLMint {
     }
 }
 
-fn transfer(source_key: Key, target_key: Key, amount: U512, mint: CLMint) -> Result<(), mint::Error> {
+fn transfer(
+    source_key: Key,
+    target_key: Key,
+    amount: U512,
+    mint: CLMint,
+) -> Result<(), mint::Error> {
     let source: WithdrawId = source_key
         .try_into()
         .map_err(|_| mint::Error::SourceNotFound)?;
