@@ -98,8 +98,7 @@ class GraphQLServiceSpec extends WordSpecLike with Matchers with Eventually {
             GraphQLWebSocketMessage.ConnectionInit,
             GraphQLWebSocketMessage.Start("1", GraphQLQuery(SubscriptionQuery)),
             GraphQLWebSocketMessage.Start("2", GraphQLQuery(SubscriptionQuery)),
-            GraphQLWebSocketMessage.Start("3", GraphQLQuery(s"query { $QueryFieldName }")),
-            GraphQLWebSocketMessage.Data("3", Json.fromJsonObject(QuerySuccessfulResponse))
+            GraphQLWebSocketMessage.Start("3", GraphQLQuery(s"query { $QueryFieldName }"))
           ).map(_.asJson.toString)
         ) { responses =>
           val expected = List(
@@ -107,13 +106,14 @@ class GraphQLServiceSpec extends WordSpecLike with Matchers with Eventually {
             GraphQLWebSocketMessage.ConnectionKeepAlive,
             GraphQLWebSocketMessage.Complete("1"),
             GraphQLWebSocketMessage.Complete("2"),
-            GraphQLWebSocketMessage.Complete("3")
+            GraphQLWebSocketMessage.Complete("3"),
+            GraphQLWebSocketMessage.Data("3", Json.fromJsonObject(QuerySuccessfulResponse))
           ) ::: SubscriptionResponsesEncoded.flatMap(
             json =>
               List(
                 GraphQLWebSocketMessage.Data("1", json),
                 GraphQLWebSocketMessage.Data("2", json)
-            )
+              )
           )
           eventually {
             responses.get() should contain allElementsOf expected
@@ -129,8 +129,8 @@ class GraphQLServiceSpec extends WordSpecLike with Matchers with Eventually {
         subscriptionResponse = SubscriptionResponse.zipLeft(Stream.awakeEvery[Task](1.seconds))
       ) { responses =>
         assertThrows[Exception](eventually {
-          responses.get() should contain atLeastOneElementOf (SubscriptionResponsesEncoded.map(
-            json => GraphQLWebSocketMessage.Data("1", json)) :+
+          responses.get() should contain atLeastOneElementOf (SubscriptionResponsesEncoded
+            .map(json => GraphQLWebSocketMessage.Data("1", json)) :+
             GraphQLWebSocketMessage.Complete("1"))
         })
       }

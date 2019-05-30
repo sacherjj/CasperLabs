@@ -90,7 +90,7 @@ object GraphQL {
             WebSocketFrame.Text(
               (GraphQLWebSocketMessage.ConnectionKeepAlive: GraphQLWebSocketMessage).asJson
                 .toString()
-          )
+            )
         )
       val output = queue.dequeue
         .map { m =>
@@ -238,7 +238,7 @@ object GraphQL {
               .onComplete {
                 case Success(json) => callback(json.asRight[Throwable])
                 case Failure(e)    => callback(e.asLeft[Json])
-            }
+              }
         )
       }
 
