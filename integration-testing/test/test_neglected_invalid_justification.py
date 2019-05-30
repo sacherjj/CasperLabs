@@ -33,13 +33,13 @@ class TimedThread(Thread):
 class DeployTimedTread(TimedThread):
 
     def my_call(self, kwargs):
-        self.node.deploy(**kwargs)
+        self.node.client.deploy(**kwargs)
 
 
 class ProposeTimedThread(TimedThread):
 
     def my_call(self, kwargs):
-        self.node.propose()
+        self.node.client.propose()
 
 
 def test_neglected_invalid_block(three_node_network):
