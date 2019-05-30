@@ -25,7 +25,7 @@ trap cleanup 0
 error_exit()
 {
     if [[ "$?" != "0" ]]; then
-        log.sh "$1"
+        echo "$1"
         exit 1
     fi
 }
