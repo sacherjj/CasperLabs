@@ -90,7 +90,7 @@ object GraphQL {
             WebSocketFrame.Text(
               (GraphQLWebSocketMessage.ConnectionKeepAlive: GraphQLWebSocketMessage).asJson
                 .toString()
-            )
+          )
         )
       val output = queue.dequeue
         .map { m =>
@@ -149,6 +149,12 @@ object GraphQL {
             GraphQLWebSocketMessage.Start(id, payload)
             ) =>
           for {
+            _ <- activeSubscriptions
+                  .asInstanceOf[Subscriptions[F]]
+                  .get(id)
+                  .fold(().pure[F]) { prevFiber =>
+                    prevFiber.cancel.start.map(_.join)
+                  }
             fiber <- processWebSocketQuery[F](payload, executor)
                       .map(json => GraphQLWebSocketMessage.Data(id, json))
                       .onFinalizeCase {
@@ -232,7 +238,7 @@ object GraphQL {
               .onComplete {
                 case Success(json) => callback(json.asRight[Throwable])
                 case Failure(e)    => callback(e.asLeft[Json])
-              }
+            }
         )
       }
 
