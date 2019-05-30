@@ -1,16 +1,18 @@
 package io.casperlabs.casper.util.execengine
 
-import cats.implicits._
 import cats.Id
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
-import io.casperlabs.casper.consensus
-import io.casperlabs.casper.consensus._, Block.ProcessedDeploy
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.execengine.ExecEngineUtilTest._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
-import io.casperlabs.casper.{InvalidPostStateHash, InvalidPreStateHash, Validate}
+import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
@@ -18,10 +20,6 @@ import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
-
-import Op.OpMap
-
-import ExecEngineUtilTest._
 
 class ExecEngineUtilTest
     extends FlatSpec
@@ -208,7 +206,7 @@ class ExecEngineUtilTest
                 ExecutionEffect(Seq(opEntry), Seq(transforEntry))
               }
               deploys
-                .map(d => DeployResult(10, DeployResult.Result.Effects(getExecutionEffect(d))))
+                .map(d => DeployResult(Some(getExecutionEffect(d)), None, 10))
                 .asRight[Throwable]
             },
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],

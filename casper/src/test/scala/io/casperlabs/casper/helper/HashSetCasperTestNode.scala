@@ -6,12 +6,11 @@ import cats.data.EitherT
 import cats.effect.{Concurrent, Timer}
 import cats.implicits._
 import cats.temp.par.Par
-import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
+import cats.{Applicative, ApplicativeError, Defer, Id, Monad, Parallel, ~>}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{Block, Bond}
-import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
@@ -271,7 +270,7 @@ object HashSetCasperTestNode {
         //regardless of their wasm code. It pretends to have run all the deploys,
         //but it doesn't really; it just returns the same result no matter what.
         deploys
-          .map(d => DeployResult(10, DeployResult.Result.Effects(getExecutionEffect(d))))
+          .map(d => DeployResult(Some(getExecutionEffect(d)), None, 10))
           .asRight[Throwable]
           .pure[F]
 

@@ -2,25 +2,23 @@ package io.casperlabs.casper.util.execengine
 
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Foldable, Monad, MonadError}
 import cats.kernel.Monoid
+import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
-import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.{Block, Deploy}, Block.ProcessedDeploy
+import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.util.ProtoUtil.blockNumber
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
-import io.casperlabs.models.{DeployResult => _, _}
+import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
-
-import scala.collection.immutable.BitSet
-
-import Op.{OpMap, OpMapAddComm}
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -80,12 +78,19 @@ object ExecEngineUtil {
       deployResults: Seq[(Deploy, DeployResult)]
   ): Seq[(Deploy, Long, Option[ExecutionEffect])] =
     deployResults.map {
-      case (deploy, DeployResult(_, DeployResult.Result.Empty)) =>
+      case (deploy, dr) if dr.effects.isEmpty && dr.error.isEmpty =>
         (deploy, 0L, None) //This should never happen either
-      case (deploy, DeployResult(cost, DeployResult.Result.Error(_))) =>
+      case (deploy, DeployResult(executionEffects, None, cost)) =>
+        (deploy, cost, executionEffects)
+      case (deploy, DeployResult(None, Some(error @ _), cost)) =>
+        // "precondition failure" - one where there are no effects to the GlobalState
+        // like invalid nonce, deploy key not being an account, invalid Wasm or invalid key.
+        // TODO: handle error
         (deploy, cost, None)
-      case (deploy, DeployResult(cost, DeployResult.Result.Effects(eff))) =>
-        (deploy, cost, Some(eff))
+      case (deploy, DeployResult(Some(effects), Some(error), cost)) =>
+        // Execution error but with effects.
+        // Usually these effects will be to bump a nonce.
+        (deploy, cost, Some(effects))
     }
 
   //TODO: Logic for picking the commuting group? Prioritize highest revenue? Try to include as many deploys as possible?
