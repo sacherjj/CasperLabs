@@ -386,3 +386,9 @@ pipeline:
       status:
         - failure
 
+# Signature for Drone
+---
+kind: signature
+hmac: aba74ddcedb4ac74f39f8884cd644c6f13eb4ed7f7226c7b9fefda17d0241af2
+
+...

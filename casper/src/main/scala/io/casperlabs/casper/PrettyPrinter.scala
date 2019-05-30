@@ -4,7 +4,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.protocol._
 import io.casperlabs.crypto.codec._
 import io.casperlabs.ipc
-import scalapb.GeneratedMessage
 
 object PrettyPrinter {
 
@@ -24,7 +23,7 @@ object PrettyPrinter {
     case ipc.Transform.TransformInstance.AddKeys(ipc.TransformAddKeys(ks)) =>
       s"Insert(${ks.map(buildString).mkString(",")})"
     case ipc.Transform.TransformInstance.Failure(_)  => "TransformFailure"
-    case ipc.Transform.TransformInstance.Identity(_) => "Identity"
+    case ipc.Transform.TransformInstance.Identity(_) => "Read"
     case ipc.Transform.TransformInstance.Write(ipc.TransformWrite(mv)) =>
       mv match {
         case None    => "Write(Nothing)"
@@ -44,8 +43,8 @@ object PrettyPrinter {
 
   def buildString(v: ipc.Value): String = v.valueInstance match {
     case ipc.Value.ValueInstance.Empty => "ValueEmpty"
-    case ipc.Value.ValueInstance.Account(ipc.Account(pk, nonce, urefs)) =>
-      s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}})"
+    case ipc.Value.ValueInstance.Account(ipc.Account(pk, nonce, urefs, associatedKeys)) =>
+      s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}}, {${associatedKeys.map(buildString).mkString(",")})"
     case ipc.Value.ValueInstance.ByteArr(bytes) => s"ByteArray(${buildString(bytes)})"
     case ipc.Value.ValueInstance.Contract(ipc.Contract(body, urefs, protocolVersion)) =>
       s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}}, ${buildString(protocolVersion)})"
@@ -97,6 +96,12 @@ object PrettyPrinter {
       case ipc.KeyURef.AccessRights.READ_WRITE     => "ReadWrite"
       case ipc.KeyURef.AccessRights.READ_ADD_WRITE => "ReadAddWrite"
     }
+
+  private def buildString(ak: ipc.Account.AssociatedKey): String = {
+    val pk     = buildString(ak.pubKey)
+    val weight = ak.weight
+    s"$pk:$weight"
+  }
 
   def buildString(d: consensus.Deploy): String =
     s"Deploy #${d.getHeader.timestamp}"

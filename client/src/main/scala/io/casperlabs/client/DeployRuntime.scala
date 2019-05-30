@@ -206,11 +206,18 @@ object DeployRuntime {
 
     def sign(privateKey: PrivateKey) = {
       val sig = Ed25519.sign(d.deployHash.toByteArray, privateKey)
-      d.withSignature(
-        consensus
-          .Signature()
-          .withSigAlgorithm(Ed25519.name)
-          .withSig(ByteString.copyFrom(sig))
+      d.withApprovals(
+        List(
+          consensus
+            .Approval()
+            .withApproverPublicKey(d.getHeader.accountPublicKey)
+            .withSignature(
+              consensus
+                .Signature()
+                .withSigAlgorithm(Ed25519.name)
+                .withSig(ByteString.copyFrom(sig))
+            )
+        )
       )
     }
   }

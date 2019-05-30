@@ -331,6 +331,86 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverApprovalRelayFactor =
+      gen[Int]("Number of nodes to relay genesis approvals to.")
+
+    @scallop
+    val serverApprovalPollInterval =
+      gen[FiniteDuration](
+        "Time to wait between asking the bootstrap node for an updated list of genesis approvals."
+      )
+
+    @scallop
+    val serverSyncMaxPossibleDepth =
+      gen[Int]("Maximum DAG depth to allow when syncing after a new block notification.")
+
+    @scallop
+    val serverSyncMinBlockCountToCheckBranchingFactor =
+      gen[Int](
+        "Minimum DAG depth before we start checking the branching factor for abnormal growth."
+      )
+
+    @scallop
+    val serverSyncMaxBranchingFactor =
+      gen[Double](
+        "Maximum branching factor to allow during syncs before terminating the operation as malicious."
+      )
+
+    @scallop
+    val serverSyncMaxDepthAncestorsRequest =
+      gen[Int]("Maximum DAG depth to ask in iterative requests during syncing.")
+
+    @scallop
+    val serverInitSyncMaxNodes =
+      gen[Int]("Maximum number of nodes to try to sync with initially in a round.")
+
+    @scallop
+    val serverInitSyncMinSuccessful =
+      gen[Int]("Minimum number of successful initial syncs in a round to call it done.")
+
+    @scallop
+    val serverInitSyncMemoizeNodes =
+      gen[Boolean](
+        "Remember the selection of nodes to synchronize with initially, or pick a new set in each round."
+      )
+
+    @scallop
+    val serverInitSyncSkipFailedNodes =
+      gen[Boolean](
+        "Skip nodes which failed previous synchronization attempts or allow them to be tried again."
+      )
+
+    @scallop
+    val serverInitSyncRoundPeriod =
+      gen[FiniteDuration]("Time to wait between initial synchronization attempts.")
+
+    @scallop
+    val serverDownloadMaxParallelBlocks =
+      gen[Int]("Maximum number of parallel block downloads initiated by the download manager.")
+    @scallop
+    val serverDownloadMaxRetries =
+      gen[Int]("Maximum number of times to retry to download a block from the same node.")
+
+    @scallop
+    val serverDownloadRetryInitialBackoffPeriod =
+      gen[FiniteDuration](
+        "Time to wait before trying to download a failed block again from the same node."
+      )
+
+    @scallop
+    val serverDownloadRetryBackoffFactor =
+      gen[Double](
+        "Exponential factor to apply on subsequent wait times before trying to download again."
+      )
+
+    @scallop
+    val serverRelayMaxParallelBlocks =
+      gen[Int]("Maximum number of parallel block downloads allowed to peers.")
+
+    @scallop
+    val serverRelayBlockChunkConsumerTimeout =
+      gen[FiniteDuration]("Maximum time to allow a peer downloading a block to consume each chunk.")
+    @scallop
     val casperStandalone =
       gen[Flag](
         "Start a stand-alone node (no bootstrapping).",

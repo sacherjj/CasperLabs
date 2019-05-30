@@ -1,4 +1,5 @@
 use crate::key::*;
+use crate::value::account::{AssociatedKeys, PublicKey, Weight, MAX_KEYS};
 use crate::value::*;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -39,10 +40,32 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
     ]
 }
 
+pub fn public_key_arb() -> impl Strategy<Value = PublicKey> {
+    u8_slice_32().prop_map(Into::into)
+}
+
+pub fn weight_arb() -> impl Strategy<Value = Weight> {
+    any::<u8>().prop_map(Weight::new)
+}
+
+pub fn associated_keys_arb(size: usize) -> impl Strategy<Value = AssociatedKeys> {
+    proptest::collection::btree_map(public_key_arb(), weight_arb(), size).prop_map(|keys| {
+        let mut associated_keys = AssociatedKeys::empty();
+        keys.into_iter().for_each(|(k, v)| {
+            associated_keys.add_key(k, v).unwrap();
+        });
+        associated_keys
+    })
+}
+
 pub fn account_arb() -> impl Strategy<Value = Account> {
     u8_slice_32().prop_flat_map(|b| {
         any::<u64>().prop_flat_map(move |u64arb| {
-            uref_map_arb(3).prop_map(move |urefs| Account::new(b, u64arb, urefs))
+            associated_keys_arb(MAX_KEYS - 1).prop_flat_map(move |mut associated_keys| {
+                associated_keys.add_key(b.into(), Weight::new(1)).unwrap();
+                uref_map_arb(3)
+                    .prop_map(move |urefs| Account::new(b, u64arb, urefs, associated_keys.clone()))
+            })
         })
     })
 }
@@ -76,6 +99,7 @@ pub fn value_arb() -> impl Strategy<Value = Value> {
         ("\\PC*".prop_map(Value::String)),
         (vec(any::<String>(), 1..500).prop_map(Value::ListString)),
         ("\\PC*", key_arb()).prop_map(|(n, k)| Value::NamedKey(n, k)),
+        key_arb().prop_map(Value::Key),
         account_arb().prop_map(Value::Account),
         contract_arb().prop_map(Value::Contract),
         u128_arb().prop_map(Value::UInt128),
