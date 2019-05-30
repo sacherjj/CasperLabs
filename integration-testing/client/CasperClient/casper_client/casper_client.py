@@ -92,9 +92,9 @@ class CasperClient:
         self.node = GRPCService(self.port, DeployServiceStub)
         self.casperService = GRPCService(self.port, CasperServiceStub)
 
-    @guarded
+    # @guarded
     def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
-               payment: str = None, session: str = None, nonce: int=0,
+               payment: str = None, session: str = None, nonce: int = 0,
                public_key: str = None, private_key: str = None):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -119,96 +119,43 @@ class CasperClient:
             h = blake2b(digest_size=32)
             h.update(data)
             #return h.digest()
-            return h.hexdigest()
+            return bytes(h.hexdigest(), 'utf-8')
+
+        def read_binary(file_name: str):
+            with open(file_name, 'rb') as f:
+                return f.read()
+
+        def read_code(file_name: str):
+            return consensus_pb2.Deploy.Code(code = read_binary(file_name))
+
+        signing_key = ed25519.SigningKey(read_binary(private_key))
 
         def sign(data: bytes):
-            with open(private_key,"rb") as f:
-                signing_key = ed25519.SigningKey(f.read())
-                return signing_key.sign(data, encoding='base16')
+            return consensus_pb2.Signature(sig_algorithm = 'ed25519',
+                                           sig = signing_key.sign(data)) #, encoding='base16'))
 
-        def read_code(filename: str):
-            with open(filename, "rb") as f:
-                return consensus_pb2.Deploy.Code(code=f.read())
+        def serialize(o) -> bytes:
+            return o.SerializeToString()
 
         body = consensus_pb2.Deploy.Body(session = read_code(session),
                                          payment = read_code(payment))
 
-        header = consensus_pb2.Deploy.Header(account_public_key = b'',
+        header = consensus_pb2.Deploy.Header(account_public_key = read_binary(public_key),  # TODO: base16?
                                              nonce = nonce,
                                              timestamp = int(time.time()),
                                              gas_price = gas_price,
-                                             body_hash = b'')
+                                             body_hash = hash(serialize(body)))
 
-        d = consensus_pb2.Deploy(deploy_hash = b'',
+        deploy_hash = hash(serialize(header))
+
+        d = consensus_pb2.Deploy(deploy_hash = deploy_hash,
                                  header = header,
                                  body = body,
-                                 signature = None)
+                                 signature = sign(deploy_hash))
 
         data = casper_pb2.DeployRequest(deploy = d)
-
-        """
-        data = CasperMessage_pb2.DeployData(
-            address = from_addr,
-            timestamp = int(time.time()),
-            session = read_deploy_code(session),
-            payment = read_deploy_code(payment),
-            gas_limit = gas_limit,
-            gas_price = gas_price,
-            nonce = nonce,
-            sig_algorithm = "ed25519",
-            #bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
-            signature = b'', #TODO
-            user = public_key and pathlib.Path(public_key).read_bytes(),
-        )
-        r = self.node.DoDeploy(data)
-        """
         r = self.casperService.Deploy(data)
         return r
-
-
-        """
-
-// A smart contract invocation, singed by the account that sent it.
-message Deploy {
-    // blake2b256 hash of the `header`.
-    bytes deploy_hash = 1;
-    Header header = 2;
-    Body body = 3;
-    // Signature over `deploy_hash`.
-    Signature signature = 4;
-
-    message Header {
-        // Identifying the Account is the key used to sign the Deploy.
-        bytes account_public_key = 1;
-        // Monotonic nonce of the Account. Only the Deploy with the expected nonce can be executed straight away;
-        // anything higher has to wait until the Account gets into the correct state, i.e. the pending Deploys get
-        // executed on whichever Node they are currently waiting.
-        uint64 nonce = 2;
-        // Current time milliseconds.
-        uint64 timestamp = 3;
-        // Conversion rate between the cost of Wasm opcodes and the tokens sent by the `payment_code`.
-        uint64 gas_price = 4;
-        // Hash of the body structure as a whole.
-        bytes body_hash = 5;
-    }
-
-    message Body {
-        // Wasm code of the smart contract to be executed.
-        Code session = 1;
-        // Wasm code that transfers some tokens to the validators as payment in exchange to run the Deploy.
-        Code payment = 2;
-    }
-
-    // Code (either session or payment) to be deployed to the platform.
-    // Includes both binary instructions (wasm) and optionally, arguments
-    // to those instructions encoded via our ABI
-    message Code {
-        bytes code = 1; // wasm byte code
-        bytes args = 2; // ABI-encoded arguments
-    }
-}
-
-"""
 
 
     @guarded
@@ -222,7 +169,7 @@ message Deploy {
         yield from self.node.showBlocks_(CasperMessage_pb2.BlocksQuery(depth=depth))
 
     @guarded
-    def showBlock(self, hash):
+    def showBlock(self, hash: str):
         """
         Return object describing a block known by Casper on an existing running node.
 
