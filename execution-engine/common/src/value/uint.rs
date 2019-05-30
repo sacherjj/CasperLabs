@@ -125,33 +125,33 @@ ser_and_num_impls!(U512, 64);
 
 #[test]
 fn wrapping_test_u512() {
-    let foo = U512::max_value();
-    let bar = foo.wrapping_add(&1.into());
-    assert_eq!(bar, 0.into());
+    let max = U512::max_value();
+    let value = max.wrapping_add(&1.into());
+    assert_eq!(value, 0.into());
 
-    let foo = U512::min_value();
-    let bar = foo.wrapping_sub(&1.into());
-    assert_eq!(bar, U512::max_value());
+    let min = U512::min_value();
+    let value = min.wrapping_sub(&1.into());
+    assert_eq!(value, U512::max_value());
 }
 
 #[test]
 fn wrapping_test_u256() {
-    let foo = U256::max_value();
-    let bar = foo.wrapping_add(&1.into());
-    assert_eq!(bar, 0.into());
+    let max = U256::max_value();
+    let value = max.wrapping_add(&1.into());
+    assert_eq!(value, 0.into());
 
-    let foo = U256::min_value();
-    let bar = foo.wrapping_sub(&1.into());
-    assert_eq!(bar, U256::max_value());
+    let min = U256::min_value();
+    let value = min.wrapping_sub(&1.into());
+    assert_eq!(value, U256::max_value());
 }
 
 #[test]
 fn wrapping_test_u128() {
-    let foo = U128::max_value();
-    let bar = foo.wrapping_add(&1.into());
-    assert_eq!(bar, 0.into());
+    let max = U128::max_value();
+    let value = max.wrapping_add(&1.into());
+    assert_eq!(value, 0.into());
 
-    let foo = U128::min_value();
-    let bar = foo.wrapping_sub(&1.into());
-    assert_eq!(bar, U128::max_value());
+    let min = U128::min_value();
+    let value = min.wrapping_sub(&1.into());
+    assert_eq!(value, U128::max_value());
 }
