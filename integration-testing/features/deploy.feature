@@ -26,13 +26,11 @@ Feature: Deploy Operation
       When: Deploy is performed with session contract and payment contract
       Then: Deploy occurs
 
-  #Not Implemented
   Scenario; Deploy with invalid signature
      Given: Invalid account private/public key pair
       When: Deploy is performed with all fields
       Then: Client error occurs
 
-  #Not Implemented
   Scenario: Deploy with valid signature
      Given: Single Node Network
        And: Valid account private/public key pair
