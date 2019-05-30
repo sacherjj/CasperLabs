@@ -916,7 +916,20 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
 #[cfg(test)]
 mod tests {
     use super::Error;
+    use common::key::Key;
+    use common::value::{Account, Value};
+    use engine_state::execution_effect::ExecutionEffect;
     use engine_state::execution_result::ExecutionResult;
+    use execution::{Executor, WasmiExecutor};
+    use parity_wasm::builder::ModuleBuilder;
+    use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
+    use std::cell::RefCell;
+    use std::collections::btree_map::BTreeMap;
+    use std::collections::HashMap;
+    use std::rc::Rc;
+    use storage::global_state::StateReader;
+    use tracking_copy::TrackingCopy;
+
     fn on_fail_charge_test_helper<T>(
         f: impl Fn() -> Result<T, Error>,
         success_cost: u64,
@@ -970,6 +983,66 @@ mod tests {
                 // Check if the containers are non-empty
                 assert_eq!(effect.0.len(), 1);
                 assert_eq!(effect.1.len(), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_nonce_no_cost_effect() {
+        let init_nonce = 1u64;
+        let invalid_nonce = init_nonce + 2;
+        struct DummyReader;
+        impl StateReader<Key, Value> for DummyReader {
+            type Error = ::storage::error::Error;
+
+            fn read(&self, key: &Key) -> Result<Option<Value>, Self::Error> {
+                let pub_key: [u8; 32] = match key {
+                    Key::Account(pub_key) => *pub_key,
+                    _ => panic!("Key must be of an Account type"),
+                };
+                let acc = Account::new(pub_key, 1, BTreeMap::new());
+                Ok(Some(Value::Account(acc)))
+            }
+        }
+
+        let executor = WasmiExecutor;
+        let account_address = [0u8; 32];
+        let parity_module: Module = ModuleBuilder::new()
+            .with_import(ImportEntry::new(
+                "env".to_string(),
+                "memory".to_string(),
+                External::Memory(MemoryType::new(16, Some(::wasm_prep::MEM_PAGES))),
+            ))
+            .build();
+
+        let tc: Rc<RefCell<TrackingCopy<DummyReader>>> =
+            Rc::new(RefCell::new(TrackingCopy::new(DummyReader)));
+
+        let exec_result = executor.exec(
+            parity_module,
+            &vec![],
+            account_address,
+            0u64,
+            invalid_nonce,
+            100u64,
+            1u64,
+            tc,
+        );
+
+        match exec_result {
+            ExecutionResult::Success { .. } => panic!("Expected ExecutionResult::Failure."),
+            ExecutionResult::Failure {
+                error,
+                effect,
+                cost,
+            } => {
+                assert_eq!(effect, ExecutionEffect(HashMap::new(), HashMap::new()));
+                assert_eq!(cost, 0);
+                if let ::engine_state::error::Error::ExecError(Error::InvalidNonce(nonce)) = error {
+                    assert_eq!(nonce, invalid_nonce);
+                } else {
+                    panic!("Expected InvalidNonce error got: {:?}", error);
+                }
             }
         }
     }

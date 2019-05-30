@@ -1,6 +1,7 @@
 use super::error::Error;
 use super::execution_effect::ExecutionEffect;
 
+#[derive(Debug)]
 pub enum ExecutionResult {
     /// An error condition that happened during execution
     Failure {

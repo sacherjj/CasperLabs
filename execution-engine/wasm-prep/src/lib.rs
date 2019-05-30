@@ -9,7 +9,7 @@ use std::error::Error;
 use wasm_costs::WasmCosts;
 
 //NOTE: size of Wasm memory page is 64 KiB
-const MEM_PAGES: u32 = 64;
+pub const MEM_PAGES: u32 = 64;
 
 #[derive(Debug)]
 pub enum PreprocessingError {
