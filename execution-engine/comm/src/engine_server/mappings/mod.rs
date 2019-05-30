@@ -132,6 +132,8 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             } else if v.has_key() {
                 let key = v.get_key().try_into()?;
                 transform_write(common::value::Value::Key(key))
+            } else if v.has_unit() {
+                transform_write(common::value::Value::Unit)
             } else {
                 parse_error(format!(
                     "TransformEntry write contained unknown value: {:?}",
@@ -201,6 +203,7 @@ impl From<common::value::Value> for super::ipc::Value {
                 contr.set_protocol_version(protocol);
                 tv.set_contract(contr);
             }
+            common::value::Value::Unit => tv.set_unit(ipc::UnitValue::new()),
         };
         tv
     }
