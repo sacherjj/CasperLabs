@@ -153,7 +153,7 @@ object GraphQL {
                   .asInstanceOf[Subscriptions[F]]
                   .get(id)
                   .fold(().pure[F]) { prevFiber =>
-                    prevFiber.cancel.start.map(_.join)
+                    prevFiber.cancel
                   }
             fiber <- processWebSocketQuery[F](payload, executor)
                       .map(json => GraphQLWebSocketMessage.Data(id, json))
@@ -182,7 +182,7 @@ object GraphQL {
             _ <- activeSubscriptions
                   .asInstanceOf[Subscriptions[F]]
                   .get(id)
-                  .fold(().pure[F])(_.cancel.start.map(_.join))
+                  .fold(().pure[F])(_.cancel)
           } yield
             (ProtocolState.Active(activeSubscriptions.asInstanceOf[Subscriptions[F]] - id), ())
 
@@ -195,7 +195,7 @@ object GraphQL {
                   .asInstanceOf[Subscriptions[F]]
                   .values
                   .toList
-                  .traverse(_.cancel.start.map(_.join))
+                  .traverse(_.cancel)
             _ <- stopSignal.complete(())
           } yield (ProtocolState.Closed, ())
 
