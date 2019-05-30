@@ -870,7 +870,7 @@ impl Executor<Module> for WasmiExecutor {
         } else {
             // TODO: figure out how this works with the cost model
             // https://casperlabs.atlassian.net/browse/EE-239
-            on_fail_charge!(deserialize(args), 0, effects_snapshot)
+            on_fail_charge!(deserialize(args), args.len() as u64, effects_snapshot)
         };
 
         let context = RuntimeContext::new(
