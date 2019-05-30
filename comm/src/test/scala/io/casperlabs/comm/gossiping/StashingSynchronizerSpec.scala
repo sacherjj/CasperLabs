@@ -174,7 +174,7 @@ object StashingSynchronizerSpec {
           parallelism = 100,
           executionModel = ExecutionModel.AlwaysAsyncExecution
         )
-      run.runSyncUnsafe(10.seconds)
+      run.runSyncUnsafe(5.seconds)
     }
   }
 }

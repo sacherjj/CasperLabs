@@ -1,4 +1,6 @@
 package io.casperlabs.comm.gossiping
+
+import cats.effect.Timer
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.implicits._
 import cats.effect.{Concurrent, Sync}
@@ -8,8 +10,9 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import scala.concurrent.duration._
 
-class StashingSynchronizer[F[_]: Concurrent: Par](
+class StashingSynchronizer[F[_]: Concurrent: Par: Timer](
     underlying: Synchronizer[F],
     stashedRequestsRef: Ref[F, Map[
       Node,
@@ -28,6 +31,7 @@ class StashingSynchronizer[F[_]: Concurrent: Par](
               underlying.syncDag(source, targetBlockHashes)
             } else {
               for {
+                _ <- Timer[F].sleep(50.millis)
                 maybeInitialDeferred <- Deferred[F, Either[Throwable, Either[SyncError, Vector[
                                          BlockSummary
                                        ]]]]
@@ -58,7 +62,7 @@ class StashingSynchronizer[F[_]: Concurrent: Par](
 
 object StashingSynchronizer {
 
-  def wrap[F[_]: Concurrent: Par](
+  def wrap[F[_]: Concurrent: Par: Timer](
       underlying: Synchronizer[F],
       awaitApproved: F[Unit]
   ): F[Synchronizer[F]] =
