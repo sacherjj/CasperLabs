@@ -103,11 +103,14 @@ macro_rules! ser_and_num_impls {
                 $type::MAX
             }
         }
+
+        // Instead of implementing arbitrary methods we can use existing traits from num crate.
         impl WrappingAdd for $type {
             fn wrapping_add(&self, other: &$type) -> $type {
                 self.overflowing_add(*other).0
             }
         }
+
         impl WrappingSub for $type {
             fn wrapping_sub(&self, other: &$type) -> $type {
                 self.overflowing_sub(*other).0
