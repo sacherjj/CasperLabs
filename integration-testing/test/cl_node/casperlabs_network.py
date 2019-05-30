@@ -143,6 +143,16 @@ class OneNodeNetwork(CasperLabsNetwork):
                               network=self.create_docker_network())
         self.add_bootstrap(config)
 
+class SignatureNodeNetwork(CasperLabsNetwork):
+    """ A single node network with just a bootstrap """
+
+    def create_cl_network(self):
+        kp = self.get_key()
+        config = DockerConfig(self.docker_client,
+                              node_private_key=kp.private_key,
+                              node_public_key=kp.public_key,
+                              network=self.create_docker_network())
+        self.add_bootstrap(config)
 
 class TwoNodeNetwork(CasperLabsNetwork):
 
