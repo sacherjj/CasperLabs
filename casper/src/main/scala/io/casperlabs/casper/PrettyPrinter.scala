@@ -15,11 +15,15 @@ object PrettyPrinter {
     case ipc.Key.KeyInstance.Uref(ipc.KeyURef(id, accessRights)) =>
       s"URef(${buildString(id)}, ${buildString(accessRights)})"
     case ipc.Key.KeyInstance.Hash(ipc.KeyHash(hash)) => s"Hash(${buildString(hash)})"
+    case ipc.Key.KeyInstance.Local(ipc.KeyLocal(seed, keyHash)) =>
+      s"Local(${buildString(seed)}, ${buildString(keyHash)})"
   }
 
   def buildString(t: ipc.Transform): String = t.transformInstance match {
     case ipc.Transform.TransformInstance.Empty                            => "TransformEmpty"
     case ipc.Transform.TransformInstance.AddI32(ipc.TransformAddInt32(i)) => s"Add($i)"
+    case ipc.Transform.TransformInstance.AddBigInt(ipc.TransformAddBigInt(value)) =>
+      s"AddBigInt(${value.get.value})"
     case ipc.Transform.TransformInstance.AddKeys(ipc.TransformAddKeys(ks)) =>
       s"Insert(${ks.map(buildString).mkString(",")})"
     case ipc.Transform.TransformInstance.Failure(_)  => "TransformFailure"
@@ -53,6 +57,8 @@ object PrettyPrinter {
     case ipc.Value.ValueInstance.NamedKey(nk)                     => buildString(nk)
     case ipc.Value.ValueInstance.StringList(ipc.StringList(list)) => s"List(${list.mkString(",")})"
     case ipc.Value.ValueInstance.StringVal(s)                     => s"String($s)"
+    case ipc.Value.ValueInstance.BigInt(v)                        => s"BigInt(${v.value})"
+    case ipc.Value.ValueInstance.Key(key)                         => buildString(key)
   }
 
   def buildString(b: BlockMessage): String =
@@ -95,6 +101,8 @@ object PrettyPrinter {
       case ipc.KeyURef.AccessRights.READ_ADD       => "ReadAdd"
       case ipc.KeyURef.AccessRights.READ_WRITE     => "ReadWrite"
       case ipc.KeyURef.AccessRights.READ_ADD_WRITE => "ReadAddWrite"
+      case ipc.KeyURef.AccessRights.Unrecognized(value) =>
+        s"Unrecognized AccessRights variant: $value"
     }
 
   private def buildString(ak: ipc.Account.AssociatedKey): String = {
