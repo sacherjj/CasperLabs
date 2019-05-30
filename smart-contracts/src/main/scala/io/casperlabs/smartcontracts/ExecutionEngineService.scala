@@ -6,8 +6,8 @@ import cats.effect.{Resource, Sync}
 import cats.implicits._
 import cats.{Applicative, Defer}
 import com.google.protobuf.ByteString
-import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
@@ -93,13 +93,11 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
         case CommitResponse.Result.Success(CommitResult(poststateHash)) =>
           Right(poststateHash)
         case CommitResponse.Result.Empty =>
-          Left(new SmartContractEngineError("empty response"))
+          Left(SmartContractEngineError("empty response"))
         case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
-          Left(
-            new SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}")
-          )
+          Left(SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}"))
         case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
-          Left(new SmartContractEngineError(s"Error executing transform: $message"))
+          Left(SmartContractEngineError(s"Error executing transform: $message"))
       }
     }
 
@@ -111,8 +109,8 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
     sendMessage(QueryRequest(state, Some(baseKey), path), _.query) {
       _.result match {
         case QueryResponse.Result.Success(value) => Right(value)
-        case QueryResponse.Result.Empty          => Left(new SmartContractEngineError("empty response"))
-        case QueryResponse.Result.Failure(err)   => Left(new SmartContractEngineError(err))
+        case QueryResponse.Result.Empty          => Left(SmartContractEngineError("empty response"))
+        case QueryResponse.Result.Failure(err)   => Left(SmartContractEngineError(err))
       }
     }
   // Todo

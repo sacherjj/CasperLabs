@@ -1,5 +1,7 @@
 package io.casperlabs.models
 
+import scala.util.control.NoStackTrace
+
 sealed trait DeployResult { self =>
   def isFailed: Boolean = self match {
     case _: Failed => true
@@ -17,12 +19,7 @@ final case object UnknownFailure                           extends Failed
 final case class UserErrors(errors: Vector[Throwable])     extends Failed
 final case class InternalErrors(errors: Vector[Throwable]) extends Failed
 
-final class SmartContractEngineError(message: String) extends Throwable(message) {
-  def this(message: String, cause: Throwable) {
-    this(message)
-    initCause(cause)
-  }
-}
+case class SmartContractEngineError(message: String) extends NoStackTrace
 
 class ReplayException(msg: String) extends Exception(msg)
 
