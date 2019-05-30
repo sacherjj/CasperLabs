@@ -87,7 +87,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
     sendMessage(CommitRequest(prestate, effects), _.commit) {
       // TODO:
       // [warn] match may not be exhaustive.
-      // [warn] It would fail on the following inputs: KeyNotFound(_), Overflow(_), TypeMismatch(_)
+      // [warn] It would fail on the following inputs: KeyNotFound(_), TypeMismatch(_)
       // [warn]       _.result match {
       _.result match {
         case CommitResponse.Result.Success(CommitResult(poststateHash)) =>
