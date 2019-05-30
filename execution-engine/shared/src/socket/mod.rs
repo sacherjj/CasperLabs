@@ -20,6 +20,11 @@ impl Socket {
         std::path::Path::new(&self.0)
     }
 
+    /// Safely removes file pointed out by a path.
+    ///
+    /// In practice this file tries to remove file, and if
+    /// the file does not exist, it ignores it, and propagates
+    /// any other error.
     pub fn remove_file(&self) -> io::Result<()> {
         let path = self.get_path();
         match std::fs::remove_file(path) {
