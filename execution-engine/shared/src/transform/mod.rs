@@ -273,10 +273,10 @@ mod tests {
         let one = T::one();
         let zero = T::zero();
 
-        let max_value: Value = max.clone().into();
+        let max_value: Value = max.into();
         let max_transform: Transform = max.into();
 
-        let min_value: Value = min.clone().into();
+        let min_value: Value = min.into();
         let min_transform: Transform = min.into();
 
         let one_transform: Transform = one.into();
