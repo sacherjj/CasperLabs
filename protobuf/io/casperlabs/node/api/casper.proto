@@ -5,6 +5,7 @@ package io.casperlabs.node.api.casper;
 import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "io/casperlabs/casper/consensus/consensus.proto";
+import "io/casperlabs/casper/consensus/info.proto";
 
 // CasperService is the way for user and dApp developer to interact with the system,
 // including deploying contracts, looking at the DAG and querying state.
@@ -18,8 +19,54 @@ service CasperService {
             body: "deploy"
         };
     }
+
+    // Get the block summary with extra information about finality.
+    rpc GetBlock(GetBlockRequest) returns (io.casperlabs.casper.consensus.info.BlockInfo) {
+    	option (google.api.http) = {
+    		get: "/v2/blocks/{block_hash=*}"
+    	};
+    }
+
+    // List the processed deploys inside a block.
+    rpc ListBlockDeploys(ListBlockDeploysRequest) returns (ListBlockDeploysResponse) {
+    	option (google.api.http) = {
+    		get: "/v2/blocks/{block_hash=*}/deploys"
+    	};
+    }
 }
 
 message DeployRequest {
     io.casperlabs.casper.consensus.Deploy deploy = 1;
+}
+
+message GetBlockRequest {
+	bytes block_hash = 1;
+	View view = 2;
+
+	enum View {
+		// Only include information which is based on the header.
+		BASIC = 0;
+		// Include extra information that requires the full block,
+		// for example the size, number of errors in deploys, etc.
+		FULL = 1;
+	}
+}
+
+message ListBlockDeploysRequest {
+	bytes block_hash = 1;
+	View view = 2;
+	uint32 page_size = 3;
+	string page_token = 4;
+
+	enum View {
+		// Only include the header and the execution results, not the body with the code.
+		BASIC = 0;
+		// Retrieve the full deploy.
+		FULL = 1;
+	}
+}
+
+message ListBlockDeploysResponse {
+	repeated io.casperlabs.casper.consensus.Block.ProcessedDeploy deploys = 1;
+	string next_page_token = 2;
 }
