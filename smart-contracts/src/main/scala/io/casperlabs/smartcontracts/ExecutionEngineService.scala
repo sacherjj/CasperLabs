@@ -85,10 +85,6 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
       effects: Seq[TransformEntry]
   ): F[Either[Throwable, ByteString]] =
     sendMessage(CommitRequest(prestate, effects), _.commit) {
-      // TODO:
-      // [warn] match may not be exhaustive.
-      // [warn] It would fail on the following inputs: KeyNotFound(_), Overflow(_), TypeMismatch(_)
-      // [warn]       _.result match {
       _.result match {
         case CommitResponse.Result.Success(CommitResult(poststateHash)) =>
           Right(poststateHash)
@@ -98,6 +94,13 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
           Left(SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}"))
         case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
           Left(SmartContractEngineError(s"Error executing transform: $message"))
+        case CommitResponse.Result.KeyNotFound(value) =>
+          Left(SmartContractEngineError(s"Key not found in global state: $value"))
+        case CommitResponse.Result.Overflow(value) =>
+          Left(SmartContractEngineError(s"Overflow error: $value"))
+        case CommitResponse.Result.TypeMismatch(err) =>
+          Left(SmartContractEngineError(err.toString))
+
       }
     }
 
