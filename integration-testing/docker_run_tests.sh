@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 if [[ -n $DRONE_BUILD_NUMBER ]]; then
     export TAG_NAME=DRONE-${DRONE_BUILD_NUMBER}
 else
@@ -17,18 +19,10 @@ cleanup() {
 
     for num in $(seq 0 $MAX_NODE_COUNT)
     do
-        docker network rm cl-${TAG_NAME}-${num}
+        docker network rm -f cl-${TAG_NAME}-${num}
     done
 }
 trap cleanup 0
-
-error_exit()
-{
-    if [[ "$?" != "0" ]]; then
-        echo "$1"
-        exit 1
-    fi
-}
 
 for num in $(seq 0 $MAX_NODE_COUNT)
 do
@@ -38,7 +32,5 @@ done
 # Need to make network names in docker-compose.yml match tag based network.
 # Using ||TAG|| as replacable element in docker-compose.yml.template
 sed 's/||TAG||/'"${TAG_NAME}"'/g' docker-compose.yml.template > docker-compose.yml
-error_exit "Creating docker-compose.yml"
 
-docker-compose up
-error_exit "Running integration tests"
+docker-compose up && docker-compose rm -f
