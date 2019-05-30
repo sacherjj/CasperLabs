@@ -137,8 +137,8 @@ object GraphQL {
             )
         case _ => Stream.empty.covary[F]
       }
-      .evalMapAccumulate[F, ProtocolState, Unit](ProtocolState.WaitForInit) {
-        case (ProtocolState.WaitForInit, GraphQLWebSocketMessage.ConnectionInit) =>
+      .evalMapAccumulate[F, ProtocolState, Unit](ProtocolState.WaitingForInit) {
+        case (ProtocolState.WaitingForInit, GraphQLWebSocketMessage.ConnectionInit) =>
           for {
             _ <- queue.enqueue1(GraphQLWebSocketMessage.ConnectionAck)
             _ <- queue.enqueue1(GraphQLWebSocketMessage.ConnectionKeepAlive)
@@ -205,7 +205,7 @@ object GraphQL {
           } yield (ProtocolState.Closed, ())
 
         case (protocolState, message) =>
-          val error = s"Unexpected message: $message in state: $protocolState, ignoring"
+          val error = s"Unexpected message: $message in state: '${protocolState.name}', ignoring"
           for {
             _ <- Log[F].warn(error)
             _ <- queue.enqueue1(GraphQLWebSocketMessage.ConnectionError(error))

@@ -162,7 +162,7 @@ class GraphQLServiceSpec extends WordSpecLike with Matchers with Eventually {
         ) { responses =>
           val expected = List(
             GraphQLWebSocketMessage.ConnectionError(
-              s"Unexpected message: Start(1,GraphQLQuery($SubscriptionQuery)) in state: WaitForInit, ignoring"
+              s"Unexpected message: Start(1,GraphQLQuery($SubscriptionQuery)) in state: 'Waiting for init message', ignoring"
             )
           )
           eventually {
