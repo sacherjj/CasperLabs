@@ -1,8 +1,11 @@
 #![no_std]
-#![feature(alloc)]
+#![feature(alloc, cell_update)]
 
 extern crate alloc;
 extern crate cl_std;
+
+mod capabilities;
+mod mint;
 
 use alloc::collections::BTreeMap;
 use cl_std::contract_api;

@@ -9,7 +9,7 @@ use core::marker::PhantomData;
 
 // URef with type information about what value is in the global state
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub struct UPointer<T>([u8; 32], AccessRights, PhantomData<T>);
+pub struct UPointer<T>(pub [u8; 32], pub AccessRights, pub PhantomData<T>);
 
 impl<T> UPointer<T> {
     pub fn new(id: [u8; 32], rights: AccessRights) -> UPointer<T> {
