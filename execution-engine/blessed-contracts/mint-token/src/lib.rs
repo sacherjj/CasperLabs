@@ -16,11 +16,12 @@ mod internal_purse_id;
 mod mint;
 
 use alloc::collections::BTreeMap;
+use alloc::string::String;
 
 use core::convert::TryInto;
 
 use cl_std::contract_api;
-use cl_std::key::Key;
+use cl_std::key::{AccessRights, Key};
 use cl_std::value::U512;
 
 use capabilities::{ARef, RWRef};
@@ -57,7 +58,56 @@ impl Mint<ARef<U512>, RWRef<U512>> for CLMint {
     }
 }
 
+fn transfer(source_key: Key, target_key: Key, amount: U512, mint: CLMint) -> Result<(), mint::Error> {
+    let source: WithdrawId = source_key
+        .try_into()
+        .map_err(|_| mint::Error::SourceNotFound)?;
+    let target: DepositId = target_key
+        .try_into()
+        .map_err(|_| mint::Error::DestNotFound)?;
+
+    mint.transfer(source, target, amount)
+}
+
+#[no_mangle]
+pub extern "C" fn mint_ext() {
+    let mint = CLMint;
+    let method_name: String = contract_api::get_arg(0);
+
+    match method_name.as_str() {
+        "create" => {
+            let amount: U512 = contract_api::get_arg(1);
+            let purse_id = mint.create(amount);
+            let purse_key = Key::URef(purse_id.raw_id(), AccessRights::READ_ADD_WRITE);
+            contract_api::ret(&purse_key, &vec![purse_key])
+        }
+
+        "balance" => {
+            let key: Key = contract_api::get_arg(1);
+            let purse_id: WithdrawId = key.try_into().unwrap();
+            let balance_uref = mint.lookup(purse_id);
+            let balance: Option<U512> = balance_uref.map(|uref| contract_api::read(uref.into()));
+            contract_api::ret(&balance, &vec![])
+        }
+
+        "transfer" => {
+            let source_key: Key = contract_api::get_arg(1);
+            let target_key: Key = contract_api::get_arg(2);
+            let amount: U512 = contract_api::get_arg(3);
+
+            let message = match transfer(source_key, target_key, amount, mint) {
+                Ok(_) => String::from("Success!"),
+                Err(e) => format!("Error: {:?}", e),
+            };
+
+            contract_api::ret(&message, &vec![]);
+        }
+
+        _ => panic!("Unknown method name!"),
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn call() {
-    let _hash = contract_api::store_function("???", BTreeMap::new());
+    let _hash = contract_api::store_function("mint_ext", BTreeMap::new());
 }
