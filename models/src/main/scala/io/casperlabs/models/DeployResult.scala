@@ -19,7 +19,9 @@ final case object UnknownFailure                           extends Failed
 final case class UserErrors(errors: Vector[Throwable])     extends Failed
 final case class InternalErrors(errors: Vector[Throwable]) extends Failed
 
-case class SmartContractEngineError(message: String) extends NoStackTrace
+case class SmartContractEngineError(message: String) extends NoStackTrace {
+  override def getMessage(): String = this.message
+}
 
 class ReplayException(msg: String) extends Exception(msg)
 
