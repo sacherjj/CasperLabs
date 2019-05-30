@@ -118,8 +118,7 @@ class CasperClient:
         def hash(data: bytes) -> str:
             h = blake2b(digest_size=32)
             h.update(data)
-            #return h.digest()
-            return bytes(h.hexdigest(), 'utf-8')
+            return h.digest()
 
         def read_binary(file_name: str):
             with open(file_name, 'rb') as f:
@@ -151,7 +150,8 @@ class CasperClient:
         d = consensus_pb2.Deploy(deploy_hash = deploy_hash,
                                  header = header,
                                  body = body,
-                                 signature = sign(deploy_hash))
+                                 #signature = sign(deploy_hash),
+                                 )
 
         data = casper_pb2.DeployRequest(deploy = d)
         r = self.casperService.Deploy(data)
