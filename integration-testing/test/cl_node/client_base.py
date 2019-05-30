@@ -28,9 +28,5 @@ class CasperLabsClient(ABC):
         pass
 
     @abstractmethod
-    def show_blocks_with_depth(self, depth: int):
-        pass
-
-    @abstractmethod
-    def get_blocks_count(self, depth: int) -> int:
+    def show_blocks(self, depth: int):
         pass

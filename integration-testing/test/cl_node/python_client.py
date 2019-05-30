@@ -36,9 +36,9 @@ class PythonClient(CasperLabsClient):
     def show_block(self, block_hash: str) -> str:
         pass
 
-    def show_blocks_with_depth(self, depth: int):
+    def show_blocks(self, depth: int):
         return self.client.showBlocks(depth)
 
     def get_blocks_count(self, depth: int) -> int:
-        block_count = sum([1 for _ in self.show_blocks_with_depth(depth)])
+        block_count = sum([1 for _ in self.show_blocks(depth)])
         return block_count

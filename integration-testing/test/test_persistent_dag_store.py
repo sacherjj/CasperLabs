@@ -1,5 +1,4 @@
 
-from test import conftest
 from test.cl_node.casperlabsnode import (
     HELLO_NAME,
 )
@@ -59,8 +58,8 @@ def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_networ
 
     dag0 = node0.client.vdag(10)
     dag1 = node1.client.vdag(10)
-    blocks0 = node0.client.show_blocks_with_depth(10)
-    blocks1 = node1.client.show_blocks_with_depth(10)
+    blocks0 = node0.client.show_blocks(10)
+    blocks1 = node1.client.show_blocks(10)
 
     for node_num in range(2):
         tnn.stop_cl_node(node_num)
@@ -72,5 +71,5 @@ def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_networ
 
     assert dag0 == node0.client.vdag(10)
     assert dag1 == node1.client.vdag(10)
-    assert blocks0 == node0.client.show_blocks_with_depth(10)
-    assert blocks1 == node1.client.show_blocks_with_depth(10)
+    assert blocks0 == node0.client.show_blocks(10)
+    assert blocks1 == node1.client.show_blocks(10)

@@ -114,7 +114,7 @@ def test_block_propagation(three_nodes,
         wait_for_blocks_count_at_least(node, expected_number_of_blocks, expected_number_of_blocks * 2, node.timeout)
 
     for node in three_nodes:
-        blocks = parse_show_blocks(node.client.show_blocks_with_depth(expected_number_of_blocks * 100))
+        blocks = parse_show_blocks(node.client.show_blocks(expected_number_of_blocks * 100))
         # What propose returns is first 10 characters of block hash, so we can compare only first 10 charcters.
         blocks_hashes = set([b.blockHash[:10] for b in blocks])
         for t in deploy_threads:

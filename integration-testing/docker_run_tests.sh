@@ -11,8 +11,9 @@ fi
 # We need networks for the Python Client to talk directly to the DockerNode.
 # We cannot share a network as we might have DockerNodes partitioned.
 # This number of networks is the count of CasperLabNodes we can have active at one time.
+MAX_NODE_COUNT=10
 
-for num in {0..10}
+for num in $(seq 0 $MAX_NODE_COUNT)
 do
     docker network create cl-${TAG_NAME}-${num}
 done
@@ -26,7 +27,7 @@ docker-compose up
 # Eliminate this for next run
 rm docker-compose.yml
 
-for num in {0..10}
+for num in $(seq 0 $MAX_NODE_COUNT)
 do
     docker network rm cl-${TAG_NAME}-${num}
 done

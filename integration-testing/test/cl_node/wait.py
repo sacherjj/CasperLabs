@@ -9,7 +9,7 @@ import typing_extensions
 from .common import Network, WaitTimeoutError
 
 
-from .casperlabsnode import NonZeroExitCodeError
+from test.cl_node.errors import NonZeroExitCodeError
 
 
 class PredicateProtocol(typing_extensions.Protocol):

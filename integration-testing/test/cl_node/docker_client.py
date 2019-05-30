@@ -63,11 +63,11 @@ class DockerClient(CasperLabsClient):
     def show_block(self, block_hash: str) -> str:
         return self.invoke_client(f'show-block {block_hash}')
 
-    def show_blocks_with_depth(self, depth: int) -> str:
+    def show_blocks(self, depth: int) -> str:
         return self.invoke_client(f"show-blocks --depth={depth}")
 
     def get_blocks_count(self, depth: int) -> int:
-        show_blocks_output = self.show_blocks_with_depth(depth)
+        show_blocks_output = self.show_blocks(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
 
     def vdag(self, depth: int, show_justification_lines: bool = False) -> str:

@@ -1,11 +1,7 @@
-from .cl_node.casperlabsnode import NonZeroExitCodeError
-
-from .cl_node.wait import (
-    wait_for_approved_block_received_handler_state,
-    wait_for_blocks_count_at_least
-)
-
 import pytest
+
+from test.cl_node.errors import NonZeroExitCodeError
+from .cl_node.wait import wait_for_blocks_count_at_least
 
 
 @pytest.mark.parametrize(

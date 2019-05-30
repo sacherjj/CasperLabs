@@ -190,7 +190,7 @@ class DockerNode(LoggingDockerBase):
 
     def blocks_as_list_with_depth(self, depth: int) -> List:
         # TODO: Replace with generator using Python client
-        result = self.client.show_blocks_with_depth(depth)
+        result = self.client.show_blocks(depth)
         block_list = []
         for i, section in enumerate(result.split(' ---------------\n')):
             if i == 0:
