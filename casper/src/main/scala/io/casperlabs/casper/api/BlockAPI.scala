@@ -380,7 +380,11 @@ object BlockAPI {
                        }
                      }
         status = BlockStatus(faultTolerance = faultTolerance - initialFault, stats = maybeStats)
-      } yield BlockInfo().withSummary(summary).withStatus(status)
+        info = BlockInfo()
+          .withBlockHashBase16(Base16.encode(summary.blockHash.toByteArray))
+          .withSummary(summary)
+          .withStatus(status)
+      } yield info
     }
 
   def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
