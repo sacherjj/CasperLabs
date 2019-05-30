@@ -8,8 +8,8 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad, MonadError}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -74,7 +74,7 @@ object Genesis {
         ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
       )
       _               <- Log[F].debug(s"Selected ${deployEffects.size} non-conflicing blessed contracts.")
-      deploysForBlock = ExecEngineUtil.extractProcessedDepoys(deployEffects)
+      deploysForBlock = ExecEngineUtil.extractProcessedDeploys(deployEffects)
       transforms      = ExecEngineUtil.extractTransforms(deployEffects)
       _ <- Log[F].debug(
             s"Commiting blessed deploy effects onto starting hash ${Base16.encode(startHash.toByteArray)}..."

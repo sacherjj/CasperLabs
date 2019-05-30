@@ -44,7 +44,7 @@ object ExecEngineUtil {
                            protocolVersion
                          )
       deployEffects   = findCommutingEffects(processedDeployEffects(deploys zip processedDeploys))
-      deploysForBlock = extractProcessedDepoys(deployEffects)
+      deploysForBlock = extractProcessedDeploys(deployEffects)
       transforms      = extractTransforms(deployEffects)
       postStateHash <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F].commit(preStateHash, transforms)
@@ -122,7 +122,7 @@ object ExecEngineUtil {
     nonConflicting ++ errors
   }
 
-  def extractProcessedDepoys(
+  def extractProcessedDeploys(
       commutingEffects: Seq[(Deploy, Long, Option[ExecutionEffect])]
   ): Seq[Block.ProcessedDeploy] =
     commutingEffects.map {
