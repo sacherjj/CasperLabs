@@ -244,7 +244,7 @@ mod tests {
 
     use common::value::{Value, U128, U256, U512};
 
-    use super::{Error, Transform};
+    use super::Transform;
 
     #[test]
     fn i32_overflow() {
@@ -257,20 +257,21 @@ mod tests {
         let transform_overflow = Transform::AddInt32(max) + Transform::AddInt32(1);
         let transform_underflow = Transform::AddInt32(min) + Transform::AddInt32(-1);
 
-        assert_eq!(apply_overflow, Err(Error::Overflow));
-        assert_eq!(apply_underflow, Err(Error::Overflow));
+        assert_eq!(apply_overflow.expect("Unexpected overflow"), min.into());
+        assert_eq!(apply_underflow.expect("Unexpected underflow"), max.into());
 
-        assert_eq!(transform_overflow, Transform::Failure(Error::Overflow));
-        assert_eq!(transform_underflow, Transform::Failure(Error::Overflow));
+        assert_eq!(transform_overflow, min.into());
+        assert_eq!(transform_underflow, max.into());
     }
 
     fn uint_overflow_test<T>()
     where
-        T: Num + Bounded + Into<Value> + Into<Transform> + Clone,
+        T: Num + Bounded + Into<Value> + Into<Transform> + Copy,
     {
         let max = T::max_value();
         let min = T::min_value();
         let one = T::one();
+        let zero = T::zero();
 
         let max_value: Value = max.clone().into();
         let max_transform: Transform = max.into();
@@ -281,6 +282,7 @@ mod tests {
         let one_transform: Transform = one.into();
 
         let apply_overflow = Transform::AddInt32(1).apply(max_value.clone());
+
         let apply_overflow_uint = one_transform.clone().apply(max_value);
         let apply_underflow = Transform::AddInt32(-1).apply(min_value);
 
@@ -288,13 +290,13 @@ mod tests {
         let transform_overflow_uint = max_transform + one_transform;
         let transform_underflow = min_transform + Transform::AddInt32(-1);
 
-        assert_eq!(apply_overflow, Err(Error::Overflow));
-        assert_eq!(apply_overflow_uint, Err(Error::Overflow));
-        assert_eq!(apply_underflow, Err(Error::Overflow));
+        assert_eq!(apply_overflow, Ok(zero.into()));
+        assert_eq!(apply_overflow_uint, Ok(zero.into()));
+        assert_eq!(apply_underflow, Ok(max.into()));
 
-        assert_eq!(transform_overflow, Transform::Failure(Error::Overflow));
-        assert_eq!(transform_overflow_uint, Transform::Failure(Error::Overflow));
-        assert_eq!(transform_underflow, Transform::Failure(Error::Overflow));
+        assert_eq!(transform_overflow, zero.into());
+        assert_eq!(transform_overflow_uint, zero.into());
+        assert_eq!(transform_underflow, max.into());
     }
 
     #[test]
