@@ -160,7 +160,7 @@ impl Transform {
 
 /// Combines numeric `Transform`s into a single `Transform`. This is
 /// done by unwrapping the `Transform` to obtain the underlying value,
-/// performing the checked addition then wrapping up as a `Transform`
+/// performing the wrapping addition then wrapping up as a `Transform`
 /// again.
 fn wrapped_transform_addition<T>(i: T, b: Transform, expected: &str) -> Transform
 where
