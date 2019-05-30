@@ -1,5 +1,6 @@
 use crate::bytesrepr::{self, Error, FromBytes, ToBytes};
 use alloc::vec::Vec;
+use num::traits::{WrappingAdd, WrappingSub};
 use num::{Bounded, Num, One, Unsigned, Zero};
 
 // Clippy generates a ton of warnings/errors for the code the macro generates.
@@ -45,6 +46,22 @@ pub trait CheckedAdd: core::ops::Add<Self, Output = Self> + Sized {
 pub trait CheckedSub: core::ops::Sub<Self, Output = Self> + Sized {
     fn checked_sub(self, v: Self) -> Option<Self>;
 }
+
+// /// Trait to allow writing generic functions which use the
+// /// `wrapping_add` function. Can't use num::WrappingAdd because it is
+// /// defined using references (e.g. &self) which does not work with the
+// /// definitions in uint crate (where U128, etc. come from)
+// pub trait WrappingAdd: core::ops::Add<Self, Output = Self> + Sized {
+//     fn wrapping_add(self, v: Self) -> Self;
+// }
+
+// /// Trait to allow writing generic functions which use the
+// /// `wrapping_add` function. Can't use num::WrappingAdd because it is
+// /// defined using references (e.g. &self) which does not work with the
+// /// definitions in uint crate (where U128, etc. come from)
+// pub trait WrappingSub: core::ops::Sub<Self, Output = Self> + Sized {
+//     fn wrapping_(self, v: Self) -> Self;
+// }
 
 macro_rules! ser_and_num_impls {
     ($type:ident, $total_bytes:expr) => {
@@ -130,15 +147,14 @@ macro_rules! ser_and_num_impls {
                 $type::MAX
             }
         }
-        impl $type {
-            pub fn wrapping_add(&self, other: $type) -> $type {
-                self.overflowing_add(other).0
+        impl WrappingAdd for $type {
+            fn wrapping_add(&self, other: &$type) -> $type {
+                self.overflowing_add(*other).0
             }
-            pub fn wrapping_sub(&self, other: $type) -> $type {
-                self.overflowing_sub(other).0
-            }
-            pub fn wrapping_mul(&self, other: $type) -> $type {
-                self.overflowing_mul(other).0
+        }
+        impl WrappingSub for $type {
+            fn wrapping_sub(&self, other: &$type) -> $type {
+                self.overflowing_sub(*other).0
             }
         }
     };
