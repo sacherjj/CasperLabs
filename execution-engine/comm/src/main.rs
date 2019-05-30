@@ -106,8 +106,10 @@ fn main() {
 
     let socket = get_socket(matches);
 
-    logging::log_info(REMOVING_SOCKET_FILE_MESSAGE);
-    socket.remove_file().expect(REMOVING_SOCKET_FILE_EXPECT);
+    match socket.remove_file() {
+        Err(e) => panic!("{}: {:?}", REMOVING_SOCKET_FILE_EXPECT, e),
+        Ok(_) => logging::log_info(REMOVING_SOCKET_FILE_MESSAGE),
+    }
 
     let data_dir = get_data_dir(matches);
 
