@@ -119,7 +119,7 @@ impl Transform {
             Identity => Ok(v),
             Write(w) => Ok(w),
             AddInt32(i) => match v {
-                Value::Int32(j) => j.checked_add(i).ok_or(Error::Overflow).map(Value::Int32),
+                Value::Int32(j) => Ok(Value::Int32(j.wrapping_add(i))),
                 Value::UInt128(j) => Ok(Value::UInt128(i32_wrapping_addition(j, i))),
                 Value::UInt256(j) => Ok(Value::UInt256(i32_wrapping_addition(j, i))),
                 Value::UInt512(j) => Ok(Value::UInt512(i32_wrapping_addition(j, i))),
@@ -201,7 +201,7 @@ impl Add for Transform {
                 }
             }
             (AddInt32(i), b) => match b {
-                AddInt32(j) => i.checked_add(j).map_or(Failure(Error::Overflow), AddInt32),
+                AddInt32(j) => AddInt32(i.wrapping_add(j)),
                 AddUInt256(j) => AddUInt256(i32_wrapping_addition(j, i)),
                 AddUInt512(j) => AddUInt512(i32_wrapping_addition(j, i)),
                 other => Failure(
