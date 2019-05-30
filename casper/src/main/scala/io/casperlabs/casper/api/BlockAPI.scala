@@ -381,7 +381,6 @@ object BlockAPI {
                      }
         status = BlockStatus(faultTolerance = faultTolerance - initialFault, stats = maybeStats)
         info = BlockInfo()
-          .withBlockHashBase16(Base16.encode(summary.blockHash.toByteArray))
           .withSummary(summary)
           .withStatus(status)
       } yield info

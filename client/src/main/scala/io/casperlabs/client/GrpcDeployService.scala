@@ -57,7 +57,7 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
   def showBlock(hash: String): Task[Either[Throwable, String]] =
     casperServiceStub
       .getBlockInfo(GetBlockInfoRequest(hash, GetBlockInfoRequest.View.FULL))
-      .map(_.toProtoString)
+      .map(Printer.printToUnicodeString(_))
       .attempt
 
   def queryState(q: QueryStateRequest): Task[Either[Throwable, String]] =

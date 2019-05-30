@@ -4,9 +4,8 @@ package io.casperlabs.casper.consensus.info;
 import "io/casperlabs/casper/consensus/consensus.proto";
 
 message BlockInfo {
-	string block_hash_base16 = 1;
-	BlockSummary summary = 2;
-	BlockStatus status = 3;
+	BlockSummary summary = 1;
+	BlockStatus status = 2;
 }
 
 message BlockStatus {
