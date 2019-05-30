@@ -47,6 +47,8 @@ trait BlockStore[F[_]] {
 
   def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]]
 
+  def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]]
+
   def checkpoint(): F[Unit]
 
   def clear(): F[Unit]
@@ -97,6 +99,7 @@ object BlockStore {
   }
   def apply[F[_]](implicit ev: BlockStore[F]): BlockStore[F] = ev
 
-  type BlockHash = ByteString
+  type BlockHash  = ByteString
+  type DeployHash = ByteString
 
 }
