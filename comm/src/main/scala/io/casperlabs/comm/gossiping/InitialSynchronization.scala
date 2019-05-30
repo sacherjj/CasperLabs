@@ -61,7 +61,7 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
       } yield ()
 
     def loop(nodes: List[Node], failed: Set[Node]): F[Unit] =
-      if (nodes.isEmpty) {
+      if (nodes.isEmpty && failed.nonEmpty) {
         Log[F].error("Failed to run initial sync - no more nodes to try") >>
           Sync[F].raiseError(SynchronizationError())
       } else {

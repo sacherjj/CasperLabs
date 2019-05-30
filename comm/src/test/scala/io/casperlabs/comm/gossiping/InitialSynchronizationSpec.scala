@@ -16,7 +16,7 @@ import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.metrics.Metrics
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import monix.execution.atomic.Atomic
+import monix.execution.atomic.{Atomic, AtomicInt}
 import monix.tail.Iterant
 import org.scalacheck.{Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -39,7 +39,28 @@ class InitialSynchronizationSpec
 
   def pos(n: Int): Int Refined Positive = refineV[Positive](n).right.get
 
-  "syncOnStartup" when {
+  "InitialSynchronization" when {
+    "doesn't have nodes in the initial round" should {
+      "try again later" in forAll(genNodes(), genTips()) { (nodes, tips) =>
+        val counter = AtomicInt(0)
+        TestFixture(
+          nodes,
+          tips,
+          selectNodes = { nodes =>
+            val cnt = counter.incrementAndGet()
+            if (cnt == 1) Nil else nodes
+          },
+          minSuccessful = 1
+        ) { (initialSynchronizer, _) =>
+          for {
+            w <- initialSynchronizer.sync()
+            _ <- w.timeout(250.millis)
+          } yield {
+            counter.get() shouldBe 2
+          }
+        }
+      }
+    }
     "specified to memoize nodes between rounds" should {
       def test(skipFailedNodesInNextRound: Boolean): Unit = forAll(genNodes(), genTips()) {
         (nodes, tips) =>
