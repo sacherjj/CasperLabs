@@ -172,7 +172,7 @@ object GraphQL {
           } yield
             (
               ProtocolState.Active[F](
-                activeSubscriptions.asInstanceOf[Subscriptions[F]] + ("id" -> fiber)
+                activeSubscriptions.asInstanceOf[Subscriptions[F]] + (id -> fiber)
               ),
               ()
             )
@@ -182,7 +182,7 @@ object GraphQL {
             _ <- activeSubscriptions
                   .asInstanceOf[Subscriptions[F]]
                   .get(id)
-                  .fold(().pure[F])(_.cancel.start.void)
+                  .fold(().pure[F])(_.cancel.start.map(_.join))
           } yield
             (ProtocolState.Active(activeSubscriptions.asInstanceOf[Subscriptions[F]] - id), ())
 
@@ -195,7 +195,7 @@ object GraphQL {
                   .asInstanceOf[Subscriptions[F]]
                   .values
                   .toList
-                  .traverse(_.cancel.start)
+                  .traverse(_.cancel.start.map(_.join))
             _ <- stopSignal.complete(())
           } yield (ProtocolState.Closed, ())
 

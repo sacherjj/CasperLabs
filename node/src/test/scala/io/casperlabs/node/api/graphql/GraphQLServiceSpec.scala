@@ -102,23 +102,38 @@ class GraphQLServiceSpec extends WordSpecLike with Matchers with Eventually {
             GraphQLWebSocketMessage.Data("3", Json.fromJsonObject(QuerySuccessfulResponse))
           ).map(_.asJson.toString)
         ) { responses =>
-          eventually {
-            val expected = List(
-              GraphQLWebSocketMessage.ConnectionAck,
-              GraphQLWebSocketMessage.ConnectionKeepAlive,
-              GraphQLWebSocketMessage.Complete("1"),
-              GraphQLWebSocketMessage.Complete("2"),
-              GraphQLWebSocketMessage.Complete("3")
-            ) ::: SubscriptionResponsesEncoded.flatMap(
-              json =>
-                List(
-                  GraphQLWebSocketMessage.Data("1", json),
-                  GraphQLWebSocketMessage.Data("2", json)
-                )
+          val expected = List(
+            GraphQLWebSocketMessage.ConnectionAck,
+            GraphQLWebSocketMessage.ConnectionKeepAlive,
+            GraphQLWebSocketMessage.Complete("1"),
+            GraphQLWebSocketMessage.Complete("2"),
+            GraphQLWebSocketMessage.Complete("3")
+          ) ::: SubscriptionResponsesEncoded.flatMap(
+            json =>
+              List(
+                GraphQLWebSocketMessage.Data("1", json),
+                GraphQLWebSocketMessage.Data("2", json)
             )
+          )
+          eventually {
             responses.get() should contain allElementsOf expected
           }
         }
+
+      "cancel a stream if receives Stop" in TestFixture.subscription(
+        toSend = List(
+          GraphQLWebSocketMessage.ConnectionInit,
+          GraphQLWebSocketMessage.Start("1", GraphQLQuery(SubscriptionQuery)),
+          GraphQLWebSocketMessage.Stop("1")
+        ).map(_.asJson.toString),
+        subscriptionResponse = SubscriptionResponse.zipLeft(Stream.awakeEvery[Task](1.seconds))
+      ) { responses =>
+        assertThrows[Exception](eventually {
+          responses.get() should contain atLeastOneElementOf (SubscriptionResponsesEncoded.map(
+            json => GraphQLWebSocketMessage.Data("1", json)) :+
+            GraphQLWebSocketMessage.Complete("1"))
+        })
+      }
 
       "ignore unparseable messages" in TestFixture
         .subscription(
@@ -127,14 +142,14 @@ class GraphQLServiceSpec extends WordSpecLike with Matchers with Eventually {
             "Invalid message"
           )
         ) { responses =>
-          eventually {
-            val expected = List(
-              GraphQLWebSocketMessage.ConnectionAck,
-              GraphQLWebSocketMessage.ConnectionKeepAlive,
-              GraphQLWebSocketMessage.ConnectionError(
-                s"Failed to parse GraphQL WebSocket message: Invalid message, reason: expected json value got 'Invali...' (line 1, column 1)"
-              )
+          val expected = List(
+            GraphQLWebSocketMessage.ConnectionAck,
+            GraphQLWebSocketMessage.ConnectionKeepAlive,
+            GraphQLWebSocketMessage.ConnectionError(
+              s"Failed to parse GraphQL WebSocket message: Invalid message, reason: expected json value got 'Invali...' (line 1, column 1)"
             )
+          )
+          eventually {
             responses.get() should contain allElementsOf expected
           }
         }
@@ -145,12 +160,12 @@ class GraphQLServiceSpec extends WordSpecLike with Matchers with Eventually {
               .Start("1", GraphQLQuery(SubscriptionQuery)): GraphQLWebSocketMessage).asJson.toString
           )
         ) { responses =>
-          eventually {
-            val expected = List(
-              GraphQLWebSocketMessage.ConnectionError(
-                s"Unexpected message: Start(1,GraphQLQuery($SubscriptionQuery)) in state: WaitForInit, ignoring"
-              )
+          val expected = List(
+            GraphQLWebSocketMessage.ConnectionError(
+              s"Unexpected message: Start(1,GraphQLQuery($SubscriptionQuery)) in state: WaitForInit, ignoring"
             )
+          )
+          eventually {
             responses.get() should contain allElementsOf expected
           }
         }
