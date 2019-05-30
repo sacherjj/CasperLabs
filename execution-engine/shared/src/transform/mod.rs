@@ -98,9 +98,9 @@ where
 }
 
 /// Attempts to add `i` to `v`, assuming `v` is of type `expected`
-fn checked_addition<T>(i: T, v: Value, expected: &str) -> Result<Value, Error>
+fn wrapping_addition<T>(i: T, v: Value, expected: &str) -> Result<Value, Error>
 where
-    T: Into<Value> + TryFrom<Value, Error = String> + CheckedAdd,
+    T: Into<Value> + TryFrom<Value, Error = String> + WrappingAdd,
 {
     match T::try_from(v) {
         Err(v_type) => Err(TypeMismatch {
@@ -109,7 +109,7 @@ where
         }
         .into()),
 
-        Ok(j) => j.checked_add(i).ok_or(Error::Overflow).map(T::into),
+        Ok(j) => Ok(j.wrapping_add(&i).into()),
     }
 }
 
@@ -132,9 +132,9 @@ impl Transform {
                     .into())
                 }
             },
-            AddUInt128(i) => checked_addition(i, v, "UInt128"),
-            AddUInt256(i) => checked_addition(i, v, "UInt256"),
-            AddUInt512(i) => checked_addition(i, v, "UInt512"),
+            AddUInt128(i) => wrapping_addition(i, v, "UInt128"),
+            AddUInt256(i) => wrapping_addition(i, v, "UInt256"),
+            AddUInt512(i) => wrapping_addition(i, v, "UInt512"),
             AddKeys(mut keys) => match v {
                 Value::Contract(mut c) => {
                     c.insert_urefs(&mut keys);
