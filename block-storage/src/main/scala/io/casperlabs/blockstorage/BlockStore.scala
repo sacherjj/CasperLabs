@@ -31,7 +31,7 @@ trait BlockStore[F[_]] {
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]
 
-  def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]]
+  def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]]
 
   def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit]
 
@@ -64,10 +64,10 @@ object BlockStore {
     ): F[Option[BlockMsgWithTransform]] =
       incAndMeasure("get", super.get(blockHash))
 
-    abstract override def find(
+    abstract override def findBlockHash(
         p: BlockHash => Boolean
-    ): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
-      incAndMeasure("find", super.find(p))
+    ): F[Option[BlockHash]] =
+      incAndMeasure("findBlockHash", super.findBlockHash(p))
 
     abstract override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
       incAndMeasure("getBlockSummary", super.getBlockSummary(blockHash))

@@ -1,6 +1,7 @@
 package io.casperlabs.comm.gossiping
 
 import cats.implicits._
+import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
@@ -19,6 +20,7 @@ import monix.execution.atomic.AtomicInt
 import monix.execution.schedulers.CanBlock.permit
 import monix.tail.Iterant
 import org.scalacheck.Gen
+import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
 import scala.collection.mutable.ListBuffer
@@ -44,6 +46,19 @@ class SynchronizerSpec
     Gen.choose(1.0, max).map(i => refineV[GreaterEqual[W.`1.0`.T]](i).right.get)
 
   "Synchronizer" when {
+    "gets too many blocks during initializing" should {
+      "return SyncError.TooMany" in forAll(
+        genPartialDagFromTips
+      ) { dag =>
+        log.reset()
+        TestFixture(dag)(maxInitialBlockCount = 1, isInitial = true) { (synchronizer, _, _) =>
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+            dagOrError.isLeft shouldBe true
+            dagOrError.left.get shouldBe an[SyncError.TooMany]
+          }
+        }
+      }
+    }
     "streamed DAG contains cycle" should {
       "return SyncError.Cycle" in forAll(genPartialDagFromTips) { dag =>
         log.reset()
@@ -78,13 +93,18 @@ class SynchronizerSpec
     "streamed DAG is too deep" should {
       "return SyncError.TooDeep" in forAll(
         genPartialDagFromTips,
-        genPositiveInt(1, consensusConfig.dagDepth - 1)
-      ) { (dag, n) =>
+        genPositiveInt(1, consensusConfig.dagDepth - 1),
+        arbitrary[Boolean]
+      ) { (dag, n, isInitial) =>
         log.reset()
-        TestFixture(dag)(maxPossibleDepth = n) { (synchronizer, _, _) =>
+        TestFixture(dag)(maxPossibleDepth = n, isInitial = isInitial) { (synchronizer, _, _) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
-            dagOrError.isLeft shouldBe true
-            dagOrError.left.get shouldBe an[SyncError.TooDeep]
+            if (isInitial) {
+              dagOrError.isLeft shouldBe false
+            } else {
+              dagOrError.isLeft shouldBe true
+              dagOrError.left.get shouldBe an[SyncError.TooDeep]
+            }
           }
         }
       }
@@ -338,6 +358,8 @@ object SynchronizerSpec {
         maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T] = Double.MaxValue,
         maxDepthAncestorsRequest: Int Refined Positive = Int.MaxValue,
         minBlockCountToCheckBranchingFactor: Int Refined NonNegative = Int.MaxValue,
+        maxInitialBlockCount: Int Refined Positive = Int.MaxValue,
+        isInitial: Boolean = false,
         validate: BlockSummary => Task[Unit] = _ => Task.unit,
         notInDag: ByteString => Task[Boolean] = _ => Task.now(false),
         error: Option[RuntimeException] = None,
@@ -353,7 +375,9 @@ object SynchronizerSpec {
         maxPossibleDepth = maxPossibleDepth,
         minBlockCountToCheckBranchingFactor = minBlockCountToCheckBranchingFactor,
         maxBranchingFactor = maxBranchingFactor,
-        maxDepthAncestorsRequest = maxDepthAncestorsRequest
+        maxDepthAncestorsRequest = maxDepthAncestorsRequest,
+        maxInitialBlockCount = maxInitialBlockCount,
+        isInitialRef = Ref.unsafe[Task, Boolean](isInitial)
       )
       test(synchronizer, requestsCounter, knownHashes).runSyncUnsafe(5.seconds)
     }

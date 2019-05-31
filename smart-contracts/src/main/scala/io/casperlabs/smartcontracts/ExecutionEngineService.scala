@@ -6,8 +6,8 @@ import cats.effect.{Resource, Sync}
 import cats.implicits._
 import cats.{Applicative, Defer}
 import com.google.protobuf.ByteString
-import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
@@ -43,8 +43,8 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
   private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
   override def emptyStateHash: ByteString = {
-    val arr: Array[Byte] = Array(176, 48, 219, 9, 47, 224, 193, 80, 164, 168, 1, 230, 1, 75, 255,
-      199, 211, 67, 213, 61, 31, 192, 211, 77, 59, 244, 219, 236, 53, 253, 100, 159).map(_.toByte)
+    val arr: Array[Byte] = Array(193, 151, 167, 126, 241, 141, 9, 163, 43, 169, 238, 19, 93, 87,
+      183, 131, 99, 160, 96, 216, 8, 39, 227, 218, 246, 90, 65, 57, 207, 242, 61, 205).map(_.toByte)
     ByteString.copyFrom(arr)
   }
 
@@ -85,21 +85,22 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
       effects: Seq[TransformEntry]
   ): F[Either[Throwable, ByteString]] =
     sendMessage(CommitRequest(prestate, effects), _.commit) {
-      // TODO:
-      // [warn] match may not be exhaustive.
-      // [warn] It would fail on the following inputs: KeyNotFound(_), TypeMismatch(_)
-      // [warn]       _.result match {
       _.result match {
         case CommitResponse.Result.Success(CommitResult(poststateHash)) =>
           Right(poststateHash)
         case CommitResponse.Result.Empty =>
-          Left(new SmartContractEngineError("empty response"))
+          Left(SmartContractEngineError("empty response"))
         case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
-          Left(
-            new SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}")
-          )
+          Left(SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}"))
         case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
-          Left(new SmartContractEngineError(s"Error executing transform: $message"))
+          Left(SmartContractEngineError(s"Error executing transform: $message"))
+        case CommitResponse.Result.KeyNotFound(value) =>
+          Left(SmartContractEngineError(s"Key not found in global state: $value"))
+        case CommitResponse.Result.Overflow(value) =>
+          Left(SmartContractEngineError(s"Overflow error: $value"))
+        case CommitResponse.Result.TypeMismatch(err) =>
+          Left(SmartContractEngineError(err.toString))
+
       }
     }
 
@@ -111,8 +112,8 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
     sendMessage(QueryRequest(state, Some(baseKey), path), _.query) {
       _.result match {
         case QueryResponse.Result.Success(value) => Right(value)
-        case QueryResponse.Result.Empty          => Left(new SmartContractEngineError("empty response"))
-        case QueryResponse.Result.Failure(err)   => Left(new SmartContractEngineError(err))
+        case QueryResponse.Result.Empty          => Left(SmartContractEngineError("empty response"))
+        case QueryResponse.Result.Failure(err)   => Left(SmartContractEngineError(err))
       }
     }
   // Todo

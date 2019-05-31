@@ -141,13 +141,19 @@ message Value {
         StringList string_list = 7;
         NamedKey named_key = 8;
         RustBigInt big_int = 9;
+        Key key = 10;
     }
 }
 
 message Account {
+    message AssociatedKey {
+        bytes pub_key = 1; // Should have 32 elements
+        uint32 weight = 2;
+    }
     bytes pub_key = 1; // Should have 32 elements
     uint64 nonce = 2;
     repeated NamedKey known_urefs = 3;
+    repeated AssociatedKey associated_keys = 4;
 }
 message Contract {
     bytes body = 1;

@@ -1,29 +1,11 @@
 import threading
-
-from . import conftest
-from .cl_node.casperlabsnode import (
-    Node,
-    bootstrap_connected_peer,
-    docker_network_with_started_bootstrap,
-)
-from .cl_node.common import random_string
-from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
-from .cl_node.wait import (
-    wait_for_blocks_count_at_least,
-    wait_for_peers_count_at_least,
-)
-
 import pytest
 from typing import List
 
-
-BOOTSTRAP_NODE_KEYS = PREGENERATED_KEYPAIRS[0]
-
-
-def create_volume(docker_client) -> str:
-    volume_name = "casperlabs{}".format(random_string(5).lower())
-    docker_client.volumes.create(name=volume_name, driver="local")
-    return volume_name
+from test.cl_node.docker_node import DockerNode
+from .cl_node.wait import (
+    wait_for_blocks_count_at_least,
+)
 
 
 # An explanation given by @Akosh about number of expected blocks.
@@ -45,11 +27,6 @@ but if you did it in perfect parallelism you could have all of them
 branch out and be only 4 levels deep
 (`G<-A1, G<-B1, G<-C1, [A1,B1,C1]<-C2`, etc).
 """
-
-
-@pytest.fixture
-def timeout(command_line_options_fixture):
-    return command_line_options_fixture.node_startup_timeout
 
 
 def parse_value(s):
@@ -85,7 +62,7 @@ def parse_show_blocks(s):
 
 
 class DeployThread(threading.Thread):
-    def __init__(self, name: str, node: Node, batches_of_contracts: List[List[str]]) -> None:
+    def __init__(self, name: str, node: DockerNode, batches_of_contracts: List[List[str]]) -> None:
         threading.Thread.__init__(self)
         self.name = name
         self.node = node
@@ -94,15 +71,15 @@ class DeployThread(threading.Thread):
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
-                assert 'Success' in self.node.deploy(session_contract = contract, payment_contract = contract)
-            self.node.propose()
+                assert 'Success' in self.node.client.deploy(session_contract=contract, payment_contract=contract)
+            self.node.client.propose()
 
 
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
                          ([['test_helloname.wasm'],['test_helloworld.wasm']], [1, 1, 1, 1, 1, 1]),
 ])
 # Nodes deploy one or more contracts followed by propose.
-def test_multiple_deploys_at_once(three_node_network, timeout,
+def test_multiple_deploys_at_once(three_node_network,
                                   contract_paths: List[List[str]], expected_deploy_counts_in_blocks):
     """
     Feature file : multiple_simultaneous_deploy.feature
@@ -121,10 +98,10 @@ def test_multiple_deploys_at_once(three_node_network, timeout,
 
     # See COMMENT_EXPECTED_BLOCKS 
     for node in nodes:
-        wait_for_blocks_count_at_least(node, len(expected_deploy_counts_in_blocks), len(expected_deploy_counts_in_blocks) * 2, timeout)
+        wait_for_blocks_count_at_least(node, len(expected_deploy_counts_in_blocks), len(expected_deploy_counts_in_blocks) * 2, node.timeout)
 
     for node in nodes:
-        blocks = parse_show_blocks(node.show_blocks_with_depth(len(expected_deploy_counts_in_blocks) * 100))
+        blocks = parse_show_blocks(node.client.show_blocks(len(expected_deploy_counts_in_blocks) * 100))
         n_blocks = len(expected_deploy_counts_in_blocks)
         assert [b.deployCount for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, \
                'Unexpected deploy counts in blocks'
