@@ -9,7 +9,7 @@ import typing_extensions
 from .common import Network, WaitTimeoutError
 
 
-from .casperlabsnode import NonZeroExitCodeError
+from test.cl_node.errors import NonZeroExitCodeError
 
 
 class PredicateProtocol(typing_extensions.Protocol):
@@ -202,7 +202,7 @@ class BlocksCountAtLeast:
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        actual_blocks_count = self.node.get_blocks_count(self.max_retrieved_blocks)
+        actual_blocks_count = self.node.client.get_blocks_count(self.max_retrieved_blocks)
         logging.info("THE ACTUAL BLOCKS COUNT: {}".format(actual_blocks_count))
         return actual_blocks_count >= self.blocks_count
 

@@ -254,12 +254,6 @@ impl From<transform::Transform> for super::ipc::Transform {
                 fail.set_type_mismatch(typemismatch_err);
                 t.set_failure(fail);
             }
-            transform::Transform::Failure(transform::Error::Overflow) => {
-                let mut fail = super::ipc::TransformFailure::new();
-                let mut overflow_err = super::ipc::AdditionOverflow::new();
-                fail.set_overflow(overflow_err);
-                t.set_failure(fail);
-            }
         };
         t
     }
@@ -531,13 +525,6 @@ where
             root.set_hash(prestate_hash.to_vec());
             let mut tmp_res = ipc::CommitResponse::new();
             tmp_res.set_missing_prestate(root);
-            tmp_res
-        }
-        Ok(CommitResult::Overflow) => {
-            logging::log_warning("Overflow");
-            let overflow = ipc::AdditionOverflow::new();
-            let mut tmp_res = ipc::CommitResponse::new();
-            tmp_res.set_overflow(overflow);
             tmp_res
         }
         Ok(CommitResult::Success(post_state_hash)) => {

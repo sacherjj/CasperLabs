@@ -1,5 +1,6 @@
 use crate::bytesrepr::{self, Error, FromBytes, ToBytes};
 use alloc::vec::Vec;
+use num::traits::{WrappingAdd, WrappingSub};
 use num::{Bounded, Num, One, Unsigned, Zero};
 
 // Clippy generates a ton of warnings/errors for the code the macro generates.
@@ -28,22 +29,6 @@ pub use self::macro_code::{U128, U256, U512};
 pub enum UIntParseError {
     FromDecStr(uint::FromDecStrErr),
     InvalidRadix,
-}
-
-/// Trait to allow writing generic functions which use the
-/// `checked_add` function. Can't use num::CheckedAdd because it is
-/// defined using references (e.g. &self) which does not work with the
-/// definitions in uint crate (where U128, etc. come from)
-pub trait CheckedAdd: core::ops::Add<Self, Output = Self> + Sized {
-    fn checked_add(self, v: Self) -> Option<Self>;
-}
-
-/// Trait to allow writing generic functions which use the
-/// `checked_sub` function. Can't use num::CheckedSub because it is
-/// defined using references (e.g. &self) which does not work with the
-/// definitions in uint crate (where U128, etc. come from)
-pub trait CheckedSub: core::ops::Sub<Self, Output = Self> + Sized {
-    fn checked_sub(self, v: Self) -> Option<Self>;
 }
 
 macro_rules! ser_and_num_impls {
@@ -108,18 +93,6 @@ macro_rules! ser_and_num_impls {
         // Requires Num to be implemented
         impl Unsigned for $type {}
 
-        impl CheckedAdd for $type {
-            fn checked_add(self, v: Self) -> Option<Self> {
-                $type::checked_add(self, v)
-            }
-        }
-
-        impl CheckedSub for $type {
-            fn checked_sub(self, v: Self) -> Option<Self> {
-                $type::checked_sub(self, v)
-            }
-        }
-
         // Additional numeric trait, which also holds for these types
         impl Bounded for $type {
             fn min_value() -> Self {
@@ -130,9 +103,55 @@ macro_rules! ser_and_num_impls {
                 $type::MAX
             }
         }
+
+        // Instead of implementing arbitrary methods we can use existing traits from num crate.
+        impl WrappingAdd for $type {
+            fn wrapping_add(&self, other: &$type) -> $type {
+                self.overflowing_add(*other).0
+            }
+        }
+
+        impl WrappingSub for $type {
+            fn wrapping_sub(&self, other: &$type) -> $type {
+                self.overflowing_sub(*other).0
+            }
+        }
     };
 }
 
 ser_and_num_impls!(U128, 16);
 ser_and_num_impls!(U256, 32);
 ser_and_num_impls!(U512, 64);
+
+#[test]
+fn wrapping_test_u512() {
+    let max = U512::max_value();
+    let value = max.wrapping_add(&1.into());
+    assert_eq!(value, 0.into());
+
+    let min = U512::min_value();
+    let value = min.wrapping_sub(&1.into());
+    assert_eq!(value, U512::max_value());
+}
+
+#[test]
+fn wrapping_test_u256() {
+    let max = U256::max_value();
+    let value = max.wrapping_add(&1.into());
+    assert_eq!(value, 0.into());
+
+    let min = U256::min_value();
+    let value = min.wrapping_sub(&1.into());
+    assert_eq!(value, U256::max_value());
+}
+
+#[test]
+fn wrapping_test_u128() {
+    let max = U128::max_value();
+    let value = max.wrapping_add(&1.into());
+    assert_eq!(value, 0.into());
+
+    let min = U128::min_value();
+    let value = min.wrapping_sub(&1.into());
+    assert_eq!(value, U128::max_value());
+}

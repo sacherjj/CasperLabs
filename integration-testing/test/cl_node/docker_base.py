@@ -109,9 +109,8 @@ class DockerBase:
         self.connected_networks = []
 
         self.docker_tag: str = 'test'
-        if os.environ.get(CI_BUILD_NUMBER) is not None:
-            self.docker_tag = f'DRONE-{os.environ.get(CI_BUILD_NUMBER)}'
-
+        if os.environ.get("TAG_NAME") is not None:
+            self.docker_tag = os.environ.get("TAG_NAME")
         self.container = self._get_container()
 
     @property

@@ -25,10 +25,8 @@ class InMemBlockStore[F[_]] private (
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     refF.get.map(_.get(blockHash).map(_._1))
 
-  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
-    refF.get.map(_.filterKeys(p).map {
-      case (k, (b, s)) => (k, b)
-    }.toSeq)
+  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
+    refF.get.map(_.keys.find(p))
 
   def put(
       f: => (BlockHash, BlockMsgWithTransform)
