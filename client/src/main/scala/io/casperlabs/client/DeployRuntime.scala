@@ -32,7 +32,7 @@ object DeployRuntime {
     gracefulExit(DeployService[F].showBlock(hash))
 
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
-    gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
+    gracefulExit(DeployService[F].showBlocks(depth))
 
   def visualizeDag[F[_]: Sync: DeployService: Timer](
       depth: Int,

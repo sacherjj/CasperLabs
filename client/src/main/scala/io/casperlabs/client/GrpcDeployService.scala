@@ -9,7 +9,8 @@ import io.casperlabs.node.api.casper.{
   BlockInfoView,
   CasperGrpcMonix,
   DeployRequest,
-  GetBlockInfoRequest
+  GetBlockInfoRequest,
+  StreamBlockInfosRequest
 }
 import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
@@ -74,13 +75,13 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
   def visualizeDag(q: VisualizeDagQuery): Task[Either[Throwable, String]] =
     deployServiceStub.visualizeDag(q).attempt.map(_.map(_.content))
 
-  def showBlocks(q: BlocksQuery): Task[Either[Throwable, String]] =
-    deployServiceStub
-      .showBlocks(q)
+  def showBlocks(depth: Int): Task[Either[Throwable, String]] =
+    casperServiceStub
+      .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfoView.BASIC))
       .map { bi =>
         s"""
-         |------------- block ${bi.blockNumber} ---------------
-         |${bi.toProtoString}
+         |------------- block @ ${bi.getSummary.getHeader.rank} ---------------
+         |${Printer.printToUnicodeString(bi)}
          |-----------------------------------------------------
          |""".stripMargin
       }
