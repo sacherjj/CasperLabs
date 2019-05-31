@@ -500,7 +500,7 @@ lazy val client = (project in file("client"))
       grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
     )
   )
-  .dependsOn(crypto, shared, models)
+  .dependsOn(crypto, shared, models, graphz)
 
 /**
   * This project contains Gatling test suits which perform load testing.

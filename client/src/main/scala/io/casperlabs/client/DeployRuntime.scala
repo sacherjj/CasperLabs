@@ -43,7 +43,7 @@ object DeployRuntime {
     gracefulExit({
       def askDag =
         DeployService[F]
-          .visualizeDag(VisualizeDagQuery(depth, showJustificationLines))
+          .visualizeDag(depth, showJustificationLines)
           .rethrow
 
       val useJdkRenderer = Sync[F].delay(Graphviz.useEngine(new GraphvizJdkEngine))
@@ -101,6 +101,7 @@ object DeployRuntime {
         case (None, Some(_)) =>
           Sync[F].raiseError[String](new Throwable("--out must be specified if --stream"))
       }
+
       eff.attempt
     })
 
