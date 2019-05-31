@@ -28,7 +28,7 @@ networks:
 
 services:
   test:
-    image: casperlabs/integration-testing:test
+    image: casperlabs/integration-testing:||TAG||
     volumes:
       - /tmp:/tmp
       - /var/run/docker.sock:/var/run/docker.sock
