@@ -43,6 +43,7 @@ pub enum Error {
     Interpreter(InterpreterError),
     Storage(storage::error::Error),
     BytesRepr(BytesReprError),
+    InvalidAddress,
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
     InvalidAccess { required: AccessRights },
@@ -762,7 +763,7 @@ pub trait Executor<A> {
         &self,
         parity_module: A,
         args: &[u8],
-        account_addr: [u8; 32],
+        account_addr: &[u8],
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
@@ -780,7 +781,7 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        account_addr: [u8; 32],
+        account_addr: &[u8],
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
@@ -790,7 +791,13 @@ impl Executor<Module> for WasmiExecutor {
     where
         R::Error: Into<Error>,
     {
-        let acct_key = Key::Account(account_addr);
+        if account_addr.len() != 32 {
+            return (Err(Error::InvalidAddress.into()), 0);
+        }
+        let mut account_bytes = [0; 32];
+        account_bytes.copy_from_slice(account_addr);
+        let acct_key = Key::Account(account_bytes);
+
         let (instance, memory) = on_fail_charge!(
             instance_and_memory(parity_module.clone(), protocol_version),
             0
@@ -809,7 +816,7 @@ impl Executor<Module> for WasmiExecutor {
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
-        let rng = create_rng(&account_addr, timestamp, nonce);
+        let rng = create_rng(&account_bytes, timestamp, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
         let arguments: Vec<Vec<u8>> = if args.is_empty() {

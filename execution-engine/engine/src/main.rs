@@ -141,7 +141,7 @@ fn main() {
         let result = engine_state.run_deploy(
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
-            account_addr,
+            &account_addr,
             timestamp,
             nonce,
             state_hash,

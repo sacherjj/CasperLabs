@@ -213,11 +213,6 @@ where
             let session_contract = deploy.get_session();
             let module_bytes = &session_contract.code;
             let args = &session_contract.args;
-            let address: [u8; 32] = {
-                let mut tmp = [0u8; 32];
-                tmp.copy_from_slice(&deploy.address);
-                tmp
-            };
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
@@ -225,7 +220,7 @@ where
                 .run_deploy(
                     module_bytes,
                     args,
-                    address,
+                    &deploy.address,
                     timestamp,
                     nonce,
                     prestate_hash,
