@@ -157,7 +157,8 @@ class CasperClient:
                              header = header,
                              body = body)
 
-        return self.casperService.Deploy(casper_pb2.DeployRequest(deploy = d))
+        # TODO: we may want to return deploy_hash base16 encoded
+        return self.casperService.Deploy(casper_pb2.DeployRequest(deploy = d)), deploy_hash
 
 
     @guarded
@@ -301,9 +302,9 @@ def _show_block(response):
 
 @guarded_command
 def deploy_command(casper_client, args):
-    response = casper_client.deploy(getattr(args,'from'), args.gas_limit, args.gas_price, 
-                                    args.payment, args.session, args.nonce)
-    print (response.message)
+    response, deploy_hash = casper_client.deploy(getattr(args,'from'), args.gas_limit, args.gas_price, 
+                                                 args.payment, args.session, args.nonce)
+    print (f'{response.message}. Deploy hash: {deploy_hash}')
     if not response.success:
         return 1
 
