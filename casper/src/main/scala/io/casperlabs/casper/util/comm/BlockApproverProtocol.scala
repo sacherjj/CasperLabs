@@ -9,7 +9,7 @@ import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ProcessedDeployResult}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProcessedDeployUtil, ProtoUtil}
-import io.casperlabs.casper.{LegacyConversions, ValidatorIdentity, consensus}
+import io.casperlabs.casper.{consensus, LegacyConversions, ValidatorIdentity}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.Node

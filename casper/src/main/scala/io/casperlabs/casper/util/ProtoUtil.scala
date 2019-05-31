@@ -375,10 +375,10 @@ object ProtoUtil {
     ByteString.copyFrom(Base16.decode(string))
 
   def basicDeploy[F[_]: Monad: Time](
-      id: Int
+      nonce: Int
   ): F[Deploy] =
     Time[F].currentMillis.map { now =>
-      basicDeploy(now, ByteString.EMPTY)
+      basicDeploy(now, ByteString.EMPTY).withNonce(nonce)
     }
 
   def basicDeploy(
@@ -438,4 +438,15 @@ object ProtoUtil {
       .toSet
     (missingParents union missingJustifications).toList
   }
+
+  implicit class DeployOps(d: Deploy) {
+    def incrementNonce(): Deploy =
+      this.withNonce(d.header.get.nonce + 1)
+
+    def withNonce(newNonce: Long): Deploy =
+      d.withHeader(d.header.get.withNonce(newNonce))
+  }
+
+  def randomAccountAddress(): ByteString =
+    ByteString.copyFrom(scala.util.Random.nextString(32), "UTF-8")
 }

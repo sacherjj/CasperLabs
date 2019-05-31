@@ -15,7 +15,11 @@ import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, Hash
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
-import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil, ExecutionEngineServiceStub}
+import io.casperlabs.casper.util.execengine.{
+  DeploysCheckpoint,
+  ExecEngineUtil,
+  ExecutionEngineServiceStub
+}
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16

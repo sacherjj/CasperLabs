@@ -6,7 +6,7 @@ import cats.data.EitherT
 import cats.effect.{Concurrent, Timer}
 import cats.implicits._
 import cats.temp.par.Par
-import cats.{Applicative, ApplicativeError, Defer, Id, Monad, Parallel, ~>}
+import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
@@ -32,6 +32,7 @@ import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler
 
+import scala.collection.mutable.{Map => MutMap}
 import scala.util.Random
 
 /** Base class for test nodes with fields used by tests exposed as public. */
@@ -245,8 +246,10 @@ object HashSetCasperTestNode {
   ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
       import ipc._
-      private val zero  = Array.fill(32)(0.toByte)
-      private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
+
+      private val accountNonceTracker: MutMap[ByteString, Long] = MutMap.empty
+      private val zero                                          = Array.fill(32)(0.toByte)
+      private var bonds                                         = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
       private def getExecutionEffect(deploy: Deploy) = {
         // The real execution engine will get the keys from what the code changes, which will include
@@ -258,6 +261,26 @@ object HashSetCasperTestNode {
         val transforEntry = TransformEntry(Some(key), Some(transform))
         val opEntry       = OpEntry(Some(key), Some(op))
         ExecutionEffect(Seq(opEntry), Seq(transforEntry))
+      }
+
+      // Validate that account's nonces increment monotonically by 1.
+      // Assumes that any account address already exists in the GlobalState with nonce = 0.
+      private def validateNonce(deploy: Deploy): Boolean = {
+        val deployAccount = deploy.address
+        val deployNonce   = deploy.nonce
+        accountNonceTracker.get(deployAccount) match {
+          case Some(nonce) =>
+            if (deployNonce == nonce + 1) {
+              accountNonceTracker.update(deployAccount, deployNonce)
+              true
+            } else false
+          // If there's no entry for that address in the map, we're assuming that old nonce = 0
+          case None =>
+            if (deployNonce == 1) {
+              accountNonceTracker.update(deployAccount, 1)
+              true
+            } else false
+        }
       }
 
       override def emptyStateHash: ByteString = ByteString.EMPTY
@@ -273,11 +296,15 @@ object HashSetCasperTestNode {
         deploys
           .map(
             d =>
-              DeployResult(
-                ExecutionResult(
-                  ipc.DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
+              if (validateNonce(d)) {
+                DeployResult(
+                  ExecutionResult(
+                    ipc.DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
+                  )
                 )
-              )
+              } else {
+                DeployResult(DeployResult.Result.InvalidNonce(DeployResult.InvalidNonce(d.nonce)))
+              }
           )
           .asRight[Throwable]
           .pure[F]
