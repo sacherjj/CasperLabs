@@ -26,6 +26,8 @@ cleanup() {
     done
 
     docker network prune --force
+
+    docker-compose rm --force
 }
 trap cleanup 0
 
@@ -38,4 +40,5 @@ done
 # Using ||TAG|| as replacable element in docker-compose.yml.template
 sed 's/||TAG||/'"${TAG_NAME}"'/g' docker-compose.yml.template > docker-compose.yml
 
-docker-compose up --force-recreate && docker-compose rm --force --stop
+docker-compose rm --force
+docker-compose up
