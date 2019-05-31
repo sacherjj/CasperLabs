@@ -14,6 +14,7 @@ impl WithdrawId {
         contract_api::read_local(self.raw_id())
     }
 }
+
 impl DepositId {
     pub fn raw_id(&self) -> [u8; 32] {
         self.0

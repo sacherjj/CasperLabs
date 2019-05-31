@@ -10,7 +10,7 @@ use core::marker::PhantomData;
 use core::ops::Add;
 
 /// Trait representing the ability to read a value. Use case: a key
-/// for the blockdag global state (`UPointer)` is obviously Readable,
+/// for the blockdag global state (`UPointer`) is obviously Readable,
 /// however if we abstract over it then we can write unit tests for
 /// smart contracts much more easily.
 pub trait Readable<T> {
@@ -36,14 +36,11 @@ macro_rules! from_try_from_impl {
             type Error = ();
 
             fn try_from(u: UPointer<T>) -> Result<Self, Self::Error> {
-                match u {
-                    UPointer(id, access, phantom) => {
-                        if access & $min_access == $min_access {
-                            Ok($type(id, phantom))
-                        } else {
-                            Err(())
-                        }
-                    }
+                let UPointer(id, access, phantom) = u;
+                if access & $min_access == $min_access {
+                    Ok($type(id, phantom))
+                } else {
+                    Err(())
                 }
             }
         }
