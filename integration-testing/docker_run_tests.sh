@@ -14,20 +14,20 @@ fi
 MAX_NODE_COUNT=10
 
 cleanup() {
-    # Eliminate this for next run
-    if [[ -f "docker-compose.yml" ]]; then
-        rm docker-compose.yml
-    fi
-
     for num in $(seq 0 $MAX_NODE_COUNT)
     do
         # Network might get tore down with docker-compose rm, so "|| true" to ignore failure
         docker network rm cl-${TAG_NAME}-${num} || true
     done
 
-    docker network prune --force
+    docker network prune --force || true
 
-    docker-compose rm --force
+    docker-compose rm --force || true
+
+    # Eliminate this for next run
+    if [[ -f "docker-compose.yml" ]]; then
+        rm docker-compose.yml
+    fi
 }
 trap cleanup 0
 
@@ -40,5 +40,5 @@ done
 # Using ||TAG|| as replacable element in docker-compose.yml.template
 sed 's/||TAG||/'"${TAG_NAME}"'/g' docker-compose.yml.template > docker-compose.yml
 
-docker-compose rm --force
+docker-compose rm --force || true
 docker-compose up
