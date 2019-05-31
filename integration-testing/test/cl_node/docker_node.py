@@ -75,7 +75,8 @@ class DockerNode(LoggingDockerBase):
 
     def _get_container(self):
         env = {
-            'RUST_BACKTRACE': 'full'
+            'RUST_BACKTRACE': 'full',
+            'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'false'
         }
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
