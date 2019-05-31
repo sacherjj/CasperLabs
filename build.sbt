@@ -127,7 +127,6 @@ lazy val casper = (project in file("casper"))
     comm         % "compile->compile;test->test",
     shared       % "compile->compile;test->test",
     smartContracts % "compile->compile;test->test",
-		graphz,
     crypto,
     models
   )

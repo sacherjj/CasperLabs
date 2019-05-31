@@ -39,7 +39,6 @@ import io.casperlabs.comm.ServiceError.{
 }
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b512Random
-import io.casperlabs.graphz._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 
@@ -214,35 +213,6 @@ object BlockAPI {
       tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
       mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[Block], depth)
     } yield mainChain
-
-  @deprecated("To be removed before devnet. Will be moved to client.", "0.4")
-  def visualizeDag[
-      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
-      G[_]: Monad: GraphSerializer
-  ](
-      d: Option[Int] = None,
-      visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
-      stringify: G[Graphz[G]] => String
-  ): F[String] = {
-    val errorMessage =
-      "Could not visualize graph."
-
-    def casperResponse(implicit casper: MultiParentCasper[F]): F[String] =
-      for {
-        dag                <- MultiParentCasper[F].blockDag
-        maxHeight          <- dag.topoSort(0L).map(_.length - 1)
-        depth              = d.getOrElse(maxHeight)
-        topoSort           <- dag.topoSortTail(depth)
-        lastFinalizedBlock <- MultiParentCasper[F].lastFinalizedBlock
-        graph              <- visualizer(topoSort, PrettyPrinter.buildString(lastFinalizedBlock.blockHash))
-      } yield stringify(graph)
-
-    MultiParentCasperRef.withCasper[F, String](
-      casperResponse(_),
-      errorMessage,
-      errorMessage.pure[F]
-    )
-  }
 
   // TOOD extract common code from show blocks
   @deprecated("To be removed before devnet. Use `getBlockInfos`.", "0.4")
