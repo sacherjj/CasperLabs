@@ -3,6 +3,7 @@ import pytest
 from typing import List
 
 from test.cl_node.docker_node import DockerNode
+from test.cl_node.client_parser import parse_show_blocks
 from .cl_node.wait import (
     wait_for_blocks_count_at_least,
 )
@@ -29,44 +30,12 @@ branch out and be only 4 levels deep
 """
 
 
-def parse_value(s):
-    try:
-        return int(s)
-    except ValueError:
-        return s[1:-1]  # unquote string
-
-        
-def parse_line(line):
-    k, v = line.split(': ')
-    return k, parse_value(v)
-
-
-def parse_block(s):
-
-    class Block:
-        def __init__(self, d):
-            self.d = d
-
-        def __getattr__(self, name):
-            return self.d[name]
-
-    return Block(dict(parse_line(line) for line in filter(lambda line: ':' in line, s.splitlines())))
-
-
-def parse_show_blocks(s):
-    """
-    TODO: remove this and related functions once Python client is integrated into test framework.
-    """
-    blocks = s.split('-----------------------------------------------------')[:-1]
-    return [parse_block(b) for b in blocks]
-
-
 class DeployThread(threading.Thread):
     def __init__(self, name: str, node: DockerNode, batches_of_contracts: List[List[str]]) -> None:
         threading.Thread.__init__(self)
         self.name = name
         self.node = node
-        self.batches_of_contracts = batches_of_contracts 
+        self.batches_of_contracts = batches_of_contracts
 
     def run(self) -> None:
         for batch in self.batches_of_contracts:
@@ -96,12 +65,12 @@ def test_multiple_deploys_at_once(three_node_network,
     for t in deploy_threads:
         t.join()
 
-    # See COMMENT_EXPECTED_BLOCKS 
+    # See COMMENT_EXPECTED_BLOCKS
     for node in nodes:
         wait_for_blocks_count_at_least(node, len(expected_deploy_counts_in_blocks), len(expected_deploy_counts_in_blocks) * 2, node.timeout)
 
     for node in nodes:
         blocks = parse_show_blocks(node.client.show_blocks(len(expected_deploy_counts_in_blocks) * 100))
         n_blocks = len(expected_deploy_counts_in_blocks)
-        assert [b.deployCount for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, \
+        assert [b.deploy_count for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, \
                'Unexpected deploy counts in blocks'

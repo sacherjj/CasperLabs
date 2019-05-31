@@ -2,6 +2,7 @@ import threading
 
 from . import conftest
 from test.cl_node.docker_node import DockerNode
+from test.cl_node.client_parser import parse_show_blocks
 from .cl_node.common import random_string
 from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from .cl_node.wait import (
@@ -24,44 +25,12 @@ def create_volume(docker_client) -> str:
     return volume_name
 
 
-def parse_value(s):
-    try:
-        return int(s)
-    except ValueError:
-        return s[1:-1] # unquote string
-
-        
-def parse_line(line):
-    k, v = line.split(': ')
-    return k, parse_value(v)
-
-
-def parse_block(s):
-
-    class Block:
-        def __init__(self, d):
-            self.d = d
-
-        def __getattr__(self, name):
-            return self.d[name]
-
-    return Block(dict(parse_line(line) for line in filter(lambda line: ':' in line, s.splitlines())))
-
-
-def parse_show_blocks(s):
-    """
-    TODO: remove this and related functions once Python client is integrated into test framework.
-    """
-    blocks = s.split('-----------------------------------------------------')[:-1]
-    return [parse_block(b) for b in blocks]
-
-
 class DeployThread(threading.Thread):
     def __init__(self, name: str, node: DockerNode, batches_of_contracts: List[List[str]]) -> None:
         threading.Thread.__init__(self)
         self.name = name
         self.node = node
-        self.batches_of_contracts = batches_of_contracts 
+        self.batches_of_contracts = batches_of_contracts
         self.deployed_blocks_hashes = set()
 
     def propose(self):
@@ -116,9 +85,9 @@ def test_block_propagation(three_nodes,
     for node in three_nodes:
         blocks = parse_show_blocks(node.client.show_blocks(expected_number_of_blocks * 100))
         # What propose returns is first 10 characters of block hash, so we can compare only first 10 charcters.
-        blocks_hashes = set([b.blockHash[:10] for b in blocks])
+        blocks_hashes = set([b.block_hash[:10] for b in blocks])
         for t in deploy_threads:
             assert t.deployed_blocks_hashes.issubset(blocks_hashes), \
                    f"Not all blocks deployed and proposed on {t.name} were propagated to {node.name}"
-        
+
 
