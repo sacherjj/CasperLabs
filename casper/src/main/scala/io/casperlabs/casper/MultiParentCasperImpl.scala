@@ -501,9 +501,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
 object MultiParentCasperImpl {
 
-  // TODO: Mateusz will move this to its own place.
-  val version = 1L
-
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
   class StatelessExecutor[F[_]: Sync: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService](
