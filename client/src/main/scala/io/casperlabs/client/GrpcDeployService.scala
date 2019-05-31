@@ -5,7 +5,12 @@ import com.google.protobuf.empty.Empty
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
-import io.casperlabs.node.api.casper.{CasperGrpcMonix, DeployRequest, GetBlockInfoRequest}
+import io.casperlabs.node.api.casper.{
+  BlockInfoView,
+  CasperGrpcMonix,
+  DeployRequest,
+  GetBlockInfoRequest
+}
 import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
@@ -56,7 +61,7 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
 
   def showBlock(hash: String): Task[Either[Throwable, String]] =
     casperServiceStub
-      .getBlockInfo(GetBlockInfoRequest(hash, GetBlockInfoRequest.View.FULL))
+      .getBlockInfo(GetBlockInfoRequest(hash, BlockInfoView.FULL))
       .map(Printer.printToUnicodeString(_))
       .attempt
 

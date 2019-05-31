@@ -8,7 +8,7 @@ import cats.implicits._
 import cats.mtl._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
+import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore, StorageError}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.{BlockStatus => _, _}
@@ -67,6 +67,7 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("create-blocks-success", 0)
     } yield ()
 
+  @deprecated("To be removed before devnet. Use the one with `Deploy`.", "0.4")
   def deploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: Metrics](
       d: protocol.DeployData,
       ignoreDeploySignature: Boolean
@@ -129,7 +130,7 @@ object BlockAPI {
     } yield ()
   }
 
-  // TODO: Eventually remove in favor of `propose`.
+  @deprecated("To be removed before devnet. Use `propose`.", "0.4")
   def createBlock[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics](
       blockApiLock: Semaphore[F]
   ): F[DeployServiceResponse] =
@@ -202,6 +203,7 @@ object BlockAPI {
   }
 
   // FIX: Not used at the moment - in RChain it's being used in method like `getListeningName*`
+  @deprecated("To be removed before devnet.", "0.4")
   private def getMainChainFromTip[F[_]: MonadThrowable: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[IndexedSeq[Block]] =
@@ -213,6 +215,7 @@ object BlockAPI {
       mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[Block], depth)
     } yield mainChain
 
+  @deprecated("To be removed before devnet. Will be moved to client.", "0.4")
   def visualizeDag[
       F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
       G[_]: Monad: GraphSerializer
@@ -242,6 +245,7 @@ object BlockAPI {
   }
 
   // TOOD extract common code from show blocks
+  @deprecated("To be removed before devnet. Use `getBlockInfos`.", "0.4")
   def showBlocks[F[_]: MonadThrowable: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
@@ -279,6 +283,7 @@ object BlockAPI {
                }
     } yield result
 
+  @deprecated("To be removed before devnet.", "0.4")
   def showMainChain[F[_]: MonadThrowable: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
@@ -303,6 +308,7 @@ object BlockAPI {
   }
 
   // TODO: Replace with call to BlockStore
+  @deprecated("To be removed before devnet. Will add `getDeployInfo`.", "0.4")
   def findBlockWithDeploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       accountPublicKey: ByteString,
       timestamp: Long
@@ -352,7 +358,7 @@ object BlockAPI {
 
   def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
       blockHashBase16: String,
-      full: Boolean
+      full: Boolean = false
   ): F[BlockInfo] =
     unsafeWithCasper[F, BlockInfo]("Could not show block.") { implicit casper =>
       for {
@@ -386,6 +392,32 @@ object BlockAPI {
       } yield info
     }
 
+  /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
+    * then we pass previous ranks to paginate backwards. */
+  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      depth: Int,
+      maxRank: Long = 0,
+      full: Boolean = false
+  ): F[List[BlockInfo]] =
+    unsafeWithCasper[F, List[BlockInfo]]("Could not show blocks.") { implicit casper =>
+      casper.blockDag flatMap { dag =>
+        maxRank match {
+          case 0 => dag.topoSortTail(depth)
+          case r => dag.topoSort(endBlockNumber = r, startBlockNumber = r - depth + 1)
+        }
+      } handleErrorWith {
+        case ex: StorageError =>
+          MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
+        case ex: IllegalArgumentException =>
+          MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
+      } map { ranksOfHashes =>
+        ranksOfHashes.flatten.reverse.map(h => Base16.encode(h.toByteArray))
+      } flatMap { hashes =>
+        hashes.toList.traverse(h => getBlockInfo[F](h, full))
+      }
+    }
+
+  @deprecated("To be removed before devnet. Use `getBlockInfo`.", "0.4")
   def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       q: BlockQuery
   ): F[BlockQueryResponse] = {
