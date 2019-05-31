@@ -43,11 +43,49 @@ where
 mod tests {
     use alloc::collections::BTreeMap;
     use alloc::rc::Rc;
+    use capabilities::{Addable, Readable, Writable};
     use cl_std::value::U512;
     use core::cell::{Cell, RefCell};
+    use core::ops::Add;
     use mint::{Error, Mint};
 
     type Balance = Rc<Cell<U512>>;
+
+    impl<T: Copy> Readable<T> for Cell<T> {
+        fn read(&self) -> T {
+            self.get()
+        }
+    }
+
+    impl<T> Writable<T> for Cell<T> {
+        fn write(&self, t: T) {
+            self.set(t);
+        }
+    }
+
+    impl<T: Add<Output = T> + Copy> Addable<T> for Cell<T> {
+        fn add(&self, t: T) {
+            self.update(|x| x + t);
+        }
+    }
+
+    impl<T, R: Readable<T>> Readable<T> for Rc<R> {
+        fn read(&self) -> T {
+            R::read(self)
+        }
+    }
+
+    impl<T, W: Writable<T>> Writable<T> for Rc<W> {
+        fn write(&self, t: T) {
+            W::write(self, t)
+        }
+    }
+
+    impl<T, A: Addable<T>> Addable<T> for Rc<A> {
+        fn add(&self, t: T) {
+            A::add(self, t)
+        }
+    }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     struct FullId(u32);
