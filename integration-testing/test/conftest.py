@@ -8,6 +8,7 @@ from .cl_node.casperlabs_network import (
     TwoNodeNetwork,
     ThreeNodeNetwork,
     CustomConnectionNetwork,
+    DeploySignatureSingleNodeNetwork
 )
 
 
@@ -31,6 +32,12 @@ def one_node_network(docker_client_fixture):
         onn.create_cl_network()
         yield onn
 
+
+@pytest.fixture()
+def one_node_signed_deploy_network(docker_client_fixture):
+    with DeploySignatureSingleNodeNetwork(docker_client_fixture) as onn:
+        onn.create_cl_network()
+        yield onn
 
 @pytest.fixture()
 def two_node_network(docker_client_fixture):

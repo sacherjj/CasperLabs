@@ -153,7 +153,8 @@ class DeploySignatureSingleNodeNetwork(CasperLabsNetwork):
         config = DockerConfig(self.docker_client,
                               node_private_key=kp.private_key,
                               node_public_key=kp.public_key,
-                              network=self.create_docker_network())
+                              network=self.create_docker_network(),
+                              is_validator=True)
         self.add_bootstrap(config)
 
 class TwoNodeNetwork(CasperLabsNetwork):
