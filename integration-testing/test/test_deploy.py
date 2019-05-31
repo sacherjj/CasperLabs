@@ -1,13 +1,4 @@
 
-from test import conftest
-from test.cl_node.casperlabsnode import (
-    HELLO_NAME,
-    HELLO_WORLD,
-    complete_network,
-    deploy,
-    propose,
-)
-
 
 def test_deploy_with_valid_signature(one_node_signed_deploy_network):
     """
@@ -15,7 +6,7 @@ def test_deploy_with_valid_signature(one_node_signed_deploy_network):
     Scenario: Deploy with valid signature
     """
     node0 = one_node_signed_deploy_network.docker_nodes[0]
-    node0.deploy()
+    node0.client.deploy()
 
 
 def test_deploy_with_invalid_signature(one_node_signed_deploy_network):
@@ -24,4 +15,4 @@ def test_deploy_with_invalid_signature(one_node_signed_deploy_network):
     Scenario: Deploy with invalid signature
     """
     node0 = one_node_signed_deploy_network.docker_nodes[0]
-    node0.deploy()
+    node0.client.deploy()
