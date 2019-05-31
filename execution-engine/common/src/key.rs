@@ -49,8 +49,8 @@ use Key::*;
 
 impl Key {
     pub fn to_u_ptr<T>(self) -> Option<UPointer<T>> {
-        if let URef(id, access_right) = self {
-            Some(UPointer::new(id, access_right))
+        if let URef(id, Some(rights)) = self {
+            Some(UPointer::new(id, rights))
         } else {
             None
         }
@@ -58,7 +58,7 @@ impl Key {
 
     pub fn to_c_ptr(self) -> Option<ContractPointer> {
         match self {
-            URef(id, rights) => Some(ContractPointer::URef(UPointer::new(id, rights))),
+            URef(id, Some(rights)) => Some(ContractPointer::URef(UPointer::new(id, rights))),
             Hash(id) => Some(ContractPointer::Hash(id)),
             _ => None,
         }

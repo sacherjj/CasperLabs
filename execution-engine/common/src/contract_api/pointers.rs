@@ -9,11 +9,11 @@ use core::marker::PhantomData;
 
 // URef with type information about what value is in the global state
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub struct UPointer<T>([u8; 32], Option<AccessRights>, PhantomData<T>);
+pub struct UPointer<T>([u8; 32], AccessRights, PhantomData<T>);
 
 impl<T> UPointer<T> {
-    pub fn new(id: [u8; 32], maybe_rights: Option<AccessRights>) -> UPointer<T> {
-        UPointer(id, maybe_rights, PhantomData)
+    pub fn new(id: [u8; 32], rights: AccessRights) -> UPointer<T> {
+        UPointer(id, rights, PhantomData)
     }
 }
 
@@ -25,7 +25,7 @@ pub enum ContractPointer {
 
 impl<T> From<UPointer<T>> for Key {
     fn from(u_ptr: UPointer<T>) -> Self {
-        Key::URef(u_ptr.0, u_ptr.1)
+        Key::URef(u_ptr.0, Some(u_ptr.1))
     }
 }
 
