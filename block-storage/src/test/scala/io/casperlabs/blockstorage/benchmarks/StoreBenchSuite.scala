@@ -196,7 +196,6 @@ object Init {
     InMemBlockStore.emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)].runSyncUnsafe(),
     InMemBlockStore.emptyMapRef[Task, Seq[BlockHash]].runSyncUnsafe(),
     Ref[Task].of(none[ApprovedBlock]).runSyncUnsafe(),
-    Semaphore[Task](1).runSyncUnsafe(),
     metricsNop
   )
 

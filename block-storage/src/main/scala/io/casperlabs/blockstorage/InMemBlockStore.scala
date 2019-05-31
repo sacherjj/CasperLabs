@@ -18,7 +18,6 @@ class InMemBlockStore[F[_]] private (
     monadF: Monad[F],
     refF: Ref[F, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]],
     reverseIdxRefF: Ref[F, Map[DeployHash, Seq[BlockHash]]],
-    lock: Semaphore[F],
     approvedBlockRef: Ref[F, Option[ApprovedBlock]]
 ) extends BlockStore[F] {
 
@@ -31,20 +30,18 @@ class InMemBlockStore[F[_]] private (
   def put(
       f: => (BlockHash, BlockMsgWithTransform)
   ): F[Unit] =
-    lock.withPermit {
-      refF
-        .update(
-          _ + (f._1 -> (f._2, f._2.toBlockSummary))
-        ) *>
-        reverseIdxRefF.update { m =>
-          f._2.getBlockMessage.getBody.deploys.foldLeft(m) { (m, d) =>
-            m.updated(
-              d.getDeploy.deployHash,
-              m.getOrElse(d.getDeploy.deployHash, Seq.empty[BlockHash]) :+ f._1
-            )
-          }
+    refF
+      .update(
+        _ + (f._1 -> (f._2, f._2.toBlockSummary))
+      ) *>
+      reverseIdxRefF.update { m =>
+        f._2.getBlockMessage.getBody.deploys.foldLeft(m) { (m, d) =>
+          m.updated(
+            d.getDeploy.deployHash,
+            m.getOrElse(d.getDeploy.deployHash, Seq.empty[BlockHash]) :+ f._1
+          )
         }
-    }
+      }
 
   def getApprovedBlock(): F[Option[ApprovedBlock]] =
     approvedBlockRef.get
@@ -75,7 +72,6 @@ object InMemBlockStore {
       refF: Ref[F, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]],
       reverseIdxRefF: Ref[F, Map[DeployHash, Seq[BlockHash]]],
       approvedBlockRef: Ref[F, Option[ApprovedBlock]],
-      lock: Semaphore[F],
       metricsF: Metrics[F]
   ): BlockStore[F] =
     new InMemBlockStore[F] with MeteredBlockStore[F] {

@@ -192,7 +192,7 @@ class InMemBlockStoreTest extends BlockStoreTest {
       metrics             = new MetricsNOP[Task]()
       lock                <- Semaphore[Task](1)
       store = InMemBlockStore
-        .create[Task](Monad[Task], refTask, deployHashesRefTask, approvedBlockRef, lock, metrics)
+        .create[Task](Monad[Task], refTask, deployHashesRefTask, approvedBlockRef, metrics)
       _      <- store.findBlockHash(_ => true).map(x => assert(x.isEmpty))
       result <- f(store)
     } yield result
