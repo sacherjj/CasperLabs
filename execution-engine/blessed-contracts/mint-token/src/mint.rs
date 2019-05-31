@@ -1,5 +1,6 @@
-use crate::capabilities::{Addable, Readable, Writable};
 use cl_std::value::U512;
+
+use capabilities::{Addable, Readable, Writable};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
@@ -43,10 +44,12 @@ where
 mod tests {
     use alloc::collections::BTreeMap;
     use alloc::rc::Rc;
-    use capabilities::{Addable, Readable, Writable};
-    use cl_std::value::U512;
     use core::cell::{Cell, RefCell};
     use core::ops::Add;
+
+    use cl_std::value::U512;
+
+    use capabilities::{Addable, Readable, Writable};
     use mint::{Error, Mint};
 
     type Balance = Rc<Cell<U512>>;

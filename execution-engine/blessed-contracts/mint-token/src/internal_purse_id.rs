@@ -1,6 +1,7 @@
+use core::convert::TryFrom;
+
 use cl_std::contract_api;
 use cl_std::key::Key;
-use core::convert::TryFrom;
 
 pub struct WithdrawId([u8; 32]);
 
