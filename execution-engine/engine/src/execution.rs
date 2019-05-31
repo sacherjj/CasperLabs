@@ -45,7 +45,6 @@ pub enum Error {
     BytesRepr(BytesReprError),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
-    Overflow,
     InvalidAccess { required: AccessRights },
     ForgedReference(Key),
     ArgIndexOutOfBounds(usize),

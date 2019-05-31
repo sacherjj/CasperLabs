@@ -93,7 +93,6 @@ pub enum AddResult {
     Success,
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
-    Overflow,
 }
 
 impl<R: StateReader<Key, Value>> TrackingCopy<R> {
@@ -169,7 +168,6 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                     Err(transform::Error::TypeMismatch(type_mismatch)) => {
                         Ok(AddResult::TypeMismatch(type_mismatch))
                     }
-                    Err(transform::Error::Overflow) => Ok(AddResult::Overflow),
                 }
             }
         }

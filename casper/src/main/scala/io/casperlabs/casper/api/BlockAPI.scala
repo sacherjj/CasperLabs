@@ -11,10 +11,12 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper._
+import io.casperlabs.casper.{BlockStatus => _, _}
+import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.protocol
 import io.casperlabs.casper.protocol.{
-  BlockInfo,
+  BlockInfo => BlockInfoWithTuplespace,
   BlockInfoWithoutTuplespace,
   BlockQuery,
   BlockQueryResponse,
@@ -29,6 +31,7 @@ import io.casperlabs.comm.ServiceError.{
   FailedPrecondition,
   Internal,
   InvalidArgument,
+  NotFound,
   OutOfRange,
   ResourceExhausted,
   Unavailable,
@@ -347,6 +350,42 @@ object BlockAPI {
       .traverse(ProtoUtil.unsafeGetBlock[F](_))
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, accountPublicKey, timestamp)))
 
+  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      blockHashBase16: String,
+      full: Boolean
+  ): F[BlockInfo] =
+    unsafeWithCasper[F, BlockInfo]("Could not show block.") { implicit casper =>
+      for {
+        maybeSummary <- getByHashPrefix[F, BlockSummary](blockHashBase16)(
+                         BlockStore[F].getBlockSummary(_)
+                       )
+        notFound = MonadThrowable[F]
+          .raiseError[BlockSummary](NotFound(s"Cannot find block matching hash $blockHashBase16"))
+        summary        <- maybeSummary.fold(notFound)(_.pure[F])
+        dag            <- MultiParentCasper[F].blockDag
+        faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, summary.blockHash)
+        initialFault <- MultiParentCasper[F].normalizedInitialFault(
+                         ProtoUtil.weightMap(summary.getHeader)
+                       )
+        maybeStats <- if (!full) {
+                       none[BlockStatus.Stats].pure[F]
+                     } else {
+                       BlockStore[F].get(summary.blockHash).map(_.get.getBlockMessage) map {
+                         block =>
+                           BlockStatus
+                             .Stats()
+                             .withBlockSizeBytes(block.serializedSize)
+                             .withDeployErrorCount(block.getBody.deploys.count(_.isError))
+                             .some
+                       }
+                     }
+        status = BlockStatus(faultTolerance = faultTolerance - initialFault, stats = maybeStats)
+        info = BlockInfo()
+          .withSummary(summary)
+          .withStatus(status)
+      } yield info
+    }
+
   def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       q: BlockQuery
   ): F[BlockQueryResponse] = {
@@ -355,8 +394,9 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        dag        <- MultiParentCasper[F].blockDag
-        maybeBlock <- getBlock[F](q, dag)
+        maybeBlock <- getByHashPrefix[F, Block](q.hash)(
+                       BlockStore[F].get(_).map(_ flatMap (_.blockMessage))
+                     )
         blockQueryResponse <- maybeBlock match {
                                case Some(block) =>
                                  for {
@@ -420,7 +460,9 @@ object BlockAPI {
 
   private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: Block
-  ): F[BlockInfo] = getBlockInfo[BlockInfo, F](block, constructBlockInfo[F])
+  ): F[BlockInfoWithTuplespace] =
+    getBlockInfo[BlockInfoWithTuplespace, F](block, constructBlockInfo[F])
+
   private def getBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: Block
   ): F[BlockInfoWithoutTuplespace] =
@@ -436,21 +478,23 @@ object BlockAPI {
       parentsHashList: Seq[BlockHash],
       normalizedFaultTolerance: Float,
       initialFault: Float
-  ): F[BlockInfo] =
-    BlockInfo(
-      blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
-      blockSize = block.serializedSize.toString,
-      blockNumber = ProtoUtil.blockNumber(block),
-      protocolVersion = protocolVersion,
-      deployCount = deployCount,
-      globalStateRootHash = PrettyPrinter.buildStringNoLimit(postStateHash),
-      timestamp = timestamp,
-      faultTolerance = normalizedFaultTolerance - initialFault,
-      mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
-      parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
-      sender = PrettyPrinter.buildStringNoLimit(block.getHeader.validatorPublicKey),
-      shardId = block.getHeader.chainId
-    ).pure[F]
+  ): F[BlockInfoWithTuplespace] =
+    protocol
+      .BlockInfo(
+        blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
+        blockSize = block.serializedSize.toString,
+        blockNumber = ProtoUtil.blockNumber(block),
+        protocolVersion = protocolVersion,
+        deployCount = deployCount,
+        globalStateRootHash = PrettyPrinter.buildStringNoLimit(postStateHash),
+        timestamp = timestamp,
+        faultTolerance = normalizedFaultTolerance - initialFault,
+        mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
+        parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
+        sender = PrettyPrinter.buildStringNoLimit(block.getHeader.validatorPublicKey),
+        shardId = block.getHeader.chainId
+      )
+      .pure[F]
 
   private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: Block,
@@ -477,16 +521,18 @@ object BlockAPI {
       sender = PrettyPrinter.buildStringNoLimit(block.getHeader.validatorPublicKey)
     ).pure[F]
 
-  private def getBlock[F[_]: Monad: MultiParentCasper: BlockStore](
-      q: BlockQuery,
-      dag: BlockDagRepresentation[F]
-  ): F[Option[Block]] =
-    for {
-      findResult <- BlockStore[F].find(h => {
-                     Base16.encode(h.toByteArray).startsWith(q.hash)
-                   })
-    } yield
-      findResult.headOption.flatMap {
-        case (_, blockWithTransform) => blockWithTransform.blockMessage
-      }
+  private def getByHashPrefix[F[_]: Monad: MultiParentCasper: BlockStore, A](
+      blockHashBase16: String
+  )(f: ByteString => F[Option[A]]): F[Option[A]] =
+    if (blockHashBase16.size == 64) {
+      f(ByteString.copyFrom(Base16.decode(blockHashBase16)))
+    } else {
+      for {
+        maybeHash <- BlockStore[F].findBlockHash { h =>
+                      Base16.encode(h.toByteArray).startsWith(blockHashBase16)
+                    }
+        maybeA <- maybeHash.fold(none[A].pure[F])(f(_))
+      } yield maybeA
+    }
+
 }

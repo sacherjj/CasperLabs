@@ -381,6 +381,10 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverInitSyncMaxBlockCount =
+      gen[Int]("Maximum number of blocks to allow to be synced initially.")
+
+    @scallop
     val serverInitSyncRoundPeriod =
       gen[FiniteDuration]("Time to wait between initial synchronization attempts.")
 

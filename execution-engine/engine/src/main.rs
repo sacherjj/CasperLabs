@@ -184,10 +184,6 @@ fn main() {
                         log_level = LogLevel::Warning;
                         error_message = format!("type mismatch: {:?} ", type_mismatch);
                     }
-                    Ok(CommitResult::Overflow) => {
-                        log_level = LogLevel::Warning;
-                        error_message = String::from("overflow during addition");
-                    }
                     Ok(CommitResult::Success(new_root_hash)) => {
                         state_hash = new_root_hash; // we need to keep updating the post state hash after each deploy
                         properties.insert(

@@ -104,12 +104,15 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val showBlock = new Subcommand("show-block") {
     descr(
-      "View properties of a block known by Casper on an existing running node." +
-        "Output includes: parent hashes, storage contents of the tuplespace."
+      "View properties of a block known by Casper on an existing running node."
     )
 
     val hash =
-      trailArg[String](name = "hash", required = true, descr = "the hash value of the block")
+      trailArg[String](
+        name = "hash",
+        required = true,
+        descr = "Value of the block hash, full, base16 encoded."
+      )
   }
   addSubcommand(showBlock)
 

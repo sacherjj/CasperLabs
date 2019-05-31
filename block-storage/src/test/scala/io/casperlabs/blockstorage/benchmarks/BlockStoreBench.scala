@@ -49,11 +49,11 @@ abstract class BlockStoreBench {
 
   @Benchmark
   def findRandom() =
-    blockStore.find(_ == randomHash).runSyncUnsafe()
+    blockStore.findBlockHash(_ == randomHash).runSyncUnsafe()
 
   @Benchmark
   def findInserted() =
-    blockStore.find(_ == inserted.next()).runSyncUnsafe()
+    blockStore.findBlockHash(_ == inserted.next()).runSyncUnsafe()
 
   @Benchmark
   def checkpoint() =
