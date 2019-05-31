@@ -73,7 +73,7 @@ object InMemBlockStore {
       implicit
       monadF: Monad[F],
       refF: Ref[F, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]],
-      revertIdxRefF: Ref[F, Map[DeployHash, Seq[BlockHash]]],
+      reverseIdxRefF: Ref[F, Map[DeployHash, Seq[BlockHash]]],
       approvedBlockRef: Ref[F, Option[ApprovedBlock]],
       lock: Semaphore[F],
       metricsF: Metrics[F]

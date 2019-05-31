@@ -174,8 +174,13 @@ object LMDBBlockStore {
     val blockSummaryDB: Dbi[ByteBuffer] = env.openDbi(s"blockSummaries", MDB_CREATE)
     val deployHashesDb: Dbi[ByteBuffer] = env.openDbi(s"deployHashes", MDB_CREATE, MDB_DUPSORT)
 
-    new LMDBBlockStore[F](env, config.dir, blocks, blockSummaryDB, deployHashesDb)
-    with MeteredBlockStore[F] {
+    new LMDBBlockStore[F](
+      env,
+      config.dir,
+      blocks,
+      blockSummaryDB,
+      deployHashesDb
+    ) with MeteredBlockStore[F] {
       override implicit val m: Metrics[F] = metricsF
       override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "lmdb")
       override implicit val a: Apply[F]   = syncF
@@ -191,8 +196,13 @@ object LMDBBlockStore {
     val blockSummaryDb: Dbi[ByteBuffer] = env.openDbi(s"blockSummarise", MDB_CREATE)
     val deployHashesDb: Dbi[ByteBuffer] = env.openDbi(s"deployHashes", MDB_CREATE, MDB_DUPSORT)
 
-    new LMDBBlockStore[F](env, path, blocks, blockSummaryDb, deployHashesDb)
-    with MeteredBlockStore[F] {
+    new LMDBBlockStore[F](
+      env,
+      path,
+      blocks,
+      blockSummaryDb,
+      deployHashesDb
+    ) with MeteredBlockStore[F] {
       override implicit val m: Metrics[F] = metricsF
       override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "lmdb")
       override implicit val a: Apply[F]   = syncF
