@@ -7,7 +7,6 @@ import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
-import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
@@ -114,7 +113,10 @@ object Servers {
       connectionsCell: ConnectionsCell[Task],
       scheduler: Scheduler,
       T: Timer[Task],
-      C: cats.effect.ConcurrentEffect[Task]
+      C: cats.effect.ConcurrentEffect[Task],
+      M: MultiParentCasperRef[Effect],
+      S: SafetyOracle[Effect],
+      B: BlockStore[Effect]
   ): Resource[Effect, Unit] = {
 
     val prometheusReporter = new NewPrometheusReporter()

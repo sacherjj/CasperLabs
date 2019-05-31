@@ -1,19 +1,18 @@
 package io.casperlabs.node.api
 
-import cats.implicits._
 import cats.effect._
-import cats.effect.concurrent._
+import cats.implicits._
 import com.google.protobuf.empty.Empty
 import io.casperlabs.blockstorage.BlockStore
-import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.Log
 import io.casperlabs.node.api.casper._
-import monix.execution.Scheduler
+import io.casperlabs.shared.Log
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 
@@ -31,9 +30,17 @@ object GrpcCasperService {
         override def getBlockInfo(request: GetBlockInfoRequest): Task[BlockInfo] =
           TaskLike[F].toTask {
             BlockAPI
-              .getBlockInfo[F](
+              .getBlockInfo[F, BlockInfo](
                 request.blockHashBase16,
-                full = request.view == BlockInfoView.FULL
+                full = request.view == BlockInfoView.FULL,
+                combine = (summary, _, status) =>
+                  BlockInfo()
+                    .withSummary(summary)
+                    .withStatus(status),
+                ifNotFound = MonadThrowable[F]
+                  .raiseError[BlockInfo](
+                    NotFound(s"Cannot find block matching hash ${request.blockHashBase16}")
+                  )
               )
           }
 

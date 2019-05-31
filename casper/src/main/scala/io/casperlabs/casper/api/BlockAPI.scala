@@ -1,44 +1,28 @@
 package io.casperlabs.casper.api
 
-import cats.{Id, Monad}
-import cats.data.StateT
-import cats.effect.{Concurrent, Sync}
+import cats.Monad
 import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.mtl._
-import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore, StorageError}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.{BlockStatus => _, _}
-import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.protocol
+import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.protocol.{
-  BlockInfo => BlockInfoWithTuplespace,
   BlockInfoWithoutTuplespace,
   BlockQuery,
   BlockQueryResponse,
-  DeployServiceResponse
+  DeployServiceResponse,
+  BlockInfo => BlockInfoWithTuplespace
 }
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.catscontrib.ski._
+import io.casperlabs.casper.{protocol, BlockStatus => _, _}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError
-import io.casperlabs.comm.ServiceError.{
-  Aborted,
-  FailedPrecondition,
-  Internal,
-  InvalidArgument,
-  NotFound,
-  OutOfRange,
-  ResourceExhausted,
-  Unavailable,
-  Unimplemented
-}
+import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.hash.Blake2b512Random
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 
@@ -122,9 +106,9 @@ object BlockAPI {
             case Right(_) =>
               Metrics[F].incrementCounter("deploys-success") *> ().pure[F]
             case Left(ex: IllegalArgumentException) =>
-              MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
+              MonadThrowable[F].raiseError[Unit](InvalidArgument(ex.getMessage))
             case Left(ex) =>
-              MonadThrowable[F].raiseError(ex)
+              MonadThrowable[F].raiseError[Unit](ex)
           }
     } yield ()
   }
@@ -326,40 +310,43 @@ object BlockAPI {
       .traverse(ProtoUtil.unsafeGetBlock[F](_))
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, accountPublicKey, timestamp)))
 
-  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore, A](
       blockHashBase16: String,
-      full: Boolean = false
-  ): F[BlockInfo] =
-    unsafeWithCasper[F, BlockInfo]("Could not show block.") { implicit casper =>
-      for {
-        maybeSummary <- getByHashPrefix[F, BlockSummary](blockHashBase16)(
-                         BlockStore[F].getBlockSummary(_)
-                       )
-        notFound = MonadThrowable[F]
-          .raiseError[BlockSummary](NotFound(s"Cannot find block matching hash $blockHashBase16"))
-        summary        <- maybeSummary.fold(notFound)(_.pure[F])
-        dag            <- MultiParentCasper[F].blockDag
-        faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, summary.blockHash)
-        initialFault <- MultiParentCasper[F].normalizedInitialFault(
-                         ProtoUtil.weightMap(summary.getHeader)
-                       )
-        maybeStats <- if (!full) {
-                       none[BlockStatus.Stats].pure[F]
-                     } else {
-                       BlockStore[F].get(summary.blockHash).map(_.get.getBlockMessage) map {
-                         block =>
-                           BlockStatus
-                             .Stats()
-                             .withBlockSizeBytes(block.serializedSize)
-                             .withDeployErrorCount(block.getBody.deploys.count(_.isError))
-                             .some
+      full: Boolean = false,
+      combine: (BlockSummary, Block, BlockStatus) => A,
+      ifNotFound: F[A]
+  ): F[A] =
+    unsafeWithCasper[F, A]("Could not show block.") { implicit casper =>
+      getByHashPrefix[F, BlockSummary](blockHashBase16)(
+        BlockStore[F].getBlockSummary(_)
+      ).flatMap { maybeSummary =>
+        maybeSummary.fold(ifNotFound) { summary =>
+          for {
+            dag            <- MultiParentCasper[F].blockDag
+            faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, summary.blockHash)
+            initialFault <- MultiParentCasper[F].normalizedInitialFault(
+                             ProtoUtil.weightMap(summary.getHeader)
+                           )
+            result <- BlockStore[F].get(summary.blockHash).map(_.get.getBlockMessage).map { block =>
+                       val maybeStats = if (!full) {
+                         none[BlockStatus.Stats]
+                       } else {
+                         BlockStatus
+                           .Stats()
+                           .withBlockSizeBytes(block.serializedSize)
+                           .withDeployErrorCount(block.getBody.deploys.count(_.isError))
+                           .some
                        }
+                       val status =
+                         BlockStatus(
+                           faultTolerance = faultTolerance - initialFault,
+                           stats = maybeStats
+                         )
+                       combine(summary, block, status)
                      }
-        status = BlockStatus(faultTolerance = faultTolerance - initialFault, stats = maybeStats)
-        info = BlockInfo()
-          .withSummary(summary)
-          .withStatus(status)
-      } yield info
+          } yield result
+        }
+      }
     }
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
@@ -383,7 +370,21 @@ object BlockAPI {
       } map { ranksOfHashes =>
         ranksOfHashes.flatten.reverse.map(h => Base16.encode(h.toByteArray))
       } flatMap { hashes =>
-        hashes.toList.traverse(h => getBlockInfo[F](h, full))
+        hashes.toList.traverse(
+          h =>
+            getBlockInfo(
+              h,
+              full,
+              (summary, _, status) =>
+                BlockInfo()
+                  .withSummary(summary)
+                  .withStatus(status),
+              MonadThrowable[F]
+                .raiseError[BlockInfo](
+                  NotFound(s"Cannot find block matching hash $h")
+                )
+            )
+        )
       }
     }
 
@@ -463,12 +464,12 @@ object BlockAPI {
   private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: Block
   ): F[BlockInfoWithTuplespace] =
-    getBlockInfo[BlockInfoWithTuplespace, F](block, constructBlockInfo[F])
+    getBlockInfo[BlockInfoWithTuplespace, F](block, constructBlockInfo[F] _)
 
   private def getBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: Block
   ): F[BlockInfoWithoutTuplespace] =
-    getBlockInfo[BlockInfoWithoutTuplespace, F](block, constructBlockInfoWithoutTuplespace[F])
+    getBlockInfo[BlockInfoWithoutTuplespace, F](block, constructBlockInfoWithoutTuplespace[F] _)
 
   private def constructBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: Block,

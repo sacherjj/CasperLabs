@@ -3,8 +3,7 @@ package io.casperlabs.node
 import cats._
 import cats.data._
 import cats.effect._
-import cats.effect.concurrent.{Deferred, Ref, Semaphore}
-import cats.mtl.MonadState
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
@@ -13,35 +12,22 @@ import cats.syntax.show._
 import com.olegpy.meow.effects._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.{
-  BlockDagFileStorage,
-  BlockDagStorage,
-  BlockStore,
-  FileLMDBIndexBlockStore
-}
+import io.casperlabs.blockstorage.{BlockDagFileStorage, FileLMDBIndexBlockStore}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, syncId, taskLiftEitherT}
-import io.casperlabs.catscontrib.ski._
-import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
-import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.discovery.NodeUtils._
-import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
+import io.casperlabs.comm.discovery._
+import io.casperlabs.comm.rp.Connect.RPConfState
 import io.casperlabs.comm.rp._
-import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.node.diagnostics._
-import io.casperlabs.p2p.effects._
-import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
-import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
+import io.casperlabs.smartcontracts.GrpcExecutionEngineService
 import monix.eval.instances.CatsConcurrentEffectForTask
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
@@ -60,8 +46,6 @@ class NodeRuntime private[node] (
     Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
 
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
-
-  import ApplicativeError_._
 
   private val port           = conf.server.port
   private val kademliaPort   = conf.server.kademliaPort
@@ -223,7 +207,10 @@ class NodeRuntime private[node] (
               connectionsCell,
               scheduler,
               Timer[Task],
-              new CatsConcurrentEffectForTask()(grpcScheduler, Task.defaultOptions)
+              new CatsConcurrentEffectForTask()(grpcScheduler, Task.defaultOptions),
+              multiParentCasperRef,
+              safetyOracle,
+              blockStore
             )
 
         _ <- if (conf.server.useGossiping) {

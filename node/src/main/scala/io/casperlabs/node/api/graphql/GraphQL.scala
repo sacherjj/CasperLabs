@@ -4,7 +4,11 @@ import cats.effect._
 import cats.effect.concurrent.Deferred
 import cats.effect.implicits._
 import cats.implicits._
+import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.node.CommErrT
 import io.casperlabs.node.api.graphql.GraphQLQuery._
 import io.casperlabs.node.api.graphql.ProtocolState.Subscriptions
 import io.casperlabs.node.api.graphql.circe._
@@ -36,7 +40,10 @@ object GraphQL {
 
   /* Entry point */
   def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log](
-      implicit ec: ExecutionContext
+      implicit ec: ExecutionContext,
+      M: MultiParentCasperRef[CommErrT[F, ?]],
+      S: SafetyOracle[CommErrT[F, ?]],
+      B: BlockStore[CommErrT[F, ?]]
   ): HttpRoutes[F] = {
     implicit val fs2SubscriptionStream = new Fs2SubscriptionStream[F]()
     buildRoute(
