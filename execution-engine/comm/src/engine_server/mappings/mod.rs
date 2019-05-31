@@ -4,7 +4,7 @@ use protobuf::ProtobufEnum;
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
-use engine_server::ipc::KeyURef_AccessRights;
+use engine_server::ipc::{DeployResult_ExecutionResult, KeyURef_AccessRights};
 use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
@@ -417,8 +417,10 @@ impl From<ExecutionResult> for ipc::DeployResult {
             } => {
                 let mut ipc_ee = effects.into();
                 let mut deploy_result = ipc::DeployResult::new();
-                deploy_result.set_effects(ipc_ee);
-                deploy_result.set_cost(cost);
+                let mut execution_result = ipc::DeployResult_ExecutionResult::new();
+                execution_result.set_effects(ipc_ee);
+                execution_result.set_cost(cost);
+                deploy_result.set_executionResult(execution_result);
                 deploy_result
             }
             ExecutionResult::Failure {
@@ -431,50 +433,43 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
                     EngineError::StorageError(storage_err) => {
-                        let mut err = wasm_error(storage_err.to_string());
-                        err.set_cost(cost);
-                        err.set_effects(effect.into());
-                        err
+                        wasm_error(storage_err.to_string(), cost, effect)
                     }
-                    EngineError::PreprocessingError(err_msg) => {
-                        let mut err = wasm_error(err_msg);
-                        err.set_cost(cost);
-                        err
-                    }
+                    EngineError::PreprocessingError(err_msg) => wasm_error(err_msg, cost, effect),
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {
                             let mut deploy_result = ipc::DeployResult::new();
-                            let mut deploy_error = ipc::DeployError::new();
-                            deploy_error.set_gasErr(ipc::DeployError_OutOfGasError::new());
-                            deploy_result.set_error(deploy_error);
-                            deploy_result.set_cost(cost);
-                            deploy_result.set_effects(effect.into());
+                            let deploy_error = {
+                                let mut tmp = ipc::DeployError::new();
+                                tmp.set_gasErr(ipc::DeployError_OutOfGasError::new());
+                                tmp
+                            };
+                            let exec_result = {
+                                let mut tmp = DeployResult_ExecutionResult::new();
+                                tmp.set_error(deploy_error);
+                                tmp.set_cost(cost);
+                                tmp.set_effects(effect.into());
+                                tmp
+                            };
+
+                            deploy_result.set_executionResult(exec_result);
                             deploy_result
                         }
                         ExecutionError::KeyNotFound(key) => {
                             let msg = format!("Key {:?} not found.", key);
-                            let mut err = wasm_error(msg);
-                            err.set_effects(effect.into());
-                            err
+                            wasm_error(msg, cost, effect)
                         }
                         ExecutionError::InvalidNonce(nonce) => {
                             let mut deploy_result = ipc::DeployResult::new();
-                            let mut deploy_error = ipc::DeployError::new();
-                            let mut invalid_nonce = ipc::DeployError_InvalidNonceError::new();
+                            let mut invalid_nonce = ipc::DeployResult_InvalidNonce::new();
                             invalid_nonce.set_nonce(nonce);
-                            deploy_error.set_invalidNonceErr(invalid_nonce);
-                            deploy_result.set_error(deploy_error);
-                            deploy_result.set_effects(effect.into());
-                            deploy_result.set_cost(cost);
+                            deploy_result.set_invalidNonce(invalid_nonce);
                             deploy_result
                         }
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
                             let msg = format!("{:?}", other);
-                            let mut err = wasm_error(msg);
-                            err.set_cost(cost);
-                            err.set_effects(effect.into());
-                            err
+                            wasm_error(msg, cost, effect)
                         }
                     },
                 }
@@ -554,13 +549,23 @@ where
     }
 }
 
-fn wasm_error(msg: String) -> ipc::DeployResult {
+fn wasm_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::DeployResult {
     let mut deploy_result = ipc::DeployResult::new();
-    let mut deploy_error = ipc::DeployError::new();
-    let mut err = ipc::DeployError_WasmError::new();
-    err.set_message(msg.to_owned());
-    deploy_error.set_wasmErr(err);
-    deploy_result.set_error(deploy_error);
+    let deploy_error = {
+        let mut tmp = ipc::DeployError::new();
+        let mut err = ipc::DeployError_WasmError::new();
+        err.set_message(msg.to_owned());
+        tmp.set_wasmErr(err);
+        tmp
+    };
+    let execution_result = {
+        let mut tmp = DeployResult_ExecutionResult::new();
+        tmp.set_error(deploy_error);
+        tmp.set_cost(cost);
+        tmp.set_effects(effect.into());
+        tmp
+    };
+    deploy_result.set_executionResult(execution_result);
     deploy_result
 }
 
@@ -581,9 +586,11 @@ mod tests {
     #[test]
     fn wasm_error_result() {
         let error_msg = "WasmError";
-        let mut result = wasm_error(error_msg.to_owned());
-        assert!(result.has_error());
-        let mut ipc_error = result.take_error();
+        let mut result = wasm_error(error_msg.to_owned(), 0, Default::default());
+        assert!(result.has_executionResult());
+        let mut exec_result = result.take_executionResult();
+        assert!(exec_result.has_error());
+        let mut ipc_error = exec_result.take_error();
         assert!(ipc_error.has_wasmErr());
         let ipc_wasm_error = ipc_error.take_wasmErr();
         let ipc_error_msg = ipc_wasm_error.get_message();
@@ -616,11 +623,13 @@ mod tests {
             cost,
         };
         let mut ipc_deploy_result: super::ipc::DeployResult = execution_result.into();
-        assert_eq!(ipc_deploy_result.get_cost(), cost);
+        assert!(ipc_deploy_result.has_executionResult());
+        let mut success = ipc_deploy_result.take_executionResult();
+        assert_eq!(success.get_cost(), cost);
 
         // Extract transform map from the IPC message and parse it back to the domain
         let ipc_transforms: HashMap<Key, Transform> = {
-            let mut ipc_effects = ipc_deploy_result.take_effects();
+            let mut ipc_effects = success.take_effects();
             let ipc_effects_tnfs = ipc_effects.take_transform_map().into_vec();
             ipc_effects_tnfs
                 .iter()
@@ -642,7 +651,9 @@ mod tests {
     fn test_cost<E: Into<EngineError>>(expected_cost: u64, err: E) -> u64 {
         let execution_failure = into_execution_failure(err, expected_cost);
         let ipc_deploy_result: super::ipc::DeployResult = execution_failure.into();
-        ipc_deploy_result.get_cost()
+        assert!(ipc_deploy_result.has_executionResult());
+        let success = ipc_deploy_result.get_executionResult();
+        success.get_cost()
     }
 
     #[test]

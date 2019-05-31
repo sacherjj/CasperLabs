@@ -21,6 +21,7 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
+import io.casperlabs.ipc.DeployResult.Result.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
@@ -270,7 +271,14 @@ object HashSetCasperTestNode {
         //regardless of their wasm code. It pretends to have run all the deploys,
         //but it doesn't really; it just returns the same result no matter what.
         deploys
-          .map(d => DeployResult(Some(getExecutionEffect(d)), None, 10))
+          .map(
+            d =>
+              DeployResult(
+                ExecutionResult(
+                  ipc.DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
+                )
+              )
+          )
           .asRight[Throwable]
           .pure[F]
 

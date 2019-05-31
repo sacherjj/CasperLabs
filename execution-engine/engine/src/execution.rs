@@ -1020,7 +1020,7 @@ mod tests {
 
         let exec_result = executor.exec(
             parity_module,
-            &vec![],
+            &[],
             account_address,
             0u64,
             invalid_nonce,

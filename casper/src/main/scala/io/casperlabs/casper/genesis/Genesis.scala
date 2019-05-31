@@ -71,7 +71,7 @@ object Genesis {
       // Either we make it a "SEQ" block (which is not a feature that exists yet)
       // or there should be a single deploy containing all the blessed contracts.
       deployEffects = ExecEngineUtil.findCommutingEffects(
-        ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
+        ExecEngineUtil.zipDeploysResults(blessedTerms, processedDeploys)
       )
       _               <- Log[F].debug(s"Selected ${deployEffects.size} non-conflicing blessed contracts.")
       deploysForBlock = ExecEngineUtil.extractProcessedDeploys(deployEffects)

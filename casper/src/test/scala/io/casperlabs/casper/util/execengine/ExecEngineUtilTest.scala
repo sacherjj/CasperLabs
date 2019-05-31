@@ -119,7 +119,7 @@ class ExecEngineUtilTest
                           deploy,
                           protocolVersion
                         )
-      DeploysCheckpoint(_, _, result, _, _) = computeResult
+      DeploysCheckpoint(_, _, result, _, _, _) = computeResult
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
@@ -206,7 +206,14 @@ class ExecEngineUtilTest
                 ExecutionEffect(Seq(opEntry), Seq(transforEntry))
               }
               deploys
-                .map(d => DeployResult(Some(getExecutionEffect(d)), None, 10))
+                .map(
+                  d =>
+                    DeployResult(
+                      DeployResult.Result.ExecutionResult(
+                        DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
+                      )
+                    )
+                )
                 .asRight[Throwable]
             },
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],

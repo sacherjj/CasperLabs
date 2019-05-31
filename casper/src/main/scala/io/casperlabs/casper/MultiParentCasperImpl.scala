@@ -1,32 +1,33 @@
 package io.casperlabs.casper
 
-import cats.{Applicative, Monad}
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import cats.mtl.FunctorRaise
+import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.Validate.ValidateErrorWrapper
-import io.casperlabs.casper.consensus._, Block.Justification
+import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.comm.CommUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
+import io.casperlabs.comm.gossiping
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
-import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc.{ProtocolVersion, ValidateRequest}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
+
 import scala.util.control.NonFatal
 
 /**
@@ -361,7 +362,18 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                         deploys,
                         protocolVersion
                       )
-      DeploysCheckpoint(preStateHash, postStateHash, deploysForBlock, number, protocolVersion) = stateResult
+      DeploysCheckpoint(
+        preStateHash,
+        postStateHash,
+        deploysForBlock,
+        // We don't have to put InvalidNonce deploys back to the buffer,
+        // as by default buffer is cleared when deploy gets included in
+        // the finalized block. If that strategy ever changes, we will have to
+        // put them back into the buffer explicitly.
+        invalidNonceDeploys,
+        number,
+        protocolVersion
+      ) = stateResult
       //TODO: compute bonds properly
       newBonds = ProtoUtil.bonds(parents.head)
 
