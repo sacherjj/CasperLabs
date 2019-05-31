@@ -43,7 +43,7 @@ def replace_in_place(pairs, file_name):
 
 
 def patch_imports(file_names):
-    print('Patch generated Python gRPC modules...')
+    print(f'Patch generated Python gRPC modules...: {file_names}')
     for file_name in file_names:
         with in_place.InPlace(file_name) as f:
             for line in f:
@@ -58,17 +58,16 @@ def modify_files(pairs, files):
         replace_in_place(pairs, file_name)
 
 
-def run_protoc(*file_names, PROTO_DIR = PROTO_DIR):
-    print('Run protoc...')
+def run_protoc(file_names, PROTO_DIR = PROTO_DIR):
+    print(f'Run protoc...: {file_names}')
     google_proto = join(dirname(grpc_tools.__file__), '_proto')
     for file_name in file_names:
         protoc.main((
             '',
             f'-I{PROTO_DIR}',
             '-I' + google_proto,
-            '-I.',
-            '--python_out=.',
-            '--grpc_python_out=.',
+            f'--python_out={PACKAGE_DIR}',
+            f'--grpc_python_out={PACKAGE_DIR}',
             file_name,
         ))
 
@@ -99,17 +98,22 @@ def patch_proto_files():
                   ('import "google/api/', 'import "')],
                  glob.glob(f'{PROTO_DIR}/*.proto'))
 
-
-def run_codegen():
-    collect_proto_files()
-    patch_proto_files()
-
+def clean_up():
     try: shutil.rmtree(f'{PROTO_DIR}')
     except FileNotFoundError: pass
     make_dirs(f'{PROTO_DIR}')
 
-    run_protoc(*glob.glob(f'{PROTO_DIR}/.*proto'))
-    patch_imports(glob.glob(f'{PACKAGE_DIR}/*pb2*py'))
+def run_codegen():
+    clean_up()
+
+    collect_proto_files()
+    patch_proto_files()
+
+    proto_files = glob.glob(f'{PROTO_DIR}/*.proto')
+    run_protoc(proto_files)
+
+    generated_files = glob.glob(f'{PACKAGE_DIR}/*pb2*py')
+    patch_imports(generated_files)
 
 
 if __name__ == '__main__':

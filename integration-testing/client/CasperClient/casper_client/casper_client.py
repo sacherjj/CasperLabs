@@ -11,11 +11,16 @@ import pathlib
 from pyblake2 import blake2b
 import ed25519
 
+# ~/CasperLabs/protobuf/io/casperlabs/casper/protocol/CasperMessage.proto
 from . import CasperMessage_pb2
 from .CasperMessage_pb2_grpc import DeployServiceStub
+
+# ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
 from . import casper_pb2
 from .casper_pb2_grpc import CasperServiceStub
-from . import consensus_pb2
+
+# ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
+from . import consensus_pb2 as consensus
 
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 40401
@@ -92,7 +97,7 @@ class CasperClient:
         self.node = GRPCService(self.port, DeployServiceStub)
         self.casperService = GRPCService(self.port, CasperServiceStub)
 
-    # @guarded
+    @guarded
     def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
                payment: str = None, session: str = None, nonce: int = 0,
                public_key: str = None, private_key: str = None):
@@ -115,7 +120,7 @@ class CasperClient:
         :return:              deserialized DeployServiceResponse object
         """
 
-        def hash(data: bytes) -> str:
+        def hash(data: bytes) -> bytes:
             h = blake2b(digest_size=32)
             h.update(data)
             return h.digest()
@@ -125,37 +130,34 @@ class CasperClient:
                 return f.read()
 
         def read_code(file_name: str):
-            return consensus_pb2.Deploy.Code(code = read_binary(file_name))
+            return consensus.Deploy.Code(code = read_binary(file_name))
 
         signing_key = ed25519.SigningKey(read_binary(private_key))
 
         def sign(data: bytes):
-            return consensus_pb2.Signature(sig_algorithm = 'ed25519',
-                                           sig = signing_key.sign(data)) #, encoding='base16'))
+            return consensus.Signature(sig_algorithm = 'ed25519',
+                                       sig = signing_key.sign(data, encoding='base16'))
 
         def serialize(o) -> bytes:
             return o.SerializeToString()
 
-        body = consensus_pb2.Deploy.Body(session = read_code(session),
-                                         payment = read_code(payment))
+        body = consensus.Deploy.Body(session = read_code(session),
+                                     payment = read_code(payment))
 
-        header = consensus_pb2.Deploy.Header(account_public_key = read_binary(public_key),  # TODO: base16?
-                                             nonce = nonce,
-                                             timestamp = int(time.time()),
-                                             gas_price = gas_price,
-                                             body_hash = hash(serialize(body)))
+        account_public_key = read_binary(public_key)
+        header = consensus.Deploy.Header(account_public_key = account_public_key, 
+                                         nonce = nonce,
+                                         timestamp = int(time.time()),
+                                         gas_price = gas_price,
+                                         body_hash = hash(serialize(body)))
 
         deploy_hash = hash(serialize(header))
+        d = consensus.Deploy(deploy_hash = deploy_hash,
+                             approvals = [consensus.Approval(approver_public_key = account_public_key, signature = sign(deploy_hash))],
+                             header = header,
+                             body = body)
 
-        d = consensus_pb2.Deploy(deploy_hash = deploy_hash,
-                                 header = header,
-                                 body = body,
-                                 #signature = sign(deploy_hash),
-                                 )
-
-        data = casper_pb2.DeployRequest(deploy = d)
-        r = self.casperService.Deploy(data)
-        return r
+        return self.casperService.Deploy(casper_pb2.DeployRequest(deploy = d))
 
 
     @guarded
