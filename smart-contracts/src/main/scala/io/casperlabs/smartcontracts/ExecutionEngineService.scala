@@ -96,8 +96,6 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
           Left(SmartContractEngineError(s"Error executing transform: $message"))
         case CommitResponse.Result.KeyNotFound(value) =>
           Left(SmartContractEngineError(s"Key not found in global state: $value"))
-        case CommitResponse.Result.Overflow(value) =>
-          Left(SmartContractEngineError(s"Overflow error: $value"))
         case CommitResponse.Result.TypeMismatch(err) =>
           Left(SmartContractEngineError(err.toString))
 

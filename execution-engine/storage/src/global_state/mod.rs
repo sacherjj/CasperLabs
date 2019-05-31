@@ -28,7 +28,6 @@ pub enum CommitResult {
     Success(Blake2bHash),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
-    Overflow,
 }
 
 impl From<transform::Error> for CommitResult {
@@ -37,7 +36,6 @@ impl From<transform::Error> for CommitResult {
             transform::Error::TypeMismatch(type_mismatch) => {
                 CommitResult::TypeMismatch(type_mismatch)
             }
-            transform::Error::Overflow => CommitResult::Overflow,
         }
     }
 }
