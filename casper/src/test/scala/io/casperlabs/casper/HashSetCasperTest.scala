@@ -98,10 +98,11 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                    }
                )
     } yield result
+
     val threadStatuses: (BlockStatus, BlockStatus) =
       testProgram.value.unsafeRunSync(scheduler).right.get
 
-    threadStatuses should matchPattern { case (Processing, Valid) | (Valid, Processing) => }
+    threadStatuses should matchPattern { case (Processed, Valid) | (Valid, Processed) => }
     node.tearDown().value.unsafeRunSync
   }
 
@@ -314,7 +315,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield result
   }
 
-  // FIXME
   it should "handle multi-parent blocks correctly" in effectTest {
     for {
       nodes       <- networkEff(validatorKeys.take(2), genesis, transforms)
@@ -577,7 +577,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield result
   }
 
-  // FIXME
   it should "ask peers for blocks it is missing" in effectTest {
     for {
       nodes <- networkEff(validatorKeys.take(3), genesis, transforms)
@@ -657,7 +656,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
    *  f2 has in its justifications list c2. This should be handled properly.
    *
    */
-  // FIXME
   it should "ask peers for blocks it is missing and add them" in effectTest {
     //TODO: figure out a way to get wasm into deploys for tests
     val deployDatasFs = Vector[() => Deploy](
@@ -734,7 +732,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
-  // FIXME
   it should "ignore adding equivocation blocks" in effectTest {
     for {
       nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
@@ -770,7 +767,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   }
 
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
-  // FIXME
   it should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
     for {
       nodes       <- networkEff(validatorKeys.take(3), genesis, transforms)
@@ -873,6 +869,45 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield result
   }
 
+  it should "not ignore adding equivocation blocks when a child is revealed later" in effectTest {
+    for {
+      nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
+
+      makeDeploy = (n: Int, i: Int) => {
+        for {
+          deploy         <- ProtoUtil.basicDeploy[Effect](i)
+          result         <- nodes(n).casperEff.deploy(deploy) *> nodes(n).casperEff.createBlock
+          Created(block) = result
+        } yield block
+      }
+
+      // Creates a pair that constitutes equivocation blocks
+      block1      <- makeDeploy(0, 0)
+      block1Prime <- makeDeploy(0, 1)
+
+      _ <- nodes(0).casperEff.addBlock(block1) shouldBeF Valid
+      _ <- nodes(0).casperEff.addBlock(block1Prime) shouldBeF IgnorableEquivocation
+      _ <- nodes(1).clearMessages()
+      _ <- nodes(1).casperEff.addBlock(block1Prime) shouldBeF Valid
+      _ <- nodes(0).receive()
+
+      _ <- nodes(0).casperEff.contains(block1) shouldBeF true
+      _ <- nodes(0).casperEff.contains(block1Prime) shouldBeF false
+
+      block2Prime <- makeDeploy(1, 2)
+      _           <- nodes(1).casperEff.addBlock(block2Prime) shouldBeF Valid
+      _           <- nodes(0).receive()
+      // Process dependencies
+      _ <- nodes(1).receive()
+      _ <- nodes(0).receive()
+
+      _ <- nodes(0).casperEff.contains(block2Prime) shouldBeF true
+      _ <- nodes(0).casperEff.contains(block1Prime) shouldBeF true
+
+      _ <- nodes.toList.traverse(_.tearDown())
+    } yield ()
+  }
+
   it should "prepare to slash a block that includes a invalid block pointer" in effectTest {
     for {
       nodes           <- networkEff(validatorKeys.take(3), genesis, transforms)
@@ -967,7 +1002,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
-  // FIXME
   it should "increment last finalized block as appropriate in round robin" in effectTest {
     val stake      = 10L
     val equalBonds = validators.map(_ -> stake).toMap

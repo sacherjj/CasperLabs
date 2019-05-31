@@ -58,6 +58,7 @@ impl ByteSize for Value {
                 // NOTE: We don't measure `key` as its size will be returned with `std::mem::size_of::<Value>()` call
                 // Similarly, we don't measure stack size of name, account and contract as they're
                 // accounted for in the `std::mem::size_of::<Self>()` call.
+                Value::Key(_) => 0,
                 Value::NamedKey(name, _key) => name.heap_size(),
                 Value::Account(account) => account.heap_size(),
                 Value::Contract(contract) => contract.heap_size(),

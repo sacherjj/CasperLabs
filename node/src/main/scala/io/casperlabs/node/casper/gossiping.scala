@@ -2,6 +2,7 @@ package io.casperlabs.node.casper
 
 import cats._
 import cats.effect._
+import cats.effect.concurrent._
 import cats.implicits._
 import cats.data.OptionT
 import cats.temp.par.Par
@@ -45,6 +46,7 @@ import monix.eval.TaskLike
 import scala.io.Source
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
+import scala.util.Random
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
@@ -115,7 +117,8 @@ package object gossiping {
       }
 
       // The StashingSynchronizer will start a fiber to await on the above.
-      synchronizer <- makeSynchronizer(connectToGossip, awaitApproval)
+      isInitialRef <- Resource.liftF(Ref.of[F, Boolean](true))
+      synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval, isInitialRef)
 
       gossipServiceServer <- makeGossipServiceServer(
                               port,
@@ -128,7 +131,7 @@ package object gossiping {
                             )
 
       // Start syncing with the bootstrap in the background.
-      _ <- makeInitialSynchronization(conf, gossipServiceServer, connectToGossip)
+      _ <- makeInitialSynchronization(conf, gossipServiceServer, connectToGossip, isInitialRef)
 
       // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
       _ <- makePeerCountPrinter
@@ -273,8 +276,7 @@ package object gossiping {
         .map(x => ByteString.copyFrom(x.publicKey))
         .filterNot(_.isEmpty)
       downloadManager <- DownloadManagerImpl[F](
-                          // TODO: Add to config.
-                          maxParallelDownloads = 10,
+                          maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
                           connectToGossip = connectToGossip,
                           backend = new DownloadManagerImpl.Backend[F] {
                             override def hasBlock(blockHash: ByteString): F[Boolean] =
@@ -298,12 +300,15 @@ package object gossiping {
                             override def storeBlockSummary(
                                 summary: BlockSummary
                             ): F[Unit] =
-                              // TODO: Add separate storage for summaries.
+                              // Storing the block automatically stores the summary as well.
                               ().pure[F]
                           },
                           relaying = relaying,
-                          // TODO: Configure retry.
-                          retriesConf = DownloadManagerImpl.RetriesConf.noRetries
+                          retriesConf = DownloadManagerImpl.RetriesConf(
+                            maxRetries = conf.server.downloadMaxRetries,
+                            initialBackoffPeriod = conf.server.downloadRetryInitialBackoffPeriod,
+                            backoffFactor = conf.server.downloadRetryBackoffFactor
+                          )
                         )
     } yield downloadManager
 
@@ -474,8 +479,7 @@ package object gossiping {
                                   backend,
                                   NodeDiscovery[F],
                                   connectToGossip,
-                                  // TODO: Move to config.
-                                  relayFactor = 10,
+                                  relayFactor = conf.server.approvalRelayFactor,
                                   genesis = genesis,
                                   maybeApproval = maybeApproveBlock(genesis)
                                 )
@@ -488,9 +492,8 @@ package object gossiping {
                                   NodeDiscovery[F],
                                   connectToGossip,
                                   bootstrap = bootstrap,
-                                  // TODO: Move to config.
-                                  relayFactor = 10,
-                                  pollInterval = 30.seconds,
+                                  relayFactor = conf.server.approvalRelayFactor,
+                                  pollInterval = conf.server.approvalPollInterval,
                                   downloadManager = downloadManager
                                 )
                    } yield approver
@@ -498,8 +501,10 @@ package object gossiping {
     } yield approver
 
   private def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: BlockDagStorage](
+      conf: Configuration,
       connectToGossip: GossipService.Connector[F],
-      awaitApproved: F[Unit]
+      awaitApproved: F[Unit],
+      isInitialRef: Ref[F, Boolean]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
       _ <- SynchronizerImpl.establishMetrics[F]
@@ -531,12 +536,14 @@ package object gossiping {
                          override def notInDag(blockHash: ByteString): F[Boolean] =
                            isInDag(blockHash).map(!_)
                        },
-                       // TODO: Move to config.
-                       maxPossibleDepth = 1000,
-                       minBlockCountToCheckBranchingFactor = 100,
+                       maxPossibleDepth = conf.server.syncMaxPossibleDepth,
+                       minBlockCountToCheckBranchingFactor =
+                         conf.server.syncMinBlockCountToCheckBranchingFactor,
                        // Really what we should be looking at is the width at any rank being less than the number of validators.
-                       maxBranchingFactor = 1.5,
-                       maxDepthAncestorsRequest = 10
+                       maxBranchingFactor = conf.server.syncMaxBranchingFactor,
+                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
+                       maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
+                       isInitialRef = isInitialRef
                      )
                    }
       stashing <- StashingSynchronizer.wrap(underlying, awaitApproved)
@@ -610,8 +617,7 @@ package object gossiping {
                    consensus,
                    genesisApprover,
                    maxChunkSize = conf.server.chunkSize,
-                   // TODO: Move to config.
-                   maxParallelBlockDownloads = 5
+                   maxParallelBlockDownloads = conf.server.relayMaxParallelBlocks
                  )
                }
 
@@ -625,8 +631,7 @@ package object gossiping {
               Sync[F].delay {
                 val svc = GrpcGossipService.fromGossipService(
                   server,
-                  // TODO: Move to config.
-                  blockChunkConsumerTimeout = 10.seconds
+                  blockChunkConsumerTimeout = conf.server.relayBlockChunkConsumerTimeout
                 )
                 GossipingGrpcMonix.bindService(svc, scheduler)
               }
@@ -643,32 +648,28 @@ package object gossiping {
 
     } yield server
 
-  /** Make the best effort so sync with the bootstrap node and some others.
-    * Nothing really depends on this at the moment so just do it in the background. */
+  /** Initially sync with the bootstrap node and/or some others. */
   private def makeInitialSynchronization[F[_]: Concurrent: Par: Log: Timer: NodeDiscovery](
       conf: Configuration,
       gossipServiceServer: GossipServiceServer[F],
-      connectToGossip: GossipService.Connector[F]
+      connectToGossip: GossipService.Connector[F],
+      isInitialRef: Ref[F, Boolean]
   ): Resource[F, Unit] =
-    conf.server.bootstrap map { bootstrap =>
-      for {
-        initialSync <- Resource.pure[F, InitialSynchronization[F]] {
-                        new InitialSynchronizationImpl(
-                          NodeDiscovery[F],
-                          gossipServiceServer,
-                          InitialSynchronizationImpl.Bootstrap(bootstrap),
-                          // TODO: Move to config
-                          selectNodes = (b, ns) => b +: ns.take(5),
-                          minSuccessful = 1,
-                          memoizeNodes = false,
-                          skipFailedNodesInNextRounds = false,
-                          roundPeriod = 30.seconds,
-                          connector = connectToGossip
-                        )
-                      }
-        _ <- makeFiberResource(initialSync.sync())
-      } yield ()
-    } getOrElse Resource.pure(())
+    for {
+      initialSync <- Resource.pure[F, InitialSynchronization[F]] {
+                      new InitialSynchronizationImpl(
+                        NodeDiscovery[F],
+                        gossipServiceServer,
+                        selectNodes = ns => Random.shuffle(ns).take(conf.server.initSyncMaxNodes),
+                        minSuccessful = conf.server.initSyncMinSuccessful,
+                        memoizeNodes = conf.server.initSyncMemoizeNodes,
+                        skipFailedNodesInNextRounds = conf.server.initSyncSkipFailedNodes,
+                        roundPeriod = conf.server.initSyncRoundPeriod,
+                        connector = connectToGossip
+                      )
+                    }
+      _ <- makeFiberResource(initialSync.sync() >> isInitialRef.set(false))
+    } yield ()
 
   /** The TransportLayer setup prints the number of peers now and then which integration tests
     * may depend upon. We aren't using the `Connect` functionality so have to do it another way. */

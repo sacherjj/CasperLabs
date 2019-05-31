@@ -27,9 +27,9 @@ use engine_state::execution_result::ExecutionResult;
 use functions::{
     ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
     GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
-    GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX,
-    PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX,
-    STORE_FN_INDEX, WRITE_FUNC_INDEX,
+    GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, IS_VALID_FN_INDEX, LOAD_ARG_FUNC_INDEX,
+    NEW_FUNC_INDEX, PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX,
+    SER_FN_FUNC_INDEX, STORE_FN_INDEX, WRITE_FUNC_INDEX,
 };
 use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
@@ -45,7 +45,6 @@ pub enum Error {
     BytesRepr(BytesReprError),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
-    Overflow,
     InvalidAccess { required: AccessRights },
     ForgedReference(Key),
     ArgIndexOutOfBounds(usize),
@@ -209,6 +208,12 @@ where
         } else {
             Err(Error::FunctionNotFound(name).into())
         }
+    }
+
+    pub fn value_is_valid(&mut self, value_ptr: u32, value_size: u32) -> Result<bool, Trap> {
+        let value = self.value_from_mem(value_ptr, value_size)?;
+
+        Ok(self.context.validate_keys(&value).is_ok())
     }
 
     /// Load the i-th argument invoked as part of a `sub_call` into
@@ -409,7 +414,7 @@ where
     /// where this data lives in the exported memory (pass its pointer and length).
     pub fn read(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        let value = err_on_missing_key(key, self.context.read_gs(&key))?;
+        let value: Option<Value> = self.context.read_gs(&key)?;
         let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
         self.host_buf = value_bytes;
         Ok(self.host_buf.len())
@@ -422,18 +427,6 @@ where
         self.memory
             .set(dest_ptr, &seed)
             .map_err(|e| Error::Interpreter(e).into())
-    }
-}
-
-// Helper function for turning result of lookup into domain values.
-fn err_on_missing_key<A, E>(key: Key, r: Result<Option<A>, E>) -> Result<A, Error>
-where
-    E: Into<Error>,
-{
-    match r {
-        Ok(None) => Err(Error::KeyNotFound(key)),
-        Err(error) => Err(error.into()),
-        Ok(Some(v)) => Ok(v),
     }
 }
 
@@ -630,6 +623,18 @@ where
                 Ok(None)
             }
 
+            IS_VALID_FN_INDEX => {
+                // args(0) = pointer to value to validate
+                // args(1) = size of value
+                let (value_ptr, value_size) = Args::parse(args)?;
+
+                if self.value_is_valid(value_ptr, value_size)? {
+                    Ok(Some(RuntimeValue::I32(1)))
+                } else {
+                    Ok(Some(RuntimeValue::I32(0)))
+                }
+            }
+
             _ => panic!("unknown function index"),
         }
     }
@@ -666,7 +671,7 @@ where
     let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
 
     let known_urefs = vec_key_rights_to_map(refs.values().cloned().chain(extra_urefs));
-    let rng = ChaChaRng::from_rng(current_runtime.context.rng().clone()).map_err(Error::Rng)?;
+    let rng = ChaChaRng::from_rng(current_runtime.context.rng()).map_err(Error::Rng)?;
     let mut runtime = Runtime {
         memory,
         module: parity_module,
@@ -917,6 +922,7 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
 mod tests {
     use super::Error;
     use common::key::Key;
+    use common::value::account::{AssociatedKeys, PublicKey, Weight};
     use common::value::{Account, Value};
     use engine_state::execution_effect::ExecutionEffect;
     use engine_state::execution_result::ExecutionResult;
@@ -1000,7 +1006,12 @@ mod tests {
                     Key::Account(pub_key) => *pub_key,
                     _ => panic!("Key must be of an Account type"),
                 };
-                let acc = Account::new(pub_key, 1, BTreeMap::new());
+                let acc = Account::new(
+                    pub_key,
+                    1,
+                    BTreeMap::new(),
+                    AssociatedKeys::new(PublicKey::new(pub_key), Weight::new(1)),
+                );
                 Ok(Some(Value::Account(acc)))
             }
         }

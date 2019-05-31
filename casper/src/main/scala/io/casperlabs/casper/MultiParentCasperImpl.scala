@@ -34,14 +34,12 @@ import scala.util.control.NonFatal
   * Encapsulates mutable state of the MultiParentCasperImpl
   **
   *
-  * @param seenBlockHashes      - tracks hashes of all blocks seen so far
   * @param blockBuffer
   * @param deployBuffer
   * @param invalidBlockTracker
   * @param equivocationsTracker : Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
   */
 final case class CasperState(
-    seenBlockHashes: Set[BlockHash] = Set.empty[BlockHash],
     blockBuffer: Set[Block] = Set.empty[Block],
     deployBuffer: Set[Deploy] = Set.empty[Deploy],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
@@ -77,28 +75,28 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     Sync[F].bracket(blockProcessingLock.acquire)(
       _ =>
         for {
-          dag            <- blockDag
-          blockHash      = block.blockHash
-          containsResult <- dag.contains(blockHash)
-          casperState    <- Cell[F, CasperState].read
-          attempts <- if (containsResult || casperState.seenBlockHashes
-                            .contains(blockHash)) {
+          dag         <- blockDag
+          blockHash   = block.blockHash
+          inDag       <- dag.contains(blockHash)
+          casperState <- Cell[F, CasperState].read
+          inBuffer    = casperState.blockBuffer.exists(_.blockHash == blockHash)
+          attempts <- if (inDag) {
                        Log[F]
                          .info(
                            s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
-                         )
-                         .map(
-                           _ =>
-                             List(
-                               block -> BlockStatus.processing
-                             )
-                         )
+                         ) *>
+                         List(block -> BlockStatus.processed).pure[F]
+                     } else if (inBuffer) {
+                       // Waiting for dependencies to become available.
+                       Log[F]
+                         .info(
+                           s"Block ${PrettyPrinter.buildString(blockHash)} is already in the buffer."
+                         ) *>
+                         List(block -> BlockStatus.processing).pure[F]
                      } else {
-                       Cell[F, CasperState].modify { s =>
-                         s.copy(
-                           seenBlockHashes = s.seenBlockHashes + blockHash
-                         )
-                       } *> internalAddBlock(block, dag)
+                       // This might be the first time we see this block, or it may not have been added to the state
+                       // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
+                       internalAddBlock(block, dag)
                      }
           // TODO: Ideally this method would just return the block hashes it created,
           // but for now it does gossiping as well. The methods return the full blocks
@@ -610,9 +608,11 @@ object MultiParentCasperImpl {
       validationStatus.flatMap {
         case Right(effects) =>
           addEffects(Valid, block, effects, dag).tupleLeft(Valid)
+
         case Left(ValidateErrorWrapper(invalid)) =>
           addEffects(invalid, block, Seq.empty, dag)
             .tupleLeft(invalid)
+
         case Left(unexpected) =>
           for {
             _ <- Log[F].error(
@@ -695,7 +695,7 @@ object MultiParentCasperImpl {
             InvalidPostStateHash =>
           handleInvalidBlockEffect(status, block, transforms)
 
-        case Processing =>
+        case Processing | Processed =>
           throw new RuntimeException(s"A block should not be processing at this stage.")
 
         case BlockException(ex) =>
@@ -795,7 +795,7 @@ object MultiParentCasperImpl {
                 InvalidSequenceNumber | NeglectedInvalidBlock | NeglectedEquivocation |
                 InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId |
                 InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash |
-                Processing =>
+                Processing | Processed =>
               Log[F].debug(
                 s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $status"
               )
@@ -822,10 +822,9 @@ object MultiParentCasperImpl {
             missingDependencies = casperState.dependencyDag
               .childToParentAdjacencyList(block.blockHash)
               .toList
-            missingUnseenDependencies = missingDependencies.filter(
-              blockHash => !casperState.seenBlockHashes.contains(blockHash)
-            )
-            _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
+            // NOTE: Requesting not just unseen dependencies so that something that was originally
+            // an `IgnorableEquivocation` can second time be fetched again and be an `AdmissibleEquivocation`.
+            _ <- missingDependencies.traverse(hash => requestMissingDependency(hash))
           } yield ()
       }
 
@@ -864,7 +863,7 @@ object MultiParentCasperImpl {
               InvalidSequenceNumber | NeglectedInvalidBlock | NeglectedEquivocation |
               InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId |
               InvalidBlockHash | InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash |
-              Processing =>
+              Processing | Processed =>
             ().pure[F]
 
           case BlockException(_) =>

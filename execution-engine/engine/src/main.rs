@@ -98,11 +98,6 @@ where
             let error_message = format!("type mismatch: {:?} ", type_mismatch);
             (LogLevel::Warning, error_message, properties, None)
         }
-        Ok(CommitResult::Overflow) => {
-            let mut properties: BTreeMap<String, String> = BTreeMap::new();
-            let error_message = String::from("overflow during addition");
-            (LogLevel::Warning, error_message, properties, None)
-        }
         Ok(CommitResult::Success(new_root_hash)) => {
             let mut properties: BTreeMap<String, String> = BTreeMap::new();
             properties.insert(
@@ -250,7 +245,9 @@ fn main() {
                 let (log_level, error_message, mut new_properties, new_state_hash) =
                     apply_effects(&engine_state, &state_hash, effects);
 
-                new_state_hash.map(|hash| state_hash = hash);
+                if let Some(hash) = new_state_hash {
+                    state_hash = hash;
+                }
 
                 properties.append(&mut new_properties);
                 log_message(log_level, error_message, properties);
@@ -266,7 +263,9 @@ fn main() {
                 let (new_log_level, new_error_message, mut new_properties, new_state_hash) =
                     apply_effects(&engine_state, &state_hash, effects);
 
-                new_state_hash.map(|hash| state_hash = hash);
+                if let Some(hash) = new_state_hash {
+                    state_hash = hash;
+                }
 
                 new_properties.append(&mut properties.clone());
                 log_message(new_log_level, new_error_message, new_properties);

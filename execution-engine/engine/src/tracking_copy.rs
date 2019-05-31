@@ -93,7 +93,6 @@ pub enum AddResult {
     Success,
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
-    Overflow,
 }
 
 impl<R: StateReader<Key, Value>> TrackingCopy<R> {
@@ -169,7 +168,6 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                     Err(transform::Error::TypeMismatch(type_mismatch)) => {
                         Ok(AddResult::TypeMismatch(type_mismatch))
                     }
-                    Err(transform::Error::Overflow) => Ok(AddResult::Overflow),
                 }
             }
         }
@@ -284,6 +282,7 @@ mod tests {
     use storage::global_state::StateReader;
 
     use super::{AddResult, QueryResult, Validated};
+    use common::value::account::{AssociatedKeys, PublicKey, Weight, KEY_SIZE};
     use engine_state::op::Op;
     use tracking_copy::TrackingCopy;
 
@@ -456,7 +455,9 @@ mod tests {
     #[test]
     fn tracking_copy_add_named_key() {
         // DB now holds an `Account` so that we can test adding a `NamedKey`
-        let account = common::value::Account::new([0u8; 32], 0u64, BTreeMap::new());
+        let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; KEY_SIZE]), Weight::new(1));
+        let account =
+            common::value::Account::new([0u8; KEY_SIZE], 0u64, BTreeMap::new(), associated_keys);
         let db = CountingDb::new_init(Value::Account(account));
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
@@ -636,10 +637,12 @@ mod tests {
             address in u8_slice_32(), // address for account key
         ) {
             let known_urefs = iter::once((name.clone(), k)).collect();
+            let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
             let account = Account::new(
                 pk,
                 nonce,
                 known_urefs,
+                associated_keys,
             );
             let account_key = Key::Account(address);
 
@@ -682,10 +685,12 @@ mod tests {
             // create account which knows about contract
             let mut account_known_urefs = BTreeMap::new();
             account_known_urefs.insert(contract_name.clone(), contract_key);
+            let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
             let account = Account::new(
                 pk,
                 nonce,
                 account_known_urefs,
+                associated_keys,
             );
             let account_key = Key::Account(address);
 

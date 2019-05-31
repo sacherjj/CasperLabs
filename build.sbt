@@ -233,7 +233,9 @@ lazy val node = (project in file("node"))
         scallop,
         scalaUri,
         scalapbRuntimegGrpc,
-        tomlScala
+        tomlScala,
+        sangria,
+        javaWebsocket
       ),
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
@@ -340,7 +342,8 @@ lazy val node = (project in file("node"))
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
     ),
-    rpmAutoreq := "no"
+    rpmAutoreq := "no",
+    Test / fork := true // Config tests errors would quit SBT itself due to Scallops.
   )
   .dependsOn(casper, comm, crypto)
 

@@ -95,8 +95,8 @@ where
         &self.args
     }
 
-    pub fn rng(&self) -> &ChaChaRng {
-        &self.rng
+    pub fn rng(&mut self) -> &mut ChaChaRng {
+        &mut self.rng
     }
 
     pub fn state(&self) -> Rc<RefCell<TrackingCopy<R>>> {
@@ -237,6 +237,7 @@ where
             | Value::String(_)
             | Value::ListString(_) => Ok(()),
             Value::NamedKey(_, key) => self.validate_key(&key),
+            Value::Key(key) => self.validate_key(&key),
             Value::Account(account) => {
                 // This should never happen as accounts can't be created by contracts.
                 // I am putting this here for the sake of completness.
@@ -350,7 +351,6 @@ where
             Ok(AddResult::Success) => Ok(()),
             Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
             Ok(AddResult::TypeMismatch(type_mismatch)) => Err(Error::TypeMismatch(type_mismatch)),
-            Ok(AddResult::Overflow) => Err(Error::Overflow),
         }
     }
 }
@@ -372,6 +372,7 @@ mod tests {
     use storage::global_state::{CommitResult, History};
 
     use super::{Error, RuntimeContext, URefAddr, Validated};
+    use common::value::account::{AssociatedKeys, PublicKey, Weight};
     use execution::{create_rng, vec_key_rights_to_map};
     use shared::newtypes::Blake2bHash;
     use tracking_copy::TrackingCopy;
@@ -401,7 +402,8 @@ mod tests {
     }
 
     fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
-        let account = value::account::Account::new(addr, 0, BTreeMap::new());
+        let associated_keys = AssociatedKeys::new(PublicKey::new(addr), Weight::new(1));
+        let account = value::account::Account::new(addr, 0, BTreeMap::new(), associated_keys);
         let key = Key::Account(addr);
 
         (key, account)
