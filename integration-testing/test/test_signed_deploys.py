@@ -15,4 +15,9 @@ def test_deploy_with_invalid_signature(one_node_signed_deploy_network):
     Scenario: Deploy with invalid signature
     """
     node0 = one_node_signed_deploy_network.docker_nodes[0]
-    node0.client.deploy()
+    try:
+        node0.client.deploy(private_key="validator-0-private-invalid.pem",
+                            public_key="validator-0-public-invalid.pem")
+        assert False , "Deploy signed with invalid signatures has been passed"
+    except:
+        assert True
