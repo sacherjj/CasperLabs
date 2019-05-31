@@ -212,20 +212,12 @@ where
     }
 
     pub fn insert_uref(&mut self, key: Validated<Key>) {
-        match *key {
-            Key::URef(raw_addr, Some(rights)) => {
-                let entry_rights = self
-                    .known_urefs
-                    .entry(raw_addr)
-                    .or_insert_with(|| std::iter::empty().collect());
-                entry_rights.insert(rights);
-            }
-            Key::URef(raw_addr, None) => {
-                self.known_urefs
-                    .entry(raw_addr)
-                    .or_insert_with(|| std::iter::empty().collect());
-            }
-            _ => (),
+        if let Key::URef(raw_addr, Some(rights)) = *key {
+            let entry_rights = self
+                .known_urefs
+                .entry(raw_addr)
+                .or_insert_with(|| std::iter::empty().collect());
+            entry_rights.insert(rights);
         }
     }
 
