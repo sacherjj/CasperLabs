@@ -105,12 +105,12 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         }
     }
 
-    pub fn get(&mut self, k: &Validated<Key>) -> Result<Option<Value>, R::Error> {
-        if let Some(value) = self.cache.get(&**k) {
-            return Ok(Some(value.clone()));
+    pub fn get(&mut self, k: &Key) -> Result<Option<Value>, R::Error> {
+        if let Some(value) = self.cache.get(k) {
+            return Ok(Some(value.to_owned()));
         }
-        if let Some(value) = self.reader.read(&**k)? {
-            self.cache.insert_read(**k, value.clone());
+        if let Some(value) = self.reader.read(k)? {
+            self.cache.insert_read(*k, value.to_owned());
             Ok(Some(value))
         } else {
             Ok(None)
@@ -118,9 +118,10 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     }
 
     pub fn read(&mut self, k: &Validated<Key>) -> Result<Option<Value>, R::Error> {
-        if let Some(value) = self.get(k)? {
-            add(&mut self.ops, **k, Op::Read);
-            add(&mut self.fns, **k, Transform::Identity);
+        let k = k.normalize();
+        if let Some(value) = self.get(&k)? {
+            add(&mut self.ops, k, Op::Read);
+            add(&mut self.fns, k, Transform::Identity);
             Ok(Some(value))
         } else {
             Ok(None)
@@ -129,17 +130,19 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
 
     pub fn write(&mut self, k: Validated<Key>, v: Validated<Value>) {
         let v_local = v.into_raw();
-        self.cache.insert_write(*k, v_local.clone());
-        add(&mut self.ops, *k, Op::Write);
-        add(&mut self.fns, *k, Transform::Write(v_local));
+        let k = k.normalize();
+        self.cache.insert_write(k, v_local.clone());
+        add(&mut self.ops, k, Op::Write);
+        add(&mut self.fns, k, Transform::Write(v_local));
     }
 
     /// Ok(None) represents missing key to which we want to "add" some value.
     /// Ok(Some(unit)) represents successful operation.
     /// Err(error) is reserved for unexpected errors when accessing global state.
     pub fn add(&mut self, k: Validated<Key>, v: Validated<Value>) -> Result<AddResult, R::Error> {
+        let k = k.normalize();
         match self.get(&k)? {
-            None => Ok(AddResult::KeyNotFound(*k)),
+            None => Ok(AddResult::KeyNotFound(k)),
             Some(curr) => {
                 let t = match v.into_raw() {
                     Value::Int32(i) => Transform::AddInt32(i),
@@ -160,9 +163,9 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                 };
                 match t.clone().apply(curr) {
                     Ok(new_value) => {
-                        self.cache.insert_write(*k, new_value);
-                        add(&mut self.ops, *k, Op::Add);
-                        add(&mut self.fns, *k, t);
+                        self.cache.insert_write(k, new_value);
+                        add(&mut self.ops, k, Op::Add);
+                        add(&mut self.fns, k, t);
                         Ok(AddResult::Success)
                     }
                     Err(transform::Error::TypeMismatch(type_mismatch)) => {
@@ -461,8 +464,8 @@ mod tests {
         let db = CountingDb::new_init(Value::Account(account));
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
-        let u1 = Key::URef([1u8; 32], AccessRights::READ_WRITE);
-        let u2 = Key::URef([2u8; 32], AccessRights::READ_WRITE);
+        let u1 = Key::URef([1u8; 32], Some(AccessRights::READ_WRITE));
+        let u2 = Key::URef([2u8; 32], Some(AccessRights::READ_WRITE));
 
         let named_key = Value::NamedKey("test".to_string(), u1);
         let other_named_key = Value::NamedKey("test2".to_string(), u2);

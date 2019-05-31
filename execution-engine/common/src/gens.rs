@@ -4,6 +4,7 @@ use crate::value::*;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use proptest::collection::{btree_map, vec};
+use proptest::option;
 use proptest::prelude::*;
 
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
@@ -34,7 +35,7 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
         u8_slice_32().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
-        access_rights_arb()
+        option::of(access_rights_arb())
             .prop_flat_map(|right| { u8_slice_32().prop_map(move |addr| Key::URef(addr, right)) }),
         (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key_hash)| Key::Local { seed, key_hash })
     ]
