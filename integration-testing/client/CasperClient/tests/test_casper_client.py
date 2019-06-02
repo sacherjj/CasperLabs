@@ -14,10 +14,10 @@ from casper_client import (CasperClient, CasperMessage_pb2_grpc, CasperMessage_p
 import mock_server
 import grpc
 
-RESOURCES_PATH = "../../../integration-testing/resources/"
+RESOURCES_PATH = "../../../resources/"
 
 def resource(file_name):
-    return os.path.join(RESOURCES_PATH, file_name)
+    return os.path.join(os.path.dirname(os.path.realpath(__file__)), RESOURCES_PATH, file_name)
 
 CONTRACT = resource("test_helloname.wasm")
 PAYMENT = resource("payment.wasm")
