@@ -12,6 +12,7 @@ from pathlib import Path
 import shutil
 import in_place
 import glob
+from pathlib import Path
 
 
 THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
@@ -82,13 +83,11 @@ def collect_proto_files():
     copyfile(join(dirname(grpc_tools.__file__), '_proto/google/protobuf/empty.proto'), f'{PROTO_DIR}/empty.proto')
     copyfile(join(dirname(grpc_tools.__file__), '_proto/google/protobuf/descriptor.proto'), f'{PROTO_DIR}/descriptor.proto')
 
-    copyfile(f'{PROTOBUF_DIR}/io/casperlabs/casper/consensus/info.proto', f'{PROTO_DIR}/info.proto')
     copyfile(f'{PROTOBUF_DIR}/google/api/http.proto', f'{PROTO_DIR}/http.proto')
     copyfile(f'{PROTOBUF_DIR}/google/api/annotations.proto', f'{PROTO_DIR}/annotations.proto')
-    copyfile(f'{PROTOBUF_DIR}/io/casperlabs/casper/protocol/CasperMessage.proto', f'{PROTO_DIR}/CasperMessage.proto')
-    copyfile(f'{PROTOBUF_DIR}/io/casperlabs/casper/consensus/consensus.proto', f'{PROTO_DIR}/consensus.proto')
-    copyfile(f'{PROTOBUF_DIR}/io/casperlabs/node/api/casper.proto', f'{PROTO_DIR}/casper.proto')
-    copyfile(f'{PROTOBUF_DIR}/io/casperlabs/node/api/control.proto', f'{PROTO_DIR}/control.proto')
+
+    for file_name in Path(f"{PROTOBUF_DIR}/io/").glob('**/*.proto'):
+        copyfile(file_name, f'{PROTO_DIR}/{basename(file_name)}')
 
 
 def patch_proto_files():
