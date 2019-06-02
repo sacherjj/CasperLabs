@@ -85,7 +85,7 @@ def test_block_propagation(three_nodes,
     for node in three_nodes:
         blocks = parse_show_blocks(node.client.show_blocks(expected_number_of_blocks * 100))
         # What propose returns is first 10 characters of block hash, so we can compare only first 10 charcters.
-        blocks_hashes = set([b.block_hash[:10] for b in blocks])
+        blocks_hashes = set([b.blockHash[:10] for b in blocks])
         for t in deploy_threads:
             assert t.deployed_blocks_hashes.issubset(blocks_hashes), \
                    f"Not all blocks deployed and proposed on {t.name} were propagated to {node.name}"
