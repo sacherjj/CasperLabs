@@ -95,6 +95,8 @@ def patch_proto_files():
     modify_files([('import "google/protobuf/', 'import "'),
                   ('import "scalapb/', 'import "'),
                   ('import "io/casperlabs/casper/consensus/', 'import "'),
+                  ('import "io/casperlabs/ipc/', 'import "'),
+                  ('import "io/casperlabs/comm/discovery/', 'import "'),
                   ('import "google/api/', 'import "')],
                  glob.glob(f'{PROTO_DIR}/*.proto'))
 
