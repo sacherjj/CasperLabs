@@ -52,11 +52,18 @@ class DockerClient(CasperLabsClient):
                gas_price: int = 1,
                nonce: int = 0,
                session_contract: Optional[str] = 'test_helloname.wasm',
-               payment_contract: Optional[str] = 'test_helloname.wasm') -> str:
-        command = (f"deploy --from {from_address}"
+               payment_contract: Optional[str] = 'test_helloname.wasm',
+               private_key: Optional[str] = None,
+               public_key: Optional[str] = None) -> str:
+        
+        command = (f"deploy"
+                   f" --from {from_address}"
                    f" --gas-limit {gas_limit} --gas-price {gas_price}"
                    f" --nonce {nonce} --session=/data/{session_contract}"
                    f" --payment=/data/{payment_contract}")
+
+        if private_key and public_key:
+            command += f" --private-key {private_key} --public-key {public_key}"
 
         return self.invoke_client(command)
 
