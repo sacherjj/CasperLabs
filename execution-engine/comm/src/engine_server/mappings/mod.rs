@@ -1,7 +1,7 @@
 mod uint;
 
 use protobuf::ProtobufEnum;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::convert::{TryFrom, TryInto};
 
 use common::value::account::{AssociatedKeys, PublicKey, Weight};
@@ -180,9 +180,7 @@ impl From<common::value::Value> for super::ipc::Value {
             common::value::Value::Key(key) => {
                 tv.set_key((&key).into());
             }
-            common::value::Value::Account(account) => {
-                tv.set_account(account.into())
-            }
+            common::value::Value::Account(account) => tv.set_account(account.into()),
             common::value::Value::Contract(contract) => {
                 tv.set_contract(contract.into());
             }
@@ -202,7 +200,9 @@ impl TryFrom<&super::ipc::Value> for common::value::Value {
                 value.get_byte_arr().to_vec(),
             ))
         } else if value.has_int_list() {
-            Ok(common::value::Value::ListInt32(value.get_int_list().get_list().to_vec()))
+            Ok(common::value::Value::ListInt32(
+                value.get_int_list().get_list().to_vec(),
+            ))
         } else if value.has_string_val() {
             Ok(common::value::Value::String(
                 value.get_string_val().to_string(),
@@ -512,6 +512,35 @@ impl From<Op> for super::ipc::Op {
     }
 }
 
+// Newtype wrapper as rustc requires because trait impl have to be defined in the crate of the type.
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct CommitTransforms(HashMap<common::key::Key, transform::Transform>);
+
+impl CommitTransforms {
+    pub fn get(&self, key: &common::key::Key) -> Option<&transform::Transform> {
+        self.0.get(&key)
+    }
+
+    pub fn value(self) -> HashMap<common::key::Key, transform::Transform> {
+        self.0
+    }
+}
+
+impl TryFrom<&[super::ipc::TransformEntry]> for CommitTransforms {
+    type Error = ParsingError;
+
+    fn try_from(value: &[super::ipc::TransformEntry]) -> Result<Self, Self::Error> {
+        let mut transforms_merged: HashMap<common::key::Key, transform::Transform> = HashMap::new();
+        for named_key in value.iter() {
+            let (key, transform): (common::key::Key, transform::Transform) =
+                named_key.try_into()?;
+            transforms_merged.insert(key, transform); // Should fail the test
+//            utils::add(&mut transforms_merged, key, transform);
+        }
+        Ok(CommitTransforms(transforms_merged))
+    }
+}
+
 /// Transforms gRPC TransformEntry into domain tuple of (Key, Transform).
 impl TryFrom<&super::ipc::TransformEntry> for (common::key::Key, transform::Transform) {
     type Error = ParsingError;
@@ -817,7 +846,41 @@ mod tests {
         assert_eq!(test_cost(cost, forged_ref_error), cost);
     }
 
+    #[test]
+    fn commit_effects_merges_transforms() {
+        // Tests that when transforms made to the same key are merged instead of lost.
+        let key = Key::Hash([1u8; 32]);
+        let setup: Vec<super::ipc::TransformEntry> = {
+            let mut tmp = Vec::new();
+            let transform_entry_first = {
+                let mut tmp = TransformEntry::new();
+                tmp.set_key((&key).into());
+                tmp.set_transform(Transform::Write(common::value::Value::Int32(12)).into());
+                tmp
+            };
+            let transform_entry_second = {
+                let mut tmp = TransformEntry::new();
+                tmp.set_key((&key).into());
+                tmp.set_transform(Transform::AddInt32(10).into());
+                tmp
+            };
+            tmp.push(transform_entry_first);
+            tmp.push(transform_entry_second);
+            tmp
+        };
+        let setup_slice: &[super::ipc::TransformEntry] = &setup;
+        let commit: CommitTransforms = setup_slice
+            .try_into()
+            .expect("Transforming [ipc::TransformEntry] into CommitTransforms should work.");
+        let expected_transform = Transform::Write(common::value::Value::Int32(22i32));
+        let commit_transform = commit.get(&key);
+        assert!(commit_transform.is_some());
+        assert_eq!(expected_transform, *commit_transform.unwrap())
+    }
+
     use common::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
+    use engine_server::ipc::TransformEntry;
+    use engine_server::mappings::CommitTransforms;
     use proptest::prelude::*;
     use shared::transform::gens::transform_arb;
 
@@ -864,7 +927,7 @@ mod tests {
         }
 
         #[test]
-        fn transform_roundtrip(key in key_arb(), transform in transform_arb()) {
+        fn transform_entry_roundtrip(key in key_arb(), transform in transform_arb()) {
             let transform_entry: super::ipc::TransformEntry = (key, transform.clone()).into();
             let tuple: (Key, Transform) = (&transform_entry).try_into()
                 .expect("Transforming TransformEntry into (Key, Transform) tuple should work.");
