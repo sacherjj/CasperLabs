@@ -10,18 +10,22 @@ pub const KEY_SIZE: usize = 32;
 /// `associated_keys` table.
 pub const MAX_KEYS: usize = 10;
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
+#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Weight(u8);
 
 impl Weight {
     pub fn new(weight: u8) -> Weight {
         Weight(weight)
     }
+
+    pub fn value(self) -> u8 {
+        self.0
+    }
 }
 
 pub const WEIGHT_SIZE: usize = U8_SIZE;
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
+#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct PublicKey([u8; KEY_SIZE]);
 
 pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE * U8_SIZE;
@@ -29,6 +33,10 @@ pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE * U8_SIZE;
 impl PublicKey {
     pub fn new(key: [u8; KEY_SIZE]) -> PublicKey {
         PublicKey(key)
+    }
+
+    pub fn value(self) -> [u8; KEY_SIZE] {
+        self.0
     }
 }
 
@@ -81,6 +89,10 @@ impl AssociatedKeys {
     pub fn get(&self, key: &PublicKey) -> Option<&Weight> {
         self.0.get(key)
     }
+
+    pub fn get_all(&self) -> &BTreeMap<PublicKey, Weight> {
+        &self.0
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -126,8 +138,8 @@ impl Account {
         &self.associated_keys
     }
 
-    pub fn get_associated_keys(self) -> AssociatedKeys {
-        self.associated_keys
+    pub fn get_associated_keys(&self) -> &AssociatedKeys {
+        &self.associated_keys
     }
 
     pub fn nonce(&self) -> u64 {

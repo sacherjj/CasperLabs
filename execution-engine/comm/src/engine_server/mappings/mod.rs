@@ -75,36 +75,7 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             } else if v.has_string_val() {
                 transform_write(common::value::Value::String(v.get_string_val().to_string()))
             } else if v.has_account() {
-                let pub_key = {
-                    let mut tmp = [0u8; 32];
-                    tmp.clone_from_slice(&v.get_account().pub_key);
-                    tmp
-                };
-                let uref_map: URefMap = v.get_account().get_known_urefs().try_into()?;
-                let associated_keys: AssociatedKeys = {
-                    let mut keys = AssociatedKeys::empty();
-                    v.get_account()
-                        .get_associated_keys()
-                        .iter()
-                        .try_for_each(|k| {
-                            k.try_into().and_then(|(pub_key, weight)| {
-                                match keys.add_key(pub_key, weight) {
-                                    Err(add_key_failure) => parse_error(format!(
-                                        "Error when parsing associated keys: {:?}",
-                                        add_key_failure
-                                    )),
-                                    Ok(_) => Ok(()),
-                                }
-                            })
-                        })?;
-                    keys
-                };
-                let account = common::value::Account::new(
-                    pub_key,
-                    v.get_account().nonce,
-                    uref_map.0,
-                    associated_keys,
-                );
+                let account = v.get_account().try_into()?;
                 transform_write(common::value::Value::Account(account))
             } else if v.has_contract() {
                 let ipc_contr = v.get_contract();
@@ -203,6 +174,67 @@ impl From<common::value::Value> for super::ipc::Value {
             }
         };
         tv
+    }
+}
+
+impl From<common::value::account::Account> for super::ipc::Account {
+    fn from(account: common::value::account::Account) -> Self {
+        let mut ipc_account = super::ipc::Account::new();
+        ipc_account.set_pub_key(account.pub_key().to_vec());
+        ipc_account.set_nonce(account.nonce());
+        let associated_keys: Vec<super::ipc::Account_AssociatedKey> = {
+            let associated_keys = account.get_associated_keys().get_all();
+            let mut tmp = Vec::with_capacity(associated_keys.len());
+            associated_keys.into_iter().for_each(|(key, weight)| {
+                let mut ipc_associated_key = super::ipc::Account_AssociatedKey::new();
+                ipc_associated_key.set_pub_key(key.value().to_vec());
+                ipc_associated_key.set_weight(weight.value() as u32);
+                tmp.push(ipc_associated_key);
+            });
+            tmp
+        };
+        let account_urefs_lookup = URefMap(account.get_urefs_lookup());
+        let ipc_urefs: Vec<super::ipc::NamedKey> = account_urefs_lookup.into();
+        ipc_account.set_known_urefs(ipc_urefs.into());
+        ipc_account.set_associated_keys(associated_keys.into());
+        ipc_account
+    }
+}
+
+impl TryFrom<&super::ipc::Account> for common::value::account::Account {
+    type Error = ParsingError;
+
+    fn try_from(value: &super::ipc::Account) -> Result<Self, Self::Error> {
+        let pub_key: [u8; 32] = {
+            let mut buff = [0u8; 32];
+            if value.pub_key.len() != 32 {
+                return parse_error("Public key has to be exactly 32 bytes long.".to_string());
+            } else {
+                buff.copy_from_slice(&value.pub_key);
+            }
+            buff
+        };
+        let uref_map: URefMap = value.get_known_urefs().try_into()?;
+        let associated_keys: AssociatedKeys = {
+            let mut keys = AssociatedKeys::empty();
+            value.get_associated_keys().iter().try_for_each(|k| {
+                k.try_into()
+                    .and_then(|(pub_key, weight)| match keys.add_key(pub_key, weight) {
+                        Err(add_key_failure) => parse_error(format!(
+                            "Error when parsing associated keys: {:?}",
+                            add_key_failure
+                        )),
+                        Ok(_) => Ok(()),
+                    })
+            })?;
+            keys
+        };
+        Ok(common::value::Account::new(
+            pub_key,
+            value.nonce,
+            uref_map.0,
+            associated_keys,
+        ))
     }
 }
 
@@ -719,7 +751,7 @@ mod tests {
         assert_eq!(test_cost(cost, forged_ref_error), cost);
     }
 
-    use common::gens::{key_arb, uref_map_arb};
+    use common::gens::{account_arb, key_arb, uref_map_arb};
     use proptest::prelude::*;
     use shared::transform::gens::transform_arb;
 
@@ -741,5 +773,12 @@ mod tests {
             assert_eq!(uref_map, uref_map_back.0)
         }
 
+        #[test]
+        fn account_roundtrip(account in account_arb()) {
+            let ipc_account: super::ipc::Account = account.clone().into();
+            let account_back = (&ipc_account).try_into()
+                .expect("Transforming ipc::Account into domain Account should succeed.");
+            assert_eq!(account, account_back)
+        }
     }
 }
