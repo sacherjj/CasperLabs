@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 import shutil
 import tempfile
-from typing import TYPE_CHECKING, Tuple, Generator, Optional, List
+from typing import Tuple, List
 import re
 
 from test.cl_node.errors import (
@@ -17,9 +17,6 @@ from test.cl_node.casperlabsnode import (
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.docker_client import DockerClient
 from test.cl_node.python_client import PythonClient
-
-if TYPE_CHECKING:
-    from test.cl_node.docker_base import DockerConfig
 
 
 def get_resources_folder() -> Path:
@@ -75,13 +72,14 @@ class DockerNode(LoggingDockerBase):
 
     def _get_container(self):
         env = {
-            'RUST_BACKTRACE': 'full',
-            'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'false'
+            'RUST_BACKTRACE': 'full'
         }
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
             env['_JAVA_OPTIONS'] = java_options
-
+        ignore_deploy_sig = os.environ.get('CL_CASPER_IGNORE_DEPLOY_SIGNATURE')
+        if ignore_deploy_sig is not None:
+            env['CL_CASPER_IGNORE_DEPLOY_SIGNATURE'] = ignore_deploy_sig
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
         self._client = self.DOCKER_CLIENT
@@ -91,8 +89,6 @@ class DockerNode(LoggingDockerBase):
 
         commands = self.container_command
         logging.info(f'{self.container_name} commands: {commands}')
-
-        #env['CL_IGNORE_DEPLOY_SIGNATURE'] = 'false' #  for testing of signed deploys (OP-269)
         container = self.config.docker_client.containers.run(
             self.image_name,
             name=self.container_name,

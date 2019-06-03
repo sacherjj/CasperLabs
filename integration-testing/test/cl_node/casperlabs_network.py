@@ -1,6 +1,5 @@
-import docker
 import logging
-
+import docker
 from typing import List, Callable, Dict
 
 
@@ -17,7 +16,6 @@ from test.cl_node.wait import (
 from test.cl_node.log_watcher import (
     wait_for_log_watcher,
     GoodbyeInLogLine,
-    RequestedForkTipFromPeersInLogLine,
 )
 
 
@@ -143,6 +141,7 @@ class OneNodeNetwork(CasperLabsNetwork):
                               network=self.create_docker_network())
         self.add_bootstrap(config)
 
+
 class DeploySignatureSingleNodeNetwork(CasperLabsNetwork):
     """ A single node network with just a bootstrap. It will be used
     for signed deploys.
@@ -154,8 +153,9 @@ class DeploySignatureSingleNodeNetwork(CasperLabsNetwork):
                               node_private_key=kp.private_key,
                               node_public_key=kp.public_key,
                               network=self.create_docker_network(),
-                              is_validator=True)
+                              is_signed_deploy=True)
         self.add_bootstrap(config)
+
 
 class TwoNodeNetwork(CasperLabsNetwork):
 

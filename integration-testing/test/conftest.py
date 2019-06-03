@@ -1,3 +1,5 @@
+import os
+
 from typing import TYPE_CHECKING, Generator
 
 import docker as docker_py
@@ -35,9 +37,12 @@ def one_node_network(docker_client_fixture):
 
 @pytest.fixture()
 def one_node_signed_deploy_network(docker_client_fixture):
+    os.environ['CL_CASPER_IGNORE_DEPLOY_SIGNATURE'] = 'false'
     with DeploySignatureSingleNodeNetwork(docker_client_fixture) as onn:
         onn.create_cl_network()
         yield onn
+    del os.environ['CL_CASPER_IGNORE_DEPLOY_SIGNATURE']
+
 
 @pytest.fixture()
 def two_node_network(docker_client_fixture):

@@ -26,11 +26,14 @@ Feature: Deploy Operation
       When: Deploy is performed with session contract and payment contract
       Then: Deploy occurs
 
+  # Implemented: test_signed_deploys.py : test_deploy_with_invalid_signature
   Scenario; Deploy with invalid signature
      Given: Invalid account private/public key pair
       When: Deploy is performed with all fields
       Then: Client error occurs
 
+
+  # Implemented: test_signed_deploys.py : test_deploy_with_valid_signature
   Scenario: Deploy with valid signature
      Given: Single Node Network
        And: Valid account private/public key pair
