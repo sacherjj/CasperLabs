@@ -378,6 +378,20 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
                 }
             };
             Ok(common::key::Key::URef(id, maybe_access_rights))
+        } else if ipc_key.has_local() {
+            let ipc_local_key = ipc_key.get_local();
+            if !(ipc_local_key.seed.len() == 32 && ipc_local_key.key_hash.len() == 32) {
+                parse_error("Seed and key hash of local key have to be 32 bytes long.".to_string())
+            } else {
+                let mut seed_buff = [0u8; 32];
+                let mut hash_buff = [0u8; 32];
+                seed_buff.copy_from_slice(&ipc_local_key.seed);
+                hash_buff.copy_from_slice(&ipc_local_key.key_hash);
+                Ok(common::key::Key::Local {
+                    seed: seed_buff,
+                    key_hash: hash_buff,
+                })
+            }
         } else {
             parse_error(format!(
                 "ipc Key couldn't be parsed to any Key: {:?}",
@@ -703,5 +717,19 @@ mod tests {
         let forged_ref_error =
             execution_engine::execution::Error::ForgedReference(Key::Account([1u8; 32]));
         assert_eq!(test_cost(cost, forged_ref_error), cost);
+    }
+
+    use common::gens::key_arb;
+    use proptest::prelude::*;
+    use shared::transform::gens::transform_arb;
+
+    proptest! {
+        #[test]
+        fn key_roundtrip(key in key_arb()) {
+            let ipc_key: super::ipc::Key = (&key).into();
+            let key_back: Key = (&ipc_key).try_into().expect("Transforming ipc::Key into domain Key should succeed.");
+            assert_eq!(key_back, key)
+        }
+
     }
 }
