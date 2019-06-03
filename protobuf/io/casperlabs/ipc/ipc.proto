@@ -129,6 +129,8 @@ message RustBigInt {
     uint32 bit_width = 2;
 }
 
+message UnitValue {}
+
 // Things to store under the key in the global state.
 message Value {
     oneof value_instance {
@@ -142,6 +144,7 @@ message Value {
         NamedKey named_key = 8;
         RustBigInt big_int = 9;
         Key key = 10;
+        UnitValue unit = 11;
     }
 }
 
