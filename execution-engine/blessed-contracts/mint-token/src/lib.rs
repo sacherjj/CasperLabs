@@ -57,20 +57,6 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     }
 }
 
-fn transfer(
-    source_key: Key,
-    target_key: Key,
-    amount: U512,
-    mint: CLMint,
-) -> Result<(), mint::Error> {
-    let source: WithdrawId =
-        WithdrawId::from_key(source_key).map_err(|_| mint::Error::SourceNotFound)?;
-    let target: DepositId =
-        DepositId::from_key(target_key).map_err(|_| mint::Error::DestNotFound)?;
-
-    mint.transfer(source, target, amount)
-}
-
 #[no_mangle]
 pub extern "C" fn mint_ext() {
     let mint = CLMint;
@@ -97,12 +83,22 @@ pub extern "C" fn mint_ext() {
             let target_key: Key = contract_api::get_arg(2);
             let amount: U512 = contract_api::get_arg(3);
 
-            let message = match transfer(source_key, target_key, amount, mint) {
-                Ok(_) => String::from("Success!"),
+            let source: WithdrawId = match WithdrawId::from_key(source_key) {
+                Ok(withdraw_id) => withdraw_id,
+                Err(error) => contract_api::ret(&format!("Error: {}", error), &vec![]),
+            };
+
+            let target: DepositId = match DepositId::from_key(target_key) {
+                Ok(deposit_id) => deposit_id,
+                Err(error) => contract_api::ret(&format!("Error: {}", error), &vec![]),
+            };
+
+            let transfer_message = match mint.transfer(source, target, amount) {
+                Ok(_) => String::from("Successful transfer"),
                 Err(e) => format!("Error: {:?}", e),
             };
 
-            contract_api::ret(&message, &vec![]);
+            contract_api::ret(&transfer_message, &vec![]);
         }
 
         _ => panic!("Unknown method name!"),
