@@ -294,14 +294,23 @@ impl From<transform::Transform> for super::ipc::Transform {
 // newtype because trait impl have to be defined in the crate of the type.
 pub struct URefMap(BTreeMap<String, common::key::Key>);
 
+impl TryFrom<&super::ipc::NamedKey> for (String, common::key::Key) {
+    type Error = ParsingError;
+
+    fn try_from(value: &super::ipc::NamedKey) -> Result<Self, Self::Error> {
+        let name = value.get_name().to_string();
+        let key = value.get_key().try_into()?;
+        Ok((name, key))
+    }
+}
+
 // Helper method for turning gRPC Vec of NamedKey to domain BTreeMap.
 impl TryFrom<&[super::ipc::NamedKey]> for URefMap {
     type Error = ParsingError;
     fn try_from(from: &[super::ipc::NamedKey]) -> Result<Self, ParsingError> {
         let mut tree: BTreeMap<String, common::key::Key> = BTreeMap::new();
         for nk in from {
-            let name = nk.get_name().to_string();
-            let key = nk.get_key().try_into()?;
+            let (name, key) = nk.try_into()?;
             let _ = tree.insert(name, key);
         }
         Ok(URefMap(tree))
@@ -780,5 +789,17 @@ mod tests {
                 .expect("Transforming ipc::Account into domain Account should succeed.");
             assert_eq!(account, account_back)
         }
+
+        #[test]
+        fn transform_roundtrip(key in key_arb(), transform in transform_arb()) {
+            println!("DONE0");
+            let transform_entry: super::ipc::TransformEntry = (key, transform.clone()).into();
+            println!("DONE1");
+            let tuple: (Key, Transform) = (&transform_entry).try_into()
+                .expect("Transforming TransformEntry into (Key, Transform) tuple should work.");
+            println!("DONE2");
+            assert_eq!(tuple, (key, transform))
+        }
+
     }
 }
