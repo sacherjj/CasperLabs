@@ -40,8 +40,7 @@ done
 # Using ||TAG|| as replacable element in docker-compose.yml.template
 sed 's/||TAG||/'"${TAG_NAME}"'/g' docker-compose.yml.template > docker-compose.yml
 
-docker-compose up
-
-result_code=$(docker-compose up --exit-code-from test)
+docker-compose up --exit-code-from test --abort-on-container-exit
+result_code=$?
 cleanup
 exit $result_code
