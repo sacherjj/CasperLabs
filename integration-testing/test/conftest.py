@@ -1,5 +1,3 @@
-import os
-
 from typing import TYPE_CHECKING, Generator
 
 import docker as docker_py
@@ -9,7 +7,7 @@ from .cl_node.casperlabs_network import (
     OneNodeNetwork,
     TwoNodeNetwork,
     ThreeNodeNetwork,
-    CustomConnectionNetwork
+    CustomConnectionNetwork,
 )
 
 
