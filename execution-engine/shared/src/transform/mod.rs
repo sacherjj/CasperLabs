@@ -237,6 +237,32 @@ impl fmt::Display for Transform {
     }
 }
 
+pub mod gens {
+    use super::Transform;
+    use common::gens::value_arb;
+    use proptest::collection::vec;
+    use proptest::prelude::*;
+
+    pub fn transform_arb() -> impl Strategy<Value = Transform> {
+        prop_oneof![
+            Just(Transform::Identity),
+            value_arb().prop_map(Transform::Write),
+            any::<i32>().prop_map(Transform::AddInt32),
+            any::<u128>().prop_map(|u| Transform::AddUInt128(u.into())),
+            vec(any::<u8>(), 32).prop_map(|u| {
+                let mut buf: [u8; 32] = [0u8; 32];
+                buf.copy_from_slice(&u);
+                Transform::AddUInt256(buf.into())
+            }),
+            vec(any::<u8>(), 64).prop_map(|u| {
+                let mut buf: [u8; 64] = [0u8; 64];
+                buf.copy_from_slice(&u);
+                Transform::AddUInt512(buf.into())
+            }),
+        ]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use num::{Bounded, Num};

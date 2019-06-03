@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Add;
 
-pub fn add<K, V>(map: &mut HashMap<K, V>, k: K, v: V)
+pub fn add<K, V, S: ::std::hash::BuildHasher>(map: &mut HashMap<K, V, S>, k: K, v: V)
 where
     K: Eq + Hash,
     V: Add<Output = V>,

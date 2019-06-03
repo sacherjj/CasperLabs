@@ -9,7 +9,7 @@ __buildenv:
 
 __sbtenv:
   environment:
-    - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
+    - "_JAVA_OPTIONS=-Xms2G -Xmx6G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
     - "/var/cache/cl-build/.sbt:/root/.sbt"
