@@ -127,22 +127,6 @@ macro_rules! from_try_from_key_impl {
     };
 }
 
-/// Read-only URef
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub struct RRef<T>(pub [u8; 32], PhantomData<T>);
-
-from_try_from_upointer_impl!(RRef, AccessRights::READ);
-from_try_from_key_impl!(RRef, AccessRights::READ);
-readable_impl!(RRef<T>);
-
-/// Write-only URef
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub struct WRef<T>(pub [u8; 32], PhantomData<T>);
-
-from_try_from_upointer_impl!(WRef, AccessRights::WRITE);
-from_try_from_key_impl!(WRef, AccessRights::WRITE);
-writeable_impl!(WRef<T>);
-
 /// Add-only URef
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct ARef<T>(pub [u8; 32], PhantomData<T>);
@@ -150,15 +134,6 @@ pub struct ARef<T>(pub [u8; 32], PhantomData<T>);
 from_try_from_upointer_impl!(ARef, AccessRights::ADD);
 from_try_from_key_impl!(ARef, AccessRights::ADD);
 addable_impl!(ARef<T>);
-
-/// Read+Add URef
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub struct RARef<T>(pub [u8; 32], PhantomData<T>);
-
-from_try_from_upointer_impl!(RARef, AccessRights::READ_ADD);
-from_try_from_key_impl!(RARef, AccessRights::READ_ADD);
-readable_impl!(RARef<T>);
-addable_impl!(RARef<T>);
 
 /// Read+Write URef
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
@@ -169,12 +144,3 @@ from_try_from_key_impl!(RAWRef, AccessRights::READ_ADD_WRITE);
 readable_impl!(RAWRef<T>);
 addable_impl!(RAWRef<T>);
 writeable_impl!(RAWRef<T>);
-
-/// Add+Write URef
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub struct AWRef<T>(pub [u8; 32], PhantomData<T>);
-
-from_try_from_upointer_impl!(AWRef, AccessRights::ADD_WRITE);
-from_try_from_key_impl!(AWRef, AccessRights::ADD_WRITE);
-addable_impl!(AWRef<T>);
-writeable_impl!(AWRef<T>);
