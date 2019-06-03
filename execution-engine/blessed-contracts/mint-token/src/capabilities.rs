@@ -71,7 +71,7 @@ macro_rules! addable_impl {
 }
 
 /// Macro for deriving conversion traits to/from UPointer
-macro_rules! from_try_from_upointer_impl {
+macro_rules! into_try_from_upointer_impl {
     ($type:ident, $min_access:expr) => {
         impl<T> TryFrom<UPointer<T>> for $type<T> {
             type Error = ();
@@ -131,7 +131,7 @@ macro_rules! from_try_from_key_impl {
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct ARef<T>(pub [u8; 32], PhantomData<T>);
 
-from_try_from_upointer_impl!(ARef, AccessRights::ADD);
+into_try_from_upointer_impl!(ARef, AccessRights::ADD);
 from_try_from_key_impl!(ARef, AccessRights::ADD);
 addable_impl!(ARef<T>);
 
@@ -139,7 +139,7 @@ addable_impl!(ARef<T>);
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct RAWRef<T>(pub [u8; 32], PhantomData<T>);
 
-from_try_from_upointer_impl!(RAWRef, AccessRights::READ_ADD_WRITE);
+into_try_from_upointer_impl!(RAWRef, AccessRights::READ_ADD_WRITE);
 from_try_from_key_impl!(RAWRef, AccessRights::READ_ADD_WRITE);
 readable_impl!(RAWRef<T>);
 addable_impl!(RAWRef<T>);
