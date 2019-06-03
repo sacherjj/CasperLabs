@@ -37,7 +37,7 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
         let balance_uref: Key = contract_api::new_uref(balance).into();
 
         let purse_key: Key = contract_api::new_uref(()).into();
-        let purse_id: WithdrawId = purse_key.try_into().unwrap();
+        let purse_id: WithdrawId = WithdrawId::from_key(purse_key).unwrap();
 
         // store balance uref so that the runtime knows the mint has full access
         contract_api::add_uref(&format!("{:?}", purse_id.raw_id()), &balance_uref);
@@ -63,12 +63,10 @@ fn transfer(
     amount: U512,
     mint: CLMint,
 ) -> Result<(), mint::Error> {
-    let source: WithdrawId = source_key
-        .try_into()
-        .map_err(|_| mint::Error::SourceNotFound)?;
-    let target: DepositId = target_key
-        .try_into()
-        .map_err(|_| mint::Error::DestNotFound)?;
+    let source: WithdrawId =
+        WithdrawId::from_key(source_key).map_err(|_| mint::Error::SourceNotFound)?;
+    let target: DepositId =
+        DepositId::from_key(target_key).map_err(|_| mint::Error::DestNotFound)?;
 
     mint.transfer(source, target, amount)
 }
@@ -88,7 +86,7 @@ pub extern "C" fn mint_ext() {
 
         "balance" => {
             let key: Key = contract_api::get_arg(1);
-            let purse_id: WithdrawId = key.try_into().unwrap();
+            let purse_id: WithdrawId = WithdrawId::from_key(key).unwrap();
             let balance_uref = mint.lookup(purse_id);
             let balance: Option<U512> = balance_uref.map(|uref| contract_api::read(uref.into()));
             contract_api::ret(&balance, &vec![])
