@@ -242,17 +242,18 @@ impl From<common::value::account::Account> for super::ipc::Account {
         let mut ipc_account = super::ipc::Account::new();
         ipc_account.set_pub_key(account.pub_key().to_vec());
         ipc_account.set_nonce(account.nonce());
-        let associated_keys: Vec<super::ipc::Account_AssociatedKey> = {
-            let associated_keys = account.get_associated_keys().get_all();
-            let mut tmp = Vec::with_capacity(associated_keys.len());
-            associated_keys.iter().for_each(|(key, weight)| {
+        let associated_keys: Vec<super::ipc::Account_AssociatedKey> = account
+            .get_associated_keys()
+            .get_all()
+            .iter()
+            .map(|(key, weight)| {
                 let mut ipc_associated_key = super::ipc::Account_AssociatedKey::new();
                 ipc_associated_key.set_pub_key(key.value().to_vec());
                 ipc_associated_key.set_weight(u32::from(weight.value()));
-                tmp.push(ipc_associated_key);
-            });
-            tmp
-        };
+                ipc_associated_key
+            })
+            .collect();
+
         let action_thresholds = {
             let mut tmp = Account_ActionThresholds::new();
             tmp.set_key_management_threshold(u32::from(
@@ -300,14 +301,14 @@ impl TryFrom<&super::ipc::Account> for common::value::account::Account {
         let associated_keys: AssociatedKeys = {
             let mut keys = AssociatedKeys::empty();
             value.get_associated_keys().iter().try_for_each(|k| {
-                k.try_into()
-                    .and_then(|(pub_key, weight)| match keys.add_key(pub_key, weight) {
-                        Err(add_key_failure) => parse_error(format!(
-                            "Error when parsing associated keys: {:?}",
-                            add_key_failure
-                        )),
-                        Ok(_) => Ok(()),
-                    })
+                let (pub_key, weight) = k.try_into()?;
+                match keys.add_key(pub_key, weight) {
+                    Err(add_key_failure) => parse_error(format!(
+                        "Error when parsing associated keys: {:?}",
+                        add_key_failure
+                    )),
+                    Ok(_) => Ok(()),
+                }
             })?;
             keys
         };
@@ -907,10 +908,9 @@ mod tests {
 
     #[test]
     fn commit_effects_merges_transforms() {
-        // Tests that when transforms made to the same key are merged instead of lost.
+        // Tests that transforms made to the same key are merged instead of lost.
         let key = Key::Hash([1u8; 32]);
         let setup: Vec<super::ipc::TransformEntry> = {
-            let mut tmp = Vec::new();
             let transform_entry_first = {
                 let mut tmp = TransformEntry::new();
                 tmp.set_key((&key).into());
@@ -923,9 +923,7 @@ mod tests {
                 tmp.set_transform(Transform::AddInt32(10).into());
                 tmp
             };
-            tmp.push(transform_entry_first);
-            tmp.push(transform_entry_second);
-            tmp
+            vec![transform_entry_first, transform_entry_second]
         };
         let setup_slice: &[super::ipc::TransformEntry] = &setup;
         let commit: CommitTransforms = setup_slice
