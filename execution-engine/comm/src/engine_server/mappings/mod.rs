@@ -115,6 +115,33 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
     }
 }
 
+impl From<common::value::Contract> for super::ipc::Contract {
+    fn from(contract: common::value::Contract) -> Self {
+        let (bytes, known_urefs, protocol_version) = contract.destructure();
+        let mut contract = super::ipc::Contract::new();
+        let urefs = URefMap(known_urefs).into();
+        contract.set_body(bytes);
+        contract.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
+        let mut protocol = super::ipc::ProtocolVersion::new();
+        protocol.set_version(protocol_version);
+        contract.set_protocol_version(protocol);
+        contract
+    }
+}
+
+impl TryFrom<&super::ipc::Contract> for common::value::Contract {
+    type Error = ParsingError;
+
+    fn try_from(value: &super::ipc::Contract) -> Result<Self, Self::Error> {
+        let known_urefs: URefMap = value.get_known_urefs().try_into()?;
+        Ok(common::value::Contract::new(
+            value.get_body().to_vec(),
+            known_urefs.0,
+            value.get_protocol_version().version,
+        ))
+    }
+}
+
 impl From<common::value::Value> for super::ipc::Value {
     fn from(v: common::value::Value) -> Self {
         let mut tv = super::ipc::Value::new();
@@ -162,15 +189,7 @@ impl From<common::value::Value> for super::ipc::Value {
                 tv.set_account(acc);
             }
             common::value::Value::Contract(contract) => {
-                let (bytes, known_urefs, protocol_version) = contract.destructure();
-                let mut contr = super::ipc::Contract::new();
-                let urefs = URefMap(known_urefs).into();
-                contr.set_body(bytes);
-                contr.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
-                let mut protocol = super::ipc::ProtocolVersion::new();
-                protocol.set_version(protocol_version);
-                contr.set_protocol_version(protocol);
-                tv.set_contract(contr);
+                tv.set_contract(contract.into());
             }
         };
         tv
@@ -760,7 +779,7 @@ mod tests {
         assert_eq!(test_cost(cost, forged_ref_error), cost);
     }
 
-    use common::gens::{account_arb, key_arb, uref_map_arb};
+    use common::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
     use proptest::prelude::*;
     use shared::transform::gens::transform_arb;
 
@@ -791,13 +810,18 @@ mod tests {
         }
 
         #[test]
+        fn contract_roundtrip(contract in contract_arb()) {
+            let ipc_contract: super::ipc::Contract = contract.clone().into();
+            let contract_back = (&ipc_contract).try_into()
+                .expect("Transforming ipc::Contract into domain Contract should succeed.");
+            assert_eq!(contract, contract_back)
+        }
+
+        #[test]
         fn transform_roundtrip(key in key_arb(), transform in transform_arb()) {
-            println!("DONE0");
             let transform_entry: super::ipc::TransformEntry = (key, transform.clone()).into();
-            println!("DONE1");
             let tuple: (Key, Transform) = (&transform_entry).try_into()
                 .expect("Transforming TransformEntry into (Key, Transform) tuple should work.");
-            println!("DONE2");
             assert_eq!(tuple, (key, transform))
         }
 
