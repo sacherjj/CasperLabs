@@ -162,13 +162,13 @@ addable_impl!(RARef<T>);
 
 /// Read+Write URef
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub struct RWRef<T>(pub [u8; 32], PhantomData<T>);
+pub struct RAWRef<T>(pub [u8; 32], PhantomData<T>);
 
-from_try_from_upointer_impl!(RWRef, AccessRights::READ_WRITE);
-from_try_from_key_impl!(RWRef, AccessRights::READ_WRITE);
-readable_impl!(RWRef<T>);
-writeable_impl!(RWRef<T>);
-addable_impl!(RWRef<T>); // Read+Write => Add
+from_try_from_upointer_impl!(RAWRef, AccessRights::READ_ADD_WRITE);
+from_try_from_key_impl!(RAWRef, AccessRights::READ_ADD_WRITE);
+readable_impl!(RAWRef<T>);
+addable_impl!(RAWRef<T>);
+writeable_impl!(RAWRef<T>);
 
 /// Add+Write URef
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]

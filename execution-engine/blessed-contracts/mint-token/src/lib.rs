@@ -23,13 +23,13 @@ use cl_std::contract_api;
 use cl_std::key::{AccessRights, Key};
 use cl_std::value::U512;
 
-use capabilities::{ARef, RWRef};
+use capabilities::{ARef, RAWRef};
 use internal_purse_id::{DepositId, WithdrawId};
 use mint::Mint;
 
 struct CLMint;
 
-impl Mint<ARef<U512>, RWRef<U512>> for CLMint {
+impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     type PurseId = WithdrawId;
     type DepOnlyId = DepositId;
 
@@ -48,7 +48,7 @@ impl Mint<ARef<U512>, RWRef<U512>> for CLMint {
         purse_id
     }
 
-    fn lookup(&self, p: Self::PurseId) -> Option<RWRef<U512>> {
+    fn lookup(&self, p: Self::PurseId) -> Option<RAWRef<U512>> {
         p.lookup().and_then(|key| key.try_into().ok())
     }
 
