@@ -2,7 +2,7 @@ package io.casperlabs.node.api
 
 import cats.Id
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Resource, Timer}
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -16,7 +16,7 @@ import io.casperlabs.node._
 import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.node.api.control.ControlGrpcMonix
 import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
-import io.casperlabs.node.api.graphql.GraphQL
+import io.casperlabs.node.api.graphql.{Fs2SubscriptionStream, GraphQL, GraphQLSchema}
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics.effects.diagnosticsService
 import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
@@ -26,8 +26,13 @@ import kamon.Kamon
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 import org.http4s.implicits._
+
+import scala.concurrent.duration._
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
+import sangria.execution.Executor
+
+import scala.concurrent.ExecutionContext
 
 object Servers {
 
@@ -102,34 +107,24 @@ object Servers {
     ) *>
       Resource.liftF(Log[F].info(s"External gRPC services started on port ${port}."))
 
-  def httpServerR(
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: SafetyOracle: BlockStore: ContextShift](
       port: Int,
       conf: Configuration,
-      id: NodeIdentifier
-  )(
-      implicit
-      log: Log[Task],
-      nodeDiscovery: NodeDiscovery[Task],
-      connectionsCell: ConnectionsCell[Task],
-      scheduler: Scheduler,
-      T: Timer[Task],
-      C: cats.effect.ConcurrentEffect[Task],
-      M: MultiParentCasperRef[Effect],
-      S: SafetyOracle[Effect],
-      B: BlockStore[Effect]
-  ): Resource[Effect, Unit] = {
+      id: NodeIdentifier,
+      ec: ExecutionContext
+  ): Resource[F, Unit] = {
 
     val prometheusReporter = new NewPrometheusReporter()
-    val prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
-    val metricsRuntime     = new MetricsRuntime[Task](conf, id)
+    val prometheusService  = NewPrometheusReporter.service[F](prometheusReporter)
+    val metricsRuntime     = new MetricsRuntime[F](conf, id)
 
-    (for {
+    for {
       _ <- Resource.make {
             metricsRuntime.setupMetrics(prometheusReporter)
           } { _ =>
-            Task.delay(Kamon.stopAllReporters())
+            Sync[F].delay(Kamon.stopAllReporters())
           }
-      _ <- BlazeServerBuilder[Task]
+      _ <- BlazeServerBuilder[F]
             .bindHttp(port, "0.0.0.0")
             .withNio2(true)
             .withHttpApp(
@@ -137,13 +132,13 @@ object Servers {
                 "/metrics" -> prometheusService,
                 "/version" -> VersionInfo.service,
                 "/status"  -> StatusInfo.service,
-                "/graphql" -> GraphQL.service
+                "/graphql" -> GraphQL.service[F](ec)
               ).orNotFound
             )
             .resource
       _ <- Resource.liftF(
-            Log[Task].info(s"HTTP server started on port ${port}.")
+            Log[F].info(s"HTTP server started on port ${port}.")
           )
-    } yield ()).toEffect
+    } yield ()
   }
 }

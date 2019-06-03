@@ -9,9 +9,7 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.info.BlockInfo
-import io.casperlabs.comm.CommError
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.node.CommErrT
 import io.casperlabs.shared.Log
 import sangria.schema._
 import sangria.validation.Violation
@@ -84,12 +82,10 @@ private[graphql] object GraphQLSchema {
       implicit fs2SubscriptionStream: Fs2SubscriptionStream[F],
       L: Log[F],
       E: Effect[F],
-      M: MultiParentCasperRef[CommErrT[F, ?]],
-      S: SafetyOracle[CommErrT[F, ?]],
-      B: BlockStore[CommErrT[F, ?]]
-  ): Schema[Unit, Unit] = {
-    import Log.eitherTLog
-
+      M: MultiParentCasperRef[F],
+      S: SafetyOracle[F],
+      B: BlockStore[F]
+  ): Schema[Unit, Unit] =
     Schema(
       query = ObjectType(
         "Query",
@@ -100,19 +96,9 @@ private[graphql] object GraphQLSchema {
             arguments = HashPrefix :: Nil,
             resolve = c =>
               BlockAPI
-                .getBlockInfoOpt[CommErrT[F, ?]](
+                .getBlockInfoOpt[F](
                   blockHashBase16 = c.arg(HashPrefix),
                   full = hasAtLeastOne(c, Set("blockSizeBytes", "deployErrorCount"))
-                )
-                .value
-                .flatMap(
-                  _.fold(
-                    e =>
-                      E.raiseError[Option[BlockInfo]](
-                        new RuntimeException(CommError.errorMessage(e))
-                      ),
-                    _.pure[F]
-                  )
                 )
                 .toIO
                 .unsafeToFuture()
@@ -134,5 +120,4 @@ private[graphql] object GraphQLSchema {
         )
       ).some
     )
-  }
 }
