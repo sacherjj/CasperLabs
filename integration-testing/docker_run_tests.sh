@@ -42,5 +42,4 @@ sed 's/||TAG||/'"${TAG_NAME}"'/g' docker-compose.yml.template > docker-compose.y
 
 docker-compose up --exit-code-from test --abort-on-container-exit
 result_code=$?
-cleanup
 exit $result_code
