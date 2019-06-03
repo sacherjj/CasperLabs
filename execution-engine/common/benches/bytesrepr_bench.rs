@@ -11,7 +11,9 @@ use test::Bencher;
 
 use casperlabs_contract_ffi::bytesrepr::{FromBytes, ToBytes};
 use casperlabs_contract_ffi::key::{AccessRights, Key};
-use casperlabs_contract_ffi::value::account::{AssociatedKeys, PublicKey, Weight};
+use casperlabs_contract_ffi::value::account::{
+    AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight,
+};
 use casperlabs_contract_ffi::value::{
     account::Account,
     contract::Contract,
@@ -358,11 +360,15 @@ fn make_contract() -> Contract {
 fn make_account() -> Account {
     let known_urefs = make_known_urefs();
     let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1));
+    let action_thresholds = Default::default();
+    let account_activity = AccountActivity::new(BlockTime(0), BlockTime(100));
     Account::new(
         [0u8; 32],
         2_635_333_365_164_409_670u64,
         known_urefs,
         associated_keys,
+        action_thresholds,
+        account_activity,
     )
 }
 
