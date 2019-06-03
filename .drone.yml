@@ -144,7 +144,8 @@ pipeline:
 
   run-integration-tests:
     commands:
-      - "python3 -m pip install pipenv dataclasses typing_extensions"
+      - "apt-get update && apt-get -y install gcc"
+      - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2"
       - "cd integration-testing"
       - ./docker_run_tests.sh
     environment:
