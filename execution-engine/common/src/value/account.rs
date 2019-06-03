@@ -451,7 +451,7 @@ mod tests {
         let mut keys = AssociatedKeys::new([0u8; KEY_SIZE].into(), Weight::new(1));
         let new_pk = PublicKey([1u8; KEY_SIZE]);
         let new_pk_weight = Weight::new(2);
-        assert!(keys.add_key(new_pk.clone(), new_pk_weight.clone()).is_ok());
+        assert!(keys.add_key(new_pk, new_pk_weight).is_ok());
         assert_eq!(keys.get(&new_pk), Some(&new_pk_weight))
     }
 
@@ -474,9 +474,9 @@ mod tests {
     fn associated_keys_add_duplicate() {
         let pk = PublicKey([0u8; KEY_SIZE]);
         let weight = Weight::new(1);
-        let mut keys = AssociatedKeys::new(pk.clone(), weight.clone());
+        let mut keys = AssociatedKeys::new(pk, weight);
         assert_eq!(
-            keys.add_key(pk.clone(), Weight::new(10)),
+            keys.add_key(pk, Weight::new(10)),
             Err(AddKeyFailure::DuplicateKey)
         );
         assert_eq!(keys.get(&pk), Some(&weight));
@@ -486,7 +486,7 @@ mod tests {
     fn associated_keys_remove() {
         let pk = PublicKey([0u8; KEY_SIZE]);
         let weight = Weight::new(1);
-        let mut keys = AssociatedKeys::new(pk.clone(), weight.clone());
+        let mut keys = AssociatedKeys::new(pk, weight);
         assert!(keys.remove_key(&pk));
         assert!(!keys.remove_key(&PublicKey([1u8; KEY_SIZE])));
     }

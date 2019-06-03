@@ -245,10 +245,10 @@ impl From<common::value::account::Account> for super::ipc::Account {
         let associated_keys: Vec<super::ipc::Account_AssociatedKey> = {
             let associated_keys = account.get_associated_keys().get_all();
             let mut tmp = Vec::with_capacity(associated_keys.len());
-            associated_keys.into_iter().for_each(|(key, weight)| {
+            associated_keys.iter().for_each(|(key, weight)| {
                 let mut ipc_associated_key = super::ipc::Account_AssociatedKey::new();
                 ipc_associated_key.set_pub_key(key.value().to_vec());
-                ipc_associated_key.set_weight(weight.value() as u32);
+                ipc_associated_key.set_weight(u32::from(weight.value()));
                 tmp.push(ipc_associated_key);
             });
             tmp
