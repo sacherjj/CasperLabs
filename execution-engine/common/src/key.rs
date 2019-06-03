@@ -63,6 +63,23 @@ impl Key {
             _ => None,
         }
     }
+
+    /// Returns bytes of an account
+    pub fn as_account(&self) -> Option<[u8; 32]> {
+        match self {
+            Account(bytes) => Some(*bytes),
+            _ => None,
+        }
+    }
+    /// Creates a new Account from a slice
+    pub fn account_from_slice(slice: &[u8]) -> Option<Key> {
+        if slice.len() != 32 {
+            return None;
+        }
+        let mut account_bytes = [0; 32];
+        account_bytes.copy_from_slice(slice);
+        Some(Key::Account(account_bytes))
+    }
 }
 
 const ACCOUNT_ID: u8 = 0;
@@ -187,7 +204,7 @@ impl ToBytes for Vec<Key> {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
-    use crate::key::AccessRights;
+    use crate::key::{AccessRights, Key};
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)
@@ -232,5 +249,21 @@ mod tests {
         test_addable(AccessRights::READ, false);
         test_addable(AccessRights::WRITE, false);
         test_addable(AccessRights::READ_ADD_WRITE, true);
+    }
+
+    #[test]
+    fn test_account_key_from_slice() {
+        let data = [42; 32];
+        let key = Key::account_from_slice(&data).unwrap();
+
+        let account_bytes = key.as_account().expect("Key is not an account");
+        assert_eq!(data, account_bytes);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_account_key_from_slice() {
+        let data = [42; 20];
+        let _key = Key::account_from_slice(&data).unwrap();
     }
 }

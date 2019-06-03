@@ -6,6 +6,7 @@ use std::marker::{Send, Sync};
 
 use common::key::Key;
 use execution_engine::engine_state::error::Error as EngineError;
+use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::EngineState;
 use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::tracking_copy::QueryResult;
@@ -213,6 +214,13 @@ where
             let session_contract = deploy.get_session();
             let module_bytes = &session_contract.code;
             let args = &session_contract.args;
+            let address = match Key::account_from_slice(&deploy.address) {
+                Some(key) => key,
+                None => {
+                    let err = ExecutionResult::failure(EngineError::InvalidAddress, 0);
+                    return Ok(err.into());
+                }
+            };
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
@@ -220,7 +228,7 @@ where
                 .run_deploy(
                     module_bytes,
                     args,
-                    &deploy.address,
+                    address,
                     timestamp,
                     nonce,
                     prestate_hash,
@@ -235,7 +243,7 @@ where
         .collect()
 }
 
-// Helper method which returns single DeployResult that is set to be a WasmError.
+// Helper method which returns single DeployResult that is set to be a ipc::WasmError.
 pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     socket: &str,
     e: E,

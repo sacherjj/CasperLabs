@@ -500,6 +500,15 @@ impl From<ExecutionResult> for ipc::DeployResult {
                 cost,
             } => {
                 match err {
+                    EngineError::InvalidAddress => {
+                        let mut deploy_result = ipc::DeployResult::new();
+                        let mut err = ipc::InvalidAddressError::new();
+                        let mut deploy_error = ipc::DeployError::new();
+                        deploy_error.set_invalidAddressErr(err);
+                        deploy_result.set_error(deploy_error);
+                        deploy_result.set_cost(cost);
+                        deploy_result
+                    }
                     // TODO(mateusz.gorski): Fix error model for the storage errors.
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".

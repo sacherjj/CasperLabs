@@ -43,7 +43,6 @@ pub enum Error {
     Interpreter(InterpreterError),
     Storage(storage::error::Error),
     BytesRepr(BytesReprError),
-    InvalidAddress,
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
     InvalidAccess { required: AccessRights },
@@ -763,7 +762,7 @@ pub trait Executor<A> {
         &self,
         parity_module: A,
         args: &[u8],
-        account_addr: &[u8],
+        account: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
@@ -781,7 +780,7 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        account_addr: &[u8],
+        acct_key: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
@@ -791,13 +790,6 @@ impl Executor<Module> for WasmiExecutor {
     where
         R::Error: Into<Error>,
     {
-        if account_addr.len() != 32 {
-            return (Err(Error::InvalidAddress.into()), 0);
-        }
-        let mut account_bytes = [0; 32];
-        account_bytes.copy_from_slice(account_addr);
-        let acct_key = Key::Account(account_bytes);
-
         let (instance, memory) = on_fail_charge!(
             instance_and_memory(parity_module.clone(), protocol_version),
             0
@@ -816,6 +808,12 @@ impl Executor<Module> for WasmiExecutor {
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
+        // NOTE: Enforce a safe unwrapping as passing anything other than Key would be programming error
+        debug_assert!(
+            acct_key.as_account().is_some(),
+            "A key passed should be holding an account"
+        );
+        let account_bytes = acct_key.as_account().unwrap();
         let rng = create_rng(&account_bytes, timestamp, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;

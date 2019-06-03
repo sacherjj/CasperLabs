@@ -17,6 +17,7 @@ use std::iter::Iterator;
 
 use clap::{App, Arg, ArgMatches};
 
+use common::key::Key;
 use execution_engine::engine_state::error::RootNotFound;
 use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::EngineState;
@@ -95,14 +96,14 @@ fn main() {
         logging::log_info(SERVER_NO_WASM_MESSAGE);
     }
 
-    let account_addr: [u8; 32] = {
+    let account_addr = {
         let mut address = [48u8; 32];
         matches
             .value_of("address")
             .map(str::as_bytes)
             .map(|bytes| address.copy_from_slice(bytes))
             .expect("Error when parsing address");
-        address
+        Key::Account(address)
     };
 
     let gas_limit: u64 = matches
@@ -122,7 +123,7 @@ fn main() {
     // let path = std::path::Path::new("./tmp/");
     // TODO: Better error handling?
     //    let global_state = LmdbGs::new(&path).unwrap();
-    let init_state = mocked_account(account_addr);
+    let init_state = mocked_account(account_addr.as_account().unwrap());
     let global_state =
         InMemoryGlobalState::from_pairs(&init_state).expect("Could not create global state");
     let mut state_hash: Blake2bHash = global_state.root_hash;
@@ -141,7 +142,7 @@ fn main() {
         let result = engine_state.run_deploy(
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
-            &account_addr,
+            account_addr,
             timestamp,
             nonce,
             state_hash,
