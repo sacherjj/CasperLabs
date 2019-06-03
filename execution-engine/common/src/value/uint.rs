@@ -33,11 +33,6 @@ pub enum UIntParseError {
 
 macro_rules! ser_and_num_impls {
     ($type:ident, $total_bytes:expr) => {
-        impl $type {
-            pub fn from_string(s: &str, radix: u32) -> Result<Self, UIntParseError> {
-                Num::from_str_radix(s, radix)
-            }
-        }
 
         impl ToBytes for $type {
             fn to_bytes(&self) -> Result<Vec<u8>, Error> {
