@@ -34,7 +34,9 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
     latestMessages: Map[Validator, BlockHash],
     childMap: Map[BlockHash, Set[BlockHash]],
     dataLookup: Map[BlockHash, BlockMetadata],
+    // Top layers of the DAG, rank by rank.
     topoSort: Vector[Vector[BlockHash]],
+    // The rank of the blocks in `topoSort.head`. Everything before it is in checkpoints.
     sortOffset: Long,
     checkpoints: List[Checkpoint],
     latestMessagesLogOutputStream: FileOutputStreamIO[F],
@@ -64,6 +66,10 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
       topoSortVector: Vector[Vector[BlockHash]],
       sortOffset: Long
   ) extends BlockDagRepresentation[F] {
+
+    // Number of the last rank in topoSortVector
+    def sortEndBlockNumber = sortOffset + topoSortVector.size - 1
+
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
       for {
         result <- childMap.get(blockHash) match {
@@ -101,39 +107,47 @@ class BlockDagFileStorage[F[_]: Concurrent: Log: BlockStore: RaiseIOError] priva
       dataLookup.get(blockHash).fold(BlockStore[F].contains(blockHash))(_ => true.pure[F])
 
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
-      if (startBlockNumber >= sortOffset) {
+      topoSort(startBlockNumber, sortEndBlockNumber)
+
+    def topoSort(startBlockNumber: Long, endBlockNumber: Long): F[Vector[Vector[BlockHash]]] = {
+      val length = endBlockNumber - startBlockNumber + 1
+      if (length > Int.MaxValue) { // Max Vector length
+        Sync[F].raiseError(TopoSortLengthIsTooBig(length))
+      } else if (startBlockNumber >= sortOffset) {
         val offset = startBlockNumber - sortOffset
-        assertCond[F]("Topo sort offset is not a valid Int", offset.isValidInt) map
-          kp(topoSortVector.drop(offset.toInt))
-      } else if (sortOffset - startBlockNumber + topoSortVector.length < Int.MaxValue) { // Max Vector length
+        assertCond[F]("Topo sort offset is not a valid Int", offset.isValidInt) >>
+          topoSortVector.slice(offset.toInt, (offset + length).toInt).pure[F]
+      } else {
         lock.withPermit(
           for {
             checkpoints          <- (state >> 'checkpoints).get
             checkpointsWithIndex = checkpoints.zipWithIndex
             checkpointsToLoad = checkpointsWithIndex.filter {
-              case (checkpoint, _) => startBlockNumber < checkpoint.end
+              case (checkpoint, _) =>
+                startBlockNumber <= checkpoint.end &&
+                  endBlockNumber >= checkpoint.start
             }
             checkpointsDagInfos <- checkpointsToLoad.traverse {
                                     case (startingCheckpoint, index) =>
                                       loadCheckpointDagInfo(startingCheckpoint, index)
                                   }
+            // Load previous ranks from the checkpoints.
             topoSortPrefix = checkpointsDagInfos.toVector.flatMap { checkpointsDagInfo =>
               val offset = startBlockNumber - checkpointsDagInfo.sortOffset
               // offset is always a valid Int since the method result's length was validated before
               checkpointsDagInfo.topoSort.drop(offset.toInt) // negative drops are ignored
             }
-            result = topoSortPrefix ++ topoSortVector
+            result = if (topoSortPrefix.length >= length) topoSortPrefix
+            else (topoSortPrefix ++ topoSortVector).take(length.toInt)
           } yield result
         )
-      } else {
-        Sync[F].raiseError(
-          TopoSortLengthIsTooBig(sortOffset - startBlockNumber + topoSortVector.length)
-        )
       }
+    }
 
     def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] = {
-      val startBlockNumber = Math.max(0L, sortOffset - (tailLength - topoSortVector.length))
-      topoSort(startBlockNumber)
+      val endBlockNumber   = sortEndBlockNumber
+      val startBlockNumber = Math.max(0L, endBlockNumber - tailLength + 1)
+      topoSort(startBlockNumber, endBlockNumber)
     }
 
     def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =

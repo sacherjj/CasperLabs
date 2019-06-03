@@ -1,16 +1,14 @@
-package io.casperlabs.casper.api
+package io.casperlabs.client
 
 import cats.{Monad, _}
 import cats.effect.Sync
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStore
-import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import com.google.protobuf.ByteString
 import io.casperlabs.casper._
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.catscontrib.Catscontrib._
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.graphz._
-import io.casperlabs.shared.Log
 
 final case class ValidatorBlock(
     blockHash: String,
@@ -33,7 +31,7 @@ object ValidatorBlock {
 final case class GraphConfig(showJustificationLines: Boolean = false)
 
 object GraphzGenerator {
-
+  type BlockHash        = ByteString
   type ValidatorsBlocks = Map[Long, ValidatorBlock]
 
   final case class DagInfo[G[_]](
@@ -45,96 +43,100 @@ object GraphzGenerator {
     def empty[G[_]]: DagInfo[G] = DagInfo[G]()
   }
 
+  private def hexShort(hash: ByteString) = {
+    val str = Base16.encode(hash.toByteArray)
+    if (str.length <= 10) str else str.substring(0, 10) + "..."
+  }
+
   def dagAsCluster[
-      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
       G[_]: Monad: GraphSerializer
   ](
-      topoSort: Vector[Vector[BlockHash]],
-      lastFinalizedBlockHash: String,
+      // Going from newest to oldest.
+      blockInfos: List[BlockInfo],
       config: GraphConfig
-  ): F[G[Graphz[G]]] =
+  ): G[Graphz[G]] = {
+    val acc = toDagInfo[G](blockInfos)
+
+    val lastFinalizedBlockHash =
+      blockInfos
+        .find(_.getStatus.faultTolerance > 0)
+        .map(x => hexShort(x.getSummary.blockHash))
+        .getOrElse("")
+
+    val timeseries     = acc.timeseries.reverse
+    val firstTs        = timeseries.head
+    val validators     = acc.validators
+    val validatorsList = validators.toList.sortBy(_._1)
+
     for {
-      acc <- topoSort.foldM(DagInfo.empty[G])(accumulateDagInfo[F, G])
-    } yield {
-
-      val timeseries     = acc.timeseries.reverse
-      val firstTs        = timeseries.head
-      val validators     = acc.validators
-      val validatorsList = validators.toList.sortBy(_._1)
-      for {
-        g <- initGraph[G]("dag")
-        allAncestors = validatorsList
-          .flatMap {
-            case (_, blocks) =>
-              blocks.get(firstTs).map(_.parentsHashes).getOrElse(List.empty[String])
+      g <- initGraph[G]("dag")
+      // block hashes of parents of the very first rank
+      allAncestors = validatorsList
+        .flatMap {
+          case (_, blocks) =>
+            blocks.get(firstTs).map(_.parentsHashes).getOrElse(List.empty[String])
+        }
+        .distinct
+        .sorted
+      // draw ancesotrs first
+      _ <- allAncestors.traverse(
+            ancestor =>
+              g.node(
+                ancestor,
+                style = styleFor(ancestor, lastFinalizedBlockHash),
+                shape = Box
+              )
+          )
+      // create invisible edges from ancestors to first node in each cluster for proper alligment
+      _ <- validatorsList.traverse {
+            case (id, blocks) =>
+              allAncestors.traverse(ancestor => {
+                val node = nodeForTs(id, firstTs, blocks, lastFinalizedBlockHash)._2
+                g.edge(ancestor, node, style = Some(Invis))
+              })
           }
-          .distinct
-          .sorted
-        // draw ancesotrs first
-        _ <- allAncestors.traverse(
-              ancestor =>
-                g.node(
-                  ancestor,
-                  style = styleFor(ancestor, lastFinalizedBlockHash),
-                  shape = Box
-                )
-            )
-        // create invisible edges from ancestors to first node in each cluster for proper alligment
-        _ <- validatorsList.traverse {
-              case (id, blocks) =>
-                allAncestors.traverse(ancestor => {
-                  val node = nodeForTs(id, firstTs, blocks, lastFinalizedBlockHash)._2
-                  g.edge(ancestor, node, style = Some(Invis))
-                })
-            }
-        // draw clusters per validator
-        _ <- validatorsList.traverse {
-              case (id, blocks) =>
-                g.subgraph(
-                  validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash)
-                )
-            }
-        // draw parent dependencies
-        _ <- drawParentDependencies[G](g, validatorsList.map(_._2))
-        // draw justification dotted lines
-        _ <- config.showJustificationLines.fold(
-              drawJustificationDottedLines[G](g, validators),
-              ().pure[G]
-            )
-        _ <- g.close
-      } yield g
+      // draw clusters per validator
+      _ <- validatorsList.traverse {
+            case (id, blocks) =>
+              g.subgraph(
+                validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash)
+              )
+          }
+      // draw parent dependencies
+      _ <- drawParentDependencies[G](g, validatorsList.map(_._2))
+      // draw justification dotted lines
+      _ <- config.showJustificationLines.fold(
+            drawJustificationDottedLines[G](g, validators),
+            ().pure[G]
+          )
+      _ <- g.close
+    } yield g
+  }
 
+  private def toDagInfo[G[_]](
+      blockInfos: List[BlockInfo]
+  ): DagInfo[G] = {
+    val timeseries = blockInfos.map(_.getSummary.getHeader.rank).distinct
+
+    val validators = blockInfos.map(_.getSummary).foldMap { b =>
+      val timeEntry       = b.getHeader.rank
+      val blockHash       = hexShort(b.blockHash)
+      val blockSenderHash = hexShort(b.getHeader.validatorPublicKey)
+      val parents         = b.getHeader.parentHashes.toList.map(hexShort)
+      val justifications = b.getHeader.justifications
+        .map(_.latestBlockHash)
+        .map(hexShort)
+        .toSet
+        .toList
+
+      val validatorBlocks =
+        Map(timeEntry -> ValidatorBlock(blockHash, parents, justifications))
+
+      Map(blockSenderHash -> validatorBlocks)
     }
 
-  private def accumulateDagInfo[
-      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
-      G[_]
-  ](
-      acc: DagInfo[G],
-      blockHashes: Vector[BlockHash]
-  ): F[DagInfo[G]] =
-    for {
-      blocks    <- blockHashes.traverse(ProtoUtil.unsafeGetBlock[F])
-      timeEntry = blocks.head.getHeader.rank
-      validators = blocks.toList.map { b =>
-        val blockHash       = PrettyPrinter.buildString(b.blockHash)
-        val blockSenderHash = PrettyPrinter.buildString(b.getHeader.validatorPublicKey)
-        val parents = b.getHeader.parentHashes.toList
-          .map(PrettyPrinter.buildString)
-        val justifications = b.getHeader.justifications
-          .map(_.latestBlockHash)
-          .map(PrettyPrinter.buildString)
-          .toSet
-          .toList
-        val validatorBlocks =
-          Map(timeEntry -> ValidatorBlock(blockHash, parents, justifications))
-        Map(blockSenderHash -> validatorBlocks)
-      }
-    } yield
-      acc.copy(
-        timeseries = timeEntry :: acc.timeseries,
-        validators = acc.validators |+| Foldable[List].fold(validators)
-      )
+    DagInfo[G](validators, timeseries)
+  }
 
   private def initGraph[G[_]: Monad: GraphSerializer](name: String): G[Graphz[G]] =
     Graphz[G](

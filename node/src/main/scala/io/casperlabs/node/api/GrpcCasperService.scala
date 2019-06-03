@@ -15,6 +15,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.node.api.casper._
 import monix.execution.Scheduler
 import monix.eval.{Task, TaskLike}
+import monix.reactive.Observable
 
 object GrpcCasperService {
   def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: SafetyOracle: BlockStore](
@@ -27,14 +28,25 @@ object GrpcCasperService {
             BlockAPI.deploy[F](request.getDeploy, ignoreDeploySignature).map(_ => Empty())
           }
 
-        override def getBlockInfo(request: GetBlockInfoRequest): monix.eval.Task[BlockInfo] =
+        override def getBlockInfo(request: GetBlockInfoRequest): Task[BlockInfo] =
           TaskLike[F].toTask {
             BlockAPI
               .getBlockInfo[F](
                 request.blockHashBase16,
-                full = request.view == GetBlockInfoRequest.View.FULL
+                full = request.view == BlockInfoView.FULL
               )
           }
+
+        override def streamBlockInfos(request: StreamBlockInfosRequest): Observable[BlockInfo] = {
+          val infos = TaskLike[F].toTask {
+            BlockAPI.getBlockInfos[F](
+              depth = request.depth,
+              maxRank = request.maxRank,
+              full = request.view == BlockInfoView.FULL
+            )
+          }
+          Observable.fromTask(infos).flatMap(Observable.fromIterable)
+        }
       }
     }
 }
