@@ -33,7 +33,6 @@ pub enum UIntParseError {
 
 macro_rules! ser_and_num_impls {
     ($type:ident, $total_bytes:expr) => {
-
         impl ToBytes for $type {
             fn to_bytes(&self) -> Result<Vec<u8>, Error> {
                 let mut buf = [0u8; $total_bytes];
