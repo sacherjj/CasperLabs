@@ -11,6 +11,7 @@ use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::op::Op;
 use execution_engine::execution::Error as ExecutionError;
+use execution_engine::utils;
 use ipc;
 use shared::logging;
 use shared::logging::log_level;
@@ -534,8 +535,7 @@ impl TryFrom<&[super::ipc::TransformEntry]> for CommitTransforms {
         for named_key in value.iter() {
             let (key, transform): (common::key::Key, transform::Transform) =
                 named_key.try_into()?;
-            transforms_merged.insert(key, transform); // Should fail the test
-//            utils::add(&mut transforms_merged, key, transform);
+            utils::add(&mut transforms_merged, key, transform);
         }
         Ok(CommitTransforms(transforms_merged))
     }
