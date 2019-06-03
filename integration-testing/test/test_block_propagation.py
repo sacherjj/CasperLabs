@@ -64,6 +64,9 @@ def n(request):
 def three_nodes(docker_client_fixture):
     with ThreeNodeNetwork(docker_client_fixture, extra_docker_params={'use_new_gossiping': True}) as network:
         network.create_cl_network()
+        # Wait for the genesis block reacing each node.
+        for node in network.docker_nodes:
+            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
         yield network.docker_nodes
 
 

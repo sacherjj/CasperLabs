@@ -45,7 +45,7 @@ class DeployThread(threading.Thread):
 
 
 @pytest.mark.parametrize("contract_paths,expected_deploy_counts_in_blocks", [
-                         ([['test_helloname.wasm'],['test_helloworld.wasm']], [1, 1, 1, 1, 0]),
+                         ([['test_helloname.wasm']], [1, 1, 1, 0]),
 ])
 # Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(three_node_network,
@@ -55,6 +55,10 @@ def test_multiple_deploys_at_once(three_node_network,
     Scenario: Multiple simultaneous deploy after single deploy
     """
     nodes = three_node_network.docker_nodes
+
+    # Wait for the genesis block reacing each node.
+    for node in nodes:
+        wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
 
     deploy_threads = [DeployThread("node" + str(i+1), node, contract_paths)
                       for i, node in enumerate(nodes)]
@@ -72,5 +76,4 @@ def test_multiple_deploys_at_once(three_node_network,
     for node in nodes:
         blocks = parse_show_blocks(node.client.show_blocks(len(expected_deploy_counts_in_blocks) * 100))
         n_blocks = len(expected_deploy_counts_in_blocks)
-        assert [b.deploy_count for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, \
-               'Unexpected deploy counts in blocks'
+        assert [b.deploy_count for b in blocks][:n_blocks] == expected_deploy_counts_in_blocks, 'Unexpected deploy counts in blocks'
