@@ -31,7 +31,7 @@ private[configuration] object Utils {
     try {
       source.mkString.asRight[String]
     } catch {
-      case e: Throwable if NonFatal(e) => e.getMessage.asLeft[String]
+      case NonFatal(e) => e.getMessage.asLeft[String]
     }
 
   def dashToCamel(s: String): CamelCase =

@@ -174,7 +174,7 @@ object SignatureAlgorithm {
         val key = new SigningKey(sec)
         Some(PublicKey(key.getVerifyKey.toBytes))
       } catch {
-        case e: Throwable if NonFatal(e) => None
+        case NonFatal(_) => None
       }
 
     /**
@@ -259,7 +259,7 @@ object SignatureAlgorithm {
               }
           }
       } catch {
-        case e: Throwable if NonFatal(e) => None
+        case NonFatal(_) => None
       }
 
     /**
@@ -294,7 +294,7 @@ object SignatureAlgorithm {
             )
           }
       } catch {
-        case e: Throwable if NonFatal(e) => None
+        case NonFatal(_) => None
       }
 
     override def newKeyPair: (PrivateKey, PublicKey) = {

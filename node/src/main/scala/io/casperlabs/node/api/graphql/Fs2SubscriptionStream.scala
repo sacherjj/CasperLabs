@@ -39,7 +39,7 @@ private[graphql] class Fs2SubscriptionStream[F[_]: Effect](implicit val ec: Exec
 
   override def failed[T](t: Throwable): Stream[F, T] =
     t match {
-      case e if NonFatal(e) => Stream.raiseError[F](e)
+      case NonFatal(e) => Stream.raiseError[F](e)
     }
 
   override def onComplete[Ctx, Res](result: Stream[F, Res])(op: => Unit): Stream[F, Res] =
