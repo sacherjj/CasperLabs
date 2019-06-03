@@ -18,3 +18,108 @@ message BlockStatus {
 		uint32 deploy_error_count = 2;
 	}
 }
+
+message State {
+
+	// Value stored under a key in global state.
+	message Value {
+	    oneof value {
+	        int32 int_value = 1;
+	        bytes bytes_value = 2;
+	        IntList int_list = 3;
+	        string string_value = 4;
+	        Account account = 5;
+	        Contract contract = 6;
+	        StringList string_list = 7;
+	        NamedKey named_key = 8;
+	        BigInt big_int = 9;
+	        Key key = 10;
+	    }
+	}
+
+	message IntList {
+    	repeated int32 values = 1;
+    }
+
+    message StringList {
+    	repeated string values = 2;
+    }
+
+    message BigInt {
+    	string value = 1;
+    	// Number of bits: 128 | 256 | 512.
+    	uint32 big_width = 2;
+    }
+
+	message Key {
+	    oneof value {
+	        Address address = 1;
+	        Hash hash = 2;
+	        URef uref = 3;
+	        Local local = 4;
+	    }
+
+		message Address {
+		    bytes account = 1;
+		}
+
+		message Hash {
+		    bytes hash = 1;
+		}
+
+		message URef {
+		    bytes uref = 1;
+		    AccessRights access_rights = 2;
+
+		    enum AccessRights {
+		        UNKNOWN        = 0;
+		        READ           = 1;
+		        WRITE          = 2;
+		        ADD            = 4;
+		        READ_ADD       = 5;
+		        READ_WRITE     = 3;
+		        ADD_WRITE      = 6;
+		        READ_ADD_WRITE = 7;
+		    }
+		}
+
+		message Local {
+		    bytes seed = 1;
+		    bytes key_hash = 2;
+		}
+	}
+
+	message NamedKey {
+    	string name = 1;
+    	Key key = 2;
+    }
+
+    message Contract {
+	    bytes body = 1;
+	    repeated NamedKey known_urefs = 2;
+	    uint64 protocol_version = 3;
+	}
+
+	message Account {
+	    bytes public_key = 1;
+	    uint64 nonce = 2;
+	    repeated NamedKey known_urefs = 3;
+	    repeated AssociatedKey associated_keys = 4;
+	    ActionThresholds action_thresholds = 5;
+	    AccountActivity account_activity = 6;
+
+	    message AssociatedKey {
+	        bytes public_key = 1;
+	        uint32 weight = 2;
+	    }
+	    message ActionThresholds {
+	        uint32 deployment_threshold = 1;
+	        uint32 key_management_threshold = 2;
+	    }
+	    message AccountActivity {
+	        uint64 key_management_last_used = 1;
+	        uint64 deployment_last_used = 2;
+	        uint64 inactivity_period_limit = 3;
+	    }
+	}
+}
