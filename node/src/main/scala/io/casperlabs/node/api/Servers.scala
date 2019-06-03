@@ -1,35 +1,38 @@
 package io.casperlabs.node.api
 
-import java.util.concurrent.TimeUnit
-
 import cats.Id
-import cats.effect.{Concurrent, ConcurrentEffect, Resource}
 import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.protocol.CasperMessageGrpcMonix
+import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
+import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
+import io.casperlabs.comm.rp.Connect.ConnectionsCell
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.node._
 import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.node.api.control.ControlGrpcMonix
-import io.casperlabs.catscontrib.ski._
-import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
-import io.casperlabs.comm.rp.Connect.ConnectionsCell
-import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
-import io.casperlabs.node.diagnostics.effects.diagnosticsService
 import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
-import io.casperlabs.node._
+import io.casperlabs.node.api.graphql.{Fs2SubscriptionStream, GraphQL, GraphQLSchema}
+import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.diagnostics.effects.diagnosticsService
+import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
 import io.casperlabs.shared._
-import io.grpc.Server
-import io.grpc.netty.NettyServerBuilder
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import kamon.Kamon
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
-import io.casperlabs.smartcontracts.ExecutionEngineService
-import org.http4s.server.blaze.BlazeBuilder
+import org.http4s.implicits._
+
+import scala.concurrent.duration._
+import org.http4s.server.Router
+import org.http4s.server.blaze.BlazeServerBuilder
+import sangria.execution.Executor
+
+import scala.concurrent.ExecutionContext
 
 object Servers {
 
@@ -104,36 +107,38 @@ object Servers {
     ) *>
       Resource.liftF(Log[F].info(s"External gRPC services started on port ${port}."))
 
-  def httpServerR(
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: SafetyOracle: BlockStore: ContextShift](
       port: Int,
       conf: Configuration,
-      id: NodeIdentifier
-  )(
-      implicit
-      log: Log[Task],
-      nodeDiscovery: NodeDiscovery[Task],
-      connectionsCell: ConnectionsCell[Task],
-      scheduler: Scheduler
-  ): Resource[Effect, Unit] = {
-    val prometheusReporter = new NewPrometheusReporter()
-    val prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
-    val metricsRuntime     = new MetricsRuntime[Task](conf, id)
+      id: NodeIdentifier,
+      ec: ExecutionContext
+  ): Resource[F, Unit] = {
 
-    (for {
+    val prometheusReporter = new NewPrometheusReporter()
+    val prometheusService  = NewPrometheusReporter.service[F](prometheusReporter)
+    val metricsRuntime     = new MetricsRuntime[F](conf, id)
+
+    for {
       _ <- Resource.make {
             metricsRuntime.setupMetrics(prometheusReporter)
           } { _ =>
-            Task.delay(Kamon.stopAllReporters())
+            Sync[F].delay(Kamon.stopAllReporters())
           }
-      _ <- BlazeBuilder[Task]
+      _ <- BlazeServerBuilder[F]
             .bindHttp(port, "0.0.0.0")
-            .mountService(prometheusService, "/metrics")
-            .mountService(VersionInfo.service, "/version")
-            .mountService(StatusInfo.service, "/status")
+            .withNio2(true)
+            .withHttpApp(
+              Router(
+                "/metrics" -> prometheusService,
+                "/version" -> VersionInfo.service,
+                "/status"  -> StatusInfo.service,
+                "/graphql" -> GraphQL.service[F](ec)
+              ).orNotFound
+            )
             .resource
       _ <- Resource.liftF(
-            Log[Task].info(s"HTTP server started on port ${port}.")
+            Log[F].info(s"HTTP server started on port ${port}.")
           )
-    } yield ()).toEffect
+    } yield ()
   }
 }

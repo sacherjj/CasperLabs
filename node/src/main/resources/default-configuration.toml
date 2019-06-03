@@ -82,6 +82,9 @@ init-sync-skip-failed-nodes = false
 # Time to wait between initial synchronization attempts.
 init-sync-round-period = "30second"
 
+# Maximum number of blocks to allow to be synced initially.
+init-sync-max-block-count = 1000000
+
 # Maximum number of parallel block downloads initiated by the download manager.
 download-max-parallel-blocks = 10
 

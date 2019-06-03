@@ -105,7 +105,9 @@ macro_rules! from_try_from_key_impl {
 
             fn try_from(k: Key) -> Result<Self, Self::Error> {
                 match k {
-                    Key::URef(id, access) if access >= $min_access => Ok($type(id, PhantomData)),
+                    Key::URef(id, Some(access)) if access >= $min_access => {
+                        Ok($type(id, PhantomData))
+                    }
                     _ => Err(()),
                 }
             }
@@ -114,7 +116,7 @@ macro_rules! from_try_from_key_impl {
         impl<T> From<$type<T>> for Key {
             fn from(x: $type<T>) -> Self {
                 let access = $min_access;
-                Key::URef(x.0, access)
+                Key::URef(x.0, Some(access))
             }
         }
     };

@@ -25,7 +25,7 @@ pub enum ContractPointer {
 
 impl<T> From<UPointer<T>> for Key {
     fn from(u_ptr: UPointer<T>) -> Self {
-        Key::URef(u_ptr.0, u_ptr.1)
+        Key::URef(u_ptr.0, Some(u_ptr.1))
     }
 }
 

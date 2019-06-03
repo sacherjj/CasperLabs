@@ -66,11 +66,12 @@ impl LmdbGlobalState {
             let mut txn = ret.environment.create_read_write_txn()?;
             let mut current_root = ret.root_hash;
             for (key, value) in pairs {
+                let key = key.normalize();
                 match write::<_, _, _, LmdbTrieStore, error::Error>(
                     &mut txn,
                     &ret.store,
                     &current_root,
-                    key,
+                    &key,
                     value,
                 )? {
                     WriteResult::Written(root_hash) => {

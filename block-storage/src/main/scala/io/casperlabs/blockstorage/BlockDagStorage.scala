@@ -34,7 +34,13 @@ trait BlockDagRepresentation[F[_]] {
   def children(blockHash: BlockHash): F[Option[Set[BlockHash]]]
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
   def contains(blockHash: BlockHash): F[Boolean]
+
+  /** Return the ranks of blocks in the DAG between start and end, inclusive. */
+  def topoSort(startBlockNumber: Long, endBlockNumber: Long): F[Vector[Vector[BlockHash]]]
+
+  /** Return ranks of blocks in the DAG from a start index to the end. */
   def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]]
+
   def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]]
   def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]]
   def latestMessageHash(validator: Validator): F[Option[BlockHash]]

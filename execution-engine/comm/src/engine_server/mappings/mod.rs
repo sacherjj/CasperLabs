@@ -4,7 +4,9 @@ use protobuf::ProtobufEnum;
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
-use common::value::account::{AssociatedKeys, PublicKey, Weight};
+use common::value::account::{
+    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, Weight,
+};
 use engine_server::ipc::KeyURef_AccessRights;
 use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
@@ -99,11 +101,50 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                         })?;
                     keys
                 };
+                let action_thresholds: ActionThresholds = {
+                    if !v.get_account().has_action_threshold() {
+                        return parse_error(
+                            "Missing ActionThresholds object of the Account IPC message."
+                                .to_string(),
+                        );
+                    };
+                    let mut tmp: ActionThresholds = Default::default();
+                    let action_thresholds_ipc = v.get_account().get_action_threshold();
+                    tmp.set_deployment_threshold(Weight::new(
+                        action_thresholds_ipc.get_deployment_threshold() as u8,
+                    ));
+                    tmp.set_key_management_threshold(Weight::new(
+                        action_thresholds_ipc.get_key_management_threshold() as u8,
+                    ));
+                    tmp
+                };
+                let account_activity: AccountActivity = {
+                    if !v.get_account().has_account_activity() {
+                        return parse_error(
+                            "Missing AccountActivity object of the Account IPC message."
+                                .to_string(),
+                        );
+                    };
+                    let account_activity_ipc = v.get_account().get_account_activity();
+                    let mut tmp = AccountActivity::new(BlockTime(0), BlockTime(0));
+                    tmp.update_deployment_last_used(BlockTime(
+                        account_activity_ipc.deployment_last_used,
+                    ));
+                    tmp.update_key_management_last_used(BlockTime(
+                        account_activity_ipc.key_management_last_used,
+                    ));
+                    tmp.update_inactivity_period_limit(BlockTime(
+                        account_activity_ipc.inactivity_period_limit,
+                    ));
+                    tmp
+                };
                 let account = common::value::Account::new(
                     pub_key,
                     v.get_account().nonce,
                     uref_map.0,
                     associated_keys,
+                    action_thresholds,
+                    account_activity,
                 );
                 transform_write(common::value::Value::Account(account))
             } else if v.has_contract() {
@@ -257,12 +298,6 @@ impl From<transform::Transform> for super::ipc::Transform {
                 fail.set_type_mismatch(typemismatch_err);
                 t.set_failure(fail);
             }
-            transform::Transform::Failure(transform::Error::Overflow) => {
-                let mut fail = super::ipc::TransformFailure::new();
-                let mut overflow_err = super::ipc::AdditionOverflow::new();
-                fail.set_overflow(overflow_err);
-                t.set_failure(fail);
-            }
         };
         t
     }
@@ -332,12 +367,17 @@ impl From<&common::key::Key> for super::ipc::Key {
                 key_hash.set_key(hash.to_vec());
                 k.set_hash(key_hash);
             }
-            common::key::Key::URef(uref, access_rights) => {
+            common::key::Key::URef(uref, Some(access_rights)) => {
                 let mut key_uref = super::ipc::KeyURef::new();
                 key_uref.set_uref(uref.to_vec());
                 key_uref.set_access_rights(
                     KeyURef_AccessRights::from_i32(access_rights.bits().into()).unwrap(),
                 );
+                k.set_uref(key_uref);
+            }
+            common::key::Key::URef(uref, None) => {
+                let mut key_uref = super::ipc::KeyURef::new();
+                key_uref.set_uref(uref.to_vec());
                 k.set_uref(key_uref);
             }
             common::key::Key::Local { seed, key_hash } => {
@@ -364,13 +404,24 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
             arr.clone_from_slice(&ipc_key.get_hash().key);
             Ok(common::key::Key::Hash(arr))
         } else if ipc_key.has_uref() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_uref().uref);
-            let access_rights = common::key::AccessRights::from_bits(
-                ipc_key.get_uref().access_rights.value().try_into().unwrap(),
-            )
-            .unwrap();
-            Ok(common::key::Key::URef(arr, access_rights))
+            let ipc_uref = ipc_key.get_uref();
+            let id = {
+                let mut ret = [0u8; 32];
+                ret.clone_from_slice(&ipc_uref.uref);
+                ret
+            };
+            let maybe_access_rights = {
+                let access_rights_value: i32 = ipc_uref.access_rights.value();
+                if access_rights_value != 0 {
+                    let access_rights_bits = access_rights_value.try_into().unwrap();
+                    let access_rights =
+                        common::key::AccessRights::from_bits(access_rights_bits).unwrap();
+                    Some(access_rights)
+                } else {
+                    None
+                }
+            };
+            Ok(common::key::Key::URef(id, maybe_access_rights))
         } else {
             parse_error(format!(
                 "ipc Key couldn't be parsed to any Key: {:?}",
@@ -536,13 +587,6 @@ where
             tmp_res.set_missing_prestate(root);
             tmp_res
         }
-        Ok(CommitResult::Overflow) => {
-            logging::log_warning("Overflow");
-            let overflow = ipc::AdditionOverflow::new();
-            let mut tmp_res = ipc::CommitResponse::new();
-            tmp_res.set_overflow(overflow);
-            tmp_res
-        }
         Ok(CommitResult::Success(post_state_hash)) => {
             let mut properties: BTreeMap<String, String> = BTreeMap::new();
 
@@ -639,7 +683,7 @@ mod tests {
         let input_transforms: HashMap<Key, Transform> = {
             let mut tmp_map = HashMap::new();
             tmp_map.insert(
-                Key::URef([1u8; 32], AccessRights::ADD),
+                Key::URef([1u8; 32], Some(AccessRights::ADD)),
                 Transform::AddInt32(10),
             );
             tmp_map

@@ -7,12 +7,24 @@ import time
 import argparse
 import grpc
 import functools
+import pathlib
+from pyblake2 import blake2b
+import ed25519
 
-from .proto import CasperMessage_pb2
-from .proto.CasperMessage_pb2_grpc import DeployServiceStub
+# ~/CasperLabs/protobuf/io/casperlabs/casper/protocol/CasperMessage.proto
+from . import CasperMessage_pb2
+from .CasperMessage_pb2_grpc import DeployServiceStub
+
+# ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
+from . import casper_pb2
+from .casper_pb2_grpc import CasperServiceStub
+
+# ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
+from . import consensus_pb2 as consensus
 
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 40401
+DEFAULT_INTERNAL_PORT = 40402
 
 
 class InternalError(Exception):
@@ -23,25 +35,6 @@ class InternalError(Exception):
     not have to worry about handling any other exceptions.
     """
     pass
-
-
-def read_deploy_code(filename: str):
-    """
-    Returns DeployCode object as defined in CasperMessage.proto
-    with its attribute code populated with compiled WASM code
-    read from the given file.
-
-    Note: similarly as the Scala client, currently we don't allow 
-    to pass anything in the args (ABI encoded arguments)
-    attribute of DeployCode.
-
-    :param filename: path to file with compiled WASM code
-    :return: a CasperMessage_pb2.DeployCode object
-    """
-    deploy_code = CasperMessage_pb2.DeployCode()
-    with open(filename, "rb") as f:
-        deploy_code.code = f.read()
-        return deploy_code
 
 
 def guarded(function):
@@ -68,40 +61,46 @@ class CasperClient:
     gRPC CasperLabs client.
     """
 
-    def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
+    def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, internal_port: int = DEFAULT_INTERNAL_PORT):
         """
         CasperLabs client's constructor.
 
-        :param host:  Hostname or IP of node on which gRPC service is running
-        :param port:  Port used for external gRPC API
+        :param host:           Hostname or IP of node on which gRPC service is running
+        :param port:           Port used for external gRPC API
+        :param internal_port:  Port used for internal gRPC API
         """
         self.host = host
         self.port = port
+        self.internal_port = internal_port
 
         client = self
 
-        class Node:
-            """
-            Helper class that is used by CasperClient implementation to reduce boilerplate code.
-            """
+        class GRPCService:
+
+            def __init__(self, port, serviceStub):
+                self.port = port
+                self.serviceStub = serviceStub
 
             def __getattr__(self, name):
-                address = client.host + ':' + str(client.port)
+                address = client.host + ':' + str(self.port)
 
                 def f(*args):
                     with grpc.insecure_channel(address) as channel:
-                        return getattr(DeployServiceStub(channel), name)(*args)
+                        return getattr(self.serviceStub(channel), name)(*args)
 
                 def g(*args):
                     with grpc.insecure_channel(address) as channel:
-                        yield from getattr(DeployServiceStub(channel), name[:-1])(*args)
+                        yield from getattr(self.serviceStub(channel), name[:-1])(*args)
 
                 return name.endswith('_') and g or f
 
-        self.node = Node()
+        self.node = GRPCService(self.port, DeployServiceStub)
+        self.casperService = GRPCService(self.port, CasperServiceStub)
 
     @guarded
-    def deploy(self, from_addr: bytes, gas_limit: int, gas_price: int, payment: str, session: str, nonce: int=0):
+    def deploy(self, from_addr: bytes = None, gas_limit: int = None, gas_price: int = None, 
+               payment: str = None, session: str = None, nonce: int = 0,
+               public_key: str = None, private_key: str = None):
         """
         Deploy a smart contract source file to Casper on an existing running node.
         The deploy will be packaged and sent as a block to the network depending
@@ -115,26 +114,52 @@ class CasperClient:
         :param payment:       Path to the file with payment code.
         :param session:       Path to the file with session code.
         :param nonce:         This allows you to overwrite your own pending
-#                             transactions that use the same nonce.
+                              transactions that use the same nonce.
+        :param public_key:    Path to a file with public key (Ed25519)
+        :param private_key:   Path to a file with private key (Ed25519)
         :return:              deserialized DeployServiceResponse object
         """
-        data = CasperMessage_pb2.DeployData(
-            address=from_addr,
-            timestamp=int(time.time()),
-            session=read_deploy_code(session),
-            payment=read_deploy_code(payment),
-            gas_limit=gas_limit,
-            gas_price=gas_price,
-            nonce=nonce,
 
-            # TODO: Scala client does not set attributes below
-            #string sig_algorithm = 8; // name of the algorithm used for signing
-            #bytes signature = 9; // signature over hash of [(hash(session code), hash(payment code), nonce, timestamp, gas limit, gas rate)]
+        def hash(data: bytes) -> bytes:
+            h = blake2b(digest_size=32)
+            h.update(data)
+            return h.digest()
 
-            # TODO: allow user to specify their public key [comment copied from Scala client source]
-            #bytes user = 10; //public key
-        )
-        return self.node.DoDeploy(data)
+        def read_binary(file_name: str):
+            with open(file_name, 'rb') as f:
+                return f.read()
+
+        def read_code(file_name: str):
+            return consensus.Deploy.Code(code = read_binary(file_name))
+
+        signing_key = ed25519.SigningKey(read_binary(private_key))
+
+        def sign(data: bytes):
+            return consensus.Signature(sig_algorithm = 'ed25519',
+                                       sig = signing_key.sign(data, encoding='base16'))
+
+        def serialize(o) -> bytes:
+            return o.SerializeToString()
+
+        body = consensus.Deploy.Body(session = read_code(session),
+                                     payment = read_code(payment))
+
+        account_public_key = read_binary(public_key)
+        header = consensus.Deploy.Header(account_public_key = account_public_key, 
+                                         nonce = nonce,
+                                         timestamp = int(time.time()),
+                                         gas_price = gas_price,
+                                         body_hash = hash(serialize(body)))
+
+        deploy_hash = hash(serialize(header))
+        d = consensus.Deploy(deploy_hash = deploy_hash,
+                             approvals = [consensus.Approval(approver_public_key = account_public_key, signature = sign(deploy_hash))],
+                             header = header,
+                             body = body)
+
+        # TODO: we may want to return deploy_hash base16 encoded
+        return self.casperService.Deploy(casper_pb2.DeployRequest(deploy = d)), deploy_hash
+
 
     @guarded
     def showBlocks(self, depth: int = 1):
@@ -147,7 +172,7 @@ class CasperClient:
         yield from self.node.showBlocks_(CasperMessage_pb2.BlocksQuery(depth=depth))
 
     @guarded
-    def showBlock(self, hash):
+    def showBlock(self, hash: str):
         """
         Return object describing a block known by Casper on an existing running node.
 
@@ -277,9 +302,9 @@ def _show_block(response):
 
 @guarded_command
 def deploy_command(casper_client, args):
-    response = casper_client.deploy(getattr(args,'from'), args.gas_limit, args.gas_price, 
-                                    args.payment, args.session, args.nonce)
-    print (response.message)
+    response, deploy_hash = casper_client.deploy(getattr(args,'from'), args.gas_limit, args.gas_price, 
+                                                 args.payment, args.session, args.nonce)
+    print (f'{response.message}. Deploy hash: {deploy_hash}')
     if not response.success:
         return 1
 
@@ -342,6 +367,8 @@ def command_line_tool():
                                      help='Hostname or IP of node on which gRPC service is running.')
             self.parser.add_argument('-p', '--port', required=False, default=DEFAULT_PORT, type=int,
                                      help='Port used for external gRPC API.')
+            self.parser.add_argument('--internal-port', required=False, default=DEFAULT_INTERNAL_PORT, type=int,
+                                     help='Port used for internal gRPC API.')
             self.sp = self.parser.add_subparsers(help='Choose a request')
 
         def addCommand(self, command: str, function, help, arguments):
@@ -356,16 +383,18 @@ def command_line_tool():
                 return 1
 
             args = self.parser.parse_args()
-            return args.function(CasperClient(args.host, args.port), args)
+            return args.function(CasperClient(args.host, args.port, args.internal_port), args)
 
     parser = Parser()
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
                       [[('-f', '--from'), dict(required=True, type=lambda x: bytes(x, 'utf-8'), help='Purse address that will be used to pay for the deployment.')],
-                       [('-g', '--gas-limit'), dict(required=True, type=int, help='The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.')],
+                       [('-g', '--gas-limit'), dict(required=True, type=int, help='[Deprecated] The amount of gas to use for the transaction (unused gas is refunded). Must be positive integer.')],
                        [('--gas-price',), dict(required=True, type=int, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
                        [('-n', '--nonce'), dict(required=False, type=int, default=0, help='This allows you to overwrite your own pending transactions that use the same nonce.')],
                        [('-p', '--payment'), dict(required=True, type=str, help='Path to the file with payment code')],
-                       [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')]])
+                       [('-s', '--session'), dict(required=True, type=str, help='Path to the file with session code')],
+                       [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
+                       [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
 
     parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 

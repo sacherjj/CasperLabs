@@ -172,7 +172,10 @@ object ProtoUtil {
     } yield creatorJustificationAsList).fold(List.empty[BlockHash])(id)
 
   def weightMap(block: Block): Map[ByteString, Long] =
-    block.getHeader.getState.bonds.map {
+    weightMap(block.getHeader)
+
+  def weightMap(header: Block.Header): Map[ByteString, Long] =
+    header.getState.bonds.map {
       case Bond(validator, stake) => validator -> stake
     }.toMap
 

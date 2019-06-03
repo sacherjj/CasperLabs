@@ -1,0 +1,20 @@
+syntax = "proto3";
+package io.casperlabs.casper.consensus.info;
+
+import "io/casperlabs/casper/consensus/consensus.proto";
+
+message BlockInfo {
+	BlockSummary summary = 1;
+	BlockStatus status = 2;
+}
+
+message BlockStatus {
+	float fault_tolerance = 1;
+	Stats stats = 2;
+
+	// Statistics derived from the full block.
+	message Stats {
+		uint32 block_size_bytes = 1;
+		uint32 deploy_error_count = 2;
+	}
+}

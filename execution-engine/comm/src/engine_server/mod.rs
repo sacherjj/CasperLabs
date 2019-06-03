@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::Debug;
+use std::io::ErrorKind;
 use std::marker::{Send, Sync};
 
 use common::key::Key;
@@ -245,8 +246,11 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     e: E,
 ) -> grpc::ServerBuilder {
     let socket_path = std::path::Path::new(socket);
-    if socket_path.exists() {
-        std::fs::remove_file(socket_path).expect("failed to remove old socket file");
+
+    if let Err(e) = std::fs::remove_file(socket_path) {
+        if e.kind() != ErrorKind::NotFound {
+            panic!("failed to remove old socket file: {:?}", e);
+        }
     }
 
     let mut server = grpc::ServerBuilder::new_plain();
