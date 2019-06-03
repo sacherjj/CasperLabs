@@ -375,7 +375,7 @@ mod tests {
     use storage::global_state::{CommitResult, History};
 
     use super::{Error, RuntimeContext, URefAddr, Validated};
-    use common::value::account::{AssociatedKeys, PublicKey, Weight};
+    use common::value::account::{AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight};
     use execution::{create_rng, vec_key_rights_to_map};
     use shared::newtypes::Blake2bHash;
     use tracking_copy::TrackingCopy;
@@ -406,7 +406,14 @@ mod tests {
 
     fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
         let associated_keys = AssociatedKeys::new(PublicKey::new(addr), Weight::new(1));
-        let account = value::account::Account::new(addr, 0, BTreeMap::new(), associated_keys);
+        let account = value::account::Account::new(
+            addr,
+            0,
+            BTreeMap::new(),
+            associated_keys,
+            Default::default(),
+            AccountActivity::new(BlockTime(0), BlockTime(100)),
+        );
         let key = Key::Account(addr);
 
         (key, account)
