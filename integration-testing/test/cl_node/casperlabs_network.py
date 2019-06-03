@@ -1,5 +1,6 @@
-import logging
 import docker
+import logging
+
 from typing import List, Callable, Dict
 
 
@@ -16,6 +17,7 @@ from test.cl_node.wait import (
 from test.cl_node.log_watcher import (
     wait_for_log_watcher,
     GoodbyeInLogLine,
+    RequestedForkTipFromPeersInLogLine,
 )
 
 

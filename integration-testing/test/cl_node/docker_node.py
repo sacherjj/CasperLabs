@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 import shutil
 import tempfile
-from typing import Tuple, List
+from typing import Tuple, List, TYPE_CHECKING, Generator, Optional
 import re
 
 from test.cl_node.errors import (
@@ -18,6 +18,8 @@ from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.docker_client import DockerClient
 from test.cl_node.python_client import PythonClient
 
+if TYPE_CHECKING:
+   from test.cl_node.docker_base import DockerConfig
 
 def get_resources_folder() -> Path:
     """ This will return the resources folder that is copied into the correct location for testing """

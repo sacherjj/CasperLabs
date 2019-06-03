@@ -21,7 +21,9 @@ def ignore_test_persistent_dag_store(two_node_network):
     """
     node0, node1 = two_node_network.docker_nodes
     for node in two_node_network.docker_nodes:
-        node.deploy_and_propose(session_contract=HELLO_NAME)
+        node.deploy_and_propose(session_contract=HELLO_NAME,
+                                private_key="validator-0-private.pem",
+                                public_key="validator-0-public.pem")
 
     two_node_network.stop_cl_node(1)
     two_node_network.start_cl_node(1)
@@ -30,7 +32,9 @@ def ignore_test_persistent_dag_store(two_node_network):
 
     wait_for_connected_to_node(node0, node1.name, timeout, 2)
 
-    hash_string = node0.deploy_and_propose(session_contract=HELLO_NAME)
+    hash_string = node0.deploy_and_propose(session_contract=HELLO_NAME,
+                                           private_key="validator-0-private.pem",
+                                           public_key="validator-0-public.pem")
 
     wait_for_sending_approved_block_request(node0, node1.name, timeout)
     wait_for_received_approved_block_request(node0, node1.name, timeout)
@@ -51,7 +55,8 @@ def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_networ
     tnn = two_node_network
     node0, node1 = tnn.docker_nodes
     for node in (node0, node1):
-        node.deploy_and_propose()
+        node.deploy_and_propose(private_key="validator-0-private.pem",
+                                public_key="validator-0-public.pem")
 
     wait_for_blocks_count_at_least(node0, 3, 4, 10)
     wait_for_blocks_count_at_least(node1, 3, 4, 10)
