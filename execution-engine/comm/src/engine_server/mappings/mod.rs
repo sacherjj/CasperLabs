@@ -181,18 +181,56 @@ impl From<common::value::Value> for super::ipc::Value {
                 tv.set_key((&key).into());
             }
             common::value::Value::Account(account) => {
-                let mut acc = super::ipc::Account::new();
-                acc.set_pub_key(account.pub_key().to_vec());
-                acc.set_nonce(account.nonce());
-                let urefs = URefMap(account.get_urefs_lookup()).into();
-                acc.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
-                tv.set_account(acc);
+                tv.set_account(account.into())
             }
             common::value::Value::Contract(contract) => {
                 tv.set_contract(contract.into());
             }
         };
         tv
+    }
+}
+
+impl TryFrom<&super::ipc::Value> for common::value::Value {
+    type Error = ParsingError;
+
+    fn try_from(value: &super::ipc::Value) -> Result<Self, Self::Error> {
+        if value.has_integer() {
+            Ok(common::value::Value::Int32(value.get_integer()))
+        } else if value.has_byte_arr() {
+            Ok(common::value::Value::ByteArray(
+                value.get_byte_arr().to_vec(),
+            ))
+        } else if value.has_int_list() {
+            Ok(common::value::Value::ListInt32(value.get_int_list().get_list().to_vec()))
+        } else if value.has_string_val() {
+            Ok(common::value::Value::String(
+                value.get_string_val().to_string(),
+            ))
+        } else if value.has_account() {
+            Ok(common::value::Value::Account(
+                value.get_account().try_into()?,
+            ))
+        } else if value.has_contract() {
+            let contract: common::value::Contract = value.get_contract().try_into()?;
+            Ok(common::value::Value::Contract(contract))
+        } else if value.has_string_list() {
+            Ok(common::value::Value::ListString(
+                value.get_string_list().get_list().to_vec(),
+            ))
+        } else if value.has_named_key() {
+            let (name, key) = value.get_named_key().try_into()?;
+            Ok(common::value::Value::NamedKey(name, key))
+        } else if value.has_big_int() {
+            Ok(value.get_big_int().try_into()?)
+        } else if value.has_key() {
+            Ok(common::value::Value::Key(value.get_key().try_into()?))
+        } else {
+            parse_error(format!(
+                "IPC Value {:?} couldn't be parsed to domain representation.",
+                value
+            ))
+        }
     }
 }
 
@@ -815,6 +853,14 @@ mod tests {
             let contract_back = (&ipc_contract).try_into()
                 .expect("Transforming ipc::Contract into domain Contract should succeed.");
             assert_eq!(contract, contract_back)
+        }
+
+        #[test]
+        fn value_roundtrip(value in value_arb()) {
+            let ipc_value: super::ipc::Value = value.clone().into();
+            let value_back = (&ipc_value).try_into()
+                .expect("Transforming ipc::Value into domain Value should succeed.");
+            assert_eq!(value, value_back)
         }
 
         #[test]
