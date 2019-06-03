@@ -77,7 +77,11 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             } else if v.has_account() {
                 let pub_key = {
                     let mut tmp = [0u8; 32];
-                    tmp.clone_from_slice(&v.get_account().pub_key);
+                    let source = &v.get_account().pub_key;
+                    if source.len() != 32 {
+                        return parse_error("Public key has invalid length".to_string());
+                    }
+                    tmp.copy_from_slice(source);
                     tmp
                 };
                 let uref_map: URefMap = v.get_account().get_known_urefs().try_into()?;
@@ -300,7 +304,11 @@ impl TryFrom<&ipc::Account_AssociatedKey> for (PublicKey, Weight) {
             parse_error("Key weight cannot be bigger 256.".to_string())
         } else {
             let mut pub_key = [0u8; 32];
-            pub_key.copy_from_slice(value.get_pub_key());
+            let source = &value.get_pub_key();
+            if source.len() != 32 {
+                return parse_error("Public key has invalid length".to_string());
+            }
+            pub_key.copy_from_slice(source);
             Ok((
                 PublicKey::new(pub_key),
                 Weight::new(value.get_weight() as u8),
@@ -347,16 +355,38 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
 
     fn try_from(ipc_key: &super::ipc::Key) -> Result<Self, ParsingError> {
         if ipc_key.has_account() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_account().account);
+            let arr = {
+                let mut dest = [0u8; 32];
+                let source = &ipc_key.get_account().account;
+                if source.len() != 32 {
+                    return parse_error("Account has invalid length".to_string());
+                }
+                dest.copy_from_slice(source);
+                dest
+            };
             Ok(common::key::Key::Account(arr))
         } else if ipc_key.has_hash() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_hash().key);
+            let arr = {
+                let mut dest = [0u8; 32];
+                let source = &ipc_key.get_hash().key;
+                if source.len() != 32 {
+                    return parse_error("Hash has invalid length".to_string());
+                }
+                dest.copy_from_slice(source);
+                dest
+            };
             Ok(common::key::Key::Hash(arr))
         } else if ipc_key.has_uref() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_uref().uref);
+            let arr = {
+                let mut dest = [0u8; 32];
+                let source = &ipc_key.get_uref().uref;
+                if source.len() != 32 {
+                    return parse_error("URef has invalid length".to_string());
+                }
+                dest.copy_from_slice(source);
+                dest
+            };
+
             let access_rights = common::key::AccessRights::from_bits(
                 ipc_key.get_uref().access_rights.value().try_into().unwrap(),
             )
