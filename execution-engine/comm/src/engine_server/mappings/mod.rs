@@ -4,7 +4,9 @@ use protobuf::ProtobufEnum;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::{TryFrom, TryInto};
 
-use common::value::account::{AssociatedKeys, PublicKey, Weight};
+use common::value::account::{
+    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, Weight,
+};
 use engine_server::ipc::KeyURef_AccessRights;
 use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
@@ -287,11 +289,46 @@ impl TryFrom<&super::ipc::Account> for common::value::account::Account {
             })?;
             keys
         };
+        let action_thresholds: ActionThresholds = {
+            if !value.has_action_threshold() {
+                return parse_error(
+                    "Missing ActionThresholds object of the Account IPC message.".to_string(),
+                );
+            };
+            let mut tmp: ActionThresholds = Default::default();
+            let action_thresholds_ipc = value.get_action_threshold();
+            tmp.set_deployment_threshold(Weight::new(
+                action_thresholds_ipc.get_deployment_threshold() as u8,
+            ));
+            tmp.set_key_management_threshold(Weight::new(
+                action_thresholds_ipc.get_key_management_threshold() as u8,
+            ));
+            tmp
+        };
+        let account_activity: AccountActivity = {
+            if !value.has_account_activity() {
+                return parse_error(
+                    "Missing AccountActivity object of the Account IPC message.".to_string(),
+                );
+            };
+            let account_activity_ipc = value.get_account_activity();
+            let mut tmp = AccountActivity::new(BlockTime(0), BlockTime(0));
+            tmp.update_deployment_last_used(BlockTime(account_activity_ipc.deployment_last_used));
+            tmp.update_key_management_last_used(BlockTime(
+                account_activity_ipc.key_management_last_used,
+            ));
+            tmp.update_inactivity_period_limit(BlockTime(
+                account_activity_ipc.inactivity_period_limit,
+            ));
+            tmp
+        };
         Ok(common::value::Account::new(
             pub_key,
             value.nonce,
             uref_map.0,
             associated_keys,
+            action_thresholds,
+            account_activity,
         ))
     }
 }
