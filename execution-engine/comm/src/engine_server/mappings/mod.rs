@@ -719,7 +719,7 @@ mod tests {
         assert_eq!(test_cost(cost, forged_ref_error), cost);
     }
 
-    use common::gens::key_arb;
+    use common::gens::{key_arb, uref_map_arb};
     use proptest::prelude::*;
     use shared::transform::gens::transform_arb;
 
@@ -729,6 +729,16 @@ mod tests {
             let ipc_key: super::ipc::Key = (&key).into();
             let key_back: Key = (&ipc_key).try_into().expect("Transforming ipc::Key into domain Key should succeed.");
             assert_eq!(key_back, key)
+        }
+
+        #[test]
+        fn uref_map_roundtrip(uref_map in uref_map_arb(10)) {
+            let uref_map_newtype = super::URefMap(uref_map.clone());
+            let ipc_uref_map: Vec<super::ipc::NamedKey> = uref_map_newtype.into();
+            let ipc_urefs_slice: &[super::ipc::NamedKey] = &ipc_uref_map;
+            let uref_map_back: super::URefMap = ipc_urefs_slice.try_into()
+                .expect("Transforming Vec<ipc::NamedKey> to URefMap should succeed.");
+            assert_eq!(uref_map, uref_map_back.0)
         }
 
     }

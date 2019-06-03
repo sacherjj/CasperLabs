@@ -122,6 +122,14 @@ impl Account {
         &self.public_key
     }
 
+    pub fn associated_keys(&self) -> &AssociatedKeys {
+        &self.associated_keys
+    }
+
+    pub fn get_associated_keys(self) -> AssociatedKeys {
+        self.associated_keys
+    }
+
     pub fn nonce(&self) -> u64 {
         self.nonce
     }
