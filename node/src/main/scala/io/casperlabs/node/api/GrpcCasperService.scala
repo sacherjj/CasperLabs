@@ -8,8 +8,6 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
@@ -30,17 +28,9 @@ object GrpcCasperService {
         override def getBlockInfo(request: GetBlockInfoRequest): Task[BlockInfo] =
           TaskLike[F].toTask {
             BlockAPI
-              .getBlockInfo[F, BlockInfo](
+              .getBlockInfo[F](
                 request.blockHashBase16,
-                full = request.view == BlockInfoView.FULL,
-                combine = (summary, _, status) =>
-                  BlockInfo()
-                    .withSummary(summary)
-                    .withStatus(status),
-                ifNotFound = MonadThrowable[F]
-                  .raiseError[BlockInfo](
-                    NotFound(s"Cannot find block matching hash ${request.blockHashBase16}")
-                  )
+                full = request.view == BlockInfoView.FULL
               )
           }
 

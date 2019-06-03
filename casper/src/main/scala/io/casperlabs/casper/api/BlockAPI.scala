@@ -310,44 +310,61 @@ object BlockAPI {
       .traverse(ProtoUtil.unsafeGetBlock[F](_))
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, accountPublicKey, timestamp)))
 
-  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore, A](
+  def getBlockInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
       blockHashBase16: String,
-      full: Boolean = false,
-      combine: (BlockSummary, Block, BlockStatus) => A,
-      ifNotFound: F[A]
-  ): F[A] =
-    unsafeWithCasper[F, A]("Could not show block.") { implicit casper =>
+      full: Boolean = false
+  ): F[Option[BlockInfo]] =
+    unsafeWithCasper[F, Option[BlockInfo]]("Could not show block.") { implicit casper =>
       getByHashPrefix[F, BlockSummary](blockHashBase16)(
         BlockStore[F].getBlockSummary(_)
       ).flatMap { maybeSummary =>
-        maybeSummary.fold(ifNotFound) { summary =>
+        maybeSummary.fold(none[BlockInfo].pure[F]) { summary =>
           for {
             dag            <- MultiParentCasper[F].blockDag
             faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, summary.blockHash)
             initialFault <- MultiParentCasper[F].normalizedInitialFault(
                              ProtoUtil.weightMap(summary.getHeader)
                            )
-            result <- BlockStore[F].get(summary.blockHash).map(_.get.getBlockMessage).map { block =>
-                       val maybeStats = if (!full) {
-                         none[BlockStatus.Stats]
-                       } else {
-                         BlockStatus
-                           .Stats()
-                           .withBlockSizeBytes(block.serializedSize)
-                           .withDeployErrorCount(block.getBody.deploys.count(_.isError))
-                           .some
-                       }
-                       val status =
-                         BlockStatus(
-                           faultTolerance = faultTolerance - initialFault,
-                           stats = maybeStats
-                         )
-                       combine(summary, block, status)
-                     }
-          } yield result
+            maybeBlockAndStats <- if (full) {
+                                   BlockStore[F]
+                                     .get(summary.blockHash)
+                                     .map(_.get.getBlockMessage)
+                                     .map { block =>
+                                       val stats = BlockStatus
+                                         .Stats()
+                                         .withBlockSizeBytes(block.serializedSize)
+                                         .withDeployErrorCount(
+                                           block.getBody.deploys.count(_.isError)
+                                         )
+                                       (block, stats).some
+                                     }
+                                 } else {
+                                   none[(Block, BlockStatus.Stats)].pure[F]
+                                 }
+            status = BlockStatus(
+              faultTolerance = faultTolerance - initialFault,
+              stats = maybeBlockAndStats.map(_._2)
+            )
+            result = BlockInfo()
+              .withSummary(summary)
+              .withStatus(status)
+          } yield result.some
         }
       }
     }
+
+  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      blockHashBase16: String,
+      full: Boolean = false
+  ): F[BlockInfo] =
+    getBlockInfoOpt[F](blockHashBase16, full).flatMap(
+      _.fold(
+        MonadThrowable[F]
+          .raiseError[BlockInfo](
+            NotFound(s"Cannot find block matching hash $blockHashBase16")
+          )
+      )(_.pure[F])
+    )
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
@@ -370,21 +387,7 @@ object BlockAPI {
       } map { ranksOfHashes =>
         ranksOfHashes.flatten.reverse.map(h => Base16.encode(h.toByteArray))
       } flatMap { hashes =>
-        hashes.toList.traverse(
-          h =>
-            getBlockInfo(
-              h,
-              full,
-              (summary, _, status) =>
-                BlockInfo()
-                  .withSummary(summary)
-                  .withStatus(status),
-              MonadThrowable[F]
-                .raiseError[BlockInfo](
-                  NotFound(s"Cannot find block matching hash $h")
-                )
-            )
-        )
+        hashes.toList.traverse(getBlockInfo[F](_, full))
       }
     }
 
