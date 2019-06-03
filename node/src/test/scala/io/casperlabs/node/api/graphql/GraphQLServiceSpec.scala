@@ -308,7 +308,7 @@ object GraphQLServiceSpec {
     def query(
         queryResponse: Try[String] = Success(QueryFieldResponse)
     )(test: Service => Task[Unit]): Unit =
-      test(GraphQL.buildRoute[Task](createExecutor(queryResponse), 1.second).orNotFound)
+      test(GraphQL.buildRoute[Task](createExecutor(queryResponse), 1.second, global).orNotFound)
         .runSyncUnsafe(5.seconds)
 
     def subscription(
@@ -333,7 +333,8 @@ object GraphQLServiceSpec {
             "/graphql" -> GraphQL
               .buildRoute[Task](
                 createExecutor(subscriptionResponse = subscriptionResponse),
-                keepAlivePeriod
+                keepAlivePeriod,
+                global
               )
           ).orNotFound
         )

@@ -4,13 +4,10 @@ import cats._
 import cats.data.EitherT
 import cats.effect.ExitCase.{Completed, Error}
 import cats.effect._
-import cats.syntax.applicativeError._
-import cats.syntax.functor._
-import cats.syntax.flatMap._
 import monix.eval.{Task, TaskLift}
 
-import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
+import scala.util.{Failure, Success, Try}
 
 package object implicits {
 
@@ -85,50 +82,5 @@ package object implicits {
   implicit def taskLiftEitherT[F[_]: TaskLift: Functor, E] = new TaskLift[EitherT[F, E, ?]] {
     override def taskLift[A](task: Task[A]): EitherT[F, E, A] =
       EitherT.liftF(TaskLift[F].taskLift(task))
-  }
-
-  implicit def bracketEitherTThrowable[F[_], E](
-      implicit
-      br: Bracket[F, Throwable],
-      mErr: MonadError[EitherT[F, E, ?], Throwable]
-  ) = new Bracket[EitherT[F, E, ?], Throwable] {
-
-    override def bracketCase[A, B](acquire: EitherT[F, E, A])(
-        use: A => EitherT[F, E, B]
-    )(release: (A, ExitCase[Throwable]) => EitherT[F, E, Unit]): EitherT[F, E, B] = {
-      case class Th(a: E) extends Throwable
-
-      def embedE[X](et: EitherT[F, E, X]): F[X] =
-        et.value.flatMap[X] {
-          case Left(e)  => br.raiseError[X](Th(e))
-          case Right(v) => br.pure(v)
-        }
-
-      EitherT(
-        br.bracketCase(embedE(acquire))(x => embedE(use(x)))((a, e) => embedE(release(a, e)))
-          .attempt
-          .flatMap[Either[E, B]] {
-            case Left(Th(v)) => br.pure(Left(v))
-            case Left(e)     => br.raiseError(e)
-            case Right(v)    => br.pure(Right(v))
-          }
-      )
-    }
-
-    override def flatMap[A, B](fa: EitherT[F, E, A])(f: A => EitherT[F, E, B]): EitherT[F, E, B] =
-      mErr.flatMap(fa)(f)
-
-    override def tailRecM[A, B](a: A)(f: A => EitherT[F, E, Either[A, B]]): EitherT[F, E, B] =
-      mErr.tailRecM(a)(f)
-
-    override def raiseError[A](e: Throwable): EitherT[F, E, A] =
-      mErr.raiseError(e)
-
-    override def handleErrorWith[A](
-        fa: EitherT[F, E, A]
-    )(f: Throwable => EitherT[F, E, A]): EitherT[F, E, A] =
-      mErr.handleErrorWith(fa)(f)
-
-    override def pure[A](x: A): EitherT[F, E, A] = mErr.pure(x)
   }
 }
