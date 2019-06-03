@@ -58,7 +58,7 @@ class DockerConfig:
     command_timeout: int = 180
     mem_limit: str = '4G'
     is_bootstrap: bool = False
-    is_signed_deploy: bool = False
+    is_validator: bool = True
     bootstrap_address: Optional[str] = None
     use_new_gossiping: bool = True
 
@@ -75,9 +75,9 @@ class DockerConfig:
                    '--metrics-prometheus': '',
                    '--tls-certificate': f'{bootstrap_path}/node-{self.number}.certificate.pem',
                    '--tls-key': f'{bootstrap_path}/node-{self.number}.key.pem'}
-        if self.is_signed_deploy:
-            options['--casper-validator-private-key-path'] = f'{bootstrap_path}/validator-{self.number}-private.pem'
-            options['--casper-validator-public-key-path'] = f'{bootstrap_path}/validator-{self.number}-public.pem'
+        # if self.is_validator:
+        #     options['--casper-validator-private-key-path'] = f'{bootstrap_path}/validator-{self.number}-private.pem'
+        #     options['--casper-validator-public-key-path'] = f'{bootstrap_path}/validator-{self.number}-public.pem'
         if self.bootstrap_address:
             options['--server-bootstrap'] = self.bootstrap_address
         if self.node_public_key:
