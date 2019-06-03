@@ -49,11 +49,11 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     }
 
     fn lookup(&self, p: Self::PurseId) -> Option<RAWRef<U512>> {
-        p.lookup().and_then(|key| key.try_into().ok())
+        contract_api::read_local(p.raw_id()).and_then(|key: Key| key.try_into().ok())
     }
 
     fn dep_lookup(&self, p: Self::DepOnlyId) -> Option<ARef<U512>> {
-        p.lookup().and_then(|key| key.try_into().ok())
+        contract_api::read_local(p.raw_id()).and_then(|key: Key| key.try_into().ok())
     }
 }
 

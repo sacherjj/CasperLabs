@@ -9,10 +9,6 @@ impl WithdrawId {
     pub fn raw_id(&self) -> [u8; 32] {
         self.0
     }
-
-    pub fn lookup(&self) -> Option<Key> {
-        contract_api::read_local(self.raw_id())
-    }
 }
 
 impl TryFrom<Key> for WithdrawId {
@@ -35,10 +31,6 @@ pub struct DepositId([u8; 32]);
 impl DepositId {
     pub fn raw_id(&self) -> [u8; 32] {
         self.0
-    }
-
-    pub fn lookup(&self) -> Option<Key> {
-        contract_api::read_local(self.raw_id())
     }
 }
 
