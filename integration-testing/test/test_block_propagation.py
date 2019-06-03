@@ -51,7 +51,9 @@ class DeployThread(threading.Thread):
         for batch in self.batches_of_contracts:
             for contract in batch:
                 assert 'Success' in self.node.client.deploy(session_contract = contract,
-                                                            payment_contract = contract)
+                                                            payment_contract = contract,
+                                                            private_key="validator-0-private.pem",
+                                                            public_key="validator-0-public.pem")
             block_hash = self.propose()
             self.deployed_blocks_hashes.add(block_hash)
 
