@@ -59,6 +59,7 @@ class DockerConfig:
     mem_limit: str = '4G'
     is_bootstrap: bool = False
     is_validator: bool = True
+    is_signed_deploy: bool = True
     bootstrap_address: Optional[str] = None
     use_new_gossiping: bool = True
 

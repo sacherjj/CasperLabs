@@ -72,14 +72,12 @@ class DockerNode(LoggingDockerBase):
 
     def _get_container(self):
         env = {
-            'RUST_BACKTRACE': 'full'
+            'RUST_BACKTRACE': 'full',
+            'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'false'
         }
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
             env['_JAVA_OPTIONS'] = java_options
-        ignore_deploy_sig = os.environ.get('CL_CASPER_IGNORE_DEPLOY_SIGNATURE')
-        if ignore_deploy_sig is not None:
-            env['CL_CASPER_IGNORE_DEPLOY_SIGNATURE'] = ignore_deploy_sig
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
         self._client = self.DOCKER_CLIENT
