@@ -7,7 +7,7 @@ use std::convert::{TryFrom, TryInto};
 use common::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, Weight,
 };
-use engine_server::ipc::KeyURef_AccessRights;
+use engine_server::ipc::{Account_AccountActivity, Account_ActionThresholds, KeyURef_AccessRights};
 use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
@@ -253,10 +253,32 @@ impl From<common::value::account::Account> for super::ipc::Account {
             });
             tmp
         };
-        let account_urefs_lookup = URefMap(account.get_urefs_lookup());
+        let action_thresholds = {
+            let mut tmp = Account_ActionThresholds::new();
+            tmp.set_key_management_threshold(u32::from(
+                account.action_thresholds().key_management().value(),
+            ));
+            tmp.set_deployment_threshold(u32::from(
+                account.action_thresholds().deployment().value(),
+            ));
+            tmp
+        };
+        ipc_account.set_action_threshold(action_thresholds);
+        let account_activity = {
+            let mut tmp = Account_AccountActivity::new();
+            tmp.set_deployment_last_used(account.account_activity().deployment_last_used().0);
+            tmp.set_key_management_last_used(
+                account.account_activity().key_management_last_used().0,
+            );
+            tmp.set_inactivity_period_limit(account.account_activity().inactivity_period_limit().0);
+            tmp
+        };
+        let account_urefs = account.get_urefs_lookup();
+        let account_urefs_lookup = URefMap(account_urefs);
         let ipc_urefs: Vec<super::ipc::NamedKey> = account_urefs_lookup.into();
         ipc_account.set_known_urefs(ipc_urefs.into());
         ipc_account.set_associated_keys(associated_keys.into());
+        ipc_account.set_account_activity(account_activity);
         ipc_account
     }
 }

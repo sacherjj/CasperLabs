@@ -49,6 +49,14 @@ impl ActionThresholds {
             true
         }
     }
+
+    pub fn deployment(&self) -> &Weight {
+        &self.deployment
+    }
+
+    pub fn key_management(&self) -> &Weight {
+        &self.key_management
+    }
 }
 
 impl Default for ActionThresholds {
@@ -99,6 +107,18 @@ impl AccountActivity {
 
     pub fn update_inactivity_period_limit(&mut self, new_inactivity_period_limit: BlockTime) {
         self.inactivity_period_limit = new_inactivity_period_limit;
+    }
+
+    pub fn key_management_last_used(&self) -> BlockTime {
+        self.key_management_last_used
+    }
+
+    pub fn deployment_last_used(&self) -> BlockTime {
+        self.deployment_last_used
+    }
+
+    pub fn inactivity_period_limit(&self) -> BlockTime {
+        self.inactivity_period_limit
     }
 }
 
@@ -244,6 +264,14 @@ impl Account {
 
     pub fn get_associated_keys(&self) -> &AssociatedKeys {
         &self.associated_keys
+    }
+
+    pub fn action_thresholds(&self) -> &ActionThresholds {
+        &self.action_thresholds
+    }
+
+    pub fn account_activity(&self) -> &AccountActivity {
+        &self.account_activity
     }
 
     pub fn nonce(&self) -> u64 {
