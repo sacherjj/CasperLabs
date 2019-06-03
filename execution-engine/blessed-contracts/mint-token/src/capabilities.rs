@@ -105,14 +105,7 @@ macro_rules! from_try_from_key_impl {
 
             fn try_from(k: Key) -> Result<Self, Self::Error> {
                 match k {
-                    Key::URef(id, access) => {
-                        if access >= $min_access {
-                            Ok($type(id, PhantomData))
-                        } else {
-                            Err(())
-                        }
-                    }
-
+                    Key::URef(id, access) if access >= $min_access => Ok($type(id, PhantomData)),
                     _ => Err(()),
                 }
             }
