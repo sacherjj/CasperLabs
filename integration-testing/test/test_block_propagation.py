@@ -13,16 +13,26 @@ from .cl_node.casperlabsnode import ( extract_block_hash_from_propose_output, )
 
 import pytest
 from typing import List
+import ed25519
 
 from .cl_node.casperlabs_network import ThreeNodeNetwork
 
 BOOTSTRAP_NODE_KEYS = PREGENERATED_KEYPAIRS[0]
 
 
-def create_volume(docker_client) -> str:
-    volume_name = "casperlabs{}".format(random_string(5).lower())
-    docker_client.volumes.create(name=volume_name, driver="local")
-    return volume_name
+def generate_keys(prefix):
+    signing_key_file, verifying_key_file = f'{prefix}_signing_key', f'{prefix}_verifying_key'
+
+    signing_key, verifying_key = ed25519.create_keypair()
+
+    def write_key(key_file, key):
+        with open(key_file, 'wb') as f:
+            f.write(key.to_bytes())
+
+    write_key(signing_key_file, signing_key) 
+    write_key(verifying_key_file, verifying_key) 
+        
+    return signing_key_file, verifying_key_file
 
 
 class DeployThread(threading.Thread):
@@ -40,7 +50,8 @@ class DeployThread(threading.Thread):
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
-                assert 'Success' in self.node.client.deploy(session_contract = contract, payment_contract = contract)
+                assert 'Success' in self.node.client.deploy(session_contract = contract,
+                                                            payment_contract = contract)
             block_hash = self.propose()
             self.deployed_blocks_hashes.add(block_hash)
 
@@ -49,17 +60,16 @@ class DeployThread(threading.Thread):
 def n(request):
     return request.param
 
-# This fixture will be parametrized so it runs on node set up to use gossiping as well as the old method.
 @pytest.fixture()
 def three_nodes(docker_client_fixture):
     with ThreeNodeNetwork(docker_client_fixture, extra_docker_params={'use_new_gossiping': True}) as network:
         network.create_cl_network()
-        yield [node.node for node in network.cl_nodes]
+        yield network.docker_nodes
 
 
 @pytest.mark.parametrize("contract_paths, expected_number_of_blocks", [
 
-                         ([['test_helloname.wasm'],['test_helloworld.wasm']], 7),
+                         ([['test_helloname.wasm'],['test_helloworld.wasm']], 5),
 
                          ])
 # Curently nodes is a network of three bootstrap connected nodes.
@@ -85,7 +95,7 @@ def test_block_propagation(three_nodes,
     for node in three_nodes:
         blocks = parse_show_blocks(node.client.show_blocks(expected_number_of_blocks * 100))
         # What propose returns is first 10 characters of block hash, so we can compare only first 10 charcters.
-        blocks_hashes = set([b.blockHash[:10] for b in blocks])
+        blocks_hashes = set([b.block_hash[:10] for b in blocks])
         for t in deploy_threads:
             assert t.deployed_blocks_hashes.issubset(blocks_hashes), \
                    f"Not all blocks deployed and proposed on {t.name} were propagated to {node.name}"
