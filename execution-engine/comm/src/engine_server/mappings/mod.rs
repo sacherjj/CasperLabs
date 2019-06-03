@@ -418,6 +418,15 @@ impl TryFrom<&super::ipc::TransformEntry> for (common::key::Key, transform::Tran
     }
 }
 
+impl From<(common::key::Key, transform::Transform)> for super::ipc::TransformEntry {
+    fn from((k, t): (common::key::Key, transform::Transform)) -> Self {
+        let mut tr_entry = super::ipc::TransformEntry::new();
+        tr_entry.set_key((&k).into());
+        tr_entry.set_transform(t.into());
+        tr_entry
+    }
+}
+
 impl From<ExecutionEffect> for super::ipc::ExecutionEffect {
     fn from(ee: ExecutionEffect) -> super::ipc::ExecutionEffect {
         let mut eff = super::ipc::ExecutionEffect::new();
@@ -432,17 +441,7 @@ impl From<ExecutionEffect> for super::ipc::ExecutionEffect {
                     op_entry
                 })
                 .collect();
-        let ipc_tran: Vec<super::ipc::TransformEntry> =
-            ee.1.into_iter()
-                .map(|(k, t)| {
-                    let mut tr_entry = super::ipc::TransformEntry::new();
-
-                    let ipc_tr = t.into();
-                    tr_entry.set_key((&k).into());
-                    tr_entry.set_transform(ipc_tr);
-                    tr_entry
-                })
-                .collect();
+        let ipc_tran: Vec<super::ipc::TransformEntry> = ee.1.into_iter().map(Into::into).collect();
         eff.set_op_map(protobuf::RepeatedField::from_vec(ipc_ops));
         eff.set_transform_map(protobuf::RepeatedField::from_vec(ipc_tran));
         eff
