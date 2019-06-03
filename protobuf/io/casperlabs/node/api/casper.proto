@@ -15,7 +15,7 @@ service CasperService {
     // to be processed during subsequent block proposals.
     rpc Deploy(DeployRequest) returns (google.protobuf.Empty) {
         option (google.api.http) = {
-            put: "/v2/deploys/{deploy.deploy_hash=*}"
+            post: "/v2/deploys"
             body: "deploy"
         };
     }
