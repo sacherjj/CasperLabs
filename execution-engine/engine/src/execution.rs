@@ -810,11 +810,6 @@ impl Executor<Module> for WasmiExecutor {
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
-        // NOTE: Enforce a safe unwrapping as passing anything other than Key would be programming error
-        debug_assert!(
-            acct_key.as_account().is_some(),
-            "A key passed should be holding an account"
-        );
         let account_bytes = acct_key.as_account().unwrap();
         let rng = create_rng(&account_bytes, timestamp, nonce);
         let gas_counter = 0u64;
