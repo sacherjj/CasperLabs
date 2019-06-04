@@ -54,7 +54,19 @@ object GrpcCasperService extends StateConversions {
         }
 
         override def getDeployInfo(request: GetDeployInfoRequest): Task[DeployInfo] =
-          ???
+          TaskLike[F].toTask {
+            BlockAPI
+              .getDeployInfo[F](
+                request.deployHashBase16
+              ) map { info =>
+              request.view match {
+                case DeployInfo.View.BASIC =>
+                  info.withDeploy(info.getDeploy.copy(body = None))
+                case _ =>
+                  info
+              }
+            }
+          }
 
         override def streamBlockDeploys(
             request: StreamBlockDeploysRequest
