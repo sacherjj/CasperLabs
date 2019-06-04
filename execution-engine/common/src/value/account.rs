@@ -49,6 +49,14 @@ impl ActionThresholds {
             true
         }
     }
+
+    pub fn deployment(&self) -> &Weight {
+        &self.deployment
+    }
+
+    pub fn key_management(&self) -> &Weight {
+        &self.key_management
+    }
 }
 
 impl Default for ActionThresholds {
@@ -100,6 +108,18 @@ impl AccountActivity {
     pub fn update_inactivity_period_limit(&mut self, new_inactivity_period_limit: BlockTime) {
         self.inactivity_period_limit = new_inactivity_period_limit;
     }
+
+    pub fn key_management_last_used(&self) -> BlockTime {
+        self.key_management_last_used
+    }
+
+    pub fn deployment_last_used(&self) -> BlockTime {
+        self.deployment_last_used
+    }
+
+    pub fn inactivity_period_limit(&self) -> BlockTime {
+        self.inactivity_period_limit
+    }
 }
 
 pub const KEY_SIZE: usize = 32;
@@ -108,18 +128,22 @@ pub const KEY_SIZE: usize = 32;
 /// `associated_keys` table.
 pub const MAX_KEYS: usize = 10;
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
+#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Weight(u8);
 
 impl Weight {
     pub fn new(weight: u8) -> Weight {
         Weight(weight)
     }
+
+    pub fn value(self) -> u8 {
+        self.0
+    }
 }
 
 pub const WEIGHT_SIZE: usize = U8_SIZE;
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
+#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct PublicKey([u8; KEY_SIZE]);
 
 pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE * U8_SIZE;
@@ -127,6 +151,10 @@ pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE * U8_SIZE;
 impl PublicKey {
     pub fn new(key: [u8; KEY_SIZE]) -> PublicKey {
         PublicKey(key)
+    }
+
+    pub fn value(self) -> [u8; KEY_SIZE] {
+        self.0
     }
 }
 
@@ -179,6 +207,10 @@ impl AssociatedKeys {
     pub fn get(&self, key: &PublicKey) -> Option<&Weight> {
         self.0.get(key)
     }
+
+    pub fn get_all(&self) -> &BTreeMap<PublicKey, Weight> {
+        &self.0
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -224,6 +256,22 @@ impl Account {
 
     pub fn pub_key(&self) -> &[u8] {
         &self.public_key
+    }
+
+    pub fn associated_keys(&self) -> &AssociatedKeys {
+        &self.associated_keys
+    }
+
+    pub fn get_associated_keys(&self) -> &AssociatedKeys {
+        &self.associated_keys
+    }
+
+    pub fn action_thresholds(&self) -> &ActionThresholds {
+        &self.action_thresholds
+    }
+
+    pub fn account_activity(&self) -> &AccountActivity {
+        &self.account_activity
     }
 
     pub fn nonce(&self) -> u64 {
@@ -431,7 +479,7 @@ mod tests {
         let mut keys = AssociatedKeys::new([0u8; KEY_SIZE].into(), Weight::new(1));
         let new_pk = PublicKey([1u8; KEY_SIZE]);
         let new_pk_weight = Weight::new(2);
-        assert!(keys.add_key(new_pk.clone(), new_pk_weight.clone()).is_ok());
+        assert!(keys.add_key(new_pk, new_pk_weight).is_ok());
         assert_eq!(keys.get(&new_pk), Some(&new_pk_weight))
     }
 
@@ -454,9 +502,9 @@ mod tests {
     fn associated_keys_add_duplicate() {
         let pk = PublicKey([0u8; KEY_SIZE]);
         let weight = Weight::new(1);
-        let mut keys = AssociatedKeys::new(pk.clone(), weight.clone());
+        let mut keys = AssociatedKeys::new(pk, weight);
         assert_eq!(
-            keys.add_key(pk.clone(), Weight::new(10)),
+            keys.add_key(pk, Weight::new(10)),
             Err(AddKeyFailure::DuplicateKey)
         );
         assert_eq!(keys.get(&pk), Some(&weight));
@@ -466,7 +514,7 @@ mod tests {
     fn associated_keys_remove() {
         let pk = PublicKey([0u8; KEY_SIZE]);
         let weight = Weight::new(1);
-        let mut keys = AssociatedKeys::new(pk.clone(), weight.clone());
+        let mut keys = AssociatedKeys::new(pk, weight);
         assert!(keys.remove_key(&pk));
         assert!(!keys.remove_key(&PublicKey([1u8; KEY_SIZE])));
     }

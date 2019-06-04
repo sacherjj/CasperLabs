@@ -235,7 +235,8 @@ where
             | Value::ByteArray(_)
             | Value::ListInt32(_)
             | Value::String(_)
-            | Value::ListString(_) => Ok(()),
+            | Value::ListString(_)
+            | Value::Unit => Ok(()),
             Value::NamedKey(_, key) => self.validate_key(&key),
             Value::Key(key) => self.validate_key(&key),
             Value::Account(account) => {

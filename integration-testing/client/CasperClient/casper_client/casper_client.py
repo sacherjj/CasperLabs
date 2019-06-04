@@ -132,11 +132,11 @@ class CasperClient:
         def read_code(file_name: str):
             return consensus.Deploy.Code(code = read_binary(file_name))
 
-        signing_key = ed25519.SigningKey(read_binary(private_key))
 
         def sign(data: bytes):
-            return consensus.Signature(sig_algorithm = 'ed25519',
-                                       sig = signing_key.sign(data, encoding='base16'))
+            return (private_key
+                    and consensus.Signature(sig_algorithm = 'ed25519',
+                                            sig = ed25519.SigningKey(read_binary(private_key)).sign(data, encoding='base16')))
 
         def serialize(o) -> bytes:
             return o.SerializeToString()
@@ -144,7 +144,7 @@ class CasperClient:
         body = consensus.Deploy.Body(session = read_code(session),
                                      payment = read_code(payment))
 
-        account_public_key = read_binary(public_key)
+        account_public_key = public_key and read_binary(public_key)
         header = consensus.Deploy.Header(account_public_key = account_public_key, 
                                          nonce = nonce,
                                          timestamp = int(time.time()),
@@ -153,11 +153,11 @@ class CasperClient:
 
         deploy_hash = hash(serialize(header))
         d = consensus.Deploy(deploy_hash = deploy_hash,
-                             approvals = [consensus.Approval(approver_public_key = account_public_key, signature = sign(deploy_hash))],
+                             approvals = [consensus.Approval(approver_public_key = account_public_key, signature = sign(deploy_hash))]
+                                         if account_public_key else [],
                              header = header,
                              body = body)
 
-        # TODO: we may want to return deploy_hash base16 encoded
         return self.casperService.Deploy(casper_pb2.DeployRequest(deploy = d)), deploy_hash
 
 

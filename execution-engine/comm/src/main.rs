@@ -7,6 +7,7 @@ extern crate grpc;
 #[macro_use]
 extern crate lazy_static;
 extern crate lmdb;
+extern crate proptest;
 extern crate protobuf;
 extern crate shared;
 extern crate storage;

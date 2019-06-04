@@ -1,12 +1,11 @@
-from typing import Optional
 import logging
-from docker.errors import ContainerError
-
-
+from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
+from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
-from test.cl_node.client_base import CasperLabsClient
-from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
+from typing import Optional
+
+from docker.errors import ContainerError
 
 
 class DockerClient(CasperLabsClient):
@@ -52,11 +51,18 @@ class DockerClient(CasperLabsClient):
                gas_price: int = 1,
                nonce: int = 0,
                session_contract: Optional[str] = 'test_helloname.wasm',
-               payment_contract: Optional[str] = 'test_helloname.wasm') -> str:
+               payment_contract: Optional[str] = 'test_helloname.wasm',
+               private_key: Optional[str] = None,
+               public_key: Optional[str] = None) -> str:
         command = (f"deploy --from {from_address}"
                    f" --gas-limit {gas_limit} --gas-price {gas_price}"
                    f" --nonce {nonce} --session=/data/{session_contract}"
                    f" --payment=/data/{payment_contract}")
+
+        if public_key and private_key:
+            command += (f" --private-key=/data/{private_key}"
+                        f" --public-key=/data/{public_key}")
+
 
         return self.invoke_client(command)
 

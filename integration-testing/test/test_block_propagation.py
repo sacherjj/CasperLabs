@@ -1,28 +1,35 @@
 import threading
-
-from . import conftest
-from test.cl_node.docker_node import DockerNode
 from test.cl_node.client_parser import parse_show_blocks
-from .cl_node.common import random_string
-from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
-from .cl_node.wait import (
-    wait_for_blocks_count_at_least,
-)
-
-from .cl_node.casperlabsnode import ( extract_block_hash_from_propose_output, )
-
-import pytest
+from test.cl_node.docker_node import DockerNode
 from typing import List
 
+import ed25519
+import pytest
+
+from . import conftest
 from .cl_node.casperlabs_network import ThreeNodeNetwork
+from .cl_node.casperlabsnode import extract_block_hash_from_propose_output
+from .cl_node.common import random_string
+from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
+from .cl_node.wait import wait_for_blocks_count_at_least
+
 
 BOOTSTRAP_NODE_KEYS = PREGENERATED_KEYPAIRS[0]
 
 
-def create_volume(docker_client) -> str:
-    volume_name = "casperlabs{}".format(random_string(5).lower())
-    docker_client.volumes.create(name=volume_name, driver="local")
-    return volume_name
+def generate_keys(prefix):
+    signing_key_file, verifying_key_file = f'{prefix}_signing_key', f'{prefix}_verifying_key'
+
+    signing_key, verifying_key = ed25519.create_keypair()
+
+    def write_key(key_file, key):
+        with open(key_file, 'wb') as f:
+            f.write(key.to_bytes())
+
+    write_key(signing_key_file, signing_key) 
+    write_key(verifying_key_file, verifying_key) 
+        
+    return signing_key_file, verifying_key_file
 
 
 class DeployThread(threading.Thread):
@@ -40,7 +47,10 @@ class DeployThread(threading.Thread):
     def run(self) -> None:
         for batch in self.batches_of_contracts:
             for contract in batch:
-                assert 'Success' in self.node.client.deploy(session_contract = contract, payment_contract = contract)
+                assert 'Success' in self.node.client.deploy(session_contract = contract,
+                                                            payment_contract = contract,
+                                                            private_key="validator-0-private.pem",
+                                                            public_key="validator-0-public.pem")
             block_hash = self.propose()
             self.deployed_blocks_hashes.add(block_hash)
 
@@ -49,17 +59,19 @@ class DeployThread(threading.Thread):
 def n(request):
     return request.param
 
-# This fixture will be parametrized so it runs on node set up to use gossiping as well as the old method.
 @pytest.fixture()
 def three_nodes(docker_client_fixture):
     with ThreeNodeNetwork(docker_client_fixture, extra_docker_params={'use_new_gossiping': True}) as network:
         network.create_cl_network()
-        yield [node.node for node in network.cl_nodes]
+        # Wait for the genesis block reacing each node.
+        for node in network.docker_nodes:
+            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
+        yield network.docker_nodes
 
 
 @pytest.mark.parametrize("contract_paths, expected_number_of_blocks", [
 
-                         ([['test_helloname.wasm'],['test_helloworld.wasm']], 7),
+                         ([['test_helloname.wasm'],['test_helloworld.wasm']], 5),
 
                          ])
 # Curently nodes is a network of three bootstrap connected nodes.
