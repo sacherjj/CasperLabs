@@ -464,7 +464,7 @@ impl TryFrom<&ipc::Account_AssociatedKey> for (PublicKey, Weight) {
             let mut pub_key = [0u8; 32];
             let source = &value.get_pub_key();
             if source.len() != 32 {
-                return parse_error("Public key has invalid length".to_string());
+                return parse_error("Public key has to be exactly 32 bytes long.".to_string());
             }
             pub_key.copy_from_slice(source);
             Ok((
@@ -522,7 +522,7 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
                 let mut dest = [0u8; 32];
                 let source = &ipc_key.get_account().account;
                 if source.len() != 32 {
-                    return parse_error("Account has invalid length".to_string());
+                    return parse_error("Account key has to be 32 bytes long.".to_string());
                 }
                 dest.copy_from_slice(source);
                 dest
@@ -533,7 +533,7 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
                 let mut dest = [0u8; 32];
                 let source = &ipc_key.get_hash().key;
                 if source.len() != 32 {
-                    return parse_error("Hash has invalid length".to_string());
+                    return parse_error("Hash key has to be 32 bytes long.".to_string());
                 }
                 dest.copy_from_slice(source);
                 dest
@@ -545,7 +545,7 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
                 let mut ret = [0u8; 32];
                 let source = &ipc_uref.uref;
                 if source.len() != 32 {
-                    return parse_error("URef has invalid length".to_string());
+                    return parse_error("URef key has to be 32 bytes long.".to_string());
                 }
                 ret.copy_from_slice(source);
                 ret
