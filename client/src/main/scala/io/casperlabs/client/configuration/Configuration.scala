@@ -20,9 +20,10 @@ final case class Deploy(
 
 final case object Propose extends Configuration
 
-final case class ShowBlock(hash: String)   extends Configuration
-final case class ShowDeploys(hash: String) extends Configuration
-final case class ShowBlocks(depth: Int)    extends Configuration
+final case class ShowBlock(blockHash: String)   extends Configuration
+final case class ShowDeploys(blockHash: String) extends Configuration
+final case class ShowDeploy(deployHash: String) extends Configuration
+final case class ShowBlocks(depth: Int)         extends Configuration
 final case class VisualizeDag(
     depth: Int,
     showJustificationLines: Boolean,
@@ -63,6 +64,8 @@ object Configuration {
         ShowBlock(options.showBlock.hash())
       case options.showDeploys =>
         ShowDeploys(options.showDeploys.hash())
+      case options.showDeploy =>
+        ShowDeploy(options.showDeploy.hash())
       case options.showBlocks =>
         ShowBlocks(options.showBlocks.depth())
       case options.visualizeBlocks =>

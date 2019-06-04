@@ -16,6 +16,7 @@ import io.casperlabs.node.api.casper.{
   DeployRequest,
   GetBlockInfoRequest,
   GetBlockStateRequest,
+  GetDeployInfoRequest,
   StateQuery,
   StreamBlockDeploysRequest,
   StreamBlockInfosRequest
@@ -73,16 +74,22 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
       .map(Printer.printToUnicodeString(_))
       .attempt
 
+  def showDeploy(hash: String): Task[Either[Throwable, String]] =
+    casperServiceStub
+      .getDeployInfo(GetDeployInfoRequest(hash, DeployInfo.View.BASIC))
+      .map(Printer.printToUnicodeString(_))
+      .attempt
+
   def showDeploys(hash: String): Task[Either[Throwable, String]] =
     casperServiceStub
-      .streamBlockDeploys(StreamBlockDeploysRequest(hash, DeployInfo.View.FULL))
+      .streamBlockDeploys(StreamBlockDeploysRequest(hash, DeployInfo.View.BASIC))
       .zipWithIndex
       .map {
         case (d, idx) =>
           s"""
-         |------------- deploy # $idx ---------------
+         |------------- deploy # $hash / $idx ---------------
          |${Printer.printToUnicodeString(d)}
-         |-------------------------------------------
+         |---------------------------------------------------
          |""".stripMargin
       }
       .toListL

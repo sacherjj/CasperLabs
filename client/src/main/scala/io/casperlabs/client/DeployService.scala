@@ -10,6 +10,7 @@ import scala.util.Either
   def propose(): F[Either[Throwable, String]]
   def showBlock(blockHash: String): F[Either[Throwable, String]]
   def showDeploys(blockHash: String): F[Either[Throwable, String]]
+  def showDeploy(blockHash: String): F[Either[Throwable, String]]
   def showBlocks(depth: Int): F[Either[Throwable, String]]
   def visualizeDag(depth: Int, showJustificationLines: Boolean): F[Either[Throwable, String]]
   def queryState(

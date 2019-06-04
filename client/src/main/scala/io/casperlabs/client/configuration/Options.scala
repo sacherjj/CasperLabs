@@ -130,6 +130,20 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showDeploys)
 
+  val showDeploy = new Subcommand("show-deploy") {
+    descr(
+      "View properties of a deploy known by Casper on an existing running node."
+    )
+
+    val hash =
+      trailArg[String](
+        name = "hash",
+        required = true,
+        descr = "Value of the deploy hash, base16 encoded."
+      )
+  }
+  addSubcommand(showDeploy)
+
   val showBlocks = new Subcommand("show-blocks") {
     descr(
       "View list of blocks in the current Casper view on an existing running node."
