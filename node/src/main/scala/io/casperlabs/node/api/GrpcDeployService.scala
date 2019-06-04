@@ -18,6 +18,7 @@ import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import java.lang.IllegalArgumentException
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 import monix.reactive.Observable
@@ -33,7 +34,7 @@ object GrpcDeployService {
           case 32 => ipc.Key(ipc.Key.KeyInstance.Hash(ipc.KeyHash(keyBytes))).pure[F]
           case n =>
             appErr.raiseError(
-              new Exception(
+              new IllegalArgumentException(
                 s"Key of type hash must have exactly 32 bytes, $n =/= 32 provided."
               )
             )
@@ -43,7 +44,7 @@ object GrpcDeployService {
           case 32 => ipc.Key(ipc.Key.KeyInstance.Uref(ipc.KeyURef(keyBytes))).pure[F]
           case n =>
             appErr.raiseError(
-              new Exception(
+              new IllegalArgumentException(
                 s"Key of type uref must have exactly 32 bytes, $n =/= 32 provided."
               )
             )
@@ -53,14 +54,14 @@ object GrpcDeployService {
           case 32 => ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes))).pure[F]
           case n =>
             appErr.raiseError(
-              new Exception(
+              new IllegalArgumentException(
                 s"Key of type address must have exactly 32 bytes, $n =/= 32 provided."
               )
             )
         }
       case _ =>
         appErr.raiseError(
-          new Exception(
+          new IllegalArgumentException(
             s"Key variant $keyType not valid. Must be one of hash, uref, address."
           )
         )

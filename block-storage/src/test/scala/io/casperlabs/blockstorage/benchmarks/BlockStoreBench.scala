@@ -18,9 +18,9 @@ abstract class BlockStoreBench {
     val hashes = Array.fill[BlockHash](StoreBenchSuite.preAllocSize)(null)
 
     for (i <- 0 until StoreBenchSuite.preAllocSize) {
-      val block = randomBlock
-      blockStore.put(block).runSyncUnsafe()
-      hashes(i) = block._1
+      val (blockHash, blockMsgWithTransform) = randomBlock
+      blockStore.put(blockHash, blockMsgWithTransform).runSyncUnsafe()
+      hashes(i) = blockHash
     }
 
     inserted = repeatedIteratorFrom(hashes.toIndexedSeq)
@@ -32,12 +32,15 @@ abstract class BlockStoreBench {
     blockStore.clear().runSyncUnsafe()
 
   @Benchmark
-  def put(): Unit =
+  def put(): Unit = {
+    val (blockHash, blockMsgWithTransform) = StoreBenchSuite.blocksIter.next()
     blockStore
       .put(
-        StoreBenchSuite.blocksIter.next()
+        blockHash,
+        blockMsgWithTransform
       )
       .runSyncUnsafe()
+  }
 
   @Benchmark
   def getRandom() =

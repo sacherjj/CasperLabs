@@ -34,6 +34,14 @@ object DeployRuntime {
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(depth))
 
+  def queryState[F[_]: Sync: DeployService](
+      blockHash: String,
+      keyVariant: String,
+      keyValue: String,
+      path: String
+  ): F[Unit] =
+    gracefulExit(DeployService[F].queryState(blockHash, keyVariant, keyValue, path))
+
   def visualizeDag[F[_]: Sync: DeployService: Timer](
       depth: Int,
       showJustificationLines: Boolean,
