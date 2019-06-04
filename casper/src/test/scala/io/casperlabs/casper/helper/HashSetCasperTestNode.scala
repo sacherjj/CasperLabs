@@ -247,7 +247,7 @@ object HashSetCasperTestNode {
     new ExecutionEngineService[F] {
       import ipc._
 
-      private val accountNonceTracker: MutMap[ByteString, Long] = MutMap.empty
+      private val accountNonceTracker: MutMap[ByteString, Long] = MutMap.empty.withDefaultValue(0)
       private val zero                                          = Array.fill(32)(0.toByte)
       private var bonds                                         = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
@@ -265,22 +265,14 @@ object HashSetCasperTestNode {
 
       // Validate that account's nonces increment monotonically by 1.
       // Assumes that any account address already exists in the GlobalState with nonce = 0.
-      private def validateNonce(deploy: Deploy): Boolean = {
+      private def validateNonce(deploy: Deploy): Boolean = synchronized {
         val deployAccount = deploy.address
         val deployNonce   = deploy.nonce
-        accountNonceTracker.get(deployAccount) match {
-          case Some(nonce) =>
-            if (deployNonce == nonce + 1) {
-              accountNonceTracker.update(deployAccount, deployNonce)
-              true
-            } else false
-          // If there's no entry for that address in the map, we're assuming that old nonce = 0
-          case None =>
-            if (deployNonce == 1) {
-              accountNonceTracker.update(deployAccount, 1)
-              true
-            } else false
-        }
+        val oldNonce      = accountNonceTracker(deployAccount)
+        if (deployNonce == oldNonce + 1) {
+          accountNonceTracker.update(deployAccount, deployNonce)
+          true
+        } else false
       }
 
       override def emptyStateHash: ByteString = ByteString.EMPTY
