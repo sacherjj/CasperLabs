@@ -727,7 +727,9 @@ pub fn vec_key_rights_to_map<I: IntoIterator<Item = Key>>(
         .map(|(key, group)| {
             (
                 key,
-                group.map(|(_, x)| x).collect::<HashSet<AccessRights>>(),
+                group
+                    .filter_map(|(_, x)| x)
+                    .collect::<HashSet<AccessRights>>(),
             )
         })
         .collect()
@@ -909,9 +911,9 @@ impl Executor<Module> for WasmiExecutor {
 /// Turns `key` into a `([u8; 32], AccessRights)` tuple.
 /// Returns None if `key` is not `Key::URef` as it wouldn't have `AccessRights` associated with it.
 /// Helper function for creating `known_urefs` associating addresses and corresponding `AccessRights`.
-pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
+pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
     match key {
-        Key::URef(raw_addr, rights) => Some((raw_addr, rights)),
+        Key::URef(raw_addr, maybe_rights) => Some((raw_addr, maybe_rights)),
         Key::Account(_) => None,
         Key::Hash(_) => None,
         Key::Local { .. } => None,
@@ -922,7 +924,7 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
 mod tests {
     use super::Error;
     use common::key::Key;
-    use common::value::account::{AssociatedKeys, PublicKey, Weight};
+    use common::value::account::{AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight};
     use common::value::{Account, Value};
     use engine_state::execution_effect::ExecutionEffect;
     use engine_state::execution_result::ExecutionResult;
@@ -1011,6 +1013,8 @@ mod tests {
                     1,
                     BTreeMap::new(),
                     AssociatedKeys::new(PublicKey::new(pub_key), Weight::new(1)),
+                    Default::default(),
+                    AccountActivity::new(BlockTime(0), BlockTime(0)),
                 );
                 Ok(Some(Value::Account(acc)))
             }

@@ -1,26 +1,20 @@
-import os
 import logging
-from pathlib import Path
+import os
+import re
 import shutil
 import tempfile
-from typing import TYPE_CHECKING, Tuple, Generator, Optional, List
-import re
-
-from test.cl_node.errors import (
-    CasperLabsNodeAddressNotFoundError,
-)
-
+from pathlib import Path
+from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from test.cl_node.docker_base import LoggingDockerBase
-from test.cl_node.casperlabsnode import (
-    extract_block_hash_from_propose_output,
-)
-from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.docker_client import DockerClient
+from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
+from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
+from typing import TYPE_CHECKING, Generator, List, Optional, Tuple
+
 
 if TYPE_CHECKING:
-    from test.cl_node.docker_base import DockerConfig
-
+   from test.cl_node.docker_base import DockerConfig
 
 def get_resources_folder() -> Path:
     """ This will return the resources folder that is copied into the correct location for testing """
@@ -75,12 +69,12 @@ class DockerNode(LoggingDockerBase):
 
     def _get_container(self):
         env = {
-            'RUST_BACKTRACE': 'full'
+            'RUST_BACKTRACE': 'full',
+            'CL_CASPER_IGNORE_DEPLOY_SIGNATURE': 'false'
         }
         java_options = os.environ.get('_JAVA_OPTIONS')
         if java_options is not None:
             env['_JAVA_OPTIONS'] = java_options
-
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
         self._client = self.DOCKER_CLIENT
@@ -90,7 +84,6 @@ class DockerNode(LoggingDockerBase):
 
         commands = self.container_command
         logging.info(f'{self.container_name} commands: {commands}')
-
         container = self.config.docker_client.containers.run(
             self.image_name,
             name=self.container_name,
@@ -100,7 +93,8 @@ class DockerNode(LoggingDockerBase):
             mem_limit=self.config.mem_limit,
             # If multiple tests are running in drone, local ports are duplicated.  Need a solution to this
             # Prior to implementing the python client.
-            # ports={f'{self.GRPC_PORT}/tcp': self.config.grpc_port},  # Exposing grpc for Python Client
+            #ports={f'{self.GRPC_PORT}/tcp': self.config.grpc_port},  # Exposing grpc for Python Client
+            #ports={'40401/tcp': 40401, '40402/tcp': 40402},  # Exposing grpc for Python Client
             network=self.network,
             volumes=self.volumes,
             command=commands,

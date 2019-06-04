@@ -16,7 +16,7 @@ import scala.util.{Failure, Success}
   *
   * Needed because http4s uses [[fs2.Stream]].
   */
-private[graphql] class Fs2SubscriptionStream[F[_]: Effect](implicit ec: ExecutionContext)
+private[graphql] class Fs2SubscriptionStream[F[_]: Effect](implicit val ec: ExecutionContext)
     extends SubscriptionStream[Stream[F, ?]] {
 
   override def supported[T[_]](other: SubscriptionStream[T]): Boolean =

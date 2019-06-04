@@ -1,8 +1,7 @@
-import threading
 import contextlib
-import time
 import logging
-
+import threading
+import time
 from typing import Any
 
 
@@ -21,7 +20,7 @@ class LogWatcherThread(threading.Thread):
         self.data = None
 
     def __repr__(self):
-        return f'<{self.__class__.__name__}({self.container.name})'
+        return f'<{self.__class__.__name__}({self.container.name})>'
 
     def run(self) -> None:
         end_line = self.container.logs(tail=1)

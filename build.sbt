@@ -127,7 +127,6 @@ lazy val casper = (project in file("casper"))
     comm         % "compile->compile;test->test",
     shared       % "compile->compile;test->test",
     smartContracts % "compile->compile;test->test",
-		graphz,
     crypto,
     models
   )
@@ -500,7 +499,7 @@ lazy val client = (project in file("client"))
       grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
     )
   )
-  .dependsOn(crypto, shared, models)
+  .dependsOn(crypto, shared, models, graphz)
 
 /**
   * This project contains Gatling test suits which perform load testing.

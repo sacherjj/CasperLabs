@@ -9,8 +9,11 @@ import time
 import grpc
 import pprint
 
-import CasperMessage_pb2
-import CasperMessage_pb2_grpc
+from casper_client import CasperMessage_pb2
+from casper_client import CasperMessage_pb2_grpc
+from casper_client import CasperServiceStub
+from casper_client import casper_pb2_grpc
+from casper_client import empty_pb2 
 
 CL_GRPC_PORT_EXTERNAL=3477
 
@@ -57,6 +60,34 @@ digraph "dag" {
 }
 
 """
+
+
+class CasperServiceServicer(casper_pb2_grpc.CasperServiceServicer):
+  """CasperService is the way for user and dApp developer to interact with the system,
+  including deploying contracts, looking at the DAG and querying state.
+  """
+
+  def Deploy(self, request, context):
+    """Add a deploy to the deploy pool on the node,
+    to be processed during subsequent block proposals.
+    """
+    context.set_code(grpc.StatusCode.OK)
+    context.set_details('')
+    return empty_pb2.Empty()
+
+  def GetBlockInfo(self, request, context):
+    """Get the block summary with extra information about finality.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+  def StreamBlockInfos(self, request, context):
+    """Get slices of the DAG, going backwards, rank by rank.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
 
 
 class DeployServicer(CasperMessage_pb2_grpc.DeployServiceServicer):

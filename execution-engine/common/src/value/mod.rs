@@ -30,6 +30,7 @@ pub enum Value {
     Key(key::Key),
     Account(account::Account),
     Contract(contract::Contract),
+    Unit,
 }
 
 const INT32_ID: u8 = 0;
@@ -44,6 +45,7 @@ const U128_ID: u8 = 8;
 const U256_ID: u8 = 9;
 const U512_ID: u8 = 10;
 const KEY_ID: u8 = 11;
+const UNIT_ID: u8 = 12;
 
 use self::Value::*;
 
@@ -145,6 +147,7 @@ impl ToBytes for Value {
                 result.append(&mut arr.to_bytes()?);
                 Ok(result)
             }
+            Unit => Ok(vec![UNIT_ID]),
         }
     }
 }
@@ -201,6 +204,7 @@ impl FromBytes for Value {
                 let (arr, rem): (Vec<String>, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((ListString(arr), rem))
             }
+            UNIT_ID => Ok((Unit, rest)),
             _ => Err(Error::FormattingError),
         }
     }
@@ -221,6 +225,7 @@ impl Value {
             NamedKey(_, _) => String::from("NamedKey"),
             Key(_) => String::from("Key"),
             ListString(_) => String::from("List[String]"),
+            Unit => String::from("Unit"),
         }
     }
 }
@@ -271,6 +276,24 @@ impl TryFrom<Value> for (String, key::Key) {
     fn try_from(v: Value) -> Result<(String, key::Key), ()> {
         if let Value::NamedKey(name, key) = v {
             Ok((name, key))
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl From<()> for Value {
+    fn from(_unit: ()) -> Self {
+        Value::Unit
+    }
+}
+
+impl TryFrom<Value> for () {
+    type Error = ();
+
+    fn try_from(v: Value) -> Result<(), ()> {
+        if let Value::Unit = v {
+            Ok(())
         } else {
             Err(())
         }

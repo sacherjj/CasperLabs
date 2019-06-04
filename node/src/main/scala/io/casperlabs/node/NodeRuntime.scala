@@ -3,8 +3,7 @@ package io.casperlabs.node
 import cats._
 import cats.data._
 import cats.effect._
-import cats.effect.concurrent.{Deferred, Ref, Semaphore}
-import cats.mtl.MonadState
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
@@ -13,36 +12,23 @@ import cats.syntax.show._
 import com.olegpy.meow.effects._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.{
-  BlockDagFileStorage,
-  BlockDagStorage,
-  BlockStore,
-  FileLMDBIndexBlockStore
-}
+import io.casperlabs.blockstorage.{BlockDagFileStorage, BlockStore, FileLMDBIndexBlockStore}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.util.comm.CasperPacketHandler
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits.{bracketEitherTThrowable, syncId, taskLiftEitherT}
-import io.casperlabs.catscontrib.ski._
-import io.casperlabs.comm.CommError.ErrorHandler
+import io.casperlabs.catscontrib.effect.implicits.{syncId, taskLiftEitherT}
 import io.casperlabs.comm._
-import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.discovery.NodeUtils._
-import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
+import io.casperlabs.comm.discovery.NodeDiscovery._
+import io.casperlabs.comm.discovery._
+import io.casperlabs.comm.rp.Connect.RPConfState
 import io.casperlabs.comm.rp._
-import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.node.diagnostics._
-import io.casperlabs.p2p.effects._
-import io.casperlabs.shared.PathOps._
 import io.casperlabs.shared._
-import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
-import monix.eval.instances.CatsConcurrentEffectForTask
+import io.casperlabs.smartcontracts.GrpcExecutionEngineService
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 
@@ -56,12 +42,14 @@ class NodeRuntime private[node] (
 
   private[this] val loopScheduler =
     Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
-  private[this] val grpcScheduler =
-    Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
+  private[this] val blockingScheduler =
+    Scheduler.cached("blocking-io", 4, 64, reporter = UncaughtExceptionLogger)
+  private implicit val concurrentEffectForEffect: ConcurrentEffect[Effect] =
+    catsConcurrentEffectForEffect(
+      scheduler
+    )
 
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
-
-  import ApplicativeError_._
 
   private val port           = conf.server.port
   private val kademliaPort   = conf.server.kademliaPort
@@ -101,26 +89,30 @@ class NodeRuntime private[node] (
 
         maybeBootstrap <- Resource.liftF(initPeer[Effect])
 
-        nodeDiscovery <- effects.nodeDiscovery(id, kademliaPort, conf.server.defaultTimeout.millis)(
-                          maybeBootstrap
-                        )(
-                          grpcScheduler,
-                          effects.peerNodeAsk,
-                          log,
-                          effects.time,
-                          metrics
-                        )
+        implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
+                                                          id,
+                                                          kademliaPort,
+                                                          conf.server.defaultTimeout.millis
+                                                        )(
+                                                          maybeBootstrap
+                                                        )(
+                                                          blockingScheduler,
+                                                          effects.peerNodeAsk,
+                                                          log,
+                                                          effects.time,
+                                                          metrics
+                                                        )
 
-        blockStore <- FileLMDBIndexBlockStore[Effect](
-                       conf.server.dataDir,
-                       blockstorePath,
-                       100L * 1024L * 1024L * 4096L
-                     )(
-                       Concurrent[Effect],
-                       logEff,
-                       raiseIOError,
-                       metricsEff
-                     )
+        implicit0(blockStore: BlockStore[Effect]) <- FileLMDBIndexBlockStore[Effect](
+                                                      conf.server.dataDir,
+                                                      blockstorePath,
+                                                      100L * 1024L * 1024L * 4096L
+                                                    )(
+                                                      Concurrent[Effect],
+                                                      logEff,
+                                                      raiseIOError,
+                                                      metricsEff
+                                                    )
 
         blockDagStorage <- BlockDagFileStorage[Effect](
                             conf.server.dataDir,
@@ -149,11 +141,16 @@ class NodeRuntime private[node] (
         // TODO: Only a loop started with the TransportLayer keeps filling this up,
         // so if we use the GossipService it's going to stay empty. The diagnostics
         // should use NodeDiscovery instead.
-        connectionsCell <- Resource.liftF(effects.rpConnections.toEffect)
+        implicit0(connectionsCell: Connect.ConnectionsCell[Task]) <- Resource.liftF(
+                                                                      effects.rpConnections.toEffect
+                                                                    )
 
-        multiParentCasperRef <- Resource.liftF(MultiParentCasperRef.of[Effect])
+        implicit0(multiParentCasperRef: MultiParentCasperRef[Effect]) <- Resource.liftF(
+                                                                          MultiParentCasperRef
+                                                                            .of[Effect]
+                                                                        )
 
-        safetyOracle = SafetyOracle
+        implicit0(safetyOracle: SafetyOracle[Effect]) = SafetyOracle
           .cliqueOracle[Effect](Monad[Effect], logEff)
 
         blockApiLock <- Resource.liftF(Semaphore[Effect](1))
@@ -178,7 +175,7 @@ class NodeRuntime private[node] (
               .internalServersR(
                 conf.grpc.portInternal,
                 conf.server.maxMessageSize,
-                grpcScheduler,
+                blockingScheduler,
                 blockApiLock
               )(
                 logEff,
@@ -196,7 +193,7 @@ class NodeRuntime private[node] (
         _ <- api.Servers.externalServersR[Effect](
               conf.grpc.portExternal,
               conf.server.maxMessageSize,
-              grpcScheduler,
+              blockingScheduler,
               blockApiLock,
               conf.casper.ignoreDeploySignature
             )(
@@ -213,24 +210,18 @@ class NodeRuntime private[node] (
               metricsId
             )
 
-        _ <- api.Servers.httpServerR(
+        _ <- api.Servers.httpServerR[Effect](
               conf.server.httpPort,
               conf,
-              id
-            )(
-              log,
-              nodeDiscovery,
-              connectionsCell,
-              scheduler,
-              Timer[Task],
-              new CatsConcurrentEffectForTask()(grpcScheduler, Task.defaultOptions)
+              id,
+              blockingScheduler
             )
 
         _ <- if (conf.server.useGossiping) {
               casper.gossiping.apply[Effect](
                 port,
                 conf,
-                grpcScheduler
+                blockingScheduler
               )(
                 catsParForEffect,
                 catsConcurrentEffectForEffect(scheduler),
@@ -253,7 +244,7 @@ class NodeRuntime private[node] (
               casper.transport.apply(
                 port,
                 conf,
-                grpcScheduler
+                blockingScheduler
               )(
                 log,
                 logEff,

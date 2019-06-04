@@ -4,6 +4,9 @@ import cats.effect._
 import cats.effect.concurrent.Deferred
 import cats.effect.implicits._
 import cats.implicits._
+import io.casperlabs.blockstorage.BlockStore
+import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.node.api.graphql.GraphQLQuery._
 import io.casperlabs.node.api.graphql.ProtocolState.Subscriptions
@@ -35,21 +38,21 @@ object GraphQL {
   private implicit val logSource: LogSource = LogSource(getClass)
 
   /* Entry point */
-  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log](
-      implicit ec: ExecutionContext
+  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      executionContext: ExecutionContext
   ): HttpRoutes[F] = {
-    implicit val fs2SubscriptionStream = new Fs2SubscriptionStream[F]()
+    implicit val ec: ExecutionContext                            = executionContext
+    implicit val fs2SubscriptionStream: Fs2SubscriptionStream[F] = new Fs2SubscriptionStream[F]()
     buildRoute(
       executor = Executor(GraphQLSchema.createSchema),
-      keepAlivePeriod = 10.seconds
+      keepAlivePeriod = 10.seconds,
+      ec
     )
   }
 
-  private[graphql] def buildRoute[F[_]: Concurrent: ContextShift: Timer: Log](
+  private[graphql] def buildRoute[F[_]: Concurrent: ContextShift: Timer: Log: Fs2SubscriptionStream](
       executor: Executor[Unit, Unit],
-      keepAlivePeriod: FiniteDuration
-  )(
-      implicit fs2SubscriptionStream: Fs2SubscriptionStream[F],
+      keepAlivePeriod: FiniteDuration,
       ec: ExecutionContext
   ): HttpRoutes[F] = {
     val dsl = org.http4s.dsl.Http4sDsl[F]
@@ -63,7 +66,7 @@ object GraphQL {
         val res: F[Response[F]] = for {
           json  <- req.as[Json]
           query <- Sync[F].fromEither(json.as[GraphQLQuery])
-          res   <- processHttpQuery(query, executor).flatMap(Ok(_))
+          res   <- processHttpQuery(query, executor, ec).flatMap(Ok(_))
         } yield res
 
         res.handleErrorWith {
@@ -74,10 +77,10 @@ object GraphQL {
     }
   }
 
-  private def handleWebSocket[F[_]: Concurrent: Timer: Log](
+  private def handleWebSocket[F[_]: Concurrent: Timer: Log: Fs2SubscriptionStream](
       executor: Executor[Unit, Unit],
       keepAlivePeriod: FiniteDuration
-  )(implicit fs2SubscriptionStream: Fs2SubscriptionStream[F]): F[Response[F]] = {
+  ): F[Response[F]] = {
 
     def out(
         queue: Queue[F, GraphQLWebSocketMessage],
@@ -225,8 +228,10 @@ object GraphQL {
       .flatMap(queryAst => executor.execute(queryAst, (), ()))
   }
 
-  private def processHttpQuery[F[_]: Async](query: GraphQLQuery, executor: Executor[Unit, Unit])(
-      implicit ec: ExecutionContext
+  private def processHttpQuery[F[_]: Async](
+      query: GraphQLQuery,
+      executor: Executor[Unit, Unit],
+      ec: ExecutionContext
   ): F[Json] =
     Async[F]
       .fromTry(QueryParser.parse(query.query))
@@ -238,7 +243,7 @@ object GraphQL {
               .onComplete {
                 case Success(json) => callback(json.asRight[Throwable])
                 case Failure(e)    => callback(e.asLeft[Json])
-              }
+              }(ec)
         )
       }
 

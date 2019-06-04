@@ -9,7 +9,7 @@ __buildenv:
 
 __sbtenv:
   environment:
-    - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
+    - "_JAVA_OPTIONS=-Xms2G -Xmx6G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
     - "/var/cache/cl-build/.sbt:/root/.sbt"
@@ -144,7 +144,8 @@ pipeline:
 
   run-integration-tests:
     commands:
-      - "python3 -m pip install pipenv dataclasses typing_extensions"
+      - "apt-get update && apt-get -y install gcc"
+      - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2"
       - "cd integration-testing"
       - ./docker_run_tests.sh
     environment:
@@ -308,11 +309,10 @@ pipeline:
     secrets:
       - slack_webhook
     template: |
-      *{{ uppercasefirst build.status }} *
-      PR: <${DRONE_COMMIT_LINK}|#{{ build.pull }} - ${DRONE_COMMIT_MESSAGE}>
-      Commit: <${DRONE_COMMIT_LINK}/commits/{{build.commit}}|{{ truncate build.commit 10 }}>
-      Author: {{ build.author }}
-      Drone Build:  <{{ build.link }}|#{{ build.number }}>
+      *{{ uppercasefirst build.status }}*
+        Author: {{ build.author }} 
+        Drone Build: <{{ build.link }}|#{{ build.number }}>
+        Commit Link: <https://github.com/{{repo.owner}}/{{repo.name}}/commit/{{build.commit}}|{{ truncate build.commit 10 }}>
     when:
       status:
         - failure

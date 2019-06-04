@@ -26,6 +26,13 @@ service CasperService {
     		get: "/v2/blocks/{block_hash_base16=*}"
     	};
     }
+
+    // Get slices of the DAG, going backwards, rank by rank.
+    rpc StreamBlockInfos(StreamBlockInfosRequest) returns (stream io.casperlabs.casper.consensus.info.BlockInfo) {
+    	option (google.api.http) = {
+    		get: "/v2/blocks"
+    	};
+    }
 }
 
 message DeployRequest {
@@ -36,13 +43,25 @@ message GetBlockInfoRequest {
 	// Either the full or just the first few characters of the block hash in base16 encoding,
 	// so that it works with the client's redacted displays.
 	string block_hash_base16 = 1;
-	View view = 2;
 
-	enum View {
-		// Only include information which is based on the header.
-		BASIC = 0;
-		// Include extra information that requires the full block,
-		// for example the size, number of errors in deploys, etc.
-		FULL = 1;
-	}
+	BlockInfoView view = 2;
+}
+
+message StreamBlockInfosRequest {
+	// How many of the top ranks of the DAG to show.
+	uint32 depth = 1;
+
+	// Optionally specify the maximum rank to to go back from.
+	// 0 means go from the current tip of the DAG.
+	uint64 max_rank = 2;
+
+	BlockInfoView view = 3;
+}
+
+enum BlockInfoView {
+	// Only include information which is based on the header.
+	BASIC = 0;
+	// Include extra information that requires the full block,
+	// for example the size, number of errors in deploys, etc.
+	FULL = 1;
 }

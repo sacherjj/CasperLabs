@@ -47,8 +47,12 @@ object PrettyPrinter {
 
   def buildString(v: ipc.Value): String = v.valueInstance match {
     case ipc.Value.ValueInstance.Empty => "ValueEmpty"
-    case ipc.Value.ValueInstance.Account(ipc.Account(pk, nonce, urefs, associatedKeys)) =>
-      s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}}, {${associatedKeys.map(buildString).mkString(",")})"
+    case ipc.Value.ValueInstance.Account(
+        ipc.Account(pk, nonce, urefs, associatedKeys, actionThresholds, accountActivity)
+        ) =>
+      s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}}, {${associatedKeys
+        .map(buildString)
+        .mkString(",")}, {${actionThresholds.map(buildString)}}, {${accountActivity.map(buildString)})"
     case ipc.Value.ValueInstance.ByteArr(bytes) => s"ByteArray(${buildString(bytes)})"
     case ipc.Value.ValueInstance.Contract(ipc.Contract(body, urefs, protocolVersion)) =>
       s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}}, ${buildString(protocolVersion)})"
@@ -110,6 +114,12 @@ object PrettyPrinter {
     val weight = ak.weight
     s"$pk:$weight"
   }
+
+  private def buildString(at: ipc.Account.ActionThresholds): String =
+    s"Deployment threshold ${at.deploymentThreshold}, Key management threshold: ${at.keyManagementThreshold}"
+
+  private def buildString(ac: ipc.Account.AccountActivity): String =
+    s"Last deploy: ${ac.deploymentLastUsed}, last key management change: ${ac.keyManagementLastUsed}, inactivity period limit: ${ac.inactivityPeriodLimit}"
 
   def buildString(d: consensus.Deploy): String =
     s"Deploy #${d.getHeader.timestamp}"
