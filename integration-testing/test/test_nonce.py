@@ -58,3 +58,18 @@ def disable_test_deploy_with_lower_nonce(node, contract: str):
                            private_key = "validator-0-private.pem",
                            public_key = "validator-0-public.pem")
         node.client.propose()
+
+
+
+@pytest.mark.parametrize("contract", ['test_helloname.wasm',])
+def disable_test_deploy_with_higher_nonce(node, contract: str):
+    """
+      Scenario: Deploy with higher nonce
+         Given: Single Node Network
+           And: Nonce is 4 for account
+          When: Deploy is performed with nonce of 5
+          Then: TODO: Does this hang until nonce of 4 is deployed???
+    """
+    # TODO:
+    pass
+
