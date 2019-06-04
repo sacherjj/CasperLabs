@@ -283,7 +283,6 @@ object HashSetCasperTestNode {
           val deployAccount = deploy.address
           val deployNonce   = deploy.nonce
           val oldNonce      = accountNonceTracker(deployAccount)
-          println(s"Old nonce $oldNonce, deploy nonce: $deployNonce")
           if (deployNonce == oldNonce + 1) {
             accountNonceTracker.update(deployAccount, deployNonce)
             true

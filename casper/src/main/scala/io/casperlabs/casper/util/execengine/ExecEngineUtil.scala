@@ -56,10 +56,8 @@ object ExecEngineUtil {
                                 // We are collecting only InvalidNonceDeploy deploys
                                 List.empty[InvalidNonceDeploy].pure[F]
                             }
-      _                             = println(s"Invalid nonce deploys: $invalidNonceDeploys")
       deployEffects                 = findCommutingEffects(processedDeployResults)
       (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
-      _                             = println(s"Deploys for block  ${deploysForBlock}")
       postStateHash                 <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
       maxBlockNumber = merged.parents.foldl(-1L) {
         case (acc, b) => math.max(acc, blockNumber(b))
