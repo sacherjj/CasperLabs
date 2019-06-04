@@ -118,7 +118,7 @@ impl LogBufferProvider for BufferedLogger {
                 if let Some(value) = guard.get(&key) {
                     if value.properties.contains_key(CORRELATION_ID_KEY) {
                         if let Some(c) = value.properties.get(CORRELATION_ID_KEY) {
-                            if c.eq(correlation_id) {
+                            if c == correlation_id {
                                 if let Some(value) = guard.remove(&key) {
                                     result.push(value)
                                 }
