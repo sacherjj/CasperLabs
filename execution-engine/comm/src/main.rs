@@ -39,7 +39,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use storage::global_state::lmdb::LmdbGlobalState;
 use storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
-use shared::newtypes::CorrelationId;
 
 // exe / proc
 const PROC_NAME: &str = "casperlabs-engine-grpc-server";
@@ -209,7 +208,7 @@ fn get_socket(matches: &ArgMatches) -> socket::Socket {
 }
 
 /// Gets value of data-dir argument
-pub(crate) fn get_data_dir(matches: &ArgMatches) -> PathBuf {
+fn get_data_dir(matches: &ArgMatches) -> PathBuf {
     let mut buf = matches.value_of(ARG_DATA_DIR).map_or(
         {
             let mut dir = home_dir().expect(GET_HOME_DIR_EXPECT);
@@ -224,7 +223,7 @@ pub(crate) fn get_data_dir(matches: &ArgMatches) -> PathBuf {
 }
 
 ///  Parses pages argument and returns map size
-pub(crate) fn get_map_size(matches: &ArgMatches) -> usize {
+fn get_map_size(matches: &ArgMatches) -> usize {
     let page_size = get_page_size().unwrap();
     let pages = matches
         .value_of(ARG_PAGES)
@@ -243,7 +242,7 @@ fn get_grpc_server(socket: &socket::Socket, data_dir: PathBuf, map_size: usize) 
 }
 
 /// Builds and returns engine global state
-pub(crate) fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGlobalState> {
+fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGlobalState> {
     let environment = {
         let ret = LmdbEnvironment::new(&data_dir, map_size).expect(LMDB_ENVIRONMENT_EXPECT);
         Arc::new(ret)
