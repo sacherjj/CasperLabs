@@ -1,11 +1,26 @@
+use std::time::Instant;
+
 use common::bytesrepr::{self, ToBytes};
-use shared::newtypes::Blake2bHash;
+use shared::logging::{log_duration, log_metric, GAUGE};
+use shared::newtypes::{Blake2bHash, CorrelationId};
 
 use trie::{self, Parents, Pointer, Trie};
 use trie_store::{Readable, TrieStore, Writable};
 
 #[cfg(test)]
 mod tests;
+
+const TRIE_STORE_READ_DURATION: &str = "trie_store_read_duration";
+const TRIE_STORE_READ_GETS: &str = "trie_store_read_gets";
+const TRIE_STORE_SCAN_DURATION: &str = "trie_store_scan_duration";
+const TRIE_STORE_SCAN_GETS: &str = "trie_store_scan_gets";
+const TRIE_STORE_WRITE_DURATION: &str = "trie_store_write_duration";
+const TRIE_STORE_WRITE_PUTS: &str = "trie_store_write_puts";
+const READ: &str = "read";
+const GET: &str = "get";
+const SCAN: &str = "scan";
+const WRITE: &str = "write";
+const PUT: &str = "put";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ReadResult<V> {
@@ -16,6 +31,7 @@ pub enum ReadResult<V> {
 
 /// Returns a value from the corresponding key at a given root in a given store
 pub fn read<K, V, T, S, E>(
+    correlation_id: CorrelationId,
     txn: &T,
     store: &S,
     root: &Blake2bHash,
@@ -37,6 +53,9 @@ where
         None => return Ok(ReadResult::RootNotFound),
     };
 
+    let start = Instant::now();
+    let mut get_counter: i32 = 0;
+
     loop {
         match current {
             Trie::Leaf {
@@ -50,6 +69,19 @@ where
                     // a Node directly to a Leaf
                     ReadResult::NotFound
                 };
+                log_metric(
+                    correlation_id,
+                    TRIE_STORE_READ_GETS,
+                    GET,
+                    GAUGE,
+                    f64::from(get_counter),
+                );
+                log_duration(
+                    correlation_id,
+                    TRIE_STORE_READ_DURATION,
+                    READ,
+                    start.elapsed(),
+                );
                 return Ok(result);
             }
             Trie::Node { pointer_block } => {
@@ -64,10 +96,25 @@ where
                 match maybe_pointer {
                     Some(pointer) => match store.get(txn, pointer.hash())? {
                         Some(next) => {
+                            get_counter += 1;
                             depth += 1;
                             current = next;
                         }
                         None => {
+                            get_counter += 1;
+                            log_metric(
+                                correlation_id,
+                                TRIE_STORE_READ_GETS,
+                                GET,
+                                GAUGE,
+                                f64::from(get_counter),
+                            );
+                            log_duration(
+                                correlation_id,
+                                TRIE_STORE_READ_DURATION,
+                                READ,
+                                start.elapsed(),
+                            );
                             panic!(
                                 "No trie value at key: {:?} (reading from key: {:?})",
                                 pointer.hash(),
@@ -76,6 +123,19 @@ where
                         }
                     },
                     None => {
+                        log_metric(
+                            correlation_id,
+                            TRIE_STORE_READ_GETS,
+                            GET,
+                            GAUGE,
+                            f64::from(get_counter),
+                        );
+                        log_duration(
+                            correlation_id,
+                            TRIE_STORE_READ_DURATION,
+                            READ,
+                            start.elapsed(),
+                        );
                         return Ok(ReadResult::NotFound);
                     }
                 }
@@ -83,12 +143,28 @@ where
             Trie::Extension { affix, pointer } => {
                 let sub_path = &path[depth..depth + affix.len()];
                 if sub_path == affix.as_slice() {
+                    get_counter += 1;
                     match store.get(txn, pointer.hash())? {
                         Some(next) => {
+                            get_counter += 1;
                             depth += affix.len();
                             current = next;
                         }
                         None => {
+                            get_counter += 1;
+                            log_metric(
+                                correlation_id,
+                                TRIE_STORE_READ_GETS,
+                                GET,
+                                GAUGE,
+                                f64::from(get_counter),
+                            );
+                            log_duration(
+                                correlation_id,
+                                TRIE_STORE_READ_DURATION,
+                                READ,
+                                start.elapsed(),
+                            );
                             panic!(
                                 "No trie value at key: {:?} (reading from key: {:?})",
                                 pointer.hash(),
@@ -97,6 +173,19 @@ where
                         }
                     }
                 } else {
+                    log_metric(
+                        correlation_id,
+                        TRIE_STORE_READ_GETS,
+                        GET,
+                        GAUGE,
+                        f64::from(get_counter),
+                    );
+                    log_duration(
+                        correlation_id,
+                        TRIE_STORE_READ_DURATION,
+                        READ,
+                        start.elapsed(),
+                    );
                     return Ok(ReadResult::NotFound);
                 }
             }
@@ -120,6 +209,7 @@ impl<K, V> TrieScan<K, V> {
 /// "tip", along the with the parents of that variant. Parents are ordered by
 /// their depth from the root (shallow to deep).
 fn scan<K, V, T, S, E>(
+    correlation_id: CorrelationId,
     txn: &T,
     store: &S,
     key_bytes: &[u8],
@@ -133,6 +223,9 @@ where
     S::Error: From<T::Error>,
     E: From<S::Error> + From<common::bytesrepr::Error>,
 {
+    let start = Instant::now();
+    let mut get_counter: i32 = 0;
+
     let path = key_bytes;
 
     let mut current = root.to_owned();
@@ -142,6 +235,19 @@ where
     loop {
         match current {
             leaf @ Trie::Leaf { .. } => {
+                log_metric(
+                    correlation_id,
+                    TRIE_STORE_SCAN_GETS,
+                    GET,
+                    GAUGE,
+                    f64::from(get_counter),
+                );
+                log_duration(
+                    correlation_id,
+                    TRIE_STORE_SCAN_DURATION,
+                    SCAN,
+                    start.elapsed(),
+                );
                 return Ok(TrieScan::new(leaf, acc));
             }
             Trie::Node { pointer_block } => {
@@ -156,15 +262,45 @@ where
                 };
                 let pointer = match maybe_pointer {
                     Some(pointer) => pointer,
-                    None => return Ok(TrieScan::new(Trie::Node { pointer_block }, acc)),
+                    None => {
+                        log_metric(
+                            correlation_id,
+                            TRIE_STORE_SCAN_GETS,
+                            GET,
+                            GAUGE,
+                            f64::from(get_counter),
+                        );
+                        log_duration(
+                            correlation_id,
+                            TRIE_STORE_SCAN_DURATION,
+                            SCAN,
+                            start.elapsed(),
+                        );
+                        return Ok(TrieScan::new(Trie::Node { pointer_block }, acc));
+                    }
                 };
                 match store.get(txn, pointer.hash())? {
                     Some(next) => {
+                        get_counter += 1;
                         current = next;
                         depth += 1;
                         acc.push((index, Trie::Node { pointer_block }))
                     }
                     None => {
+                        get_counter += 1;
+                        log_metric(
+                            correlation_id,
+                            TRIE_STORE_SCAN_GETS,
+                            GET,
+                            GAUGE,
+                            f64::from(get_counter),
+                        );
+                        log_duration(
+                            correlation_id,
+                            TRIE_STORE_SCAN_DURATION,
+                            SCAN,
+                            start.elapsed(),
+                        );
                         panic!(
                             "No trie value at key: {:?} (reading from path: {:?})",
                             pointer.hash(),
@@ -176,10 +312,24 @@ where
             Trie::Extension { affix, pointer } => {
                 let sub_path = &path[depth..depth + affix.len()];
                 if sub_path != affix.as_slice() {
+                    log_metric(
+                        correlation_id,
+                        TRIE_STORE_SCAN_GETS,
+                        GET,
+                        GAUGE,
+                        f64::from(get_counter),
+                    );
+                    log_duration(
+                        correlation_id,
+                        TRIE_STORE_SCAN_DURATION,
+                        SCAN,
+                        start.elapsed(),
+                    );
                     return Ok(TrieScan::new(Trie::Extension { affix, pointer }, acc));
                 }
                 match store.get(txn, pointer.hash())? {
                     Some(next) => {
+                        get_counter += 1;
                         let index = {
                             assert!(depth < path.len(), "depth must be < {}", path.len());
                             path[depth]
@@ -189,6 +339,20 @@ where
                         acc.push((index, Trie::Extension { affix, pointer }))
                     }
                     None => {
+                        get_counter += 1;
+                        log_metric(
+                            correlation_id,
+                            TRIE_STORE_SCAN_GETS,
+                            GET,
+                            GAUGE,
+                            f64::from(get_counter),
+                        );
+                        log_duration(
+                            correlation_id,
+                            TRIE_STORE_SCAN_DURATION,
+                            SCAN,
+                            start.elapsed(),
+                        );
                         panic!(
                             "No trie value at key: {:?} (reading from path: {:?})",
                             pointer.hash(),
@@ -449,6 +613,7 @@ pub enum WriteResult {
 }
 
 pub fn write<K, V, T, S, E>(
+    correlation_id: CorrelationId,
     txn: &mut T,
     store: &S,
     root: &Blake2bHash,
@@ -463,6 +628,9 @@ where
     S::Error: From<T::Error>,
     E: From<S::Error> + From<common::bytesrepr::Error>,
 {
+    let start = Instant::now();
+    let mut put_counter: i32 = 0;
+
     match store.get(txn, root)? {
         None => Ok(WriteResult::RootNotFound),
         Some(current_root) => {
@@ -472,7 +640,7 @@ where
             };
             let path: Vec<u8> = key.to_bytes()?;
             let TrieScan { tip, parents } =
-                scan::<K, V, T, S, E>(txn, store, &path, &current_root)?;
+                scan::<K, V, T, S, E>(correlation_id, txn, store, &path, &current_root)?;
             let new_elements: Vec<(Blake2bHash, Trie<K, V>)> = match tip {
                 // If the "tip" is the same as the new leaf, then the leaf
                 // is already in the Trie.
@@ -525,13 +693,33 @@ where
                 }
             };
             if new_elements.is_empty() {
+                log_duration(
+                    correlation_id,
+                    TRIE_STORE_WRITE_DURATION,
+                    WRITE,
+                    start.elapsed(),
+                );
                 return Ok(WriteResult::AlreadyExists);
             }
             let mut root_hash = root.to_owned();
             for (hash, element) in new_elements.iter() {
+                put_counter += 1;
                 store.put(txn, hash, element)?;
                 root_hash = *hash;
             }
+            log_metric(
+                correlation_id,
+                TRIE_STORE_WRITE_PUTS,
+                PUT,
+                GAUGE,
+                f64::from(put_counter),
+            );
+            log_duration(
+                correlation_id,
+                TRIE_STORE_WRITE_DURATION,
+                WRITE,
+                start.elapsed(),
+            );
             Ok(WriteResult::Written(root_hash))
         }
     }
