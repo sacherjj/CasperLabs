@@ -239,7 +239,7 @@ where
         .collect()
 }
 
-// Helper method which returns single DeployResult that is set to be a ipc::WasmError.
+// Helper method which returns single DeployResult that is set to be a WasmError.
 pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     socket: &str,
     e: E,
