@@ -1,21 +1,18 @@
 import threading
+from test.cl_node.client_parser import parse_show_blocks
+from test.cl_node.docker_node import DockerNode
+from typing import List
+
+import ed25519
+import pytest
 
 from . import conftest
-from test.cl_node.docker_node import DockerNode
-from test.cl_node.client_parser import parse_show_blocks
+from .cl_node.casperlabs_network import ThreeNodeNetwork
+from .cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from .cl_node.common import random_string
 from .cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
-from .cl_node.wait import (
-    wait_for_blocks_count_at_least,
-)
+from .cl_node.wait import wait_for_blocks_count_at_least
 
-from .cl_node.casperlabsnode import ( extract_block_hash_from_propose_output, )
-
-import pytest
-from typing import List
-import ed25519
-
-from .cl_node.casperlabs_network import ThreeNodeNetwork
 
 BOOTSTRAP_NODE_KEYS = PREGENERATED_KEYPAIRS[0]
 
@@ -51,7 +48,9 @@ class DeployThread(threading.Thread):
         for batch in self.batches_of_contracts:
             for contract in batch:
                 assert 'Success' in self.node.client.deploy(session_contract = contract,
-                                                            payment_contract = contract)
+                                                            payment_contract = contract,
+                                                            private_key="validator-0-private.pem",
+                                                            public_key="validator-0-public.pem")
             block_hash = self.propose()
             self.deployed_blocks_hashes.add(block_hash)
 
