@@ -11,8 +11,8 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
-import io.casperlabs.casper.consensus.Deploy.Code
-import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.{Approval, Block, Deploy, Signature}
 import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.shared.Log
@@ -112,34 +112,43 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
     )
   )
 
-  val ProcessedDeployType = ObjectType(
-    "ProcessedDeploy",
-    "Results of executing a deploy",
-    fields[Unit, ProcessedDeploy](
+  val DeployResultInterface = InterfaceType(
+    "DeployProcessingResult",
+    "Basic information of results of a deploy processing",
+    fields[Unit, Either[ProcessedDeploy, ProcessingResult]](
       Field(
         "cost",
         LongType,
         "Amount of gas spent to execute the deploy".some,
-        resolve = c => c.value.cost
+        resolve = c => c.value.fold(_.cost, _.cost)
       ),
       Field(
         "isError",
         BooleanType,
         "True if execution failed, false otherwife".some,
-        resolve = c => c.value.isError
+        resolve = c => c.value.fold(_.isError, _.isError)
       ),
       Field(
         "errorMessage",
         OptionType(StringType),
         "Error message if failed, null otherwise".some,
-        resolve = c => Option(c.value.errorMessage).filter(_.nonEmpty)
-      ),
-      Field("deploy", DeployType, resolve = c => c.value.getDeploy)
+        resolve = c => Option(c.value.fold(_.errorMessage, _.errorMessage)).filter(_.nonEmpty)
+      )
     )
   )
 
-  val BlockType = ObjectType(
-    "Block",
+  val ProcessedDeployType = ObjectType(
+    "ProcessedDeploy",
+    "Results of executing a deploy",
+    interfaces[Unit, Either[ProcessedDeploy, ProcessingResult]](DeployResultInterface),
+    fields[Unit, Either[ProcessedDeploy, ProcessingResult]](
+      Field("deploy", DeployType, resolve = c => c.value.left.get.getDeploy)
+    )
+  )
+
+  val BlockInfoInterface = InterfaceType(
+    "BlockInfo",
+    "Basic block information which doesn't require reading a full block",
     fields[Unit, (BlockInfo, Option[Block])](
       Field(
         "blockHash",
@@ -214,7 +223,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
         "deploys",
         ListType(ProcessedDeployType),
         "Deploys in the block".some,
-        resolve = c => c.value._2.get.getBody.deploys.toList
+        resolve = c => c.value._2.get.getBody.deploys.toList.map(_.asLeft[ProcessingResult])
       ),
       Field(
         "faultTolerance",
@@ -234,8 +243,64 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
     )
   )
 
-  val HashPrefix =
-    Argument("blockHashBase16", StringType, description = "Prefix or full base-16 hash")
+  val ProcessingResultType = ObjectType(
+    "ProcessingResult",
+    "Full deploys processing result information",
+    interfaces[Unit, Either[ProcessedDeploy, ProcessingResult]](
+      DeployResultInterface
+    ),
+    fields[Unit, Either[ProcessedDeploy, ProcessingResult]](
+      Field(
+        "block",
+        BlockInfoInterface,
+        resolve = c => (c.value.right.get.getBlockInfo, none[Block])
+      )
+    )
+  )
+
+  val DeployInfoType = ObjectType(
+    "DeployInfo",
+    "Deploy information",
+    fields[Unit, DeployInfo](
+      Field(
+        "deploy",
+        DeployType,
+        resolve = c => c.value.getDeploy
+      ),
+      Field(
+        "processingResults",
+        ListType(ProcessingResultType),
+        resolve = c => c.value.processingResults.map(_.asRight[ProcessedDeploy]).toList
+      )
+    )
+  )
+
+  val BlockType = ObjectType(
+    "Block",
+    interfaces[Unit, (BlockInfo, Option[Block])](BlockInfoInterface),
+    fields[Unit, (BlockInfo, Option[Block])](
+      Field(
+        "deploys",
+        ListType(ProcessedDeployType),
+        "Deploys in the block".some,
+        resolve = c => c.value._2.get.getBody.deploys.toList.map(_.asLeft[ProcessingResult])
+      )
+    )
+  )
+
+  val BlockHashPrefix =
+    Argument(
+      "blockHashBase16Prefix",
+      StringType,
+      description = "Prefix or full base-16 hash of a block"
+    )
+
+  val DeployHash =
+    Argument(
+      "deployHashBase16",
+      StringType,
+      description = "Base-16 hash of a deploy, must be 64 characters long"
+    )
 
   val randomBytes: List[Array[Byte]] = (for {
     _ <- 0 until 5
@@ -266,17 +331,23 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
           Field(
             "block",
             OptionType(BlockType),
-            arguments = HashPrefix :: Nil,
+            arguments = BlockHashPrefix :: Nil,
             resolve = Projector { (context, projections) =>
               BlockAPI
                 .getBlockInfoOpt[F](
-                  blockHashBase16 = context.arg(HashPrefix),
+                  blockHashBase16 = context.arg(BlockHashPrefix),
                   full =
                     hasAtLeastOne(projections, Set("blockSizeBytes", "deployErrorCount", "deploys"))
                 )
                 .toIO
                 .unsafeToFuture()
             }
+          ),
+          Field(
+            "deploy",
+            OptionType(DeployInfoType),
+            arguments = DeployHash :: Nil,
+            resolve = c => BlockAPI.getDeployInfoOpt[F](c.arg(DeployHash)).toIO.unsafeToFuture()
           )
         )
       ),

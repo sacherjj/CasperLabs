@@ -310,10 +310,10 @@ object BlockAPI {
       .traverse(ProtoUtil.unsafeGetBlock[F](_))
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, accountPublicKey, timestamp)))
 
-  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
       deployHashBase16: String
-  ): F[DeployInfo] =
-    unsafeWithCasper[F, DeployInfo]("Could not show deploy.") { implicit casper =>
+  ): F[Option[DeployInfo]] =
+    unsafeWithCasper[F, Option[DeployInfo]]("Could not show deploy.") { implicit casper =>
       val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
 
       BlockStore[F].findBlockHashesWithDeployhash(deployHash) flatMap {
@@ -344,19 +344,26 @@ object BlockAPI {
                     .withBlockInfo(blockInfo)
               }
             )
-          } yield info
+          } yield info.some
 
         case _ =>
-          casper.bufferedDeploys.flatMap { deploys =>
+          casper.bufferedDeploys.map { deploys =>
             deploys.find(_.deployHash == deployHash) map { deploy =>
-              DeployInfo().withDeploy(deploy).pure[F]
-            } getOrElse {
-              MonadThrowable[F]
-                .raiseError[DeployInfo](NotFound(s"Cannot find deploy with hash $deployHashBase16"))
+              DeployInfo().withDeploy(deploy)
             }
           }
       }
     }
+
+  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      deployHashBase16: String
+  ): F[DeployInfo] =
+    getDeployInfoOpt[F](deployHashBase16).flatMap(
+      _.fold(
+        MonadThrowable[F]
+          .raiseError[DeployInfo](NotFound(s"Cannot find deploy with hash $deployHashBase16"))
+      )(_.pure[F])
+    )
 
   def getBlockDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStore](
       blockHashBase16: String
