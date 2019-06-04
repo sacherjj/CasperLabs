@@ -38,7 +38,7 @@ object GrpcCasperService extends StateConversions {
             BlockAPI
               .getBlockInfo[F](
                 request.blockHashBase16,
-                full = request.view == BlockInfoView.FULL
+                full = request.view == BlockInfo.View.FULL
               )
           }
 
@@ -47,20 +47,27 @@ object GrpcCasperService extends StateConversions {
             BlockAPI.getBlockInfos[F](
               depth = request.depth,
               maxRank = request.maxRank,
-              full = request.view == BlockInfoView.FULL
+              full = request.view == BlockInfo.View.FULL
             )
           }
           Observable.fromTask(infos).flatMap(Observable.fromIterable)
         }
 
-        def getBlockState(request: GetBlockStateRequest): Task[State.Value] =
+        override def getDeployInfo(request: GetDeployInfoRequest): Task[DeployInfo] =
+          ???
+
+        override def streamBlockDeploys(
+            request: StreamBlockDeploysRequest
+        ): Observable[DeployInfo] = ???
+
+        override def getBlockState(request: GetBlockStateRequest): Task[State.Value] =
           batchGetBlockState(
             BatchGetBlockStateRequest(request.blockHashBase16, List(request.getQuery))
           ) map {
             _.values.head
           }
 
-        def batchGetBlockState(
+        override def batchGetBlockState(
             request: BatchGetBlockStateRequest
         ): Task[BatchGetBlockStateResponse] = TaskLike[F].toTask {
           for {

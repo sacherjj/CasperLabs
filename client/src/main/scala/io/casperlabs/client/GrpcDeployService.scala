@@ -9,9 +9,9 @@ import java.util.concurrent.TimeUnit
 import com.google.protobuf.empty.Empty
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.graphz
 import io.casperlabs.node.api.casper.{
-  BlockInfoView,
   CasperGrpcMonix,
   DeployRequest,
   GetBlockInfoRequest,
@@ -68,7 +68,7 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
 
   def showBlock(hash: String): Task[Either[Throwable, String]] =
     casperServiceStub
-      .getBlockInfo(GetBlockInfoRequest(hash, BlockInfoView.FULL))
+      .getBlockInfo(GetBlockInfoRequest(hash, BlockInfo.View.FULL))
       .map(Printer.printToUnicodeString(_))
       .attempt
 
@@ -98,7 +98,7 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
 
   def visualizeDag(depth: Int, showJustificationLines: Boolean): Task[Either[Throwable, String]] =
     casperServiceStub
-      .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfoView.BASIC))
+      .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfo.View.BASIC))
       .toListL
       .map { infos =>
         type G[A] = StateT[Id, StringBuffer, A]
@@ -110,7 +110,7 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
 
   def showBlocks(depth: Int): Task[Either[Throwable, String]] =
     casperServiceStub
-      .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfoView.BASIC))
+      .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfo.View.BASIC))
       .map { bi =>
         s"""
          |------------- block @ ${bi.getSummary.getHeader.rank} ---------------
