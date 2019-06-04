@@ -1144,22 +1144,38 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     import node._
     implicit val timeEff = new LogicalTime[Effect]
 
-    // Choosing obviously invalid nonce as there's no way to extract nonce
+    // Choosing obviously invalid nonce as there's no way to extract current account's nonce from the GlobalState
     val invalidNonce = 1000
 
     for {
-      deploy <- ProtoUtil
-                 .basicDeploy[Effect](1)
-                 .map(d => d.withHeader(d.header.get.withNonce(invalidNonce)))
-      _                 <- node.casperEff.deploy(deploy)
+      invalidDeploy     <- ProtoUtil.basicDeploy[Effect](invalidNonce)
+      _                 <- node.casperEff.deploy(invalidDeploy)
+      validDeploy       <- ProtoUtil.basicDeploy[Effect](1)
+      _                 <- node.casperEff.deploy(validDeploy)
       createBlockResult <- MultiParentCasper[Effect].createBlock
       Created(block)    = createBlockResult
       casperState       <- Cell[Effect, CasperState].read
       deployBuffer      = casperState.deployBuffer
     } yield {
-      assert(block.body.get.deploys.isEmpty)
-      assert(deployBuffer.contains(deploy))
+      assert(block.body.get.deploys.flatMap(_.deploy).contains(validDeploy))
+      assert(deployBuffer.contains(invalidDeploy))
     }
+  }
+
+  it should "return NoNewDeploys status if there are no deploys to put into the block after executing contracts" in effectTest {
+    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+    import node._
+    implicit val timeEff = new LogicalTime[Effect]
+
+    // Choosing obviously invalid nonce as there's no way to extract current account's nonce from the GlobalState
+    val invalidNonce = 1000
+
+    for {
+      invalidDeploy     <- ProtoUtil.basicDeploy[Effect](invalidNonce)
+      _                 <- node.casperEff.deploy(invalidDeploy)
+      createBlockStatus <- MultiParentCasper[Effect].createBlock
+      _                 = println(createBlockStatus)
+    } yield assert(createBlockStatus.isInstanceOf[io.casperlabs.casper.NoNewDeploys.type])
   }
 
   private def buildBlockWithInvalidJustification(

@@ -351,59 +351,65 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       justifications: Seq[Justification],
       protocolVersion: ProtocolVersion
   ): F[CreateBlockStatus] =
-    (for {
-      now <- Time[F].currentMillis
-      s   <- Cell[F, CasperState].read
-      stateResult <- ExecEngineUtil
-                      .computeDeploysCheckpoint[F](
-                        merged,
-                        deploys,
-                        protocolVersion
-                      )
-      DeploysCheckpoint(
-        preStateHash,
-        postStateHash,
-        deploysForBlock,
-        // We don't have to put InvalidNonce deploys back to the buffer,
-        // as by default buffer is cleared when deploy gets included in
-        // the finalized block. If that strategy ever changes, we will have to
-        // put them back into the buffer explicitly.
-        invalidNonceDeploys,
-        number,
+    ExecEngineUtil
+      .computeDeploysCheckpoint[F](
+        merged,
+        deploys,
         protocolVersion
-      ) = stateResult
-      //TODO: compute bonds properly
-      newBonds = ProtoUtil.bonds(parents.head)
-
-      postState = Block
-        .GlobalState()
-        .withPreStateHash(preStateHash)
-        .withPostStateHash(postStateHash)
-        .withBonds(newBonds)
-
-      body = Block
-        .Body()
-        .withDeploys(deploysForBlock)
-
-      header = blockHeader(
-        body,
-        parentHashes = parents.map(_.blockHash),
-        justifications = justifications,
-        state = postState,
-        rank = number,
-        protocolVersion = protocolVersion.version,
-        timestamp = now,
-        chainId = chainId
       )
-      block = unsignedBlockProto(body, header)
-    } yield CreateBlockStatus.created(block)).handleErrorWith(
-      ex =>
-        Log[F]
-          .error(
-            s"Critical error encountered while processing deploys: ${ex.getMessage}"
-          )
-          .map(_ => CreateBlockStatus.internalDeployError(ex))
-    )
+      .flatMap {
+        case DeploysCheckpoint(
+            preStateHash,
+            postStateHash,
+            deploysForBlock,
+            // We don't have to put InvalidNonce deploys back to the buffer,
+            // as by default buffer is cleared when deploy gets included in
+            // the finalized block. If that strategy ever changes, we will have to
+            // put them back into the buffer explicitly.
+            invalidNonceDeploys,
+            number,
+            protocolVersion
+            ) =>
+          if (deploysForBlock.isEmpty) {
+            CreateBlockStatus.noNewDeploys.pure[F]
+          } else {
+            Time[F].currentMillis.map { now =>
+              val newBonds = ProtoUtil.bonds(parents.head)
+
+              val postState = Block
+                .GlobalState()
+                .withPreStateHash(preStateHash)
+                .withPostStateHash(postStateHash)
+                .withBonds(newBonds)
+
+              val body = Block
+                .Body()
+                .withDeploys(deploysForBlock)
+
+              val header = blockHeader(
+                body,
+                parentHashes = parents.map(_.blockHash),
+                justifications = justifications,
+                state = postState,
+                rank = number,
+                protocolVersion = protocolVersion.version,
+                timestamp = now,
+                chainId = chainId
+              )
+              val block = unsignedBlockProto(body, header)
+
+              CreateBlockStatus.created(block)
+            }
+          }
+      }
+      .handleErrorWith(
+        ex =>
+          Log[F]
+            .error(
+              s"Critical error encountered while processing deploys: ${ex.getMessage}"
+            )
+            .map(_ => CreateBlockStatus.internalDeployError(ex))
+      )
 
   // MultiParentCasper Exposes the block DAG to those who need it.
   def blockDag: F[BlockDagRepresentation[F]] =
