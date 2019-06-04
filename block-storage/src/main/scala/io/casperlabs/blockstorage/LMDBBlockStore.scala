@@ -73,9 +73,8 @@ class LMDBBlockStore[F[_]] private (
   private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
     withTxn(env.txnRead())(f)
 
-  def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
+  def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
     withWriteTxn { txn =>
-      val (blockHash, blockMsgWithTransform) = f
       blocks.put(
         txn,
         blockHash.toDirectByteBuffer,

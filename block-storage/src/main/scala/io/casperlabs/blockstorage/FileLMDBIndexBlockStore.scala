@@ -165,16 +165,15 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
       }
     )
 
-  override def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
+  override def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
     lock.withPermit(
       for {
-        randomAccessFile                   <- getBlockMessageRandomAccessFile
-        currentIndex                       <- getCurrentIndex
-        endOfFileOffset                    <- randomAccessFile.length
-        _                                  <- randomAccessFile.seek(endOfFileOffset)
-        (blockHash, blockMsgWithTransform) = f
-        blockMsgWithTransformByteArray     = blockMsgWithTransform.toByteArray
-        blockSummary                       = blockMsgWithTransform.toBlockSummary
+        randomAccessFile               <- getBlockMessageRandomAccessFile
+        currentIndex                   <- getCurrentIndex
+        endOfFileOffset                <- randomAccessFile.length
+        _                              <- randomAccessFile.seek(endOfFileOffset)
+        blockMsgWithTransformByteArray = blockMsgWithTransform.toByteArray
+        blockSummary                   = blockMsgWithTransform.toBlockSummary
         deployHashes = blockMsgWithTransform.getBlockMessage.getBody.deploys
           .flatMap(_.deploy.map(_.deployHash))
         _ <- randomAccessFile.writeInt(blockMsgWithTransformByteArray.length)

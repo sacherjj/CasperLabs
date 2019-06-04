@@ -28,17 +28,18 @@ class InMemBlockStore[F[_]] private (
     refF.get.map(_.keys.find(p))
 
   def put(
-      f: => (BlockHash, BlockMsgWithTransform)
+      blockHash: BlockHash,
+      blockMsgWithTransform: BlockMsgWithTransform
   ): F[Unit] =
     refF
       .update(
-        _ + (f._1 -> (f._2, f._2.toBlockSummary))
+        _ + (blockHash -> (blockMsgWithTransform, blockMsgWithTransform.toBlockSummary))
       ) *>
       reverseIdxRefF.update { m =>
-        f._2.getBlockMessage.getBody.deploys.foldLeft(m) { (m, d) =>
+        blockMsgWithTransform.getBlockMessage.getBody.deploys.foldLeft(m) { (m, d) =>
           m.updated(
             d.getDeploy.deployHash,
-            m.getOrElse(d.getDeploy.deployHash, Seq.empty[BlockHash]) :+ f._1
+            m.getOrElse(d.getDeploy.deployHash, Seq.empty[BlockHash]) :+ blockHash
           )
         }
       }
