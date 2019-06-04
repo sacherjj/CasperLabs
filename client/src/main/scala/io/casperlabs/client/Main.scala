@@ -40,8 +40,9 @@ object Main {
       configuration: Configuration
   ): F[Unit] =
     configuration match {
-      case ShowBlock(hash) => DeployRuntime.showBlock(hash)
-
+      case ShowBlock(hash)   => DeployRuntime.showBlock(hash)
+      case ShowDeploy(hash)  => DeployRuntime.showDeploy(hash)
+      case ShowDeploys(hash) => DeployRuntime.showDeploys(hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
 
       case Deploy(from, nonce, sessionCode, paymentCode, maybePublicKey, maybePrivateKey) =>
@@ -61,8 +62,6 @@ object Main {
         DeployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
 
       case Query(hash, keyType, keyValue, path) =>
-        DeployRuntime.gracefulExit(
-          DeployService[F].queryState(protocol.QueryStateRequest(hash, keyType, keyValue, path))
-        )
+        DeployRuntime.queryState(hash, keyType, keyValue, path)
     }
 }
