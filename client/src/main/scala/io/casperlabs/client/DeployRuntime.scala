@@ -31,6 +31,12 @@ object DeployRuntime {
   def showBlock[F[_]: Sync: DeployService](hash: String): F[Unit] =
     gracefulExit(DeployService[F].showBlock(hash))
 
+  def showDeploys[F[_]: Sync: DeployService](hash: String): F[Unit] =
+    gracefulExit(DeployService[F].showDeploys(hash))
+
+  def showDeploy[F[_]: Sync: DeployService](hash: String): F[Unit] =
+    gracefulExit(DeployService[F].showDeploy(hash))
+
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(depth))
 

@@ -8,6 +8,7 @@ import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics
@@ -38,7 +39,7 @@ object GrpcCasperService extends StateConversions {
             BlockAPI
               .getBlockInfo[F](
                 request.blockHashBase16,
-                full = request.view == BlockInfoView.FULL
+                full = request.view == BlockInfo.View.FULL
               )
           }
 
@@ -47,20 +48,55 @@ object GrpcCasperService extends StateConversions {
             BlockAPI.getBlockInfos[F](
               depth = request.depth,
               maxRank = request.maxRank,
-              full = request.view == BlockInfoView.FULL
+              full = request.view == BlockInfo.View.FULL
             )
           }
           Observable.fromTask(infos).flatMap(Observable.fromIterable)
         }
 
-        def getBlockState(request: GetBlockStateRequest): Task[State.Value] =
+        override def getDeployInfo(request: GetDeployInfoRequest): Task[DeployInfo] =
+          TaskLike[F].toTask {
+            BlockAPI
+              .getDeployInfo[F](
+                request.deployHashBase16
+              ) map { info =>
+              request.view match {
+                case DeployInfo.View.BASIC =>
+                  info.withDeploy(info.getDeploy.copy(body = None))
+                case _ =>
+                  info
+              }
+            }
+          }
+
+        override def streamBlockDeploys(
+            request: StreamBlockDeploysRequest
+        ): Observable[Block.ProcessedDeploy] = {
+          val deploys = TaskLike[F].toTask {
+            BlockAPI.getBlockDeploys[F](
+              request.blockHashBase16
+            ) map {
+              _ map { pd =>
+                request.view match {
+                  case DeployInfo.View.BASIC =>
+                    pd.withDeploy(pd.getDeploy.copy(body = None))
+                  case _ =>
+                    pd
+                }
+              }
+            }
+          }
+          Observable.fromTask(deploys).flatMap(Observable.fromIterable)
+        }
+
+        override def getBlockState(request: GetBlockStateRequest): Task[State.Value] =
           batchGetBlockState(
             BatchGetBlockStateRequest(request.blockHashBase16, List(request.getQuery))
           ) map {
             _.values.head
           }
 
-        def batchGetBlockState(
+        override def batchGetBlockState(
             request: BatchGetBlockStateRequest
         ): Task[BatchGetBlockStateResponse] = TaskLike[F].toTask {
           for {
