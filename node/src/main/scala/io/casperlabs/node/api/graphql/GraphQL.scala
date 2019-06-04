@@ -43,8 +43,9 @@ object GraphQL {
   ): HttpRoutes[F] = {
     implicit val ec: ExecutionContext                            = executionContext
     implicit val fs2SubscriptionStream: Fs2SubscriptionStream[F] = new Fs2SubscriptionStream[F]()
+    val schemaBuilder                                            = new GraphQLSchemaBuilder[F]
     buildRoute(
-      executor = Executor(GraphQLSchema.createSchema),
+      executor = Executor(schemaBuilder.createSchema),
       keepAlivePeriod = 10.seconds,
       ec
     )
