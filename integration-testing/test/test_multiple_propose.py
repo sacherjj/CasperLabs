@@ -1,6 +1,7 @@
+from test.cl_node.errors import NonZeroExitCodeError
+
 import pytest
 
-from test.cl_node.errors import NonZeroExitCodeError
 from .cl_node.wait import wait_for_blocks_count_at_least
 
 

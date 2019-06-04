@@ -1,6 +1,7 @@
-from threading import Thread
-from time import time, sleep
 import logging
+from threading import Thread
+from time import sleep, time
+
 
 CONTRACT_1 = 'helloname_invalid_just_1.wasm'
 CONTRACT_2 = 'helloname_invalid_just_2.wasm'

@@ -1,12 +1,11 @@
 import threading
-import pytest
+from test.cl_node.client_parser import parse_show_blocks
+from test.cl_node.docker_node import DockerNode
 from typing import List
 
-from test.cl_node.docker_node import DockerNode
-from test.cl_node.client_parser import parse_show_blocks
-from .cl_node.wait import (
-    wait_for_blocks_count_at_least,
-)
+import pytest
+
+from .cl_node.wait import wait_for_blocks_count_at_least
 
 
 # An explanation given by @Akosh about number of expected blocks.

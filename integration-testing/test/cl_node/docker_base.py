@@ -1,24 +1,14 @@
-from dataclasses import dataclass
+import logging
 import os
 import threading
-import logging
+from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from queue import Empty
-from typing import (
-    Optional,
-    Dict,
-    Any,
-    Union,
-    Tuple,
-)
-from docker import DockerClient
-
-from test.cl_node.errors import (
-    NonZeroExitCodeError,
-    CommandTimeoutError,
-)
-
 from test.cl_node.common import random_string
+from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
+from typing import Any, Dict, Optional, Tuple, Union
+
+from docker import DockerClient
 
 
 class LoggingThread(threading.Thread):

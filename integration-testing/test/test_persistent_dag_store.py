@@ -1,15 +1,13 @@
 
-from test.cl_node.casperlabsnode import (
-    HELLO_NAME,
-)
+from test.cl_node.casperlabsnode import HELLO_NAME
 from test.cl_node.wait import (
+    wait_for_blocks_count_at_least,
     wait_for_connected_to_node,
     wait_for_finalised_hash,
     wait_for_metrics_and_assert_blocks_avaialable,
     wait_for_received_approved_block_request,
     wait_for_sending_approved_block_request,
     wait_for_streamed_packet,
-    wait_for_blocks_count_at_least,
 )
 
 

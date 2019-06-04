@@ -1,22 +1,17 @@
-import os
 import logging
-from pathlib import Path
+import os
+import re
 import shutil
 import tempfile
-from typing import Tuple, List, TYPE_CHECKING, Generator, Optional
-import re
-
-from test.cl_node.errors import (
-    CasperLabsNodeAddressNotFoundError,
-)
-
+from pathlib import Path
+from test.cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from test.cl_node.docker_base import LoggingDockerBase
-from test.cl_node.casperlabsnode import (
-    extract_block_hash_from_propose_output,
-)
-from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.docker_client import DockerClient
+from test.cl_node.errors import CasperLabsNodeAddressNotFoundError
+from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.python_client import PythonClient
+from typing import TYPE_CHECKING, Generator, List, Optional, Tuple
+
 
 if TYPE_CHECKING:
    from test.cl_node.docker_base import DockerConfig
