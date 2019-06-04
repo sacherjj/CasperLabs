@@ -61,8 +61,6 @@ object Main {
         DeployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
 
       case Query(hash, keyType, keyValue, path) =>
-        DeployRuntime.gracefulExit(
-          DeployService[F].queryState(protocol.QueryStateRequest(hash, keyType, keyValue, path))
-        )
+        DeployRuntime.queryState(hash, keyType, keyValue, path)
     }
 }

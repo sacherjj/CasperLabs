@@ -8,7 +8,6 @@ import java.io.Closeable
 import java.util.concurrent.TimeUnit
 import com.google.protobuf.empty.Empty
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
 import io.casperlabs.graphz
 import io.casperlabs.node.api.casper.{
@@ -16,6 +15,8 @@ import io.casperlabs.node.api.casper.{
   CasperGrpcMonix,
   DeployRequest,
   GetBlockInfoRequest,
+  GetBlockStateRequest,
+  StateQuery,
   StreamBlockInfosRequest
 }
 import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
@@ -50,7 +51,6 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
       .build()
   }
 
-  private lazy val deployServiceStub  = CasperMessageGrpcMonix.stub(externalChannel)
   private lazy val casperServiceStub  = CasperGrpcMonix.stub(externalChannel)
   private lazy val controlServiceStub = ControlGrpcMonix.stub(internalChannel)
 
@@ -72,10 +72,28 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
       .map(Printer.printToUnicodeString(_))
       .attempt
 
-  def queryState(q: QueryStateRequest): Task[Either[Throwable, String]] =
-    deployServiceStub
-      .queryState(q)
-      .map(_.result)
+  def queryState(
+      blockHash: String,
+      keyVariant: String,
+      keyValue: String,
+      path: String
+  ): Task[Either[Throwable, String]] =
+    StateQuery.KeyVariant.values
+      .find(_.name == keyVariant.toUpperCase)
+      .fold(
+        Task.raiseError[String](
+          new java.lang.IllegalArgumentException(s"Unknown key variant: $keyVariant")
+        )
+      ) { kv =>
+        val req = GetBlockStateRequest(blockHash)
+          .withQuery(
+            StateQuery(kv, keyValue, path.split('/').filterNot(_.isEmpty))
+          )
+
+        casperServiceStub
+          .getBlockState(req)
+          .map(Printer.printToUnicodeString(_))
+      }
       .attempt
 
   def visualizeDag(depth: Int, showJustificationLines: Boolean): Task[Either[Throwable, String]] =

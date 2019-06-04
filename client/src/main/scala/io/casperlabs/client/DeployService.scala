@@ -1,6 +1,6 @@
 package io.casperlabs.client
-import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus.info
 import simulacrum.typeclass
 
 import scala.util.Either
@@ -11,5 +11,10 @@ import scala.util.Either
   def showBlock(blockHash: String): F[Either[Throwable, String]]
   def showBlocks(depth: Int): F[Either[Throwable, String]]
   def visualizeDag(depth: Int, showJustificationLines: Boolean): F[Either[Throwable, String]]
-  def queryState(q: QueryStateRequest): F[Either[Throwable, String]]
+  def queryState(
+      blockHash: String,
+      keyVariant: String,
+      keyValue: String,
+      path: String
+  ): F[Either[Throwable, String]]
 }
