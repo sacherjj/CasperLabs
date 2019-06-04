@@ -113,7 +113,6 @@ object ExecEngineUtil {
                 (next :: acc, totalOps + ops)
               else
                 unchanged
-            case (unchanged, _) => unchanged
           }
 
         result
