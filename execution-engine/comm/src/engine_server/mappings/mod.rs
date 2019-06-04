@@ -701,9 +701,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     EngineError::StorageError(storage_err) => {
                         execution_error(storage_err.to_string(), cost, effect)
                     }
-                    EngineError::PreprocessingError(err_msg) => {
-                        execution_error(err_msg, cost, effect)
-                    }
+                    EngineError::PreprocessingError(error_msg) => precondition_failure(error_msg),
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {
                             let mut deploy_result = ipc::DeployResult::new();
@@ -948,14 +946,6 @@ mod tests {
         // assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
         let bytesrepr_err = common::bytesrepr::Error::EarlyEndOfStream;
         assert_eq!(test_cost(cost, BytesRepr(bytesrepr_err)), cost);
-    }
-
-    #[test]
-    fn preprocessing_err_has_cost() {
-        let cost: u64 = 100;
-        // it doesn't matter what error type it is
-        let preprocessing_error = wasm_prep::PreprocessingError::NoExportSection;
-        assert_eq!(test_cost(cost, preprocessing_error), cost);
     }
 
     #[test]
