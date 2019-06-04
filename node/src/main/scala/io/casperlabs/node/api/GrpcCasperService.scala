@@ -8,6 +8,7 @@ import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics
@@ -70,7 +71,23 @@ object GrpcCasperService extends StateConversions {
 
         override def streamBlockDeploys(
             request: StreamBlockDeploysRequest
-        ): Observable[DeployInfo] = ???
+        ): Observable[Block.ProcessedDeploy] = {
+          val deploys = TaskLike[F].toTask {
+            BlockAPI.getBlockDeploys[F](
+              request.blockHashBase16
+            ) map {
+              _ map { pd =>
+                request.view match {
+                  case DeployInfo.View.BASIC =>
+                    pd.withDeploy(pd.getDeploy.copy(body = None))
+                  case _ =>
+                    pd
+                }
+              }
+            }
+          }
+          Observable.fromTask(deploys).flatMap(Observable.fromIterable)
+        }
 
         override def getBlockState(request: GetBlockStateRequest): Task[State.Value] =
           batchGetBlockState(

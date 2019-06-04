@@ -358,6 +358,15 @@ object BlockAPI {
       }
     }
 
+  def getBlockDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStore](
+      blockHashBase16: String
+  ): F[Seq[Block.ProcessedDeploy]] =
+    unsafeWithCasper[F, Seq[Block.ProcessedDeploy]]("Could not show deploys.") { implicit casper =>
+      getByHashPrefix(blockHashBase16) {
+        ProtoUtil.unsafeGetBlock[F](_).map(_.some)
+      }.map(_.get.getBody.deploys)
+    }
+
   def makeBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle](
       summary: BlockSummary,
       maybeBlock: Option[Block]

@@ -41,8 +41,8 @@ service CasperService {
         };
     }
 
-    // Get slices of the DAG, going backwards, rank by rank.
-    rpc StreamBlockDeploys(StreamBlockDeploysRequest) returns (stream io.casperlabs.casper.consensus.info.DeployInfo) {
+    // Get the processed deploys within a block.
+    rpc StreamBlockDeploys(StreamBlockDeploysRequest) returns (stream io.casperlabs.casper.consensus.Block.ProcessedDeploy) {
         option (google.api.http) = {
             get: "/v2/blocks{block_hash_base16=*}/deploys"
         };
