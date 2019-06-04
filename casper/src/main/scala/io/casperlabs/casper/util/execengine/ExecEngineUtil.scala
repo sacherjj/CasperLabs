@@ -44,11 +44,22 @@ object ExecEngineUtil {
                            protocolVersion
                          )
       processedDeployResults = zipDeploysResults(deploys, processedDeploys)
-      invalidNonceDeploys    = processedDeployResults.collect { case d: InvalidNonceDeploy => d }
-      deployEffects          = findCommutingEffects(processedDeployResults)
-      deploysForBlock        = extractProcessedDeploys(deployEffects)
-      transforms             = extractTransforms(deployEffects)
-      postStateHash          <- ExecutionEngineService[F].commit(preStateHash, transforms).rethrow
+      invalidNonceDeploys <- processedDeployResults.toList.flatTraverse[F, InvalidNonceDeploy] {
+                              case d: InvalidNonceDeploy => List(d).pure[F]
+                              case PreconditionFailure(deploy, errorMessage) => {
+                                // Log precondition failures as we will be getting rid of them.
+                                Log[F].warn(
+                                  s"Deploy ${PrettyPrinter.buildString(deploy.deployHash)} failed precondition error: $errorMessage"
+                                ) *> List.empty[InvalidNonceDeploy].pure[F]
+                              }
+                              case _ =>
+                                // We are collecting only InvalidNonceDeploy deploys
+                                List.empty[InvalidNonceDeploy].pure[F]
+                            }
+      deployEffects   = findCommutingEffects(processedDeployResults)
+      deploysForBlock = extractProcessedDeploys(deployEffects)
+      transforms      = extractTransforms(deployEffects)
+      postStateHash   <- ExecutionEngineService[F].commit(preStateHash, transforms).rethrow
       maxBlockNumber = merged.parents.foldl(-1L) {
         case (acc, b) => math.max(acc, blockNumber(b))
       }
