@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::ErrorKind;
 use std::marker::{Send, Sync};
-use std::time::SystemTime;
+use std::time::Instant;
 
 use execution_engine::engine_state::error::Error as EngineError;
 use execution_engine::engine_state::EngineState;
@@ -11,18 +11,19 @@ use execution_engine::tracking_copy::QueryResult;
 use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
-use shared::capture_duration;
-use shared::capture_elapsed;
 use shared::logging;
+use shared::logging::log_duration;
 use shared::newtypes::{Blake2bHash, CorrelationId};
 use storage::global_state::History;
-use wabt::Error;
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 pub mod ipc;
 pub mod ipc_grpc;
 pub mod mappings;
+
+#[cfg(test)]
+mod tests;
 
 const METRIC_DURATION_COMMIT: &str = "commit_duration";
 const METRIC_DURATION_EXEC: &str = "exec_duration";
@@ -49,7 +50,7 @@ where
         _request_options: ::grpc::RequestOptions,
         query_request: ipc::QueryRequest,
     ) -> grpc::SingleResponse<ipc::QueryResponse> {
-        let start = SystemTime::now();
+        let start = Instant::now();
         let correlation_id = CorrelationId::new();
         // TODO: don't unwrap
         let state_hash: Blake2bHash = query_request.get_state_hash().try_into().unwrap();
@@ -60,11 +61,11 @@ where
                 let error = format!("Error during checkout out Trie: {:?}", storage_error);
                 logging::log_error(&error);
                 result.set_failure(error);
-                capture_elapsed!(
+                log_duration(
                     correlation_id,
                     METRIC_DURATION_QUERY,
                     "tracking_copy_error",
-                    start
+                    start.elapsed(),
                 );
                 return grpc::SingleResponse::completed(result);
             }
@@ -73,11 +74,11 @@ where
                 let error = format!("Root not found: {:?}", state_hash);
                 logging::log_warning(&error);
                 result.set_failure(error);
-                capture_elapsed!(
+                log_duration(
                     correlation_id,
                     METRIC_DURATION_QUERY,
-                    "root_not_found",
-                    start
+                    "tracking_copy_root_not_found",
+                    start.elapsed(),
                 );
                 return grpc::SingleResponse::completed(result);
             }
@@ -89,11 +90,11 @@ where
                 logging::log_error(&err_msg);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(err_msg);
-                capture_elapsed!(
+                log_duration(
                     correlation_id,
                     METRIC_DURATION_QUERY,
                     "key_parsing_error",
-                    start
+                    start.elapsed(),
                 );
                 return grpc::SingleResponse::completed(result);
             }
@@ -124,11 +125,11 @@ where
             }
         };
 
-        capture_elapsed!(
+        log_duration(
             correlation_id,
             METRIC_DURATION_QUERY,
             TAG_RESPONSE_QUERY,
-            start
+            start.elapsed(),
         );
 
         grpc::SingleResponse::completed(response)
@@ -139,7 +140,7 @@ where
         _request_options: ::grpc::RequestOptions,
         exec_request: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
-        let start = SystemTime::now();
+        let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
         let protocol_version = exec_request.get_protocol_version();
@@ -181,11 +182,11 @@ where
             }
         };
 
-        capture_elapsed!(
+        log_duration(
             correlation_id,
             METRIC_DURATION_EXEC,
             TAG_RESPONSE_EXEC,
-            start
+            start.elapsed(),
         );
 
         grpc::SingleResponse::completed(exec_response)
@@ -196,7 +197,7 @@ where
         _request_options: ::grpc::RequestOptions,
         commit_request: ipc::CommitRequest,
     ) -> grpc::SingleResponse<ipc::CommitResponse> {
-        let start = SystemTime::now();
+        let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
         // TODO: don't unwrap
@@ -220,11 +221,11 @@ where
             ),
         };
 
-        capture_elapsed!(
+        log_duration(
             correlation_id,
             METRIC_DURATION_COMMIT,
             TAG_RESPONSE_COMMIT,
-            start
+            start.elapsed(),
         );
 
         grpc::SingleResponse::completed(commit_response)
@@ -235,21 +236,33 @@ where
         _request_options: ::grpc::RequestOptions,
         validate_request: ValidateRequest,
     ) -> grpc::SingleResponse<ValidateResponse> {
-        let start = SystemTime::now();
+        let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
-        let pay_mod = get_module(
+        let pay_mod = wabt::Module::read_binary(
+            validate_request.payment_code,
+            &wabt::ReadBinaryOptions::default(),
+        )
+        .and_then(|x| x.validate());
+
+        log_duration(
             correlation_id,
             METRIC_DURATION_VALIDATE,
             "pay_mod",
-            validate_request.payment_code,
+            start.elapsed(),
         );
 
-        let ses_mod = get_module(
+        let ses_mod = wabt::Module::read_binary(
+            validate_request.session_code,
+            &wabt::ReadBinaryOptions::default(),
+        )
+        .and_then(|x| x.validate());
+
+        log_duration(
             correlation_id,
             METRIC_DURATION_VALIDATE,
             "ses_mod",
-            validate_request.session_code,
+            start.elapsed(),
         );
 
         let validate_result = match pay_mod.and(ses_mod) {
@@ -268,11 +281,11 @@ where
             }
         };
 
-        capture_elapsed!(
+        log_duration(
             correlation_id,
             METRIC_DURATION_VALIDATE,
             TAG_RESPONSE_VALIDATE,
-            start
+            start.elapsed(),
         );
 
         grpc::SingleResponse::completed(validate_result)
@@ -354,21 +367,3 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     server.add_service(ipc_grpc::ExecutionEngineServiceServer::new_service_def(e));
     server
 }
-
-fn get_module(
-    correlation_id: CorrelationId,
-    metric_name: &str,
-    module_name: &str,
-    bytes: std::vec::Vec<u8>,
-) -> Result<(), Error> {
-    capture_duration!(
-        correlation_id,
-        metric_name,
-        module_name,
-        wabt::Module::read_binary(bytes, &wabt::ReadBinaryOptions::default())
-            .and_then(|x| x.validate())
-    )
-}
-
-#[cfg(test)]
-mod tests;

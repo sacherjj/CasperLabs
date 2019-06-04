@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::logging::log_level::LogLevel;
 use crate::logging::log_message::{LogMessage, MessageId};
-use crate::logging::logger::set_terminal_logger;
+use crate::logging::logger::initialize_terminal_logger;
 use crate::newtypes::CorrelationId;
 use crate::utils::jsonify;
 
@@ -13,12 +13,18 @@ pub mod log_settings;
 #[macro_use]
 pub mod logger;
 
+#[cfg(test)]
+mod tests;
+
+pub const GAUGE: &str = "gauge";
+
 /// # Arguments
 ///
 /// * `log_level` - log level of the message to be logged
 /// * `log_message` - the message to be logged
+#[inline]
 pub fn log(log_level: LogLevel, log_message: &str) -> Option<MessageId> {
-    set_terminal_logger();
+    initialize_terminal_logger();
     let log_settings_provider = log_settings::get_log_settings_provider();
 
     if log_settings_provider.filter(log_level) {
@@ -48,12 +54,13 @@ pub fn log(log_level: LogLevel, log_message: &str) -> Option<MessageId> {
 /// * `log_level` - log level of the message to be logged
 /// * `message_format` - a message template to apply over properties by key
 /// * `properties` - a collection of machine readable key / value properties which will be logged
+#[inline]
 pub fn log_details(
     log_level: LogLevel,
     message_format: String,
     properties: BTreeMap<String, String>,
 ) -> Option<MessageId> {
-    set_terminal_logger();
+    initialize_terminal_logger();
     let log_settings_provider = log_settings::get_log_settings_provider();
 
     if log_settings_provider.filter(log_level) {
@@ -89,13 +96,14 @@ pub fn log_details(
 /// * `metric` - the name of the metric
 /// * `tag` - a grouping tag for the metric
 /// * `duration` - in seconds
+#[inline]
 pub fn log_duration(
     correlation_id: CorrelationId,
     metric: &str,
     tag: &str,
     duration: Duration,
 ) -> Option<MessageId> {
-    set_terminal_logger();
+    initialize_terminal_logger();
     let duration_in_seconds: f64 = duration.as_float_secs();
 
     log_metric(
@@ -114,6 +122,7 @@ pub fn log_duration(
 /// * `tag` - a grouping tag for the metric
 /// * `metric_key` - property key for metric's value
 /// * `metric_value` - numeric value of metric
+#[inline]
 pub fn log_metric(
     correlation_id: CorrelationId,
     metric: &str,
@@ -121,7 +130,7 @@ pub fn log_metric(
     metric_key: &str,
     metric_value: f64,
 ) -> Option<MessageId> {
-    set_terminal_logger();
+    initialize_terminal_logger();
     let log_settings_provider = log_settings::get_log_settings_provider();
 
     const METRIC_LOG_LEVEL: LogLevel = LogLevel::Metric;
@@ -167,92 +176,38 @@ pub fn log_metric(
 /// # Arguments
 ///
 /// * `log_message` - the message to be logged
-pub fn log_fatal(log_message: &str) {
-    log(LogLevel::Fatal, log_message);
+#[inline]
+pub fn log_fatal(log_message: &str) -> Option<MessageId> {
+    log(LogLevel::Fatal, log_message)
 }
 
 /// # Arguments
 ///
 /// * `log_message` - the message to be logged
-pub fn log_error(log_message: &str) {
-    log(LogLevel::Error, log_message);
+#[inline]
+pub fn log_error(log_message: &str) -> Option<MessageId> {
+    log(LogLevel::Error, log_message)
 }
 
 /// # Arguments
 ///
 /// * `log_message` - the message to be logged
-pub fn log_warning(log_message: &str) {
-    log(LogLevel::Warning, log_message);
+#[inline]
+pub fn log_warning(log_message: &str) -> Option<MessageId> {
+    log(LogLevel::Warning, log_message)
 }
 
 /// # Arguments
 ///
 /// * `log_message` - the message to be logged
-pub fn log_info(log_message: &str) {
-    log(LogLevel::Info, log_message);
+#[inline]
+pub fn log_info(log_message: &str) -> Option<MessageId> {
+    log(LogLevel::Info, log_message)
 }
 
 /// # Arguments
 ///
 /// * `log_message` - the message to be logged
-pub fn log_debug(log_message: &str) {
-    log(LogLevel::Debug, log_message);
+pub fn log_debug(log_message: &str) -> Option<MessageId> {
+    log(LogLevel::Debug, log_message)
 }
-
-/// this macro does not support early return
-#[macro_export]
-macro_rules! capture_duration {
-    ($correlation_id:expr, $metric_name:expr, $tag:expr, $f:expr) => {{
-        let log_settings_provider = $crate::logging::log_settings::get_log_settings_provider();
-
-        if log_settings_provider.filter($crate::logging::log_level::LogLevel::Metric) {
-            $f
-        } else {
-            let start = SystemTime::now();
-
-            let result = $f;
-
-            $crate::logging::log_duration(
-                $correlation_id,
-                $metric_name,
-                $tag,
-                start.elapsed().unwrap(),
-            );
-
-            result
-        }
-    }};
-}
-
-/// this macro logs elapsed time and returns the elapsed duration if log settings allow metrics, otherwise None.
-#[macro_export]
-macro_rules! capture_elapsed {
-    ($correlation_id:expr, $metric_name:expr, $tag:expr, $s:expr) => {{
-        let log_settings_provider = $crate::logging::log_settings::get_log_settings_provider();
-
-        if log_settings_provider.filter($crate::logging::log_level::LogLevel::Metric) {
-            None
-        } else {
-            let elapsed = $s.elapsed().unwrap();
-
-            $crate::logging::log_duration($correlation_id, $metric_name, $tag, elapsed);
-
-            Some(elapsed)
-        }
-    }};
-}
-
-/// this macro logs numerical gauge if log settings allow metrics
-#[macro_export]
-macro_rules! capture_gauge {
-    ($correlation_id:expr, $metric_name:expr, $tag:expr, $metric:expr) => {{
-        let log_settings_provider = $crate::logging::log_settings::get_log_settings_provider();
-
-        if !log_settings_provider.filter($crate::logging::log_level::LogLevel::Metric) {
-            $crate::logging::log_metric($correlation_id, $metric_name, $tag, "gauge", $metric);
-        }
-    }};
-}
-
-#[cfg(test)]
-mod tests;

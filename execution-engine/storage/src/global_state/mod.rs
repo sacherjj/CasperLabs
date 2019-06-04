@@ -3,16 +3,14 @@ pub mod lmdb;
 
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use std::time::SystemTime;
+use std::time::Instant;
 
 use common::key::Key;
 use common::value::Value;
-use shared::capture_duration;
-use shared::capture_elapsed;
-use shared::capture_gauge;
 use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::{self, Transform, TypeMismatch};
 
+use shared::logging::{log_duration, log_metric, GAUGE};
 use trie::Trie;
 use trie_store::operations::{read, write, ReadResult, WriteResult};
 use trie_store::{Transaction, TransactionSource, TrieStore};
@@ -91,16 +89,18 @@ where
         return Ok(CommitResult::RootNotFound);
     };
 
-    let start = SystemTime::now();
+    let start = Instant::now();
     let mut reads: i32 = 0;
     let mut writes: i32 = 0;
 
     for (key, transform) in effects.into_iter() {
-        let read_result = capture_duration!(
+        let read_result = read::<_, _, _, _, E>(correlation_id, &txn, store, &current_root, &key)?;
+
+        log_duration(
             correlation_id,
             GLOBAL_STATE_COMMIT_READ_DURATION,
             COMMIT,
-            read::<_, _, _, _, E>(correlation_id, &txn, store, &current_root, &key)?
+            start.elapsed(),
         );
 
         reads += 1;
@@ -117,11 +117,14 @@ where
             _x @ (ReadResult::RootNotFound, _) => panic!(stringify!(_x._1)),
         };
 
-        let write_result = capture_duration!(
+        let write_result =
+            write::<_, _, _, _, E>(correlation_id, &mut txn, store, &current_root, &key, &value)?;
+
+        log_duration(
             correlation_id,
             GLOBAL_STATE_COMMIT_WRITE_DURATION,
             COMMIT,
-            write::<_, _, _, _, E>(correlation_id, &mut txn, store, &current_root, &key, &value)?
+            start.elapsed(),
         );
 
         match write_result {
@@ -136,20 +139,27 @@ where
 
     txn.commit()?;
 
-    capture_elapsed!(correlation_id, GLOBAL_STATE_COMMIT_DURATION, COMMIT, start);
+    log_duration(
+        correlation_id,
+        GLOBAL_STATE_COMMIT_DURATION,
+        COMMIT,
+        start.elapsed(),
+    );
 
-    capture_gauge!(
+    log_metric(
         correlation_id,
         GLOBAL_STATE_COMMIT_READS,
         COMMIT,
-        f64::from(reads)
+        GAUGE,
+        f64::from(reads),
     );
 
-    capture_gauge!(
+    log_metric(
         correlation_id,
         GLOBAL_STATE_COMMIT_WRITES,
         COMMIT,
-        f64::from(writes)
+        GAUGE,
+        f64::from(writes),
     );
 
     Ok(CommitResult::Success(current_root))

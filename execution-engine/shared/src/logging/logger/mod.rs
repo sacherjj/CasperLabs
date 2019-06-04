@@ -12,18 +12,6 @@ pub(crate) const LOGGER_EXPECT: &str = "Logger should be set";
 /// log lines are written to StdOut
 pub(crate) static TERMINAL_LOGGER: TerminalLogger = TerminalLogger;
 
-lazy_static! {
-    /// log lines buffered internally instead of being output.
-    /// log lines can be retrieved via LogBufferProvider
-    pub static ref BUFFERED_LOGGER: BufferedLogger = get_buffered_logger();
-}
-
-pub fn get_buffered_logger() -> BufferedLogger {
-    BufferedLogger {
-        queue: Mutex::new(BTreeMap::new()),
-    }
-}
-
 pub struct BufferedLogger {
     queue: Mutex<BTreeMap<String, LogLineItem>>,
 }
@@ -56,6 +44,18 @@ impl log::Log for BufferedLogger {
     }
 }
 
+pub fn get_buffered_logger() -> BufferedLogger {
+    BufferedLogger {
+        queue: Mutex::new(BTreeMap::new()),
+    }
+}
+
+lazy_static! {
+    /// log lines buffered internally instead of being output.
+    /// log lines can be retrieved via LogBufferProvider
+    pub static ref BUFFERED_LOGGER: BufferedLogger = get_buffered_logger();
+}
+
 pub struct TerminalLogger;
 
 impl log::Log for TerminalLogger {
@@ -77,8 +77,8 @@ impl log::Log for TerminalLogger {
 
 pub trait LogBufferProvider {
     fn push(&self, line: LogLineItem);
-    fn take(&self, message_id: &str) -> Option<LogLineItem>;
-    fn take_correlated(&self, correlation_id: &str) -> Option<Vec<LogLineItem>>;
+    fn extract(&self, message_id: &str) -> Option<LogLineItem>;
+    fn extract_correlated(&self, correlation_id: &str) -> Option<Vec<LogLineItem>>;
     fn drain(&self) -> Vec<LogLineItem>;
     fn reset(&self);
 }
@@ -95,7 +95,7 @@ impl LogBufferProvider for BufferedLogger {
     }
 
     // remove and return item from buffer by matching message_id
-    fn take(&self, message_id: &str) -> Option<LogLineItem> {
+    fn extract(&self, message_id: &str) -> Option<LogLineItem> {
         if let Ok(mut guard) = self.queue.lock() {
             if !guard.contains_key(message_id) {
                 return None;
@@ -108,7 +108,7 @@ impl LogBufferProvider for BufferedLogger {
     }
 
     // remove and return all items with matching correlation_id
-    fn take_correlated(&self, correlation_id: &str) -> Option<Vec<LogLineItem>> {
+    fn extract_correlated(&self, correlation_id: &str) -> Option<Vec<LogLineItem>> {
         const CORRELATION_ID_KEY: &str = "correlation_id";
         let mut result: Vec<LogLineItem> = vec![];
         if let Ok(mut guard) = self.queue.lock() {
@@ -145,7 +145,7 @@ impl LogBufferProvider for BufferedLogger {
                 }
             }
 
-            *guard = std::collections::BTreeMap::new();
+            guard.clear();
         };
 
         result
@@ -154,7 +154,7 @@ impl LogBufferProvider for BufferedLogger {
     // empty the buffer
     fn reset(&self) {
         if let Ok(mut guard) = self.queue.lock() {
-            *guard = std::collections::BTreeMap::new();
+            guard.clear();
         };
     }
 }
@@ -182,7 +182,7 @@ impl LogLineItem {
 }
 
 /// set terminal logger as application logger
-pub fn set_terminal_logger() {
+pub fn initialize_terminal_logger() {
     LOGGER_INIT.call_once(|| {
         log::set_logger(&TERMINAL_LOGGER).expect(LOGGER_EXPECT);
         log::set_max_level(LOG_MAX_LEVEL);
@@ -190,7 +190,7 @@ pub fn set_terminal_logger() {
 }
 
 /// set buffered logger as application logger
-pub fn set_buffered_logger() {
+pub fn initialize_buffered_logger() {
     LOGGER_INIT.call_once(|| {
         log::set_logger(&*BUFFERED_LOGGER).expect(LOGGER_EXPECT);
         log::set_max_level(LOG_MAX_LEVEL);
@@ -199,7 +199,7 @@ pub fn set_buffered_logger() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::Arc;
     use std::thread;
 
     use crate::logging::log_level;
@@ -207,20 +207,20 @@ mod tests {
     use crate::logging::log_settings::{
         get_log_settings_provider, set_log_settings_provider, LogLevelFilter, LogSettings,
     };
-
     use crate::utils::jsonify;
-    use std::sync::Arc;
+
+    use super::*;
 
     const PROC_NAME: &str = "ee-shared-lib-logger-tests";
-
-    lazy_static! {
-        static ref LOG_SETTINGS_TESTS: LogSettings = get_log_settings(PROC_NAME);
-    }
 
     fn get_log_settings(process_name: &str) -> LogSettings {
         let log_level_filter = LogLevelFilter::ERROR;
 
         LogSettings::new(process_name, log_level_filter)
+    }
+
+    lazy_static! {
+        static ref LOG_SETTINGS_TESTS: LogSettings = get_log_settings(PROC_NAME);
     }
 
     #[test]
@@ -230,7 +230,7 @@ mod tests {
         let message_handle = message_id.clone();
 
         let handle = thread::spawn(move || {
-            set_buffered_logger();
+            initialize_buffered_logger();
 
             set_log_settings_provider(&*LOG_SETTINGS_TESTS);
 
@@ -275,7 +275,7 @@ mod tests {
             let key = guard.clone().unwrap();
 
             let item = BUFFERED_LOGGER
-                .take(&key)
+                .extract(&key)
                 .expect("expected item by message id)");
 
             assert_eq!(item.log_level, "Fatal", "expected Fatal")

@@ -1,21 +1,14 @@
+use std::time::Instant;
+
 use common::bytesrepr::{self, ToBytes};
-use shared::capture_elapsed;
-use shared::capture_gauge;
+use shared::logging::{log_duration, log_metric, GAUGE};
 use shared::newtypes::{Blake2bHash, CorrelationId};
 
-use std::time::SystemTime;
 use trie::{self, Parents, Pointer, Trie};
 use trie_store::{Readable, TrieStore, Writable};
 
 #[cfg(test)]
 mod tests;
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ReadResult<V> {
-    Found(V),
-    NotFound,
-    RootNotFound,
-}
 
 const TRIE_STORE_READ_DURATION: &str = "trie_store_read_duration";
 const TRIE_STORE_READ_GETS: &str = "trie_store_read_gets";
@@ -28,6 +21,13 @@ const GET: &str = "get";
 const SCAN: &str = "scan";
 const WRITE: &str = "write";
 const PUT: &str = "put";
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ReadResult<V> {
+    Found(V),
+    NotFound,
+    RootNotFound,
+}
 
 /// Returns a value from the corresponding key at a given root in a given store
 pub fn read<K, V, T, S, E>(
@@ -53,7 +53,7 @@ where
         None => return Ok(ReadResult::RootNotFound),
     };
 
-    let start = SystemTime::now();
+    let start = Instant::now();
     let mut get_counter: i32 = 0;
 
     loop {
@@ -69,14 +69,19 @@ where
                     // a Node directly to a Leaf
                     ReadResult::NotFound
                 };
-
-                capture_gauge!(
+                log_metric(
                     correlation_id,
                     TRIE_STORE_READ_GETS,
                     GET,
-                    f64::from(get_counter)
+                    GAUGE,
+                    f64::from(get_counter),
                 );
-                capture_elapsed!(correlation_id, TRIE_STORE_READ_DURATION, READ, start);
+                log_duration(
+                    correlation_id,
+                    TRIE_STORE_READ_DURATION,
+                    READ,
+                    start.elapsed(),
+                );
                 return Ok(result);
             }
             Trie::Node { pointer_block } => {
@@ -88,25 +93,28 @@ where
                     assert!(index < trie::RADIX, "key length must be < {}", trie::RADIX);
                     pointer_block[index]
                 };
-
                 match maybe_pointer {
                     Some(pointer) => match store.get(txn, pointer.hash())? {
                         Some(next) => {
                             get_counter += 1;
-
                             depth += 1;
                             current = next;
                         }
                         None => {
                             get_counter += 1;
-
-                            capture_gauge!(
+                            log_metric(
                                 correlation_id,
                                 TRIE_STORE_READ_GETS,
                                 GET,
-                                f64::from(get_counter)
+                                GAUGE,
+                                f64::from(get_counter),
                             );
-                            capture_elapsed!(correlation_id, TRIE_STORE_READ_DURATION, READ, start);
+                            log_duration(
+                                correlation_id,
+                                TRIE_STORE_READ_DURATION,
+                                READ,
+                                start.elapsed(),
+                            );
                             panic!(
                                 "No trie value at key: {:?} (reading from key: {:?})",
                                 pointer.hash(),
@@ -115,15 +123,19 @@ where
                         }
                     },
                     None => {
-                        capture_gauge!(
+                        log_metric(
                             correlation_id,
                             TRIE_STORE_READ_GETS,
                             GET,
-                            f64::from(get_counter)
+                            GAUGE,
+                            f64::from(get_counter),
                         );
-
-                        capture_elapsed!(correlation_id, TRIE_STORE_READ_DURATION, READ, start);
-
+                        log_duration(
+                            correlation_id,
+                            TRIE_STORE_READ_DURATION,
+                            READ,
+                            start.elapsed(),
+                        );
                         return Ok(ReadResult::NotFound);
                     }
                 }
@@ -140,14 +152,19 @@ where
                         }
                         None => {
                             get_counter += 1;
-
-                            capture_gauge!(
+                            log_metric(
                                 correlation_id,
                                 TRIE_STORE_READ_GETS,
                                 GET,
-                                f64::from(get_counter)
+                                GAUGE,
+                                f64::from(get_counter),
                             );
-                            capture_elapsed!(correlation_id, TRIE_STORE_READ_DURATION, READ, start);
+                            log_duration(
+                                correlation_id,
+                                TRIE_STORE_READ_DURATION,
+                                READ,
+                                start.elapsed(),
+                            );
                             panic!(
                                 "No trie value at key: {:?} (reading from key: {:?})",
                                 pointer.hash(),
@@ -156,13 +173,19 @@ where
                         }
                     }
                 } else {
-                    capture_gauge!(
+                    log_metric(
                         correlation_id,
                         TRIE_STORE_READ_GETS,
                         GET,
-                        f64::from(get_counter)
+                        GAUGE,
+                        f64::from(get_counter),
                     );
-                    capture_elapsed!(correlation_id, TRIE_STORE_READ_DURATION, READ, start);
+                    log_duration(
+                        correlation_id,
+                        TRIE_STORE_READ_DURATION,
+                        READ,
+                        start.elapsed(),
+                    );
                     return Ok(ReadResult::NotFound);
                 }
             }
@@ -200,7 +223,7 @@ where
     S::Error: From<T::Error>,
     E: From<S::Error> + From<common::bytesrepr::Error>,
 {
-    let start = SystemTime::now();
+    let start = Instant::now();
     let mut get_counter: i32 = 0;
 
     let path = key_bytes;
@@ -212,13 +235,19 @@ where
     loop {
         match current {
             leaf @ Trie::Leaf { .. } => {
-                capture_gauge!(
+                log_metric(
                     correlation_id,
                     TRIE_STORE_SCAN_GETS,
                     GET,
-                    f64::from(get_counter)
+                    GAUGE,
+                    f64::from(get_counter),
                 );
-                capture_elapsed!(correlation_id, TRIE_STORE_SCAN_DURATION, SCAN, start);
+                log_duration(
+                    correlation_id,
+                    TRIE_STORE_SCAN_DURATION,
+                    SCAN,
+                    start.elapsed(),
+                );
                 return Ok(TrieScan::new(leaf, acc));
             }
             Trie::Node { pointer_block } => {
@@ -234,13 +263,19 @@ where
                 let pointer = match maybe_pointer {
                     Some(pointer) => pointer,
                     None => {
-                        capture_gauge!(
+                        log_metric(
                             correlation_id,
                             TRIE_STORE_SCAN_GETS,
                             GET,
-                            f64::from(get_counter)
+                            GAUGE,
+                            f64::from(get_counter),
                         );
-                        capture_elapsed!(correlation_id, TRIE_STORE_SCAN_DURATION, SCAN, start);
+                        log_duration(
+                            correlation_id,
+                            TRIE_STORE_SCAN_DURATION,
+                            SCAN,
+                            start.elapsed(),
+                        );
                         return Ok(TrieScan::new(Trie::Node { pointer_block }, acc));
                     }
                 };
@@ -252,6 +287,20 @@ where
                         acc.push((index, Trie::Node { pointer_block }))
                     }
                     None => {
+                        get_counter += 1;
+                        log_metric(
+                            correlation_id,
+                            TRIE_STORE_SCAN_GETS,
+                            GET,
+                            GAUGE,
+                            f64::from(get_counter),
+                        );
+                        log_duration(
+                            correlation_id,
+                            TRIE_STORE_SCAN_DURATION,
+                            SCAN,
+                            start.elapsed(),
+                        );
                         panic!(
                             "No trie value at key: {:?} (reading from path: {:?})",
                             pointer.hash(),
@@ -263,14 +312,19 @@ where
             Trie::Extension { affix, pointer } => {
                 let sub_path = &path[depth..depth + affix.len()];
                 if sub_path != affix.as_slice() {
-                    capture_gauge!(
+                    log_metric(
                         correlation_id,
                         TRIE_STORE_SCAN_GETS,
                         GET,
-                        f64::from(get_counter)
+                        GAUGE,
+                        f64::from(get_counter),
                     );
-                    capture_elapsed!(correlation_id, TRIE_STORE_SCAN_DURATION, SCAN, start);
-
+                    log_duration(
+                        correlation_id,
+                        TRIE_STORE_SCAN_DURATION,
+                        SCAN,
+                        start.elapsed(),
+                    );
                     return Ok(TrieScan::new(Trie::Extension { affix, pointer }, acc));
                 }
                 match store.get(txn, pointer.hash())? {
@@ -286,14 +340,19 @@ where
                     }
                     None => {
                         get_counter += 1;
-                        capture_gauge!(
+                        log_metric(
                             correlation_id,
                             TRIE_STORE_SCAN_GETS,
                             GET,
-                            f64::from(get_counter)
+                            GAUGE,
+                            f64::from(get_counter),
                         );
-                        capture_elapsed!(correlation_id, TRIE_STORE_SCAN_DURATION, SCAN, start);
-
+                        log_duration(
+                            correlation_id,
+                            TRIE_STORE_SCAN_DURATION,
+                            SCAN,
+                            start.elapsed(),
+                        );
                         panic!(
                             "No trie value at key: {:?} (reading from path: {:?})",
                             pointer.hash(),
@@ -569,7 +628,7 @@ where
     S::Error: From<T::Error>,
     E: From<S::Error> + From<common::bytesrepr::Error>,
 {
-    let start = SystemTime::now();
+    let start = Instant::now();
     let mut put_counter: i32 = 0;
 
     match store.get(txn, root)? {
@@ -634,7 +693,12 @@ where
                 }
             };
             if new_elements.is_empty() {
-                capture_elapsed!(correlation_id, TRIE_STORE_WRITE_DURATION, WRITE, start);
+                log_duration(
+                    correlation_id,
+                    TRIE_STORE_WRITE_DURATION,
+                    WRITE,
+                    start.elapsed(),
+                );
                 return Ok(WriteResult::AlreadyExists);
             }
             let mut root_hash = root.to_owned();
@@ -643,15 +707,19 @@ where
                 store.put(txn, hash, element)?;
                 root_hash = *hash;
             }
-
-            capture_gauge!(
+            log_metric(
                 correlation_id,
                 TRIE_STORE_WRITE_PUTS,
                 PUT,
-                f64::from(put_counter)
+                GAUGE,
+                f64::from(put_counter),
             );
-            capture_elapsed!(correlation_id, TRIE_STORE_WRITE_DURATION, WRITE, start);
-
+            log_duration(
+                correlation_id,
+                TRIE_STORE_WRITE_DURATION,
+                WRITE,
+                start.elapsed(),
+            );
             Ok(WriteResult::Written(root_hash))
         }
     }

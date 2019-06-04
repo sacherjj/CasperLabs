@@ -39,9 +39,9 @@ impl LogMessage {
         T: LogSettingsProvider,
     {
         const MESSAGE_TEMPLATE_KEY: &str = "message_template";
-        if !properties.contains_key(MESSAGE_TEMPLATE_KEY) {
-            properties.insert(MESSAGE_TEMPLATE_KEY.to_string(), message_template.clone());
-        }
+        properties
+            .entry(MESSAGE_TEMPLATE_KEY.to_string())
+            .or_insert_with(|| message_template.clone());
         let message_type = MessageType::new(MESSAGE_TYPE.to_string());
         let message_type_version = SemVer::V1_0_0;
         let process_id = log_settings_provider.get_process_id();

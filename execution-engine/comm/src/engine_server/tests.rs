@@ -1,39 +1,46 @@
-use super::super::*;
+use grpc::RequestOptions;
+use parity_wasm::builder::ModuleBuilder;
+use parity_wasm::elements::{MemorySection, MemoryType, Module, Section, Serialize};
+
 use engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, ExecRequest, KeyAddress, ProtocolVersion, QueryRequest,
     ValidateRequest,
 };
 use engine_server::ipc_grpc::ExecutionEngineService;
-use grpc::RequestOptions;
-use parity_wasm::builder::ModuleBuilder;
-use parity_wasm::elements::{MemorySection, MemoryType, Module, Section, Serialize};
-
 use shared::logging::log_level::LogLevel;
-use shared::logging::logger::set_buffered_logger;
+use shared::logging::logger::initialize_buffered_logger;
 use shared::logging::logger::{LogBufferProvider, BUFFERED_LOGGER};
 use storage::global_state::in_memory::InMemoryGlobalState;
 
+use super::super::*;
+
 #[test]
 fn should_query_with_metrics() {
-    let setup_state = setup();
-
-    let mut key = engine_server::ipc::Key::new();
-    let mut key_address = KeyAddress::new();
-    key_address.set_account(MOCKED_ACCOUNT_ADDRESS.to_vec());
-    key.set_account(key_address);
+    setup();
+    let correlation_id = CorrelationId::new();
+    let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
+    let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
+    let root_hash = global_state.root_hash.to_vec();
+    let engine_state = EngineState::new(global_state);
 
     let mut query_request = QueryRequest::new();
-    query_request.set_base_key(key);
-    query_request.set_path(vec![].into());
-    query_request.set_state_hash(setup_state.root_hash);
+    {
+        let mut key = engine_server::ipc::Key::new();
+        let mut key_address = KeyAddress::new();
+        key_address.set_account(MOCKED_ACCOUNT_ADDRESS.to_vec());
+        key.set_account(key_address);
 
-    let _query_response_result = setup_state
-        .engine_state
+        query_request.set_base_key(key);
+        query_request.set_path(vec![].into());
+        query_request.set_state_hash(root_hash);
+    }
+
+    let _query_response_result = engine_state
         .query(RequestOptions::new(), query_request)
         .wait_drop_metadata();
 
     let log_items = BUFFERED_LOGGER
-        .take_correlated(&setup_state.correlation_id.to_string())
+        .extract_correlated(&correlation_id.to_string())
         .expect("log items expected");
 
     for log_item in log_items {
@@ -51,7 +58,7 @@ fn should_query_with_metrics() {
 
         assert_eq!(
             matched_correlation_id,
-            &setup_state.correlation_id.to_string(),
+            &correlation_id.to_string(),
             "correlation_id should match"
         );
 
@@ -61,23 +68,29 @@ fn should_query_with_metrics() {
 
 #[test]
 fn should_exec_with_metrics() {
-    let setup_state = setup();
-
-    let mut deploys: protobuf::RepeatedField<Deploy> = <protobuf::RepeatedField<Deploy>>::new();
-    deploys.push(get_mock_deploy());
+    setup();
+    let correlation_id = CorrelationId::new();
+    let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
+    let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
+    let root_hash = global_state.root_hash.to_vec();
+    let engine_state = EngineState::new(global_state);
 
     let mut exec_request = ExecRequest::new();
-    exec_request.set_deploys(deploys);
-    exec_request.set_parent_state_hash(setup_state.root_hash);
-    exec_request.set_protocol_version(get_protocol_version());
+    {
+        let mut deploys: protobuf::RepeatedField<Deploy> = <protobuf::RepeatedField<Deploy>>::new();
+        deploys.push(get_mock_deploy());
 
-    let _exec_response_result = setup_state
-        .engine_state
+        exec_request.set_deploys(deploys);
+        exec_request.set_parent_state_hash(root_hash);
+        exec_request.set_protocol_version(get_protocol_version());
+    }
+
+    let _exec_response_result = engine_state
         .exec(RequestOptions::new(), exec_request)
         .wait_drop_metadata();
 
     let log_items = BUFFERED_LOGGER
-        .take_correlated(&setup_state.correlation_id.to_string())
+        .extract_correlated(&correlation_id.to_string())
         .expect("log items expected");
 
     for log_item in log_items {
@@ -95,7 +108,7 @@ fn should_exec_with_metrics() {
 
         assert_eq!(
             matched_correlation_id,
-            &setup_state.correlation_id.to_string(),
+            &correlation_id.to_string(),
             "correlation_id should match"
         );
 
@@ -105,22 +118,26 @@ fn should_exec_with_metrics() {
 
 #[test]
 fn should_commit_with_metrics() {
-    let setup_state = setup();
+    setup();
+    let correlation_id = CorrelationId::new();
+    let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
+    let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
+    let root_hash = global_state.root_hash.to_vec();
+    let engine_state = EngineState::new(global_state);
 
     let request_options = RequestOptions::new();
 
     let mut commit_request = CommitRequest::new();
 
     commit_request.set_effects(vec![].into());
-    commit_request.set_prestate_hash(setup_state.root_hash);
+    commit_request.set_prestate_hash(root_hash);
 
-    let _commit_response_result = setup_state
-        .engine_state
+    let _commit_response_result = engine_state
         .commit(request_options, commit_request)
         .wait_drop_metadata();
 
     let log_items = BUFFERED_LOGGER
-        .take_correlated(&setup_state.correlation_id.to_string())
+        .extract_correlated(&correlation_id.to_string())
         .expect("log items expected");
 
     for log_item in log_items {
@@ -138,7 +155,7 @@ fn should_commit_with_metrics() {
 
         assert_eq!(
             matched_correlation_id,
-            &setup_state.correlation_id.to_string(),
+            &correlation_id.to_string(),
             "correlation_id should match"
         );
 
@@ -148,7 +165,11 @@ fn should_commit_with_metrics() {
 
 #[test]
 fn should_validate_with_metrics() {
-    let setup_state = setup();
+    setup();
+    let correlation_id = CorrelationId::new();
+    let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
+    let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
+    let engine_state = EngineState::new(global_state);
 
     let mut validate_request = ValidateRequest::new();
 
@@ -157,13 +178,12 @@ fn should_validate_with_metrics() {
     validate_request.set_payment_code(wasm_bytes.clone());
     validate_request.set_session_code(wasm_bytes);
 
-    let _validate_response_result = setup_state
-        .engine_state
+    let _validate_response_result = engine_state
         .validate(RequestOptions::new(), validate_request)
         .wait_drop_metadata();
 
     let log_items = BUFFERED_LOGGER
-        .take_correlated(&setup_state.correlation_id.to_string())
+        .extract_correlated(&correlation_id.to_string())
         .expect("log items expected");
 
     for log_item in log_items {
@@ -181,7 +201,7 @@ fn should_validate_with_metrics() {
 
         assert_eq!(
             matched_correlation_id,
-            &setup_state.correlation_id.to_string(),
+            &correlation_id.to_string(),
             "correlation_id should match"
         );
 
@@ -196,39 +216,15 @@ lazy_static! {
 const PROC_NAME: &str = "ee-shared-lib-tests";
 const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 
-fn setup() -> SetupState {
-    set_buffered_logger();
+fn setup() {
+    initialize_buffered_logger();
     log_settings::set_log_settings_provider(&*LOG_SETTINGS);
-    SetupState::new()
 }
 
 fn get_log_settings(log_level: LogLevel) -> LogSettings {
     let log_level_filter = LogLevelFilter::new(log_level);
 
     LogSettings::new(PROC_NAME, log_level_filter)
-}
-
-struct SetupState {
-    correlation_id: CorrelationId,
-    root_hash: Vec<u8>,
-    engine_state: EngineState<InMemoryGlobalState>,
-}
-
-impl SetupState {
-    fn new() -> SetupState {
-        let correlation_id = CorrelationId::new();
-        let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
-        let global_state =
-            InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
-        let root_hash = global_state.root_hash.to_vec();
-        let engine_state = EngineState::new(global_state);
-
-        SetupState {
-            correlation_id,
-            root_hash,
-            engine_state,
-        }
-    }
 }
 
 fn get_protocol_version() -> ProtocolVersion {
