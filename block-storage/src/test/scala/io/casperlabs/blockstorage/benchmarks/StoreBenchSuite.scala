@@ -6,7 +6,7 @@ import java.util.{Properties, UUID}
 
 import cats.Monad
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits.none
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore.BlockHash
@@ -194,6 +194,7 @@ object Init {
   def inMemBlockStore = InMemBlockStore.create[Task](
     Monad[Task],
     InMemBlockStore.emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)].runSyncUnsafe(),
+    InMemBlockStore.emptyMapRef[Task, Seq[BlockHash]].runSyncUnsafe(),
     Ref[Task].of(none[ApprovedBlock]).runSyncUnsafe(),
     metricsNop
   )

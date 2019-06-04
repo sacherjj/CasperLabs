@@ -67,7 +67,7 @@ block-to-block.
 
 ### API
 
-The `queryState` gRPC method of the CasperLabs node accepts a message
+The `GetBlockState` gRPC method (`query-state` on the CLI client) of the CasperLabs node accepts a message
 with four parameters:
 
 - Block hash
@@ -76,8 +76,9 @@ with four parameters:
   - The hash is presented as a base-16 encoded string.
 - Key type
   - Specified the type of key from which to start the query. Allowed
-    values are "address", "hash" and "uref", same as the types of keys
+    values are `ADDRESS`, `HASH` and `UREF`, same as the types of keys
     described above.
+  - The key type is passed as lowercased string on the CLI.
 - Key bytes
   - The bytes which are used to identify the particular key. `URef`
     and `Hash` type keys use 32-byte identifiers, while `Address` uses
@@ -88,8 +89,8 @@ with four parameters:
   - The sequence of human-readable names which can be used to reach
     the desired key to query. This makes use of the human-readable
     name associations accounts and contracts have for keys.
-  - The path is presented as a '/'-separated string of identifiers.
-  
+  - The path is presented as a '/'-separated string of identifiers on the CLI.
+
 ### Example
 
 Consider the [counter contract from our contract examples
@@ -104,7 +105,7 @@ pub extern "C" fn counter_ext() {
     // Look up the key associated with the name "count".
     // This key points to the contract's state variable in the global state (key-value store).
     let i_key: UPointer<i32> = get_uref("count").to_u_ptr().unwrap();
-    
+
     // The first (zeroth) argument passed to this function is the method name
     // (i.e. action to perform during this call).
     let method_name: String = get_arg(0);
@@ -132,7 +133,7 @@ pub extern "C" fn call() {
     // CasperLabs system. The key it is stored under (which is the `Hash`-type)
     // is returned.
     let hash = store_function("counter_ext", counter_urefs);
-    
+
     // `call` is the session code run by the account storing the contract.
     // This last line associates the name "counter" with the key for the
     // stored contract, allowing us to easily refer to it in the future

@@ -1,7 +1,8 @@
 package io.casperlabs.blockstorage
 
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.Block, Block.Justification
+import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.ipc._
 import io.casperlabs.storage.BlockMsgWithTransform
 import org.scalacheck.Arbitrary.arbitrary
@@ -29,6 +30,19 @@ object blockImplicits {
 
   implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
 
+  val deployGen: Gen[Deploy] = for {
+    n          <- Gen.choose(0, 10)
+    deployHash = ByteString.copyFromUtf8(s"$n")
+  } yield Deploy().withDeployHash(deployHash)
+  implicit val arbitraryDeploy: Arbitrary[Deploy] = Arbitrary(deployGen)
+
+  val processedDeployGen: Gen[Block.ProcessedDeploy] = for {
+    deploy <- arbitrary[Deploy]
+  } yield Block.ProcessedDeploy().withDeploy(deploy).withCost(1L)
+
+  implicit val arbitraryProcessedDeploy: Arbitrary[Block.ProcessedDeploy] =
+    Arbitrary(processedDeployGen)
+
   val blockMessageGen: Gen[Block] =
     for {
       hash            <- arbitrary[ByteString]
@@ -37,6 +51,7 @@ object blockImplicits {
       timestamp       <- arbitrary[Long]
       parentsHashList <- arbitrary[Seq[ByteString]]
       justifications  <- arbitrary[Seq[Justification]]
+      deploys         <- arbitrary[Seq[Block.ProcessedDeploy]]
     } yield
       Block()
         .withBlockHash(hash)
@@ -48,6 +63,7 @@ object blockImplicits {
             .withTimestamp(timestamp)
             .withValidatorPublicKey(validator)
         )
+        .withBody(Block.Body().withDeploys(deploys))
 
   val blockMsgWithTransformGen: Gen[BlockMsgWithTransform] =
     for {

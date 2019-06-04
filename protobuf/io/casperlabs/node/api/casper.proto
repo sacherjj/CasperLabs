@@ -15,7 +15,7 @@ service CasperService {
     // to be processed during subsequent block proposals.
     rpc Deploy(DeployRequest) returns (google.protobuf.Empty) {
         option (google.api.http) = {
-            put: "/v2/deploys/{deploy.deploy_hash=*}"
+            post: "/v2/deploys"
             body: "deploy"
         };
     }
@@ -32,6 +32,22 @@ service CasperService {
     	option (google.api.http) = {
     		get: "/v2/blocks"
     	};
+    }
+
+    // Query the value of global state as it was after the execution of a block.
+    rpc GetBlockState(GetBlockStateRequest) returns (io.casperlabs.casper.consensus.info.State.Value) {
+        option (google.api.http) = {
+            post: "v2/blocks/{block_hash_base16=*}/state"
+            body: "*"
+        };
+    }
+
+    // Execute multiple state queries at once.
+    rpc BatchGetBlockState(BatchGetBlockStateRequest) returns (BatchGetBlockStateResponse) {
+        option (google.api.http) = {
+            post: "v2/blocks/{block_hash_base16=*}/state:batchGet",
+            body: "*"
+        };
     }
 }
 
@@ -64,4 +80,33 @@ enum BlockInfoView {
 	// Include extra information that requires the full block,
 	// for example the size, number of errors in deploys, etc.
 	FULL = 1;
+}
+
+
+message StateQuery {
+    KeyVariant key_variant = 1;
+    string key_base16 = 2;
+    // Path of human readable names to the value.
+    repeated string path_segments = 3;
+
+    enum KeyVariant {
+        KEY_VARIANT_UNSPECIFIED = 0;
+        HASH = 1;
+        UREF = 2;
+        ADDRESS = 3;
+    }
+}
+
+message GetBlockStateRequest {
+    string block_hash_base16 = 1;
+    StateQuery query = 2;
+}
+
+message BatchGetBlockStateRequest {
+    string block_hash_base16 = 1;
+    repeated StateQuery queries = 2;
+}
+
+message BatchGetBlockStateResponse {
+    repeated io.casperlabs.casper.consensus.info.State.Value values = 1;
 }
