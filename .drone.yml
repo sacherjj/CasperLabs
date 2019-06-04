@@ -9,7 +9,7 @@ __buildenv:
 
 __sbtenv:
   environment:
-    - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
+    - "_JAVA_OPTIONS=-Xms2G -Xmx6G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
   volumes:
     - "/var/cache/cl-build/.sbt:/root/.sbt"
@@ -44,16 +44,9 @@ clone:
 # exactly the same.
 pipeline:
 
-  sbt-update:
+  sbt-compile-test:
     commands:
-      - "sbt update"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
-    image: "casperlabs/buildenv:latest"
-
-  compile:
-    commands:
-      - "sbt compile test:compile doc"
+      - "sbt test"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
@@ -64,11 +57,12 @@ pipeline:
       if echo $STATUS_CHECK | grep -q "modified" ; then echo "$STATUS_CHECK"; exit 1; fi
     image: "casperlabs/buildenv:latest"
 
-  compile-rust:
+  rust-compile-test:
     commands:
       - "cd execution-engine/"
       - "~/.cargo/bin/cargo update"
       - "~/.cargo/bin/cargo build"
+      - "~/.cargo/bin/cargo test"
     image: "casperlabs/buildenv:latest"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
@@ -88,19 +82,6 @@ pipeline:
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
       - "~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints"
-    image: "casperlabs/buildenv:latest"
-
-  run-rust-tests:
-    commands:
-      - "cd execution-engine/"
-      - "~/.cargo/bin/cargo test"
-    image: "casperlabs/buildenv:latest"
-
-  run-unit-tests:
-    commands:
-      - "sbt test"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
 
 # This section of the Pipeline is variable and not always run in all situations.
@@ -163,7 +144,8 @@ pipeline:
 
   run-integration-tests:
     commands:
-      - "python3 -m pip install pipenv dataclasses typing_extensions"
+      - "apt-get update && apt-get -y install gcc"
+      - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2"
       - "cd integration-testing"
       - ./docker_run_tests.sh
     environment:
@@ -177,69 +159,19 @@ pipeline:
         - staging
         - trying
 
-  package-client-deb-universal:
+  package-sbt-artifacts:
     commands:
-      - "sbt client/debian:packageBin client/universal:packageZipTarball"
+      - "sbt update compile client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
       - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
-    image: "casperlabs/buildenv:latest"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    when:
-      branch:
-        - dev
-        - release-*
-        - master
-      event:
-        - push
-        - tag
-
-  package-client-rpm:
-    commands:
-      - "env JAVAC_VERSION=1.8 sbt clean compile doc client/rpm:packageBin"
-      - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
-    image: "casperlabs/buildenv:latest"
-    when:
-      branch:
-        - dev
-        - release-*
-        - master
-      event:
-        - push
-        - tag
-
-  package-node-deb-universal:
-    commands:
-      - "sbt node/debian:packageBin node/universal:packageZipTarball"
-      - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
-    image: "casperlabs/buildenv:latest"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    when:
-      branch:
-        - dev
-        - release-*
-        - master
-      event:
-        - push
-        - tag
-
-  package-node-rpm:
-    commands:
-      - "env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin"
-      - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm artifacts/${DRONE_BRANCH}"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
     when:
       branch:
         - dev
@@ -377,12 +309,17 @@ pipeline:
     secrets:
       - slack_webhook
     template: |
-      *{{ uppercasefirst build.status }} *
-      PR: <${DRONE_COMMIT_LINK}|#{{ build.pull }} - ${DRONE_COMMIT_MESSAGE}>
-      Commit: <${DRONE_COMMIT_LINK}/commits/{{build.commit}}|{{ truncate build.commit 10 }}>
-      Author: {{ build.author }}
-      Drone Build:  <{{ build.link }}|#{{ build.number }}>
+      *{{ uppercasefirst build.status }}*
+        Author: {{ build.author }} 
+        Drone Build: <{{ build.link }}|#{{ build.number }}>
+        Commit Link: <https://github.com/{{repo.owner}}/{{repo.name}}/commit/{{build.commit}}|{{ truncate build.commit 10 }}>
     when:
       status:
         - failure
 
+# Signature for Drone
+---
+kind: signature
+hmac: aba74ddcedb4ac74f39f8884cd644c6f13eb4ed7f7226c7b9fefda17d0241af2
+
+...

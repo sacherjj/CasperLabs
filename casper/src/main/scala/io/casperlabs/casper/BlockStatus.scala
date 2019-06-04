@@ -7,6 +7,9 @@ sealed trait BlockStatus {
 final case object Processing extends BlockStatus {
   override val inDag: Boolean = false
 }
+final case object Processed extends BlockStatus {
+  override val inDag: Boolean = true
+}
 final case class BlockException(ex: Throwable) extends BlockStatus {
   override val inDag: Boolean = false
 }
@@ -49,7 +52,8 @@ final case object InvalidBlockHash        extends InvalidBlock with Slashable
 final case object InvalidDeployCount      extends InvalidBlock with Slashable
 
 object BlockStatus {
-  def valid: BlockStatus                    = Valid
-  def processing: BlockStatus               = Processing
+  val valid: BlockStatus                    = Valid
+  val processing: BlockStatus               = Processing
+  val processed: BlockStatus                = Processed
   def exception(ex: Throwable): BlockStatus = BlockException(ex)
 }

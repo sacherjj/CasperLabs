@@ -27,13 +27,13 @@ def mk_expected_string(node, random_token):
 
 def test_casper_propose_and_deploy(two_node_network):
     for node in two_node_network.docker_nodes:
-        node.deploy_and_propose()
+        node.deploy_and_propose(private_key="validator-0-private.pem", public_key="validator-0-public.pem")
 
 
 def test_star_network(star_network):
     # deploy and propose from one of the star edge nodes.
     node1 = star_network.docker_nodes[1]
-    block = node1.deploy_and_propose()
+    block = node1.deploy_and_propose(private_key="validator-0-private.pem", public_key="validator-0-public.pem")
 
     # validate all nodes get block
     for node in star_network.docker_nodes:

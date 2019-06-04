@@ -5,7 +5,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStore.{BlockHash, DeployHash}
 import io.casperlabs.blockstorage.InMemBlockStore.emptyMapRef
 import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElementsGen}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
@@ -44,6 +44,15 @@ trait BlockStoreTest
 
   def withStore[R](f: BlockStore[Task] => Task[R]): R
 
+  def checkAllHashes(store: BlockStore[Task], hashes: List[BlockHash]) =
+    hashes.traverse { h =>
+      store.findBlockHash(_ == h).map(h -> _.isDefined)
+    } map { res =>
+      Inspectors.forAll(res) {
+        case (hash, isDefined) => isDefined shouldBe true
+      }
+    }
+
   "Block Store" should "return Some(message) on get for a published key and return Some(blockSummary) on getSummary" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
       withStore { store =>
@@ -51,17 +60,17 @@ trait BlockStoreTest
         for {
           _ <- items.traverse_(store.put)
           _ <- items.traverse[Task, Assertion] { block =>
-                store.get(block.getBlockMessage.blockHash).map(_ shouldBe Some(block))
-                store
-                  .getBlockSummary(block.getBlockMessage.blockHash)
-                  .map(
-                    _ shouldBe Some(
-                      block.toBlockSummary
+                store.get(block.getBlockMessage.blockHash).map(_ shouldBe Some(block)) *>
+                  store
+                    .getBlockSummary(block.getBlockMessage.blockHash)
+                    .map(
+                      _ shouldBe Some(
+                        block.toBlockSummary
+                      )
                     )
-                  )
               }
-          result <- store.find(_ => true).map(_.size shouldEqual items.size)
-        } yield result
+          _ <- checkAllHashes(store, items.map(_.getBlockMessage.blockHash).toList)
+        } yield ()
       }
     }
   }
@@ -74,14 +83,15 @@ trait BlockStoreTest
           _ <- items.traverse_(store.put)
           _ <- items.traverse[Task, Assertion] { block =>
                 store
-                  .find(_ == ByteString.copyFrom(block.getBlockMessage.blockHash.toByteArray))
+                  .findBlockHash(
+                    _ == ByteString.copyFrom(block.getBlockMessage.blockHash.toByteArray)
+                  )
                   .map { w =>
-                    w should have size 1
-                    w.head._2 shouldBe block
+                    w should not be empty
+                    w.get shouldBe block.getBlockMessage.blockHash
                   }
               }
-          result <- store.find(_ => true).map(_.size shouldEqual items.size)
-        } yield result
+        } yield ()
       }
     }
   }
@@ -116,12 +126,49 @@ trait BlockStoreTest
                     .getBlockSummary(k)
                     .map(_ shouldBe Some(v2.toBlockSummary))
               }
-          result <- store.find(_ => true).map(_.size shouldEqual items.size)
-        } yield result
+          _ <- checkAllHashes(store, items.map(_._1).toList)
+        } yield ()
       }
     }
 
-  it should "rollback the transaction on error" in {
+  it should "be able to get blocks containing the specific deploy" in {
+    forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+      val deployHashToBlockHashes =
+        blockStoreElements
+          .flatMap(
+            b =>
+              b.getBlockMessage.getBody.deploys
+                .map(
+                  _.getDeploy.deployHash -> b.getBlockMessage.blockHash
+                )
+                .toSet
+          )
+          .groupBy(_._1)
+          .mapValues(_.map(_._2))
+
+      withStore { store =>
+        val items = blockStoreElements
+        for {
+          _ <- items.traverse_(store.put)
+          _ <- items.traverse[Task, Seq[Assertion]] { block =>
+                block.getBlockMessage.getBody.deploys.toList.traverse { deploy =>
+                  store
+                    .findBlockHashesWithDeployhash(deploy.getDeploy.deployHash)
+                    .map(
+                      _ should contain theSameElementsAs (
+                        deployHashToBlockHashes(deploy.getDeploy.deployHash)
+                      )
+                    )
+                }
+              }
+        } yield ()
+      }
+    }
+  }
+
+  //TODO: update this test to properly test rollback feature.
+  //https://casperlabs.atlassian.net/browse/STOR-95
+  it should "rollback the transaction on error" ignore {
     withStore { store =>
       val exception = new RuntimeException("msg")
 
@@ -129,10 +176,11 @@ trait BlockStoreTest
         throw exception
 
       for {
-        _          <- store.find(_ => true).map(_.size shouldEqual 0)
-        putAttempt <- store.put { elem }.attempt
-        _          = putAttempt.left.value shouldBe exception
-        result     <- store.find(_ => true).map(_.size shouldEqual 0)
+        _                  <- store.findBlockHash(_ => true).map(_ shouldBe empty)
+        (blockHash, block) = elem
+        putAttempt         <- store.put(blockHash, block).attempt
+        _                  = putAttempt.left.value shouldBe exception
+        result             <- store.findBlockHash(_ => true).map(_ shouldBe empty)
       } yield result
     }
   }
@@ -141,13 +189,14 @@ trait BlockStoreTest
 class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val test = for {
-      refTask          <- emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)]
-      approvedBlockRef <- Ref[Task].of(none[ApprovedBlock])
-      metrics          = new MetricsNOP[Task]()
-      lock             <- Semaphore[Task](1)
+      refTask             <- emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)]
+      deployHashesRefTask <- emptyMapRef[Task, Seq[BlockHash]]
+      approvedBlockRef    <- Ref[Task].of(none[ApprovedBlock])
+      metrics             = new MetricsNOP[Task]()
+      lock                <- Semaphore[Task](1)
       store = InMemBlockStore
-        .create[Task](Monad[Task], refTask, approvedBlockRef, metrics)
-      _      <- store.find(_ => true).map(map => assert(map.isEmpty))
+        .create[Task](Monad[Task], refTask, deployHashesRefTask, approvedBlockRef, metrics)
+      _      <- store.findBlockHash(_ => true).map(x => assert(x.isEmpty))
       result <- f(store)
     } yield result
     test.unsafeRunSync
@@ -167,7 +216,7 @@ class LMDBBlockStoreTest extends BlockStoreTest {
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
     val store                           = LMDBBlockStore.create[Task](env, dbDir)
     val test = for {
-      _      <- store.find(_ => true).map(map => assert(map.isEmpty))
+      _      <- store.findBlockHash(_ => true).map(x => assert(x.isEmpty))
       result <- f(store)
     } yield result
     try {
@@ -194,7 +243,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
     val env                             = Context.env(dbDir, mapSize)
     val test = for {
       store  <- FileLMDBIndexBlockStore.create[Task](env, dbDir).map(_.right.get)
-      _      <- store.find(_ => true).map(map => assert(map.isEmpty))
+      _      <- store.findBlockHash(_ => true).map(x => assert(x.isEmpty))
       result <- f(store)
     } yield result
     try {
@@ -239,9 +288,12 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   secondStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
-          result <- secondStore.find(_ => true).map(_.size shouldEqual blockStoreElements.size)
-          _      <- secondStore.close()
-        } yield result
+          _ <- checkAllHashes(
+                secondStore,
+                blockStoreElements.map(_.getBlockMessage.blockHash).toList
+              )
+          _ <- secondStore.close()
+        } yield ()
       }
     }
   }
@@ -285,16 +337,22 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   firstStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
-          _           <- firstStore.find(_ => true).map(_.size shouldEqual blockStoreElements.size)
+          _ <- checkAllHashes(
+                firstStore,
+                blockStoreElements.map(_.getBlockMessage.blockHash).toList
+              )
           _           <- firstStore.close()
           secondStore <- createBlockStore(blockStoreDataDir)
           _ <- blockStoreElements.traverse[Task, Assertion] {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   secondStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
-          result <- secondStore.find(_ => true).map(_.size shouldEqual blockStoreElements.size)
-          _      <- secondStore.close()
-        } yield result
+          _ <- checkAllHashes(
+                secondStore,
+                blockStoreElements.map(_.getBlockMessage.blockHash).toList
+              )
+          _ <- secondStore.close()
+        } yield ()
       }
     }
   }
@@ -314,16 +372,22 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   firstStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
-          _           <- firstStore.find(_ => true).map(_.size shouldEqual blocks.size)
+          _ <- checkAllHashes(
+                firstStore,
+                blocks.map(_.getBlockMessage.blockHash).toList
+              )
           _           <- firstStore.close()
           secondStore <- createBlockStore(blockStoreDataDir)
           _ <- blocks.traverse[Task, Assertion] {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   secondStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
-          result <- secondStore.find(_ => true).map(_.size shouldEqual blocks.size)
-          _      <- secondStore.close()
-        } yield result
+          _ <- checkAllHashes(
+                secondStore,
+                blocks.map(_.getBlockMessage.blockHash).toList
+              )
+          _ <- secondStore.close()
+        } yield ()
       }
     }
   }
@@ -346,12 +410,12 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   firstStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
-          _ <- firstStore.find(_ => true).map(_.size shouldEqual blocks.size)
+          _ <- firstStore.findBlockHash(_ => true).map(_.isEmpty shouldBe blocks.isEmpty)
           _ = approvedBlockPath.toFile.exists() shouldBe true
           _ <- firstStore.clear()
           _ = approvedBlockPath.toFile.exists() shouldBe false
           _ = checkpointsDir.toFile.list().size shouldBe 0
-          _ <- firstStore.find(_ => true).map(_.size shouldEqual 0)
+          _ <- firstStore.findBlockHash(_ => true).map(_ shouldBe empty)
           _ <- blockStoreBatches.traverse_[Task, Unit](
                 blockStoreElements =>
                   blockStoreElements
@@ -364,8 +428,11 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                 case b @ BlockMsgWithTransform(Some(block), _) =>
                   secondStore.get(block.blockHash).map(_ shouldBe Some(b))
               }
-          result <- secondStore.find(_ => true).map(_.size shouldEqual blocks.size)
-        } yield result
+          _ <- checkAllHashes(
+                secondStore,
+                blocks.map(_.getBlockMessage.blockHash).toList
+              )
+        } yield ()
       }
     }
   }

@@ -61,11 +61,12 @@ impl InMemoryGlobalState {
             let mut txn = ret.environment.create_read_write_txn()?;
             let mut current_root = ret.root_hash;
             for (key, value) in pairs {
+                let key = key.normalize();
                 match write::<_, _, _, InMemoryTrieStore, in_memory::Error>(
                     &mut txn,
                     &ret.store,
                     &current_root,
-                    key,
+                    &key,
                     value,
                 )? {
                     WriteResult::Written(root_hash) => {
@@ -268,8 +269,8 @@ mod tests {
     #[test]
     fn initial_state_has_the_expected_hash() {
         let expected_bytes = vec![
-            176u8, 48, 219, 9, 47, 224, 193, 80, 164, 168, 1, 230, 1, 75, 255, 199, 211, 67, 213,
-            61, 31, 192, 211, 77, 59, 244, 219, 236, 53, 253, 100, 159,
+            213u8, 28, 115, 132, 250, 129, 55, 111, 27, 68, 13, 5, 143, 211, 111, 190, 243, 87,
+            140, 228, 21, 158, 179, 104, 240, 16, 70, 251, 167, 153, 156, 43,
         ];
         let init_state = mocked_account([48u8; 32]);
         let global_state = InMemoryGlobalState::from_pairs(&init_state).unwrap();

@@ -1,12 +1,24 @@
 package io.casperlabs.client
+
+import cats.Id
+import cats.data.StateT
+import cats.implicits._
+import cats.mtl.implicits._
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
-
 import com.google.protobuf.empty.Empty
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
-import io.casperlabs.node.api.casper.{CasperGrpcMonix, DeployRequest}
+import io.casperlabs.graphz
+import io.casperlabs.node.api.casper.{
+  BlockInfoView,
+  CasperGrpcMonix,
+  DeployRequest,
+  GetBlockInfoRequest,
+  GetBlockStateRequest,
+  StateQuery,
+  StreamBlockInfosRequest
+}
 import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
@@ -39,7 +51,6 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
       .build()
   }
 
-  private lazy val deployServiceStub  = CasperMessageGrpcMonix.stub(externalChannel)
   private lazy val casperServiceStub  = CasperGrpcMonix.stub(externalChannel)
   private lazy val controlServiceStub = ControlGrpcMonix.stub(internalChannel)
 
@@ -55,28 +66,55 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
       }
       .attempt
 
-  def showBlock(q: BlockQuery): Task[Either[Throwable, String]] =
-    deployServiceStub.showBlock(q).map { response =>
-      if (response.status == "Success") Right(response.toProtoString)
-      else Left(new RuntimeException(response.status))
-    }
-
-  def queryState(q: QueryStateRequest): Task[Either[Throwable, String]] =
-    deployServiceStub
-      .queryState(q)
-      .map(_.result)
+  def showBlock(hash: String): Task[Either[Throwable, String]] =
+    casperServiceStub
+      .getBlockInfo(GetBlockInfoRequest(hash, BlockInfoView.FULL))
+      .map(Printer.printToUnicodeString(_))
       .attempt
 
-  def visualizeDag(q: VisualizeDagQuery): Task[Either[Throwable, String]] =
-    deployServiceStub.visualizeDag(q).attempt.map(_.map(_.content))
+  def queryState(
+      blockHash: String,
+      keyVariant: String,
+      keyValue: String,
+      path: String
+  ): Task[Either[Throwable, String]] =
+    StateQuery.KeyVariant.values
+      .find(_.name == keyVariant.toUpperCase)
+      .fold(
+        Task.raiseError[String](
+          new java.lang.IllegalArgumentException(s"Unknown key variant: $keyVariant")
+        )
+      ) { kv =>
+        val req = GetBlockStateRequest(blockHash)
+          .withQuery(
+            StateQuery(kv, keyValue, path.split('/').filterNot(_.isEmpty))
+          )
 
-  def showBlocks(q: BlocksQuery): Task[Either[Throwable, String]] =
-    deployServiceStub
-      .showBlocks(q)
+        casperServiceStub
+          .getBlockState(req)
+          .map(Printer.printToUnicodeString(_))
+      }
+      .attempt
+
+  def visualizeDag(depth: Int, showJustificationLines: Boolean): Task[Either[Throwable, String]] =
+    casperServiceStub
+      .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfoView.BASIC))
+      .toListL
+      .map { infos =>
+        type G[A] = StateT[Id, StringBuffer, A]
+        implicit val ser = new graphz.StringSerializer[G]
+        val state        = GraphzGenerator.dagAsCluster[G](infos, GraphConfig(showJustificationLines))
+        state.runS(new StringBuffer).toString
+      }
+      .attempt
+
+  def showBlocks(depth: Int): Task[Either[Throwable, String]] =
+    casperServiceStub
+      .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfoView.BASIC))
       .map { bi =>
         s"""
-         |------------- block ${bi.blockNumber} ---------------
-         |${bi.toProtoString}
+         |------------- block @ ${bi.getSummary.getHeader.rank} ---------------
+         |${Printer.printToUnicodeString(bi)}
          |-----------------------------------------------------
          |""".stripMargin
       }
@@ -87,8 +125,9 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
            |count: ${bs.length}
            |""".stripMargin
 
-        Right(bs.mkString("\n") + "\n" + showLength)
+        bs.mkString("\n") + "\n" + showLength
       }
+      .attempt
 
   override def close(): Unit = {
     if (internalConnected)

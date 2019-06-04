@@ -58,7 +58,6 @@ message CommitResponse {
         Key key_not_found = 3;
         TypeMismatch type_mismatch = 4;
         PostEffectsError failed_transform = 5;
-        AdditionOverflow overflow = 6;
     }
 }
 
@@ -130,6 +129,8 @@ message RustBigInt {
     uint32 bit_width = 2;
 }
 
+message UnitValue {}
+
 // Things to store under the key in the global state.
 message Value {
     oneof value_instance {
@@ -142,13 +143,31 @@ message Value {
         StringList string_list = 7;
         NamedKey named_key = 8;
         RustBigInt big_int = 9;
+        Key key = 10;
+        UnitValue unit = 11;
     }
 }
 
 message Account {
+    message AssociatedKey {
+        bytes pub_key = 1; // Should have 32 elements
+        uint32 weight = 2;
+    }
+    message ActionThresholds {
+        uint32 deployment_threshold = 1;
+        uint32 key_management_threshold = 2;
+    }
+    message AccountActivity {
+        uint64 key_management_last_used = 1;
+        uint64 deployment_last_used = 2;
+        uint64 inactivity_period_limit = 3;
+    }
     bytes pub_key = 1; // Should have 32 elements
     uint64 nonce = 2;
     repeated NamedKey known_urefs = 3;
+    repeated AssociatedKey associated_keys = 4;
+    ActionThresholds action_threshold = 5;
+    AccountActivity account_activity = 6;
 }
 message Contract {
     bytes body = 1;
@@ -183,11 +202,9 @@ message TransformAddKeys {
 message TransformWrite {
     Value value = 1;
 }
-message AdditionOverflow {}
 message TransformFailure {
     oneof failure_instance {
         TypeMismatch type_mismatch = 1;
-        AdditionOverflow overflow = 2;
      }
 }
 

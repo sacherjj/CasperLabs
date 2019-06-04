@@ -10,20 +10,32 @@ import os
 from concurrent import futures
 import pytest
 
-from CasperClient.casper_client import CasperClient, CasperMessage_pb2_grpc, CasperMessage_pb2
-from CasperClient.tests import mock_server
+from casper_client import (CasperClient, CasperMessage_pb2_grpc, CasperMessage_pb2, casper_pb2_grpc, empty_pb2)
+import mock_server
 import grpc
 
-RESOURCES_PATH = "../../../integration-testing/resources/"
+RESOURCES_PATH = "../../../resources/"
 
-CONTRACT = os.path.join(RESOURCES_PATH, "test_helloname.wasm")
-PAYMENT = os.path.join(RESOURCES_PATH, "payment.wasm")
-SESSION = os.path.join(RESOURCES_PATH, "session.wasm")
+def resource(file_name):
+    return os.path.join(os.path.dirname(os.path.realpath(__file__)), RESOURCES_PATH, file_name)
+
+CONTRACT = resource("test_helloname.wasm")
+PAYMENT = resource("payment.wasm")
+SESSION = resource("session.wasm")
 
 HASH = 'd9d087fe5d22dbfa1bacb57d6da8d509f7191a216cee6a971de32463ff0f284f'
 
-client = CasperClient()
-client.port = mock_server.CL_GRPC_PORT_EXTERNAL
+client = CasperClient(port = mock_server.CL_GRPC_PORT_EXTERNAL)
+
+
+@pytest.fixture()
+def casper_service(request):
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+    casper_pb2_grpc.add_CasperServiceServicer_to_server(mock_server.CasperServiceServicer(), server)
+    port = '[::]:' + str(mock_server.CL_GRPC_PORT_EXTERNAL)
+    server.add_insecure_port(port)
+    server.start()
+    request.addfinalizer(lambda: server.stop(0))
 
 
 @pytest.fixture()
@@ -36,15 +48,14 @@ def mock_server_setup(request):
     request.addfinalizer(lambda: server.stop(0))
 
 
-def test_deploy(mock_server_setup):
-    response = client.deploy(from_=b"00000000000000000000",
-                             gas_limit=100000000,
-                             gas_price=1,
-                             session=SESSION,
-                             payment=PAYMENT)
-    assert type(response) == CasperMessage_pb2.DeployServiceResponse
-    assert type(response.success) == bool
-    assert type(response.message) == str
+def test_deploy(casper_service):
+    response, deploy_hash = client.deploy(from_addr = 32 * b"0",
+                                          gas_limit = 100000000,
+                                          gas_price = 1,
+                                          session = SESSION,
+                                          payment = PAYMENT)
+    assert type(response) == empty_pb2.Empty
+    assert len(deploy_hash) == 32
 
 
 def test_showBlocks(mock_server_setup):
@@ -78,17 +89,6 @@ def test_queryState(mock_server_setup):
     except Exception as e:
         # See NODE-451.
         pass
-
-
-def test_showMainChain(mock_server_setup):
-    response = client.showMainChain(depth=10)
-    for block in response:
-        assert len(block.blockHash) > 0
-
-
-def test_findBlockWithDeploy(mock_server_setup):
-    response = client.findBlockWithDeploy(b"0000000", 0)
-    assert len(response.status) > 0
 
 
 if __name__ == '__main__':

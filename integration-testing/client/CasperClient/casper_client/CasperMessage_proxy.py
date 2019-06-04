@@ -4,7 +4,7 @@ import time
 import grpc
 from concurrent import futures
 
-from .proto import CasperMessage_pb2_grpc
+from . import CasperMessage_pb2_grpc
 
 from . import grpc_proxy
 

@@ -1,15 +1,19 @@
 mod uint;
 
 use protobuf::ProtobufEnum;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::convert::{TryFrom, TryInto};
 
-use engine_server::ipc::KeyURef_AccessRights;
+use common::value::account::{
+    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, Weight,
+};
+use engine_server::ipc::{Account_AccountActivity, Account_ActionThresholds, KeyURef_AccessRights};
 use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::op::Op;
 use execution_engine::execution::Error as ExecutionError;
+use execution_engine::utils;
 use ipc;
 use shared::logging;
 use shared::logging::log_level;
@@ -74,11 +78,7 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
             } else if v.has_string_val() {
                 transform_write(common::value::Value::String(v.get_string_val().to_string()))
             } else if v.has_account() {
-                let mut pub_key = [0u8; 32];
-                let uref_map: URefMap = v.get_account().get_known_urefs().try_into()?;
-                pub_key.clone_from_slice(&v.get_account().pub_key);
-                let account =
-                    common::value::Account::new(pub_key, v.get_account().nonce as u64, uref_map.0);
+                let account = v.get_account().try_into()?;
                 transform_write(common::value::Value::Account(account))
             } else if v.has_contract() {
                 let ipc_contr = v.get_contract();
@@ -103,6 +103,11 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
                 let name = nk.get_name().to_string();
                 let key = nk.get_key().try_into()?;
                 transform_write(common::value::Value::NamedKey(name, key))
+            } else if v.has_key() {
+                let key = v.get_key().try_into()?;
+                transform_write(common::value::Value::Key(key))
+            } else if v.has_unit() {
+                transform_write(common::value::Value::Unit)
             } else {
                 parse_error(format!(
                     "TransformEntry write contained unknown value: {:?}",
@@ -112,6 +117,33 @@ impl TryFrom<&super::ipc::Transform> for transform::Transform {
         } else {
             parse_error("TransformEntry couldn't be parsed to known Transform.".to_owned())
         }
+    }
+}
+
+impl From<common::value::Contract> for super::ipc::Contract {
+    fn from(contract: common::value::Contract) -> Self {
+        let (bytes, known_urefs, protocol_version) = contract.destructure();
+        let mut contract = super::ipc::Contract::new();
+        let urefs = URefMap(known_urefs).into();
+        contract.set_body(bytes);
+        contract.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
+        let mut protocol = super::ipc::ProtocolVersion::new();
+        protocol.set_version(protocol_version);
+        contract.set_protocol_version(protocol);
+        contract
+    }
+}
+
+impl TryFrom<&super::ipc::Contract> for common::value::Contract {
+    type Error = ParsingError;
+
+    fn try_from(value: &super::ipc::Contract) -> Result<Self, Self::Error> {
+        let known_urefs: URefMap = value.get_known_urefs().try_into()?;
+        Ok(common::value::Contract::new(
+            value.get_body().to_vec(),
+            known_urefs.0,
+            value.get_protocol_version().version,
+        ))
     }
 }
 
@@ -150,27 +182,180 @@ impl From<common::value::Value> for super::ipc::Value {
                 };
                 tv.set_named_key(named_key);
             }
-            common::value::Value::Account(account) => {
-                let mut acc = super::ipc::Account::new();
-                acc.set_pub_key(account.pub_key().to_vec());
-                acc.set_nonce(account.nonce());
-                let urefs = URefMap(account.get_urefs_lookup()).into();
-                acc.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
-                tv.set_account(acc);
+            common::value::Value::Key(key) => {
+                tv.set_key((&key).into());
             }
+            common::value::Value::Account(account) => tv.set_account(account.into()),
             common::value::Value::Contract(contract) => {
-                let (bytes, known_urefs, protocol_version) = contract.destructure();
-                let mut contr = super::ipc::Contract::new();
-                let urefs = URefMap(known_urefs).into();
-                contr.set_body(bytes);
-                contr.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
-                let mut protocol = super::ipc::ProtocolVersion::new();
-                protocol.set_version(protocol_version);
-                contr.set_protocol_version(protocol);
-                tv.set_contract(contr);
+                tv.set_contract(contract.into());
             }
+            common::value::Value::Unit => tv.set_unit(ipc::UnitValue::new()),
         };
         tv
+    }
+}
+
+impl TryFrom<&super::ipc::Value> for common::value::Value {
+    type Error = ParsingError;
+
+    fn try_from(value: &super::ipc::Value) -> Result<Self, Self::Error> {
+        if value.has_integer() {
+            Ok(common::value::Value::Int32(value.get_integer()))
+        } else if value.has_byte_arr() {
+            Ok(common::value::Value::ByteArray(
+                value.get_byte_arr().to_vec(),
+            ))
+        } else if value.has_int_list() {
+            Ok(common::value::Value::ListInt32(
+                value.get_int_list().get_list().to_vec(),
+            ))
+        } else if value.has_string_val() {
+            Ok(common::value::Value::String(
+                value.get_string_val().to_string(),
+            ))
+        } else if value.has_account() {
+            Ok(common::value::Value::Account(
+                value.get_account().try_into()?,
+            ))
+        } else if value.has_contract() {
+            let contract: common::value::Contract = value.get_contract().try_into()?;
+            Ok(common::value::Value::Contract(contract))
+        } else if value.has_string_list() {
+            Ok(common::value::Value::ListString(
+                value.get_string_list().get_list().to_vec(),
+            ))
+        } else if value.has_named_key() {
+            let (name, key) = value.get_named_key().try_into()?;
+            Ok(common::value::Value::NamedKey(name, key))
+        } else if value.has_big_int() {
+            Ok(value.get_big_int().try_into()?)
+        } else if value.has_key() {
+            Ok(common::value::Value::Key(value.get_key().try_into()?))
+        } else {
+            parse_error(format!(
+                "IPC Value {:?} couldn't be parsed to domain representation.",
+                value
+            ))
+        }
+    }
+}
+
+impl From<common::value::account::Account> for super::ipc::Account {
+    fn from(account: common::value::account::Account) -> Self {
+        let mut ipc_account = super::ipc::Account::new();
+        ipc_account.set_pub_key(account.pub_key().to_vec());
+        ipc_account.set_nonce(account.nonce());
+        let associated_keys: Vec<super::ipc::Account_AssociatedKey> = account
+            .get_associated_keys()
+            .get_all()
+            .iter()
+            .map(|(key, weight)| {
+                let mut ipc_associated_key = super::ipc::Account_AssociatedKey::new();
+                ipc_associated_key.set_pub_key(key.value().to_vec());
+                ipc_associated_key.set_weight(u32::from(weight.value()));
+                ipc_associated_key
+            })
+            .collect();
+
+        let action_thresholds = {
+            let mut tmp = Account_ActionThresholds::new();
+            tmp.set_key_management_threshold(u32::from(
+                account.action_thresholds().key_management().value(),
+            ));
+            tmp.set_deployment_threshold(u32::from(
+                account.action_thresholds().deployment().value(),
+            ));
+            tmp
+        };
+        ipc_account.set_action_threshold(action_thresholds);
+        let account_activity = {
+            let mut tmp = Account_AccountActivity::new();
+            tmp.set_deployment_last_used(account.account_activity().deployment_last_used().0);
+            tmp.set_key_management_last_used(
+                account.account_activity().key_management_last_used().0,
+            );
+            tmp.set_inactivity_period_limit(account.account_activity().inactivity_period_limit().0);
+            tmp
+        };
+        let account_urefs = account.get_urefs_lookup();
+        let account_urefs_lookup = URefMap(account_urefs);
+        let ipc_urefs: Vec<super::ipc::NamedKey> = account_urefs_lookup.into();
+        ipc_account.set_known_urefs(ipc_urefs.into());
+        ipc_account.set_associated_keys(associated_keys.into());
+        ipc_account.set_account_activity(account_activity);
+        ipc_account
+    }
+}
+
+impl TryFrom<&super::ipc::Account> for common::value::account::Account {
+    type Error = ParsingError;
+
+    fn try_from(value: &super::ipc::Account) -> Result<Self, Self::Error> {
+        let pub_key: [u8; 32] = {
+            let mut buff = [0u8; 32];
+            if value.pub_key.len() != 32 {
+                return parse_error("Public key has to be exactly 32 bytes long.".to_string());
+            } else {
+                buff.copy_from_slice(&value.pub_key);
+            }
+            buff
+        };
+        let uref_map: URefMap = value.get_known_urefs().try_into()?;
+        let associated_keys: AssociatedKeys = {
+            let mut keys = AssociatedKeys::empty();
+            value.get_associated_keys().iter().try_for_each(|k| {
+                let (pub_key, weight) = k.try_into()?;
+                match keys.add_key(pub_key, weight) {
+                    Err(add_key_failure) => parse_error(format!(
+                        "Error when parsing associated keys: {:?}",
+                        add_key_failure
+                    )),
+                    Ok(_) => Ok(()),
+                }
+            })?;
+            keys
+        };
+        let action_thresholds: ActionThresholds = {
+            if !value.has_action_threshold() {
+                return parse_error(
+                    "Missing ActionThresholds object of the Account IPC message.".to_string(),
+                );
+            };
+            let mut tmp: ActionThresholds = Default::default();
+            let action_thresholds_ipc = value.get_action_threshold();
+            tmp.set_deployment_threshold(Weight::new(
+                action_thresholds_ipc.get_deployment_threshold() as u8,
+            ));
+            tmp.set_key_management_threshold(Weight::new(
+                action_thresholds_ipc.get_key_management_threshold() as u8,
+            ));
+            tmp
+        };
+        let account_activity: AccountActivity = {
+            if !value.has_account_activity() {
+                return parse_error(
+                    "Missing AccountActivity object of the Account IPC message.".to_string(),
+                );
+            };
+            let account_activity_ipc = value.get_account_activity();
+            let mut tmp = AccountActivity::new(BlockTime(0), BlockTime(0));
+            tmp.update_deployment_last_used(BlockTime(account_activity_ipc.deployment_last_used));
+            tmp.update_key_management_last_used(BlockTime(
+                account_activity_ipc.key_management_last_used,
+            ));
+            tmp.update_inactivity_period_limit(BlockTime(
+                account_activity_ipc.inactivity_period_limit,
+            ));
+            tmp
+        };
+        Ok(common::value::Account::new(
+            pub_key,
+            value.nonce,
+            uref_map.0,
+            associated_keys,
+            action_thresholds,
+            account_activity,
+        ))
     }
 }
 
@@ -222,12 +407,6 @@ impl From<transform::Transform> for super::ipc::Transform {
                 fail.set_type_mismatch(typemismatch_err);
                 t.set_failure(fail);
             }
-            transform::Transform::Failure(transform::Error::Overflow) => {
-                let mut fail = super::ipc::TransformFailure::new();
-                let mut overflow_err = super::ipc::AdditionOverflow::new();
-                fail.set_overflow(overflow_err);
-                t.set_failure(fail);
-            }
         };
         t
     }
@@ -236,14 +415,23 @@ impl From<transform::Transform> for super::ipc::Transform {
 // newtype because trait impl have to be defined in the crate of the type.
 pub struct URefMap(BTreeMap<String, common::key::Key>);
 
+impl TryFrom<&super::ipc::NamedKey> for (String, common::key::Key) {
+    type Error = ParsingError;
+
+    fn try_from(value: &super::ipc::NamedKey) -> Result<Self, Self::Error> {
+        let name = value.get_name().to_string();
+        let key = value.get_key().try_into()?;
+        Ok((name, key))
+    }
+}
+
 // Helper method for turning gRPC Vec of NamedKey to domain BTreeMap.
 impl TryFrom<&[super::ipc::NamedKey]> for URefMap {
     type Error = ParsingError;
     fn try_from(from: &[super::ipc::NamedKey]) -> Result<Self, ParsingError> {
         let mut tree: BTreeMap<String, common::key::Key> = BTreeMap::new();
         for nk in from {
-            let name = nk.get_name().to_string();
-            let key = nk.get_key().try_into()?;
+            let (name, key) = nk.try_into()?;
             let _ = tree.insert(name, key);
         }
         Ok(URefMap(tree))
@@ -265,6 +453,24 @@ impl From<URefMap> for Vec<super::ipc::NamedKey> {
     }
 }
 
+impl TryFrom<&ipc::Account_AssociatedKey> for (PublicKey, Weight) {
+    type Error = ParsingError;
+
+    fn try_from(value: &ipc::Account_AssociatedKey) -> Result<Self, Self::Error> {
+        // Weight is a newtype wrapper around u8 type.
+        if value.get_weight() > u8::max_value().into() {
+            parse_error("Key weight cannot be bigger 256.".to_string())
+        } else {
+            let mut pub_key = [0u8; 32];
+            pub_key.copy_from_slice(value.get_pub_key());
+            Ok((
+                PublicKey::new(pub_key),
+                Weight::new(value.get_weight() as u8),
+            ))
+        }
+    }
+}
+
 impl From<&common::key::Key> for super::ipc::Key {
     fn from(key: &common::key::Key) -> super::ipc::Key {
         let mut k = super::ipc::Key::new();
@@ -279,12 +485,17 @@ impl From<&common::key::Key> for super::ipc::Key {
                 key_hash.set_key(hash.to_vec());
                 k.set_hash(key_hash);
             }
-            common::key::Key::URef(uref, access_rights) => {
+            common::key::Key::URef(uref, Some(access_rights)) => {
                 let mut key_uref = super::ipc::KeyURef::new();
                 key_uref.set_uref(uref.to_vec());
                 key_uref.set_access_rights(
                     KeyURef_AccessRights::from_i32(access_rights.bits().into()).unwrap(),
                 );
+                k.set_uref(key_uref);
+            }
+            common::key::Key::URef(uref, None) => {
+                let mut key_uref = super::ipc::KeyURef::new();
+                key_uref.set_uref(uref.to_vec());
                 k.set_uref(key_uref);
             }
             common::key::Key::Local { seed, key_hash } => {
@@ -311,13 +522,38 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
             arr.clone_from_slice(&ipc_key.get_hash().key);
             Ok(common::key::Key::Hash(arr))
         } else if ipc_key.has_uref() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_uref().uref);
-            let access_rights = common::key::AccessRights::from_bits(
-                ipc_key.get_uref().access_rights.value().try_into().unwrap(),
-            )
-            .unwrap();
-            Ok(common::key::Key::URef(arr, access_rights))
+            let ipc_uref = ipc_key.get_uref();
+            let id = {
+                let mut ret = [0u8; 32];
+                ret.clone_from_slice(&ipc_uref.uref);
+                ret
+            };
+            let maybe_access_rights = {
+                let access_rights_value: i32 = ipc_uref.access_rights.value();
+                if access_rights_value != 0 {
+                    let access_rights_bits = access_rights_value.try_into().unwrap();
+                    let access_rights =
+                        common::key::AccessRights::from_bits(access_rights_bits).unwrap();
+                    Some(access_rights)
+                } else {
+                    None
+                }
+            };
+            Ok(common::key::Key::URef(id, maybe_access_rights))
+        } else if ipc_key.has_local() {
+            let ipc_local_key = ipc_key.get_local();
+            if !(ipc_local_key.seed.len() == 32 && ipc_local_key.key_hash.len() == 32) {
+                parse_error("Seed and key hash of local key have to be 32 bytes long.".to_string())
+            } else {
+                let mut seed_buff = [0u8; 32];
+                let mut hash_buff = [0u8; 32];
+                seed_buff.copy_from_slice(&ipc_local_key.seed);
+                hash_buff.copy_from_slice(&ipc_local_key.key_hash);
+                Ok(common::key::Key::Local {
+                    seed: seed_buff,
+                    key_hash: hash_buff,
+                })
+            }
         } else {
             parse_error(format!(
                 "ipc Key couldn't be parsed to any Key: {:?}",
@@ -340,6 +576,34 @@ impl From<Op> for super::ipc::Op {
     }
 }
 
+// Newtype wrapper as rustc requires because trait impl have to be defined in the crate of the type.
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct CommitTransforms(HashMap<common::key::Key, transform::Transform>);
+
+impl CommitTransforms {
+    pub fn get(&self, key: &common::key::Key) -> Option<&transform::Transform> {
+        self.0.get(&key)
+    }
+
+    pub fn value(self) -> HashMap<common::key::Key, transform::Transform> {
+        self.0
+    }
+}
+
+impl TryFrom<&[super::ipc::TransformEntry]> for CommitTransforms {
+    type Error = ParsingError;
+
+    fn try_from(value: &[super::ipc::TransformEntry]) -> Result<Self, Self::Error> {
+        let mut transforms_merged: HashMap<common::key::Key, transform::Transform> = HashMap::new();
+        for named_key in value.iter() {
+            let (key, transform): (common::key::Key, transform::Transform) =
+                named_key.try_into()?;
+            utils::add(&mut transforms_merged, key, transform);
+        }
+        Ok(CommitTransforms(transforms_merged))
+    }
+}
+
 /// Transforms gRPC TransformEntry into domain tuple of (Key, Transform).
 impl TryFrom<&super::ipc::TransformEntry> for (common::key::Key, transform::Transform) {
     type Error = ParsingError;
@@ -358,6 +622,15 @@ impl TryFrom<&super::ipc::TransformEntry> for (common::key::Key, transform::Tran
     }
 }
 
+impl From<(common::key::Key, transform::Transform)> for super::ipc::TransformEntry {
+    fn from((k, t): (common::key::Key, transform::Transform)) -> Self {
+        let mut tr_entry = super::ipc::TransformEntry::new();
+        tr_entry.set_key((&k).into());
+        tr_entry.set_transform(t.into());
+        tr_entry
+    }
+}
+
 impl From<ExecutionEffect> for super::ipc::ExecutionEffect {
     fn from(ee: ExecutionEffect) -> super::ipc::ExecutionEffect {
         let mut eff = super::ipc::ExecutionEffect::new();
@@ -372,17 +645,7 @@ impl From<ExecutionEffect> for super::ipc::ExecutionEffect {
                     op_entry
                 })
                 .collect();
-        let ipc_tran: Vec<super::ipc::TransformEntry> =
-            ee.1.into_iter()
-                .map(|(k, t)| {
-                    let mut tr_entry = super::ipc::TransformEntry::new();
-
-                    let ipc_tr = t.into();
-                    tr_entry.set_key((&k).into());
-                    tr_entry.set_transform(ipc_tr);
-                    tr_entry
-                })
-                .collect();
+        let ipc_tran: Vec<super::ipc::TransformEntry> = ee.1.into_iter().map(Into::into).collect();
         eff.set_op_map(protobuf::RepeatedField::from_vec(ipc_ops));
         eff.set_transform_map(protobuf::RepeatedField::from_vec(ipc_tran));
         eff
@@ -493,13 +756,6 @@ where
             tmp_res.set_missing_prestate(root);
             tmp_res
         }
-        Ok(CommitResult::Overflow) => {
-            logging::log_warning("Overflow");
-            let overflow = ipc::AdditionOverflow::new();
-            let mut tmp_res = ipc::CommitResponse::new();
-            tmp_res.set_overflow(overflow);
-            tmp_res
-        }
         Ok(CommitResult::Success(post_state_hash)) => {
             let mut properties: BTreeMap<String, String> = BTreeMap::new();
 
@@ -596,7 +852,7 @@ mod tests {
         let input_transforms: HashMap<Key, Transform> = {
             let mut tmp_map = HashMap::new();
             tmp_map.insert(
-                Key::URef([1u8; 32], AccessRights::ADD),
+                Key::URef([1u8; 32], Some(AccessRights::ADD)),
                 Transform::AddInt32(10),
             );
             tmp_map
@@ -661,5 +917,92 @@ mod tests {
         let forged_ref_error =
             execution_engine::execution::Error::ForgedReference(Key::Account([1u8; 32]));
         assert_eq!(test_cost(cost, forged_ref_error), cost);
+    }
+
+    #[test]
+    fn commit_effects_merges_transforms() {
+        // Tests that transforms made to the same key are merged instead of lost.
+        let key = Key::Hash([1u8; 32]);
+        let setup: Vec<super::ipc::TransformEntry> = {
+            let transform_entry_first = {
+                let mut tmp = TransformEntry::new();
+                tmp.set_key((&key).into());
+                tmp.set_transform(Transform::Write(common::value::Value::Int32(12)).into());
+                tmp
+            };
+            let transform_entry_second = {
+                let mut tmp = TransformEntry::new();
+                tmp.set_key((&key).into());
+                tmp.set_transform(Transform::AddInt32(10).into());
+                tmp
+            };
+            vec![transform_entry_first, transform_entry_second]
+        };
+        let setup_slice: &[super::ipc::TransformEntry] = &setup;
+        let commit: CommitTransforms = setup_slice
+            .try_into()
+            .expect("Transforming [ipc::TransformEntry] into CommitTransforms should work.");
+        let expected_transform = Transform::Write(common::value::Value::Int32(22i32));
+        let commit_transform = commit.get(&key);
+        assert!(commit_transform.is_some());
+        assert_eq!(expected_transform, *commit_transform.unwrap())
+    }
+
+    use common::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
+    use engine_server::ipc::TransformEntry;
+    use engine_server::mappings::CommitTransforms;
+    use proptest::prelude::*;
+    use shared::transform::gens::transform_arb;
+
+    proptest! {
+        #[test]
+        fn key_roundtrip(key in key_arb()) {
+            let ipc_key: super::ipc::Key = (&key).into();
+            let key_back: Key = (&ipc_key).try_into().expect("Transforming ipc::Key into domain Key should succeed.");
+            assert_eq!(key_back, key)
+        }
+
+        #[test]
+        fn uref_map_roundtrip(uref_map in uref_map_arb(10)) {
+            let uref_map_newtype = super::URefMap(uref_map.clone());
+            let ipc_uref_map: Vec<super::ipc::NamedKey> = uref_map_newtype.into();
+            let ipc_urefs_slice: &[super::ipc::NamedKey] = &ipc_uref_map;
+            let uref_map_back: super::URefMap = ipc_urefs_slice.try_into()
+                .expect("Transforming Vec<ipc::NamedKey> to URefMap should succeed.");
+            assert_eq!(uref_map, uref_map_back.0)
+        }
+
+        #[test]
+        fn account_roundtrip(account in account_arb()) {
+            let ipc_account: super::ipc::Account = account.clone().into();
+            let account_back = (&ipc_account).try_into()
+                .expect("Transforming ipc::Account into domain Account should succeed.");
+            assert_eq!(account, account_back)
+        }
+
+        #[test]
+        fn contract_roundtrip(contract in contract_arb()) {
+            let ipc_contract: super::ipc::Contract = contract.clone().into();
+            let contract_back = (&ipc_contract).try_into()
+                .expect("Transforming ipc::Contract into domain Contract should succeed.");
+            assert_eq!(contract, contract_back)
+        }
+
+        #[test]
+        fn value_roundtrip(value in value_arb()) {
+            let ipc_value: super::ipc::Value = value.clone().into();
+            let value_back = (&ipc_value).try_into()
+                .expect("Transforming ipc::Value into domain Value should succeed.");
+            assert_eq!(value, value_back)
+        }
+
+        #[test]
+        fn transform_entry_roundtrip(key in key_arb(), transform in transform_arb()) {
+            let transform_entry: super::ipc::TransformEntry = (key, transform.clone()).into();
+            let tuple: (Key, Transform) = (&transform_entry).try_into()
+                .expect("Transforming TransformEntry into (Key, Transform) tuple should work.");
+            assert_eq!(tuple, (key, transform))
+        }
+
     }
 }

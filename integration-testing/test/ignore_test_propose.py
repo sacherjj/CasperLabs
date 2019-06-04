@@ -5,6 +5,10 @@ from .cl_node.wait import (
 
 
 def test_propose(one_node_network):
+    """
+    Feature file: propose.feature
+    Scenario: Single node deploy and single propose should result in a single block creation.
+    """
     node = one_node_network.docker_nodes[0]
     result = node.deploy()
     assert 'Success!' in str(result)

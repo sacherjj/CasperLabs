@@ -95,8 +95,8 @@ where
         &self.args
     }
 
-    pub fn rng(&self) -> &ChaChaRng {
-        &self.rng
+    pub fn rng(&mut self) -> &mut ChaChaRng {
+        &mut self.rng
     }
 
     pub fn state(&self) -> Rc<RefCell<TrackingCopy<R>>> {
@@ -159,7 +159,7 @@ where
     pub fn new_uref(&mut self, value: Value) -> Result<Key, Error> {
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
-        let key = Key::URef(key, AccessRights::READ_ADD_WRITE);
+        let key = Key::URef(key, Some(AccessRights::READ_ADD_WRITE));
         let validated_key = Validated::new(key, Validated::valid)?;
         self.insert_uref(validated_key);
         self.write_gs(key, value)?;
@@ -212,7 +212,7 @@ where
     }
 
     pub fn insert_uref(&mut self, key: Validated<Key>) {
-        if let Key::URef(raw_addr, rights) = *key {
+        if let Key::URef(raw_addr, Some(rights)) = *key {
             let entry_rights = self
                 .known_urefs
                 .entry(raw_addr)
@@ -235,8 +235,10 @@ where
             | Value::ByteArray(_)
             | Value::ListInt32(_)
             | Value::String(_)
-            | Value::ListString(_) => Ok(()),
+            | Value::ListString(_)
+            | Value::Unit => Ok(()),
             Value::NamedKey(_, key) => self.validate_key(&key),
+            Value::Key(key) => self.validate_key(&key),
             Value::Account(account) => {
                 // This should never happen as accounts can't be created by contracts.
                 // I am putting this here for the sake of completness.
@@ -257,7 +259,7 @@ where
     /// that are less powerful than access rights' of the key in the `known_urefs`.
     pub fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
-            Key::URef(raw_addr, new_rights) => {
+            Key::URef(raw_addr, Some(new_rights)) => {
                 self.known_urefs
                     .get(raw_addr) // Check if the `key` is known
                     .map(|known_rights| {
@@ -313,7 +315,8 @@ where
         match key {
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
-            Key::URef(_, rights) => rights.is_readable(),
+            Key::URef(_, Some(rights)) => rights.is_readable(),
+            Key::URef(_, None) => false,
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -322,7 +325,8 @@ where
     pub fn is_addable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
-            Key::URef(_, rights) => rights.is_addable(),
+            Key::URef(_, Some(rights)) => rights.is_addable(),
+            Key::URef(_, None) => false,
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -331,7 +335,8 @@ where
     pub fn is_writeable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) | Key::Hash(_) => false,
-            Key::URef(_, rights) => rights.is_writeable(),
+            Key::URef(_, Some(rights)) => rights.is_writeable(),
+            Key::URef(_, None) => false,
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -350,7 +355,6 @@ where
             Ok(AddResult::Success) => Ok(()),
             Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
             Ok(AddResult::TypeMismatch(type_mismatch)) => Err(Error::TypeMismatch(type_mismatch)),
-            Ok(AddResult::Overflow) => Err(Error::Overflow),
         }
     }
 }
@@ -372,6 +376,7 @@ mod tests {
     use storage::global_state::{CommitResult, History};
 
     use super::{Error, RuntimeContext, URefAddr, Validated};
+    use common::value::account::{AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight};
     use execution::{create_rng, vec_key_rights_to_map};
     use shared::newtypes::Blake2bHash;
     use tracking_copy::TrackingCopy;
@@ -401,7 +406,15 @@ mod tests {
     }
 
     fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
-        let account = value::account::Account::new(addr, 0, BTreeMap::new());
+        let associated_keys = AssociatedKeys::new(PublicKey::new(addr), Weight::new(1));
+        let account = value::account::Account::new(
+            addr,
+            0,
+            BTreeMap::new(),
+            associated_keys,
+            Default::default(),
+            AccountActivity::new(BlockTime(0), BlockTime(100)),
+        );
         let key = Key::Account(addr);
 
         (key, account)
@@ -425,7 +438,7 @@ mod tests {
     fn random_uref_key<G: RngCore>(entropy_source: &mut G, rights: AccessRights) -> Key {
         let mut key = [0u8; 32];
         entropy_source.fill_bytes(&mut key);
-        Key::URef(key, rights)
+        Key::URef(key, Some(rights))
     }
 
     fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SIZE]) -> Key {

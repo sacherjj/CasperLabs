@@ -37,7 +37,11 @@ class InMemBlockDagStorage[F[_]: Concurrent: Log: BlockStore](
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.contains(blockHash).pure[F]
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
-      topoSortVector.drop(startBlockNumber.toInt).pure[F]
+      topoSort(startBlockNumber, topoSortVector.size.toLong - 1)
+    def topoSort(startBlockNumber: Long, endBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
+      topoSortVector
+        .slice(startBlockNumber.toInt, endBlockNumber.toInt + 1)
+        .pure[F]
     def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
       topoSortVector.takeRight(tailLength).pure[F]
     def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =

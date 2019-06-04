@@ -15,18 +15,20 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Resources.withResource
 import io.casperlabs.storage.BlockMsgWithTransform
-import org.lmdbjava.DbiFlags.MDB_CREATE
+import org.lmdbjava.DbiFlags.{MDB_CREATE, MDB_DUPSORT}
 import org.lmdbjava.Txn.NotReadyException
 import org.lmdbjava._
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 import scala.language.higherKinds
 
 class LMDBBlockStore[F[_]] private (
     val env: Env[ByteBuffer],
     path: Path,
     blocks: Dbi[ByteBuffer],
-    blockSummaryDB: Dbi[ByteBuffer]
+    blockSummaryDB: Dbi[ByteBuffer],
+    deployHashesDb: Dbi[ByteBuffer]
 )(
     implicit
     syncF: Sync[F]
@@ -71,9 +73,8 @@ class LMDBBlockStore[F[_]] private (
   private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
     withTxn(env.txnRead())(f)
 
-  def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
+  def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit] =
     withWriteTxn { txn =>
-      val (blockHash, blockMsgWithTransform) = f
       blocks.put(
         txn,
         blockHash.toDirectByteBuffer,
@@ -84,6 +85,13 @@ class LMDBBlockStore[F[_]] private (
         blockHash.toDirectByteBuffer,
         blockMsgWithTransform.toBlockSummary.toByteString.toDirectByteBuffer
       )
+      blockMsgWithTransform.getBlockMessage.getBody.deploys.foreach { d =>
+        deployHashesDb.put(
+          txn,
+          d.getDeploy.deployHash.toDirectByteBuffer,
+          blockHash.toDirectByteBuffer
+        )
+      }
     }
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
@@ -92,18 +100,10 @@ class LMDBBlockStore[F[_]] private (
         .map(r => BlockMsgWithTransform.parseFrom(ByteString.copyFrom(r).newCodedInput()))
     }
 
-  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMsgWithTransform)]] =
+  override def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]] =
     withReadTxn { txn =>
-      withResource(blocks.iterate(txn)) { iterator =>
-        iterator.asScala
-          .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
-          .withFilter { case (key, _) => p(key) }
-          .map {
-            case (key, value) =>
-              val msg = BlockMsgWithTransform.parseFrom(ByteString.copyFrom(value).newCodedInput())
-              (key, msg)
-          }
-          .toList
+      withResource(blocks.iterate(txn)) { it =>
+        it.asScala.map(kv => ByteString.copyFrom(kv.key)).find(p)
       }
     }
 
@@ -126,6 +126,20 @@ class LMDBBlockStore[F[_]] private (
 
   override def close(): F[Unit] =
     syncF.delay { env.close() }
+
+  override def findBlockHashesWithDeployhash(deployHash: BlockHash): F[Seq[BlockHash]] =
+    withReadTxn { txn =>
+      val c = deployHashesDb.iterate(
+        txn,
+        KeyRange.closed(deployHash.toDirectByteBuffer, deployHash.toDirectByteBuffer)
+      )
+      c.iterable()
+        .asScala
+        .map(kv => {
+          ByteString.copyFrom(kv.`val`())
+        })
+        .toSeq
+    }
 }
 
 object LMDBBlockStore {
@@ -157,8 +171,15 @@ object LMDBBlockStore {
 
     val blocks: Dbi[ByteBuffer]         = env.openDbi(s"blocks", MDB_CREATE) //TODO this is a bracket
     val blockSummaryDB: Dbi[ByteBuffer] = env.openDbi(s"blockSummaries", MDB_CREATE)
+    val deployHashesDb: Dbi[ByteBuffer] = env.openDbi(s"deployHashes", MDB_CREATE, MDB_DUPSORT)
 
-    new LMDBBlockStore[F](env, config.dir, blocks, blockSummaryDB) with MeteredBlockStore[F] {
+    new LMDBBlockStore[F](
+      env,
+      config.dir,
+      blocks,
+      blockSummaryDB,
+      deployHashesDb
+    ) with MeteredBlockStore[F] {
       override implicit val m: Metrics[F] = metricsF
       override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "lmdb")
       override implicit val a: Apply[F]   = syncF
@@ -172,8 +193,15 @@ object LMDBBlockStore {
   ): BlockStore[F] = {
     val blocks: Dbi[ByteBuffer]         = env.openDbi(s"blocks", MDB_CREATE)
     val blockSummaryDb: Dbi[ByteBuffer] = env.openDbi(s"blockSummarise", MDB_CREATE)
+    val deployHashesDb: Dbi[ByteBuffer] = env.openDbi(s"deployHashes", MDB_CREATE, MDB_DUPSORT)
 
-    new LMDBBlockStore[F](env, path, blocks, blockSummaryDb) with MeteredBlockStore[F] {
+    new LMDBBlockStore[F](
+      env,
+      path,
+      blocks,
+      blockSummaryDb,
+      deployHashesDb
+    ) with MeteredBlockStore[F] {
       override implicit val m: Metrics[F] = metricsF
       override implicit val ms: Source    = Metrics.Source(BlockStorageMetricsSource, "lmdb")
       override implicit val a: Apply[F]   = syncF

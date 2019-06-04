@@ -1,25 +1,24 @@
 package io.casperlabs.node.api
 
-import cats.data.StateT
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.mtl.implicits._
 import cats.{ApplicativeError, Id}
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
-import io.casperlabs.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
+import io.casperlabs.casper.api.{BlockAPI}
 import io.casperlabs.casper.protocol.{DeployData, DeployServiceResponse, _}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.graphz.{GraphSerializer, Graphz, StringSerializer}
+import io.casperlabs.comm.ServiceError.Unimplemented
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import java.lang.IllegalArgumentException
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 import monix.reactive.Observable
@@ -35,7 +34,7 @@ object GrpcDeployService {
           case 32 => ipc.Key(ipc.Key.KeyInstance.Hash(ipc.KeyHash(keyBytes))).pure[F]
           case n =>
             appErr.raiseError(
-              new Exception(
+              new IllegalArgumentException(
                 s"Key of type hash must have exactly 32 bytes, $n =/= 32 provided."
               )
             )
@@ -45,7 +44,7 @@ object GrpcDeployService {
           case 32 => ipc.Key(ipc.Key.KeyInstance.Uref(ipc.KeyURef(keyBytes))).pure[F]
           case n =>
             appErr.raiseError(
-              new Exception(
+              new IllegalArgumentException(
                 s"Key of type uref must have exactly 32 bytes, $n =/= 32 provided."
               )
             )
@@ -55,14 +54,14 @@ object GrpcDeployService {
           case 32 => ipc.Key(ipc.Key.KeyInstance.Account(ipc.KeyAddress(keyBytes))).pure[F]
           case n =>
             appErr.raiseError(
-              new Exception(
+              new IllegalArgumentException(
                 s"Key of type address must have exactly 32 bytes, $n =/= 32 provided."
               )
             )
         }
       case _ =>
         appErr.raiseError(
-          new Exception(
+          new IllegalArgumentException(
             s"Key variant $keyType not valid. Must be one of hash, uref, address."
           )
         )
@@ -106,25 +105,12 @@ object GrpcDeployService {
           defer(f)
       }
 
-      // TODO handle potentiall errors (at least by returning proper response)
-      override def visualizeDag(q: VisualizeDagQuery): Task[VisualizeBlocksResponse] = {
-        type Effect[A] = StateT[Id, StringBuffer, A]
-        implicit val ser: GraphSerializer[Effect]       = new StringSerializer[Effect]
-        val stringify: Effect[Graphz[Effect]] => String = _.runS(new StringBuffer).toString
-
-        val depth  = if (q.depth <= 0) None else Some(q.depth)
-        val config = GraphConfig(q.showJustificationLines)
-
-        defer(
-          BlockAPI
-            .visualizeDag[F, Effect](
-              depth,
-              (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
-              stringify
-            )
-            .map(graph => VisualizeBlocksResponse(graph))
+      override def visualizeDag(q: VisualizeDagQuery): Task[VisualizeBlocksResponse] =
+        Task.raiseError(
+          Unimplemented(
+            "Deprecated. Use CasperService.StreamBlockInfos and visualize on the client side."
+          )
         )
-      }
 
       override def showBlocks(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
         Observable

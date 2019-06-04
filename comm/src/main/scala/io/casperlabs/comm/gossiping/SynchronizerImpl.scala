@@ -3,6 +3,7 @@ package io.casperlabs.comm.gossiping
 import cats.Monad
 import cats.data._
 import cats.effect._
+import cats.effect.concurrent._
 import cats.implicits._
 import cats.kernel.Monoid
 import com.google.protobuf.ByteString
@@ -14,14 +15,7 @@ import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError.{
-  Cycle,
-  MissingDependencies,
-  TooDeep,
-  TooWide,
-  Unreachable,
-  ValidationError
-}
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError._
 import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
@@ -34,7 +28,9 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
     maxPossibleDepth: Int Refined Positive,
     minBlockCountToCheckBranchingFactor: Int Refined NonNegative,
     maxBranchingFactor: Double Refined GreaterEqual[W.`1.0`.T],
-    maxDepthAncestorsRequest: Int Refined Positive
+    maxDepthAncestorsRequest: Int Refined Positive,
+    maxInitialBlockCount: Int Refined Positive,
+    isInitialRef: Ref[F, Boolean]
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
 
@@ -50,12 +46,14 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
       service        <- connectToGossip(source)
       tips           <- backend.tips
       justifications <- backend.justifications
+      isInitial      <- isInitialRef.get
       syncStateOrError <- Metrics[F].gauge("syncs_ongoing") {
                            loop(
                              service,
                              targetBlockHashes.toList,
                              tips ::: justifications,
-                             SyncState.initial(targetBlockHashes)
+                             SyncState.initial(targetBlockHashes),
+                             isInitial
                            )
                          }
       res <- syncStateOrError.fold(
@@ -83,7 +81,8 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
       service: GossipService[F],
       targetBlockHashes: List[ByteString],
       knownBlockHashes: List[ByteString],
-      prevSyncState: SyncState
+      prevSyncState: SyncState,
+      isInitial: Boolean
   ): F[Either[SyncError, SyncState]] =
     if (targetBlockHashes.isEmpty) {
       prevSyncState.asRight[SyncError].pure[F]
@@ -92,7 +91,8 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
         service,
         targetBlockHashes,
         knownBlockHashes,
-        prevSyncState
+        prevSyncState,
+        isInitial
       ).flatMap {
         case left @ Left(_) => (left: Either[SyncError, SyncState]).pure[F]
         case Right(newSyncState) =>
@@ -101,7 +101,8 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
               missing =>
                 if (prevSyncState.summaries == newSyncState.summaries)
                   prevSyncState.asRight[SyncError].pure[F]
-                else loop(service, missing, knownBlockHashes, newSyncState)
+                else
+                  loop(service, missing, knownBlockHashes, newSyncState, isInitial)
             )
       }
     }
@@ -128,7 +129,8 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
       service: GossipService[F],
       targetBlockHashes: List[ByteString],
       knownBlockHashes: List[ByteString],
-      prevSyncState: SyncState
+      prevSyncState: SyncState,
+      isInitial: Boolean
   ): F[Either[SyncError, SyncState]] =
     service
       .streamAncestorBlockSummaries(
@@ -142,16 +144,19 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
         case (Right(syncState), summary) =>
           val effect = for {
             _ <- EitherT.liftF(Metrics[F].incrementCounter("summaries_traversed"))
-            _ <- noCycles(syncState, summary)
             distance <- reachable(
                          syncState,
                          summary,
                          targetBlockHashes.toSet
                        )
             newSyncState = syncState.append(summary, distance)
-            _            <- notTooDeep(newSyncState)
-            _            <- notTooWide(newSyncState)
-
+            _ <- if (isInitial) {
+                  notTooManyInitial(newSyncState, summary)
+                } else {
+                  noCycles(syncState, summary) >>
+                    notTooDeep(newSyncState) >>
+                    notTooWide(newSyncState)
+                }
             _ <- EitherT(
                   backend
                     .validate(summary)
@@ -194,6 +199,16 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
       EitherT(().asRight[SyncError].pure[F])
     }
   }
+
+  private def notTooManyInitial(
+      syncState: SyncState,
+      last: BlockSummary
+  ): EitherT[F, SyncError, Unit] =
+    if (syncState.summaries.size <= maxInitialBlockCount) {
+      EitherT(().asRight[SyncError].pure[F])
+    } else {
+      EitherT((TooMany(last.blockHash, maxInitialBlockCount): SyncError).asLeft[Unit].pure[F])
+    }
 
   private def notTooDeep(syncState: SyncState): EitherT[F, SyncError, Unit] =
     if (syncState.distanceFromOriginalTarget.isEmpty) {

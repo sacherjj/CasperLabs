@@ -127,7 +127,6 @@ lazy val casper = (project in file("casper"))
     comm         % "compile->compile;test->test",
     shared       % "compile->compile;test->test",
     smartContracts % "compile->compile;test->test",
-		graphz,
     crypto,
     models
   )
@@ -233,7 +232,9 @@ lazy val node = (project in file("node"))
         scallop,
         scalaUri,
         scalapbRuntimegGrpc,
-        tomlScala
+        tomlScala,
+        sangria,
+        javaWebsocket
       ),
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
@@ -340,7 +341,8 @@ lazy val node = (project in file("node"))
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
     ),
-    rpmAutoreq := "no"
+    rpmAutoreq := "no",
+    Test / fork := true // Config tests errors would quit SBT itself due to Scallops.
   )
   .dependsOn(casper, comm, crypto)
 
@@ -497,7 +499,7 @@ lazy val client = (project in file("client"))
       grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
     )
   )
-  .dependsOn(crypto, shared, models)
+  .dependsOn(crypto, shared, models, graphz)
 
 /**
   * This project contains Gatling test suits which perform load testing.

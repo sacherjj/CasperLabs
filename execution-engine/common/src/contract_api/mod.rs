@@ -34,13 +34,14 @@ where
     let key: Key = u_ptr.into();
     let value = read_untyped(&key);
     value
+        .unwrap() // TODO: return an Option instead of unwrapping (https://casperlabs.atlassian.net/browse/EE-349)
         .try_into()
         .map_err(|_| "T could not be derived from Value")
         .unwrap()
 }
 
 /// Reads the value at the given key in the context-local partition of global state
-pub fn read_local<K, V>(key: K) -> V
+pub fn read_local<K, V>(key: K) -> Option<V>
 where
     K: ToBytes,
     V: TryFrom<Value>,
@@ -55,13 +56,14 @@ where
         hash(&key_bytes)
     };
     let key = Key::Local { seed, key_hash };
-    read_untyped(&key)
-        .try_into()
-        .map_err(|_| "T could not be derived from Value")
-        .unwrap()
+    read_untyped(&key).map(|v| {
+        v.try_into()
+            .map_err(|_| "T could not be derived from Value")
+            .unwrap()
+    })
 }
 
-fn read_untyped(key: &Key) -> Value {
+fn read_untyped(key: &Key) -> Option<Value> {
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is
     //      dropped then key_ptr becomes invalid.
 
@@ -145,10 +147,10 @@ where
         Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
     };
     let key: Key = deserialize(&bytes).unwrap();
-    if let Key::URef(id, access_rights) = key {
+    if let Key::URef(id, Some(access_rights)) = key {
         UPointer::new(id, access_rights)
     } else {
-        panic!("URef FFI did not return a URef!");
+        panic!("URef FFI did not return a valid URef!");
     }
 }
 
@@ -284,4 +286,16 @@ pub fn revert(status: u32) -> ! {
     unsafe {
         ext_ffi::revert(status);
     }
+}
+
+/// Checks if all the keys contained in the given `Value`
+/// (rather, thing that can be turned into a `Value`) are
+/// valid, in the sense that all of the urefs (and their access rights)
+/// are known in the current context.
+#[allow(clippy::ptr_arg)]
+pub fn is_valid<T: Into<Value>>(t: T) -> bool {
+    let value = t.into();
+    let (value_ptr, value_size, _bytes) = to_ptr(&value);
+    let result = unsafe { ext_ffi::is_valid(value_ptr, value_size) };
+    result != 0
 }

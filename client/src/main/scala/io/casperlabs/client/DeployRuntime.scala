@@ -29,10 +29,18 @@ object DeployRuntime {
     )
 
   def showBlock[F[_]: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showBlock(BlockQuery(hash)))
+    gracefulExit(DeployService[F].showBlock(hash))
 
   def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
-    gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
+    gracefulExit(DeployService[F].showBlocks(depth))
+
+  def queryState[F[_]: Sync: DeployService](
+      blockHash: String,
+      keyVariant: String,
+      keyValue: String,
+      path: String
+  ): F[Unit] =
+    gracefulExit(DeployService[F].queryState(blockHash, keyVariant, keyValue, path))
 
   def visualizeDag[F[_]: Sync: DeployService: Timer](
       depth: Int,
@@ -43,7 +51,7 @@ object DeployRuntime {
     gracefulExit({
       def askDag =
         DeployService[F]
-          .visualizeDag(VisualizeDagQuery(depth, showJustificationLines))
+          .visualizeDag(depth, showJustificationLines)
           .rethrow
 
       val useJdkRenderer = Sync[F].delay(Graphviz.useEngine(new GraphvizJdkEngine))
@@ -101,6 +109,7 @@ object DeployRuntime {
         case (None, Some(_)) =>
           Sync[F].raiseError[String](new Throwable("--out must be specified if --stream"))
       }
+
       eff.attempt
     })
 
@@ -206,11 +215,18 @@ object DeployRuntime {
 
     def sign(privateKey: PrivateKey) = {
       val sig = Ed25519.sign(d.deployHash.toByteArray, privateKey)
-      d.withSignature(
-        consensus
-          .Signature()
-          .withSigAlgorithm(Ed25519.name)
-          .withSig(ByteString.copyFrom(sig))
+      d.withApprovals(
+        List(
+          consensus
+            .Approval()
+            .withApproverPublicKey(d.getHeader.accountPublicKey)
+            .withSignature(
+              consensus
+                .Signature()
+                .withSigAlgorithm(Ed25519.name)
+                .withSig(ByteString.copyFrom(sig))
+            )
+        )
       )
     }
   }

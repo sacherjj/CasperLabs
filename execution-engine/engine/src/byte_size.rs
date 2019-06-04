@@ -48,7 +48,11 @@ impl ByteSize for Value {
     fn byte_size(&self) -> usize {
         std::mem::size_of::<Self>()
             + match self {
-                Value::Int32(_) | Value::UInt128(_) | Value::UInt256(_) | Value::UInt512(_) => 0,
+                Value::Int32(_)
+                | Value::UInt128(_)
+                | Value::UInt256(_)
+                | Value::UInt512(_)
+                | Value::Unit => 0,
                 Value::ByteArray(vec) => std::mem::size_of::<Vec<u8>>() + vec.capacity(),
                 Value::ListInt32(list) => {
                     std::mem::size_of::<Vec<i32>>() + list.capacity() * I32_SIZE
@@ -58,6 +62,7 @@ impl ByteSize for Value {
                 // NOTE: We don't measure `key` as its size will be returned with `std::mem::size_of::<Value>()` call
                 // Similarly, we don't measure stack size of name, account and contract as they're
                 // accounted for in the `std::mem::size_of::<Self>()` call.
+                Value::Key(_) => 0,
                 Value::NamedKey(name, _key) => name.heap_size(),
                 Value::Account(account) => account.heap_size(),
                 Value::Contract(contract) => contract.heap_size(),

@@ -7,6 +7,7 @@ extern crate grpc;
 #[macro_use]
 extern crate lazy_static;
 extern crate lmdb;
+extern crate proptest;
 extern crate protobuf;
 extern crate shared;
 extern crate storage;
@@ -106,9 +107,9 @@ fn main() {
 
     let socket = get_socket(matches);
 
-    if socket.file_exists() {
-        logging::log_info(REMOVING_SOCKET_FILE_MESSAGE);
-        socket.remove_file().expect(REMOVING_SOCKET_FILE_EXPECT);
+    match socket.remove_file() {
+        Err(e) => panic!("{}: {:?}", REMOVING_SOCKET_FILE_EXPECT, e),
+        Ok(_) => logging::log_info(REMOVING_SOCKET_FILE_MESSAGE),
     }
 
     let data_dir = get_data_dir(matches);

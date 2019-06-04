@@ -17,4 +17,5 @@ pub const ADD_UREF_FUNC_INDEX: usize = 15;
 pub const STORE_FN_INDEX: usize = 16;
 pub const PROTOCOL_VERSION_FUNC_INDEX: usize = 17;
 pub const SEED_FN_INDEX: usize = 18;
-pub const REVERT_FUNC_INDEX: usize = 19;
+pub const IS_VALID_FN_INDEX: usize = 19;
+pub const REVERT_FUNC_INDEX: usize = 20;

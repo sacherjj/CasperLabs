@@ -1,9 +1,8 @@
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::Debug;
+use std::io::ErrorKind;
 use std::marker::{Send, Sync};
 
-use common::key::Key;
 use execution_engine::engine_state::error::Error as EngineError;
 use execution_engine::engine_state::EngineState;
 use execution_engine::execution::{Executor, WasmiExecutor};
@@ -12,7 +11,6 @@ use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
 use shared::newtypes::Blake2bHash;
-use shared::transform::Transform;
 use storage::global_state::History;
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
@@ -136,8 +134,7 @@ where
     ) -> grpc::SingleResponse<ipc::CommitResponse> {
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = p.get_prestate_hash().try_into().unwrap();
-        let effects_result: Result<HashMap<Key, Transform>, ParsingError> =
-            p.get_effects().iter().map(TryInto::try_into).collect();
+        let effects_result: Result<CommitTransforms, ParsingError> = p.get_effects().try_into();
         match effects_result {
             Err(ParsingError(error_message)) => {
                 logging::log_error(&error_message);
@@ -150,7 +147,7 @@ where
             Ok(effects) => {
                 let result = grpc_response_from_commit_result::<H>(
                     prestate_hash,
-                    self.apply_effect(prestate_hash, effects),
+                    self.apply_effect(prestate_hash, effects.value()),
                 );
                 grpc::SingleResponse::completed(result)
             }
@@ -245,8 +242,11 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     e: E,
 ) -> grpc::ServerBuilder {
     let socket_path = std::path::Path::new(socket);
-    if socket_path.exists() {
-        std::fs::remove_file(socket_path).expect("failed to remove old socket file");
+
+    if let Err(e) = std::fs::remove_file(socket_path) {
+        if e.kind() != ErrorKind::NotFound {
+            panic!("failed to remove old socket file: {:?}", e);
+        }
     }
 
     let mut server = grpc::ServerBuilder::new_plain();
