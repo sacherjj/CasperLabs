@@ -429,8 +429,6 @@ where
 
     /// Reverts contract execution with a status specified.
     pub fn revert(&mut self, status: u32) -> Trap {
-        // Get bytes of a reason specified by user
-        println!("Revert with status {}", status);
         Error::Revert(status).into()
     }
 }
