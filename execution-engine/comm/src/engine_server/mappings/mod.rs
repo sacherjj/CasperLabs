@@ -686,7 +686,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                 let mut execution_result = ipc::DeployResult_ExecutionResult::new();
                 execution_result.set_effects(ipc_ee);
                 execution_result.set_cost(cost);
-                deploy_result.set_executionResult(execution_result);
+                deploy_result.set_execution_result(execution_result);
                 deploy_result
             }
             ExecutionResult::Failure {
@@ -699,15 +699,17 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
                     EngineError::StorageError(storage_err) => {
-                        wasm_error(storage_err.to_string(), cost, effect)
+                        execution_error(storage_err.to_string(), cost, effect)
                     }
-                    EngineError::PreprocessingError(err_msg) => wasm_error(err_msg, cost, effect),
+                    EngineError::PreprocessingError(err_msg) => {
+                        execution_error(err_msg, cost, effect)
+                    }
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {
                             let mut deploy_result = ipc::DeployResult::new();
                             let deploy_error = {
                                 let mut tmp = ipc::DeployError::new();
-                                tmp.set_gasErr(ipc::DeployError_OutOfGasError::new());
+                                tmp.set_gas_error(ipc::DeployError_OutOfGasError::new());
                                 tmp
                             };
                             let exec_result = {
@@ -718,24 +720,24 @@ impl From<ExecutionResult> for ipc::DeployResult {
                                 tmp
                             };
 
-                            deploy_result.set_executionResult(exec_result);
+                            deploy_result.set_execution_result(exec_result);
                             deploy_result
                         }
                         ExecutionError::KeyNotFound(key) => {
                             let msg = format!("Key {:?} not found.", key);
-                            wasm_error(msg, cost, effect)
+                            execution_error(msg, cost, effect)
                         }
                         ExecutionError::InvalidNonce(nonce) => {
                             let mut deploy_result = ipc::DeployResult::new();
                             let mut invalid_nonce = ipc::DeployResult_InvalidNonce::new();
                             invalid_nonce.set_nonce(nonce);
-                            deploy_result.set_invalidNonce(invalid_nonce);
+                            deploy_result.set_invalid_nonce(invalid_nonce);
                             deploy_result
                         }
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
                             let msg = format!("{:?}", other);
-                            wasm_error(msg, cost, effect)
+                            execution_error(msg, cost, effect)
                         }
                     },
                 }
@@ -808,13 +810,14 @@ where
     }
 }
 
-fn wasm_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::DeployResult {
+/// Constructs an instance of [[ipc::DeployResult]] with error set to be [[ipc::DeployError_ExecutionError]].
+fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::DeployResult {
     let mut deploy_result = ipc::DeployResult::new();
     let deploy_error = {
         let mut tmp = ipc::DeployError::new();
-        let mut err = ipc::DeployError_WasmError::new();
+        let mut err = ipc::DeployError_ExecutionError::new();
         err.set_message(msg.to_owned());
-        tmp.set_wasmErr(err);
+        tmp.set_exec_error(err);
         tmp
     };
     let execution_result = {
@@ -824,13 +827,13 @@ fn wasm_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::DeployRes
         tmp.set_effects(effect.into());
         tmp
     };
-    deploy_result.set_executionResult(execution_result);
+    deploy_result.set_execution_result(execution_result);
     deploy_result
 }
 
 #[cfg(test)]
 mod tests {
-    use super::wasm_error;
+    use super::execution_error;
     use common::key::AccessRights;
     use common::key::Key;
     use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
@@ -844,15 +847,15 @@ mod tests {
     // Test that wasm_error function actually returns DeployResult with result set to WasmError
     #[test]
     fn wasm_error_result() {
-        let error_msg = "WasmError";
-        let mut result = wasm_error(error_msg.to_owned(), 0, Default::default());
-        assert!(result.has_executionResult());
-        let mut exec_result = result.take_executionResult();
+        let error_msg = "ExecError";
+        let mut result = execution_error(error_msg.to_owned(), 0, Default::default());
+        assert!(result.has_execution_result());
+        let mut exec_result = result.take_execution_result();
         assert!(exec_result.has_error());
         let mut ipc_error = exec_result.take_error();
-        assert!(ipc_error.has_wasmErr());
-        let ipc_wasm_error = ipc_error.take_wasmErr();
-        let ipc_error_msg = ipc_wasm_error.get_message();
+        assert!(ipc_error.has_exec_error());
+        let ipc_exec_error = ipc_error.take_exec_error();
+        let ipc_error_msg = ipc_exec_error.get_message();
         assert_eq!(ipc_error_msg, error_msg);
     }
 
@@ -882,8 +885,8 @@ mod tests {
             cost,
         };
         let mut ipc_deploy_result: super::ipc::DeployResult = execution_result.into();
-        assert!(ipc_deploy_result.has_executionResult());
-        let mut success = ipc_deploy_result.take_executionResult();
+        assert!(ipc_deploy_result.has_execution_result());
+        let mut success = ipc_deploy_result.take_execution_result();
         assert_eq!(success.get_cost(), cost);
 
         // Extract transform map from the IPC message and parse it back to the domain
@@ -910,8 +913,8 @@ mod tests {
     fn test_cost<E: Into<EngineError>>(expected_cost: u64, err: E) -> u64 {
         let execution_failure = into_execution_failure(err, expected_cost);
         let ipc_deploy_result: super::ipc::DeployResult = execution_failure.into();
-        assert!(ipc_deploy_result.has_executionResult());
-        let success = ipc_deploy_result.get_executionResult();
+        assert!(ipc_deploy_result.has_execution_result());
+        let success = ipc_deploy_result.get_execution_result();
         success.get_cost()
     }
 

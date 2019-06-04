@@ -21,7 +21,7 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
-import io.casperlabs.ipc.DeployResult.Result.ExecutionResult
+import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
@@ -303,7 +303,7 @@ object HashSetCasperTestNode {
                   )
                 )
               } else {
-                DeployResult(DeployResult.Result.InvalidNonce(DeployResult.InvalidNonce(d.nonce)))
+                DeployResult(DeployResult.Value.InvalidNonce(DeployResult.InvalidNonce(d.nonce)))
               }
           )
           .asRight[Throwable]

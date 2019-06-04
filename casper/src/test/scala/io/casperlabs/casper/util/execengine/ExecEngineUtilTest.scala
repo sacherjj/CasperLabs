@@ -209,7 +209,7 @@ class ExecEngineUtilTest
                 .map(
                   d =>
                     DeployResult(
-                      DeployResult.Result.ExecutionResult(
+                      DeployResult.Value.ExecutionResult(
                         DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
                       )
                     )

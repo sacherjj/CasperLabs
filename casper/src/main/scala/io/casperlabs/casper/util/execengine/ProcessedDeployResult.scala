@@ -14,13 +14,12 @@ sealed trait DeployEffects extends ProcessedDeployResult {
 final case class InvalidNonceDeploy(deploy: Deploy, nonce: Long) extends ProcessedDeployResult
 
 // Precondition failures don't have effects or cost.
-// They are either errors (like key not found, key not being an public key of the account)
-// that we can't charge for, or failures for which we choose not to charge for (like invalid nonce).
-final case class PreconditionFailure(deploy: Deploy, error: ipc.DeployError)
+// They are either errors that we can't charge for (like key not found, key not being an public key of the account).
+final case class PreconditionFailure(deploy: Deploy, errorMessage: String)
     extends ProcessedDeployResult
 
 // Represents errors during execution of the program.
-// These errors do have effects in the form of increasing account's nonce.
+// These errors do have effects in the form of increasing account's nonce and execution of payment code.
 final case class ExecutionError(
     deploy: Deploy,
     error: ipc.DeployError,
@@ -32,16 +31,20 @@ final case class ExecutionSuccessful(deploy: Deploy, effects: ipc.ExecutionEffec
     extends DeployEffects
 
 object ProcessedDeployResult {
-  def apply(deploy: Deploy, res: ipc.DeployResult): ProcessedDeployResult =
-    res match {
-      case ipc.DeployResult(ipc.DeployResult.Result.InvalidNonce(invalid_nonce)) =>
+  def apply(deploy: Deploy, result: ipc.DeployResult): ProcessedDeployResult =
+    result match {
+      case ipc.DeployResult(ipc.DeployResult.Value.InvalidNonce(invalid_nonce)) =>
         InvalidNonceDeploy(deploy, invalid_nonce.nonce)
-      case ipc.DeployResult(ipc.DeployResult.Result.ExecutionResult(exec_result)) =>
+      case ipc.DeployResult(ipc.DeployResult.Value.PreconditionFailure(value)) =>
+        PreconditionFailure(deploy, value.message)
+      case ipc.DeployResult(ipc.DeployResult.Value.ExecutionResult(exec_result)) =>
         exec_result match {
           case ipc.DeployResult.ExecutionResult(Some(effects), Some(error), cost) =>
             ExecutionError(deploy, error, effects, cost)
           case ipc.DeployResult.ExecutionResult(None, Some(error), cost) =>
-            // Execution error without effects - commutes  with everything.
+            // Execution error without effects.
+            // Once we add payment code execution this will never happen as every
+            // correct deploy will at least have effects in the form of payment transfer.
             ExecutionError(deploy, error, ipc.ExecutionEffect.defaultInstance, cost)
           case ipc.DeployResult.ExecutionResult(Some(effects), None, cost) =>
             ExecutionSuccessful(deploy, effects, cost)
