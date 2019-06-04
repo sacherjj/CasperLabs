@@ -727,10 +727,23 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             let msg = format!("Key {:?} not found.", key);
                             execution_error(msg, cost, effect)
                         }
-                        ExecutionError::InvalidNonce(nonce) => {
+                        ExecutionError::InvalidNonce {
+                            deploy_nonce,
+                            expected_nonce,
+                        } if deploy_nonce <= expected_nonce => {
+                            // Deploys with nonce lower than (or equal to) current account's nonce will always fail.
+                            // They won't be repeated so we treat them as precondition failures.
+                            let error_msg = format!("Deploy nonce: {:?} was lower (or equal to) than expected nonce {:?}", deploy_nonce, expected_nonce);
+                            precondition_failure(error_msg)
+                        }
+                        ExecutionError::InvalidNonce {
+                            deploy_nonce,
+                            expected_nonce,
+                        } => {
                             let mut deploy_result = ipc::DeployResult::new();
                             let mut invalid_nonce = ipc::DeployResult_InvalidNonce::new();
-                            invalid_nonce.set_nonce(nonce);
+                            invalid_nonce.set_deploy_nonce(deploy_nonce);
+                            invalid_nonce.set_expected_nonce(expected_nonce);
                             deploy_result.set_invalid_nonce(invalid_nonce);
                             deploy_result
                         }
@@ -810,7 +823,16 @@ where
     }
 }
 
-/// Constructs an instance of [[ipc::DeployResult]] with error set to be [[ipc::DeployError_ExecutionError]].
+/// Constructs an instance of [[ipc::DeployResult]] with an error set to [[ipc::DeployError_PreconditionFailure]].
+fn precondition_failure(msg: String) -> ipc::DeployResult {
+    let mut deploy_result = ipc::DeployResult::new();
+    let mut precondition_failure = ipc::DeployResult_PreconditionFailure::new();
+    precondition_failure.set_message(msg);
+    deploy_result.set_precondition_failure(precondition_failure);
+    deploy_result
+}
+
+/// Constructs an instance of [[ipc::DeployResult]] with error set to [[ipc::DeployError_ExecutionError]].
 fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::DeployResult {
     let mut deploy_result = ipc::DeployResult::new();
     let deploy_error = {

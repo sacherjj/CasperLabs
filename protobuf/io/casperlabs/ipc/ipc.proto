@@ -272,7 +272,8 @@ message DeployResult {
     // Invalid nonce is not an error, it's also not a successful execution.
     // Deploys with invalid nonce are returned to the deploy buffer.
     message InvalidNonce {
-        uint64 nonce = 1;
+        uint64 deploy_nonce = 1;
+        uint64 expected_nonce = 2;
     }
 
     // Deploys that failed because of precondition failure that we can't charge for

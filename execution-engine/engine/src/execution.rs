@@ -45,7 +45,9 @@ pub enum Error {
     BytesRepr(BytesReprError),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
-    InvalidAccess { required: AccessRights },
+    InvalidAccess {
+        required: AccessRights,
+    },
     ForgedReference(Key),
     ArgIndexOutOfBounds(usize),
     URefNotFound(String),
@@ -55,7 +57,10 @@ pub enum Error {
     Ret(Vec<Key>),
     Rng(rand::Error),
     ResolverError(ResolverError),
-    InvalidNonce(u64),
+    InvalidNonce {
+        deploy_nonce: u64,
+        expected_nonce: u64,
+    },
 }
 
 impl fmt::Display for Error {
@@ -850,7 +855,13 @@ impl Executor<Module> for WasmiExecutor {
         // Difference should always be 1 greater than current nonce for a
         // given account.
         if delta != 1 {
-            return ExecutionResult::precondition_failure(Error::InvalidNonce(nonce).into());
+            return ExecutionResult::precondition_failure(
+                Error::InvalidNonce {
+                    deploy_nonce: nonce,
+                    expected_nonce: account.nonce(),
+                }
+                .into(),
+            );
         }
 
         let mut updated_account = account.clone();
@@ -1053,8 +1064,13 @@ mod tests {
             } => {
                 assert_eq!(effect, ExecutionEffect(HashMap::new(), HashMap::new()));
                 assert_eq!(cost, 0);
-                if let ::engine_state::error::Error::ExecError(Error::InvalidNonce(nonce)) = error {
-                    assert_eq!(nonce, invalid_nonce);
+                if let ::engine_state::error::Error::ExecError(Error::InvalidNonce {
+                    deploy_nonce,
+                    expected_nonce,
+                }) = error
+                {
+                    assert_eq!(deploy_nonce, invalid_nonce);
+                    assert_eq!(expected_nonce, init_nonce + 1);
                 } else {
                     panic!("Expected InvalidNonce error got: {:?}", error);
                 }
