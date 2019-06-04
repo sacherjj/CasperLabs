@@ -73,14 +73,13 @@ object Genesis {
       deployEffects = ExecEngineUtil.findCommutingEffects(
         ExecEngineUtil.zipDeploysResults(blessedTerms, processedDeploys)
       )
-      _               <- Log[F].debug(s"Selected ${deployEffects.size} non-conflicing blessed contracts.")
-      deploysForBlock = ExecEngineUtil.extractProcessedDeploys(deployEffects)
-      transforms      = ExecEngineUtil.extractTransforms(deployEffects)
+      _                             <- Log[F].debug(s"Selected ${deployEffects.size} non-conflicing blessed contracts.")
+      (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
       _ <- Log[F].debug(
             s"Commiting blessed deploy effects onto starting hash ${Base16.encode(startHash.toByteArray)}..."
           )
       postStateHash <- MonadError[F, Throwable].rethrow(
-                        ExecutionEngineService[F].commit(startHash, transforms)
+                        ExecutionEngineService[F].commit(startHash, transforms.flatten)
                       )
       stateWithContracts = initial.getHeader.getState
         .withPreStateHash(ExecutionEngineService[F].emptyStateHash)
@@ -97,7 +96,7 @@ object Genesis {
         chainId = initial.getHeader.chainId
       )
       unsignedBlock = unsignedBlockProto(body, header)
-    } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
+    } yield BlockMsgWithTransform(Some(unsignedBlock), transforms.flatten)
 
   def withoutContracts(
       bonds: Map[PublicKey, Long],

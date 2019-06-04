@@ -56,15 +56,15 @@ object ExecEngineUtil {
                                 // We are collecting only InvalidNonceDeploy deploys
                                 List.empty[InvalidNonceDeploy].pure[F]
                             }
-      deployEffects   = findCommutingEffects(processedDeployResults)
-      deploysForBlock = extractProcessedDeploys(deployEffects)
-      transforms      = extractTransforms(deployEffects)
-      postStateHash   <- ExecutionEngineService[F].commit(preStateHash, transforms).rethrow
+      deployEffects                 = findCommutingEffects(processedDeployResults)
+      (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
+      postStateHash                 <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
       maxBlockNumber = merged.parents.foldl(-1L) {
         case (acc, b) => math.max(acc, blockNumber(b))
       }
       number = maxBlockNumber + 1
-      msgBody = transforms
+      //TODO: Remove this logging at some point
+      msgBody = transforms.flatten
         .map(t => {
           val k    = PrettyPrinter.buildString(t.key.get)
           val tStr = PrettyPrinter.buildString(t.transform.get)
@@ -97,11 +97,12 @@ object ExecEngineUtil {
       deployEffects: Seq[ProcessedDeployResult]
   ): Seq[ProcessedDeployResult] = {
     // All the deploys that do not change the global state in a way that can conflict with others:
-    // + `ExecutionError` deploys update the nonce,
-    // + `PreconditionFailure` deploys have no effects
-    val (effectFree, effectful) = deployEffects.partition(!_.isInstanceOf[ExecutionSuccessful])
+    // which can be only`ExecutionError` now as `InvalidNonce` and `PreconditionFailure` has been
+    // filtered out when creating block and when we're validating block it shouldn't include those either.
+    val (conflictFree, mergeCandidates) =
+      deployEffects.partition(!_.isInstanceOf[ExecutionSuccessful])
 
-    val nonConflicting = effectful match {
+    val nonConflicting = mergeCandidates match {
       case Nil => List.empty[ProcessedDeployResult]
       case list =>
         val (result, _) =
@@ -122,7 +123,7 @@ object ExecEngineUtil {
     // commuting with everything since we will never
     // re-run them (this is a policy decision we have made) and
     // they touch no keys because we rolled back the changes
-    nonConflicting ++ effectFree
+    nonConflicting ++ conflictFree
   }
 
   def zipDeploysResults(
@@ -131,32 +132,24 @@ object ExecEngineUtil {
   ): Seq[ProcessedDeployResult] =
     deploys.zip(results).map((ProcessedDeployResult.apply _).tupled)
 
-  def extractProcessedDeploys(
+  def unzipEffectsAndDeploys(
       commutingEffects: Seq[ProcessedDeployResult]
-  ): Seq[Block.ProcessedDeploy] =
+  ): Seq[(Block.ProcessedDeploy, Seq[TransformEntry])] =
     commutingEffects.collect {
-      case ExecutionSuccessful(deploy, _, cost) =>
+      case ExecutionSuccessful(deploy, effects, cost) =>
         Block.ProcessedDeploy(
           Some(deploy),
           cost,
           false
-        )
-      case ExecutionError(deploy, error, _, cost) =>
+        ) -> effects.transformMap
+      case ExecutionError(deploy, error, effects, cost) =>
         Block.ProcessedDeploy(
           Some(deploy),
           cost,
           true,
           utils.deployErrorsShow.show(error)
-        )
+        ) -> effects.transformMap
     }
-
-  def extractTransforms(
-      commutingEffects: Seq[ProcessedDeployResult]
-  ): Seq[TransformEntry] =
-    commutingEffects.collect {
-      case ExecutionSuccessful(_, effects, _) => effects.transformMap
-      case ExecutionError(_, _, effects, _)   => effects.transformMap
-    }.flatten
 
   def effectsForBlock[F[_]: Sync: BlockStore: ExecutionEngineService](
       block: Block,
@@ -173,7 +166,8 @@ object ExecEngineUtil {
                            protocolVersion
                          )
       deployEffects = zipDeploysResults(deploys.flatMap(_.deploy), processedDeploys)
-      transformMap  = (findCommutingEffects _ andThen extractTransforms)(deployEffects)
+      transformMap = (findCommutingEffects _ andThen unzipEffectsAndDeploys)(deployEffects)
+        .flatMap(_._2)
     } yield transformMap
   }
 
