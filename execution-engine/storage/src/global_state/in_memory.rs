@@ -150,19 +150,6 @@ mod tests {
     use shared::init::mocked_account;
 
     use super::*;
-    use shared::logging::log_level::LogLevel;
-    use shared::logging::log_settings;
-    use shared::logging::log_settings::{LogLevelFilter, LogSettings};
-
-    lazy_static! {
-        static ref LOG_SETTINGS: LogSettings = get_log_settings(LogLevel::Debug);
-    }
-
-    fn get_log_settings(log_level: LogLevel) -> LogSettings {
-        let log_level_filter = LogLevelFilter::new(log_level);
-
-        LogSettings::new("global_state_in_memory", log_level_filter)
-    }
 
     #[derive(Debug, Clone)]
     struct TestPair {
@@ -231,7 +218,6 @@ mod tests {
     #[test]
     fn commit_updates_state() {
         let correlation_id = CorrelationId::new();
-        log_settings::set_log_settings_provider(&*LOG_SETTINGS);
 
         let test_pairs_updated = create_test_pairs_updated();
 
