@@ -858,7 +858,7 @@ impl Executor<Module> for WasmiExecutor {
             return ExecutionResult::precondition_failure(
                 Error::InvalidNonce {
                     deploy_nonce: nonce,
-                    expected_nonce: account.nonce(),
+                    expected_nonce: account.nonce() + 1,
                 }
                 .into(),
             );
