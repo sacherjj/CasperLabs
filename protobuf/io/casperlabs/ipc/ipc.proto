@@ -258,14 +258,14 @@ message DeployError {
     oneof deploy_errors {
         OutOfGasError gasErr = 1;
         WasmError wasmErr = 2;
-        InvalidAddressError invalidAddressErr = 3;
+        PreprocessingError preprocessingErr = 3;
     }
 }
 message OutOfGasError {}
 message WasmError {
     string message = 1;
 }
-message InvalidAddressError {}
+message PreprocessingError {}
 
 message DeployResult {
     oneof result {

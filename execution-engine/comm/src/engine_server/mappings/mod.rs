@@ -712,9 +712,9 @@ impl From<ExecutionResult> for ipc::DeployResult {
                 match err {
                     EngineError::InvalidAddress => {
                         let mut deploy_result = ipc::DeployResult::new();
-                        let mut err = ipc::InvalidAddressError::new();
+                        let mut err = ipc::PreprocessingError::new();
                         let mut deploy_error = ipc::DeployError::new();
-                        deploy_error.set_invalidAddressErr(err);
+                        deploy_error.set_preprocessingErr(err);
                         deploy_result.set_error(deploy_error);
                         deploy_result.set_cost(cost);
                         deploy_result
