@@ -3,12 +3,12 @@ use std::fmt::Debug;
 use std::io::ErrorKind;
 use std::marker::{Send, Sync};
 
+use common::key::Key;
 use execution_engine::engine_state::error::Error as EngineError;
 use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::EngineState;
 use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::tracking_copy::QueryResult;
-use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
 use shared::newtypes::Blake2bHash;
@@ -103,7 +103,7 @@ where
         // TODO: don't unwrap
         let wasm_costs = WasmCosts::from_version(protocol_version.version).unwrap();
         let preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
-        let deploys_result: Result<Vec<DeployResult>, RootNotFound> = run_deploys(
+        let deploys_result: Result<Vec<ipc::DeployResult>, ipc::RootNotFound> = run_deploys(
             &self,
             &executor,
             &preprocessor,
@@ -158,8 +158,8 @@ where
     fn validate(
         &self,
         _o: ::grpc::RequestOptions,
-        p: ValidateRequest,
-    ) -> grpc::SingleResponse<ValidateResponse> {
+        p: ipc::ValidateRequest,
+    ) -> grpc::SingleResponse<ipc::ValidateResponse> {
         let pay_mod =
             wabt::Module::read_binary(p.payment_code, &wabt::ReadBinaryOptions::default())
                 .and_then(|x| x.validate());
@@ -169,14 +169,14 @@ where
 
         match pay_mod.and(ses_mod) {
             Ok(_) => {
-                let mut result = ValidateResponse::new();
-                result.set_success(ValidateResponse_ValidateSuccess::new());
+                let mut result = ipc::ValidateResponse::new();
+                result.set_success(ipc::ValidateResponse_ValidateSuccess::new());
                 grpc::SingleResponse::completed(result)
             }
             Err(cause) => {
                 let cause_msg = cause.to_string();
                 logging::log_error(&cause_msg);
-                let mut result = ValidateResponse::new();
+                let mut result = ipc::ValidateResponse::new();
                 result.set_failure(cause_msg);
                 grpc::SingleResponse::completed(result)
             }
@@ -190,8 +190,8 @@ fn run_deploys<A, H, E, P>(
     preprocessor: &P,
     prestate_hash: Blake2bHash,
     deploys: &[ipc::Deploy],
-    protocol_version: &ProtocolVersion,
-) -> Result<Vec<DeployResult>, RootNotFound>
+    protocol_version: &ipc::ProtocolVersion,
+) -> Result<Vec<ipc::DeployResult>, ipc::RootNotFound>
 where
     H: History,
     E: Executor<A>,
