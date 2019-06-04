@@ -9,6 +9,7 @@ from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
 from typing import Any, Dict, Optional, Tuple, Union
 
 from docker import DockerClient
+import docker.errors
 
 
 class LoggingThread(threading.Thread):
@@ -204,7 +205,10 @@ class DockerBase:
         if self.container:
             for network_name in self.connected_networks:
                 self.disconnect_from_network(network_name)
-            self.container.remove(force=True, v=True)
+            try:
+                self.container.remove(force=True, v=True)
+            except docker.errors.NotFound:
+                pass
 
 
 class LoggingDockerBase(DockerBase):

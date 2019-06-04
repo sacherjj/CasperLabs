@@ -40,9 +40,9 @@ Feature: Deploy Operation
       When: Deploy is performed with all fields
       Then: Deploy is successful
 
-  #Not Implemented
+  # Implemented: ../test/test_nonce.py : test_deploy_without_nonce
   Scenario: Deploy without nonce
-     Given: Client exists
+     Given: Single Node Network
       When: Deploy is performed with all fields except nonce
       Then: Client error occurs
 
