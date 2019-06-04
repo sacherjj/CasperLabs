@@ -313,45 +313,50 @@ object BlockAPI {
   def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
       deployHashBase16: String
   ): F[Option[DeployInfo]] =
-    unsafeWithCasper[F, Option[DeployInfo]]("Could not show deploy.") { implicit casper =>
-      val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
+    // LMDB throws an exception if a key isn't 32 bytes long, so we fail-fast here
+    if (deployHashBase16.length != 64) {
+      Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
+    } else {
+      unsafeWithCasper[F, Option[DeployInfo]]("Could not show deploy.") { implicit casper =>
+        val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
 
-      BlockStore[F].findBlockHashesWithDeployhash(deployHash) flatMap {
-        case blockHashes if blockHashes.nonEmpty =>
-          for {
-            blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
-            blockInfos <- blocks.traverse { block =>
-                           val summary =
-                             BlockSummary(block.blockHash, block.header, block.signature)
-                           makeBlockInfo[F](summary, block.some)
-                         }
-            results = (blocks zip blockInfos).flatMap {
-              case (block, info) =>
-                block.getBody.deploys
-                  .find(_.getDeploy.deployHash == deployHash)
-                  .map(_ -> info)
-            }
-            info = DeployInfo(
-              deploy = results.headOption.flatMap(_._1.deploy),
-              processingResults = results.map {
-                case (processedDeploy, blockInfo) =>
-                  DeployInfo
-                    .ProcessingResult(
-                      cost = processedDeploy.cost,
-                      isError = processedDeploy.isError,
-                      errorMessage = processedDeploy.errorMessage
-                    )
-                    .withBlockInfo(blockInfo)
+        BlockStore[F].findBlockHashesWithDeployhash(deployHash) flatMap {
+          case blockHashes if blockHashes.nonEmpty =>
+            for {
+              blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
+              blockInfos <- blocks.traverse { block =>
+                             val summary =
+                               BlockSummary(block.blockHash, block.header, block.signature)
+                             makeBlockInfo[F](summary, block.some)
+                           }
+              results = (blocks zip blockInfos).flatMap {
+                case (block, info) =>
+                  block.getBody.deploys
+                    .find(_.getDeploy.deployHash == deployHash)
+                    .map(_ -> info)
               }
-            )
-          } yield info.some
+              info = DeployInfo(
+                deploy = results.headOption.flatMap(_._1.deploy),
+                processingResults = results.map {
+                  case (processedDeploy, blockInfo) =>
+                    DeployInfo
+                      .ProcessingResult(
+                        cost = processedDeploy.cost,
+                        isError = processedDeploy.isError,
+                        errorMessage = processedDeploy.errorMessage
+                      )
+                      .withBlockInfo(blockInfo)
+                }
+              )
+            } yield info.some
 
-        case _ =>
-          casper.bufferedDeploys.map { deploys =>
-            deploys.find(_.deployHash == deployHash) map { deploy =>
-              DeployInfo().withDeploy(deploy)
+          case _ =>
+            casper.bufferedDeploys.map { deploys =>
+              deploys.find(_.deployHash == deployHash) map { deploy =>
+                DeployInfo().withDeploy(deploy)
+              }
             }
-          }
+        }
       }
     }
 
