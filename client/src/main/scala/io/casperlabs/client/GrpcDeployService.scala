@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 import com.google.protobuf.empty.Empty
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus
-import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.graphz
 import io.casperlabs.node.api.casper.{
   CasperGrpcMonix,
@@ -17,6 +17,7 @@ import io.casperlabs.node.api.casper.{
   GetBlockInfoRequest,
   GetBlockStateRequest,
   StateQuery,
+  StreamBlockDeploysRequest,
   StreamBlockInfosRequest
 }
 import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
@@ -72,6 +73,29 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
       .map(Printer.printToUnicodeString(_))
       .attempt
 
+  def showDeploys(hash: String): Task[Either[Throwable, String]] =
+    casperServiceStub
+      .streamBlockDeploys(StreamBlockDeploysRequest(hash, DeployInfo.View.FULL))
+      .zipWithIndex
+      .map {
+        case (d, idx) =>
+          s"""
+         |------------- deploy # $idx ---------------
+         |${Printer.printToUnicodeString(d)}
+         |-------------------------------------------
+         |""".stripMargin
+      }
+      .toListL
+      .map { xs =>
+        val showLength =
+          s"""
+           |count: ${xs.length}
+           |""".stripMargin
+
+        xs.mkString("\n") + "\n" + showLength
+      }
+      .attempt
+
   def queryState(
       blockHash: String,
       keyVariant: String,
@@ -119,13 +143,13 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
          |""".stripMargin
       }
       .toListL
-      .map { bs =>
+      .map { xs =>
         val showLength =
           s"""
-           |count: ${bs.length}
+           |count: ${xs.length}
            |""".stripMargin
 
-        bs.mkString("\n") + "\n" + showLength
+        xs.mkString("\n") + "\n" + showLength
       }
       .attempt
 
