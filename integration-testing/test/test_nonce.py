@@ -18,7 +18,14 @@ def node(one_node_network):
             wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
         yield network.docker_nodes[0]
 
-# DISABLED: DID NOT RAISE
+
+def deploy(node, contract, nonce):
+    node.client.deploy(session_contract = contract,
+                       payment_contract = contract,
+                       nonce = nonce,
+                       private_key = "validator-0-private.pem",
+                       public_key = "validator-0-public.pem")
+
 @pytest.mark.parametrize("contract", ['test_helloname.wasm',])
 def disabled_test_deploy_without_nonce(node, contract: str):
     """
@@ -26,43 +33,31 @@ def disabled_test_deploy_without_nonce(node, contract: str):
     Scenario: Deploy without nonce
     """
     with pytest.raises(NonZeroExitCodeError):
-        node.client.deploy(session_contract = contract,
-                           payment_contract = contract,
-                           nonce = None,
-                           private_key = "validator-0-private.pem",
-                           public_key = "validator-0-public.pem")
+        deploy(node, contract, None)
         node.client.propose()
         wait_for_blocks_count_at_least(node, 2, 2, node.timeout)
 
 
 @pytest.mark.parametrize("contract", ['test_helloname.wasm',])
-def disable_test_deploy_with_lower_nonce(node, contract: str):
+def disabled_test_deploy_with_lower_nonce(node, contract: str):
     """
     Feature file: deploy.feature
     Scenario: Deploy with lower nonce
     """
 
     for i in range(5):
-        node.client.deploy(session_contract = contract,
-                           payment_contract = contract,
-                           nonce = i,
-                           private_key = "validator-0-private.pem",
-                           public_key = "validator-0-public.pem")
+        deploy(node, contract, i)
         node.client.propose()
         wait_for_blocks_count_at_least(node, i+1, i+1, node.timeout)
 
     with pytest.raises(NonZeroExitCodeError):
-        node.client.deploy(session_contract = contract,
-                           payment_contract = contract,
-                           nonce = 3,
-                           private_key = "validator-0-private.pem",
-                           public_key = "validator-0-public.pem")
+        deploy(node, contract, 3)
         node.client.propose()
 
 
 
 @pytest.mark.parametrize("contract", ['test_helloname.wasm',])
-def disable_test_deploy_with_higher_nonce(node, contract: str):
+def disabled_test_deploy_with_higher_nonce(node, contract: str):
     """
       Scenario: Deploy with higher nonce
          Given: Single Node Network
@@ -71,5 +66,5 @@ def disable_test_deploy_with_higher_nonce(node, contract: str):
           Then: TODO: Does this hang until nonce of 4 is deployed???
     """
     # TODO:
-    pass
+    raise Exception('Not implemented yet')
 
