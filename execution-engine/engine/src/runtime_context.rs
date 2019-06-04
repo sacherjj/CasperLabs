@@ -357,7 +357,11 @@ where
             self.validate_addable(&k).and(self.validate_key(&k))
         })?;
         let validated_value = Validated::new(value, |v| self.validate_keys(&v))?;
-        match self.state.borrow_mut().add(self.correlation_id, validated_key, validated_value) {
+        match self
+            .state
+            .borrow_mut()
+            .add(self.correlation_id, validated_key, validated_value)
+        {
             Err(storage_error) => Err(storage_error.into()),
             Ok(AddResult::Success) => Ok(()),
             Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
@@ -476,7 +480,7 @@ mod tests {
             0,
             rng,
             1,
-            CorrelationId::new()
+            CorrelationId::new(),
         )
     }
 
@@ -766,7 +770,7 @@ mod tests {
             0,
             chacha_rng,
             1,
-            CorrelationId::new()
+            CorrelationId::new(),
         );
 
         let uref_name = "NewURef".to_owned();
@@ -817,7 +821,7 @@ mod tests {
             0,
             chacha_rng,
             1,
-            CorrelationId::new()
+            CorrelationId::new(),
         );
 
         let uref_name = "NewURef".to_owned();
