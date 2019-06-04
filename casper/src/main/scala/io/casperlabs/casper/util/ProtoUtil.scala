@@ -381,12 +381,14 @@ object ProtoUtil {
       nonce: Int
   ): F[Deploy] =
     Time[F].currentMillis.map { now =>
-      basicDeploy(now, ByteString.EMPTY).withNonce(nonce)
+      basicDeploy(now, ByteString.EMPTY, nonce)
     }
 
   def basicDeploy(
       timestamp: Long,
-      sessionCode: ByteString = ByteString.EMPTY
+      sessionCode: ByteString = ByteString.EMPTY,
+      nonce: Long = 0,
+      accountPublicKey: ByteString = ByteString.EMPTY
   ): Deploy = {
     val b = Deploy
       .Body()
@@ -394,8 +396,9 @@ object ProtoUtil {
       .withPayment(Deploy.Code())
     val h = Deploy
       .Header()
-      .withAccountPublicKey(ByteString.EMPTY)
+      .withAccountPublicKey(accountPublicKey)
       .withTimestamp(timestamp)
+      .withNonce(nonce)
       .withBodyHash(protoHash(b))
     Deploy()
       .withDeployHash(protoHash(h))

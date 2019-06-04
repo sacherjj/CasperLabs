@@ -155,16 +155,18 @@ class ExecEngineUtilTest
         } yield batchResult should contain theSameElementsAs singleResults
   }
 
-  it should "keep track of different deploys with identical effects (NODE-376)" in withStorage {
+  // TODO: Bring back this test once node is more clever about what deploys it chooses for the block.
+  // Node should choose single deploy per source account, one with the lowest nonce.
+  ignore should "keep track of different deploys with identical effects (NODE-376)" in withStorage {
     implicit blockStore =>
       implicit blockDagStorage =>
         // Create multiple identical deploys.
         val startTime = System.currentTimeMillis
         val deploys = List.range(0, 10).map { i =>
-          ProtoUtil.sourceDeploy(
-            ByteString.copyFromUtf8("Doesn't matter what this is."),
+          ProtoUtil.basicDeploy(
             startTime + i,
-            Integer.MAX_VALUE
+            ByteString.copyFromUtf8("Doesn't matter what this is."),
+            i + 1
           )
         }
         for {
@@ -175,8 +177,10 @@ class ExecEngineUtilTest
                          ProtocolVersion(1)
                        )
         } yield {
+          val invalidNonceDeploys = checkpoint.invalidNonceDeploys
+          invalidNonceDeploys should contain theSameElementsAs (deploys.tail)
           val processedDeploys = checkpoint.deploysForBlock.map(_.getDeploy)
-          processedDeploys should contain theSameElementsInOrderAs deploys
+          processedDeploys should contain(deploys.head)
       }
   }
 

@@ -41,7 +41,8 @@ abstract class HashSetCasperTestNode[F[_]](
     sk: PrivateKey,
     val genesis: Block,
     val blockDagDir: Path,
-    val blockStoreDir: Path
+    val blockStoreDir: Path,
+    val validateNonces: Boolean
 )(
     implicit
     concurrentF: Concurrent[F],
@@ -60,7 +61,7 @@ abstract class HashSetCasperTestNode[F[_]](
     .map(b => PublicKey(b.validatorPublicKey.toByteArray) -> b.stake)
     .toMap
 
-  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds)
+  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds, validateNonces)
 
   /** Handle one message. */
   def receive(): F[Unit]
@@ -136,7 +137,8 @@ trait HashSetCasperTestNodeFactory {
       genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Float = 0f,
+      validateNonces: Boolean = true
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
@@ -149,9 +151,17 @@ trait HashSetCasperTestNodeFactory {
       genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Float = 0f,
+      validateNonces: Boolean = true
   ): Effect[IndexedSeq[TestNode[Effect]]] =
-    networkF[Effect](sks, genesis, transforms, storageSize, faultToleranceThreshold)(
+    networkF[Effect](
+      sks,
+      genesis,
+      transforms,
+      storageSize,
+      faultToleranceThreshold,
+      validateNonces
+    )(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
       Par[Effect],
@@ -242,7 +252,8 @@ object HashSetCasperTestNode {
 
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
   def simpleEEApi[F[_]: Defer: Applicative](
-      initialBonds: Map[PublicKey, Long]
+      initialBonds: Map[PublicKey, Long],
+      validateNonces: Boolean = true
   ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
       import ipc._
@@ -266,13 +277,18 @@ object HashSetCasperTestNode {
       // Validate that account's nonces increment monotonically by 1.
       // Assumes that any account address already exists in the GlobalState with nonce = 0.
       private def validateNonce(deploy: Deploy): Boolean = synchronized {
-        val deployAccount = deploy.address
-        val deployNonce   = deploy.nonce
-        val oldNonce      = accountNonceTracker(deployAccount)
-        if (deployNonce == oldNonce + 1) {
-          accountNonceTracker.update(deployAccount, deployNonce)
+        if (!validateNonces) {
           true
-        } else false
+        } else {
+          val deployAccount = deploy.address
+          val deployNonce   = deploy.nonce
+          val oldNonce      = accountNonceTracker(deployAccount)
+          println(s"Old nonce $oldNonce, deploy nonce: $deployNonce")
+          if (deployNonce == oldNonce + 1) {
+            accountNonceTracker.update(deployAccount, deployNonce)
+            true
+          } else false
+        }
       }
 
       override def emptyStateHash: ByteString = ByteString.EMPTY
