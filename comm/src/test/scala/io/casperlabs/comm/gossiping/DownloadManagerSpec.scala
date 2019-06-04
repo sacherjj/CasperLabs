@@ -24,7 +24,7 @@ import org.scalacheck.{Arbitrary, Gen}
 import Arbitrary.arbitrary
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import monix.execution.schedulers.TestScheduler
-
+import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
 class DownloadManagerSpec
@@ -228,7 +228,7 @@ class DownloadManagerSpec
             regetter = { get =>
               for {
                 _ <- Task.delay({ started = true })
-                _ <- Task.sleep(750.millis)
+                _ <- Task.sleep(1.second)
                 _ <- Task.delay({ finished = true })
                 r <- get
               } yield r
@@ -245,17 +245,22 @@ class DownloadManagerSpec
                     retriesConf = RetriesConf.noRetries
                   ).allocated
           (manager, release) = alloc
-          _                  <- manager.scheduleDownload(summaryOf(block), source, relay = false)
-          _                  <- Task.sleep(500.millis)
-          _                  <- release
-          _                  <- Task.sleep(500.millis)
+          w                  <- manager.scheduleDownload(summaryOf(block), source, relay = false)
+          // Allow some time for the download to start.
+          _ <- Task.sleep(250.millis)
+          // Cancel the download.
+          _ <- release
+          // Allow some time for it to finish, if it's not canceled.
+          r <- w.timeout(1250.millis).attempt
         } yield {
-          backend.summaries should not contain (block.blockHash)
+          r.isLeft shouldBe true
+          r.left.get shouldBe a[TimeoutException]
           started shouldBe true
           finished shouldBe false
+          backend.summaries should not contain (block.blockHash)
         }
 
-        test.runSyncUnsafe(2.seconds)
+        test.runSyncUnsafe(5.seconds)
       }
 
       "reject further schedules" in {
