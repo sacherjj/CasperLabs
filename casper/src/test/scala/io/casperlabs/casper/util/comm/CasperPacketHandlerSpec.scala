@@ -4,7 +4,7 @@ import cats.effect.concurrent.Ref
 import cats.syntax.show._
 import cats.{Applicative, ApplicativeError}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStore.BlockHash
+import io.casperlabs.blockstorage.BlockStore.{BlockHash, DeployHash}
 import io.casperlabs.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
 import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
@@ -100,7 +100,9 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockMap =
       Ref.unsafe[Task, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]](Map.empty)
+    implicit val deployHashMap    = Ref.unsafe[Task, Map[DeployHash, Seq[BlockHash]]](Map.empty)
     implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
+    implicit val lock             = Semaphore[Task](1).unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockStore       = InMemBlockStore.create[Task]
     implicit val blockDagStorage = InMemBlockDagStorage
       .create[Task]
