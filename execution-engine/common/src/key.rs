@@ -1,5 +1,5 @@
 use super::alloc::vec::Vec;
-use super::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
+use super::bytesrepr::{Error, FromBytes, ToBytes, N32, OPTION_SIZE, U32_SIZE};
 use crate::contract_api::pointers::*;
 use bitflags;
 
@@ -79,12 +79,12 @@ const LOCAL_ID: u8 = 3;
 
 const KEY_ID_SIZE: usize = 1; // u8 used to determine the ID
 const ACCESS_RIGHTS_SIZE: usize = 1; // u8 used to tag AccessRights
-pub const UREF_SIZE: usize = U32_SIZE + N32 + KEY_ID_SIZE + ACCESS_RIGHTS_SIZE;
+pub const UREF_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32 + OPTION_SIZE + ACCESS_RIGHTS_SIZE;
 const LOCAL_SIZE: usize = KEY_ID_SIZE + U32_SIZE + LOCAL_SEED_SIZE + U32_SIZE + LOCAL_KEY_HASH_SIZE;
 
 impl ToBytes for AccessRights {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        self.bits.to_bytes()
+        Ok(vec![self.bits])
     }
 }
 
