@@ -125,7 +125,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
       Field(
         "isError",
         BooleanType,
-        "True if execution failed, false otherwife".some,
+        "True if execution failed, false otherwise".some,
         resolve = c => c.value.fold(_.isError, _.isError)
       ),
       Field(
