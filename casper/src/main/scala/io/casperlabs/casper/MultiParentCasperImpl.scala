@@ -41,7 +41,7 @@ import scala.util.control.NonFatal
   * @param equivocationsTracker : Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
   */
 final case class CasperState(
-    blockBuffer: Set[Block] = Set.empty[Block],
+    blockBuffer: Map[ByteString, Block] = Map.empty,
     deployBuffer: DeployBuffer = DeployBuffer.empty,
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
@@ -80,7 +80,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
           blockHash   = block.blockHash
           inDag       <- dag.contains(blockHash)
           casperState <- Cell[F, CasperState].read
-          inBuffer    = casperState.blockBuffer.exists(_.blockHash == blockHash)
+          inBuffer    = casperState.blockBuffer.contains(blockHash)
           attempts <- if (inDag) {
                        Log[F]
                          .info(
@@ -215,7 +215,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       block: Block
   ): F[Boolean] =
     Cell[F, CasperState].read
-      .map(_.blockBuffer.exists(_.blockHash == block.blockHash))
+      .map(_.blockBuffer.contains(block.blockHash))
       .ifM(
         true.pure[F],
         BlockStore[F].contains(block.blockHash)
@@ -448,7 +448,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     for {
       casperState    <- Cell[F, CasperState].read
       dependencyFree = casperState.dependencyDag.dependencyFree
-      dependencyFreeBlocks = casperState.blockBuffer
+      dependencyFreeBlocks = casperState.blockBuffer.values
         .filter(block => dependencyFree.contains(block.blockHash))
         .toList
       dependencyFreeAttempts <- dependencyFreeBlocks.foldM(
@@ -489,7 +489,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
     Cell[F, CasperState].modify { s =>
       s.copy(
-        blockBuffer = s.blockBuffer.filterNot(addedBlockHashes contains _.blockHash),
+        blockBuffer = s.blockBuffer.filterKeys(h => !addedBlockHashes(h)),
         dependencyDag = addedBlockHashes.foldLeft(s.dependencyDag) {
           case (dag, blockHash) =>
             DoublyLinkedDagOperations.remove(dag, blockHash)
@@ -666,7 +666,7 @@ object MultiParentCasperImpl {
 
         case MissingBlocks =>
           Cell[F, CasperState].modify { s =>
-            s.copy(blockBuffer = s.blockBuffer + block)
+            s.copy(blockBuffer = s.blockBuffer + (block.blockHash -> block))
           } *>
             addMissingDependencies(block, dag) *>
             dag.pure[F]
