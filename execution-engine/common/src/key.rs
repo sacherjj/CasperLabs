@@ -80,6 +80,7 @@ const LOCAL_ID: u8 = 3;
 const KEY_ID_SIZE: usize = 1; // u8 used to determine the ID
 const ACCESS_RIGHTS_SIZE: usize = 1; // u8 used to tag AccessRights
 const ACCOUNT_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
+const HASH_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
 pub const UREF_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32 + OPTION_SIZE + ACCESS_RIGHTS_SIZE;
 const LOCAL_SIZE: usize = KEY_ID_SIZE + U32_SIZE + LOCAL_SEED_SIZE + U32_SIZE + LOCAL_KEY_HASH_SIZE;
 
@@ -110,7 +111,7 @@ impl ToBytes for Key {
                 Ok(result)
             }
             Hash(hash) => {
-                let mut result = Vec::with_capacity(ACCOUNT_KEY_SIZE);
+                let mut result = Vec::with_capacity(HASH_KEY_SIZE);
                 result.push(HASH_ID);
                 result.append(&mut hash.to_bytes()?);
                 Ok(result)
