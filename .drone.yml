@@ -71,9 +71,6 @@ pipeline:
       - "~/.cargo/bin/cargo build"
       - "~/.cargo/bin/cargo test"
     image: "casperlabs/buildenv:latest"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
-    image: "casperlabs/buildenv:latest"
     when:
       event:
         - pull_request
@@ -128,9 +125,6 @@ pipeline:
       - "~/.cargo/bin/cargo update"
       - "~/.cargo/bin/cargo build"
       - "~/.cargo/bin/cargo test"
-    image: "casperlabs/buildenv:latest"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
     when:
       branch:
@@ -215,6 +209,21 @@ pipeline:
         - trying
 
 # The below section is for post-bors push webhooks
+  rust-compile-for-make:
+    commands:
+      - "cd execution-engine/"
+      - "~/.cargo/bin/cargo update"
+      - "~/.cargo/bin/cargo build"
+    image: "casperlabs/buildenv:latest"
+    when:
+      branch:
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
+
   docker-build-artifacts-merge:
     commands:
       - "sbt node/docker:publishLocal client/docker:publishLocal"
