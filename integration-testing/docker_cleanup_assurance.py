@@ -12,7 +12,10 @@ def cleanup(tag_name: str):
             # Don't remove testing image that we may be running in.
             if 'integration-testing' in container.name:
                 continue
-            if tag_name in container.name:
+            # Don't remove docker-compose container
+            if 'test-' == container.name[:5]:
+                continue
+            if tag_name == container.name[-len(tag_name):]:
                 try:
                     print(f'REMOVING ABANDONED DOCKER CONTAINER: {container.name}')
                     container.remove(force=True)
