@@ -138,9 +138,7 @@ impl FromBytes for Key {
         match id {
             ACCOUNT_ID => {
                 let (addr, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
-                let mut addr_array = [0u8; 32];
-                addr_array.copy_from_slice(&addr);
-                Ok((Account(addr_array), rem))
+                Ok((Account(addr), rem))
             }
             HASH_ID => {
                 let (hash, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
