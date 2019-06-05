@@ -45,7 +45,7 @@ def disabled_test_deploy_with_lower_nonce(node, contract: str):
     Scenario: Deploy with lower nonce
     """
 
-    for i in range(5):
+    for i in range(4):
         deploy(node, contract, i)
         node.client.propose()
         wait_for_blocks_count_at_least(node, i+1, i+1, node.timeout)
@@ -61,7 +61,7 @@ def disabled_test_deploy_with_higher_nonce(node, contract: str):
     """
       Scenario: Deploy with higher nonce
          Given: Single Node Network
-           And: Nonce is 4 for account
+           And: Nonce is 3 for account
           When: Deploy is performed with nonce of 5
           Then: TODO: Does this hang until nonce of 4 is deployed???
     """
