@@ -5,7 +5,7 @@ from typing import List
 import pytest
 
 from . import conftest
-from .cl_node.casperlabs_network import ThreeNodeNetwork
+from .cl_node.casperlabs_network import ThreeNodeNetwork, CustomConnectionNetwork
 from .cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from .cl_node.common import random_string
 from .cl_node.wait import wait_for_blocks_count_at_least
@@ -33,13 +33,10 @@ class DeployThread(threading.Thread):
             self.deployed_blocks_hashes.add(block_hash)
 
 
-@pytest.fixture(scope='function')
-def n(request):
-    return request.param
 
 @pytest.fixture()
 def nodes(docker_client_fixture):
-    with ThreeNodeNetwork(docker_client_fixture, extra_docker_params={'use_new_gossiping': True}) as network:
+    with ThreeNodeNetwork(docker_client_fixture) as network:
         network.create_cl_network()
         # Wait for the genesis block reaching each node.
         for node in network.docker_nodes:
@@ -47,12 +44,12 @@ def nodes(docker_client_fixture):
         yield network.docker_nodes
 
 
+
 @pytest.mark.parametrize("contract_paths, expected_number_of_blocks", [
 
                          ([['test_helloname.wasm'],['test_helloworld.wasm']], 5),
 
                          ])
-# Curently nodes is a network of three bootstrap connected nodes.
 def test_block_propagation(nodes,
                            contract_paths: List[List[str]], expected_number_of_blocks):
     """
@@ -80,3 +77,33 @@ def test_block_propagation(nodes,
                    f"Not all blocks deployed and proposed on {t.node.container_name} were propagated to {node.container_name}"
 
 
+
+def deploy_and_propose(node, contract):
+    assert 'Success' in node.client.deploy(session_contract = contract,
+                                           payment_contract = contract,
+                                           private_key="validator-0-private.pem",
+                                           public_key="validator-0-public.pem")
+    propose_output = node.client.propose()
+    return extract_block_hash_from_propose_output(propose_output)
+
+
+@pytest.fixture()
+def not_all_connected_directly_nodes(docker_client_fixture):
+    """
+    node0 -- node1 -- node2
+    """
+    with CustomConnectionNetwork(docker_client_fixture) as network:
+        network.create_cl_network(3, [(0, 1), (1, 2)])
+        # Wait for the genesis block reaching each node.
+        for node in network.docker_nodes:
+            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
+        yield network.docker_nodes
+
+    
+def test_blocks_infect_network(not_all_connected_directly_nodes):
+    block_hash = deploy_and_propose(not_all_connected_directly_nodes[0], 'test_helloname.wasm')
+    wait_for_blocks_count_at_least(not_all_connected_directly_nodes[2], 2, 2)
+    blocks = parse_show_blocks(node.client.show_blocks(2))
+    blocks_hashes = set([b.block_hash[:10] for b in blocks])
+    assert block_hash in blocks_hashes
+    
