@@ -33,38 +33,38 @@ case class DeployBuffer(
     // Deploys that have been processed at least once,
     // waiting to be finalized or orphaned.
     processedDeploys: Map[ByteString, Deploy],
-    // Deploys we never looked at.
-    newDeploys: Map[ByteString, Deploy]
+    // Deploys not yet included in a block.
+    pendingDeploys: Map[ByteString, Deploy]
 ) {
   def size =
-    processedDeploys.size + newDeploys.size
+    processedDeploys.size + pendingDeploys.size
 
   def add(deploy: Deploy) =
     if (!contains(deploy))
-      copy(newDeploys = newDeploys + (deploy.deployHash -> deploy))
+      copy(pendingDeploys = pendingDeploys + (deploy.deployHash -> deploy))
     else
       this
 
   // Removes deploys that were included in a block.
-  // They could be in newDeploys too if they were sent to multiple nodes.
+  // They could be in pendingDeploys too if they were sent to multiple nodes.
   def remove(deployHashes: Set[ByteString]) =
     copy(
       processedDeploys = processedDeploys.filterKeys(h => !deployHashes(h)),
-      newDeploys = newDeploys.filterKeys(h => !deployHashes(h))
+      pendingDeploys = pendingDeploys.filterKeys(h => !deployHashes(h))
     )
 
   // Move some deploys from new to processed.
   def processed(deployHashes: Set[ByteString]) =
     copy(
-      processedDeploys = processedDeploys ++ newDeploys.filterKeys(deployHashes),
-      newDeploys = newDeploys.filterKeys(h => !deployHashes(h))
+      processedDeploys = processedDeploys ++ pendingDeploys.filterKeys(deployHashes),
+      pendingDeploys = pendingDeploys.filterKeys(h => !deployHashes(h))
     )
 
   def get(deployHash: ByteString): Option[Deploy] =
-    newDeploys.get(deployHash) orElse processedDeploys.get(deployHash)
+    pendingDeploys.get(deployHash) orElse processedDeploys.get(deployHash)
 
   def contains(deploy: Deploy) =
-    newDeploys.contains(deploy.deployHash) || processedDeploys.contains(deploy.deployHash)
+    pendingDeploys.contains(deploy.deployHash) || processedDeploys.contains(deploy.deployHash)
 }
 object DeployBuffer {
   val empty = DeployBuffer(Map.empty, Map.empty)

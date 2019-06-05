@@ -182,7 +182,7 @@ object AutoProposerTest {
     override def createBlock: F[CreateBlockStatus] =
       Sync[F].delay {
         proposalCount += 1
-        val keys = deployBuffer.newDeploys.keySet.toSet
+        val keys = deployBuffer.pendingDeploys.keySet.toSet
         deployBuffer = deployBuffer.processed(keys)
         ReadOnlyMode
       }

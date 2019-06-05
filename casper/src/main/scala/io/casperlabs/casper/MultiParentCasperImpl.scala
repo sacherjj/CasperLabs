@@ -338,10 +338,10 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                        val remDeploys       = prevProcessedDeploys -- processedDeploys
                        if (remDeploys.nonEmpty) Left(remDeploys) else Right(Set.empty)
                    }
-      // New deploys are most likely not in the past, or we'd have to go back indefinitely to
+      // Pending deploys are most likely not in the past, or we'd have to go back indefinitely to
       // prove they aren't. The EE will ignore them if the nonce is less then the expected,
       // so it should be fine to include and see what happens.
-    } yield orphaned.toSeq ++ state.deployBuffer.newDeploys.values
+    } yield orphaned.toSeq ++ state.deployBuffer.pendingDeploys.values
 
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */

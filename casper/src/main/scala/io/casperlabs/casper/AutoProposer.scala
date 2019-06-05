@@ -27,9 +27,9 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
     val maxElapsedMillis = maxInterval.toMillis
 
     def loop(
-        // Deploys which were new when we tried to propose last time.
+        // Deploys we tried to propose last time.
         prevDeploys: Set[ByteString],
-        // Time we saw the first new deploy after an auto-proposal.
+        // Time we saw the first new deploys after an auto-proposal.
         startMillis: Long
     ): F[Unit] = {
 
@@ -37,23 +37,23 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef](
         currentMillis <- Time[F].currentMillis
         casper        <- MultiParentCasperRef[F].get
         deployBuffer  <- casper.fold(DeployBuffer.empty.pure[F])(_.bufferedDeploys)
-        newDeploys    = deployBuffer.newDeploys.keySet
-      } yield (currentMillis, currentMillis - startMillis, newDeploys)
+        deploys       = deployBuffer.pendingDeploys.keySet
+      } yield (currentMillis, currentMillis - startMillis, deploys)
 
       snapshot flatMap {
         // Reset time when we see a new deploy.
-        case (currentMillis, _, newDeploys) if newDeploys.nonEmpty && startMillis == 0 =>
+        case (currentMillis, _, deploys) if deploys.nonEmpty && startMillis == 0 =>
           Time[F].sleep(checkInterval) *> loop(prevDeploys, currentMillis)
 
-        case (_, elapsedMillis, newDeploys)
-            if newDeploys.nonEmpty
-              && newDeploys != prevDeploys
-              && (elapsedMillis >= maxElapsedMillis || newDeploys.size >= maxCount) =>
+        case (_, elapsedMillis, deploys)
+            if deploys.nonEmpty
+              && deploys != prevDeploys
+              && (elapsedMillis >= maxElapsedMillis || deploys.size >= maxCount) =>
           Log[F].info(
-            s"Proposing block after ${elapsedMillis} ms with ${newDeploys.size} new deploys."
+            s"Proposing block after ${elapsedMillis} ms with ${deploys.size} pending deploys."
           ) *>
             tryPropose() *>
-            loop(newDeploys, 0)
+            loop(deploys, 0)
 
         case _ =>
           Time[F].sleep(checkInterval) *> loop(prevDeploys, startMillis)
