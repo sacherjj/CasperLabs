@@ -15,7 +15,7 @@ final case class InvalidNonceDeploy(deploy: Deploy, deployNonce: Long, expectedN
     extends ProcessedDeployResult
 
 // Precondition failures don't have effects or cost.
-// They are either errors that we can't charge for (like key not found, key not being an public key of the account).
+// They are errors that we can't charge for (like key not found, key not being an public key of the account).
 final case class PreconditionFailure(deploy: Deploy, errorMessage: String)
     extends ProcessedDeployResult
 
