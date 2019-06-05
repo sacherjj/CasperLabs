@@ -22,7 +22,9 @@ def cleanup(tag_name: str):
                 except APIError as e:
                     print(f'Error removing container {container.name}: {e}')
     for network in dc.networks.list():
-        if tag_name in network.name:
+        # We do not want to remove the PythonClient networks ending in -0 thru -10,
+        # so matching tag_name end only
+        if tag_name == network.name[-len(tag_name):]:
             try:
                 print(f'REMOVING ABANDONED DOCKER NETWORK: {network.name}')
                 network.remove()
