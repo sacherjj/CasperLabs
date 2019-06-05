@@ -443,6 +443,33 @@ object BlockAPI {
       )(_._1.pure[F])
     )
 
+  /** Return block infos and maybe according blocks (if 'full' is true) in the a slice of the DAG.
+    * Use `maxRank` 0 to get the top slice,
+    * then we pass previous ranks to paginate backwards. */
+  def getBlockInfosMaybeWithBlocks[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      depth: Int,
+      maxRank: Long = 0,
+      full: Boolean = false
+  ): F[List[(BlockInfo, Option[Block])]] =
+    unsafeWithCasper[F, List[(BlockInfo, Option[Block])]]("Could not show blocks.") {
+      implicit casper =>
+        casper.blockDag flatMap { dag =>
+          maxRank match {
+            case 0 => dag.topoSortTail(depth)
+            case r => dag.topoSort(endBlockNumber = r, startBlockNumber = r - depth + 1)
+          }
+        } handleErrorWith {
+          case ex: StorageError =>
+            MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
+          case ex: IllegalArgumentException =>
+            MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
+        } map { ranksOfHashes =>
+          ranksOfHashes.flatten.reverse.map(h => Base16.encode(h.toByteArray))
+        } flatMap { hashes =>
+          hashes.toList.flatTraverse(getBlockInfoOpt[F](_, full).map(_.toList))
+        }
+    }
+
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
   def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
@@ -450,23 +477,7 @@ object BlockAPI {
       maxRank: Long = 0,
       full: Boolean = false
   ): F[List[BlockInfo]] =
-    unsafeWithCasper[F, List[BlockInfo]]("Could not show blocks.") { implicit casper =>
-      casper.blockDag flatMap { dag =>
-        maxRank match {
-          case 0 => dag.topoSortTail(depth)
-          case r => dag.topoSort(endBlockNumber = r, startBlockNumber = r - depth + 1)
-        }
-      } handleErrorWith {
-        case ex: StorageError =>
-          MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
-        case ex: IllegalArgumentException =>
-          MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-      } map { ranksOfHashes =>
-        ranksOfHashes.flatten.reverse.map(h => Base16.encode(h.toByteArray))
-      } flatMap { hashes =>
-        hashes.toList.traverse(getBlockInfo[F](_, full))
-      }
-    }
+    getBlockInfosMaybeWithBlocks[F](depth, maxRank, full).map(_.map(_._1))
 
   @deprecated("To be removed before devnet. Use `getBlockInfo`.", "0.4")
   def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
