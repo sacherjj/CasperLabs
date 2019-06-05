@@ -8,8 +8,8 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Monad, MonadError}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -71,16 +71,15 @@ object Genesis {
       // Either we make it a "SEQ" block (which is not a feature that exists yet)
       // or there should be a single deploy containing all the blessed contracts.
       deployEffects = ExecEngineUtil.findCommutingEffects(
-        ExecEngineUtil.processedDeployEffects(blessedTerms zip processedDeploys)
+        ExecEngineUtil.zipDeploysResults(blessedTerms, processedDeploys)
       )
-      _               <- Log[F].debug(s"Selected ${deployEffects.size} non-conflicing blessed contracts.")
-      deploysForBlock = ExecEngineUtil.extractProcessedDepoys(deployEffects)
-      transforms      = ExecEngineUtil.extractTransforms(deployEffects)
+      _                             <- Log[F].debug(s"Selected ${deployEffects.size} non-conflicing blessed contracts.")
+      (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
       _ <- Log[F].debug(
             s"Commiting blessed deploy effects onto starting hash ${Base16.encode(startHash.toByteArray)}..."
           )
       postStateHash <- MonadError[F, Throwable].rethrow(
-                        ExecutionEngineService[F].commit(startHash, transforms)
+                        ExecutionEngineService[F].commit(startHash, transforms.flatten)
                       )
       stateWithContracts = initial.getHeader.getState
         .withPreStateHash(ExecutionEngineService[F].emptyStateHash)
@@ -97,7 +96,7 @@ object Genesis {
         chainId = initial.getHeader.chainId
       )
       unsignedBlock = unsignedBlockProto(body, header)
-    } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
+    } yield BlockMsgWithTransform(Some(unsignedBlock), transforms.flatten)
 
   def withoutContracts(
       bonds: Map[PublicKey, Long],

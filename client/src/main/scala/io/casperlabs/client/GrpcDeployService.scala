@@ -8,14 +8,17 @@ import java.io.Closeable
 import java.util.concurrent.TimeUnit
 import com.google.protobuf.empty.Empty
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.casper.protocol._
 import io.casperlabs.casper.consensus
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.graphz
 import io.casperlabs.node.api.casper.{
-  BlockInfoView,
   CasperGrpcMonix,
   DeployRequest,
   GetBlockInfoRequest,
+  GetBlockStateRequest,
+  GetDeployInfoRequest,
+  StateQuery,
+  StreamBlockDeploysRequest,
   StreamBlockInfosRequest
 }
 import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
@@ -50,7 +53,6 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
       .build()
   }
 
-  private lazy val deployServiceStub  = CasperMessageGrpcMonix.stub(externalChannel)
   private lazy val casperServiceStub  = CasperGrpcMonix.stub(externalChannel)
   private lazy val controlServiceStub = ControlGrpcMonix.stub(internalChannel)
 
@@ -68,19 +70,66 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
 
   def showBlock(hash: String): Task[Either[Throwable, String]] =
     casperServiceStub
-      .getBlockInfo(GetBlockInfoRequest(hash, BlockInfoView.FULL))
+      .getBlockInfo(GetBlockInfoRequest(hash, BlockInfo.View.FULL))
       .map(Printer.printToUnicodeString(_))
       .attempt
 
-  def queryState(q: QueryStateRequest): Task[Either[Throwable, String]] =
-    deployServiceStub
-      .queryState(q)
-      .map(_.result)
+  def showDeploy(hash: String): Task[Either[Throwable, String]] =
+    casperServiceStub
+      .getDeployInfo(GetDeployInfoRequest(hash, DeployInfo.View.BASIC))
+      .map(Printer.printToUnicodeString(_))
+      .attempt
+
+  def showDeploys(hash: String): Task[Either[Throwable, String]] =
+    casperServiceStub
+      .streamBlockDeploys(StreamBlockDeploysRequest(hash, DeployInfo.View.BASIC))
+      .zipWithIndex
+      .map {
+        case (d, idx) =>
+          s"""
+         |------------- deploy # $hash / $idx ---------------
+         |${Printer.printToUnicodeString(d)}
+         |---------------------------------------------------
+         |""".stripMargin
+      }
+      .toListL
+      .map { xs =>
+        val showLength =
+          s"""
+           |count: ${xs.length}
+           |""".stripMargin
+
+        xs.mkString("\n") + "\n" + showLength
+      }
+      .attempt
+
+  def queryState(
+      blockHash: String,
+      keyVariant: String,
+      keyValue: String,
+      path: String
+  ): Task[Either[Throwable, String]] =
+    StateQuery.KeyVariant.values
+      .find(_.name == keyVariant.toUpperCase)
+      .fold(
+        Task.raiseError[String](
+          new java.lang.IllegalArgumentException(s"Unknown key variant: $keyVariant")
+        )
+      ) { kv =>
+        val req = GetBlockStateRequest(blockHash)
+          .withQuery(
+            StateQuery(kv, keyValue, path.split('/').filterNot(_.isEmpty))
+          )
+
+        casperServiceStub
+          .getBlockState(req)
+          .map(Printer.printToUnicodeString(_))
+      }
       .attempt
 
   def visualizeDag(depth: Int, showJustificationLines: Boolean): Task[Either[Throwable, String]] =
     casperServiceStub
-      .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfoView.BASIC))
+      .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfo.View.BASIC))
       .toListL
       .map { infos =>
         type G[A] = StateT[Id, StringBuffer, A]
@@ -92,7 +141,7 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
 
   def showBlocks(depth: Int): Task[Either[Throwable, String]] =
     casperServiceStub
-      .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfoView.BASIC))
+      .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfo.View.BASIC))
       .map { bi =>
         s"""
          |------------- block @ ${bi.getSummary.getHeader.rank} ---------------
@@ -101,13 +150,13 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
          |""".stripMargin
       }
       .toListL
-      .map { bs =>
+      .map { xs =>
         val showLength =
           s"""
-           |count: ${bs.length}
+           |count: ${xs.length}
            |""".stripMargin
 
-        bs.mkString("\n") + "\n" + showLength
+        xs.mkString("\n") + "\n" + showLength
       }
       .attempt
 

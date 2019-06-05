@@ -7,20 +7,20 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, HashSetCasperTestNode}
-import io.casperlabs.casper.consensus._, Block.Justification
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ExecutionEngineServiceStub}
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
-import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.casper.util.execengine.{
   DeploysCheckpoint,
   ExecEngineUtil,
   ExecutionEngineServiceStub
 }
+import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
@@ -31,8 +31,9 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
 
@@ -887,7 +888,7 @@ class ValidateTest
                               deploys,
                               ProtocolVersion(1)
                             )
-        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _) = deploysCheckpoint
+        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _, _) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq.empty,
                   deploys = processedDeploys,

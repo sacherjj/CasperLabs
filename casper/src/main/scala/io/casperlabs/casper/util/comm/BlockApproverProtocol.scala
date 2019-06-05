@@ -4,14 +4,12 @@ import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.LegacyConversions
-import io.casperlabs.casper.ValidatorIdentity
-import io.casperlabs.casper.consensus
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.protocol._
-import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ProcessedDeployResult}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProcessedDeployUtil, ProtoUtil}
+import io.casperlabs.casper.{consensus, LegacyConversions, ValidatorIdentity}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.Node
@@ -158,10 +156,9 @@ object BlockApproverProtocol {
                              protocolVersion
                            )
                          ).leftMap(_.getMessage)
-      deployEffects = ExecEngineUtil.findCommutingEffects(
-        ExecEngineUtil.processedDeployEffects(deploys zip processedDeploys)
-      )
-      transforms = ExecEngineUtil.extractTransforms(deployEffects)
+      processedDeployResults = ExecEngineUtil.zipDeploysResults(deploys, processedDeploys)
+      deployEffects          = ExecEngineUtil.findCommutingEffects(processedDeployResults)
+      transforms             = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).flatMap(_._2)
       postStateHash <- EitherT(
                         ExecutionEngineService[F]
                           .commit(ExecutionEngineService[F].emptyStateHash, transforms)

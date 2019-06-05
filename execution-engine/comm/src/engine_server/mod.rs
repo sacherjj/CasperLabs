@@ -2,6 +2,7 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::ErrorKind;
 use std::marker::{Send, Sync};
+use std::time::Instant;
 
 use common::key::Key;
 use execution_engine::engine_state::error::Error as EngineError;
@@ -11,16 +12,29 @@ use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::tracking_copy::QueryResult;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
-use shared::newtypes::Blake2bHash;
+use shared::logging;
+use shared::logging::log_duration;
+use shared::newtypes::{Blake2bHash, CorrelationId};
 use storage::global_state::History;
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
-use shared::logging;
-
 pub mod ipc;
 pub mod ipc_grpc;
 pub mod mappings;
+
+#[cfg(test)]
+mod tests;
+
+const METRIC_DURATION_COMMIT: &str = "commit_duration";
+const METRIC_DURATION_EXEC: &str = "exec_duration";
+const METRIC_DURATION_QUERY: &str = "query_duration";
+const METRIC_DURATION_VALIDATE: &str = "validate_duration";
+
+const TAG_RESPONSE_COMMIT: &str = "commit_response";
+const TAG_RESPONSE_EXEC: &str = "exec_response";
+const TAG_RESPONSE_QUERY: &str = "query_response";
+const TAG_RESPONSE_VALIDATE: &str = "validate_response";
 
 // Idea is that Engine will represent the core of the execution engine project.
 // It will act as an entry point for execution of Wasm binaries.
@@ -37,15 +51,23 @@ where
         _request_options: ::grpc::RequestOptions,
         query_request: ipc::QueryRequest,
     ) -> grpc::SingleResponse<ipc::QueryResponse> {
+        let start = Instant::now();
+        let correlation_id = CorrelationId::new();
         // TODO: don't unwrap
         let state_hash: Blake2bHash = query_request.get_state_hash().try_into().unwrap();
-        let path = query_request.get_path();
+
         let mut tracking_copy = match self.tracking_copy(state_hash) {
             Err(storage_error) => {
                 let mut result = ipc::QueryResponse::new();
                 let error = format!("Error during checkout out Trie: {:?}", storage_error);
                 logging::log_error(&error);
                 result.set_failure(error);
+                log_duration(
+                    correlation_id,
+                    METRIC_DURATION_QUERY,
+                    "tracking_copy_error",
+                    start.elapsed(),
+                );
                 return grpc::SingleResponse::completed(result);
             }
             Ok(None) => {
@@ -53,20 +75,36 @@ where
                 let error = format!("Root not found: {:?}", state_hash);
                 logging::log_warning(&error);
                 result.set_failure(error);
+                log_duration(
+                    correlation_id,
+                    METRIC_DURATION_QUERY,
+                    "tracking_copy_root_not_found",
+                    start.elapsed(),
+                );
                 return grpc::SingleResponse::completed(result);
             }
             Ok(Some(tracking_copy)) => tracking_copy,
         };
+
         let key = match query_request.get_base_key().try_into() {
             Err(ParsingError(err_msg)) => {
                 logging::log_error(&err_msg);
                 let mut result = ipc::QueryResponse::new();
                 result.set_failure(err_msg);
+                log_duration(
+                    correlation_id,
+                    METRIC_DURATION_QUERY,
+                    "key_parsing_error",
+                    start.elapsed(),
+                );
                 return grpc::SingleResponse::completed(result);
             }
             Ok(key) => key,
         };
-        let response = match tracking_copy.query(key, path) {
+
+        let path = query_request.get_path();
+
+        let response = match tracking_copy.query(correlation_id, key, path) {
             Err(err) => {
                 let mut result = ipc::QueryResponse::new();
                 let error = format!("{:?}", err);
@@ -87,22 +125,38 @@ where
                 result
             }
         };
+
+        log_duration(
+            correlation_id,
+            METRIC_DURATION_QUERY,
+            TAG_RESPONSE_QUERY,
+            start.elapsed(),
+        );
+
         grpc::SingleResponse::completed(response)
     }
 
     fn exec(
         &self,
-        _o: ::grpc::RequestOptions,
-        p: ipc::ExecRequest,
+        _request_options: ::grpc::RequestOptions,
+        exec_request: ipc::ExecRequest,
     ) -> grpc::SingleResponse<ipc::ExecResponse> {
-        let executor = WasmiExecutor;
+        let start = Instant::now();
+        let correlation_id = CorrelationId::new();
+
+        let protocol_version = exec_request.get_protocol_version();
+
         // TODO: don't unwrap
-        let prestate_hash: Blake2bHash = p.get_parent_state_hash().try_into().unwrap();
-        let deploys = p.get_deploys();
-        let protocol_version = p.get_protocol_version();
+        let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
         // TODO: don't unwrap
         let wasm_costs = WasmCosts::from_version(protocol_version.version).unwrap();
+
+        let deploys = exec_request.get_deploys();
+
         let preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
+
+        let executor = WasmiExecutor;
+
         let deploys_result: Result<Vec<ipc::DeployResult>, ipc::RootNotFound> = run_deploys(
             &self,
             &executor,
@@ -110,77 +164,132 @@ where
             prestate_hash,
             deploys,
             protocol_version,
+            correlation_id,
         );
-        match deploys_result {
+
+        let exec_response = match deploys_result {
             Ok(deploy_results) => {
                 let mut exec_response = ipc::ExecResponse::new();
                 let mut exec_result = ipc::ExecResult::new();
                 exec_result.set_deploy_results(protobuf::RepeatedField::from_vec(deploy_results));
                 exec_response.set_success(exec_result);
-                grpc::SingleResponse::completed(exec_response)
+                exec_response
             }
             Err(error) => {
                 logging::log_error("deploy results error: RootNotFound");
                 let mut exec_response = ipc::ExecResponse::new();
                 exec_response.set_missing_parent(error);
-                grpc::SingleResponse::completed(exec_response)
+                exec_response
             }
-        }
+        };
+
+        log_duration(
+            correlation_id,
+            METRIC_DURATION_EXEC,
+            TAG_RESPONSE_EXEC,
+            start.elapsed(),
+        );
+
+        grpc::SingleResponse::completed(exec_response)
     }
 
     fn commit(
         &self,
-        _o: ::grpc::RequestOptions,
-        p: ipc::CommitRequest,
+        _request_options: ::grpc::RequestOptions,
+        commit_request: ipc::CommitRequest,
     ) -> grpc::SingleResponse<ipc::CommitResponse> {
+        let start = Instant::now();
+        let correlation_id = CorrelationId::new();
+
         // TODO: don't unwrap
-        let prestate_hash: Blake2bHash = p.get_prestate_hash().try_into().unwrap();
-        let effects_result: Result<CommitTransforms, ParsingError> = p.get_effects().try_into();
-        match effects_result {
+        let prestate_hash: Blake2bHash = commit_request.get_prestate_hash().try_into().unwrap();
+
+        let effects_result: Result<CommitTransforms, ParsingError> =
+            commit_request.get_effects().try_into();
+
+        let commit_response = match effects_result {
             Err(ParsingError(error_message)) => {
                 logging::log_error(&error_message);
-                let mut res = ipc::CommitResponse::new();
+                let mut commit_response = ipc::CommitResponse::new();
                 let mut err = ipc::PostEffectsError::new();
                 err.set_message(error_message);
-                res.set_failed_transform(err);
-                grpc::SingleResponse::completed(res)
+                commit_response.set_failed_transform(err);
+                commit_response
             }
-            Ok(effects) => {
-                let result = grpc_response_from_commit_result::<H>(
-                    prestate_hash,
-                    self.apply_effect(prestate_hash, effects.value()),
-                );
-                grpc::SingleResponse::completed(result)
-            }
-        }
+            Ok(effects) => grpc_response_from_commit_result::<H>(
+                prestate_hash,
+                self.apply_effect(correlation_id, prestate_hash, effects.value()),
+            ),
+        };
+
+        log_duration(
+            correlation_id,
+            METRIC_DURATION_COMMIT,
+            TAG_RESPONSE_COMMIT,
+            start.elapsed(),
+        );
+
+        grpc::SingleResponse::completed(commit_response)
     }
 
     fn validate(
         &self,
-        _o: ::grpc::RequestOptions,
-        p: ipc::ValidateRequest,
+        _request_options: ::grpc::RequestOptions,
+        validate_request: ipc::ValidateRequest,
     ) -> grpc::SingleResponse<ipc::ValidateResponse> {
-        let pay_mod =
-            wabt::Module::read_binary(p.payment_code, &wabt::ReadBinaryOptions::default())
-                .and_then(|x| x.validate());
-        let ses_mod =
-            wabt::Module::read_binary(p.session_code, &wabt::ReadBinaryOptions::default())
-                .and_then(|x| x.validate());
+        let start = Instant::now();
+        let correlation_id = CorrelationId::new();
 
-        match pay_mod.and(ses_mod) {
+        let pay_mod = wabt::Module::read_binary(
+            validate_request.payment_code,
+            &wabt::ReadBinaryOptions::default(),
+        )
+        .and_then(|x| x.validate());
+
+        log_duration(
+            correlation_id,
+            METRIC_DURATION_VALIDATE,
+            "pay_mod",
+            start.elapsed(),
+        );
+
+        let ses_mod = wabt::Module::read_binary(
+            validate_request.session_code,
+            &wabt::ReadBinaryOptions::default(),
+        )
+        .and_then(|x| x.validate());
+
+        log_duration(
+            correlation_id,
+            METRIC_DURATION_VALIDATE,
+            "ses_mod",
+            start.elapsed(),
+        );
+
+        let validate_result = match pay_mod.and(ses_mod) {
             Ok(_) => {
-                let mut result = ipc::ValidateResponse::new();
-                result.set_success(ipc::ValidateResponse_ValidateSuccess::new());
-                grpc::SingleResponse::completed(result)
+                let mut validate_result = ipc::ValidateResponse::new();
+                validate_result.set_success(ipc::ValidateResponse_ValidateSuccess::new());
+                validate_result
             }
             Err(cause) => {
                 let cause_msg = cause.to_string();
                 logging::log_error(&cause_msg);
-                let mut result = ipc::ValidateResponse::new();
-                result.set_failure(cause_msg);
-                grpc::SingleResponse::completed(result)
+
+                let mut validate_result = ipc::ValidateResponse::new();
+                validate_result.set_failure(cause_msg);
+                validate_result
             }
-        }
+        };
+
+        log_duration(
+            correlation_id,
+            METRIC_DURATION_VALIDATE,
+            TAG_RESPONSE_VALIDATE,
+            start.elapsed(),
+        );
+
+        grpc::SingleResponse::completed(validate_result)
     }
 }
 
@@ -191,6 +300,7 @@ fn run_deploys<A, H, E, P>(
     prestate_hash: Blake2bHash,
     deploys: &[ipc::Deploy],
     protocol_version: &ipc::ProtocolVersion,
+    correlation_id: CorrelationId,
 ) -> Result<Vec<ipc::DeployResult>, ipc::RootNotFound>
 where
     H: History,
@@ -220,6 +330,7 @@ where
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
+            let protocol_version = protocol_version.get_version();
             engine_state
                 .run_deploy(
                     module_bytes,
@@ -229,7 +340,8 @@ where
                     nonce,
                     prestate_hash,
                     gas_limit,
-                    protocol_version.get_version(),
+                    protocol_version,
+                    correlation_id,
                     executor,
                     preprocessor,
                 )

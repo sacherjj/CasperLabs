@@ -19,7 +19,7 @@ trait BlockStore[F[_]] {
       blockMsgWithTransform: BlockMsgWithTransform
   )(implicit applicative: Applicative[F]): F[Unit] =
     blockMsgWithTransform.blockMessage.fold(().pure[F])(
-      b => put((b.blockHash, blockMsgWithTransform))
+      b => put(b.blockHash, blockMsgWithTransform)
     )
 
   def put(
@@ -27,13 +27,13 @@ trait BlockStore[F[_]] {
       blockMessage: BlockMessage,
       transforms: Seq[TransformEntry]
   ): F[Unit] =
-    put((blockHash, BlockMsgWithTransform(Some(blockMessage), transforms)))
+    put(blockHash, BlockMsgWithTransform(Some(blockMessage), transforms))
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]]
 
   def findBlockHash(p: BlockHash => Boolean): F[Option[BlockHash]]
 
-  def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit]
+  def put(blockHash: BlockHash, blockMsgWithTransform: BlockMsgWithTransform): F[Unit]
 
   def apply(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[BlockMsgWithTransform] =
     get(blockHash).map(_.get)
@@ -46,6 +46,8 @@ trait BlockStore[F[_]] {
   def putApprovedBlock(block: ApprovedBlock): F[Unit]
 
   def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]]
+
+  def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]]
 
   def checkpoint(): F[Unit]
 
@@ -72,8 +74,11 @@ object BlockStore {
     abstract override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
       incAndMeasure("getBlockSummary", super.getBlockSummary(blockHash))
 
-    abstract override def put(f: => (BlockHash, BlockMsgWithTransform)): F[Unit] =
-      incAndMeasure("put", super.put(f))
+    abstract override def put(
+        blockHash: BlockHash,
+        blockMsgWithTransform: BlockMsgWithTransform
+    ): F[Unit] =
+      incAndMeasure("put", super.put(blockHash, blockMsgWithTransform))
 
     abstract override def checkpoint(): F[Unit] =
       super.checkpoint().timer("checkpoint-time")
@@ -97,6 +102,7 @@ object BlockStore {
   }
   def apply[F[_]](implicit ev: BlockStore[F]): BlockStore[F] = ev
 
-  type BlockHash = ByteString
+  type BlockHash  = ByteString
+  type DeployHash = ByteString
 
 }

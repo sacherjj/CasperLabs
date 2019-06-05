@@ -10,7 +10,7 @@ use std::rc::Rc;
 use parking_lot::Mutex;
 
 use common::key::Key;
-use shared::newtypes::Blake2bHash;
+use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::Transform;
 use storage::global_state::{CommitResult, History};
 use wasm_prep::Preprocessor;
@@ -47,8 +47,6 @@ where
         }
     }
 
-    // TODO run_deploy should perform preprocessing and validation of the deploy.
-    // It should validate the signatures, ocaps etc.
     #[allow(clippy::too_many_arguments)]
     pub fn run_deploy<A, P: Preprocessor<A>, E: Executor<A>>(
         &self,
@@ -60,22 +58,23 @@ where
         prestate_hash: Blake2bHash,
         gas_limit: u64,
         protocol_version: u64,
+        correlation_id: CorrelationId,
         executor: &E,
         preprocessor: &P,
     ) -> Result<ExecutionResult, RootNotFound> {
         let module = match preprocessor.preprocess(module_bytes) {
-            Err(error) => return Ok(ExecutionResult::failure(error.into(), 0)),
+            Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
             Ok(module) => module,
         };
         let checkout_result = match self.tracking_copy(prestate_hash) {
-            Err(error) => return Ok(ExecutionResult::failure(error, 0)),
+            Err(error) => return Ok(ExecutionResult::precondition_failure(error)),
             Ok(checkout_result) => checkout_result,
         };
         let tracking_copy = match checkout_result {
             None => return Err(RootNotFound(prestate_hash)),
             Some(mut tracking_copy) => Rc::new(RefCell::new(tracking_copy)),
         };
-        match executor.exec(
+        Ok(executor.exec(
             module,
             args,
             address,
@@ -83,18 +82,19 @@ where
             nonce,
             gas_limit,
             protocol_version,
+            correlation_id,
             tracking_copy,
-        ) {
-            (Ok(ee), cost) => Ok(ExecutionResult::success(ee, cost)),
-            (Err(error), cost) => Ok(ExecutionResult::failure(error.into(), cost)),
-        }
+        ))
     }
 
     pub fn apply_effect(
         &self,
+        correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, H::Error> {
-        self.state.lock().commit(prestate_hash, effects)
+        self.state
+            .lock()
+            .commit(correlation_id, prestate_hash, effects)
     }
 }

@@ -18,12 +18,12 @@ use wasmi::{
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::Value;
-use shared::newtypes::Validated;
+use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
 use storage::global_state::StateReader;
 
 use args::Args;
-use engine_state::execution_effect::ExecutionEffect;
+use engine_state::execution_result::ExecutionResult;
 use functions::{
     ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
     GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
@@ -45,7 +45,9 @@ pub enum Error {
     BytesRepr(BytesReprError),
     KeyNotFound(Key),
     TypeMismatch(TypeMismatch),
-    InvalidAccess { required: AccessRights },
+    InvalidAccess {
+        required: AccessRights,
+    },
     ForgedReference(Key),
     ArgIndexOutOfBounds(usize),
     URefNotFound(String),
@@ -55,6 +57,10 @@ pub enum Error {
     Ret(Vec<Key>),
     Rng(rand::Error),
     ResolverError(ResolverError),
+    InvalidNonce {
+        deploy_nonce: u64,
+        expected_nonce: u64,
+    },
 }
 
 impl fmt::Display for Error {
@@ -688,6 +694,7 @@ where
             current_runtime.context.fn_store_id(),
             rng,
             protocol_version,
+            current_runtime.context.correlation_id(),
         ),
     };
 
@@ -747,12 +754,38 @@ pub fn create_rng(account_addr: &[u8; 32], timestamp: u64, nonce: u64) -> ChaCha
 
 #[macro_export]
 macro_rules! on_fail_charge {
+    ($fn:expr) => {
+        match $fn {
+            Ok(res) => res,
+            Err(e) => {
+                let exec_err: ::execution::Error = e.into();
+                return ExecutionResult::precondition_failure(exec_err.into());
+            }
+        }
+    };
     ($fn:expr, $cost:expr) => {
         match $fn {
             Ok(res) => res,
-            Err(er) => {
-                let mut lambda = || $cost;
-                return (Err(er.into()), lambda());
+            Err(e) => {
+                let exec_err: ::execution::Error = e.into();
+                return ExecutionResult::Failure {
+                    error: exec_err.into(),
+                    effect: Default::default(),
+                    cost: $cost,
+                };
+            }
+        }
+    };
+    ($fn:expr, $cost:expr, $effect:expr) => {
+        match $fn {
+            Ok(res) => res,
+            Err(e) => {
+                let exec_err: ::execution::Error = e.into();
+                return ExecutionResult::Failure {
+                    error: exec_err.into(),
+                    effect: $effect,
+                    cost: $cost,
+                };
             }
         }
     };
@@ -769,8 +802,9 @@ pub trait Executor<A> {
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
+        correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
-    ) -> (Result<ExecutionEffect, Error>, u64)
+    ) -> ExecutionResult
     where
         R::Error: Into<Error>;
 }
@@ -787,26 +821,59 @@ impl Executor<Module> for WasmiExecutor {
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
+        correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
-    ) -> (Result<ExecutionEffect, Error>, u64)
+    ) -> ExecutionResult
     where
         R::Error: Into<Error>,
     {
-        let (instance, memory) = on_fail_charge!(
-            instance_and_memory(parity_module.clone(), protocol_version),
-            0
-        );
+        let (instance, memory) =
+            on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
         #[allow(unreachable_code)]
-        let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid), 0);
+        let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid));
         let value = on_fail_charge! {
-            match tc.borrow_mut().get(&validated_key) {
+            match tc.borrow_mut().get(correlation_id, &validated_key) {
                 Ok(None) => Err(Error::KeyNotFound(acct_key)),
                 Err(error) => Err(error.into()),
                 Ok(Some(value)) => Ok(value)
-            },
-            0
+            }
         };
-        let account = value.as_account();
+
+        let account = match value {
+            Value::Account(a) => a,
+            other => {
+                return ExecutionResult::precondition_failure(
+                    ::engine_state::error::Error::ExecError(Error::TypeMismatch(
+                        TypeMismatch::new("Account".to_string(), other.type_string()),
+                    )),
+                )
+            }
+        };
+
+        // Check the difference of a request nonce and account nonce.
+        // Since both nonce and account's nonce are unsigned, so line below performs
+        // a checked subtraction, where underflow (or overflow) would be safe.
+        let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
+        // Difference should always be 1 greater than current nonce for a
+        // given account.
+        if delta != 1 {
+            return ExecutionResult::precondition_failure(
+                Error::InvalidNonce {
+                    deploy_nonce: nonce,
+                    expected_nonce: account.nonce() + 1,
+                }
+                .into(),
+            );
+        }
+
+        let mut updated_account = account.clone();
+        updated_account.increment_nonce();
+        // Store updated account with new nonce
+        tc.borrow_mut().write(
+            validated_key,
+            Validated::new(updated_account.into(), Validated::valid).unwrap(),
+        );
+
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
@@ -814,13 +881,19 @@ impl Executor<Module> for WasmiExecutor {
         let rng = create_rng(&account_bytes, timestamp, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
+
+        // Snapshot of effects before execution, so in case of error
+        // only nonce update can be returned.
+        let effects_snapshot = tc.borrow().effect();
+
         let arguments: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
         } else {
             // TODO: figure out how this works with the cost model
             // https://casperlabs.atlassian.net/browse/EE-239
-            on_fail_charge!(deserialize(args), 0)
+            on_fail_charge!(deserialize(args), args.len() as u64, effects_snapshot)
         };
+
         let context = RuntimeContext::new(
             tc,
             &mut uref_lookup_local,
@@ -833,14 +906,20 @@ impl Executor<Module> for WasmiExecutor {
             fn_store_id,
             rng,
             protocol_version,
+            correlation_id,
         );
+
         let mut runtime = Runtime::new(memory, parity_module, context);
         on_fail_charge!(
             instance.invoke_export("call", &[], &mut runtime),
-            runtime.context.gas_counter()
+            runtime.context.gas_counter(),
+            effects_snapshot
         );
 
-        (Ok(runtime.context.effect()), runtime.context.gas_counter())
+        ExecutionResult::Success {
+            effect: runtime.context.effect(),
+            cost: runtime.context.gas_counter(),
+        }
     }
 }
 
@@ -857,52 +936,155 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
 }
 
 #[cfg(test)]
-mod on_fail_charge_macro_tests {
-    struct Counter {
-        pub counter: u32,
-    }
+mod tests {
+    use super::Error;
+    use common::key::Key;
+    use common::value::account::{AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight};
+    use common::value::{Account, Value};
+    use engine_state::execution_effect::ExecutionEffect;
+    use engine_state::execution_result::ExecutionResult;
+    use execution::{Executor, WasmiExecutor};
+    use parity_wasm::builder::ModuleBuilder;
+    use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
+    use shared::newtypes::CorrelationId;
+    use std::cell::RefCell;
+    use std::collections::btree_map::BTreeMap;
+    use std::collections::HashMap;
+    use std::rc::Rc;
+    use storage::global_state::StateReader;
+    use tracking_copy::TrackingCopy;
 
-    impl Counter {
-        fn count(&mut self, count: u32) -> u32 {
-            self.counter += count;
-            count
+    fn on_fail_charge_test_helper<T>(
+        f: impl Fn() -> Result<T, Error>,
+        success_cost: u64,
+        error_cost: u64,
+    ) -> ExecutionResult {
+        let _result = on_fail_charge!(f(), error_cost);
+        ExecutionResult::Success {
+            effect: Default::default(),
+            cost: success_cost,
+        }
+    }
+    #[test]
+    fn on_fail_charge_ok_test() {
+        match on_fail_charge_test_helper(|| Ok(()), 123, 456) {
+            ExecutionResult::Success { cost, .. } => assert_eq!(cost, 123),
+            ExecutionResult::Failure { .. } => panic!("Should be success"),
+        }
+    }
+    #[test]
+    fn on_fail_charge_err_laziness_test() {
+        match on_fail_charge_test_helper(|| Err(Error::GasLimit) as Result<(), _>, 123, 456) {
+            ExecutionResult::Success { .. } => panic!("Should fail"),
+            ExecutionResult::Failure { cost, .. } => assert_eq!(cost, 456),
+        }
+    }
+    #[test]
+    fn on_fail_charge_with_action() {
+        use common::key::Key;
+        use engine_state::execution_effect::ExecutionEffect;
+        use engine_state::op::Op;
+        use shared::transform::Transform;
+        let f = || {
+            let input: Result<(), Error> = Err(Error::GasLimit);
+            on_fail_charge!(input, 456, {
+                let mut effect = ExecutionEffect::default();
+
+                effect.0.insert(Key::Hash([42u8; 32]), Op::Read);
+                effect.1.insert(Key::Hash([42u8; 32]), Transform::Identity);
+
+                effect
+            });
+            ExecutionResult::Success {
+                effect: Default::default(),
+                cost: 0,
+            }
+        };
+        match f() {
+            ExecutionResult::Success { .. } => panic!("Should fail"),
+            ExecutionResult::Failure { cost, effect, .. } => {
+                assert_eq!(cost, 456);
+                // Check if the containers are non-empty
+                assert_eq!(effect.0.len(), 1);
+                assert_eq!(effect.1.len(), 1);
+            }
         }
     }
 
-    fn on_fail_charge_test_helper(
-        counter: &mut Counter,
-        inc_value: u32,
-        input: Result<u32, String>,
-        fallback_value: u32,
-    ) -> (Result<u32, String>, u32) {
-        let res: u32 = on_fail_charge!(input, counter.count(inc_value));
-        (Ok(res), fallback_value)
-    }
-
     #[test]
-    fn on_fail_charge_ok_test() {
-        let mut cntr = Counter { counter: 0 };
-        let fallback_value = 9999;
-        let inc_value = 10;
-        let ok_value = Ok(13);
-        let res: (Result<u32, String>, u32) =
-            on_fail_charge_test_helper(&mut cntr, inc_value, ok_value.clone(), fallback_value);
-        assert_eq!(res.0, ok_value);
-        assert_eq!(res.1, fallback_value);
-        assert_eq!(cntr.counter, 0); // test that lambda was NOT executed for the Ok-case
-    }
+    fn invalid_nonce_no_cost_effect() {
+        let init_nonce = 1u64;
+        let invalid_nonce = init_nonce + 2;
+        struct DummyReader;
+        impl StateReader<Key, Value> for DummyReader {
+            type Error = ::storage::error::Error;
 
-    #[test]
-    fn on_fail_charge_err_laziness_test() {
-        let mut cntr = Counter { counter: 1 };
-        let fallback_value = 9999;
-        let inc_value = 10;
-        let expected_value = cntr.counter + inc_value;
-        let err = Err("BOOM".to_owned());
-        let res: (Result<u32, String>, u32) =
-            on_fail_charge_test_helper(&mut cntr, inc_value, err.clone(), fallback_value);
-        assert_eq!(res.0, err);
-        assert_eq!(res.1, inc_value);
-        assert_eq!(cntr.counter, expected_value) // test that lambda executed
+            fn read(
+                &self,
+                _correlation_id: CorrelationId,
+                key: &Key,
+            ) -> Result<Option<Value>, Self::Error> {
+                let pub_key: [u8; 32] = match key {
+                    Key::Account(pub_key) => *pub_key,
+                    _ => panic!("Key must be of an Account type"),
+                };
+                let acc = Account::new(
+                    pub_key,
+                    1,
+                    BTreeMap::new(),
+                    AssociatedKeys::new(PublicKey::new(pub_key), Weight::new(1)),
+                    Default::default(),
+                    AccountActivity::new(BlockTime(0), BlockTime(0)),
+                );
+                Ok(Some(Value::Account(acc)))
+            }
+        }
+
+        let executor = WasmiExecutor;
+        let account_address = [0u8; 32];
+        let parity_module: Module = ModuleBuilder::new()
+            .with_import(ImportEntry::new(
+                "env".to_string(),
+                "memory".to_string(),
+                External::Memory(MemoryType::new(16, Some(::wasm_prep::MEM_PAGES))),
+            ))
+            .build();
+
+        let tc: Rc<RefCell<TrackingCopy<DummyReader>>> =
+            Rc::new(RefCell::new(TrackingCopy::new(DummyReader)));
+
+        let exec_result = executor.exec(
+            parity_module,
+            &[],
+            account_address,
+            0u64,
+            invalid_nonce,
+            100u64,
+            1u64,
+            CorrelationId::new(),
+            tc,
+        );
+
+        match exec_result {
+            ExecutionResult::Success { .. } => panic!("Expected ExecutionResult::Failure."),
+            ExecutionResult::Failure {
+                error,
+                effect,
+                cost,
+            } => {
+                assert_eq!(effect, ExecutionEffect(HashMap::new(), HashMap::new()));
+                assert_eq!(cost, 0);
+                if let ::engine_state::error::Error::ExecError(Error::InvalidNonce {
+                    deploy_nonce,
+                    expected_nonce,
+                }) = error
+                {
+                    assert_eq!(deploy_nonce, invalid_nonce);
+                    assert_eq!(expected_nonce, init_nonce + 1);
+                } else {
+                    panic!("Expected InvalidNonce error got: {:?}", error);
+                }
+            }
+        }
     }
 }
