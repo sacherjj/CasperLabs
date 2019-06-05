@@ -888,7 +888,7 @@ class ValidateTest
                               deploys,
                               ProtocolVersion(1)
                             )
-        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _, _) = deploysCheckpoint
+        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _, _, _) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq.empty,
                   deploys = processedDeploys,

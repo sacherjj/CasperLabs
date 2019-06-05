@@ -24,6 +24,7 @@ case class DeploysCheckpoint(
     postStateHash: StateHash,
     deploysForBlock: Seq[Block.ProcessedDeploy],
     invalidNonceDeploys: Seq[InvalidNonceDeploy],
+    deploysToDiscard: Seq[PreconditionFailure],
     blockNumber: Long,
     protocolVersion: ProtocolVersion
 )
@@ -43,19 +44,20 @@ object ExecEngineUtil {
                            deploys,
                            protocolVersion
                          )
-      processedDeployResults = zipDeploysResults(deploys, processedDeploys)
-      invalidNonceDeploys <- processedDeployResults.toList.flatTraverse[F, InvalidNonceDeploy] {
-                              case d: InvalidNonceDeploy => List(d).pure[F]
-                              case PreconditionFailure(deploy, errorMessage) => {
-                                // Log precondition failures as we will be getting rid of them.
-                                Log[F].warn(
-                                  s"Deploy ${PrettyPrinter.buildString(deploy.deployHash)} failed precondition error: $errorMessage"
-                                ) *> List.empty[InvalidNonceDeploy].pure[F]
-                              }
-                              case _ =>
-                                // We are collecting only InvalidNonceDeploy deploys
-                                List.empty[InvalidNonceDeploy].pure[F]
-                            }
+      processedDeployResults = zipDeploysResults(deploys, processedDeploys).toList
+      invalidNonceDeploys = processedDeployResults.collect {
+        case d: InvalidNonceDeploy => d
+      }
+      deploysToDiscard = processedDeployResults.collect {
+        case d: PreconditionFailure => d
+      }
+      _ <- deploysToDiscard.traverse {
+            case PreconditionFailure(deploy, errorMessage) =>
+              // Log precondition failures as we will be getting rid of them.
+              Log[F].warn(
+                s"Deploy ${PrettyPrinter.buildString(deploy.deployHash)} failed precondition error: $errorMessage"
+              )
+          }
       deployEffects                 = findCommutingEffects(processedDeployResults)
       (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
       postStateHash                 <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
@@ -79,6 +81,7 @@ object ExecEngineUtil {
         postStateHash,
         deploysForBlock,
         invalidNonceDeploys,
+        deploysToDiscard,
         number,
         protocolVersion
       )

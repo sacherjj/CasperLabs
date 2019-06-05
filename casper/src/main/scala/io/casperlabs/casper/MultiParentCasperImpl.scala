@@ -350,10 +350,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
           case (_, deploys) => deploys.minBy(_.getHeader.nonce)
         }
         .toSeq
-
-      // _ = println(s"ORPHANED: ${orphaned.map(d => PrettyPrinter.buildString(d.deployHash))}")
-      // _ = println(s"CANDIDATES: ${candidates.map(d => PrettyPrinter.buildString(d.deployHash))}")
-      // _ = println(s"REMAINING: ${remaining.map(d => PrettyPrinter.buildString(d.deployHash))}")
     } yield remaining
 
   //TODO: Need to specify SEQ vs PAR type block?
@@ -382,11 +378,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
             // the finalized block. If that strategy ever changes, we will have to
             // put them back into the buffer explicitly.
             invalidNonceDeploys,
-            // TODO: Remove deploys with PrecondidtionFailed from the buffer.-
+            deploysToDiscard,
             number,
             protocolVersion
             ) =>
-          if (deploysForBlock.isEmpty) {
+          val status = if (deploysForBlock.isEmpty) {
             CreateBlockStatus.noNewDeploys.pure[F]
           } else {
             Time[F].currentMillis map { now =>
@@ -417,6 +413,23 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
               CreateBlockStatus.created(block)
             }
           }
+
+          // Discard deploys that will never be included because they failed some precondition.
+          // If we traveled back on the DAG (due to orphaned block) and picked a deploy to be included
+          // in the past of the new fork, it wouldn't hit this as the nonce would be what we expect.
+          // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
+          // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
+          // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
+          val discardDeploys = Cell[F, CasperState]
+            .modify { s =>
+              s.copy(
+                deployBuffer =
+                  s.deployBuffer.remove(deploysToDiscard.map(_.deploy.deployHash).toSet)
+              )
+            }
+            .whenA(deploysToDiscard.nonEmpty)
+
+          status <* discardDeploys
       }
       .handleErrorWith {
         case ex @ SmartContractEngineError(error_msg) =>

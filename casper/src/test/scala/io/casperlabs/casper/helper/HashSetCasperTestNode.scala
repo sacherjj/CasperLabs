@@ -280,17 +280,17 @@ object HashSetCasperTestNode {
 
       // Validate that account's nonces increment monotonically by 1.
       // Assumes that any account address already exists in the GlobalState with nonce = 0.
-      private def validateNonce(prestate: ByteString, deploy: Deploy): Boolean = synchronized {
+      private def validateNonce(prestate: ByteString, deploy: Deploy): Int = synchronized {
         if (!validateNonces) {
-          true
+          0
         } else {
           val deployAccount = deploy.address
           val deployNonce   = deploy.nonce
           val oldNonce      = accountNonceTracker(deployAccount)
-          if (deployNonce == oldNonce + 1) {
-            accountNonceTracker(deployAccount) = deployNonce
-            true
-          } else false
+          val expected      = oldNonce + 1
+          val sign          = math.signum(deployNonce - expected)
+          if (sign == 0) accountNonceTracker(deployAccount) = deployNonce
+          sign.toInt
         }
       }
 
@@ -305,18 +305,24 @@ object HashSetCasperTestNode {
         //regardless of their wasm code. It pretends to have run all the deploys,
         //but it doesn't really; it just returns the same result no matter what.
         deploys
-          .map(
-            d =>
-              if (validateNonce(prestate, d)) {
+          .map { d =>
+            validateNonce(prestate, d) match {
+              case 0 =>
                 DeployResult(
                   ExecutionResult(
                     ipc.DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
                   )
                 )
-              } else {
+              case 1 =>
                 DeployResult(DeployResult.Value.InvalidNonce(DeployResult.InvalidNonce(d.nonce)))
-              }
-          )
+              case -1 =>
+                DeployResult(
+                  DeployResult.Value.PreconditionFailure(
+                    DeployResult.PreconditionFailure("Nonce was less then expected.")
+                  )
+                )
+            }
+          }
           .asRight[Throwable]
           .pure[F]
 

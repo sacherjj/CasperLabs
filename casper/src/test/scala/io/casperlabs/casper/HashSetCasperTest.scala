@@ -1193,7 +1193,29 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     }
   }
 
-  it should "remove deploys with lower than expected nonces from the buffer" in (pending)
+  it should "remove deploys with lower than expected nonces from the buffer" in effectTest {
+    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+
+    for {
+      deploy1           <- ProtoUtil.basicDeploy[Effect](1)
+      _                 <- node.casperEff.deploy(deploy1)
+      createBlockResult <- node.casperEff.createBlock
+      Created(block)    = createBlockResult
+      _                 <- node.casperEff.addBlock(block)
+
+      // Add a deploy that is not in the future but in the past.
+      deploy0     <- ProtoUtil.basicDeploy[Effect](0)
+      _           <- node.casperEff.deploy(deploy0)
+      stateBefore <- node.casperState.read
+      _           = stateBefore.deployBuffer.contains(deploy0) shouldBe true
+      _           = println(s"BEFORE: ${stateBefore.deployBuffer}")
+      _           <- node.casperEff.createBlock shouldBeF NoNewDeploys
+      stateAfter  <- node.casperState.read
+      _           = println(s"AFTER: ${stateAfter.deployBuffer}")
+      _           = stateAfter.deployBuffer.contains(deploy0) shouldBe false
+
+    } yield ()
+  }
 
   it should "return NoNewDeploys status if there are no deploys to put into the block after executing contracts" in effectTest {
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
