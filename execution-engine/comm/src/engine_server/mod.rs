@@ -323,7 +323,7 @@ where
             let address = match Key::account_from_slice(&deploy.address) {
                 Some(key) => key,
                 None => {
-                    let err = ExecutionResult::failure(EngineError::InvalidAddress, 0);
+                    let err = ExecutionResult::precondition_failure(EngineError::InvalidAddress);
                     return Ok(err.into());
                 }
             };

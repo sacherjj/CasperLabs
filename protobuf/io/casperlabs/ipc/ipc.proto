@@ -262,13 +262,9 @@ message DeployError {
         string message = 1;
     }
 
-    // Error before contract execution.
-    message PreprocessingError {}
-
     oneof value {
         OutOfGasError gas_error = 1;
         ExecutionError exec_error = 2;
-        PreprocessingError preprocessing_error = 3;
     }
 }
 
