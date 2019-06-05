@@ -155,35 +155,6 @@ class ExecEngineUtilTest
         } yield batchResult should contain theSameElementsAs singleResults
   }
 
-  // TODO: Bring back this test once node is more clever about what deploys it chooses for the block.
-  // Node should choose single deploy per source account, one with the lowest nonce.
-  ignore should "keep track of different deploys with identical effects (NODE-376)" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
-        // Create multiple identical deploys.
-        val startTime = System.currentTimeMillis
-        val deploys = List.range(0, 10).map { i =>
-          ProtoUtil.basicDeploy(
-            startTime + i,
-            ByteString.copyFromUtf8("Doesn't matter what this is."),
-            i + 1
-          )
-        }
-        for {
-          dag <- blockDagStorage.getRepresentation
-          checkpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
-                         merged = ExecEngineUtil.MergeResult.empty,
-                         deploys = deploys,
-                         ProtocolVersion(1)
-                       )
-        } yield {
-          val invalidNonceDeploys = checkpoint.invalidNonceDeploys
-          invalidNonceDeploys should contain theSameElementsAs (deploys.tail)
-          val processedDeploys = checkpoint.deploysForBlock.map(_.getDeploy)
-          processedDeploys should contain(deploys.head)
-      }
-  }
-
   "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val failedExecEEService: ExecutionEngineService[Task] =
