@@ -85,7 +85,7 @@ const LOCAL_SIZE: usize = KEY_ID_SIZE + U32_SIZE + LOCAL_SEED_SIZE + U32_SIZE + 
 
 impl ToBytes for AccessRights {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        Ok(vec![self.bits])
+        self.bits.to_bytes()
     }
 }
 
