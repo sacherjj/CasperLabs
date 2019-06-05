@@ -3,18 +3,18 @@
 #NOTE: Leaving these here to try again eventually. The Yaml library drone 1.1.0
 # uses has a bug with how it handles these anchors. Workaround is to be more
 # verbose in the steps.
-
-__buildenv:
-  image: "casperlabs/buildenv:latest"
-
-__sbtenv:
-  environment:
-    - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
-  image: "casperlabs/buildenv:latest"
-  volumes:
-    - "/var/cache/cl-build/.sbt:/root/.sbt"
-    - "/var/cache/cl-build/.ivy2:/root/.ivy2"
-
+#
+#__buildenv:
+#  image: "casperlabs/buildenv:latest"
+#
+#__sbtenv:
+#  environment:
+#    - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+#  image: "casperlabs/buildenv:latest"
+#  volumes:
+#    - "/var/cache/cl-build/.sbt:/root/.sbt"
+#    - "/var/cache/cl-build/.ivy2:/root/.ivy2"
+#
 branches:
   - dev
   - master
@@ -44,20 +44,27 @@ clone:
 # exactly the same.
 pipeline:
 
-  sbt-compile-test:
+# Below is for pull_request webhooks only
+  sbt-compile-test-pr:
     commands:
       - "sbt test"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
 
-  git-status-post-scala-compile:
+  git-status-post-scala-compile-pr:
     commands: |
       STATUS_CHECK=$(git status)
       if echo $STATUS_CHECK | grep -q "modified" ; then echo "$STATUS_CHECK"; exit 1; fi
     image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
 
-  rust-compile-test:
+  rust-compile-test-pr:
     commands:
       - "cd execution-engine/"
       - "~/.cargo/bin/cargo update"
@@ -67,26 +74,94 @@ pipeline:
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
 
-  run-cargo-fmt:
+  run-cargo-fmt-pr:
     commands:
       - "cd execution-engine"
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
       - "~/.cargo/bin/cargo fmt --all -- --check"
     image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
 
-  run-rust-lints:
+  run-rust-lints-pr:
     commands:
       - "cd execution-engine"
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
       - "~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints"
     image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
 
-# This section of the Pipeline is variable and not always run in all situations.
+# This section is for bors' branches only
+  sbt-compile-test-bors:
+    commands:
+      - "sbt test"
+    environment:
+      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+    image: "casperlabs/buildenv:latest"
+    when:
+      branch:
+        - staging
+        - trying
 
-  try-cargo-publish:
+  git-status-post-scala-compile-bors:
+    commands: |
+      STATUS_CHECK=$(git status)
+      if echo $STATUS_CHECK | grep -q "modified" ; then echo "$STATUS_CHECK"; exit 1; fi
+    image: "casperlabs/buildenv:latest"
+    when:
+      branch:
+        - staging
+        - trying
+
+  rust-compile-test-bors:
+    commands:
+      - "cd execution-engine/"
+      - "~/.cargo/bin/cargo update"
+      - "~/.cargo/bin/cargo build"
+      - "~/.cargo/bin/cargo test"
+    image: "casperlabs/buildenv:latest"
+    environment:
+      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+    image: "casperlabs/buildenv:latest"
+    when:
+      branch:
+        - staging
+        - trying
+
+  run-cargo-fmt-bors:
+    commands:
+      - "cd execution-engine"
+      - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
+      - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) rustfmt"
+      - "~/.cargo/bin/cargo fmt --all -- --check"
+    image: "casperlabs/buildenv:latest"
+    when:
+      branch:
+        - staging
+        - trying
+
+  run-rust-lints-bors:
+    commands:
+      - "cd execution-engine"
+      - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
+      - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
+      - "~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints"
+    image: "casperlabs/buildenv:latest"
+    when:
+      branch:
+        - staging
+        - trying
+
+  try-cargo-publish-bors:
     commands:
       - "cd execution-engine/common"
       - "~/.cargo/bin/cargo publish --dry-run"
@@ -96,7 +171,7 @@ pipeline:
         - staging
         - trying
 
-  run-rust-benchmarks:
+  run-rust-benchmarks-bors:
     commands:
       - "cd execution-engine/"
       - "~/.cargo/bin/cargo bench"
@@ -122,26 +197,6 @@ pipeline:
         - staging
         - trying
 
-  docker-build-artifacts-merge:
-    commands:
-      - "sbt node/docker:publishLocal client/docker:publishLocal"
-      - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-      - "make docker-build/execution-engine"
-      - "make docker-build/integration-testing"
-    environment:
-      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
-    image: "casperlabs/buildenv:latest"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    when:
-      branch:
-        - dev
-        - release-*
-        - master
-      event:
-        - push
-        - tag
-
   run-integration-tests:
     commands:
       - "apt-get update && apt-get -y install gcc"
@@ -158,6 +213,26 @@ pipeline:
       branch:
         - staging
         - trying
+
+# The below section is for post-bors push webhooks
+  docker-build-artifacts-merge:
+    commands:
+      - "sbt node/docker:publishLocal client/docker:publishLocal"
+      - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+      - "make docker-build/execution-engine"
+    environment:
+      - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+    image: "casperlabs/buildenv:latest"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    when:
+      branch:
+        - dev
+        - release-*
+        - master
+      event:
+        - push
+        - tag
 
   package-sbt-artifacts:
     commands:
