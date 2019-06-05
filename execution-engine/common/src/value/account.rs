@@ -277,6 +277,12 @@ impl Account {
     pub fn nonce(&self) -> u64 {
         self.nonce
     }
+
+    /// Consumes instance of account and returns new one
+    /// with old contents but with nonce increased by 1.
+    pub fn increment_nonce(&mut self) {
+        self.nonce += 1;
+    }
 }
 
 impl ToBytes for Weight {
@@ -471,8 +477,25 @@ impl FromBytes for Account {
 #[cfg(test)]
 mod tests {
     use crate::value::account::{
-        AddKeyFailure, AssociatedKeys, PublicKey, Weight, KEY_SIZE, MAX_KEYS,
+        Account, AccountActivity, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, Weight,
+        KEY_SIZE, MAX_KEYS,
     };
+    use alloc::collections::btree_map::BTreeMap;
+
+    #[test]
+    fn incremented_nonce() {
+        let mut account = Account::new(
+            [0u8; 32],
+            0,
+            BTreeMap::new(),
+            AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1)),
+            Default::default(),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+        assert_eq!(account.nonce(), 0);
+        account.increment_nonce();
+        assert_eq!(account.nonce(), 1);
+    }
 
     #[test]
     fn associated_keys_add() {

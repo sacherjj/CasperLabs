@@ -253,24 +253,49 @@ message ExecutionEffect {
     repeated TransformEntry transform_map = 2;
 }
 
-//TODO: be more specific about errors
 message DeployError {
-    oneof deploy_errors {
-        OutOfGasError gasErr = 1;
-        WasmError wasmErr = 2;
+    // Run out of gas during contract execution.
+    message OutOfGasError {}
+
+    // Error during contract execution.
+    message ExecutionError {
+        string message = 1;
     }
-}
-message OutOfGasError {}
-message WasmError {
-    string message = 1;
+
+    oneof value {
+        OutOfGasError gas_error = 1;
+        ExecutionError exec_error = 2;
+    }
 }
 
 message DeployResult {
-    oneof result {
+    // Invalid nonce is not an error, it's also not a successful execution.
+    // Deploys with invalid nonce are returned to the deploy buffer.
+    message InvalidNonce {
+        uint64 deploy_nonce = 1;
+        uint64 expected_nonce = 2;
+    }
+
+    // Deploys that failed because of precondition failure that we can't charge for
+    // (invalid key format, invalid key address, invalid Wasm deploys).
+    message PreconditionFailure {
+        string message = 1;
+    }
+
+    // Execution result has effects and/or errors.
+    // Failed execution mutates the GlobalState by increasing the nonce and paying for the deploy.
+    message ExecutionResult {
         ExecutionEffect effects = 1;
         DeployError error = 2;
+        uint64 cost = 3;
     }
-    uint64 cost = 3;
+
+    oneof value {
+        InvalidNonce invalid_nonce = 1;
+        PreconditionFailure precondition_failure = 2;
+        ExecutionResult execution_result = 3;
+    }
+
 }
 
 //TODO: be more specific about errors
