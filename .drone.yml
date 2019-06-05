@@ -47,7 +47,7 @@ pipeline:
 # Below is for pull_request webhooks only
   sbt-compile-test-pr:
     commands:
-      - "sbt test"
+      - "sbt coverage test coverageReport"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
@@ -92,6 +92,15 @@ pipeline:
       - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
       - "~/.cargo/bin/rustup component add --toolchain=$(cat rust-toolchain) clippy"
       - "~/.cargo/bin/cargo clippy --all-targets --all -- -D warnings -A renamed_and_removed_lints"
+    image: "casperlabs/buildenv:latest"
+    when:
+      event:
+        - pull_request
+
+  push-codecov-pr:
+    secrets: [ codecov_token ]
+    commands:
+      - "codecov -t $CODECOV_TOKEN"
     image: "casperlabs/buildenv:latest"
     when:
       event:
