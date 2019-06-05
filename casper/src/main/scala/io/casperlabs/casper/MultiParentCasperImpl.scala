@@ -42,7 +42,7 @@ import scala.util.control.NonFatal
   */
 final case class CasperState(
     blockBuffer: Set[Block] = Set.empty[Block],
-    deployBuffer: Set[Deploy] = Set.empty[Deploy],
+    deployBuffer: DeployBuffer = DeployBuffer.empty,
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
@@ -182,11 +182,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   private def removeDeploysInBlock(blockHash: BlockHash): F[Int] =
     for {
       block              <- ProtoUtil.unsafeGetBlock[F](blockHash)
-      deploysToRemove    = block.body.get.deploys.map(_.deploy.get).toSet
+      deploysToRemove    = block.body.get.deploys.map(_.deploy.get.deployHash).toSet
       stateBefore        <- Cell[F, CasperState].read
       initialHistorySize = stateBefore.deployBuffer.size
       _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployBuffer = s.deployBuffer.filterNot(deploysToRemove))
+            s.copy(deployBuffer = s.deployBuffer.remove(deploysToRemove))
           }
       stateAfter     <- Cell[F, CasperState].read
       deploysRemoved = initialHistorySize - stateAfter.deployBuffer.size
@@ -221,7 +221,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
         BlockStore[F].contains(block.blockHash)
       )
 
-  override def bufferedDeploys: F[Set[Deploy]] =
+  override def bufferedDeploys: F[DeployBuffer] =
     Cell[F, CasperState].read.map(_.deployBuffer)
 
   /** Add a deploy to the buffer, if the code passes basic validation. */
@@ -248,7 +248,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   /** Add a deploy to the buffer, to be executed later. */
   private def addDeploy(deploy: Deploy): F[Unit] =
     Cell[F, CasperState].modify { s =>
-      s.copy(deployBuffer = s.deployBuffer + deploy)
+      s.copy(deployBuffer = s.deployBuffer.add(deploy))
     } *> Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
 
   /** Return the list of tips. */
@@ -323,7 +323,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       Block                  <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
     } yield Block
 
-  // TODO: Optimize for large number of deploys accumulated over history
   /** Get the deploys that are not present in the past of the chosen parents. */
   private def remainingDeploys(
       dag: BlockDagRepresentation[F],
@@ -331,16 +330,18 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   ): F[Seq[Deploy]] =
     for {
       state <- Cell[F, CasperState].read
-      hist  = state.deployBuffer
-      unprocessed <- DagOperations
-                      .bfTraverseF[F, Block](parents.toList)(ProtoUtil.unsafeGetParents[F])
-                      .foldWhileLeft(state.deployBuffer) {
-                        case (deployPool, block) =>
-                          val processedDeploys = block.getBody.deploys.flatMap(_.deploy)
-                          val remDeploys       = deployPool -- processedDeploys
-                          if (remDeploys.nonEmpty) Left(remDeploys) else Right(Set.empty)
-                      }
-    } yield unprocessed.toSeq
+      orphaned <- DagOperations
+                   .bfTraverseF[F, Block](parents.toList)(ProtoUtil.unsafeGetParents[F])
+                   .foldWhileLeft(state.deployBuffer.processedDeploys.values.toSet) {
+                     case (prevProcessedDeploys, block) =>
+                       val processedDeploys = block.getBody.deploys.flatMap(_.deploy)
+                       val remDeploys       = prevProcessedDeploys -- processedDeploys
+                       if (remDeploys.nonEmpty) Left(remDeploys) else Right(Set.empty)
+                   }
+      // New deploys are most likely not in the past, or we'd have to go back indefinitely to
+      // prove they aren't. The EE will ignore them if the nonce is less then the expected,
+      // so it should be fine to include and see what happens.
+    } yield orphaned.toSeq ++ state.deployBuffer.newDeploys.values
 
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
@@ -368,39 +369,49 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
             // the finalized block. If that strategy ever changes, we will have to
             // put them back into the buffer explicitly.
             invalidNonceDeploys,
+            // TODO: Remove deploys with PrecondidtionFailed from the buffer.-
             number,
             protocolVersion
             ) =>
           if (deploysForBlock.isEmpty) {
             CreateBlockStatus.noNewDeploys.pure[F]
           } else {
-            Time[F].currentMillis.map { now =>
-              val newBonds = ProtoUtil.bonds(parents.head)
+            for {
+              now <- Time[F].currentMillis
+              created = {
+                val newBonds = ProtoUtil.bonds(parents.head)
 
-              val postState = Block
-                .GlobalState()
-                .withPreStateHash(preStateHash)
-                .withPostStateHash(postStateHash)
-                .withBonds(newBonds)
+                val postState = Block
+                  .GlobalState()
+                  .withPreStateHash(preStateHash)
+                  .withPostStateHash(postStateHash)
+                  .withBonds(newBonds)
 
-              val body = Block
-                .Body()
-                .withDeploys(deploysForBlock)
+                val body = Block
+                  .Body()
+                  .withDeploys(deploysForBlock)
 
-              val header = blockHeader(
-                body,
-                parentHashes = parents.map(_.blockHash),
-                justifications = justifications,
-                state = postState,
-                rank = number,
-                protocolVersion = protocolVersion.version,
-                timestamp = now,
-                chainId = chainId
-              )
-              val block = unsignedBlockProto(body, header)
+                val header = blockHeader(
+                  body,
+                  parentHashes = parents.map(_.blockHash),
+                  justifications = justifications,
+                  state = postState,
+                  rank = number,
+                  protocolVersion = protocolVersion.version,
+                  timestamp = now,
+                  chainId = chainId
+                )
+                val block = unsignedBlockProto(body, header)
 
-              CreateBlockStatus.created(block)
-            }
+                CreateBlockStatus.created(block)
+              }
+              _ <- Cell[F, CasperState].modify { s =>
+                    // Mark processed deploys, but leave the ones with invalid nonce so the
+                    // AutoProposer still considers them for its next round.
+                    val deployHashesInBlock = deploysForBlock.map(_.getDeploy.deployHash).toSet
+                    s.copy(deployBuffer = s.deployBuffer.processed(deployHashesInBlock))
+                  }
+            } yield created
           }
       }
       .handleErrorWith {
@@ -737,7 +748,6 @@ object MultiParentCasperImpl {
       for {
         _          <- BlockStore[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
         updatedDag <- BlockDagStorage[F].insert(block)
-        hash       = block.blockHash
       } yield updatedDag
 
     /** Check if the block has dependencies that we don't have in store.

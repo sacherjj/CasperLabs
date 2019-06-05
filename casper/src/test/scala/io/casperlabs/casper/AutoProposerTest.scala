@@ -167,21 +167,23 @@ object AutoProposerTest {
 
   class MockMultiParentCasper[F[_]: Sync] extends MultiParentCasper[F] {
 
-    @volatile var deployBuffer  = Set.empty[Deploy]
+    @volatile var deployBuffer  = DeployBuffer.empty
     @volatile var proposalCount = 0
 
     override def deploy(deployData: Deploy): F[Either[Throwable, Unit]] =
       Sync[F].delay {
-        deployBuffer = deployBuffer + deployData
+        deployBuffer = deployBuffer.add(deployData)
         Right(())
       }
 
-    override def bufferedDeploys: F[Set[Deploy]] =
+    override def bufferedDeploys: F[DeployBuffer] =
       deployBuffer.pure[F]
 
     override def createBlock: F[CreateBlockStatus] =
       Sync[F].delay {
         proposalCount += 1
+        val keys = deployBuffer.newDeploys.keySet.toSet
+        deployBuffer = deployBuffer.processed(keys)
         ReadOnlyMode
       }
 

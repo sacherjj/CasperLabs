@@ -26,7 +26,48 @@ trait Casper[F[_], A] {
   def deploy(deployData: Deploy): F[Either[Throwable, Unit]]
   def estimator(dag: BlockDagRepresentation[F]): F[A]
   def createBlock: F[CreateBlockStatus]
-  def bufferedDeploys: F[Set[Deploy]]
+  def bufferedDeploys: F[DeployBuffer]
+}
+
+case class DeployBuffer(
+    // Deploys that have been processed at least once,
+    // waiting to be finalized or orphaned.
+    processedDeploys: Map[ByteString, Deploy],
+    // Deploys we never looked at.
+    newDeploys: Map[ByteString, Deploy]
+) {
+  def size =
+    processedDeploys.size + newDeploys.size
+
+  def add(deploy: Deploy) =
+    if (!contains(deploy))
+      copy(newDeploys = newDeploys + (deploy.deployHash -> deploy))
+    else
+      this
+
+  // Removes deploys that were included in a block.
+  // They could be in newDeploys too if they were sent to multiple nodes.
+  def remove(deployHashes: Set[ByteString]) =
+    copy(
+      processedDeploys = processedDeploys.filterKeys(h => !deployHashes(h)),
+      newDeploys = newDeploys.filterKeys(h => !deployHashes(h))
+    )
+
+  // Move some deploys from new to processed.
+  def processed(deployHashes: Set[ByteString]) =
+    copy(
+      processedDeploys = processedDeploys ++ newDeploys.filterKeys(deployHashes),
+      newDeploys = newDeploys.filterKeys(h => !deployHashes(h))
+    )
+
+  def get(deployHash: ByteString): Option[Deploy] =
+    newDeploys.get(deployHash) orElse processedDeploys.get(deployHash)
+
+  def contains(deploy: Deploy) =
+    newDeploys.contains(deploy.deployHash) || processedDeploys.contains(deploy.deployHash)
+}
+object DeployBuffer {
+  val empty = DeployBuffer(Map.empty, Map.empty)
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {

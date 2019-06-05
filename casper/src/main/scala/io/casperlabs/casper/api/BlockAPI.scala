@@ -352,7 +352,7 @@ object BlockAPI {
 
           case _ =>
             casper.bufferedDeploys.map { deploys =>
-              deploys.find(_.deployHash == deployHash) map { deploy =>
+              deploys.get(deployHash) map { deploy =>
                 DeployInfo().withDeploy(deploy)
               }
             }
