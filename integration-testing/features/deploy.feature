@@ -46,21 +46,21 @@ Feature: Deploy Operation
       When: Deploy is performed with all fields except nonce
       Then: Client error occurs
 
-  #Not Implemented
+  # Implemented: ../test/test_nonce.py : test_deploy_with_lower_nonce
   Scenario: Deploy with lower nonce
      Given: Single Node Network
        And: Nonce is 4 for account
       When: Deploy is performed with nonce of 3
       Then: Block proposed shows error because of nonce
 
-  #Not Implemented
+  # Implemented (stub): ../test/test_nonce.py : test_deploy_with_higher_nonce
   Scenario: Deploy with higher nonce
      Given: Single Node Network
        And: Nonce is 4 for account
       When: Deploy is performed with nonce of 5
       Then: TODO: Does this hang until nonce of 4 is deployed???
 
-  #Not Implemented
+  # Implemented: ../test/test_nonce.py : test_deploy_with_lower_nonce (first part of the test)
   Scenario: Deploy with correct nonce
      Given: Single Node Network
        And: Nonce is 4 for account
