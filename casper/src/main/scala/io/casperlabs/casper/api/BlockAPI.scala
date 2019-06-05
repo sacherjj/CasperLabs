@@ -310,6 +310,90 @@ object BlockAPI {
       .traverse(ProtoUtil.unsafeGetBlock[F](_))
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, accountPublicKey, timestamp)))
 
+  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      deployHashBase16: String
+  ): F[DeployInfo] =
+    unsafeWithCasper[F, DeployInfo]("Could not show deploy.") { implicit casper =>
+      val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
+
+      BlockStore[F].findBlockHashesWithDeployhash(deployHash) flatMap {
+        case blockHashes if blockHashes.nonEmpty =>
+          for {
+            blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
+            blockInfos <- blocks.traverse { block =>
+                           val summary =
+                             BlockSummary(block.blockHash, block.header, block.signature)
+                           makeBlockInfo[F](summary, block.some)
+                         }
+            results = (blocks zip blockInfos).flatMap {
+              case (block, info) =>
+                block.getBody.deploys
+                  .find(_.getDeploy.deployHash == deployHash)
+                  .map(_ -> info)
+            }
+            info = DeployInfo(
+              deploy = results.headOption.flatMap(_._1.deploy),
+              processingResults = results.map {
+                case (processedDeploy, blockInfo) =>
+                  DeployInfo
+                    .ProcessingResult(
+                      cost = processedDeploy.cost,
+                      isError = processedDeploy.isError,
+                      errorMessage = processedDeploy.errorMessage
+                    )
+                    .withBlockInfo(blockInfo)
+              }
+            )
+          } yield info
+
+        case _ =>
+          casper.bufferedDeploys.flatMap { deploys =>
+            deploys.find(_.deployHash == deployHash) map { deploy =>
+              DeployInfo().withDeploy(deploy).pure[F]
+            } getOrElse {
+              MonadThrowable[F]
+                .raiseError[DeployInfo](NotFound(s"Cannot find deploy with hash $deployHashBase16"))
+            }
+          }
+      }
+    }
+
+  def getBlockDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStore](
+      blockHashBase16: String
+  ): F[Seq[Block.ProcessedDeploy]] =
+    unsafeWithCasper[F, Seq[Block.ProcessedDeploy]]("Could not show deploys.") { implicit casper =>
+      getByHashPrefix(blockHashBase16) {
+        ProtoUtil.unsafeGetBlock[F](_).map(_.some)
+      }.map(_.get.getBody.deploys)
+    }
+
+  def makeBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle](
+      summary: BlockSummary,
+      maybeBlock: Option[Block]
+  ): F[BlockInfo] =
+    for {
+      dag            <- MultiParentCasper[F].blockDag
+      faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, summary.blockHash)
+      initialFault <- MultiParentCasper[F].normalizedInitialFault(
+                       ProtoUtil.weightMap(summary.getHeader)
+                     )
+      maybeStats = maybeBlock.map { block =>
+        BlockStatus
+          .Stats()
+          .withBlockSizeBytes(block.serializedSize)
+          .withDeployErrorCount(
+            block.getBody.deploys.count(_.isError)
+          )
+      }
+      status = BlockStatus(
+        faultTolerance = faultTolerance - initialFault,
+        stats = maybeStats
+      )
+      info = BlockInfo()
+        .withSummary(summary)
+        .withStatus(status)
+    } yield info
+
   def getBlockInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
       blockHashBase16: String,
       full: Boolean = false
@@ -325,30 +409,15 @@ object BlockAPI {
             initialFault <- MultiParentCasper[F].normalizedInitialFault(
                              ProtoUtil.weightMap(summary.getHeader)
                            )
-            maybeBlockAndStats <- if (full) {
-                                   BlockStore[F]
-                                     .get(summary.blockHash)
-                                     .map(_.get.getBlockMessage)
-                                     .map { block =>
-                                       val stats = BlockStatus
-                                         .Stats()
-                                         .withBlockSizeBytes(block.serializedSize)
-                                         .withDeployErrorCount(
-                                           block.getBody.deploys.count(_.isError)
-                                         )
-                                       (block, stats).some
-                                     }
-                                 } else {
-                                   none[(Block, BlockStatus.Stats)].pure[F]
-                                 }
-            status = BlockStatus(
-              faultTolerance = faultTolerance - initialFault,
-              stats = maybeBlockAndStats.map(_._2)
-            )
-            result = BlockInfo()
-              .withSummary(summary)
-              .withStatus(status)
-          } yield result.some
+            maybeBlock <- if (full) {
+                           BlockStore[F]
+                             .get(summary.blockHash)
+                             .map(_.get.blockMessage)
+                         } else {
+                           none[Block].pure[F]
+                         }
+            info <- makeBlockInfo[F](summary, maybeBlock)
+          } yield info.some
         }
       }
     }

@@ -33,11 +33,15 @@ impl LogMessage {
         log_settings_provider: &T,
         log_level: LogLevel,
         message_template: String,
-        properties: BTreeMap<String, String>,
+        mut properties: BTreeMap<String, String>,
     ) -> LogMessage
     where
         T: LogSettingsProvider,
     {
+        const MESSAGE_TEMPLATE_KEY: &str = "message_template";
+        properties
+            .entry(MESSAGE_TEMPLATE_KEY.to_string())
+            .or_insert_with(|| message_template.clone());
         let message_type = MessageType::new(MESSAGE_TYPE.to_string());
         let message_type_version = SemVer::V1_0_0;
         let process_id = log_settings_provider.get_process_id();
@@ -130,7 +134,7 @@ impl fmt::Display for TimestampRfc3999 {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct MessageId(String);
 
 impl MessageId {

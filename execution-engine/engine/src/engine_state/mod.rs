@@ -10,7 +10,7 @@ use std::rc::Rc;
 use parking_lot::Mutex;
 
 use common::key::Key;
-use shared::newtypes::Blake2bHash;
+use shared::newtypes::{Blake2bHash, CorrelationId};
 use shared::transform::Transform;
 use storage::global_state::{CommitResult, History};
 use wasm_prep::Preprocessor;
@@ -58,6 +58,7 @@ where
         prestate_hash: Blake2bHash,
         gas_limit: u64,
         protocol_version: u64,
+        correlation_id: CorrelationId,
         executor: &E,
         preprocessor: &P,
     ) -> Result<ExecutionResult, RootNotFound> {
@@ -81,15 +82,19 @@ where
             nonce,
             gas_limit,
             protocol_version,
+            correlation_id,
             tracking_copy,
         ))
     }
 
     pub fn apply_effect(
         &self,
+        correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, H::Error> {
-        self.state.lock().commit(prestate_hash, effects)
+        self.state
+            .lock()
+            .commit(correlation_id, prestate_hash, effects)
     }
 }

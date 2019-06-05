@@ -28,7 +28,7 @@ use shared::logging;
 use shared::logging::log_level::LogLevel;
 use shared::logging::log_settings;
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
-use shared::newtypes::Blake2bHash;
+use shared::newtypes::{Blake2bHash, CorrelationId};
 use storage::global_state::in_memory::InMemoryGlobalState;
 use storage::global_state::CommitResult;
 use storage::global_state::History;
@@ -68,6 +68,7 @@ struct Task {
 }
 
 fn apply_effects<H>(
+    correlation_id: CorrelationId,
     engine_state: &EngineState<H>,
     pre_state_hash: &Blake2bHash,
     effects: ExecutionEffect,
@@ -81,7 +82,7 @@ where
     H: History,
     H::Error: Into<execution_engine::execution::Error> + Debug,
 {
-    match engine_state.apply_effect(*pre_state_hash, effects.1) {
+    match engine_state.apply_effect(correlation_id, *pre_state_hash, effects.1) {
         Ok(CommitResult::RootNotFound) => {
             let mut properties: BTreeMap<String, String> = BTreeMap::new();
             let error_message = format!("root {:?} not found", pre_state_hash);
@@ -195,8 +196,8 @@ fn main() {
     let protocol_version: u64 = 1;
 
     let init_state = mocked_account(account_addr);
-    let global_state =
-        InMemoryGlobalState::from_pairs(&init_state).expect("Could not create global state");
+    let global_state = InMemoryGlobalState::from_pairs(CorrelationId::new(), &init_state)
+        .expect("Could not create global state");
     let mut state_hash: Blake2bHash = global_state.root_hash;
     let engine_state = EngineState::new(global_state);
 
@@ -210,6 +211,7 @@ fn main() {
     let wasmi_preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
 
     for (i, wasm_bytes) in wasm_files.iter().enumerate() {
+        let correlation_id = CorrelationId::new();
         let nonce = i as u64 + 1;
         let result = engine_state.run_deploy(
             &wasm_bytes.bytes,
@@ -220,6 +222,7 @@ fn main() {
             state_hash,
             gas_limit,
             protocol_version,
+            correlation_id,
             &wasmi_executor,
             &wasmi_preprocessor,
         );
@@ -243,7 +246,7 @@ fn main() {
             }) => {
                 properties.insert("gas-cost".to_string(), format!("{:?}", cost));
                 let (log_level, error_message, mut new_properties, new_state_hash) =
-                    apply_effects(&engine_state, &state_hash, effects);
+                    apply_effects(correlation_id, &engine_state, &state_hash, effects);
 
                 if let Some(hash) = new_state_hash {
                     state_hash = hash;
@@ -261,7 +264,7 @@ fn main() {
                 properties.insert("gas-cost".to_string(), format!("{:?}", cost));
 
                 let (new_log_level, new_error_message, mut new_properties, new_state_hash) =
-                    apply_effects(&engine_state, &state_hash, effects);
+                    apply_effects(correlation_id, &engine_state, &state_hash, effects);
 
                 if let Some(hash) = new_state_hash {
                     state_hash = hash;

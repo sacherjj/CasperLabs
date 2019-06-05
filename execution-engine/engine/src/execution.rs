@@ -18,7 +18,7 @@ use wasmi::{
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
 use common::value::Value;
-use shared::newtypes::Validated;
+use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
 use storage::global_state::StateReader;
 
@@ -694,6 +694,7 @@ where
             current_runtime.context.fn_store_id(),
             rng,
             protocol_version,
+            current_runtime.context.correlation_id(),
         ),
     };
 
@@ -801,6 +802,7 @@ pub trait Executor<A> {
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
+        correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> ExecutionResult
     where
@@ -819,6 +821,7 @@ impl Executor<Module> for WasmiExecutor {
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
+        correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
     ) -> ExecutionResult
     where
@@ -830,7 +833,7 @@ impl Executor<Module> for WasmiExecutor {
         #[allow(unreachable_code)]
         let validated_key = on_fail_charge!(Validated::new(acct_key, Validated::valid));
         let value = on_fail_charge! {
-            match tc.borrow_mut().get(&validated_key) {
+            match tc.borrow_mut().get(correlation_id, &validated_key) {
                 Ok(None) => Err(Error::KeyNotFound(acct_key)),
                 Err(error) => Err(error.into()),
                 Ok(Some(value)) => Ok(value)
@@ -903,6 +906,7 @@ impl Executor<Module> for WasmiExecutor {
             fn_store_id,
             rng,
             protocol_version,
+            correlation_id,
         );
 
         let mut runtime = Runtime::new(memory, parity_module, context);
@@ -942,6 +946,7 @@ mod tests {
     use execution::{Executor, WasmiExecutor};
     use parity_wasm::builder::ModuleBuilder;
     use parity_wasm::elements::{External, ImportEntry, MemoryType, Module};
+    use shared::newtypes::CorrelationId;
     use std::cell::RefCell;
     use std::collections::btree_map::BTreeMap;
     use std::collections::HashMap;
@@ -1014,7 +1019,11 @@ mod tests {
         impl StateReader<Key, Value> for DummyReader {
             type Error = ::storage::error::Error;
 
-            fn read(&self, key: &Key) -> Result<Option<Value>, Self::Error> {
+            fn read(
+                &self,
+                _correlation_id: CorrelationId,
+                key: &Key,
+            ) -> Result<Option<Value>, Self::Error> {
                 let pub_key: [u8; 32] = match key {
                     Key::Account(pub_key) => *pub_key,
                     _ => panic!("Key must be of an Account type"),
@@ -1052,6 +1061,7 @@ mod tests {
             invalid_nonce,
             100u64,
             1u64,
+            CorrelationId::new(),
             tc,
         );
 

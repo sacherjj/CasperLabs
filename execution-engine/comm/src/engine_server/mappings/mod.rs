@@ -1,6 +1,5 @@
 mod uint;
 
-use protobuf::ProtobufEnum;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::{TryFrom, TryInto};
 
@@ -18,6 +17,7 @@ use execution_engine::engine_state::op::Op;
 use execution_engine::execution::Error as ExecutionError;
 use execution_engine::utils;
 use ipc;
+use protobuf::ProtobufEnum;
 use shared::logging;
 use shared::logging::log_level;
 use shared::newtypes::Blake2bHash;

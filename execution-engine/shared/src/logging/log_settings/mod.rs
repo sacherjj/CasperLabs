@@ -1,23 +1,21 @@
+use std::cell::RefCell;
 use std::process;
 
 use serde::Serialize;
 
 use crate::logging::log_level::*;
 
-use std::cell::RefCell;
-use std::sync::atomic::AtomicUsize;
-
 thread_local! {
-    static LOG_SETTINGS_PROVIDER: RefCell<&'static LogSettingsProvider> = RefCell::new(&NopLogSettingsProvder);
-
-    static LOG_SETTINGS_INIT:  RefCell<AtomicUsize> = RefCell::new(AtomicUsize::new(0));
+    static LOG_SETTINGS_PROVIDER: RefCell<&'static LogSettingsProvider> = RefCell::new(&NopLogSettingsProvider);
 }
 
+/// set log_settings_provider to be used (per thread)
 pub fn set_log_settings_provider(log_settings_provider: &'static LogSettingsProvider) {
     LOG_SETTINGS_PROVIDER.with(|f| *f.borrow_mut() = log_settings_provider);
 }
 
-pub(crate) fn get_log_settings_provider() -> &'static LogSettingsProvider {
+/// get log_settings_provider to be used (per thread)
+pub fn get_log_settings_provider() -> &'static LogSettingsProvider {
     LOG_SETTINGS_PROVIDER.with(|f| *f.borrow())
 }
 
@@ -84,9 +82,9 @@ impl LogSettingsProvider for LogSettings {
     }
 }
 
-struct NopLogSettingsProvder;
+struct NopLogSettingsProvider;
 
-impl LogSettingsProvider for NopLogSettingsProvder {
+impl LogSettingsProvider for NopLogSettingsProvider {
     fn filter(&self, _log_level: LogLevel) -> bool {
         true
     }
@@ -133,6 +131,7 @@ impl LogLevelFilter {
                 "fatal" => LogLevel::Fatal,
                 "error" => LogLevel::Error,
                 "warning" => LogLevel::Warning,
+                "metric" => LogLevel::Metric,
                 "debug" => LogLevel::Debug,
                 _ => LogLevel::Info,
             },
@@ -151,6 +150,8 @@ impl Into<log::Level> for LogLevelFilter {
             LogLevel::Error => log::Level::Error,
             LogLevel::Warning => log::Level::Warn,
             LogLevel::Info => log::Level::Info,
+            // metric is below info above debug for filtering purposes
+            LogLevel::Metric => log::Level::Trace,
             LogLevel::Debug => log::Level::Debug,
         }
     }
