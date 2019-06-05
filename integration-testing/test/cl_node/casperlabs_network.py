@@ -161,8 +161,21 @@ class TwoNodeNetwork(CasperLabsNetwork):
         self.wait_for_peers()
 
 
-class ThreeNodeNetwork(CasperLabsNetwork):
+class NodeJoinExistingNetwork(TwoNodeNetwork):
 
+    def add_node_to_existing_network(self):
+        """
+        This method should be called separately
+        :return:
+        """
+        kp = self.get_key()
+        config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
+        self.add_cl_node(config)
+        self.wait_method(wait_for_approved_block_received_handler_state, 2)
+        self.wait_for_peers()
+
+
+class ThreeNodeNetwork(CasperLabsNetwork):
     def create_cl_network(self):
         kp = self.get_key()
         config = DockerConfig(self.docker_client,
