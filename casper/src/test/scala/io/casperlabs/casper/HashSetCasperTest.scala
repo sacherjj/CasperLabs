@@ -1198,9 +1198,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     for {
       invalidDeploy     <- ProtoUtil.basicDeploy[Effect](invalidNonce)
       _                 <- node.casperEff.deploy(invalidDeploy)
-      createBlockStatus <- MultiParentCasper[Effect].createBlock
-      _                 = println(createBlockStatus)
-    } yield assert(createBlockStatus.isInstanceOf[io.casperlabs.casper.NoNewDeploys.type])
+      createBlockStatus <- MultiParentCasper[Effect].createBlock shouldBeF io.casperlabs.casper.NoNewDeploys
+    } yield ()
   }
 
   private def buildBlockWithInvalidJustification(
