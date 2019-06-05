@@ -323,8 +323,11 @@ where
             let address = match Key::account_from_slice(&deploy.address) {
                 Some(key) => key,
                 None => {
-                    let err = ExecutionResult::precondition_failure(EngineError::InvalidAddress);
-                    return Ok(err.into());
+                    let err = EngineError::PreprocessingError(
+                        "Address should be provided in a valid format".to_string(),
+                    );
+                    let failure = ExecutionResult::precondition_failure(err);
+                    return Ok(failure.into());
                 }
             };
             let timestamp = deploy.timestamp;

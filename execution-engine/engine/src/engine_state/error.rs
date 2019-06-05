@@ -4,8 +4,6 @@ use shared::newtypes::Blake2bHash;
 
 #[derive(Fail, Debug)]
 pub enum Error {
-    #[fail(display = "Invalid address")]
-    InvalidAddress,
     #[fail(display = "{}", _0)]
     PreprocessingError(String),
     #[fail(display = "Execution error")]

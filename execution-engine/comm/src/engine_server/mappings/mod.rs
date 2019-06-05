@@ -716,9 +716,6 @@ impl From<ExecutionResult> for ipc::DeployResult {
                 cost,
             } => {
                 match err {
-                    EngineError::InvalidAddress => precondition_failure(
-                        "Address should be provided in a valid format".to_string(),
-                    ),
                     // TODO(mateusz.gorski): Fix error model for the storage errors.
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
