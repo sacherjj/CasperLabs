@@ -24,6 +24,7 @@ import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc.{ProtocolVersion, ValidateRequest}
+import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -402,14 +403,16 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
             }
           }
       }
-      .handleErrorWith(
-        ex =>
+      .handleErrorWith {
+        case ex @ SmartContractEngineError(error_msg) =>
           Log[F]
-            .error(
-              s"Critical error encountered while processing deploys: ${ex.getMessage}"
-            )
-            .map(_ => CreateBlockStatus.internalDeployError(ex))
-      )
+            .error(s"Execution Engine returned an error while processing deploys: $error_msg")
+            .as(CreateBlockStatus.internalDeployError(ex))
+        case NonFatal(ex) =>
+          Log[F]
+            .error(s"Critical error encountered while processing deploys: ${ex.getMessage}", ex)
+            .as(CreateBlockStatus.internalDeployError(ex))
+      }
 
   // MultiParentCasper Exposes the block DAG to those who need it.
   def blockDag: F[BlockDagRepresentation[F]] =
