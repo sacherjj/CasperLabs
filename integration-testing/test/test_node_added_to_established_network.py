@@ -13,3 +13,5 @@ def test_newly_joined_node_should_not_gossip_blocks(node_join_existing_network):
                                                     public_key="validator-0-public.pem"))
     node_join_existing_network.add_node_to_existing_network()
     node0, node1, node2 = node_join_existing_network.docker_nodes
+    for block in block_hashes:
+        assert f"Attempting to add Block {block}... to DAG" in node2.logs()
