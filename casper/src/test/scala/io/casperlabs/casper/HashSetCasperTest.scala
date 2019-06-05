@@ -233,8 +233,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     val data1 = ProtoUtil.basicDeploy(2, dummyContract, 2)
 
     for {
-      // NOTE: Not validating nonces because after adding creating the 1st block it expects the nonce
-      // will increase, but instead we make the block invalid and try again with the same deploy.
+      // NOTE: Not validating nonces because after creating the 1st block it expects the nonce will increase,
+      // but instead we make the block invalid and try creating another again with the same deploy still in the buffer.
       // It would work if the nonces were tracked per pre-state-hash.
       nodes              <- networkEff(validatorKeys.take(2), genesis, transforms, validateNonces = false)
       List(node0, node1) = nodes.toList
@@ -1208,10 +1208,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _           <- node.casperEff.deploy(deploy0)
       stateBefore <- node.casperState.read
       _           = stateBefore.deployBuffer.contains(deploy0) shouldBe true
-      _           = println(s"BEFORE: ${stateBefore.deployBuffer}")
       _           <- node.casperEff.createBlock shouldBeF NoNewDeploys
       stateAfter  <- node.casperState.read
-      _           = println(s"AFTER: ${stateAfter.deployBuffer}")
       _           = stateAfter.deployBuffer.contains(deploy0) shouldBe false
 
     } yield ()
