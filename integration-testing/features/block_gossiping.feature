@@ -1,8 +1,10 @@
 Feature: Block gossiping and transport
 
-  # Not Implemented
+  # test_block_propagation.py
   Scenario: Blocks 'infect' the network and nodes 'closest' to the propose see the blocks first.
-    # TODO Workout scenario
+    Given: Network where not all nodes are connected to each other directly
+     When: Block is deployed and proposed on a node
+     Then: Block reaches all nodes in the network
 
   # Not Implemented
   Scenario: Network partition occurs and rejoin occurs
