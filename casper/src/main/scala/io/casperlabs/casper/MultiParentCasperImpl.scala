@@ -341,7 +341,20 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       // Pending deploys are most likely not in the past, or we'd have to go back indefinitely to
       // prove they aren't. The EE will ignore them if the nonce is less then the expected,
       // so it should be fine to include and see what happens.
-    } yield orphaned.toSeq ++ state.deployBuffer.pendingDeploys.values
+      candidates = orphaned.toSeq ++ state.deployBuffer.pendingDeploys.values
+
+      // Only send the next nonce per account.
+      remaining = candidates
+        .groupBy(_.getHeader.accountPublicKey)
+        .map {
+          case (_, deploys) => deploys.minBy(_.getHeader.nonce)
+        }
+        .toSeq
+
+      // _ = println(s"ORPHANED: ${orphaned.map(d => PrettyPrinter.buildString(d.deployHash))}")
+      // _ = println(s"CANDIDATES: ${candidates.map(d => PrettyPrinter.buildString(d.deployHash))}")
+      // _ = println(s"REMAINING: ${remaining.map(d => PrettyPrinter.buildString(d.deployHash))}")
+    } yield remaining
 
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
@@ -376,42 +389,33 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
           if (deploysForBlock.isEmpty) {
             CreateBlockStatus.noNewDeploys.pure[F]
           } else {
-            for {
-              now <- Time[F].currentMillis
-              created = {
-                val newBonds = ProtoUtil.bonds(parents.head)
+            Time[F].currentMillis map { now =>
+              val newBonds = ProtoUtil.bonds(parents.head)
 
-                val postState = Block
-                  .GlobalState()
-                  .withPreStateHash(preStateHash)
-                  .withPostStateHash(postStateHash)
-                  .withBonds(newBonds)
+              val postState = Block
+                .GlobalState()
+                .withPreStateHash(preStateHash)
+                .withPostStateHash(postStateHash)
+                .withBonds(newBonds)
 
-                val body = Block
-                  .Body()
-                  .withDeploys(deploysForBlock)
+              val body = Block
+                .Body()
+                .withDeploys(deploysForBlock)
 
-                val header = blockHeader(
-                  body,
-                  parentHashes = parents.map(_.blockHash),
-                  justifications = justifications,
-                  state = postState,
-                  rank = number,
-                  protocolVersion = protocolVersion.version,
-                  timestamp = now,
-                  chainId = chainId
-                )
-                val block = unsignedBlockProto(body, header)
+              val header = blockHeader(
+                body,
+                parentHashes = parents.map(_.blockHash),
+                justifications = justifications,
+                state = postState,
+                rank = number,
+                protocolVersion = protocolVersion.version,
+                timestamp = now,
+                chainId = chainId
+              )
+              val block = unsignedBlockProto(body, header)
 
-                CreateBlockStatus.created(block)
-              }
-              _ <- Cell[F, CasperState].modify { s =>
-                    // Mark processed deploys, but leave the ones with invalid nonce so the
-                    // AutoProposer still considers them for its next round.
-                    val deployHashesInBlock = deploysForBlock.map(_.getDeploy.deployHash).toSet
-                    s.copy(deployBuffer = s.deployBuffer.processed(deployHashesInBlock))
-                  }
-            } yield created
+              CreateBlockStatus.created(block)
+            }
           }
       }
       .handleErrorWith {
@@ -487,9 +491,19 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       case (block, status) if canRemove(status) => block.blockHash
     }.toSet
 
+    // Mark deploys we have observed in blocks as processed.
+    val processedDeployHashes = attempts
+      .collect {
+        case (block, status) if canRemove(status) =>
+          block.getBody.deploys.map(_.getDeploy.deployHash)
+      }
+      .flatten
+      .toSet
+
     Cell[F, CasperState].modify { s =>
       s.copy(
         blockBuffer = s.blockBuffer.filterKeys(h => !addedBlockHashes(h)),
+        deployBuffer = s.deployBuffer.processed(processedDeployHashes),
         dependencyDag = addedBlockHashes.foldLeft(s.dependencyDag) {
           case (dag, blockHash) =>
             DoublyLinkedDagOperations.remove(dag, blockHash)
