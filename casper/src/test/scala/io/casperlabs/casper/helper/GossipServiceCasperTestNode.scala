@@ -364,7 +364,6 @@ object GossipServiceCasperTestNodeFactory {
                     )
                 _ <- Validate.blockSummary[F](
                       blockSummary,
-                      dag,
                       "casperlabs"
                     )
               } yield ()

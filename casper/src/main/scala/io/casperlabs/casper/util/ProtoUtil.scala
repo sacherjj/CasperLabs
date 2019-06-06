@@ -77,6 +77,20 @@ object ProtoUtil {
     } yield mainChain
   }
 
+  def unsafeGetBlockSummary[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[BlockSummary] =
+    for {
+      maybeBlock <- BlockStore[F].getBlockSummary(hash)
+      block <- maybeBlock match {
+                case Some(b) => b.pure[F]
+                case None =>
+                  MonadThrowable[F].raiseError(
+                    new NoSuchElementException(
+                      s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}"
+                    )
+                  )
+              }
+    } yield block
+
   def unsafeGetBlock[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[Block] =
     for {
       maybeBlock <- BlockStore[F].getBlockMessage(hash)
@@ -275,6 +289,9 @@ object ProtoUtil {
     b.getHeader.getState.preStateHash
 
   def bonds(b: Block): Seq[Bond] =
+    b.getHeader.getState.bonds
+
+  def bonds(b: BlockSummary): Seq[Bond] =
     b.getHeader.getState.bonds
 
   def blockNumber(b: Block): Long =

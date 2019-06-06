@@ -344,9 +344,8 @@ object Validate {
       beforeFuture = currentTime + DRIFT >= timestamp
       latestParentTimestamp <- b.getHeader.parentHashes.toList.foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
-                                  // TODO: Fetch summary only.
                                   ProtoUtil
-                                    .unsafeGetBlock[F](parentHash)
+                                    .unsafeGetBlockSummary[F](parentHash)
                                     .map(parent => {
                                       val timestamp =
                                         parent.header.fold(latestTimestamp)(_.timestamp)
@@ -591,7 +590,7 @@ object Validate {
       _                   <- raiseNoParent.whenA(b.getHeader.parentHashes.isEmpty)
       justifiedValidators = b.getHeader.justifications.map(_.validatorPublicKey).toSet
       mainParentHash      = b.getHeader.parentHashes.head
-      mainParent          <- ProtoUtil.unsafeGetBlock[F](mainParentHash)
+      mainParent          <- ProtoUtil.unsafeGetBlockSummary[F](mainParentHash)
       bondedValidators    = ProtoUtil.bonds(mainParent).map(_.validatorPublicKey).toSet
       status <- if (bondedValidators == justifiedValidators) {
                  Applicative[F].unit
@@ -687,9 +686,9 @@ object Validate {
   ): F[Boolean] =
     for {
       currentBlockJustification <- ProtoUtil
-                                    .unsafeGetBlock[F](currentBlockJustificationHash)
+                                    .unsafeGetBlockSummary[F](currentBlockJustificationHash)
       previousBlockJustification <- ProtoUtil
-                                     .unsafeGetBlock[F](previousBlockJustificationHash)
+                                     .unsafeGetBlockSummary[F](previousBlockJustificationHash)
     } yield
       if (currentBlockJustification.getHeader.validatorBlockSeqNum < previousBlockJustification.getHeader.validatorBlockSeqNum) {
         true
