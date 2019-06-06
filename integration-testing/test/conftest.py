@@ -4,11 +4,10 @@ import docker as docker_py
 import pytest
 
 from .cl_node.casperlabs_network import (
-    OneNodeNetwork,
-    TwoNodeNetwork,
-    ThreeNodeNetwork,
     CustomConnectionNetwork,
-    NodeJoinExistingNetwork,
+    OneNodeNetwork,
+    ThreeNodeNetwork,
+    TwoNodeNetwork,
 )
 
 
@@ -43,13 +42,6 @@ def two_node_network(docker_client_fixture):
 @pytest.fixture()
 def three_node_network(docker_client_fixture):
     with ThreeNodeNetwork(docker_client_fixture) as tnn:
-        tnn.create_cl_network()
-        yield tnn
-
-
-@pytest.fixture()
-def node_join_existing_network(docker_client_fixture):
-    with NodeJoinExistingNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
         yield tnn
 

@@ -62,6 +62,13 @@ class CasperLabsNetwork:
         cl_node = CasperLabsNode(config)
         self.cl_nodes.append(cl_node)
 
+    def add_new_node_to_network(self) -> None:
+        kp = self.get_key()
+        config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
+        self.add_cl_node(config)
+        self.wait_method(wait_for_approved_block_received_handler_state, 1)
+        self.wait_for_peers()
+
     def add_bootstrap(self, config: DockerConfig) -> None:
         if self.node_count > 0:
             raise Exception('There can be only one bootstrap')
@@ -148,24 +155,7 @@ class TwoNodeNetwork(CasperLabsNetwork):
                               network=self.create_docker_network())
         self.add_bootstrap(config)
 
-        kp = self.get_key()
-        config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
-        self.add_cl_node(config)
-        self.wait_method(wait_for_approved_block_received_handler_state, 1)
-        self.wait_for_peers()
-
-
-class NodeJoinExistingNetwork(TwoNodeNetwork):
-
-    def add_node_to_existing_network(self):
-        """
-        Add a new node to the existing network.
-        """
-        kp = self.get_key()
-        config = DockerConfig(self.docker_client, node_private_key=kp.private_key)
-        self.add_cl_node(config)
-        self.wait_method(wait_for_approved_block_received_handler_state, 2)
-        self.wait_for_peers()
+        self.add_new_node_to_network()
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):
