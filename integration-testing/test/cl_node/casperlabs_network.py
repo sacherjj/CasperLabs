@@ -1,24 +1,17 @@
-import docker
-import logging
-
-from typing import List, Callable, Dict
-
-
-from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_node import CasperLabsNode
-from test.cl_node.docker_node import DockerNode
 from test.cl_node.common import random_string
+from test.cl_node.docker_base import DockerConfig
+from test.cl_node.docker_node import DockerNode
+from test.cl_node.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
 from test.cl_node.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 from test.cl_node.wait import (
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,
     wait_for_peers_count_at_least,
 )
-from test.cl_node.log_watcher import (
-    wait_for_log_watcher,
-    GoodbyeInLogLine,
-    RequestedForkTipFromPeersInLogLine,
-)
+from typing import Callable, Dict, List
+
+import docker
 
 
 class CasperLabsNetwork:
@@ -165,8 +158,7 @@ class NodeJoinExistingNetwork(TwoNodeNetwork):
 
     def add_node_to_existing_network(self):
         """
-        This method should be called separately
-        :return:
+        Add a new node to the existing network.
         """
         kp = self.get_key()
         config = DockerConfig(self.docker_client, node_private_key=kp.private_key)

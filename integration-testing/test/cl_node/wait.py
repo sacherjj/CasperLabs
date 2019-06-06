@@ -1,15 +1,13 @@
 import logging
 import re
 import time
-from typing import TYPE_CHECKING, List
+from test.cl_node.errors import NonZeroExitCodeError
+from typing import List
 
 import pytest
 import typing_extensions
 
 from .common import Network, WaitTimeoutError
-
-
-from test.cl_node.errors import NonZeroExitCodeError
 
 
 class PredicateProtocol(typing_extensions.Protocol):
@@ -148,7 +146,7 @@ class TotalBlocksOnNode:
         return count == self.number_of_blocks
 
 
-class GossipBlocksOnNode:
+class GossipedBlocksOnNode:
     def __init__(self, node: 'Node', number_of_blocks: int) -> None:
         self.node = node
         self.number_of_blocks = number_of_blocks
@@ -162,6 +160,13 @@ class GossipBlocksOnNode:
         if None in [accepted_blocks, rejected_blocks]:
             return False
         return int(accepted_blocks.group(1)) == self.number_of_blocks and int(rejected_blocks.group(1)) == self.number_of_blocks
+
+
+def get_new_blocks_requests_total(node: 'Node') -> int:
+    _, data = node.get_metrics()
+    new_blocks_requests = re.compile(r"^casperlabs_comm_grpc_GossipService_NewBlocks_requests_total (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+    new_blocks_requests_total = new_blocks_requests.search(data)
+    return int(new_blocks_requests_total.group(1))
 
 
 class HasAtLeastPeers:
@@ -315,8 +320,9 @@ def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout_seconds:
 
 
 def wait_for_gossip_metrics_and_assert_blocks_gossiped(node: 'Node', timeout_seconds: int, number_of_blocks: int) -> None:
-    predicate = GossipBlocksOnNode(node, number_of_blocks)
+    predicate = GossipedBlocksOnNode(node, number_of_blocks)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
+
 
 def wait_for_count_the_blocks_on_node(node: 'Node', timeout_seconds: int = 10, number_of_blocks: int = 1) -> None:
     predicate = TotalBlocksOnNode(node, number_of_blocks)
