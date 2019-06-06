@@ -147,8 +147,8 @@ where
         Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
     };
     let key: Key = deserialize(&bytes).unwrap();
-    if let Key::URef(id, Some(access_rights)) = key {
-        UPointer::new(id, access_rights)
+    if let Key::URef(uref) = key {
+        UPointer::from_uref(uref).unwrap()
     } else {
         panic!("URef FFI did not return a valid URef!");
     }

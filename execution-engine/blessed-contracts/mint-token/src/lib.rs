@@ -20,7 +20,8 @@ use alloc::string::String;
 use core::convert::TryInto;
 
 use cl_std::contract_api;
-use cl_std::key::{AccessRights, Key};
+use cl_std::key::Key;
+use cl_std::uref::{AccessRights, URef};
 use cl_std::value::U512;
 
 use capabilities::{ARef, RAWRef};
@@ -78,7 +79,7 @@ pub extern "C" fn mint_ext() {
         "create" => {
             let amount: U512 = contract_api::get_arg(1);
             let purse_id = mint.create(amount);
-            let purse_key = Key::URef(purse_id.raw_id(), Some(AccessRights::READ_ADD_WRITE));
+            let purse_key = Key::URef(URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE));
             contract_api::ret(&purse_key, &vec![purse_key])
         }
 

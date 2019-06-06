@@ -1,7 +1,8 @@
 use core::fmt;
 
 use cl_std::contract_api;
-use cl_std::key::{AccessRights, Key};
+use cl_std::key::Key;
+use cl_std::uref::AccessRights;
 
 #[derive(Debug, Copy, Clone)]
 pub enum PurseIdError {
@@ -33,12 +34,8 @@ impl WithdrawId {
         }
 
         match key {
-            Key::URef(id, Some(access_rights)) if access_rights.is_writeable() => {
-                Ok(WithdrawId(id))
-            }
-            Key::URef(_, maybe_access_rights) => {
-                Err(PurseIdError::InvalidAccessRights(maybe_access_rights))
-            }
+            Key::URef(uref) if uref.is_writeable() => Ok(WithdrawId(uref.id())),
+            Key::URef(uref) => Err(PurseIdError::InvalidAccessRights(uref.access_rights())),
             key => Err(PurseIdError::InvalidKeyVariant(key)),
         }
     }
@@ -57,10 +54,8 @@ impl DepositId {
         }
 
         match key {
-            Key::URef(id, Some(access_rights)) if access_rights.is_addable() => Ok(DepositId(id)),
-            Key::URef(_, maybe_access_rights) => {
-                Err(PurseIdError::InvalidAccessRights(maybe_access_rights))
-            }
+            Key::URef(uref) if uref.is_addable() => Ok(DepositId(uref.id())),
+            Key::URef(uref) => Err(PurseIdError::InvalidAccessRights(uref.access_rights())),
             key => Err(PurseIdError::InvalidKeyVariant(key)),
         }
     }

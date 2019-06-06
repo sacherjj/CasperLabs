@@ -3,6 +3,7 @@ mod uint;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::{TryFrom, TryInto};
 
+use common::uref::URef;
 use common::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, Weight,
 };
@@ -488,17 +489,14 @@ impl From<&common::key::Key> for super::ipc::Key {
                 key_hash.set_key(hash.to_vec());
                 k.set_hash(key_hash);
             }
-            common::key::Key::URef(uref, Some(access_rights)) => {
+            common::key::Key::URef(uref) => {
                 let mut key_uref = super::ipc::KeyURef::new();
-                key_uref.set_uref(uref.to_vec());
-                key_uref.set_access_rights(
-                    KeyURef_AccessRights::from_i32(access_rights.bits().into()).unwrap(),
-                );
-                k.set_uref(key_uref);
-            }
-            common::key::Key::URef(uref, None) => {
-                let mut key_uref = super::ipc::KeyURef::new();
-                key_uref.set_uref(uref.to_vec());
+                key_uref.set_uref(uref.id().to_vec());
+                if let Some(access_rights) = uref.access_rights() {
+                    key_uref.set_access_rights(
+                        KeyURef_AccessRights::from_i32(access_rights.bits().into()).unwrap(),
+                    );
+                }
                 k.set_uref(key_uref);
             }
             common::key::Key::Local { seed, key_hash } => {
@@ -536,13 +534,16 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
                 if access_rights_value != 0 {
                     let access_rights_bits = access_rights_value.try_into().unwrap();
                     let access_rights =
-                        common::key::AccessRights::from_bits(access_rights_bits).unwrap();
+                        common::uref::AccessRights::from_bits(access_rights_bits).unwrap();
                     Some(access_rights)
                 } else {
                     None
                 }
             };
-            Ok(common::key::Key::URef(id, maybe_access_rights))
+            Ok(common::key::Key::URef(URef::unsafe_new(
+                id,
+                maybe_access_rights,
+            )))
         } else if ipc_key.has_local() {
             let ipc_local_key = ipc_key.get_local();
             if !(ipc_local_key.seed.len() == 32 && ipc_local_key.key_hash.len() == 32) {
@@ -854,8 +855,8 @@ fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::Depl
 #[cfg(test)]
 mod tests {
     use super::execution_error;
-    use common::key::AccessRights;
     use common::key::Key;
+    use common::uref::{AccessRights, URef};
     use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
     use execution_engine::engine_state::execution_effect::ExecutionEffect;
     use execution_engine::engine_state::execution_result::ExecutionResult;
@@ -892,7 +893,7 @@ mod tests {
         let input_transforms: HashMap<Key, Transform> = {
             let mut tmp_map = HashMap::new();
             tmp_map.insert(
-                Key::URef([1u8; 32], Some(AccessRights::ADD)),
+                Key::URef(URef::new([1u8; 32], AccessRights::ADD)),
                 Transform::AddInt32(10),
             );
             tmp_map

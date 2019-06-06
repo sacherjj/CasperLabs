@@ -10,7 +10,8 @@ use test::black_box;
 use test::Bencher;
 
 use casperlabs_contract_ffi::bytesrepr::{FromBytes, ToBytes};
-use casperlabs_contract_ffi::key::{AccessRights, Key};
+use casperlabs_contract_ffi::key::Key;
+use casperlabs_contract_ffi::uref::{AccessRights, URef};
 use casperlabs_contract_ffi::value::account::{
     AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight,
 };
@@ -252,12 +253,12 @@ fn deserialize_key_hash(b: &mut Bencher) {
 
 #[bench]
 fn serialize_key_uref(b: &mut Bencher) {
-    let uref = Key::URef([0u8; 32], Some(AccessRights::ADD_WRITE));
+    let uref = Key::URef(URef::new([0u8; 32], AccessRights::ADD_WRITE));
     b.iter(|| ToBytes::to_bytes(black_box(&uref)))
 }
 #[bench]
 fn deserialize_key_uref(b: &mut Bencher) {
-    let uref = Key::URef([0u8; 32], Some(AccessRights::ADD_WRITE));
+    let uref = Key::URef(URef::new([0u8; 32], AccessRights::ADD_WRITE));
     let uref_bytes = uref.to_bytes().unwrap();
 
     b.iter(|| Key::from_bytes(black_box(&uref_bytes)))
@@ -266,7 +267,7 @@ fn deserialize_key_uref(b: &mut Bencher) {
 #[bench]
 fn serialize_vec_of_keys(b: &mut Bencher) {
     let keys: Vec<Key> = (0..32)
-        .map(|i| Key::URef([i; 32], Some(AccessRights::ADD_WRITE)))
+        .map(|i| Key::URef(URef::new([i; 32], AccessRights::ADD_WRITE)))
         .collect();
     b.iter(|| ToBytes::to_bytes(black_box(&keys)))
 }
@@ -274,7 +275,7 @@ fn serialize_vec_of_keys(b: &mut Bencher) {
 #[bench]
 fn deserialize_vec_of_keys(b: &mut Bencher) {
     let keys: Vec<Key> = (0..32)
-        .map(|i| Key::URef([i; 32], Some(AccessRights::ADD_WRITE)))
+        .map(|i| Key::URef(URef::new([i; 32], AccessRights::ADD_WRITE)))
         .collect();
     let keys_bytes = keys.clone().to_bytes().unwrap();
     b.iter(|| Vec::<Key>::from_bytes(black_box(&keys_bytes)));
@@ -339,15 +340,15 @@ fn make_known_urefs() -> BTreeMap<String, Key> {
     let mut urefs = BTreeMap::new();
     urefs.insert(
         "ref1".to_string(),
-        Key::URef([0u8; 32], Some(AccessRights::READ)),
+        Key::URef(URef::new([0u8; 32], AccessRights::READ)),
     );
     urefs.insert(
         "ref2".to_string(),
-        Key::URef([1u8; 32], Some(AccessRights::WRITE)),
+        Key::URef(URef::new([1u8; 32], AccessRights::WRITE)),
     );
     urefs.insert(
         "ref3".to_string(),
-        Key::URef([2u8; 32], Some(AccessRights::ADD)),
+        Key::URef(URef::new([2u8; 32], AccessRights::ADD)),
     );
     urefs
 }

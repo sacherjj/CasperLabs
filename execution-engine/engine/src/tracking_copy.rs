@@ -297,7 +297,8 @@ mod tests {
     use proptest::prelude::*;
 
     use common::gens::*;
-    use common::key::{AccessRights, Key};
+    use common::key::Key;
+    use common::uref::{AccessRights, URef};
     use common::value::{Account, Contract, Value};
     use shared::transform::Transform;
     use storage::global_state::in_memory::InMemoryGlobalState;
@@ -511,8 +512,8 @@ mod tests {
         let db = CountingDb::new_init(Value::Account(account));
         let mut tc = TrackingCopy::new(db);
         let k = Key::Hash([0u8; 32]);
-        let u1 = Key::URef([1u8; 32], Some(AccessRights::READ_WRITE));
-        let u2 = Key::URef([2u8; 32], Some(AccessRights::READ_WRITE));
+        let u1 = Key::URef(URef::new([1u8; 32], AccessRights::READ_WRITE));
+        let u2 = Key::URef(URef::new([2u8; 32], AccessRights::READ_WRITE));
 
         let named_key = Value::NamedKey("test".to_string(), u1);
         let other_named_key = Value::NamedKey("test2".to_string(), u2);

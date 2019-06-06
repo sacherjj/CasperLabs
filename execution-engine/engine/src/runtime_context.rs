@@ -8,7 +8,8 @@ use rand::RngCore;
 use rand_chacha::ChaChaRng;
 
 use common::bytesrepr::{deserialize, ToBytes};
-use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
+use common::key::{Key, LOCAL_SEED_SIZE};
+use common::uref::{AccessRights, URef};
 use common::value::account::Account;
 use common::value::Value;
 use shared::newtypes::{Blake2bHash, CorrelationId, Validated};
@@ -130,7 +131,7 @@ where
         match self.base_key {
             Key::Account(bytes) => bytes,
             Key::Hash(bytes) => bytes,
-            Key::URef(bytes, _) => bytes,
+            Key::URef(uref) => uref.id(),
             Key::Local { seed, key_hash } => Blake2bHash::new(&[seed, key_hash].concat()).into(),
         }
     }
@@ -166,7 +167,7 @@ where
     pub fn new_uref(&mut self, value: Value) -> Result<Key, Error> {
         let mut key = [0u8; 32];
         self.rng.fill_bytes(&mut key);
-        let key = Key::URef(key, Some(AccessRights::READ_ADD_WRITE));
+        let key = Key::URef(URef::new(key, AccessRights::READ_ADD_WRITE));
         let validated_key = Validated::new(key, Validated::valid)?;
         self.insert_uref(validated_key);
         self.write_gs(key, value)?;
@@ -219,12 +220,14 @@ where
     }
 
     pub fn insert_uref(&mut self, key: Validated<Key>) {
-        if let Key::URef(raw_addr, Some(rights)) = *key {
-            let entry_rights = self
-                .known_urefs
-                .entry(raw_addr)
-                .or_insert_with(|| std::iter::empty().collect());
-            entry_rights.insert(rights);
+        if let Key::URef(uref) = *key {
+            if let Some(rights) = uref.access_rights() {
+                let entry_rights = self
+                    .known_urefs
+                    .entry(uref.id())
+                    .or_insert_with(|| std::iter::empty().collect());
+                entry_rights.insert(rights);
+            }
         }
     }
 
@@ -266,13 +269,14 @@ where
     /// that are less powerful than access rights' of the key in the `known_urefs`.
     pub fn validate_key(&self, key: &Key) -> Result<(), Error> {
         match key {
-            Key::URef(raw_addr, Some(new_rights)) => {
+            Key::URef(uref) if uref.access_rights().is_some() => {
+                let new_rights = uref.access_rights().unwrap(); // panic is unreachable
                 self.known_urefs
-                    .get(raw_addr) // Check if the `key` is known
+                    .get(&uref.id()) // Check if the `key` is known
                     .map(|known_rights| {
                         known_rights
                             .iter()
-                            .any(|right| *right & *new_rights == *new_rights)
+                            .any(|right| *right & new_rights == new_rights)
                     }) // are we allowed to use it this way?
                     .map(|_| ()) // at this point we know it's valid to use `key`
                     .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
@@ -322,8 +326,7 @@ where
         match key {
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
-            Key::URef(_, Some(rights)) => rights.is_readable(),
-            Key::URef(_, None) => false,
+            Key::URef(uref) => uref.is_readable(),
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -332,8 +335,7 @@ where
     pub fn is_addable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
-            Key::URef(_, Some(rights)) => rights.is_addable(),
-            Key::URef(_, None) => false,
+            Key::URef(uref) => uref.is_addable(),
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -342,8 +344,7 @@ where
     pub fn is_writeable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) | Key::Hash(_) => false,
-            Key::URef(_, Some(rights)) => rights.is_writeable(),
-            Key::URef(_, None) => false,
+            Key::URef(uref) => uref.is_writeable(),
             Key::Local { seed, .. } => &self.seed() == seed,
         }
     }
@@ -380,7 +381,8 @@ mod tests {
     use rand::RngCore;
     use rand_chacha::ChaChaRng;
 
-    use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
+    use common::key::{Key, LOCAL_SEED_SIZE};
+    use common::uref::{AccessRights, URef};
     use common::value::{self, Account, Contract, Value};
     use shared::transform::Transform;
     use storage::global_state::in_memory::InMemoryGlobalState;
@@ -450,7 +452,7 @@ mod tests {
     fn random_uref_key<G: RngCore>(entropy_source: &mut G, rights: AccessRights) -> Key {
         let mut key = [0u8; 32];
         entropy_source.fill_bytes(&mut key);
-        Key::URef(key, Some(rights))
+        Key::URef(URef::new(key, rights))
     }
 
     fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SIZE]) -> Key {

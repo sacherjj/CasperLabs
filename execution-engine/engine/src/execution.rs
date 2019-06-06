@@ -16,7 +16,8 @@ use wasmi::{
 };
 
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
-use common::key::{AccessRights, Key};
+use common::key::Key;
+use common::uref::AccessRights;
 use common::value::Value;
 use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
@@ -928,7 +929,7 @@ impl Executor<Module> for WasmiExecutor {
 /// Helper function for creating `known_urefs` associating addresses and corresponding `AccessRights`.
 pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
     match key {
-        Key::URef(raw_addr, maybe_rights) => Some((raw_addr, maybe_rights)),
+        Key::URef(uref) => Some((uref.id(), uref.access_rights())),
         Key::Account(_) => None,
         Key::Hash(_) => None,
         Key::Local { .. } => None,
