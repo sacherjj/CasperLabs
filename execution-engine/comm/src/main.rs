@@ -7,6 +7,8 @@ extern crate grpc;
 #[macro_use]
 extern crate lazy_static;
 extern crate lmdb;
+#[cfg(test)]
+extern crate parity_wasm;
 extern crate proptest;
 extern crate protobuf;
 extern crate shared;
@@ -20,7 +22,9 @@ use std::collections::btree_map::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use clap::{App, Arg, ArgMatches};
 use dirs::home_dir;
@@ -31,10 +35,9 @@ use lmdb::DatabaseFlags;
 use shared::init::mocked_account;
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
 use shared::logging::{log_level, log_settings};
+use shared::newtypes::CorrelationId;
 use shared::os::get_page_size;
 use shared::{logging, socket};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 use storage::global_state::lmdb::LmdbGlobalState;
 use storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
@@ -110,7 +113,7 @@ fn main() {
     match socket.remove_file() {
         Err(e) => panic!("{}: {:?}", REMOVING_SOCKET_FILE_EXPECT, e),
         Ok(_) => logging::log_info(REMOVING_SOCKET_FILE_MESSAGE),
-    }
+    };
 
     let data_dir = get_data_dir(matches);
 
@@ -255,6 +258,7 @@ fn get_engine_state(data_dir: PathBuf, map_size: usize) -> EngineState<LmdbGloba
     let global_state = {
         let init_state = mocked_account([48u8; 32]);
         LmdbGlobalState::from_pairs(
+            CorrelationId::new(),
             Arc::clone(&environment),
             Arc::clone(&trie_store),
             &init_state,

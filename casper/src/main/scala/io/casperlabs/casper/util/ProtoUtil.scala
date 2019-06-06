@@ -378,15 +378,17 @@ object ProtoUtil {
     ByteString.copyFrom(Base16.decode(string))
 
   def basicDeploy[F[_]: Monad: Time](
-      id: Int
+      nonce: Int
   ): F[Deploy] =
     Time[F].currentMillis.map { now =>
-      basicDeploy(now, ByteString.EMPTY)
+      basicDeploy(now, ByteString.EMPTY, nonce)
     }
 
   def basicDeploy(
       timestamp: Long,
-      sessionCode: ByteString = ByteString.EMPTY
+      sessionCode: ByteString = ByteString.EMPTY,
+      nonce: Long = 0,
+      accountPublicKey: ByteString = ByteString.EMPTY
   ): Deploy = {
     val b = Deploy
       .Body()
@@ -394,8 +396,9 @@ object ProtoUtil {
       .withPayment(Deploy.Code())
     val h = Deploy
       .Header()
-      .withAccountPublicKey(ByteString.EMPTY)
+      .withAccountPublicKey(accountPublicKey)
       .withTimestamp(timestamp)
+      .withNonce(nonce)
       .withBodyHash(protoHash(b))
     Deploy()
       .withDeployHash(protoHash(h))
@@ -441,4 +444,15 @@ object ProtoUtil {
       .toSet
     (missingParents union missingJustifications).toList
   }
+
+  implicit class DeployOps(d: Deploy) {
+    def incrementNonce(): Deploy =
+      this.withNonce(d.header.get.nonce + 1)
+
+    def withNonce(newNonce: Long): Deploy =
+      d.withHeader(d.header.get.withNonce(newNonce))
+  }
+
+  def randomAccountAddress(): ByteString =
+    ByteString.copyFrom(scala.util.Random.nextString(32), "UTF-8")
 }

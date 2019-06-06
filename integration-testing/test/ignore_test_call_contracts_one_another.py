@@ -1,3 +1,5 @@
+import time
+from itertools import count
 from .cl_node.casperlabsnode import (
     COMBINED_CONTRACT,
     COUNTER_CALL,
@@ -13,9 +15,10 @@ def test_call_contracts_one_another(three_node_network):
     Feature file: consensus.feature
     Scenario: Call contracts deployed on a node from another node.
     """
+    nonce = count(1)
     tnn = three_node_network
     bootstrap, node1, node2 = tnn.docker_nodes
-    bootstrap.deploy_and_propose(session_contract=COMBINED_CONTRACT, payment_contract=COMBINED_CONTRACT,
+    bootstrap.deploy_and_propose(session_contract=COMBINED_CONTRACT, payment_contract=COMBINED_CONTRACT, nonce=next(nonce),
                                  private_key="validator-0-private.pem", public_key="validator-0-public.pem")
     for node in tnn.docker_nodes:
         wait_for_blocks_count_at_least(node, 1, 2, node.timeout)
@@ -23,7 +26,7 @@ def test_call_contracts_one_another(three_node_network):
     for contract_name in (COUNTER_CALL, MAILING_LIST_CALL, HELLO_WORLD):
         list_of_hashes = []
         for node in tnn.docker_nodes:
-            block_hash = node.deploy_and_propose(session_contract=contract_name, payment_contract=contract_name,
+            block_hash = node.deploy_and_propose(session_contract=contract_name, payment_contract=contract_name, nonce=next(nonce),
                                                  private_key="validator-0-private.pem", public_key="validator-0-public.pem")
             list_of_hashes.append(block_hash)
         generated_hashes[contract_name] = list_of_hashes

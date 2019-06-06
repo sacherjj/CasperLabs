@@ -11,7 +11,7 @@ use common::bytesrepr::{deserialize, ToBytes};
 use common::key::{AccessRights, Key, LOCAL_SEED_SIZE};
 use common::value::account::Account;
 use common::value::Value;
-use shared::newtypes::{Blake2bHash, Validated};
+use shared::newtypes::{Blake2bHash, CorrelationId, Validated};
 use storage::global_state::StateReader;
 
 use engine_state::execution_effect::ExecutionEffect;
@@ -36,6 +36,7 @@ pub struct RuntimeContext<'a, R> {
     fn_store_id: u32,
     rng: ChaChaRng,
     protocol_version: u64,
+    correlation_id: CorrelationId,
 }
 
 impl<'a, R: StateReader<Key, Value>> RuntimeContext<'a, R>
@@ -55,6 +56,7 @@ where
         fn_store_id: u32,
         rng: ChaChaRng,
         protocol_version: u64,
+        correlation_id: CorrelationId,
     ) -> Self {
         RuntimeContext {
             state,
@@ -68,6 +70,7 @@ where
             fn_store_id,
             rng,
             protocol_version,
+            correlation_id,
         }
     }
 
@@ -136,6 +139,10 @@ where
         self.protocol_version
     }
 
+    pub fn correlation_id(&self) -> CorrelationId {
+        self.correlation_id
+    }
+
     /// Generates new function address.
     /// Function address is deterministic. It is a hash of public key, nonce and `fn_store_id`,
     /// which is a counter that is being incremented after every function generation.
@@ -181,7 +188,7 @@ where
         })?;
         self.state
             .borrow_mut()
-            .read(&validated_key)
+            .read(self.correlation_id, &validated_key)
             .map_err(Into::into)
     }
 
@@ -350,7 +357,11 @@ where
             self.validate_addable(&k).and(self.validate_key(&k))
         })?;
         let validated_value = Validated::new(value, |v| self.validate_keys(&v))?;
-        match self.state.borrow_mut().add(validated_key, validated_value) {
+        match self
+            .state
+            .borrow_mut()
+            .add(self.correlation_id, validated_key, validated_value)
+        {
             Err(storage_error) => Err(storage_error.into()),
             Ok(AddResult::Success) => Ok(()),
             Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
@@ -378,10 +389,11 @@ mod tests {
     use super::{Error, RuntimeContext, URefAddr, Validated};
     use common::value::account::{AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight};
     use execution::{create_rng, vec_key_rights_to_map};
-    use shared::newtypes::Blake2bHash;
+    use shared::newtypes::{Blake2bHash, CorrelationId};
     use tracking_copy::TrackingCopy;
 
     fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {
+        let correlation_id = CorrelationId::new();
         let mut hist = InMemoryGlobalState::empty().unwrap();
         let root_hash = hist.root_hash;
         let transform = Transform::Write(value::Value::Account(init_account.clone()));
@@ -389,7 +401,7 @@ mod tests {
         let mut m = HashMap::new();
         m.insert(init_key, transform);
         let commit_result = hist
-            .commit(root_hash, m)
+            .commit(correlation_id, root_hash, m)
             .expect("Creation of mocked account should be a success.");
 
         let new_hash = match commit_result {
@@ -468,6 +480,7 @@ mod tests {
             0,
             rng,
             1,
+            CorrelationId::new(),
         )
     }
 
@@ -757,6 +770,7 @@ mod tests {
             0,
             chacha_rng,
             1,
+            CorrelationId::new(),
         );
 
         let uref_name = "NewURef".to_owned();
@@ -807,6 +821,7 @@ mod tests {
             0,
             chacha_rng,
             1,
+            CorrelationId::new(),
         );
 
         let uref_name = "NewURef".to_owned();

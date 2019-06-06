@@ -49,7 +49,11 @@ class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCaspe
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
       "for(_ <- @1){ @2!(2) }"
-    ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+    ).zipWithIndex.map {
+      case (deploy, nonce) =>
+        ProtoUtil
+          .basicDeploy(System.currentTimeMillis(), ByteString.copyFromUtf8(deploy), nonce + 1)
+    }
 
     implicit val logEff = new LogStub[Effect]
     def testProgram(blockApiLock: Semaphore[Effect])(
