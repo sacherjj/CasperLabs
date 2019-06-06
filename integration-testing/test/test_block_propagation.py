@@ -113,4 +113,43 @@ def test_blocks_infect_network(not_all_connected_directly_nodes):
     blocks = parse_show_blocks(last.client.show_blocks(2))
     blocks_hashes = set([b.block_hash[:10] for b in blocks])
     assert block_hash in blocks_hashes
+
+
+@pytest.fixture()
+def four_nodes_network(docker_client_fixture):
+    with CustomConnectionNetwork(docker_client_fixture) as network:
+
+        # Initially all nodes are connected to each other
+        network.create_cl_network(4, [(i, j) for i in range(4) for j in range(4) if i != j and i < j])
+
+        # Wait till all nodes have the genesis block.
+        for node in network.docker_nodes:
+            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
+
+        yield network
+
+
+def test_network_partition_and_rejoin(four_nodes_network):
+    """
+    Feature file: block_gossiping.feature
+    Scenario: Network partition occurs and rejoin occurs
+    """ 
+    # Partition the network so node0 connected to node1 and node2 connected to node3 only.
+    #for connection in [(i, j) for i in (0,1) for j in (2,3)]:
+    #    four_nodes_network.disconnect(connection)
+
+    nodes = four_nodes_network.docker_nodes
+    subnet1, subnet2 = nodes[:1], nodes[2:]
     
+    deploy_and_propose(subnet1[0], "test_helloname.wasm")
+    deploy_and_propose(subnet2[0], "test_mailinglistdefine.wasm")
+
+    for node in nodes:
+        wait_for_blocks_count_at_least(node, 2, 2, node.timeout * 2)
+    
+    # Connect the partitions. 
+    #four_nodes_network.connect((0,3))
+    
+    for node in nodes:
+        wait_for_blocks_count_at_least(node, 3, 3, node.timeout * 2)
+

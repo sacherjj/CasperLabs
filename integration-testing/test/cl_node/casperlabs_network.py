@@ -234,10 +234,7 @@ class CustomConnectionNetwork(CasperLabsNetwork):
             self.add_cl_node(config, network_with_bootstrap=False)
 
         for network_members in network_connections:
-            network_name = self.create_docker_network()
-            self.network_names[tuple(network_members)] = network_name
-            for node_num in network_members:
-                self.docker_nodes[node_num].connect_to_network(network_name)
+            self.connect(network_members)
 
         for node_number in range(1, node_count):
             self.wait_method(wait_for_approved_block_received_handler_state, node_number)
@@ -254,11 +251,17 @@ class CustomConnectionNetwork(CasperLabsNetwork):
             if peer_count > 0:
                 wait_for_peers_count_at_least(self.docker_nodes[node_num], peer_count, timeout)
 
+    def connect(self, network_members):
+        network_name = self.create_docker_network()
+        self.network_names[tuple(network_members)] = network_name
+        for node_num in network_members:
+            self.docker_nodes[node_num].connect_to_network(network_name)
 
     def disconnect(self, connection):
         network_name = self.network_names[tuple(connection)]
         for node_num in connection:
             self.docker_nodes[node_num].disconnect_from_network(network_name)
+        del self.network_names[tuple(connection)]
 
 
 if __name__ == '__main__':
