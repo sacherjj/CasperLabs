@@ -324,7 +324,7 @@ where
                 Some(key) => key,
                 None => {
                     let err = EngineError::PreprocessingError(
-                        "Unable to create a valid account key because the provided value has an invalid length".to_string(),
+                        "Public key has to be exactly 32 bytes long.".to_string(),
                     );
                     let failure = ExecutionResult::precondition_failure(err);
                     return Ok(failure.into());
