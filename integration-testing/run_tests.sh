@@ -9,8 +9,8 @@ if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "test" ]]; then
 fi
 
 # Running locally, build contracts if needed
-if [[ -n $TAG_NAME ]]; then
-    cd resources
+if [[ -z $TAG_NAME ]]; then
+    cd contracts
     make all
     make copy
     cd ..
