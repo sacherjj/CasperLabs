@@ -195,11 +195,11 @@ object ProtoUtil {
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
-  def mainParent[F[_]: Monad: BlockStore](block: Block): F[Option[Block]] = {
-    val maybeParentHash = block.getHeader.parentHashes.headOption
+  private def mainParent[F[_]: Monad: BlockStore](header: Block.Header): F[Option[BlockSummary]] = {
+    val maybeParentHash = header.parentHashes.headOption
     maybeParentHash match {
-      case Some(parentHash) => BlockStore[F].getBlockMessage(parentHash)
-      case None             => none[Block].pure[F]
+      case Some(parentHash) => BlockStore[F].getBlockSummary(parentHash)
+      case None             => none[BlockSummary].pure[F]
     }
   }
 
@@ -221,18 +221,27 @@ object ProtoUtil {
     } yield result
 
   def weightFromValidator[F[_]: Monad: BlockStore](
-      b: Block,
+      header: Block.Header,
       validator: ByteString
   ): F[Long] =
     for {
-      maybeMainParent <- mainParent[F](b)
+      maybeMainParent <- mainParent[F](header)
       weightFromValidator = maybeMainParent
-        .map(weightMap(_).getOrElse(validator, 0L))
-        .getOrElse(weightMap(b).getOrElse(validator, 0L)) //no parents means genesis -- use itself
+        .map(p => weightMap(p.getHeader).getOrElse(validator, 0L))
+        .getOrElse(weightMap(header).getOrElse(validator, 0L)) //no parents means genesis -- use itself
     } yield weightFromValidator
+
+  def weightFromValidator[F[_]: Monad: BlockStore](
+      b: Block,
+      validator: ByteString
+  ): F[Long] =
+    weightFromValidator[F](b.getHeader, validator)
 
   def weightFromSender[F[_]: Monad: BlockStore](b: Block): F[Long] =
     weightFromValidator[F](b, b.getHeader.validatorPublicKey)
+
+  def weightFromSender[F[_]: Monad: BlockStore](header: Block.Header): F[Long] =
+    weightFromValidator[F](header, header.validatorPublicKey)
 
   def parentHashes(b: Block): Seq[ByteString] =
     b.getHeader.parentHashes

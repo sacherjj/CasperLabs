@@ -216,7 +216,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                           ].createBlock
       Created(block) = createBlockResult
       invalidBlock   = block.withSignature(block.getSignature.withSig((ByteString.EMPTY)))
-      _              <- MultiParentCasper[Effect].addBlock(invalidBlock)
+      _              <- MultiParentCasper[Effect].addBlock(invalidBlock) shouldBeF InvalidUnslashableBlock
       _              = logEff.warns.count(_.contains("because block signature")) should be(1)
       _              <- node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>

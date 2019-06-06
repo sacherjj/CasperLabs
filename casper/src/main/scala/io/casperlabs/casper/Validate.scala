@@ -10,6 +10,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.protocol.{ApprovedBlock}
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}, Block.Justification
 import io.casperlabs.casper.util.ProtoUtil.bonds
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
@@ -46,7 +47,21 @@ object Validate {
 
   final case class ValidateErrorWrapper(status: InvalidBlock) extends Exception
 
+  // Wrapper for the tests that were originally outside the `attemptAdd` method
+  // and meant the block was not getting saved.
+  final case class DropErrorWrapper(status: InvalidBlock) extends Exception
+
   private implicit val logSource: LogSource = LogSource(this.getClass)
+
+  private def checkDroppable[F[_]: MonadThrowable](checks: F[Boolean]*): F[Unit] =
+    checks.toList
+      .traverse(identity)
+      .map(_.forall(identity))
+      .ifM(
+        ().pure[F],
+        MonadThrowable[F]
+          .raiseError[Unit](DropErrorWrapper(InvalidUnslashableBlock))
+      )
 
   def signatureVerifiers(sigAlgorithm: String): Option[(Data, Signature, PublicKey) => Boolean] =
     sigAlgorithm match {
@@ -103,20 +118,87 @@ object Validate {
     }
   }
 
-  def blockSignature[F[_]: Applicative: Log](b: Block): F[Boolean] =
-    signatureVerifiers(b.getSignature.sigAlgorithm)
-      .map(verify => {
-        Try(
-          verify(
-            b.blockHash.toByteArray,
-            Signature(b.getSignature.sig.toByteArray),
-            PublicKey(b.getHeader.validatorPublicKey.toByteArray)
+  /** Validate just the BlockSummary, that all the fields are present, the signature is fine, etc.
+    * We'll need the full body to validate it properly but this preliminary check can prevent
+    * obviously corrupt data from being downloaded. */
+  def blockSummary[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
+      summary: BlockSummary,
+      dag: BlockDagRepresentation[F],
+      chainId: String,
+      maybeGenesis: Option[Block]
+  ): F[Unit] = {
+    val treatAsGenesis =
+      maybeGenesis.isEmpty &&
+        summary.getHeader.parentHashes.isEmpty &&
+        summary.getHeader.validatorPublicKey.isEmpty &&
+        summary.getSignature.sig.isEmpty
+    for {
+      _ <- checkDroppable(
+            Validate.formatOfFields[F](summary, treatAsGenesis),
+            Validate.version[F](
+              summary,
+              CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
+            ),
+            if (!treatAsGenesis) Validate.blockSignature[F](summary) else true.pure[F],
+            if (!treatAsGenesis) Validate.blockSender[F](summary) else true.pure[F]
           )
-        ) match {
-          case Success(true) => true.pure[F]
-          case _             => Log[F].warn(ignore(b, "signature is invalid.")).map(_ => false)
-        }
-      }) getOrElse {
+      _ <- Validate.summaryHash[F](summary)
+      _ <- Validate.missingBlocks[F](summary, dag)
+      _ <- Validate.timestamp[F](summary, dag)
+      _ <- Validate.blockNumber[F](summary, dag)
+      _ <- Validate.sequenceNumber[F](summary, dag)
+      _ <- Validate.chainIdentifier[F](summary, chainId)
+      _ <- maybeGenesis.fold(().pure[F]) { genesis =>
+            Validate.justificationFollows[F](summary, genesis, dag) *>
+              Validate.justificationRegressions[F](summary, genesis, dag)
+          }
+    } yield ()
+  }
+
+  /** Check the block without executing deploys. */
+  def blockFull[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
+      block: Block,
+      dag: BlockDagRepresentation[F],
+      chainId: String,
+      maybeGenesis: Option[Block],
+      summaryAlreadyChecked: Boolean = false
+  ): F[Unit] = {
+    val summary = BlockSummary(block.blockHash, block.header, block.signature)
+    for {
+      _ <- Validate.blockSummary(summary, dag, chainId, maybeGenesis).whenA(!summaryAlreadyChecked)
+      _ <- Validate.blockBody(block, dag)
+    } yield ()
+  }
+
+  /** Check the block without executing deploys. */
+  private def blockBody[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
+      block: Block,
+      dag: BlockDagRepresentation[F]
+  ): F[Unit] =
+    for {
+      _ <- checkDroppable(
+            if (block.body.isEmpty)
+              Log[F].warn(ignore(block, s"block body is missing.")) *> false.pure[F]
+            else true.pure[F]
+          )
+      _ <- Validate.blockHash[F](block)
+      _ <- Validate.deployCount[F](block)
+      _ <- Validate.repeatDeploy[F](block, dag)
+    } yield ()
+
+  def blockSignature[F[_]: Applicative: Log](b: BlockSummary): F[Boolean] =
+    signatureVerifiers(b.getSignature.sigAlgorithm) map { verify =>
+      Try(
+        verify(
+          b.blockHash.toByteArray,
+          Signature(b.getSignature.sig.toByteArray),
+          PublicKey(b.getHeader.validatorPublicKey.toByteArray)
+        )
+      ) match {
+        case Success(true) => true.pure[F]
+        case _             => Log[F].warn(ignore(b, "signature is invalid.")).map(_ => false)
+      }
+    } getOrElse {
       for {
         _ <- Log[F].warn(
               ignore(b, s"signature algorithm ${b.getSignature.sigAlgorithm} is unsupported.")
@@ -159,30 +241,24 @@ object Validate {
     }
 
   def blockSender[F[_]: Monad: Log: BlockStore](
-      b: Block,
-      genesis: Block,
-      dag: BlockDagRepresentation[F]
+      block: BlockSummary
   ): F[Boolean] =
-    if (b == genesis) {
-      true.pure[F] //genesis block has a valid sender
-    } else {
-      for {
-        weight <- ProtoUtil.weightFromSender[F](b)
-        result <- if (weight > 0) true.pure[F]
-                 else
-                   for {
-                     _ <- Log[F].warn(
-                           ignore(
-                             b,
-                             s"block creator ${PrettyPrinter.buildString(b.getHeader.validatorPublicKey)} has 0 weight."
-                           )
+    for {
+      weight <- ProtoUtil.weightFromSender[F](block.getHeader)
+      result <- if (weight > 0) true.pure[F]
+               else
+                 for {
+                   _ <- Log[F].warn(
+                         ignore(
+                           block,
+                           s"block creator ${PrettyPrinter.buildString(block.getHeader.validatorPublicKey)} has 0 weight."
                          )
-                   } yield false
-      } yield result
-    }
+                       )
+                 } yield false
+    } yield result
 
   def formatOfFields[F[_]: Monad: Log](
-      b: Block,
+      b: BlockSummary,
       treatAsGenesis: Boolean = false
   ): F[Boolean] =
     if (b.blockHash.isEmpty) {
@@ -192,10 +268,6 @@ object Validate {
     } else if (b.header.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block header is missing."))
-      } yield false
-    } else if (b.body.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block body is missing."))
       } yield false
     } else if (b.getSignature.sig.isEmpty && !treatAsGenesis) {
       for {
@@ -231,7 +303,7 @@ object Validate {
 
   // Validates whether block was built using correct protocol version.
   def version[F[_]: Applicative: Log](
-      b: Block,
+      b: BlockSummary,
       m: BlockHeight => ipc.ProtocolVersion
   ): F[Boolean] = {
     val blockVersion = b.getHeader.protocolVersion
@@ -247,63 +319,6 @@ object Validate {
         )
       ) *> false.pure[F]
     }
-  }
-
-  /** Validate just the BlockSummary, that all the fields are present, the signature is fine, etc.
-    * We'll need the full body to validate it properly but this preliminary check can prevent
-    * obviously corrupt data from being downloaded. */
-  def blockSummary[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
-      summary: BlockSummary,
-      genesis: Block,
-      dag: BlockDagRepresentation[F],
-      chainId: String
-  ): F[Unit] =
-    for {
-      _ <- Validate.summaryHash[F](summary)
-      _ <- Validate.missingBlocks[F](summary, dag)
-      _ <- Validate.timestamp[F](summary, dag)
-      _ <- Validate.blockNumber[F](summary, dag)
-      _ <- Validate.sequenceNumber[F](summary, dag)
-      _ <- Validate.chainIdentifier[F](summary, chainId)
-      _ <- Validate.justificationFollows[F](summary, genesis, dag)
-      _ <- Validate.justificationRegressions[F](summary, genesis, dag)
-    } yield ()
-
-  /*
-   * TODO: Double check ordering of validity checks
-   */
-  def blockSummary[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
-      block: Block,
-      genesis: Block,
-      dag: BlockDagRepresentation[F],
-      chainId: String,
-      lastFinalizedBlockHash: BlockHash
-  ): F[Unit] = {
-    val summary = BlockSummary(block.blockHash, block.header, block.signature)
-    for {
-      _ <- Validate.blockSummaryPreGenesis(block, dag, chainId)
-      _ <- Validate.justificationFollows[F](summary, genesis, dag)
-      _ <- Validate.justificationRegressions[F](summary, genesis, dag)
-    } yield ()
-  }
-
-  /** Validations we can run even without an approved Genesis, i.e. on Genesis itself. */
-  def blockSummaryPreGenesis[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
-      block: Block,
-      dag: BlockDagRepresentation[F],
-      chainId: String
-  ): F[Unit] = {
-    val summary = BlockSummary(block.blockHash, block.header, block.signature)
-    for {
-      _ <- Validate.blockHash[F](block)
-      _ <- Validate.deployCount[F](block)
-      _ <- Validate.missingBlocks[F](summary, dag)
-      _ <- Validate.timestamp[F](summary, dag)
-      _ <- Validate.repeatDeploy[F](block, dag)
-      _ <- Validate.blockNumber[F](summary, dag)
-      _ <- Validate.sequenceNumber[F](summary, dag)
-      _ <- Validate.chainIdentifier[F](summary, chainId)
-    } yield ()
   }
 
   /**

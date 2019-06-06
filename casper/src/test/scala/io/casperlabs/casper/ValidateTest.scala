@@ -188,7 +188,7 @@ class ValidateTest
         block4       <- signedBlock(4).map(_.changeSig(invalidKey))
         block5       <- signedBlock(5).map(_.changeSig(block0.getSignature.sig)) //wrong sig
         blocks       = Vector(block0, block1, block2, block3, block4, block5)
-        _            <- blocks.existsM[Task](Validate.blockSignature[Task]) shouldBeF false
+        _            <- blocks.existsM[Task](b => Validate.blockSignature[Task](b)) shouldBeF false
         _            = log.warns.size should be(blocks.length)
         result       = log.warns.forall(_.contains("signature is invalid")) should be(true)
       } yield result
@@ -428,10 +428,8 @@ class ValidateTest
         invalidBlock <- blockDagStorage
                          .lookupByIdUnsafe(2)
                          .map(_.changeValidator(impostor))
-        dag    <- blockDagStorage.getRepresentation
-        _      <- Validate.blockSender[Task](genesis, genesis, dag) shouldBeF true
-        _      <- Validate.blockSender[Task](validBlock, genesis, dag) shouldBeF true
-        result <- Validate.blockSender[Task](invalidBlock, genesis, dag) shouldBeF false
+        _      <- Validate.blockSender[Task](validBlock) shouldBeF true
+        result <- Validate.blockSender[Task](invalidBlock) shouldBeF false
       } yield result
   }
 
@@ -508,7 +506,7 @@ class ValidateTest
   }
 
   // Creates a block with an invalid block number and sequence number
-  "Block summary validation" should "short circuit after first invalidity" in withStorage {
+  "Block validation" should "short circuit after first invalidity" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
         _        <- createChain[Task](2)
@@ -522,17 +520,19 @@ class ValidateTest
                         sk,
                         Ed25519
                       )
-        _ <- Validate
-              .blockSummary[Task](
-                signedBlock,
-                Block.defaultInstance,
-                dag,
-                "casperlabs",
-                Block.defaultInstance.blockHash
-              )
-              .attempt shouldBeF Left(InvalidBlockNumber)
-        result = log.warns.size should be(1)
-      } yield result
+        result <- Validate
+                   .blockFull[Task](
+                     signedBlock,
+                     dag,
+                     "casperlabs",
+                     Block.defaultInstance.some
+                   )
+                   .attempt
+        _ = result shouldBe Left(
+          Validate.DropErrorWrapper(InvalidUnslashableBlock)
+        )
+
+      } yield ()
   }
 
   "Justification follow validation" should "return valid for proper justifications and failed otherwise" in withStorage {
@@ -724,7 +724,7 @@ class ValidateTest
         _       <- Validate.formatOfFields[Task](genesis) shouldBeF true
         _       <- Validate.formatOfFields[Task](genesis.withBlockHash(ByteString.EMPTY)) shouldBeF false
         _       <- Validate.formatOfFields[Task](genesis.clearHeader) shouldBeF false
-        _       <- Validate.formatOfFields[Task](genesis.clearBody) shouldBeF false
+        _       <- Validate.formatOfFields[Task](genesis.clearBody) shouldBeF true // Body is only checked in `Validate.blockFull`
         _ <- Validate.formatOfFields[Task](
               genesis.withSignature(genesis.getSignature.withSig(ByteString.EMPTY))
             ) shouldBeF false
