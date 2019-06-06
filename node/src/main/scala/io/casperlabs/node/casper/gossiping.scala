@@ -108,7 +108,7 @@ package object gossiping {
                      genesis,
                      prestate,
                      transforms,
-                     conf.casper.shardId,
+                     conf.casper.chainId,
                      relaying
                    )
           _ <- MultiParentCasperRef[F].set(casper)
@@ -148,7 +148,7 @@ package object gossiping {
 
   /** Validate the genesis candidate or any new block via Casper. */
   private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
-      shardId: String,
+      chainId: String,
       block: Block
   ): F[Unit] =
     MultiParentCasperRef[F].get
@@ -160,7 +160,7 @@ package object gossiping {
           for {
             _           <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
             state       <- Cell.mvarCell[F, CasperState](CasperState())
-            executor    = new MultiParentCasperImpl.StatelessExecutor(shardId)
+            executor    = new MultiParentCasperImpl.StatelessExecutor(chainId)
             dag         <- BlockDagStorage[F].getRepresentation
             result      <- executor.validateAndAddBlock(None, dag, block)(state)
             (status, _) = result
@@ -291,7 +291,7 @@ package object gossiping {
                                       s"Block ${PrettyPrinter.buildString(block)} seems to be created by a doppelganger using the same validator key!"
                                     )
                                 } *>
-                                validateAndAddBlock(conf.casper.shardId, block)
+                                validateAndAddBlock(conf.casper.chainId, block)
 
                             override def storeBlock(block: Block): F[Unit] =
                               // Validation has already stored it.
@@ -464,14 +464,14 @@ package object gossiping {
                                                conf.casper.minimumBond,
                                                conf.casper.maximumBond,
                                                conf.casper.hasFaucet,
-                                               conf.casper.shardId,
+                                               conf.casper.chainId,
                                                conf.casper.deployTimestamp
                                              ).map(_.getBlockMessage)
                                    // Store it so others can pull it from the bootstrap node.
                                    _ <- Log[F].info(
                                          s"Trying to store generated Genesis candidate ${genesis.blockHash}..."
                                        )
-                                   _ <- validateAndAddBlock(conf.casper.shardId, genesis)
+                                   _ <- validateAndAddBlock(conf.casper.chainId, genesis)
                                  } yield genesis
                                }
 
@@ -506,6 +506,8 @@ package object gossiping {
       awaitApproved: F[Unit],
       isInitialRef: Ref[F, Boolean]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
+    implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
+
     for {
       _ <- SynchronizerImpl.establishMetrics[F]
       underlying <- Sync[F].delay {
@@ -527,11 +529,7 @@ package object gossiping {
                            } yield latest.values.toList
 
                          override def validate(blockSummary: BlockSummary): F[Unit] =
-                           // TODO: Presently the Validation only works on full blocks.
-                           // Logging so we get an idea of how many summaries we are pulling.
-                           Log[F].debug(
-                             s"Trying to validate block summary ${show(blockSummary.blockHash)}"
-                           )
+                           Validate.blockSummary[F](blockSummary, conf.casper.chainId)
 
                          override def notInDag(blockHash: ByteString): F[Boolean] =
                            isInDag(blockHash).map(!_)

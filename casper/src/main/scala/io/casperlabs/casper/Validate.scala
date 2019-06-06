@@ -45,11 +45,18 @@ object Validate {
         Sync[F].raiseError(ValidateErrorWrapper(e))
     }
 
-  final case class ValidateErrorWrapper(status: InvalidBlock) extends Exception
+  final case class ValidateErrorWrapper(status: InvalidBlock) extends Exception(status.toString)
 
   // Wrapper for the tests that were originally outside the `attemptAdd` method
   // and meant the block was not getting saved.
   final case class DropErrorWrapper(status: InvalidBlock) extends Exception
+
+  implicit class BlockSummaryOps(summary: BlockSummary) {
+    def isGenesisLike =
+      summary.getHeader.parentHashes.isEmpty &&
+        summary.getHeader.validatorPublicKey.isEmpty &&
+        summary.getSignature.sig.isEmpty
+  }
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -118,20 +125,15 @@ object Validate {
     }
   }
 
-  /** Validate just the BlockSummary, that all the fields are present, the signature is fine, etc.
-    * We'll need the full body to validate it properly but this preliminary check can prevent
+  /** Validate just the BlockSummary, assuming we don't have the block yet, or all its dependencies.
+    * We can check that all the fields are present, the signature is fine, etc.
+    * We'll need the full body to validate the block properly but this preliminary check can prevent
     * obviously corrupt data from being downloaded. */
-  def blockSummary[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
+  def blockSummary[F[_]: MonadThrowable: Log: RaiseValidationError](
       summary: BlockSummary,
-      dag: BlockDagRepresentation[F],
-      chainId: String,
-      maybeGenesis: Option[Block]
+      chainId: String
   ): F[Unit] = {
-    val treatAsGenesis =
-      maybeGenesis.isEmpty &&
-        summary.getHeader.parentHashes.isEmpty &&
-        summary.getHeader.validatorPublicKey.isEmpty &&
-        summary.getSignature.sig.isEmpty
+    val treatAsGenesis = summary.isGenesisLike
     for {
       _ <- checkDroppable(
             Validate.formatOfFields[F](summary, treatAsGenesis),
@@ -139,19 +141,10 @@ object Validate {
               summary,
               CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
             ),
-            if (!treatAsGenesis) Validate.blockSignature[F](summary) else true.pure[F],
-            if (!treatAsGenesis) Validate.blockSender[F](summary) else true.pure[F]
+            if (!treatAsGenesis) Validate.blockSignature[F](summary) else true.pure[F]
           )
       _ <- Validate.summaryHash[F](summary)
-      _ <- Validate.missingBlocks[F](summary, dag)
-      _ <- Validate.timestamp[F](summary, dag)
-      _ <- Validate.blockNumber[F](summary, dag)
-      _ <- Validate.sequenceNumber[F](summary, dag)
       _ <- Validate.chainIdentifier[F](summary, chainId)
-      _ <- maybeGenesis.fold(().pure[F]) { genesis =>
-            Validate.justificationFollows[F](summary, genesis, dag) *>
-              Validate.justificationRegressions[F](summary, genesis, dag)
-          }
     } yield ()
   }
 
@@ -160,30 +153,34 @@ object Validate {
       block: Block,
       dag: BlockDagRepresentation[F],
       chainId: String,
-      maybeGenesis: Option[Block],
-      summaryAlreadyChecked: Boolean = false
+      maybeGenesis: Option[Block]
   ): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
-    for {
-      _ <- Validate.blockSummary(summary, dag, chainId, maybeGenesis).whenA(!summaryAlreadyChecked)
-      _ <- Validate.blockBody(block, dag)
-    } yield ()
-  }
-
-  /** Check the block without executing deploys. */
-  private def blockBody[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
-      block: Block,
-      dag: BlockDagRepresentation[F]
-  ): F[Unit] =
     for {
       _ <- checkDroppable(
             if (block.body.isEmpty)
               Log[F].warn(ignore(block, s"block body is missing.")) *> false.pure[F]
-            else true.pure[F]
+            else true.pure[F],
+            // Validate that the sender is a bonded validator.
+            maybeGenesis.fold(summary.isGenesisLike.pure[F]) { _ =>
+              Validate.blockSender[F](summary)
+            }
           )
+      _ <- Validate.blockSummary[F](summary, chainId)
+      // Checks that need dependencies.
+      _ <- Validate.missingBlocks[F](summary, dag)
+      _ <- Validate.timestamp[F](summary, dag)
+      _ <- Validate.blockNumber[F](summary, dag)
+      _ <- Validate.sequenceNumber[F](summary, dag)
+      _ <- maybeGenesis.filterNot(_.blockHash == summary.blockHash).fold(().pure[F]) { genesis =>
+            Validate.justificationFollows[F](summary, genesis, dag) *>
+              Validate.justificationRegressions[F](summary, genesis, dag)
+          }
+      // Checks that need the body.
       _ <- Validate.blockHash[F](block)
       _ <- Validate.deployCount[F](block)
     } yield ()
+  }
 
   def blockSignature[F[_]: Applicative: Log](b: BlockSummary): F[Boolean] =
     signatureVerifiers(b.getSignature.sigAlgorithm) map { verify =>
@@ -200,7 +197,7 @@ object Validate {
     } getOrElse {
       for {
         _ <- Log[F].warn(
-              ignore(b, s"signature algorithm ${b.getSignature.sigAlgorithm} is unsupported.")
+              ignore(b, s"signature algorithm '${b.getSignature.sigAlgorithm}' is unsupported.")
             )
       } yield false
     }
@@ -347,6 +344,7 @@ object Validate {
       beforeFuture = currentTime + DRIFT >= timestamp
       latestParentTimestamp <- b.getHeader.parentHashes.toList.foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
+                                  // TODO: Fetch summary only.
                                   ProtoUtil
                                     .unsafeGetBlock[F](parentHash)
                                     .map(parent => {
@@ -450,7 +448,7 @@ object Validate {
     } yield ()
 
   // Agnostic of justifications
-  def chainIdentifier[F[_]: Monad: Log: BlockStore: RaiseValidationError](
+  def chainIdentifier[F[_]: Monad: Log: RaiseValidationError](
       b: BlockSummary,
       chainId: String
   ): F[Unit] =
@@ -501,11 +499,13 @@ object Validate {
     }
   }
 
-  def summaryHash[F[_]: Monad: RaiseValidationError](
+  def summaryHash[F[_]: Monad: Log: RaiseValidationError](
       b: BlockSummary
   ): F[Unit] = {
     val blockHashComputed = ProtoUtil.protoHash(b.getHeader)
-    RaiseValidationError[F].raise[Unit](InvalidBlockHash).whenA(b.blockHash != blockHashComputed)
+    val ok                = b.blockHash == blockHashComputed
+    (Log[F].warn(s"Invalid block hash ${PrettyPrinter.buildString(b.blockHash)}") *>
+      RaiseValidationError[F].raise[Unit](InvalidBlockHash)).whenA(!ok)
   }
 
   def deployCount[F[_]: Monad: Log: RaiseValidationError](
@@ -584,11 +584,15 @@ object Validate {
       genesis: Block,
       dag: BlockDagRepresentation[F]
   ): F[Unit] = {
-    val justifiedValidators = b.getHeader.justifications.map(_.validatorPublicKey).toSet
-    val mainParentHash      = b.getHeader.parentHashes.head
+    val raiseNoParent =
+      Log[F].warn(ignore(b, s"doesn't have a parent.")) *>
+        RaiseValidationError[F].raise[Unit](InvalidFollows)
     for {
-      mainParent       <- ProtoUtil.unsafeGetBlock[F](mainParentHash)
-      bondedValidators = ProtoUtil.bonds(mainParent).map(_.validatorPublicKey).toSet
+      _                   <- raiseNoParent.whenA(b.getHeader.parentHashes.isEmpty)
+      justifiedValidators = b.getHeader.justifications.map(_.validatorPublicKey).toSet
+      mainParentHash      = b.getHeader.parentHashes.head
+      mainParent          <- ProtoUtil.unsafeGetBlock[F](mainParentHash)
+      bondedValidators    = ProtoUtil.bonds(mainParent).map(_.validatorPublicKey).toSet
       status <- if (bondedValidators == justifiedValidators) {
                  Applicative[F].unit
                } else {

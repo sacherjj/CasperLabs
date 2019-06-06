@@ -165,11 +165,13 @@ class ValidateTest
                    .map(_.changeSigAlgorithm(rsa))
         _ <- Validate.blockSignature[Task](block0) shouldBeF false
         _ = log.warns.last
-          .contains(s"signature algorithm $unknownAlgorithm is unsupported") should be(
+          .contains(s"signature algorithm '$unknownAlgorithm' is unsupported") should be(
           true
         )
-        _      <- Validate.blockSignature[Task](block1) shouldBeF false
-        result = log.warns.last.contains(s"signature algorithm $rsa is unsupported") should be(true)
+        _ <- Validate.blockSignature[Task](block1) shouldBeF false
+        result = log.warns.last.contains(s"signature algorithm '$rsa' is unsupported") should be(
+          true
+        )
       } yield result
   }
 
