@@ -148,6 +148,22 @@ class TotalBlocksOnNode:
         return count == self.number_of_blocks
 
 
+class GossipBlocksOnNode:
+    def __init__(self, node: 'Node', number_of_blocks: int) -> None:
+        self.node = node
+        self.number_of_blocks = number_of_blocks
+
+    def is_satisfied(self) -> bool:
+        _, data = self.node.get_metrics()
+        relay_accepted_total = re.compile(r"^casperlabs_comm_gossiping_Relaying_relay_accepted_total (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+        relay_rejected_total = re.compile(r"^casperlabs_comm_gossiping_Relaying_relay_rejected_total (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+        accepted_blocks = relay_accepted_total.search(data)
+        rejected_blocks = relay_rejected_total.search(data)
+        if None in [accepted_blocks, rejected_blocks]:
+            return False
+        return int(accepted_blocks.group(1)) == self.number_of_blocks and int(rejected_blocks.group(1)) == self.number_of_blocks
+
+
 class HasAtLeastPeers:
     def __init__(self, node: 'Node', minimum_peers_number: int) -> None:
         self.node = node
@@ -297,6 +313,10 @@ def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout_seconds:
     predicate = MetricsAvailable(node, number_of_blocks)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
+
+def wait_for_gossip_metrics_and_assert_blocks_gossiped(node: 'Node', timeout_seconds: int, number_of_blocks: int) -> None:
+    predicate = GossipBlocksOnNode(node, number_of_blocks)
+    wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 def wait_for_count_the_blocks_on_node(node: 'Node', timeout_seconds: int = 10, number_of_blocks: int = 1) -> None:
     predicate = TotalBlocksOnNode(node, number_of_blocks)

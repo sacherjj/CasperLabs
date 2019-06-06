@@ -1,5 +1,5 @@
 from test.cl_node.casperlabsnode import HELLO_NAME
-
+from test.cl_node.wait import wait_for_gossip_metrics_and_assert_blocks_gossiped
 
 def test_newly_joined_node_should_not_gossip_blocks(node_join_existing_network):
     """
@@ -15,3 +15,4 @@ def test_newly_joined_node_should_not_gossip_blocks(node_join_existing_network):
     node0, node1, node2 = node_join_existing_network.docker_nodes
     for block in block_hashes:
         assert f"Attempting to add Block {block}... to DAG" in node2.logs()
+    wait_for_gossip_metrics_and_assert_blocks_gossiped(node2, node2.timeout, 0)
