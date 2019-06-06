@@ -183,7 +183,6 @@ object Validate {
           )
       _ <- Validate.blockHash[F](block)
       _ <- Validate.deployCount[F](block)
-      _ <- Validate.repeatDeploy[F](block, dag)
     } yield ()
 
   def blockSignature[F[_]: Applicative: Log](b: BlockSummary): F[Boolean] =
@@ -336,54 +335,6 @@ object Validate {
             .raise[Unit](MissingBlocks)
             .whenA(!parentsPresent || !justificationsPresent)
     } yield ()
-
-  /**
-    * Validate no deploy by the same (user, millisecond timestamp)
-    * has been produced in the chain
-    *
-    * Agnostic of non-parent justifications
-    */
-  @deprecated("The nonce check will mean any blast from the past will be discarded.", "0.4")
-  def repeatDeploy[F[_]: MonadThrowable: Log: BlockStore: RaiseValidationError](
-      block: Block,
-      dag: BlockDagRepresentation[F]
-  ): F[Unit] = {
-    val deployKeySet = block.getBody.deploys
-      .map(_.getDeploy.getHeader)
-      .map { h =>
-        (h.accountPublicKey, h.timestamp)
-      }
-      .toSet
-
-    for {
-      initParents <- ProtoUtil.unsafeGetParents[F](block)
-      duplicatedBlock <- DagOperations
-                          .bfTraverseF[F, Block](initParents)(ProtoUtil.unsafeGetParents[F])
-                          .find(
-                            _.body.exists(
-                              _.deploys
-                                .map(_.getDeploy.getHeader)
-                                .exists(
-                                  h => deployKeySet.contains((h.accountPublicKey, h.timestamp))
-                                )
-                            )
-                          )
-      _ <- duplicatedBlock match {
-            case Some(b) =>
-              for {
-                _ <- Log[F].warn(
-                      ignore(
-                        block,
-                        s"found deploy by the same (user, millisecond timestamp) produced in the block ${PrettyPrinter
-                          .buildString(b.blockHash)}"
-                      )
-                    )
-                _ <- RaiseValidationError[F].raise[Unit](InvalidRepeatDeploy)
-              } yield Left(InvalidRepeatDeploy)
-            case None => Applicative[F].unit
-          }
-    } yield ()
-  }
 
   // This is not a slashable offence
   def timestamp[F[_]: MonadThrowable: Log: Time: BlockStore: RaiseValidationError](
