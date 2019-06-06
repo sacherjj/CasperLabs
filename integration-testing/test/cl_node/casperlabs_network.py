@@ -218,6 +218,7 @@ class CustomConnectionNetwork(CasperLabsNetwork):
         :param node_count: Number of nodes to create.
         :param network_connections: A list of lists of node indexes that should be joined.
         """
+        self.network_names = {}
         kp = self.get_key()
         config = DockerConfig(self.docker_client,
                               node_private_key=kp.private_key,
@@ -234,6 +235,7 @@ class CustomConnectionNetwork(CasperLabsNetwork):
 
         for network_members in network_connections:
             network_name = self.create_docker_network()
+            self.network_names[tuple(network_members)] = network_name
             for node_num in network_members:
                 self.docker_nodes[node_num].connect_to_network(network_name)
 
@@ -251,6 +253,12 @@ class CustomConnectionNetwork(CasperLabsNetwork):
         for node_num, peer_count in enumerate(peer_counts):
             if peer_count > 0:
                 wait_for_peers_count_at_least(self.docker_nodes[node_num], peer_count, timeout)
+
+
+    def disconnect(self, connection):
+        network_name = self.network_names[tuple(connection)]
+        for node_num in connection:
+            self.docker_nodes[node_num].disconnect_from_network(network_name)
 
 
 if __name__ == '__main__':
