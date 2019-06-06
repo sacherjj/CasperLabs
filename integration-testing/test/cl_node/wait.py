@@ -146,7 +146,7 @@ class TotalBlocksOnNode:
         return count == self.number_of_blocks
 
 
-class AcceptedAndRejectedBlocksOnNewNode:
+class NodeDidNotGossip:
     def __init__(self, node: 'Node') -> None:
         self.node = node
 
@@ -319,7 +319,7 @@ def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout_seconds:
 
 
 def wait_for_gossip_metrics_and_assert_blocks_gossiped(node: 'Node', timeout_seconds: int, number_of_blocks: int) -> None:
-    predicate = AcceptedAndRejectedBlocksOnNewNode(node)
+    predicate = NodeDidNotGossip(node)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 
