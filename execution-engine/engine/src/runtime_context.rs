@@ -425,6 +425,7 @@ mod tests {
             addr,
             0,
             BTreeMap::new(),
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             Default::default(),
             AccountActivity::new(BlockTime(0), BlockTime(100)),

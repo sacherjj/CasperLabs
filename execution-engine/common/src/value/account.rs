@@ -1,5 +1,6 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
 use crate::key::{Key, UREF_SIZE};
+use crate::uref::URef;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -218,6 +219,7 @@ pub struct Account {
     public_key: [u8; 32],
     nonce: u64,
     known_urefs: BTreeMap<String, Key>,
+    purse_id: URef,
     associated_keys: AssociatedKeys,
     action_thresholds: ActionThresholds,
     account_activity: AccountActivity,
@@ -228,6 +230,7 @@ impl Account {
         public_key: [u8; 32],
         nonce: u64,
         known_urefs: BTreeMap<String, Key>,
+        purse_id: URef,
         associated_keys: AssociatedKeys,
         action_thresholds: ActionThresholds,
         account_activity: AccountActivity,
@@ -236,6 +239,7 @@ impl Account {
             public_key,
             nonce,
             known_urefs,
+            purse_id,
             associated_keys,
             action_thresholds,
             account_activity,
@@ -256,6 +260,10 @@ impl Account {
 
     pub fn pub_key(&self) -> &[u8] {
         &self.public_key
+    }
+
+    pub fn purse_id(&self) -> URef {
+        self.purse_id
     }
 
     pub fn associated_keys(&self) -> &AssociatedKeys {
@@ -432,9 +440,11 @@ impl ToBytes for Account {
         let associated_keys_size =
             self.associated_keys.0.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
         let known_urefs_size = UREF_SIZE * self.known_urefs.len() + U32_SIZE;
+        let purse_id_size = UREF_SIZE;
         let serialized_account_size = KEY_SIZE // pub key
             + U64_SIZE // nonce
             + known_urefs_size
+            + purse_id_size
             + associated_keys_size
             + action_thresholds_size
             + account_activity_size;
@@ -445,6 +455,7 @@ impl ToBytes for Account {
         result.extend(&self.public_key.to_bytes()?);
         result.append(&mut self.nonce.to_bytes()?);
         result.append(&mut self.known_urefs.to_bytes()?);
+        result.append(&mut self.purse_id.to_bytes()?);
         result.append(&mut self.associated_keys.to_bytes()?);
         result.append(&mut self.action_thresholds.to_bytes()?);
         result.append(&mut self.account_activity.to_bytes()?);
@@ -454,28 +465,31 @@ impl ToBytes for Account {
 
 impl FromBytes for Account {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (public_key, rem1): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (nonce, rem2): (u64, &[u8]) = FromBytes::from_bytes(rem1)?;
-        let (known_urefs, rem3): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem2)?;
-        let (associated_keys, rem4): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem3)?;
-        let (action_thresholds, rem5): (ActionThresholds, &[u8]) = FromBytes::from_bytes(rem4)?;
-        let (account_activity, rem6): (AccountActivity, &[u8]) = FromBytes::from_bytes(rem5)?;
+        let (public_key, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (nonce, rem): (u64, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (known_urefs, rem): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (purse_id, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (action_thresholds, rem): (ActionThresholds, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (account_activity, rem): (AccountActivity, &[u8]) = FromBytes::from_bytes(rem)?;
         Ok((
             Account {
                 public_key,
                 nonce,
                 known_urefs,
+                purse_id,
                 associated_keys,
                 action_thresholds,
                 account_activity,
             },
-            rem6,
+            rem,
         ))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::uref::{AccessRights, URef};
     use crate::value::account::{
         Account, AccountActivity, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, Weight,
         KEY_SIZE, MAX_KEYS,
@@ -488,6 +502,7 @@ mod tests {
             [0u8; 32],
             0,
             BTreeMap::new(),
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1)),
             Default::default(),
             AccountActivity::new(BlockTime(0), BlockTime(0)),

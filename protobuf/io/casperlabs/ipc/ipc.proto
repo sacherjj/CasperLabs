@@ -168,6 +168,7 @@ message Account {
     repeated AssociatedKey associated_keys = 4;
     ActionThresholds action_threshold = 5;
     AccountActivity account_activity = 6;
+    KeyURef purse_id = 7;
 }
 message Contract {
     bytes body = 1;

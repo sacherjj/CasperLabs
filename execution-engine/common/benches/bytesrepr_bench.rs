@@ -353,6 +353,10 @@ fn make_known_urefs() -> BTreeMap<String, Key> {
     urefs
 }
 
+fn make_purse_id() -> URef {
+    URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)
+}
+
 fn make_contract() -> Contract {
     let known_urefs = make_known_urefs();
     Contract::new(vec![0u8; 1024], known_urefs, 1)
@@ -360,6 +364,7 @@ fn make_contract() -> Contract {
 
 fn make_account() -> Account {
     let known_urefs = make_known_urefs();
+    let purse_id = make_purse_id();
     let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1));
     let action_thresholds = Default::default();
     let account_activity = AccountActivity::new(BlockTime(0), BlockTime(100));
@@ -367,6 +372,7 @@ fn make_account() -> Account {
         [0u8; 32],
         2_635_333_365_164_409_670u64,
         known_urefs,
+        purse_id,
         associated_keys,
         action_thresholds,
         account_activity,

@@ -940,6 +940,7 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
 mod tests {
     use super::Error;
     use common::key::Key;
+    use common::uref::{AccessRights, URef};
     use common::value::account::{AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight};
     use common::value::{Account, Value};
     use engine_state::execution_effect::ExecutionEffect;
@@ -1033,6 +1034,7 @@ mod tests {
                     pub_key,
                     1,
                     BTreeMap::new(),
+                    URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
                     AssociatedKeys::new(PublicKey::new(pub_key), Weight::new(1)),
                     Default::default(),
                     AccountActivity::new(BlockTime(0), BlockTime(0)),

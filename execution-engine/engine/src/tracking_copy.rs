@@ -505,6 +505,7 @@ mod tests {
             [0u8; KEY_SIZE],
             0u64,
             BTreeMap::new(),
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             Default::default(),
             AccountActivity::new(BlockTime(0), BlockTime(100)),
@@ -705,11 +706,13 @@ mod tests {
         ) {
             let correlation_id = CorrelationId::new();
             let known_urefs = iter::once((name.clone(), k)).collect();
+            let purse_id = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
             let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
             let account = Account::new(
                 pk,
                 nonce,
                 known_urefs,
+                purse_id,
                 associated_keys,
                 Default::default(),
                 AccountActivity::new(BlockTime(0), BlockTime(100))
@@ -756,11 +759,13 @@ mod tests {
             // create account which knows about contract
             let mut account_known_urefs = BTreeMap::new();
             account_known_urefs.insert(contract_name.clone(), contract_key);
+            let purse_id = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
             let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
             let account = Account::new(
                 pk,
                 nonce,
                 account_known_urefs,
+                purse_id,
                 associated_keys,
                 Default::default(),
                 AccountActivity::new(BlockTime(0), BlockTime(100))

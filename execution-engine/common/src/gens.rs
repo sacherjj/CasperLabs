@@ -78,15 +78,21 @@ pub fn account_activity_arb() -> impl Strategy<Value = AccountActivity> {
 }
 
 prop_compose! {
-    pub fn account_arb()
-        (pub_key in u8_slice_32(), nonce in any::<u64>(), thresholds in action_threshold_arb(),
-        account_activity in account_activity_arb(), mut associated_keys in associated_keys_arb(MAX_KEYS - 1), urefs in uref_map_arb(3))
-     -> Account {
+    pub fn account_arb()(
+        pub_key in u8_slice_32(),
+        nonce in any::<u64>(),
+        urefs in uref_map_arb(3),
+        purse_id in uref_arb(),
+        thresholds in action_threshold_arb(),
+        account_activity in account_activity_arb(),
+        mut associated_keys in associated_keys_arb(MAX_KEYS - 1),
+    ) -> Account {
             associated_keys.add_key(pub_key.into(), Weight::new(1)).unwrap();
             Account::new(
                 pub_key,
                 nonce,
                 urefs,
+                purse_id,
                 associated_keys.clone(),
                 thresholds.clone(),
                 account_activity.clone(),

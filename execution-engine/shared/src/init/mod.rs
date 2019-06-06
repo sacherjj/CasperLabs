@@ -1,6 +1,7 @@
 use std::collections::btree_map::BTreeMap;
 
 use common::key::Key;
+use common::uref::{AccessRights, URef};
 use common::value::account::{AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight};
 use common::value::{Account, Value};
 
@@ -16,6 +17,7 @@ pub fn mocked_account(account_addr: [u8; 32]) -> Vec<(Key, Value)> {
         account_addr,
         0,
         BTreeMap::new(),
+        URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
         associated_keys,
         Default::default(),
         AccountActivity::new(BlockTime(0), BlockTime(100)),
