@@ -144,7 +144,12 @@ class ValidateTest
       b.withSignature(b.getSignature.withSigAlgorithm(sigAlgorithm))
     def changeSig(sig: ByteString): Block =
       b.withSignature(b.getSignature.withSig(sig))
+
   }
+
+  // Originally validation methods wanted blocks, now they work on summaries.
+  implicit def `Block => BlockSummary`(b: Block) =
+    BlockSummary(b.blockHash, b.header, b.signature)
 
   "Block signature validation" should "return false on unknown algorithms" in withStorage {
     implicit blockStore => implicit blockDagStorage =>

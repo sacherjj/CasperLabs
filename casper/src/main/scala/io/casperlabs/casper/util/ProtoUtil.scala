@@ -92,10 +92,13 @@ object ProtoUtil {
     } yield block
 
   def creatorJustification(block: Block): Option[Justification] =
-    block.getHeader.justifications
+    creatorJustification(block.getHeader)
+
+  def creatorJustification(header: Block.Header): Option[Justification] =
+    header.justifications
       .find {
         case Justification(validator: Validator, _) =>
-          validator == block.getHeader.validatorPublicKey
+          validator == header.validatorPublicKey
       }
 
   def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
