@@ -4,10 +4,10 @@ import docker as docker_py
 import pytest
 
 from .cl_node.casperlabs_network import (
-    OneNodeNetwork,
-    TwoNodeNetwork,
-    ThreeNodeNetwork,
     CustomConnectionNetwork,
+    OneNodeNetwork,
+    ThreeNodeNetwork,
+    TwoNodeNetwork,
 )
 
 
