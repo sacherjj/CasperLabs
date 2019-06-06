@@ -146,10 +146,9 @@ class TotalBlocksOnNode:
         return count == self.number_of_blocks
 
 
-class GossipedBlocksOnNode:
-    def __init__(self, node: 'Node', number_of_blocks: int) -> None:
+class AcceptedAndRejectedBlocksOnNewNode:
+    def __init__(self, node: 'Node') -> None:
         self.node = node
-        self.number_of_blocks = number_of_blocks
 
     def is_satisfied(self) -> bool:
         _, data = self.node.get_metrics()
@@ -159,7 +158,7 @@ class GossipedBlocksOnNode:
         rejected_blocks = relay_rejected_total.search(data)
         if None in [accepted_blocks, rejected_blocks]:
             return False
-        return int(accepted_blocks.group(1)) == self.number_of_blocks and int(rejected_blocks.group(1)) == self.number_of_blocks
+        return int(accepted_blocks.group(1)) == 0 and int(rejected_blocks.group(1)) == 0
 
 
 def get_new_blocks_requests_total(node: 'Node') -> int:
@@ -320,7 +319,7 @@ def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout_seconds:
 
 
 def wait_for_gossip_metrics_and_assert_blocks_gossiped(node: 'Node', timeout_seconds: int, number_of_blocks: int) -> None:
-    predicate = GossipedBlocksOnNode(node, number_of_blocks)
+    predicate = AcceptedAndRejectedBlocksOnNewNode(node)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 
