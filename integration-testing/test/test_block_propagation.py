@@ -3,12 +3,13 @@ from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
 from typing import List
 import pytest
+import logging
 
 from . import conftest
 from .cl_node.casperlabs_network import ThreeNodeNetwork, CustomConnectionNetwork
 from .cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from .cl_node.common import random_string
-from .cl_node.wait import wait_for_blocks_count_at_least
+from .cl_node.wait import wait_for_blocks_count_at_least, wait_for_peers_count_at_least
 
 
 class DeployThread(threading.Thread):
@@ -128,6 +129,7 @@ def four_nodes_network(docker_client_fixture):
 
         yield network
 
+C = ["test_helloname.wasm", "test_mailinglistdefine.wasm", "test_helloworld.wasm"]
 
 def test_network_partition_and_rejoin(four_nodes_network):
     """
@@ -135,21 +137,33 @@ def test_network_partition_and_rejoin(four_nodes_network):
     Scenario: Network partition occurs and rejoin occurs
     """ 
     # Partition the network so node0 connected to node1 and node2 connected to node3 only.
-    #for connection in [(i, j) for i in (0,1) for j in (2,3)]:
-    #    four_nodes_network.disconnect(connection)
+    connections_between_partitions = [(i, j) for i in (0,1) for j in (2,3)]
+
+    logging.info("DISCONNECT PARTITIONS")
+    for connection in connections_between_partitions:
+        four_nodes_network.disconnect(connection)
 
     nodes = four_nodes_network.docker_nodes
-    subnet1, subnet2 = nodes[:1], nodes[2:]
+    n = len(nodes)
+    partitions = nodes[:int(n/2)], nodes[int(n/2):]
     
-    deploy_and_propose(subnet1[0], "test_helloname.wasm")
-    deploy_and_propose(subnet2[0], "test_mailinglistdefine.wasm")
+    deploy_and_propose(partitions[0][0], C[0])
+    deploy_and_propose(partitions[1][0], C[1])
 
     for node in nodes:
         wait_for_blocks_count_at_least(node, 2, 2, node.timeout * 2)
     
-    # Connect the partitions. 
-    #four_nodes_network.connect((0,3))
+    logging.info("CONNECT PARTITIONS")
+    #four_nodes_network.connect((p[0] for p in partitions))
+    for connection in connections_between_partitions:
+        four_nodes_network.connect(connection)
+
+    #for node in nodes: wait_for_peers_count_at_least(node, n-1, node.timeout)
+    logging.info("PARTITIONS CONNECTED")
+
+    deploy_and_propose(nodes[0], C[2])
     
     for node in nodes:
-        wait_for_blocks_count_at_least(node, 3, 3, node.timeout * 2)
+        logging.info(f"CHECK {node} HAS ALL NODES")
+        wait_for_blocks_count_at_least(node, 4, 4, node.timeout * 2)
 
