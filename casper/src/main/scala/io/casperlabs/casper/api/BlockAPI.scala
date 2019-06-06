@@ -406,6 +406,36 @@ object BlockAPI {
         .withStatus(status)
     } yield info
 
+  def makeBlockInfo[F[_]: Monad: BlockStore: MultiParentCasper: SafetyOracle](
+      summary: BlockSummary,
+      full: Boolean
+  ): F[(BlockInfo, Option[Block])] =
+    for {
+      maybeBlock <- if (full) {
+                     BlockStore[F]
+                       .get(summary.blockHash)
+                       .map(_.get.blockMessage)
+                   } else {
+                     none[Block].pure[F]
+                   }
+      info <- makeBlockInfo[F](summary, maybeBlock)
+    } yield (info, maybeBlock)
+
+  def getBlockInfoWithBlock[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      blockHash: BlockHash,
+      full: Boolean = false
+  ): F[(BlockInfo, Option[Block])] =
+    unsafeWithCasper[F, (BlockInfo, Option[Block])]("Could not show block.") { implicit casper =>
+      BlockStore[F].getBlockSummary(blockHash).flatMap { maybeSummary =>
+        maybeSummary.fold(
+          MonadThrowable[F]
+            .raiseError[(BlockInfo, Option[Block])](
+              NotFound(s"Cannot find block matching hash ${Base16.encode(blockHash.toByteArray)}")
+            )
+        )(makeBlockInfo[F](_, full))
+      }
+    }
+
   def getBlockInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
       blockHashBase16: String,
       full: Boolean = false
@@ -415,18 +445,9 @@ object BlockAPI {
         getByHashPrefix[F, BlockSummary](blockHashBase16)(
           BlockStore[F].getBlockSummary(_)
         ).flatMap { maybeSummary =>
-          maybeSummary.fold(none[(BlockInfo, Option[Block])].pure[F]) { summary =>
-            for {
-              maybeBlock <- if (full) {
-                             BlockStore[F]
-                               .get(summary.blockHash)
-                               .map(_.get.blockMessage)
-                           } else {
-                             none[Block].pure[F]
-                           }
-              info <- makeBlockInfo[F](summary, maybeBlock)
-            } yield (info, maybeBlock).some
-          }
+          maybeSummary.fold(none[(BlockInfo, Option[Block])].pure[F])(
+            makeBlockInfo[F](_, full).map(_.some)
+          )
         }
     }
 
@@ -618,7 +639,7 @@ object BlockAPI {
   private def getByHashPrefix[F[_]: Monad: MultiParentCasper: BlockStore, A](
       blockHashBase16: String
   )(f: ByteString => F[Option[A]]): F[Option[A]] =
-    if (blockHashBase16.size == 64) {
+    if (blockHashBase16.length == 64) {
       f(ByteString.copyFrom(Base16.decode(blockHashBase16)))
     } else {
       for {

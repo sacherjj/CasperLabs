@@ -10,6 +10,7 @@ import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.genesis.contracts.Faucet
+import io.casperlabs.casper.helper.NoOpsFinalizationHandler.finalizationHandler
 import io.casperlabs.casper.helper.{
   BlockDagStorageTestFixture,
   HashSetCasperTestNode,

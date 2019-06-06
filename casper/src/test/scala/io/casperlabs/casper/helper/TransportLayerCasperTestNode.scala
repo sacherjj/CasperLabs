@@ -9,9 +9,9 @@ import cats.implicits._
 import cats.temp.par.Par
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
-import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.helper.NoOpsFinalizationHandler.finalizationHandler
+import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
   CasperPacketHandlerImpl,

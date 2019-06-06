@@ -11,8 +11,8 @@ import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.blockstorage._
-import io.casperlabs.casper.consensus
-import io.casperlabs.casper._
+import io.casperlabs.casper.helper.NoOpsFinalizationHandler.finalizationHandler
+import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
