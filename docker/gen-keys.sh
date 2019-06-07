@@ -53,9 +53,10 @@ openssl pkey -outform DER -pubout -in "$OUTPUT_DIR/validator-private.pem" | tail
 # Assert validator-id is 32 bytes long
 VALIDATOR_ID_BASE64=$(cat "$OUTPUT_DIR/validator-id")
 VALIDATOR_ID_HEX=$(echo "$VALIDATOR_ID_BASE64" | openssl base64 -d | od -t x -An | tr -d '[:space:]')
-if [ ${#VALIDATOR_ID_HEX} -ne 64 ]
+VALIDATOR_BYTES=$((${#VALIDATOR_ID_HEX} / 2))
+if [ $VALIDATOR_BYTES -ne 32 ]
     then
-        echo "ERROR: validator-id must be 64 characters length, got " "${#VALIDATOR_ID_HEX}" "instead"
+        echo "ERROR: validator-id must be 32 bytes length, got" "$VALIDATOR_BYTES" "bytes instead"
         exit 1
 fi
 
@@ -82,9 +83,10 @@ NODE_ID=$(cat "$OUTPUT_DIR/node.key.pem" | \
     tr -d '\n')
 
 # Assert node-id is 20 bytes long
-if [ ${#NODE_ID} -ne 40 ]
+NODE_BYTES=$((${#NODE_ID} / 2))
+if [ $NODE_BYTES -ne 20 ]
     then
-        echo "ERROR: node-id must be 40 characters length, got " "${#NODE_ID}" "instead"
+        echo "ERROR: node-id must be 20 bytes length, got" "$NODE_BYTES" "bytes instead"
         exit 1
 fi
 
