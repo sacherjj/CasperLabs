@@ -18,3 +18,4 @@ pub const STORE_FN_INDEX: usize = 16;
 pub const PROTOCOL_VERSION_FUNC_INDEX: usize = 17;
 pub const SEED_FN_INDEX: usize = 18;
 pub const IS_VALID_FN_INDEX: usize = 19;
+pub const ADD_KEY_FN_INDEX: usize = 20;

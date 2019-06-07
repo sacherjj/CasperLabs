@@ -17,6 +17,7 @@ use wasmi::{
 
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
+use common::value::account::{PublicKey, Weight, KEY_SIZE};
 use common::value::Value;
 use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
@@ -25,11 +26,11 @@ use storage::global_state::StateReader;
 use args::Args;
 use engine_state::execution_result::ExecutionResult;
 use functions::{
-    ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
-    GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
-    GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, IS_VALID_FN_INDEX, LOAD_ARG_FUNC_INDEX,
-    NEW_FUNC_INDEX, PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX,
-    SER_FN_FUNC_INDEX, STORE_FN_INDEX, WRITE_FUNC_INDEX,
+    ADD_FUNC_INDEX, ADD_KEY_FN_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX,
+    GAS_FUNC_INDEX, GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX,
+    GET_READ_FUNC_INDEX, GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, IS_VALID_FN_INDEX,
+    LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX, PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX,
+    RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX, STORE_FN_INDEX, WRITE_FUNC_INDEX,
 };
 use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
@@ -433,6 +434,9 @@ where
             .set(dest_ptr, &seed)
             .map_err(|e| Error::Interpreter(e).into())
     }
+    fn add_key(&mut self, _public_key: PublicKey, _weight: Weight) -> Result<(), Trap> {
+        unimplemented!();
+    }
 }
 
 fn as_usize(u: u32) -> usize {
@@ -634,6 +638,23 @@ where
                 let (value_ptr, value_size) = Args::parse(args)?;
 
                 if self.value_is_valid(value_ptr, value_size)? {
+                    Ok(Some(RuntimeValue::I32(1)))
+                } else {
+                    Ok(Some(RuntimeValue::I32(0)))
+                }
+            }
+
+            ADD_KEY_FN_INDEX => {
+                // args(0) = pointer to array of bytes of a public key
+                // args(1) = weight of the key
+                let (public_key_ptr, weight): (u32, u8) = Args::parse(args)?;
+                let public_key = {
+                    let source = self.bytes_from_mem(public_key_ptr, 32)?;
+                    let mut public_key_bytes = [0; KEY_SIZE];
+                    public_key_bytes.copy_from_slice(&source);
+                    PublicKey::new(public_key_bytes)
+                };
+                if let Ok(_) = self.add_key(public_key, Weight::new(weight)) {
                     Ok(Some(RuntimeValue::I32(1)))
                 } else {
                     Ok(Some(RuntimeValue::I32(0)))
