@@ -112,50 +112,62 @@ object Estimator {
       genesis: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
+    def mainChild(blockHash: BlockHash, scores: Map[BlockHash, Long]): F[BlockHash] =
+      blockDag.children(blockHash).flatMap {
+        case None =>
+          blockHash.pure[F]
+        case Some(children) =>
+          for {
+            mainChildren <- children.toList.filterA {
+                             case child if scores.contains(child) ⇒
+                               blockDag.lookup(child).map {
+                                 // make sure child's main parent's hash equal to `blockHash`
+                                 case Some(blockMetadata) ⇒ blockMetadata.parents.head == blockHash
+                                 case None                ⇒ false
+                               }
+                             case _ ⇒ false.pure[F]
+                           }
+            result <- if (mainChildren.isEmpty) {
+                       blockHash.pure[F]
+                     } else {
+                       mainChild(
+                         mainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toString()),
+                         scores
+                       )
+                     }
+          } yield result
+      }
 
-    /*
-     * Only include children that have been scored,
-     * this ensures that the search does not go beyond
-     * the messages defined by blockDag.latestMessages
-     */
     def replaceBlockHashWithChildren(
-        b: BlockHash,
-        blockDag: BlockDagRepresentation[F],
-        scores: Map[BlockHash, Long]
+        b: BlockHash
     ): F[List[BlockHash]] =
       for {
-        c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains))
+        c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]))
       } yield if (c.nonEmpty) c.toList else List(b)
 
-    def loop(
-        children: List[BlockHash],
-        scores: Map[BlockHash, Long]
-    ): F[List[BlockHash]] =
-      for {
-        grandChildrenList <- children.traverse(replaceBlockHashWithChildren(_, blockDag, scores))
-        mainChild = grandChildrenList match {
-          case mainGrandChildren :: _ =>
-            mainGrandChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toString())
-        }
-        distinctGrandchildren = grandChildrenList.flatten.distinct
-        otherGrandchildren    = distinctGrandchildren.filterNot(_ == mainChild)
-        orderedGrandchildren  = mainChild +: otherGrandchildren
-        result <- if (stillSame(mainChild, children, orderedGrandchildren)) {
-                   orderedGrandchildren.pure[F]
-                 } else {
-                   loop(orderedGrandchildren, scores)
-                 }
-      } yield result
-
     def stillSame(
-        mainChild: BlockHash,
         children: List[BlockHash],
         nextChildren: List[BlockHash]
     ): Boolean =
-      mainChild == children.head && children.toSet == nextChildren.toSet
+      children.toSet == nextChildren.toSet
 
-    lmdScoring(blockDag, latestMessagesHashes)
-      .flatMap(loop(List(genesis), _))
+    def tips(blocks: List[BlockHash]): F[List[BlockHash]] =
+      for {
+        cr       <- blocks.flatTraverse(replaceBlockHashWithChildren)
+        children = cr.distinct
+        result <- if (stillSame(blocks, children)) {
+                   children.pure[F]
+                 } else {
+                   tips(children)
+                 }
+      } yield result
+
+    for {
+      score         <- lmdScoring(blockDag, latestMessagesHashes)
+      mainChild     <- mainChild(genesis, score)
+      children      <- tips(latestMessagesHashes.values.toList)
+      otherChildren = children.filter(_ != mainChild)
+    } yield mainChild +: otherChildren
   }
 
   private def buildScoresMap[F[_]: Monad](
