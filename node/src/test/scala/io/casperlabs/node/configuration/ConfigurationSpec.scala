@@ -47,7 +47,7 @@ class ConfigurationSpec
       kademliaPort = 1,
       dynamicHostAddress = false,
       noUpnp = false,
-      defaultTimeout = 1,
+      defaultTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       bootstrap = Node(
         NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
         "52.119.8.109",
