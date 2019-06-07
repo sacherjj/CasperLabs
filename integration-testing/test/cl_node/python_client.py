@@ -25,6 +25,7 @@ class PythonClient(CasperLabsClient):
                session_contract: Optional[str] = 'test_helloname.wasm',
                payment_contract: Optional[str] = 'test_helloname.wasm') -> str:
         # TODO: Will need actual path to local contracts.
+
         deploy_nonce = nonce if nonce is not None else self.nonce[from_address]
 
         logging.info(f'PY_CLIENT.deploy(from_address={from_address}, gas_limit={gas_limit}, gas_price={gas_price}, '
@@ -33,7 +34,6 @@ class PythonClient(CasperLabsClient):
 
         r = self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price,
                                   payment_contract, session_contract, nonce)
-        # TODO: check the deploy was successful
         if nonce is None:
             self.nonce[from_address] += 1
         return r
