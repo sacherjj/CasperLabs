@@ -101,7 +101,7 @@ def not_all_connected_directly_nodes(docker_client_fixture):
         network.disconnect((0, 2))
         yield network.docker_nodes
 
-    
+
 def test_blocks_infect_network(not_all_connected_directly_nodes):
     """
     Feature file: block_gossiping.feature
@@ -135,7 +135,7 @@ def test_network_partition_and_rejoin(four_nodes_network):
     """
     Feature file: block_gossiping.feature
     Scenario: Network partition occurs and rejoin occurs
-    """ 
+    """
     # Partition the network so node0 connected to node1 and node2 connected to node3 only.
     connections_between_partitions = [(i, j) for i in (0,1) for j in (2,3)]
 
@@ -146,13 +146,15 @@ def test_network_partition_and_rejoin(four_nodes_network):
     nodes = four_nodes_network.docker_nodes
     n = len(nodes)
     partitions = nodes[:int(n/2)], nodes[int(n/2):]
-    
+
+    # Propose separately in each partition. They should not see each others' blocks,
+    # so everyone has the genesis plus the 1 block proposed in its partition.
     deploy_and_propose(partitions[0][0], C[0])
     deploy_and_propose(partitions[1][0], C[1])
 
     for node in nodes:
         wait_for_blocks_count_at_least(node, 2, 2, node.timeout * 2)
-    
+
     logging.info("CONNECT PARTITIONS")
     #four_nodes_network.connect((p[0] for p in partitions))
     for connection in connections_between_partitions:
@@ -161,9 +163,28 @@ def test_network_partition_and_rejoin(four_nodes_network):
     #for node in nodes: wait_for_peers_count_at_least(node, n-1, node.timeout)
     logging.info("PARTITIONS CONNECTED")
 
+    # NOTE: Currently `NodeDiscoveryImpl.alivePeersInAscendingDistance` pings the peers
+    # before returning a list, from which we take a random subset for gossiping,
+    # so when we do a deploy the node will see the peers it previously knew about
+    # as alive as soon as the network is re-established.
+    # However, NODE-561 may change this and push pinging into the background in
+    # which case it may take a bit longer for the peers to pick up each outhers's presence.
+
+    # When we propose a node in partition[0] it should propagate to partition[1],
+    # however, nodes in partition[0] will still not see blocks from partition[1]
+    # until they also propose a new one on top of the block the created during
+    # the network outage.
     deploy_and_propose(nodes[0], C[2])
-    
-    for node in nodes:
-        logging.info(f"CHECK {node} HAS ALL NODES")
+
+    # NOTE: Currently the node closes the channel only after it has detected a failure,
+    # but the syncing will not retry it. A second attempt will create a new channel though.
+    deploy_and_propose(nodes[0], C[2])
+
+    for node in partitions[0]:
+        logging.info(f"CHECK {node} HAS ALL BLOCKS")
         wait_for_blocks_count_at_least(node, 4, 4, node.timeout * 2)
+
+    for node in partitions[1]:
+        logging.info(f"CHECK {node} HAS ALL NODES")
+        wait_for_blocks_count_at_least(node, 5, 5, node.timeout * 2)
 
