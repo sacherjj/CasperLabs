@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-set -e
-
+set -euo pipefail
+trap "echo 'error: Script failed: see failed command above'" ERR
 # Generates all necessary key for a node.
 # Usage:
 # ./gen-keys.sh <directory where to put keys>
@@ -31,18 +31,25 @@ set -e
 # Output directory where to put generated keys
 OUTPUT_DIR="$1"
 
-# Generate validator ID PEM keys
+set -v
+# Generate validator private key
 openssl genpkey -algorithm Ed25519 -out "$OUTPUT_DIR/validator-private.pem"
+
+# Extract validator public key from private
 openssl pkey -in "$OUTPUT_DIR/validator-private.pem" -pubout -out "$OUTPUT_DIR/validator-public.pem"
+
 # Extract raw public key from PEM file to serve as a validator ID
 openssl pkey -outform DER -pubout -in "$OUTPUT_DIR/validator-private.pem" | tail -c +13 | openssl base64 | tr -d '\n' > "$OUTPUT_DIR/validator-id"
 
-# Generate TLS key in PEM format
+# Generate private TLS key in PEM format
 openssl ecparam -name secp256r1 -genkey -noout -out "$OUTPUT_DIR/secp256r1-private.pem"
+
 # Transform key to PKCS#8 format
 openssl pkcs8 -topk8 -nocrypt -in "$OUTPUT_DIR/secp256r1-private.pem" -out "$OUTPUT_DIR/node.key.pem"
+
 # Remove old PEM key
 rm "$OUTPUT_DIR/secp256r1-private.pem"
+
 # Extract public key, hash it with Keccak-256 and get last 20 bytes to serve as a node ID
 # Borrowed from https://ezcook.de/2017/11/30/Generate-Ethereum-keys-and-wallet-address/
 NODE_ID=$(cat "$OUTPUT_DIR/node.key.pem" | \
@@ -56,6 +63,7 @@ NODE_ID=$(cat "$OUTPUT_DIR/node.key.pem" | \
     tail -c 41 | \
     tr -d '\n')
 echo "$NODE_ID"> "$OUTPUT_DIR/node-id"
+
 # Generate X.509 certificate
 openssl req \
 	-new \
