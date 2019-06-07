@@ -339,7 +339,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                        if (remDeploys.nonEmpty) Left(remDeploys) else Right(Set.empty)
                    }
       // Pending deploys are most likely not in the past, or we'd have to go back indefinitely to
-      // prove they aren't. The EE will ignore them if the nonce is less then the expected,
+      // prove they aren't. The EE will ignore them if the nonce is less than the expected,
       // so it should be fine to include and see what happens.
       candidates = orphaned.toSeq ++ state.deployBuffer.pendingDeploys.values
 
@@ -429,7 +429,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
             }
             .whenA(deploysToDiscard.nonEmpty)
 
-          status <* discardDeploys
+          discardDeploys *> status
       }
       .handleErrorWith {
         case ex @ SmartContractEngineError(error_msg) =>
@@ -507,7 +507,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
     // Mark deploys we have observed in blocks as processed.
     val processedDeployHashes = attempts
       .collect {
-        case (block, status) if canRemove(status) =>
+        case (block, _) if addedBlockHashes(block.blockHash) =>
           block.getBody.deploys.map(_.getDeploy.deployHash)
       }
       .flatten

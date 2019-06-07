@@ -45,11 +45,11 @@ case class DeployBuffer(
     else
       this
 
-  // Removes deploys that were included in a block.
-  // They could be in pendingDeploys too if they were sent to multiple nodes.
+  // Removes deploys that were included in a finalized block.
   def remove(deployHashes: Set[ByteString]) =
     copy(
       processedDeploys = processedDeploys.filterKeys(h => !deployHashes(h)),
+      // They could be in pendingDeploys too if they were sent to multiple nodes.
       pendingDeploys = pendingDeploys.filterKeys(h => !deployHashes(h))
     )
 

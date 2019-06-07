@@ -184,7 +184,8 @@ object AutoProposerTest {
         proposalCount += 1
         val keys = deployBuffer.pendingDeploys.keySet.toSet
         deployBuffer = deployBuffer.processed(keys)
-        ReadOnlyMode
+        // Doesn't matter what we return in this test.
+        if (keys.nonEmpty) Created(Block()) else NoNewDeploys
       }
 
     override def addBlock(block: Block): F[BlockStatus] = ???
