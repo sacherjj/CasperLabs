@@ -41,6 +41,7 @@ const SERVER_START_MESSAGE: &str = "starting Execution Engine Standalone";
 const SERVER_STOP_MESSAGE: &str = "stopping Execution Engine Standalone";
 const SERVER_NO_WASM_MESSAGE: &str = "no wasm files to process";
 const SERVER_NO_GAS_LIMIT_MESSAGE: &str = "gas limit is 0";
+const VALIDATE_NONCE: &str = "validate-nonce";
 
 // loglevel
 const ARG_LOG_LEVEL: &str = "loglevel";
@@ -191,6 +192,8 @@ fn main() {
         logging::log_info(SERVER_NO_GAS_LIMIT_MESSAGE);
     }
 
+    let validate_nonce = matches.is_present(VALIDATE_NONCE);
+
     // TODO: move to arg parser
     let timestamp: u64 = 100_000;
     let protocol_version: u64 = 1;
@@ -199,7 +202,7 @@ fn main() {
     let global_state = InMemoryGlobalState::from_pairs(CorrelationId::new(), &init_state)
         .expect("Could not create global state");
     let mut state_hash: Blake2bHash = global_state.root_hash;
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, validate_nonce);
 
     let wasmi_executor = WasmiExecutor;
     let wasm_costs = WasmCosts::from_version(protocol_version).unwrap_or_else(|| {
@@ -229,6 +232,10 @@ fn main() {
 
         let mut properties = BTreeMap::new();
 
+        properties.insert(
+            String::from("validate-nonce"),
+            format!("{:?}", validate_nonce),
+        );
         properties.insert(String::from("pre-state-hash"), format!("{:?}", state_hash));
         properties.insert(String::from("wasm-path"), wasm_bytes.path.to_owned());
         properties.insert(String::from("nonce"), format!("{}", nonce));
@@ -323,19 +330,20 @@ fn get_args() -> ArgMatches<'static> {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("wasm")
-                .long("wasm")
-                .multiple(true)
-                .required(true)
-                .index(1),
-        )
-        .arg(
             Arg::with_name(ARG_LOG_LEVEL)
                 .required(false)
                 .long(ARG_LOG_LEVEL)
                 .takes_value(true)
                 .value_name(ARG_LOG_LEVEL_VALUE)
                 .help(ARG_LOG_LEVEL_HELP),
+        )
+        .arg(Arg::with_name(VALIDATE_NONCE).long(VALIDATE_NONCE))
+        .arg(
+            Arg::with_name("wasm")
+                .long("wasm")
+                .multiple(true)
+                .required(true)
+                .index(1),
         )
         .get_matches()
 }
