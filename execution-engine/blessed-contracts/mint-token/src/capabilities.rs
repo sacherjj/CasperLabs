@@ -107,7 +107,7 @@ macro_rules! from_try_from_key_impl {
             fn try_from(k: Key) -> Result<Self, Self::Error> {
                 match k {
                     Key::URef(uref) if uref.access_rights() >= Some($min_access) => {
-                        Ok($type(uref.id(), PhantomData))
+                        Ok($type(uref.addr(), PhantomData))
                     }
                     _ => Err(()),
                 }

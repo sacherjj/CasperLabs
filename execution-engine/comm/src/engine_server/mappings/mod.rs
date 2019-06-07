@@ -491,7 +491,7 @@ impl From<&common::key::Key> for super::ipc::Key {
             }
             common::key::Key::URef(uref) => {
                 let mut key_uref = super::ipc::KeyURef::new();
-                key_uref.set_uref(uref.id().to_vec());
+                key_uref.set_uref(uref.addr().to_vec());
                 if let Some(access_rights) = uref.access_rights() {
                     key_uref.set_access_rights(
                         KeyURef_AccessRights::from_i32(access_rights.bits().into()).unwrap(),
@@ -524,26 +524,23 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
             Ok(common::key::Key::Hash(arr))
         } else if ipc_key.has_uref() {
             let ipc_uref = ipc_key.get_uref();
-            let id = {
+            let addr = {
                 let mut ret = [0u8; 32];
                 ret.clone_from_slice(&ipc_uref.uref);
                 ret
             };
-            let maybe_access_rights = {
+            let uref = {
                 let access_rights_value: i32 = ipc_uref.access_rights.value();
                 if access_rights_value != 0 {
                     let access_rights_bits = access_rights_value.try_into().unwrap();
                     let access_rights =
                         common::uref::AccessRights::from_bits(access_rights_bits).unwrap();
-                    Some(access_rights)
+                    URef::new(addr, access_rights)
                 } else {
-                    None
+                    URef::new(addr, common::uref::AccessRights::READ).remove_access_rights()
                 }
             };
-            Ok(common::key::Key::URef(URef::unsafe_new(
-                id,
-                maybe_access_rights,
-            )))
+            Ok(common::key::Key::URef(uref))
         } else if ipc_key.has_local() {
             let ipc_local_key = ipc_key.get_local();
             if !(ipc_local_key.seed.len() == 32 && ipc_local_key.key_hash.len() == 32) {

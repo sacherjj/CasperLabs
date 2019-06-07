@@ -29,7 +29,7 @@ impl<T> UPointer<T> {
 
     pub fn from_uref(uref: URef) -> Result<Self, NoAccessRightsError> {
         if let Some(access_rights) = uref.access_rights() {
-            Ok(UPointer(uref.id(), access_rights, PhantomData))
+            Ok(UPointer(uref.addr(), access_rights, PhantomData))
         } else {
             Err(NoAccessRightsError)
         }

@@ -929,7 +929,7 @@ impl Executor<Module> for WasmiExecutor {
 /// Helper function for creating `known_urefs` associating addresses and corresponding `AccessRights`.
 pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
     match key {
-        Key::URef(uref) => Some((uref.id(), uref.access_rights())),
+        Key::URef(uref) => Some((uref.addr(), uref.access_rights())),
         Key::Account(_) => None,
         Key::Hash(_) => None,
         Key::Local { .. } => None,
