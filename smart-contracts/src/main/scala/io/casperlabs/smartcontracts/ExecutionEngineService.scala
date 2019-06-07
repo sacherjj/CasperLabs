@@ -43,8 +43,10 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift] private[smart
   private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
   override def emptyStateHash: ByteString = {
-    val arr: Array[Byte] = Array(213, 28, 115, 132, 250, 129, 55, 111, 27, 68, 13, 5, 143, 211, 111,
-      190, 243, 87, 140, 228, 21, 158, 179, 104, 240, 16, 70, 251, 167, 153, 156, 43).map(_.toByte)
+    val arr: Array[Byte] = Array(
+      33, 1, 78, 19, 239, 206, 216, 72, 75, 34, 220, 39, 171, 110, 47, 180, 19, 94, 132, 105, 33,
+      180, 167, 166, 132, 211, 90, 218, 195, 96, 255, 151
+    ).map(_.toByte)
     ByteString.copyFrom(arr)
   }
 

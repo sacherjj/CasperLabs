@@ -293,8 +293,8 @@ mod tests {
     fn initial_state_has_the_expected_hash() {
         let correlation_id = CorrelationId::new();
         let expected_bytes = vec![
-            213u8, 28, 115, 132, 250, 129, 55, 111, 27, 68, 13, 5, 143, 211, 111, 190, 243, 87,
-            140, 228, 21, 158, 179, 104, 240, 16, 70, 251, 167, 153, 156, 43,
+            33u8, 1, 78, 19, 239, 206, 216, 72, 75, 34, 220, 39, 171, 110, 47, 180, 19, 94, 132,
+            105, 33, 180, 167, 166, 132, 211, 90, 218, 195, 96, 255, 151,
         ];
         let init_state = mocked_account([48u8; 32]);
         let global_state = InMemoryGlobalState::from_pairs(correlation_id, &init_state).unwrap();
