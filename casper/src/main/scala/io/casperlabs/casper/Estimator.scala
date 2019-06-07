@@ -18,12 +18,12 @@ object Estimator {
 
   def tips[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash
+      genesis: BlockHash
   ): F[IndexedSeq[BlockHash]] =
     for {
       latestMessageHashes <- blockDag.latestMessageHashes
-      result              <- Estimator.tips[F](blockDag, lastFinalizedBlockHash, latestMessageHashes)
-    } yield result
+      result              <- Estimator.lmdMainchainGhost[F](blockDag, genesis, latestMessageHashes)
+    } yield result.toIndexedSeq
 
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis)

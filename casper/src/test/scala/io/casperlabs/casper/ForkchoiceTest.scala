@@ -133,7 +133,7 @@ class ForkchoiceTest
           v1 -> b8.blockHash,
           v2 -> b6.blockHash
         )
-        forkchoice <- Estimator.tips[Task](
+        forkchoice <- Estimator.lmdMainchainGhost[Task](
                        dag,
                        genesis.blockHash,
                        latestBlocks
