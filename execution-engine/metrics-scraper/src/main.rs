@@ -1,12 +1,11 @@
-use std::io::{self, BufRead};
+mod accumulator;
+mod drain;
+mod sink;
+
+use std::io;
 use std::time::Duration;
 
-use crate::input::process_line;
-use crate::output::open_drain;
-use metrics_scraper::accumulator::Accumulator;
-
-pub mod input;
-pub mod output;
+use accumulator::Accumulator;
 
 fn main() -> io::Result<()> {
     // TODO: args
@@ -15,18 +14,9 @@ fn main() -> io::Result<()> {
 
     let accumulator: Accumulator<String> = Accumulator::new(expected_poll_length);
 
-    {
-        let _ = open_drain(accumulator.clone(), &addr);
-    }
+    drain::open_drain(Accumulator::clone(&accumulator), &addr);
 
-    {
-        let pusher = accumulator.clone();
-        let stdin = io::stdin();
-        let handle = stdin.lock();
+    sink::start_sink(Accumulator::clone(&accumulator));
 
-        let mut iter = handle.lines();
-        loop {
-            process_line(&pusher, iter.next());
-        }
-    }
+    Ok(())
 }

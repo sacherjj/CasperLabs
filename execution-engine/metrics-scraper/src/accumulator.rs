@@ -1,8 +1,19 @@
 use std::collections::vec_deque::VecDeque;
-use std::error::Error;
 use std::fmt;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::time::{Duration, Instant};
+
+pub trait Pusher<T> {
+    type Error: fmt::Debug;
+
+    fn push(&self, t: T) -> Result<(), Self::Error>;
+}
+
+pub trait Drainer<T>: Clone + Send + Sync {
+    type Error: fmt::Debug;
+
+    fn drain(&self) -> Result<Vec<T>, Self::Error>;
+}
 
 #[derive(Debug, Copy, Clone)]
 pub enum AccumulationError {
@@ -10,16 +21,8 @@ pub enum AccumulationError {
 }
 
 impl<T> From<PoisonError<T>> for AccumulationError {
-    fn from(error: PoisonError<T>) -> Self {
+    fn from(_error: PoisonError<T>) -> Self {
         AccumulationError::PoisonError
-    }
-}
-
-impl fmt::Display for AccumulationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self {
-            AccumulationError::PoisonError => write!(f, "thread was poisoned"),
-        }
     }
 }
 
@@ -30,12 +33,12 @@ pub struct Accumulator<T> {
     poll_length: Arc<Duration>,
 }
 
-impl<T> Clone for Accumulator<T> {
-    fn clone(&self) -> Self {
-        let main = Arc::clone(&self.main);
-        let alt = Arc::clone(&self.alt);
-        let timer = Arc::clone(&self.timer);
-        let poll_length = Arc::clone(&self.poll_length);
+impl<T: Clone> Accumulator<T> {
+    pub fn new(poll_length: Duration) -> Self {
+        let main = Arc::new(Mutex::new(VecDeque::new()));
+        let alt = Arc::new(Mutex::new(VecDeque::new()));
+        let timer = Arc::new(RwLock::new(Instant::now()));
+        let poll_length = Arc::new(poll_length);
         Accumulator {
             main,
             alt,
@@ -45,12 +48,10 @@ impl<T> Clone for Accumulator<T> {
     }
 }
 
-pub trait Pusher<T> {
-    fn push(&self, t: T) -> Result<(), AccumulationError>;
-}
-
 impl<T: Clone> Pusher<T> for Accumulator<T> {
-    fn push(&self, t: T) -> Result<(), AccumulationError> {
+    type Error = AccumulationError;
+
+    fn push(&self, t: T) -> Result<(), Self::Error> {
         if let Ok(mut main_guard) = self.main.try_lock() {
             let mut alt_guard = self.alt.lock()?;
             if !alt_guard.is_empty() {
@@ -72,12 +73,10 @@ impl<T: Clone> Pusher<T> for Accumulator<T> {
     }
 }
 
-pub trait Drainer<T>: Clone + Send + Sync {
-    fn drain(&self) -> Result<Vec<T>, AccumulationError>;
-}
-
 impl<T: Clone + Send + Sync> Drainer<T> for Accumulator<T> {
-    fn drain(&self) -> Result<Vec<T>, AccumulationError> {
+    type Error = AccumulationError;
+
+    fn drain(&self) -> Result<Vec<T>, Self::Error> {
         let mut main_guard = self.main.lock()?;
         let mut timer_guard = self.timer.write()?;
         let ret = main_guard.drain(..).collect();
@@ -86,27 +85,17 @@ impl<T: Clone + Send + Sync> Drainer<T> for Accumulator<T> {
     }
 }
 
-impl<T: Clone> Accumulator<T> {
-    pub fn new(poll_length: Duration) -> Self {
-        let main = Arc::new(Mutex::new(VecDeque::new()));
-        let alt = Arc::new(Mutex::new(VecDeque::new()));
-        let timer = Arc::new(RwLock::new(Instant::now()));
-        let poll_length = Arc::new(poll_length);
+impl<T> Clone for Accumulator<T> {
+    fn clone(&self) -> Self {
+        let main = Arc::clone(&self.main);
+        let alt = Arc::clone(&self.alt);
+        let timer = Arc::clone(&self.timer);
+        let poll_length = Arc::clone(&self.poll_length);
         Accumulator {
             main,
             alt,
             timer,
             poll_length,
-        }
-    }
-
-    pub fn is_empty(&self) -> Result<bool, AccumulationError> {
-        if let Ok(mut main_guard) = self.main.try_lock() {
-            let mut alt_guard = self.alt.lock()?;
-            Ok(main_guard.is_empty() && alt_guard.is_empty())
-        } else {
-            let mut alt_guard = self.alt.lock()?;
-            Ok(alt_guard.is_empty())
         }
     }
 }
@@ -118,31 +107,64 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_accept_string_value() {
-        let expected_poll_length = Duration::new(5, 0);
+    fn should_drain_when_empty() {
+        let expected: Vec<String> = vec![];
 
-        let state = Accumulator::new(expected_poll_length);
+        let actual = {
+            let accumulator: Accumulator<String> = Accumulator::new(Duration::new(5, 0));
+            accumulator.drain().expect("should drain")
+        };
 
-        state.push("foo").expect("should push");
-
-        assert!(
-            !state.is_empty().expect("should is_empty"),
-            "should not be empty"
-        );
+        assert_eq!(expected, actual);
     }
 
     #[test]
-    fn should_return_string_value() {
-        let expected_poll_length = Duration::new(5, 0);
+    fn should_drain_single_value() {
+        let expected = vec!["foo"];
 
-        let state = Accumulator::new(expected_poll_length);
+        let actual = {
+            let accumulator = Accumulator::new(Duration::new(5, 0));
+            for item in &expected {
+                accumulator.push(*item).expect("should push");
+            }
+            accumulator.drain().expect("should drain")
+        };
 
-        state.push("foo");
+        assert_eq!(expected, actual);
+    }
 
-        let mut items = state.drain().expect("should drain");
+    #[test]
+    fn should_drain_multiple_values() {
+        let expected = vec!["foo", "bar"];
 
-        let item = items.pop().expect("should have item");
+        let actual = {
+            let accumulator = Accumulator::new(Duration::new(5, 0));
+            for item in &expected {
+                accumulator.push(*item).expect("should push");
+            }
+            accumulator.drain().expect("should drain")
+        };
 
-        assert_eq!(item, "foo", "should have pushed value");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn should_fully_drain() {
+        let accumulator = Accumulator::new(Duration::new(5, 0));
+
+        let expected = vec!["foo", "bar"];
+
+        let actual = {
+            for item in &expected {
+                accumulator.push(*item).expect("should push");
+            }
+            accumulator.drain().expect("should drain")
+        };
+
+        assert_eq!(expected, actual);
+
+        let empty = accumulator.drain().expect("should drain");
+
+        assert!(empty.is_empty());
     }
 }
