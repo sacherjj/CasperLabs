@@ -57,10 +57,11 @@ impl<T: Clone> Pusher<T> for Accumulator<T> {
             if !alt_guard.is_empty() {
                 main_guard.append(&mut alt_guard);
             }
-            if {
+            let expired = {
                 let timer = self.timer.read()?;
                 timer.elapsed() > *self.poll_length
-            } {
+            };
+            if expired {
                 main_guard.pop_front();
             }
             main_guard.push_back(t);
