@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
-trap "echo 'error: Script failed: see failed command above'" ERR
+trap "echo 'ERROR: Script failed: see failed command above'" ERR
 # Generates all necessary key for a node.
 # Usage:
-# ./gen-keys.sh <directory where to put keys>
-#
+# ./gen-keys.sh [-v] <directory where to put keys>
+#   -v      Print debug output
 # Example:
-# ./gen-keys.sh test-dir
+# ./gen-keys.sh -v test-dir
 #
 # Will produce:
 #
@@ -29,9 +29,31 @@ trap "echo 'error: Script failed: see failed command above'" ERR
 #   --tls-certificate node.certificate.pem
 
 # Output directory where to put generated keys
-OUTPUT_DIR="$1"
 
-set -v
+if [ $# -eq 1 ]; then
+    if [ -d "$1" ]; then
+        OUTPUT_DIR="$1"
+    else
+        echo "ERROR: output dir doesn't exist"
+        exit 1
+    fi
+else
+    if [ $# -eq 2 ]; then
+        if [ -d "$2" ] && [ "$1" == "-v" ]; then
+            OUTPUT_DIR="$2"
+            set -v
+        else
+            echo "usage: ./gen-keys.sh [-v] <dir>"
+            echo "ERROR: output dir doesn't exist or got unexpected flag option"
+            exit 1
+        fi
+    else
+        echo "usage: ./gen-keys.sh [-v] <dir>"
+        exit 1
+    fi
+fi
+
+
 # Generate validator private key
 openssl genpkey -algorithm Ed25519 -out "$OUTPUT_DIR/validator-private.pem"
 
@@ -40,6 +62,15 @@ openssl pkey -in "$OUTPUT_DIR/validator-private.pem" -pubout -out "$OUTPUT_DIR/v
 
 # Extract raw public key from PEM file to serve as a validator ID
 openssl pkey -outform DER -pubout -in "$OUTPUT_DIR/validator-private.pem" | tail -c +13 | openssl base64 | tr -d '\n' > "$OUTPUT_DIR/validator-id"
+
+# Assert validator-id is 32 bytes long
+VALIDATOR_ID_BASE64=$(cat "$OUTPUT_DIR/validator-id")
+VALIDATOR_ID_HEX=$(echo "$VALIDATOR_ID_BASE64" | openssl base64 -d | od -t x -An | tr -d '[:space:]')
+if [ ${#VALIDATOR_ID_HEX} -ne 64 ]
+    then
+        echo "ERROR: validator-id must be 64 characters length, got " "${#VALIDATOR_ID_HEX}" "instead"
+        exit 1
+fi
 
 # Generate private TLS key in PEM format
 openssl ecparam -name secp256r1 -genkey -noout -out "$OUTPUT_DIR/secp256r1-private.pem"
@@ -62,6 +93,14 @@ NODE_ID=$(cat "$OUTPUT_DIR/node.key.pem" | \
     tr -d ' -' | \
     tail -c 41 | \
     tr -d '\n')
+
+# Assert node-id is 20 bytes long
+if [ ${#NODE_ID} -ne 40 ]
+    then
+        echo "ERROR: node-id must be 40 characters length, got " "${#NODE_ID}" "instead"
+        exit 1
+fi
+
 echo "$NODE_ID"> "$OUTPUT_DIR/node-id"
 
 # Generate X.509 certificate
