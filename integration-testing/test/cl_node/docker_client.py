@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
@@ -13,6 +14,7 @@ class DockerClient(CasperLabsClient):
     def __init__(self, node: 'DockerNode'):
         self.node = node
         self.docker_client = node.config.docker_client
+        self.nonce = defaultdict(int)
 
     @property
     def client_type(self) -> str:
@@ -49,22 +51,27 @@ class DockerClient(CasperLabsClient):
                from_address: str = "00000000000000000000000000000000",
                gas_limit: int = 1000000,
                gas_price: int = 1,
-               nonce: int = 0,
+               nonce: int = None,
                session_contract: Optional[str] = 'test_helloname.wasm',
                payment_contract: Optional[str] = 'test_helloname.wasm',
                private_key: Optional[str] = None,
                public_key: Optional[str] = None) -> str:
+
+        deploy_nonce = nonce if nonce is not None else self.nonce[from_address]
         command = (f"deploy --from {from_address}"
                    f" --gas-limit {gas_limit} --gas-price {gas_price}"
-                   f" --nonce {nonce} --session=/data/{session_contract}"
+                   f" --nonce {deploy_nonce} --session=/data/{session_contract}"
                    f" --payment=/data/{payment_contract}")
 
         if public_key and private_key:
             command += (f" --private-key=/data/{private_key}"
                         f" --public-key=/data/{public_key}")
 
-
-        return self.invoke_client(command)
+        r = self.invoke_client(command)
+        if 'Success' in r and nonce is None:
+            self.nonce[from_address] += 1
+        return r
+        
 
     def show_block(self, block_hash: str) -> str:
         return self.invoke_client(f'show-block {block_hash}')
