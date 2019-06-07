@@ -306,11 +306,9 @@ class ForkchoiceTest
           _ = scores shouldEqual Map(
             genesis.blockHash -> (3 + 5 + 7),
             a.blockHash       -> (3 + 7),
-            b.blockHash       -> (3 + 5 + 7),
-            c.blockHash       -> 5,
+            b.blockHash       -> 5,
             d.blockHash       -> (3 + 7),
-            e.blockHash       -> (3 + 5 + 7),
-            f.blockHash       -> 5,
+            e.blockHash       -> 5,
             g.blockHash       -> (3 + 7),
             h.blockHash       -> 5,
             i.blockHash       -> 7

@@ -96,7 +96,7 @@ object Estimator {
       case (acc, (validator, latestMessageHash)) =>
         DagOperations
           .bfTraverseF[F, BlockHash](List(latestMessageHash))(
-            hash => blockDag.lookup(hash).map(_.get.parents)
+            hash => blockDag.lookup(hash).map(_.get.parents.take(1))
           )
           .foldLeftF(acc) {
             case (acc2, blockHash) =>
