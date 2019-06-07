@@ -117,14 +117,14 @@ impl CorrelationId {
 
 impl fmt::Display for CorrelationId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{:?}", self.0)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::logging;
     use crate::newtypes::CorrelationId;
+    use crate::utils;
     use std::hash::{Hash, Hasher};
 
     #[test]
@@ -144,11 +144,21 @@ mod tests {
     fn should_support_to_string() {
         let correlation_id = CorrelationId::new();
 
+        assert!(
+            !correlation_id.is_empty(),
+            "correlation_id should be produce string"
+        )
+    }
+
+    #[test]
+    fn should_support_to_string_no_type_encasement() {
+        let correlation_id = CorrelationId::new();
+
         let correlation_id_string = correlation_id.to_string();
 
         assert!(
-            !correlation_id_string.is_empty(),
-            "correlation_id should be produce string"
+            !correlation_id_string.starts_with("CorrelationId"),
+            "correlation_id should just be the inner value without tuple name"
         )
     }
 
@@ -156,7 +166,7 @@ mod tests {
     fn should_support_to_json() {
         let correlation_id = CorrelationId::new();
 
-        let correlation_id_json = logging::utils::jsonify(correlation_id, false);
+        let correlation_id_json = utils::jsonify(correlation_id, false);
 
         assert!(
             !correlation_id_json.is_empty(),

@@ -2,7 +2,7 @@ package io.casperlabs.node.api
 
 import cats.Id
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
+import cats.effect.{Effect => _, _}
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -16,7 +16,7 @@ import io.casperlabs.node._
 import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.node.api.control.ControlGrpcMonix
 import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
-import io.casperlabs.node.api.graphql.{Fs2SubscriptionStream, GraphQL, GraphQLSchema}
+import io.casperlabs.node.api.graphql.GraphQL
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics.effects.diagnosticsService
 import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
@@ -26,11 +26,8 @@ import kamon.Kamon
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 import org.http4s.implicits._
-
-import scala.concurrent.duration._
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
-import sangria.execution.Executor
 
 import scala.concurrent.ExecutionContext
 

@@ -7,6 +7,7 @@ import fs2._
 import sangria.streaming.SubscriptionStream
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
 /**
@@ -36,8 +37,10 @@ private[graphql] class Fs2SubscriptionStream[F[_]: Effect](implicit val ec: Exec
   override def first[T](s: Stream[F, T]): Future[T] =
     s.head.compile.toList.toIO.unsafeToFuture().map(_.head)
 
-  override def failed[T](e: Throwable): Stream[F, T] =
-    Stream.raiseError[F](e)
+  override def failed[T](t: Throwable): Stream[F, T] =
+    t match {
+      case NonFatal(e) => Stream.raiseError[F](e)
+    }
 
   override def onComplete[Ctx, Res](result: Stream[F, Res])(op: => Unit): Stream[F, Res] =
     result.onFinalize(Sync[F].delay(op))
