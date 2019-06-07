@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::convert::TryFrom;
 use std::fmt;
 use std::iter::IntoIterator;
 use std::rc::Rc;
@@ -24,13 +25,7 @@ use storage::global_state::StateReader;
 
 use args::Args;
 use engine_state::execution_result::ExecutionResult;
-use functions::{
-    ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
-    GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
-    GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, IS_VALID_FN_INDEX, LOAD_ARG_FUNC_INDEX,
-    NEW_FUNC_INDEX, PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX,
-    SER_FN_FUNC_INDEX, STORE_FN_INDEX, WRITE_FUNC_INDEX,
-};
+use function_index::FunctionIndex;
 use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
 use resolvers::memory_resolver::MemoryResolver;
@@ -448,8 +443,9 @@ where
         index: usize,
         args: RuntimeArgs,
     ) -> Result<Option<RuntimeValue>, Trap> {
-        match index {
-            READ_FUNC_INDEX => {
+        let func = FunctionIndex::try_from(index).expect("unknown function index");
+        match func {
+            FunctionIndex::ReadFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key in Wasm memory
                 let (key_ptr, key_size) = Args::parse(args)?;
@@ -457,7 +453,7 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            SER_FN_FUNC_INDEX => {
+            FunctionIndex::SerFnFuncIndex => {
                 // args(0) = pointer to name in Wasm memory
                 // args(1) = size of name in Wasm memory
                 let (name_ptr, name_size) = Args::parse(args)?;
@@ -465,7 +461,7 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            WRITE_FUNC_INDEX => {
+            FunctionIndex::WriteFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key
                 // args(2) = pointer to value
@@ -475,7 +471,7 @@ where
                 Ok(None)
             }
 
-            ADD_FUNC_INDEX => {
+            FunctionIndex::AddFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key
                 // args(2) = pointer to value
@@ -485,7 +481,7 @@ where
                 Ok(None)
             }
 
-            NEW_FUNC_INDEX => {
+            FunctionIndex::NewFuncIndex => {
                 // args(0) = pointer to key destination in Wasm memory
                 // args(1) = pointer to initial value
                 // args(2) = size of initial value
@@ -494,35 +490,35 @@ where
                 Ok(None)
             }
 
-            GET_READ_FUNC_INDEX => {
+            FunctionIndex::GetReadFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            GET_FN_FUNC_INDEX => {
+            FunctionIndex::GetFnFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            LOAD_ARG_FUNC_INDEX => {
+            FunctionIndex::LoadArgFuncIndex => {
                 // args(0) = index of host runtime arg to load
                 let i = Args::parse(args)?;
                 let size = self.load_arg(i)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            GET_ARG_FUNC_INDEX => {
+            FunctionIndex::GetArgFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            RET_FUNC_INDEX => {
+            FunctionIndex::RetFuncIndex => {
                 // args(0) = pointer to value
                 // args(1) = size of value
                 // args(2) = pointer to extra returned urefs
@@ -537,7 +533,7 @@ where
                 ))
             }
 
-            CALL_CONTRACT_FUNC_INDEX => {
+            FunctionIndex::CallContractFuncIndex => {
                 // args(0) = pointer to key where contract is at in global state
                 // args(1) = size of key
                 // args(2) = pointer to function arguments in Wasm memory
@@ -560,14 +556,14 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            GET_CALL_RESULT_FUNC_INDEX => {
+            FunctionIndex::GetCallResultfuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            GET_UREF_FUNC_INDEX => {
+            FunctionIndex::GetUrefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 // args(2) = pointer to destination in Wasm memory
@@ -576,7 +572,7 @@ where
                 Ok(None)
             }
 
-            HAS_UREF_FUNC_INDEX => {
+            FunctionIndex::HasUrefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 let (name_ptr, name_size) = Args::parse(args)?;
@@ -584,7 +580,7 @@ where
                 Ok(Some(RuntimeValue::I32(result)))
             }
 
-            ADD_UREF_FUNC_INDEX => {
+            FunctionIndex::AddUrefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 // args(2) = pointer to destination in Wasm memory
@@ -593,13 +589,13 @@ where
                 Ok(None)
             }
 
-            GAS_FUNC_INDEX => {
+            FunctionIndex::GasFuncIndex => {
                 let gas: u32 = Args::parse(args)?;
                 self.gas(u64::from(gas))?;
                 Ok(None)
             }
 
-            STORE_FN_INDEX => {
+            FunctionIndex::StoreFnIndex => {
                 // args(0) = pointer to function name in Wasm memory
                 // args(1) = size of the name
                 // args(2) = pointer to additional unforgable names
@@ -620,15 +616,15 @@ where
                 Ok(None)
             }
 
-            PROTOCOL_VERSION_FUNC_INDEX => Ok(Some(self.context.protocol_version().into())),
+            FunctionIndex::ProtocolVersionFuncIndex => Ok(Some(self.context.protocol_version().into())),
 
-            SEED_FN_INDEX => {
+            FunctionIndex::SeedFnIndex => {
                 let dest_ptr = Args::parse(args)?;
                 self.write_seed(dest_ptr)?;
                 Ok(None)
             }
 
-            IS_VALID_FN_INDEX => {
+            FunctionIndex::IsValidFnIndex => {
                 // args(0) = pointer to value to validate
                 // args(1) = size of value
                 let (value_ptr, value_size) = Args::parse(args)?;
@@ -640,7 +636,7 @@ where
                 }
             }
 
-            _ => panic!("unknown function index"),
+            // _ => panic!(),
         }
     }
 }
