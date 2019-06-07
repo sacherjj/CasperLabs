@@ -2,7 +2,7 @@ from test.cl_node.docker_base import LoggingDockerBase
 
 
 class DockerExecutionEngine(LoggingDockerBase):
-    EXECUTION_ENGINE_COMMAND = ".casperlabs/sockets/.casper-node.sock"
+    EXECUTION_ENGINE_COMMAND = " --validate-nonce .casperlabs/sockets/.casper-node.sock"
 
     @property
     def container_type(self) -> str:
