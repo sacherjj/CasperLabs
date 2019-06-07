@@ -37,7 +37,7 @@ impl Into<usize> for FunctionIndex {
 impl TryFrom<usize> for FunctionIndex {
     type Error = &'static str;
     fn try_from(value: usize) -> Result<Self, Self::Error> {
-        FromPrimitive::from_usize(value).ok_or_else(|| "Invalid function index")
+        FromPrimitive::from_usize(value).ok_or("Invalid function index")
     }
 }
 
