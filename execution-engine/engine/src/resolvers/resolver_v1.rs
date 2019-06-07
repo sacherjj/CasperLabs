@@ -87,19 +87,19 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             ),
             "get_call_result" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::GetCallResultfuncIndex.into(),
+                FunctionIndex::GetCallResultFuncIndex.into(),
             ),
             "get_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 3][..], None),
-                FunctionIndex::GetUrefFuncIndex.into(),
+                FunctionIndex::GetURefFuncIndex.into(),
             ),
             "has_uref_name" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                FunctionIndex::HasUrefFuncIndex.into(),
+                FunctionIndex::HasURefFuncIndex.into(),
             ),
             "add_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
-                FunctionIndex::AddUrefFuncIndex.into(),
+                FunctionIndex::AddURefFuncIndex.into(),
             ),
             "gas" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),

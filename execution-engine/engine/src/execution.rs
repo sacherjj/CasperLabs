@@ -556,14 +556,14 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            FunctionIndex::GetCallResultfuncIndex => {
+            FunctionIndex::GetCallResultFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let dest_ptr = Args::parse(args)?;
                 self.set_mem_from_buf(dest_ptr)?;
                 Ok(None)
             }
 
-            FunctionIndex::GetUrefFuncIndex => {
+            FunctionIndex::GetURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 // args(2) = pointer to destination in Wasm memory
@@ -572,7 +572,7 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::HasUrefFuncIndex => {
+            FunctionIndex::HasURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 let (name_ptr, name_size) = Args::parse(args)?;
@@ -580,7 +580,7 @@ where
                 Ok(Some(RuntimeValue::I32(result)))
             }
 
-            FunctionIndex::AddUrefFuncIndex => {
+            FunctionIndex::AddURefFuncIndex => {
                 // args(0) = pointer to uref name in Wasm memory
                 // args(1) = size of uref name
                 // args(2) = pointer to destination in Wasm memory
