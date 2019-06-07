@@ -866,7 +866,7 @@ impl Executor<Module> for WasmiExecutor {
                         deploy_nonce: nonce,
                         expected_nonce: account.nonce() + 1,
                     }
-                        .into(),
+                    .into(),
                 );
             }
 

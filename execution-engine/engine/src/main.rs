@@ -232,7 +232,10 @@ fn main() {
 
         let mut properties = BTreeMap::new();
 
-        properties.insert(String::from("validate-nonce"), format!("{:?}", validate_nonce));
+        properties.insert(
+            String::from("validate-nonce"),
+            format!("{:?}", validate_nonce),
+        );
         properties.insert(String::from("pre-state-hash"), format!("{:?}", state_hash));
         properties.insert(String::from("wasm-path"), wasm_bytes.path.to_owned());
         properties.insert(String::from("nonce"), format!("{}", nonce));
@@ -334,10 +337,7 @@ fn get_args() -> ArgMatches<'static> {
                 .value_name(ARG_LOG_LEVEL_VALUE)
                 .help(ARG_LOG_LEVEL_HELP),
         )
-        .arg(
-            Arg::with_name(VALIDATE_NONCE)
-                .long(VALIDATE_NONCE)
-        )
+        .arg(Arg::with_name(VALIDATE_NONCE).long(VALIDATE_NONCE))
         .arg(
             Arg::with_name("wasm")
                 .long("wasm")
