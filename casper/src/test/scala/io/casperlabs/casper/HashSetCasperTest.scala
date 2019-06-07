@@ -233,7 +233,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     val data1 = ProtoUtil.basicDeploy(2, dummyContract, 2)
 
     for {
-      nodes              <- networkEff(validatorKeys.take(2), genesis, transforms)
+      // NOTE: Not validating nonces because after creating the 1st block it expects the nonce will increase,
+      // but instead we make the block invalid and try creating another again with the same deploy still in the buffer.
+      // It would work if the nonces were tracked per pre-state-hash.
+      nodes              <- networkEff(validatorKeys.take(2), genesis, transforms, validateNonces = false)
       List(node0, node1) = nodes.toList
       unsignedBlock <- (node0.casperEff.deploy(data0) *> node0.casperEff.createBlock)
                         .map {
@@ -249,6 +252,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       signedBlock <- (node0.casperEff.deploy(data1) *> node0.casperEff.createBlock)
                       .map { case Created(block) => block }
+
+      // NOTE: It won't actually include `data1` in the block because it still has `data0`.
+      _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data0)
 
       _ <- node0.casperEff.addBlock(signedBlock)
       _ <- node1.receive() //receives block1; should not ask for block0
@@ -1187,6 +1193,28 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     }
   }
 
+  it should "remove deploys with lower than expected nonces from the buffer" in effectTest {
+    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+
+    for {
+      deploy1           <- ProtoUtil.basicDeploy[Effect](1)
+      _                 <- node.casperEff.deploy(deploy1)
+      createBlockResult <- node.casperEff.createBlock
+      Created(block)    = createBlockResult
+      _                 <- node.casperEff.addBlock(block)
+
+      // Add a deploy that is not in the future but in the past.
+      deploy0     <- ProtoUtil.basicDeploy[Effect](0)
+      _           <- node.casperEff.deploy(deploy0)
+      stateBefore <- node.casperState.read
+      _           = stateBefore.deployBuffer.contains(deploy0) shouldBe true
+      _           <- node.casperEff.createBlock shouldBeF NoNewDeploys
+      stateAfter  <- node.casperState.read
+      _           = stateAfter.deployBuffer.contains(deploy0) shouldBe false
+
+    } yield ()
+  }
+
   it should "return NoNewDeploys status if there are no deploys to put into the block after executing contracts" in effectTest {
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
     import node._
@@ -1199,6 +1227,42 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       invalidDeploy     <- ProtoUtil.basicDeploy[Effect](invalidNonce)
       _                 <- node.casperEff.deploy(invalidDeploy)
       createBlockStatus <- MultiParentCasper[Effect].createBlock shouldBeF io.casperlabs.casper.NoNewDeploys
+    } yield ()
+  }
+
+  it should "only execute the next deploy per account in one proposal" in effectTest {
+    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+    import node._
+    implicit val timeEff = new LogicalTime[Effect]
+
+    def propose() =
+      for {
+        create         <- node.casperEff.createBlock
+        Created(block) = create
+        _              <- node.casperEff.addBlock(block)
+      } yield block
+
+    for {
+      deploy1 <- ProtoUtil.basicDeploy[Effect](1)
+      deploy2 <- ProtoUtil.basicDeploy[Effect](2)
+      _       <- node.casperEff.deploy(deploy1)
+      _       <- node.casperEff.deploy(deploy2)
+
+      block1 <- propose()
+      _      = block1.getBody.deploys.map(_.getDeploy) should contain only (deploy1)
+      state1 <- node.casperState.read
+      _      = state1.deployBuffer.processedDeploys.keySet should contain only (deploy1.deployHash)
+      _      = state1.deployBuffer.pendingDeploys.keySet should contain only (deploy2.deployHash)
+
+      block2 <- propose()
+      _      = block2.getBody.deploys.map(_.getDeploy) should contain only (deploy2)
+      state2 <- node.casperState.read
+      _ = state2.deployBuffer.processedDeploys.keySet should contain theSameElementsAs List(
+        deploy1.deployHash,
+        deploy2.deployHash
+      )
+      _ = state2.deployBuffer.pendingDeploys shouldBe empty
+
     } yield ()
   }
 
