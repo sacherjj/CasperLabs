@@ -28,29 +28,16 @@ trap "echo 'ERROR: Script failed: see failed command above'" ERR
 #   --tls-key node.key.pem
 #   --tls-certificate node.certificate.pem
 
-# Output directory where to put generated keys
+if [ "$1" == "-v" ]; then
+    set -v; shift
+fi
 
-if [ $# -eq 1 ]; then
-    if [ -d "$1" ]; then
-        OUTPUT_DIR="$1"
-    else
-        echo "ERROR: output dir doesn't exist"
-        exit 1
-    fi
-else
-    if [ $# -eq 2 ]; then
-        if [ -d "$2" ] && [ "$1" == "-v" ]; then
-            OUTPUT_DIR="$2"
-            set -v
-        else
-            echo "usage: ./gen-keys.sh [-v] <dir>"
-            echo "ERROR: output dir doesn't exist or got unexpected flag option"
-            exit 1
-        fi
-    else
-        echo "usage: ./gen-keys.sh [-v] <dir>"
-        exit 1
-    fi
+# Output directory where to put generated keys
+OUTPUT_DIR="$1"
+if [ ! -d "$OUTPUT_DIR" ]; then
+    echo "ERROR: output dir doesn't exist"
+    echo "usage: ./gen-keys.sh [-v] <dir>"
+    exit 1
 fi
 
 
