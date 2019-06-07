@@ -60,6 +60,6 @@ mod tests {
     #[test]
     #[should_panic]
     fn invalid_index() {
-        FunctionIndex::try_from(123456789usize).unwrap();
+        FunctionIndex::try_from(123_456_789usize).unwrap();
     }
 }
