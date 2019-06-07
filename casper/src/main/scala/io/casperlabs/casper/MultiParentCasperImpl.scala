@@ -500,26 +500,23 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       attempts: List[(Block, BlockStatus)],
       canRemove: BlockStatus => Boolean
   ): F[Unit] = {
-    val addedBlockHashes = attempts.collect {
-      case (block, status) if canRemove(status) => block.blockHash
+    val addedBlocks = attempts.collect {
+      case (block, status) if canRemove(status) => block
     }.toSet
 
+    val addedBlockHashes = addedBlocks.map(_.blockHash)
+
     // Mark deploys we have observed in blocks as processed.
-    val processedDeployHashes = attempts
-      .collect {
-        case (block, _) if addedBlockHashes(block.blockHash) =>
-          block.getBody.deploys.map(_.getDeploy.deployHash)
-      }
-      .flatten
-      .toSet
+    val processedDeployHashes = addedBlocks
+      .flatMap(_.getBody.deploys.map(_.getDeploy.deployHash))
 
     Cell[F, CasperState].modify { s =>
       s.copy(
         blockBuffer = s.blockBuffer.filterKeys(h => !addedBlockHashes(h)),
         deployBuffer = s.deployBuffer.processed(processedDeployHashes),
-        dependencyDag = addedBlockHashes.foldLeft(s.dependencyDag) {
-          case (dag, blockHash) =>
-            DoublyLinkedDagOperations.remove(dag, blockHash)
+        dependencyDag = addedBlocks.foldLeft(s.dependencyDag) {
+          case (dag, block) =>
+            DoublyLinkedDagOperations.remove(dag, block.blockHash)
         }
       )
     }
