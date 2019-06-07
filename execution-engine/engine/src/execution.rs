@@ -1042,7 +1042,7 @@ mod tests {
 
         let executor = WasmiExecutor;
         let account_address = [0u8; 32];
-        let account_key: Key = Key::account_from_slice(&account_address).unwrap();
+        let account_key: Key = Key::Account(account_address);
         let parity_module: Module = ModuleBuilder::new()
             .with_import(ImportEntry::new(
                 "env".to_string(),

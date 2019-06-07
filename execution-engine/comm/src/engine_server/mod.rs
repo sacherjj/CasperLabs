@@ -320,16 +320,19 @@ where
             let session_contract = deploy.get_session();
             let module_bytes = &session_contract.code;
             let args = &session_contract.args;
-            let address = match Key::account_from_slice(&deploy.address) {
-                Some(key) => key,
-                None => {
+            let address = {
+                if deploy.address.len() != 32 {
                     let err = EngineError::PreprocessingError(
                         "Public key has to be exactly 32 bytes long.".to_string(),
                     );
                     let failure = ExecutionResult::precondition_failure(err);
                     return Ok(failure.into());
                 }
+                let mut dest = [0; 32];
+                dest.copy_from_slice(&deploy.address);
+                Key::Account(dest)
             };
+
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;
