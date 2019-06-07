@@ -17,11 +17,14 @@ fn parse_line(item: String) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-fn handler_factory<D: Drainer<String>>(drainer: D) -> impl FnMut(Request<Body>) -> Response<Body> {
+fn handler_factory<D: Drainer<String>>(
+    drainer: D,
+    endpoint: &'static str,
+) -> impl FnMut(Request<Body>) -> Response<Body> {
     move |req: Request<Body>| {
         let mut response = Response::new(Body::empty());
         match (req.method(), req.uri().path()) {
-            (&Method::GET, "/") => match drainer.drain() {
+            (&Method::GET, path) if path == endpoint => match drainer.drain() {
                 Ok(ret) => {
                     let parsed_lines: String = ret
                         .into_iter()
@@ -43,10 +46,14 @@ fn handler_factory<D: Drainer<String>>(drainer: D) -> impl FnMut(Request<Body>) 
     }
 }
 
-pub fn open_drain<D: Drainer<String> + 'static>(drainer: D, addr: &SocketAddr) -> JoinHandle<()> {
+pub fn open_drain<D: Drainer<String> + 'static>(
+    drainer: D,
+    addr: &SocketAddr,
+    endpoint: &'static str,
+) -> JoinHandle<()> {
     let service = move || {
         let drainer = drainer.clone();
-        service::service_fn_ok(handler_factory(drainer))
+        service::service_fn_ok(handler_factory(drainer, endpoint))
     };
     let server = Server::bind(addr)
         .serve(service)

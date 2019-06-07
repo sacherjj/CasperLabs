@@ -14,7 +14,7 @@ fn main() -> io::Result<()> {
 
     let accumulator: Accumulator<String> = Accumulator::new(expected_poll_length);
 
-    drain::open_drain(Accumulator::clone(&accumulator), &addr);
+    drain::open_drain(Accumulator::clone(&accumulator), &addr, "/metrics");
 
     sink::start_sink(Accumulator::clone(&accumulator));
 
