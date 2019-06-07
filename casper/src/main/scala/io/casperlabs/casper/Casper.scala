@@ -107,7 +107,6 @@ sealed abstract class MultiParentCasperInstances {
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()
                     )
-      _ <- FinalizationHandler[F].newFinalizedBlock(genesis.blockHash)
     } yield (blockProcessingLock, casperState)
 
   def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ExecutionEngineService: FinalizationHandler](
