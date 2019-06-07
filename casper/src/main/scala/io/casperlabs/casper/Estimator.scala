@@ -84,10 +84,10 @@ object Estimator {
     } yield sortedChildrenHash
   }
 
-  /**
-		* Compute the scores for LMD GHOST.
-		* @return The scores map
-		*/
+  /*
+   * Compute the scores for LMD GHOST.
+   * @return The scores map
+   */
   def lmdScoring[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash]
@@ -113,11 +113,11 @@ object Estimator {
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
 
-    /**
-			* Only include children that have been scored,
-			* this ensures that the search does not go beyond
-			* the messages defined by blockDag.latestMessages
-			*/
+    /*
+     * Only include children that have been scored,
+     * this ensures that the search does not go beyond
+     * the messages defined by blockDag.latestMessages
+     */
     def replaceBlockHashWithChildren(
         b: BlockHash,
         blockDag: BlockDagRepresentation[F],

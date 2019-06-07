@@ -217,14 +217,15 @@ class ForkchoiceTest
     implicit blockStore =>
       implicit blockDagStorage =>
         /* The DAG looks like:
-	 			 *
-	       *
-	 			 *   d  e   f
-	 			 *    \ /   |
-	 			 *     a    b   c
-	 			 *      \   |   /
-	 			 *       genesis
-	 			*/
+         *
+         *
+         *
+	 		   *   d  e   f
+         *    \ /   |
+         *     a    b   c
+         *      \   |   /
+         *       genesis
+         */
 
         val v1     = generateValidator("Validator One")
         val v2     = generateValidator("Validator Two")
@@ -264,17 +265,18 @@ class ForkchoiceTest
     implicit blockStore =>
       implicit blockDagStorage =>
         /* The DAG looks like:
-		 *
-		 *        i
-		 *        |
-		 *        g   h
-		 *       | \ /  \
-		 *       d  e   f
-		 *      / \/   /
-		 *     a  b   c
-		 *      \ |  /
-		 *       genesis
-		 */
+         *
+         *
+         *         i
+         *         |
+         *        g   h
+         *       | \ /  \
+         *       d  e   f
+         *      / \/   /
+         *     a  b   c
+         *      \ |  /
+         *       genesis
+         */
         val v1     = generateValidator("Validator One")
         val v2     = generateValidator("Validator Two")
         val v3     = generateValidator("Validator Three")
@@ -320,17 +322,17 @@ class ForkchoiceTest
     implicit blockStore =>
       implicit blockDagStorage =>
         /* The DAG looks like:
-		 		 *
-		     *        i
-		 		 *        |
-		 		 *        g   h
-		 		 *       | \ /  \
-		 		 *       d  e   f
-		 		 *      / \/   /
-		 		 *     a  b   c
-		 		 *      \ |  /
-		 		 *       genesis
-		 		 */
+         *
+         *        i
+         *        |
+         *        g   h
+         *       | \ /  \
+         *        d  e   f
+         *      / \/   /
+         *     a  b   c
+         *      \ |  /
+         *       genesis
+         */
 
         val v1     = generateValidator("Validator One")
         val v2     = generateValidator("Validator Two")
