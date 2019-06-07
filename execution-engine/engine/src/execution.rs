@@ -616,7 +616,9 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::ProtocolVersionFuncIndex => Ok(Some(self.context.protocol_version().into())),
+            FunctionIndex::ProtocolVersionFuncIndex => {
+                Ok(Some(self.context.protocol_version().into()))
+            }
 
             FunctionIndex::SeedFnIndex => {
                 let dest_ptr = Args::parse(args)?;
@@ -635,8 +637,6 @@ where
                     Ok(Some(RuntimeValue::I32(0)))
                 }
             }
-
-            // _ => panic!(),
         }
     }
 }
