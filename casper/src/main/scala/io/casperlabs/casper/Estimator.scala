@@ -2,10 +2,8 @@ package io.casperlabs.casper
 
 import cats.Monad
 import cats.implicits._
-import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockStore}
-import io.casperlabs.casper.protocol.BlockMessage
+import io.casperlabs.blockstorage.BlockDagRepresentation
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.ListContrib
@@ -84,6 +82,80 @@ object Estimator {
                              scoresMap
                            )
     } yield sortedChildrenHash
+  }
+
+  /**
+		* Compute the scores for LMD GHOST.
+		* @return The scores map
+		*/
+  def lmdScoring[F[_]: Monad](
+      blockDag: BlockDagRepresentation[F],
+      latestMessagesHashes: Map[Validator, BlockHash]
+  ): F[Map[BlockHash, Long]] =
+    latestMessagesHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
+      case (acc, (validator, latestMessageHash)) =>
+        DagOperations
+          .bfTraverseF[F, BlockHash](List(latestMessageHash))(
+            hash => blockDag.lookup(hash).map(_.get.parents)
+          )
+          .foldLeftF(acc) {
+            case (acc2, blockHash) =>
+              for {
+                weight   <- weightFromValidatorByDag(blockDag, blockHash, validator)
+                oldValue = acc2.getOrElse(blockHash, 0L)
+              } yield acc2.updated(blockHash, weight + oldValue)
+          }
+    }
+
+  def lmdMainchainGhost[F[_]: Monad](
+      blockDag: BlockDagRepresentation[F],
+      genesis: BlockHash,
+      latestMessagesHashes: Map[Validator, BlockHash]
+  ): F[List[BlockHash]] = {
+
+    /**
+			* Only include children that have been scored,
+			* this ensures that the search does not go beyond
+			* the messages defined by blockDag.latestMessages
+			*/
+    def replaceBlockHashWithChildren(
+        b: BlockHash,
+        blockDag: BlockDagRepresentation[F],
+        scores: Map[BlockHash, Long]
+    ): F[List[BlockHash]] =
+      for {
+        c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains))
+      } yield if (c.nonEmpty) c.toList else List(b)
+
+    def loop(
+        children: List[BlockHash],
+        scores: Map[BlockHash, Long]
+    ): F[List[BlockHash]] =
+      for {
+        grandChildrenList <- children.traverse(replaceBlockHashWithChildren(_, blockDag, scores))
+        mainChild = grandChildrenList match {
+          case mainGrandChildren :: _ =>
+            mainGrandChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toString())
+        }
+        distinctGrandchildren = grandChildrenList.flatten.distinct
+        otherGrandchildren    = distinctGrandchildren.filterNot(_ == mainChild)
+        orderedGrandchildren  = mainChild +: otherGrandchildren
+        result <- if (stillSame(mainChild, children, orderedGrandchildren)) {
+                   orderedGrandchildren.pure[F]
+                 } else {
+                   loop(orderedGrandchildren, scores)
+                 }
+      } yield result
+
+    def stillSame(
+        mainChild: BlockHash,
+        children: List[BlockHash],
+        nextChildren: List[BlockHash]
+    ): Boolean =
+      mainChild == children.head && children.toSet == nextChildren.toSet
+
+    lmdScoring(blockDag, latestMessagesHashes)
+      .flatMap(loop(List(genesis), _))
   }
 
   private def buildScoresMap[F[_]: Monad](

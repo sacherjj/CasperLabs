@@ -211,10 +211,10 @@ object ProtoUtil {
       resultOpt <- blockParentOpt.traverse { bh =>
                     dag.lookup(bh).map(_.get.weightMap.getOrElse(validator, 0L))
                   }
-      result <- resultOpt match {
-                 case Some(result) => result.pure[F]
-                 case None         => dag.lookup(blockHash).map(_.get.weightMap.getOrElse(validator, 0L))
-               }
+      result = resultOpt match {
+        case Some(result) => result
+        case None         => blockMetadata.get.weightMap.getOrElse(validator, 0L)
+      }
     } yield result
 
   def weightFromValidator[F[_]: Monad: BlockStore](
