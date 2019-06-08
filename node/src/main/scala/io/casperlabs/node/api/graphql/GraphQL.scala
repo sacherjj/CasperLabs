@@ -15,6 +15,7 @@ import io.casperlabs.node.api.graphql.ProtocolState.Subscriptions
 import io.casperlabs.node.api.graphql.circe._
 import io.casperlabs.node.api.graphql.schema.GraphQLSchemaBuilder
 import io.casperlabs.shared.{Log, LogSource}
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.circe.parser.parse
 import io.circe.syntax._
 import io.circe.{Json, JsonObject}
@@ -39,7 +40,7 @@ object GraphQL {
   private implicit val logSource: LogSource = LogSource(getClass)
 
   /* Entry point */
-  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: SafetyOracle: BlockStore: FinalizedBlocksStream](
+  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: SafetyOracle: BlockStore: FinalizedBlocksStream: ExecutionEngineService](
       executionContext: ExecutionContext
   ): HttpRoutes[F] = {
     import io.casperlabs.node.api.graphql.RunToFuture.fromEffect

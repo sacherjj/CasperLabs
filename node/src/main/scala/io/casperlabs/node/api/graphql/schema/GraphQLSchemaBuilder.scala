@@ -6,12 +6,14 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.node.api.Utils
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql._
 import io.casperlabs.shared.Log
+import io.casperlabs.smartcontracts.ExecutionEngineService
 import sangria.schema._
 
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: SafetyOracle: BlockStore: FinalizedBlocksStream: MonadThrowable] {
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: SafetyOracle: BlockStore: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService] {
 
   val requireFullBlockFields: Set[String] = Set("blockSizeBytes", "deployErrorCount", "deploys")
 
@@ -65,6 +67,30 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             arguments = blocks.arguments.DeployHash :: Nil,
             resolve =
               c => BlockAPI.getDeployInfoOpt[F](c.arg(blocks.arguments.DeployHash)).unsafeToFuture
+          ),
+          Field(
+            "globalState",
+            ListType(globalstate.types.Value),
+            arguments = globalstate.arguments.StateQueryArgument :: blocks.arguments.BlockHashPrefix :: Nil,
+            resolve = { c =>
+              val queries               = c.arg(globalstate.arguments.StateQueryArgument)
+              val blockHashBase16Prefix = c.arg(blocks.arguments.BlockHashPrefix)
+
+              val program = for {
+                info      <- BlockAPI.getBlockInfo[F](blockHashBase16Prefix)
+                stateHash = info.getSummary.getHeader.getState.postStateHash
+                values <- queries.toList.traverse { query =>
+                           for {
+                             key <- Utils.toKey[F](query.keyType, query.key)
+                             possibleResponse <- ExecutionEngineService[F]
+                                                  .query(stateHash, key, query.pathSegments)
+                             value <- MonadThrowable[F].fromEither(possibleResponse)
+                           } yield value
+                         }
+              } yield values
+
+              program.unsafeToFuture
+            }
           )
         )
       ),
