@@ -1,14 +1,28 @@
 import logging
+import json
 import os
 import threading
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from queue import Empty
-from test.cl_node.common import random_string
-from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
 from typing import Any, Dict, Optional, Tuple, Union
 
+from test.cl_node.common import random_string
+from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
+
 from docker import DockerClient
+
+
+def humanify(line):
+    if not 'execution-engine-' in line:
+        return line
+    try:
+        _, payload = line.split('payload=')
+    except:
+        return line
+
+    d = json.loads(payload)
+    return ' '.join(str(d[k]) for k in ('description',))
 
 
 class LoggingThread(threading.Thread):
@@ -25,7 +39,8 @@ class LoggingThread(threading.Thread):
                 if self.terminate_thread_event.is_set():
                     break
                 line = next(containers_log_lines_generator)
-                self.logger.info(f"  {self.container.name}: {line.decode('utf-8').rstrip()}")
+                s = line.decode('utf-8').rstrip()
+                self.logger.info(f"  {self.container.name}: {humanify(s)}")
         except StopIteration:
             pass
 
