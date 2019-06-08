@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::iter::IntoIterator;
@@ -434,7 +434,14 @@ where
             .set(dest_ptr, &seed)
             .map_err(|e| Error::Interpreter(e).into())
     }
-    fn add_key(&mut self, _public_key: PublicKey, _weight: Weight) -> Result<(), Trap> {
+    fn add_key(&mut self, public_key: PublicKey, weight: Weight) -> Result<(), Trap> {
+        let account = Rc::clone(&self.context.account());
+        // Mutably borrows associated keys of a given account avoiding temporary
+        // account object.
+        let mut associated_keys = RefMut::map(account.borrow_mut(), |account| {
+            account.associated_keys_mut()
+        });
+        let _res = associated_keys.add_key(public_key, weight);
         unimplemented!();
     }
 }

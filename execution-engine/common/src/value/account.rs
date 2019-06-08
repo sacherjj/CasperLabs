@@ -262,6 +262,10 @@ impl Account {
         &self.associated_keys
     }
 
+    pub fn associated_keys_mut(&mut self) -> &mut AssociatedKeys {
+        &mut self.associated_keys
+    }
+
     pub fn get_associated_keys(&self) -> &AssociatedKeys {
         &self.associated_keys
     }
