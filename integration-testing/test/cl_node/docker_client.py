@@ -1,10 +1,12 @@
 import logging
+from typing import Optional
 from collections import defaultdict
+
 from test.cl_node.casperlabsnode import extract_block_count_from_show_blocks
 from test.cl_node.client_base import CasperLabsClient
 from test.cl_node.common import random_string
 from test.cl_node.errors import NonZeroExitCodeError
-from typing import Optional
+from test.cl_node.nonce_registry import NonceRegistry
 
 from docker.errors import ContainerError
 
@@ -14,7 +16,6 @@ class DockerClient(CasperLabsClient):
     def __init__(self, node: 'DockerNode'):
         self.node = node
         self.docker_client = node.config.docker_client
-        self.nonce = defaultdict(int)
 
     @property
     def client_type(self) -> str:
@@ -57,7 +58,7 @@ class DockerClient(CasperLabsClient):
                private_key: Optional[str] = None,
                public_key: Optional[str] = None) -> str:
 
-        deploy_nonce = nonce if nonce is not None else self.nonce[from_address]
+        deploy_nonce = nonce if nonce is not None else NonceRegistry.registry[from_address]
         command = (f"deploy --from {from_address}"
                    f" --gas-limit {gas_limit} --gas-price {gas_price}"
                    f" --nonce {deploy_nonce} --session=/data/{session_contract}"
@@ -69,7 +70,7 @@ class DockerClient(CasperLabsClient):
 
         r = self.invoke_client(command)
         if 'Success' in r and nonce is None:
-            self.nonce[from_address] += 1
+            NonceRegistry.registry[from_address] += 1
         return r
         
 
