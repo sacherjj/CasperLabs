@@ -18,11 +18,9 @@ object FinalizedBlocksStream {
 
   def of[F[_]: Concurrent]: F[FinalizedBlocksStream[F]] =
     for {
-      // TODO: Can lead to consensus performance problems if readers are slow
-      // In the future needs to be reworked to unbounded underlying queue
-      // together with the GraphQL ability to manage requests intensity
-      // https://casperlabs.atlassian.net/browse/NODE-549
-      dt        <- Deferred[F, Topic[F, BlockHash]]
+      // If readers are too slow, they will miss some messages, but that's okay
+      // Since they interested only in the latest finalized messages.
+      dt        <- Deferred[F, CappedTopic[F, BlockHash]]
       dr        <- Deferred[F, Ref[F, BlockHash]]
       empty     <- Ref.of[F, Boolean](true)
       maxQueued = 100
@@ -45,7 +43,7 @@ object FinalizedBlocksStream {
 
         private def init(blockHash: BlockHash): F[Unit] =
           for {
-            t <- Topic[F, BlockHash](blockHash)
+            t <- CappedTopic[F, BlockHash](blockHash)
             r <- Ref.of[F, BlockHash](blockHash)
             _ <- dt.complete(t)
             _ <- dr.complete(r)
