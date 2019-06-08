@@ -476,13 +476,12 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
                                ) {
                                  case ((attempts, updatedDag), block) =>
                                    for {
-                                     attempt <- statelessExecutor.attemptAdd(
+                                     attempt <- statelessExecutor.validateAndAddBlock(
                                                  StatelessExecutor
                                                    .Context(genesis, lastFinalizedBlockHash)
                                                    .some,
                                                  updatedDag,
-                                                 block,
-                                                 treatAsGenesis = false
+                                                 block
                                                )
                                      (status, updatedDag) = attempt
                                    } yield ((block, status) :: attempts, updatedDag)
@@ -551,62 +550,25 @@ object MultiParentCasperImpl {
 
     implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
 
+    /* Execute the block to get the effects then do some more validation.
+     * Save the block if everything checks out.
+     * We want to catch equivocations only after we confirm that the block completing
+     * the equivocation is otherwise valid. */
     def validateAndAddBlock(
         maybeContext: Option[StatelessExecutor.Context],
         dag: BlockDagRepresentation[F],
         block: Block
     )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] = {
-      val treatAsGenesis =
-        block.getHeader.parentHashes.isEmpty &&
-          block.getHeader.validatorPublicKey.isEmpty &&
-          block.getSignature.sig.isEmpty
-
-      for {
-        dag         <- BlockDagStorage[F].getRepresentation
-        validFormat <- Validate.formatOfFields[F](block, treatAsGenesis)
-        validSig    <- if (!treatAsGenesis) Validate.blockSignature[F](block) else true.pure[F]
-        validSender <- maybeContext.map { ctx =>
-                        Validate.blockSender[F](block, ctx.genesis, dag)
-                      } getOrElse (treatAsGenesis).pure[F]
-        validVersion <- Validate.version[F](
-                         block,
-                         CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
-                       )
-        attemptResult <- if (!validFormat) (InvalidUnslashableBlock, dag).pure[F]
-                        else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]
-                        else if (!validSender) (InvalidUnslashableBlock, dag).pure[F]
-                        else if (!validVersion) (InvalidUnslashableBlock, dag).pure[F]
-                        else attemptAdd(maybeContext, dag, block, treatAsGenesis)
-        (status, updatedDag) = attemptResult
-      } yield (status, updatedDag)
-    }
-
-    /* Execute the block to get the effects then do some more validation.
-     * Save the block if everything checks out.
-     * We want to catch equivocations only after we confirm that the block completing
-     * the equivocation is otherwise valid. */
-    def attemptAdd(
-        maybeContext: Option[StatelessExecutor.Context],
-        dag: BlockDagRepresentation[F],
-        block: Block,
-        treatAsGenesis: Boolean
-    )(implicit state: Cell[F, CasperState]): F[(BlockStatus, BlockDagRepresentation[F])] = {
       val validationStatus = (for {
         _ <- Log[F].info(
               s"Attempting to add Block ${PrettyPrinter.buildString(block.blockHash)} to DAG."
             )
-        postValidationStatus <- maybeContext map { ctx =>
-                                 Validate.blockSummary[F](
-                                   block,
-                                   ctx.genesis,
-                                   dag,
-                                   chainId,
-                                   ctx.lastFinalizedBlockHash
-                                 )
-                               } getOrElse {
-                                 Validate
-                                   .blockSummaryPreGenesis[F](block, dag, chainId)
-                               }
+        _ <- Validate.blockFull(
+              block,
+              dag,
+              chainId,
+              maybeContext.map(_.genesis)
+            )
         casperState <- Cell[F, CasperState].read
         // Confirm the parents are correct (including checking they commute) and capture
         // the effect needed to compute the correct pre-state as well.
@@ -652,6 +614,11 @@ object MultiParentCasperImpl {
       validationStatus.flatMap {
         case Right(effects) =>
           addEffects(Valid, block, effects, dag).tupleLeft(Valid)
+
+        case Left(Validate.DropErrorWrapper(invalid)) =>
+          // These exceptions are coming from the validation checks that used to happen outside attemptAdd,
+          // the ones that returned boolean values.
+          (invalid: BlockStatus, dag).pure[F]
 
         case Left(ValidateErrorWrapper(invalid)) =>
           addEffects(invalid, block, Seq.empty, dag)
