@@ -6,6 +6,8 @@ import cats.implicits._
 import io.casperlabs.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper, ValidatorIdentity}
+import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.DeployBuffer
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.storage.BlockMsgWithTransform
 
