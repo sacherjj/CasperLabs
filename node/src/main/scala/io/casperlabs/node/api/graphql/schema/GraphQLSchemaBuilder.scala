@@ -1,30 +1,19 @@
 package io.casperlabs.node.api.graphql.schema
 
-import java.time.{Instant, ZoneId, ZonedDateTime}
-
-import cats.effect.Effect
-import cats.effect.implicits._
 import cats.implicits._
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.node.api.graphql.{FinalizedBlocksStream, Fs2SubscriptionStream}
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.node.api.graphql.RunToFuture.ops._
+import io.casperlabs.node.api.graphql._
 import io.casperlabs.shared.Log
 import sangria.schema._
 
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Effect: MultiParentCasperRef: SafetyOracle: BlockStore: FinalizedBlocksStream] {
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: SafetyOracle: BlockStore: FinalizedBlocksStream: MonadThrowable] {
 
-  // Not defining inputs yet because it's a read-only field
-  val DateType: ScalarType[Long] = ScalarType[Long](
-    "Date",
-    coerceUserInput = _ => ???,
-    coerceOutput =
-      (l, _) => ZonedDateTime.ofInstant(Instant.ofEpochMilli(l), ZoneId.of("Z")).toString,
-    coerceInput = _ => ???
-  )
-
-  val requireFullBlockFields = Set("blockSizeBytes", "deployErrorCount", "deploys")
+  val requireFullBlockFields: Set[String] = Set("blockSizeBytes", "deployErrorCount", "deploys")
 
   def hasAtLeastOne(projections: Vector[ProjectedName], fields: Set[String]): Boolean = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
@@ -53,8 +42,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
                   blockHashBase16 = context.arg(blocks.arguments.BlockHashPrefix),
                   full = hasAtLeastOne(projections, requireFullBlockFields)
                 )
-                .toIO
-                .unsafeToFuture()
+                .unsafeToFuture
             }
           ),
           Field(
@@ -68,16 +56,15 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
                   maxRank = context.arg(blocks.arguments.MaxRank),
                   full = hasAtLeastOne(projections, requireFullBlockFields)
                 )
-                .toIO
-                .unsafeToFuture()
+                .unsafeToFuture
             }
           ),
           Field(
             "deploy",
             OptionType(blocks.types.DeployInfoType),
             arguments = blocks.arguments.DeployHash :: Nil,
-            resolve = c =>
-              BlockAPI.getDeployInfoOpt[F](c.arg(blocks.arguments.DeployHash)).toIO.unsafeToFuture()
+            resolve =
+              c => BlockAPI.getDeployInfoOpt[F](c.arg(blocks.arguments.DeployHash)).unsafeToFuture
           )
         )
       ),
