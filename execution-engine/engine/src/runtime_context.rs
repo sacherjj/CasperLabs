@@ -26,7 +26,7 @@ pub struct RuntimeContext<'a, R> {
     uref_lookup: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
     known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
-    account: &'a Account,
+    account: Rc<RefCell<Account>>,
     args: Vec<Vec<u8>>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
@@ -49,7 +49,7 @@ where
         uref_lookup: &'a mut BTreeMap<String, Key>,
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
-        account: &'a Account,
+        account: Rc<RefCell<Account>>,
         base_key: Key,
         gas_limit: u64,
         gas_counter: u64,
@@ -90,8 +90,8 @@ where
         self.known_urefs.extend(urefs_map);
     }
 
-    pub fn account(&self) -> &'a Account {
-        self.account
+    pub fn account(&self) -> Rc<RefCell<Account>> {
+        Rc::clone(&self.account)
     }
 
     pub fn args(&self) -> &Vec<Vec<u8>> {
@@ -150,8 +150,10 @@ where
     /// then all function addresses generated within one deploy would have been the same.
     pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
         let mut pre_hash_bytes = Vec::with_capacity(44); //32 byte pk + 8 byte nonce + 4 byte ID
-        pre_hash_bytes.extend_from_slice(self.account().pub_key());
-        pre_hash_bytes.append(&mut self.account().nonce().to_bytes()?);
+        let account = Rc::clone(&self.account());
+        let account = account.borrow();
+        pre_hash_bytes.extend_from_slice(account.pub_key());
+        pre_hash_bytes.append(&mut account.nonce().to_bytes()?);
         pre_hash_bytes.append(&mut self.fn_store_id().to_bytes()?);
 
         self.inc_fn_store_id();
@@ -392,11 +394,11 @@ mod tests {
     use shared::newtypes::{Blake2bHash, CorrelationId};
     use tracking_copy::TrackingCopy;
 
-    fn mock_tc(init_key: Key, init_account: &value::Account) -> TrackingCopy<InMemoryGlobalState> {
+    fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemoryGlobalState> {
         let correlation_id = CorrelationId::new();
         let mut hist = InMemoryGlobalState::empty().unwrap();
         let root_hash = hist.root_hash;
-        let transform = Transform::Write(value::Value::Account(init_account.clone()));
+        let transform = Transform::Write(value::Value::Account(init_account));
 
         let mut m = HashMap::new();
         m.insert(init_key, transform);
@@ -461,19 +463,19 @@ mod tests {
     }
 
     fn mock_runtime_context<'a>(
-        account: &'a Account,
+        account: Rc<RefCell<Account>>,
         base_key: Key,
         uref_map: &'a mut BTreeMap<String, Key>,
         known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
         rng: ChaChaRng,
     ) -> RuntimeContext<'a, InMemoryGlobalState> {
-        let tc = mock_tc(base_key, &account);
+        let tc = mock_tc(base_key, account.borrow().clone());
         RuntimeContext::new(
             Rc::new(RefCell::new(tc)),
             uref_map,
             known_urefs,
             Vec::new(),
-            &account,
+            account,
             base_key,
             0,
             0,
@@ -517,8 +519,13 @@ mod tests {
         let (key, account) = mock_account(base_acc_addr);
         let mut uref_map = BTreeMap::new();
         let chacha_rng = create_rng(&base_acc_addr, 0, 0);
-        let runtime_context =
-            mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
+        let runtime_context = mock_runtime_context(
+            Rc::new(RefCell::new(account)),
+            key,
+            &mut uref_map,
+            known_urefs,
+            chacha_rng,
+        );
         query(runtime_context)
     }
 
@@ -657,7 +664,8 @@ mod tests {
         // Account key is readable if it is a "base" key - current context of the execution.
         let query_result = test(HashMap::new(), |mut rc| {
             let base_key = rc.base_key();
-            let base_account = rc.account().clone();
+            let base_account = Rc::clone(&rc.account());
+            let base_account = base_account.borrow();
 
             let result = rc
                 .read_gs(&base_key)
@@ -747,7 +755,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let contract_key = random_contract_key(&mut rng);
         let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
-        let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
+        let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut().write(
             Validated::new(contract_key, Validated::valid).unwrap(),
@@ -763,7 +771,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
-            &account,
+            Rc::new(RefCell::new(account)),
             contract_key,
             0,
             0,
@@ -798,7 +806,7 @@ mod tests {
         let contract_key = random_contract_key(&mut rng);
         let other_contract_key = random_contract_key(&mut rng);
         let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
-        let tc = Rc::new(RefCell::new(mock_tc(account_key, &account)));
+        let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
         // Store contract in the GlobalState so that we can mainpulate it later.
         tc.borrow_mut().write(
             Validated::new(contract_key, Validated::valid).unwrap(),
@@ -814,7 +822,7 @@ mod tests {
             &mut uref_map,
             known_urefs,
             Vec::new(),
-            &account,
+            Rc::new(RefCell::new(account)),
             other_contract_key,
             0,
             0,
