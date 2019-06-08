@@ -139,9 +139,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       lastFinalizedBlockHash        <- LastFinalizedBlockHashContainer[F].get
       updatedLastFinalizedBlockHash <- updateLastFinalizedBlock(updatedDag, lastFinalizedBlockHash)
       _                             <- LastFinalizedBlockHashContainer[F].set(updatedLastFinalizedBlockHash)
-      _ <- LastFinalizedBlockHashContainer[F]
-            .set(updatedLastFinalizedBlockHash)
-            .whenA(updatedLastFinalizedBlockHash != lastFinalizedBlockHash)
       _ <- Log[F].info(
             s"New last finalized block hash is ${PrettyPrinter.buildString(updatedLastFinalizedBlockHash)}."
           )
