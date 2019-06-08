@@ -165,8 +165,9 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
 }
 
 #[derive(PartialEq, Eq, Debug)]
+#[repr(i32)]
 pub enum AddKeyFailure {
-    MaxKeysLimit,
+    MaxKeysLimit = 1,
     DuplicateKey,
 }
 

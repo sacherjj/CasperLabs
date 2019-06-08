@@ -434,15 +434,22 @@ where
             .set(dest_ptr, &seed)
             .map_err(|e| Error::Interpreter(e).into())
     }
-    fn add_key(&mut self, public_key: PublicKey, weight: Weight) -> Result<(), Trap> {
+
+    fn add_key(&mut self, public_key: PublicKey, weight: Weight) -> Result<i32, Trap> {
         let account = Rc::clone(&self.context.account());
         // Mutably borrows associated keys of a given account avoiding temporary
         // account object.
         let mut associated_keys = RefMut::map(account.borrow_mut(), |account| {
             account.associated_keys_mut()
         });
-        let _res = associated_keys.add_key(public_key, weight);
-        unimplemented!();
+        match associated_keys.add_key(public_key, weight) {
+            Ok(_) => Ok(0),
+            // This relies on the fact that `AddKeyFailure` is represented as
+            // i32 and first variant start with number `1`, so all other variants
+            // are greater than the first one, so it's safe to assume `0` is success,
+            // and any error is greater than 0.
+            Err(e) => Ok(e as i32),
+        }
     }
 }
 
@@ -661,11 +668,8 @@ where
                     public_key_bytes.copy_from_slice(&source);
                     PublicKey::new(public_key_bytes)
                 };
-                if let Ok(_) = self.add_key(public_key, Weight::new(weight)) {
-                    Ok(Some(RuntimeValue::I32(1)))
-                } else {
-                    Ok(Some(RuntimeValue::I32(0)))
-                }
+                let result = self.add_key(public_key, Weight::new(weight))?;
+                Ok(Some(RuntimeValue::I32(result)))
             }
 
             _ => panic!("unknown function index"),
