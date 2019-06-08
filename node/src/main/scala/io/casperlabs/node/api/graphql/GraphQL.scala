@@ -11,6 +11,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.node.api.graphql.GraphQLQuery._
 import io.casperlabs.node.api.graphql.ProtocolState.Subscriptions
 import io.casperlabs.node.api.graphql.circe._
+import io.casperlabs.node.api.graphql.schema.GraphQLSchemaBuilder
 import io.casperlabs.shared.{Log, LogSource}
 import io.circe.parser.parse
 import io.circe.syntax._
