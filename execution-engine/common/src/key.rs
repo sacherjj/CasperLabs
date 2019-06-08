@@ -64,6 +64,14 @@ impl Key {
         }
     }
 
+    /// Returns bytes of an account
+    pub fn as_account(&self) -> Option<[u8; 32]> {
+        match self {
+            Account(bytes) => Some(*bytes),
+            _ => None,
+        }
+    }
+
     pub fn normalize(self) -> Key {
         match self {
             Key::URef(id, _) => Key::URef(id, None),
