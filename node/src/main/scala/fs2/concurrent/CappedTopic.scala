@@ -9,6 +9,8 @@ import fs2.internal.Token
 import fs2._
 
 /**
+  * Borrowed with slight changes from [[fs2.concurrent.Topic]].
+  *
   * Asynchronous CappedTopic.
   *
   * CappedTopic allows you to distribute `A` published by arbitrary number of publishers to arbitrary number of subscribers.
