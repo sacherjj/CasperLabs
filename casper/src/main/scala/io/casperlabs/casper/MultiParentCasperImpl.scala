@@ -2,7 +2,7 @@ package io.casperlabs.casper
 
 import cats.data.EitherT
 import cats.effect.Sync
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.{Applicative, Monad}
@@ -48,7 +48,7 @@ final case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: FinalizationHandler](
+class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -66,8 +66,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
 
   type Validator = ByteString
-
-  private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
   /** Add a block if it hasn't been added yet. */
   def addBlock(
@@ -117,7 +115,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
       dag: BlockDagRepresentation[F]
   ): F[List[(Block, BlockStatus)]] =
     for {
-      lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
+      lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
       attemptResult <- statelessExecutor.validateAndAddBlock(
                         StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
                         dag,
@@ -138,11 +136,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
           )
       tipHash                       = tipHashes.head
       _                             <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
-      lastFinalizedBlockHash        <- lastFinalizedBlockHashContainer.get
+      lastFinalizedBlockHash        <- LastFinalizedBlockHashContainer[F].get
       updatedLastFinalizedBlockHash <- updateLastFinalizedBlock(updatedDag, lastFinalizedBlockHash)
-      _                             <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
-      _ <- FinalizationHandler[F]
-            .newFinalizedBlock(updatedLastFinalizedBlockHash)
+      _                             <- LastFinalizedBlockHashContainer[F].set(updatedLastFinalizedBlockHash)
+      _ <- LastFinalizedBlockHashContainer[F]
+            .set(updatedLastFinalizedBlockHash)
             .whenA(updatedLastFinalizedBlockHash != lastFinalizedBlockHash)
       _ <- Log[F].info(
             s"New last finalized block hash is ${PrettyPrinter.buildString(updatedLastFinalizedBlockHash)}."
@@ -257,7 +255,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
   /** Return the list of tips. */
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     for {
-      lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
+      lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
       rankedEstimates        <- Estimator.tips[F](dag, lastFinalizedBlockHash)
     } yield rankedEstimates
 
@@ -322,9 +320,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 
   def lastFinalizedBlock: F[Block] =
     for {
-      lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
-      Block                  <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
-    } yield Block
+      lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
+      block                  <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
+    } yield block
 
   /** Get the deploys that are not present in the past of the chosen parents. */
   private def remainingDeploys(
@@ -544,6 +542,30 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: Blo
 }
 
 object MultiParentCasperImpl {
+
+  def create[F[_]: Sync: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: Cell[
+    ?[_],
+    CasperState
+  ]](
+      statelessExecutor: StatelessExecutor[F],
+      broadcaster: Broadcaster[F],
+      validatorId: Option[ValidatorIdentity],
+      genesis: Block,
+      chainId: String,
+      blockProcessingLock: Semaphore[F],
+      faultToleranceThreshold: Float = 0f
+  ): F[MultiParentCasper[F]] =
+    LastFinalizedBlockHashContainer[F].set(genesis.blockHash) >> Sync[F].delay(
+      new MultiParentCasperImpl[F](
+        statelessExecutor,
+        broadcaster,
+        validatorId,
+        genesis,
+        chainId,
+        blockProcessingLock,
+        faultToleranceThreshold
+      )
+    )
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */

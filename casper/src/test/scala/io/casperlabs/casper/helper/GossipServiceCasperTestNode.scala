@@ -11,7 +11,6 @@ import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.blockstorage._
-import io.casperlabs.casper.helper.NoOpsFinalizationHandler.finalizationHandler
 import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
@@ -64,6 +63,9 @@ class GossipServiceCasperTestNode[F[_]](
   val ownValidatorKey = validatorId match {
     case ValidatorIdentity(key, _, _) => ByteString.copyFrom(key)
   }
+
+  implicit val lastFinalizedBlockHashContainer =
+    NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
 
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it

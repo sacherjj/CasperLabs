@@ -10,11 +10,11 @@ import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.genesis.contracts.Faucet
-import io.casperlabs.casper.helper.NoOpsFinalizationHandler.finalizationHandler
 import io.casperlabs.casper.helper.{
   BlockDagStorageTestFixture,
   HashSetCasperTestNode,
-  NoOpsCasperEffect
+  NoOpsCasperEffect,
+  NoOpsLastFinalizedBlockHashContainer
 }
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
 import io.casperlabs.casper.util.TestTime
@@ -125,6 +125,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
         val fixture      = setup()
         import fixture._
 
+        implicit val lastFinalizedBlockHashContainer =
+          NoOpsLastFinalizedBlockHashContainer.create[Task](genesis.blockHash)
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
             new GenesisValidatorHandler(validatorId, chainId, bap)
@@ -160,6 +162,9 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
         implicit val ctx = Scheduler.global
         val fixture      = setup()
         import fixture._
+
+        implicit val lastFinalizedBlockHashContainer =
+          NoOpsLastFinalizedBlockHashContainer.create[Task](genesis.blockHash)
 
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
@@ -225,6 +230,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
           refCasper           <- Ref.of[Task, CasperPacketHandlerInternal[Task]](standaloneCasper)
           casperPacketHandler = new CasperPacketHandlerImpl[Task](refCasper, Some(validatorId))
           c1                  = abp.run().forkAndForget.runToFuture
+          implicit0(lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[Task]) = NoOpsLastFinalizedBlockHashContainer
+            .create[Task](genesis.blockHash)
           c2 = StandaloneCasperHandler
             .approveBlockInterval(
               interval,
@@ -272,6 +279,8 @@ class CasperPacketHandlerSpec extends WordSpec with Matchers {
 
         val validators = Set(PublicKey(ByteString.copyFrom(validatorPk)))
 
+        implicit val lastFinalizedBlockHashContainer =
+          NoOpsLastFinalizedBlockHashContainer.create[Task](genesis.blockHash)
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
           new BootstrapCasperHandler[Task](

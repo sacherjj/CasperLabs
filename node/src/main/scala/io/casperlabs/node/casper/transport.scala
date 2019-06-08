@@ -57,7 +57,7 @@ package object transport {
       rpConfState: MonadState[Task, RPConf],
       multiParentCasperRef: MultiParentCasperRef[Effect],
       executionEngineService: ExecutionEngineService[Effect],
-      finalizationHandler: FinalizationHandler[Effect],
+      finalizationHandler: LastFinalizedBlockHashContainer[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] = Resource {
     for {
