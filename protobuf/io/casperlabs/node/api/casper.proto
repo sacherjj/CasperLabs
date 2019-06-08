@@ -6,6 +6,7 @@ import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "io/casperlabs/casper/consensus/consensus.proto";
 import "io/casperlabs/casper/consensus/info.proto";
+import "io/casperlabs/casper/consensus/state.proto";
 
 // CasperService is the way for user and dApp developer to interact with the system,
 // including deploying contracts, looking at the DAG and querying state.
@@ -49,7 +50,7 @@ service CasperService {
     }
 
     // Query the value of global state as it was after the execution of a block.
-    rpc GetBlockState(GetBlockStateRequest) returns (io.casperlabs.casper.consensus.info.State.Value) {
+    rpc GetBlockState(GetBlockStateRequest) returns (io.casperlabs.casper.consensus.state.Value) {
         option (google.api.http) = {
             post: "v2/blocks/{block_hash_base16=*}/state"
             body: "*"
@@ -124,5 +125,5 @@ message BatchGetBlockStateRequest {
 }
 
 message BatchGetBlockStateResponse {
-    repeated io.casperlabs.casper.consensus.info.State.Value values = 1;
+    repeated io.casperlabs.casper.consensus.state.Value values = 1;
 }
