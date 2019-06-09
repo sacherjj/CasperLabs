@@ -205,7 +205,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverDefaultTimeout =
-      gen[Int](
+      gen[FiniteDuration](
         "Default timeout for roundtrip connections."
       )
 

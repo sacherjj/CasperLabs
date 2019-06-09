@@ -79,7 +79,7 @@ class DockerConfig:
 
     def node_command_options(self, server_host: str) -> dict:
         bootstrap_path = '/root/.casperlabs/bootstrap'
-        options = {'--server-default-timeout': 10000,
+        options = {'--server-default-timeout': "10second",
                    '--server-host': server_host,
                    '--casper-validator-private-key': self.node_private_key,
                    '--grpc-socket': '/root/.casperlabs/sockets/.casper-node.sock',
