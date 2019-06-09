@@ -52,9 +52,6 @@ class LoggingThread(threading.Thread):
             pass
 
 
-CI_BUILD_NUMBER = 'DRONE_BUILD_NUMBER'
-
-
 @dataclass
 class DockerConfig:
     """
@@ -99,13 +96,6 @@ class DockerConfig:
             options['--server-use-gossiping'] = ''
         return options
 
-    @property
-    def grpc_port(self) -> int:
-        """
-        Each node will get a port for grpc calls starting at 40500.
-        """
-        return 40500 + self.number
-
 
 class DockerBase:
     """
@@ -122,9 +112,13 @@ class DockerBase:
         self.connected_networks = []
 
         self.docker_tag: str = 'test'
-        if os.environ.get("TAG_NAME") is not None:
+        if self.is_in_docker:
             self.docker_tag = os.environ.get("TAG_NAME")
         self.container = self._get_container()
+
+    @property
+    def is_in_docker(self) -> bool:
+        return os.environ.get("TAG_NAME") is not None
 
     @property
     def image_name(self) -> str:
@@ -137,7 +131,7 @@ class DockerBase:
 
     @property
     def container_name(self) -> str:
-        return f'{self.container_type}-{self.config.number}-{self.config.rand_str}'
+        return f'{self.container_type}-{self.config.number}-{self.config.rand_str}-{self.docker_tag}'
 
     @property
     def container_type(self) -> str:
@@ -218,9 +212,12 @@ class DockerBase:
         network.connect(self.container)
 
     def disconnect_from_network(self, network_name: str) -> None:
-        self.connected_networks.remove(network_name)
-        network = self.network_from_name(network_name)
-        network.disconnect(self.container)
+        try:
+            self.connected_networks.remove(network_name)
+            network = self.network_from_name(network_name)
+            network.disconnect(self.container)
+        except Exception as e:
+            logging.error(f'Error disconnecting {self.container_name} from {network_name}: {e}')
 
     def cleanup(self) -> None:
         if self.container:
