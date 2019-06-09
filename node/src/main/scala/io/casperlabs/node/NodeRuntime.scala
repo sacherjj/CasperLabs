@@ -98,7 +98,7 @@ class NodeRuntime private[node] (
         implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                           id,
                                                           kademliaPort,
-                                                          conf.server.defaultTimeout.millis
+                                                          conf.server.defaultTimeout
                                                         )(
                                                           maybeBootstrap
                                                         )(
@@ -354,7 +354,7 @@ class NodeRuntime private[node] (
       RPConf(
         local,
         maybeBootstrap,
-        conf.server.defaultTimeout.millis,
+        conf.server.defaultTimeout,
         ClearConnectionsConf(
           conf.server.maxNumOfConnections,
           // TODO read from conf
