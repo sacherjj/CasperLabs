@@ -79,26 +79,36 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
               val blockHashBase16Prefix = c.arg(blocks.arguments.BlockHashPrefix)
 
               val program = for {
-                info      <- BlockAPI.getBlockInfo[F](blockHashBase16Prefix)
-                stateHash = info.getSummary.getHeader.getState.postStateHash
-                values <- queries.toList.traverse {
-                           query =>
+                maybePostStateHash <- BlockAPI
+                                       .getBlockInfoOpt[F](blockHashBase16Prefix)
+                                       .map(_.map(_._1.getSummary.getHeader.getState.postStateHash))
+                values <- maybePostStateHash.fold(List.empty[Option[ipc.Value]].pure[F]) {
+                           stateHash =>
                              for {
-                               key <- Utils.toKey[F](query.keyType, query.key)
-                               possibleResponse <- ExecutionEngineService[F]
-                                                    .query(stateHash, key, query.pathSegments)
-                               value <- MonadThrowable[F]
-                                         .fromEither(possibleResponse)
-                                         .map(_.some)
-                                         .handleError {
-                                           case SmartContractEngineError(message)
-                                               if message contains "Value not found" =>
-                                             none[ipc.Value]
-                                         }
-                             } yield value
+
+                               values <- queries.toList.traverse {
+                                          query =>
+                                            for {
+                                              key <- Utils.toKey[F](query.keyType, query.key)
+                                              possibleResponse <- ExecutionEngineService[F]
+                                                                   .query(
+                                                                     stateHash,
+                                                                     key,
+                                                                     query.pathSegments
+                                                                   )
+                                              value <- MonadThrowable[F]
+                                                        .fromEither(possibleResponse)
+                                                        .map(_.some)
+                                                        .handleError {
+                                                          case SmartContractEngineError(message)
+                                                              if message contains "Value not found" =>
+                                                            none[ipc.Value]
+                                                        }
+                                            } yield value
+                                        }
+                             } yield values
                          }
               } yield values
-
               program.unsafeToFuture
             }
           )
