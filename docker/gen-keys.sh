@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-set -e
-
+set -euo pipefail
+trap "echo 'ERROR: Script failed: see failed command above'" ERR
 # Generates all necessary key for a node.
 # Usage:
-# ./gen-keys.sh <directory where to put keys>
-#
+# ./gen-keys.sh [-v] <directory where to put keys>
+#   -v      Print debug output
 # Example:
-# ./gen-keys.sh test-dir
+# ./gen-keys.sh -v test-dir
 #
 # Will produce:
 #
@@ -28,21 +28,47 @@ set -e
 #   --tls-key node.key.pem
 #   --tls-certificate node.certificate.pem
 
+if [ "$1" == "-v" ]; then
+    set -v; shift
+fi
+
 # Output directory where to put generated keys
 OUTPUT_DIR="$1"
+if [ ! -d "$OUTPUT_DIR" ]; then
+    echo "ERROR: output dir doesn't exist"
+    echo "usage: ./gen-keys.sh [-v] <dir>"
+    exit 1
+fi
 
-# Generate validator ID PEM keys
+
+# Generate validator private key
 openssl genpkey -algorithm Ed25519 -out "$OUTPUT_DIR/validator-private.pem"
+
+# Extract validator public key from private
 openssl pkey -in "$OUTPUT_DIR/validator-private.pem" -pubout -out "$OUTPUT_DIR/validator-public.pem"
+
 # Extract raw public key from PEM file to serve as a validator ID
 openssl pkey -outform DER -pubout -in "$OUTPUT_DIR/validator-private.pem" | tail -c +13 | openssl base64 | tr -d '\n' > "$OUTPUT_DIR/validator-id"
 
-# Generate TLS key in PEM format
+# Assert validator-id is 32 bytes long
+VALIDATOR_ID_BASE64=$(cat "$OUTPUT_DIR/validator-id")
+VALIDATOR_ID_HEX=$(echo "$VALIDATOR_ID_BASE64" | openssl base64 -d | od -t x -An | tr -d '[:space:]')
+VALIDATOR_BYTES=$((${#VALIDATOR_ID_HEX} / 2))
+if [ $VALIDATOR_BYTES -ne 32 ]
+    then
+        echo "ERROR: validator-id must be 32 bytes length, got" "$VALIDATOR_BYTES" "bytes instead"
+        exit 1
+fi
+
+# Generate private TLS key in PEM format
 openssl ecparam -name secp256r1 -genkey -noout -out "$OUTPUT_DIR/secp256r1-private.pem"
+
 # Transform key to PKCS#8 format
 openssl pkcs8 -topk8 -nocrypt -in "$OUTPUT_DIR/secp256r1-private.pem" -out "$OUTPUT_DIR/node.key.pem"
+
 # Remove old PEM key
 rm "$OUTPUT_DIR/secp256r1-private.pem"
+
 # Extract public key, hash it with Keccak-256 and get last 20 bytes to serve as a node ID
 # Borrowed from https://ezcook.de/2017/11/30/Generate-Ethereum-keys-and-wallet-address/
 NODE_ID=$(cat "$OUTPUT_DIR/node.key.pem" | \
@@ -55,7 +81,17 @@ NODE_ID=$(cat "$OUTPUT_DIR/node.key.pem" | \
     tr -d ' -' | \
     tail -c 41 | \
     tr -d '\n')
+
+# Assert node-id is 20 bytes long
+NODE_BYTES=$((${#NODE_ID} / 2))
+if [ $NODE_BYTES -ne 20 ]
+    then
+        echo "ERROR: node-id must be 20 bytes length, got" "$NODE_BYTES" "bytes instead"
+        exit 1
+fi
+
 echo "$NODE_ID"> "$OUTPUT_DIR/node-id"
+
 # Generate X.509 certificate
 openssl req \
 	-new \

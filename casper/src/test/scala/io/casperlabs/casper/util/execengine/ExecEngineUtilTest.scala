@@ -119,7 +119,7 @@ class ExecEngineUtilTest
                           deploy,
                           protocolVersion
                         )
-      DeploysCheckpoint(_, _, result, _, _, _) = computeResult
+      DeploysCheckpoint(_, _, result, _, _, _, _) = computeResult
     } yield result
 
   "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {

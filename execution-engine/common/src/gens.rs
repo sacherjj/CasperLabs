@@ -37,7 +37,7 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
         u8_slice_32().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
-        option::of(access_rights_arb())
+        option::weighted(option::Probability::new(0.8), access_rights_arb())
             .prop_flat_map(|right| { u8_slice_32().prop_map(move |addr| Key::URef(addr, right)) }),
         (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key_hash)| Key::Local { seed, key_hash })
     ]

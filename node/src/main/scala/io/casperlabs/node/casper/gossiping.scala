@@ -4,56 +4,45 @@ import cats._
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
-import cats.data.OptionT
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
-import eu.timepit.refined._
-import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
-import io.casperlabs.shared.{Cell, Log, Resources, Time}
 import io.casperlabs.blockstorage.{BlockDagStorage, BlockStore}
-import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.LegacyConversions
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.comm.BlockApproverProtocol
+import io.casperlabs.casper.{LegacyConversions, _}
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.comm.{CachedConnections, NodeAsk}
 import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
-import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.discovery.NodeUtils._
+import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
-import io.casperlabs.comm.grpc.{
-  AuthInterceptor,
-  ErrorInterceptor,
-  GrpcServer,
-  MetricsInterceptor,
-  SslContexts
-}
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.comm.grpc._
+import io.casperlabs.comm.{CachedConnections, NodeAsk}
 import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.node.diagnostics
+import io.casperlabs.shared.{Cell, Log, Resources, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.grpc.ManagedChannel
-import io.netty.handler.ssl.{ClientAuth, SslContext}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
-import monix.execution.Scheduler
+import io.netty.handler.ssl.{ClientAuth, SslContext}
 import monix.eval.TaskLike
-import scala.io.Source
+import monix.execution.Scheduler
+
 import scala.concurrent.duration._
-import scala.util.control.NoStackTrace
+import scala.io.Source
 import scala.util.Random
+import scala.util.control.NoStackTrace
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService](
+  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer](
       port: Int,
       conf: Configuration,
       grpcScheduler: Scheduler
@@ -108,7 +97,7 @@ package object gossiping {
                      genesis,
                      prestate,
                      transforms,
-                     conf.casper.shardId,
+                     conf.casper.chainId,
                      relaying
                    )
           _ <- MultiParentCasperRef[F].set(casper)
@@ -148,7 +137,7 @@ package object gossiping {
 
   /** Validate the genesis candidate or any new block via Casper. */
   private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStore: BlockDagStorage: ExecutionEngineService: MultiParentCasperRef](
-      shardId: String,
+      chainId: String,
       block: Block
   ): F[Unit] =
     MultiParentCasperRef[F].get
@@ -160,7 +149,7 @@ package object gossiping {
           for {
             _           <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
             state       <- Cell.mvarCell[F, CasperState](CasperState())
-            executor    = new MultiParentCasperImpl.StatelessExecutor(shardId)
+            executor    = new MultiParentCasperImpl.StatelessExecutor(chainId)
             dag         <- BlockDagStorage[F].getRepresentation
             result      <- executor.validateAndAddBlock(None, dag, block)(state)
             (status, _) = result
@@ -291,7 +280,7 @@ package object gossiping {
                                       s"Block ${PrettyPrinter.buildString(block)} seems to be created by a doppelganger using the same validator key!"
                                     )
                                 } *>
-                                validateAndAddBlock(conf.casper.shardId, block)
+                                validateAndAddBlock(conf.casper.chainId, block)
 
                             override def storeBlock(block: Block): F[Unit] =
                               // Validation has already stored it.
@@ -464,14 +453,14 @@ package object gossiping {
                                                conf.casper.minimumBond,
                                                conf.casper.maximumBond,
                                                conf.casper.hasFaucet,
-                                               conf.casper.shardId,
+                                               conf.casper.chainId,
                                                conf.casper.deployTimestamp
                                              ).map(_.getBlockMessage)
                                    // Store it so others can pull it from the bootstrap node.
                                    _ <- Log[F].info(
                                          s"Trying to store generated Genesis candidate ${genesis.blockHash}..."
                                        )
-                                   _ <- validateAndAddBlock(conf.casper.shardId, genesis)
+                                   _ <- validateAndAddBlock(conf.casper.chainId, genesis)
                                  } yield genesis
                                }
 
@@ -506,6 +495,8 @@ package object gossiping {
       awaitApproved: F[Unit],
       isInitialRef: Ref[F, Boolean]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
+    implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
+
     for {
       _ <- SynchronizerImpl.establishMetrics[F]
       underlying <- Sync[F].delay {
@@ -527,11 +518,7 @@ package object gossiping {
                            } yield latest.values.toList
 
                          override def validate(blockSummary: BlockSummary): F[Unit] =
-                           // TODO: Presently the Validation only works on full blocks.
-                           // Logging so we get an idea of how many summaries we are pulling.
-                           Log[F].debug(
-                             s"Trying to validate block summary ${show(blockSummary.blockHash)}"
-                           )
+                           Validate.blockSummary[F](blockSummary, conf.casper.chainId)
 
                          override def notInDag(blockHash: ByteString): F[Boolean] =
                            isInDag(blockHash).map(!_)

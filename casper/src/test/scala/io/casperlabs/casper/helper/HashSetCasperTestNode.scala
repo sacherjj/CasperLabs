@@ -258,9 +258,13 @@ object HashSetCasperTestNode {
     new ExecutionEngineService[F] {
       import ipc._
 
-      private val accountNonceTracker: MutMap[ByteString, Long] = MutMap.empty.withDefaultValue(0)
-      private val zero                                          = Array.fill(32)(0.toByte)
-      private var bonds                                         = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
+      // NOTE: Some tests would benefit from tacking this per pre-state-hash,
+      // but when I tried to do that a great many more failed.
+      private val accountNonceTracker: MutMap[ByteString, Long] =
+        MutMap.empty.withDefaultValue(0)
+
+      private val zero  = Array.fill(32)(0.toByte)
+      private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
       private def getExecutionEffect(deploy: Deploy) = {
         // The real execution engine will get the keys from what the code changes, which will include
@@ -276,17 +280,17 @@ object HashSetCasperTestNode {
 
       // Validate that account's nonces increment monotonically by 1.
       // Assumes that any account address already exists in the GlobalState with nonce = 0.
-      private def validateNonce(deploy: Deploy): Boolean = synchronized {
+      private def validateNonce(prestate: ByteString, deploy: Deploy): Int = synchronized {
         if (!validateNonces) {
-          true
+          0
         } else {
           val deployAccount = deploy.address
           val deployNonce   = deploy.nonce
           val oldNonce      = accountNonceTracker(deployAccount)
-          if (deployNonce == oldNonce + 1) {
-            accountNonceTracker.update(deployAccount, deployNonce)
-            true
-          } else false
+          val expected      = oldNonce + 1
+          val sign          = math.signum(deployNonce - expected)
+          if (sign == 0) accountNonceTracker(deployAccount) = deployNonce
+          sign.toInt
         }
       }
 
@@ -301,18 +305,24 @@ object HashSetCasperTestNode {
         //regardless of their wasm code. It pretends to have run all the deploys,
         //but it doesn't really; it just returns the same result no matter what.
         deploys
-          .map(
-            d =>
-              if (validateNonce(d)) {
+          .map { d =>
+            validateNonce(prestate, d) match {
+              case 0 =>
                 DeployResult(
                   ExecutionResult(
                     ipc.DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
                   )
                 )
-              } else {
+              case 1 =>
                 DeployResult(DeployResult.Value.InvalidNonce(DeployResult.InvalidNonce(d.nonce)))
-              }
-          )
+              case -1 =>
+                DeployResult(
+                  DeployResult.Value.PreconditionFailure(
+                    DeployResult.PreconditionFailure("Nonce was less then expected.")
+                  )
+                )
+            }
+          }
           .asRight[Throwable]
           .pure[F]
 

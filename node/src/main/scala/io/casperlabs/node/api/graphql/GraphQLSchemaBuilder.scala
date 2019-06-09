@@ -5,7 +5,6 @@ import java.time.{Instant, ZoneId, ZonedDateTime}
 import cats.effect.Effect
 import cats.effect.implicits._
 import cats.implicits._
-import fs2.Stream
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
@@ -16,11 +15,9 @@ import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.{Approval, Block, Deploy, Signature}
 import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.shared.Log
-import sangria.schema._
+import sangria.schema.{fields, _}
 
-import scala.util.Random
-
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Effect: MultiParentCasperRef: SafetyOracle: BlockStore] {
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Effect: MultiParentCasperRef: SafetyOracle: BlockStore: FinalizedBlocksStream] {
 
   // Not defining inputs yet because it's a read-only field
   val DateType: ScalarType[Long] = ScalarType[Long](
@@ -295,6 +292,21 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
       description = "Prefix or full base-16 hash of a block"
     )
 
+  val Depth =
+    Argument(
+      "depth",
+      IntType,
+      description = "How many of the top ranks of the DAG to show"
+    )
+
+  val MaxRank =
+    Argument(
+      "maxRank",
+      OptionInputType(LongType),
+      "The maximum rank to to go back from, 0 means go from the current tip of the DAG",
+      0L
+    )
+
   val DeployHash =
     Argument(
       "deployHashBase16",
@@ -302,13 +314,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
       description = "Base-16 hash of a deploy, must be 64 characters long"
     )
 
-  val randomBytes: List[Array[Byte]] = (for {
-    _ <- 0 until 5
-  } yield {
-    val arr = Array.ofDim[Byte](32)
-    Random.nextBytes(arr)
-    arr
-  }).toList
+  val requireFullBlockFields = Set("blockSizeBytes", "deployErrorCount", "deploys")
 
   def hasAtLeastOne(projections: Vector[ProjectedName], fields: Set[String]): Boolean = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
@@ -322,7 +328,6 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
     flatToSet(projections, Set.empty).intersect(fields).nonEmpty
   }
 
-  /* TODO: Temporary mock implementation  */
   def createSchema: Schema[Unit, Unit] =
     Schema(
       query = ObjectType(
@@ -336,8 +341,22 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
               BlockAPI
                 .getBlockInfoOpt[F](
                   blockHashBase16 = context.arg(BlockHashPrefix),
-                  full =
-                    hasAtLeastOne(projections, Set("blockSizeBytes", "deployErrorCount", "deploys"))
+                  full = hasAtLeastOne(projections, requireFullBlockFields)
+                )
+                .toIO
+                .unsafeToFuture()
+            }
+          ),
+          Field(
+            "dagSlice",
+            ListType(BlockType),
+            arguments = Depth :: MaxRank :: Nil,
+            resolve = Projector { (context, projections) =>
+              BlockAPI
+                .getBlockInfosMaybeWithBlocks[F](
+                  depth = context.arg(Depth),
+                  maxRank = context.arg(MaxRank),
+                  full = hasAtLeastOne(projections, requireFullBlockFields)
                 )
                 .toIO
                 .unsafeToFuture()
@@ -355,13 +374,28 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
         "Subscription",
         fields[Unit, Unit](
           Field.subs(
-            name = "latestBlocks",
-            fieldType = StringType,
-            description = "Subscribes to new blocks".some,
-            resolve = _ =>
-              Stream.emits[F, Action[Unit, String]](
-                randomBytes.map(bs => Action(Base16.encode(bs)))
-              )
+            "finalizedBlocks",
+            BlockType,
+            "Subscribes to new finalized blocks".some,
+            resolve = { c =>
+              // Projectors don't work with Subscriptions
+              val requireFullBlock = c.query.renderCompact
+                .split("[^a-zA-Z0-9]")
+                .collect {
+                  case s if s.trim.nonEmpty => s.trim
+                }
+                .toSet
+                .intersect(requireFullBlockFields)
+                .nonEmpty
+              FinalizedBlocksStream[F].subscribe.evalMap { blockHash =>
+                BlockAPI
+                  .getBlockInfoWithBlock[F](
+                    blockHash = blockHash,
+                    full = requireFullBlock
+                  )
+                  .map(Action(_))
+              }
+            }
           )
         )
       ).some

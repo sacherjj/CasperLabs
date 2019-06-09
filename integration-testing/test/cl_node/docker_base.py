@@ -1,15 +1,36 @@
 import logging
+import json
 import os
 import threading
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from queue import Empty
+from typing import Any, Dict, Optional, Tuple, Union
+
 from test.cl_node.common import random_string
 from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
-from typing import Any, Dict, Optional, Tuple, Union
 
 from docker import DockerClient
 import docker.errors
+
+
+def humanify(line):
+    """
+    Decode json dump of execution engine's structured log and render a human friendly line,
+    containing, together with prefix rendered by the Python test framewoork, all useful
+    information. The original dictionary in the EE structured log looks like follows:
+
+        {'timestamp': '2019-06-08T17:51:35.308Z', 'process_id': 1, 'process_name': 'casperlabs-engine-grpc-server', 'host_name': 'execution-engine-0-mlgtn', 'log_level': 'Info', 'priority': 5, 'message_type': 'ee-structured', 'message_type_version': '1.0.0', 'message_id': '14039567985248808663', 'description': 'starting Execution Engine Server', 'properties': {'message': 'starting Execution Engine Server', 'message_template': '{message}'}}
+    """
+    if not 'execution-engine-' in line:
+        return line
+    try:
+        _, payload = line.split('payload=')
+    except:
+        return line
+
+    d = json.loads(payload)
+    return ' '.join(str(d[k]) for k in ('log_level', 'description',))
 
 
 class LoggingThread(threading.Thread):
@@ -26,12 +47,10 @@ class LoggingThread(threading.Thread):
                 if self.terminate_thread_event.is_set():
                     break
                 line = next(containers_log_lines_generator)
-                self.logger.info(f"  {self.container.name}: {line.decode('utf-8').rstrip()}")
+                s = line.decode('utf-8').rstrip()
+                self.logger.info(f"  {self.container.name}: {humanify(s)}")
         except StopIteration:
             pass
-
-
-CI_BUILD_NUMBER = 'DRONE_BUILD_NUMBER'
 
 
 @dataclass
@@ -78,13 +97,6 @@ class DockerConfig:
             options['--server-use-gossiping'] = ''
         return options
 
-    @property
-    def grpc_port(self) -> int:
-        """
-        Each node will get a port for grpc calls starting at 40500.
-        """
-        return 40500 + self.number
-
 
 class DockerBase:
     """
@@ -101,9 +113,13 @@ class DockerBase:
         self.connected_networks = []
 
         self.docker_tag: str = 'test'
-        if os.environ.get("TAG_NAME") is not None:
+        if self.is_in_docker:
             self.docker_tag = os.environ.get("TAG_NAME")
         self.container = self._get_container()
+
+    @property
+    def is_in_docker(self) -> bool:
+        return os.environ.get("TAG_NAME") is not None
 
     @property
     def image_name(self) -> str:
@@ -116,7 +132,7 @@ class DockerBase:
 
     @property
     def container_name(self) -> str:
-        return f'{self.container_type}-{self.config.number}-{self.config.rand_str}'
+        return f'{self.container_type}-{self.config.number}-{self.config.rand_str}-{self.docker_tag}'
 
     @property
     def container_type(self) -> str:
@@ -197,9 +213,12 @@ class DockerBase:
         network.connect(self.container)
 
     def disconnect_from_network(self, network_name: str) -> None:
-        self.connected_networks.remove(network_name)
-        network = self.network_from_name(network_name)
-        network.disconnect(self.container)
+        try:
+            self.connected_networks.remove(network_name)
+            network = self.network_from_name(network_name)
+            network.disconnect(self.container)
+        except Exception as e:
+            logging.error(f'Error disconnecting {self.container_name} from {network_name}: {e}')
 
     def cleanup(self) -> None:
         if self.container:
