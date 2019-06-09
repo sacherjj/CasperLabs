@@ -59,10 +59,15 @@ class DockerClient(CasperLabsClient):
                public_key: Optional[str] = None) -> str:
 
         deploy_nonce = nonce if nonce is not None else NonceRegistry.registry[from_address]
+
         command = (f"deploy --from {from_address}"
-                   f" --gas-limit {gas_limit} --gas-price {gas_price}"
-                   f" --nonce {deploy_nonce} --session=/data/{session_contract}"
+                   f" --gas-limit {gas_limit}"
+                   f" --gas-price {gas_price}"
+                   f" --session=/data/{session_contract}"
                    f" --payment=/data/{payment_contract}")
+
+        if deploy_nonce != '':
+            command += f" --nonce {deploy_nonce}" 
 
         if public_key and private_key:
             command += (f" --private-key=/data/{private_key}"

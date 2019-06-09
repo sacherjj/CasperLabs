@@ -31,19 +31,15 @@ class PythonClient(CasperLabsClient):
 
         deploy_nonce = nonce if nonce is not None else NonceRegistry.registry[from_address]
 
-        logging.info(f'PY_CLIENT.deploy(from_address={from_address}, gas_limit={gas_limit}, gas_price={gas_price}, '
-                     f'payment_contract={payment_contract}, session_contract={session_contract}, '
-                     f'nonce={deploy_nonce})')
-
         resources_path = self.node.resources_folder
         session_contract_path = str(resources_path / session_contract)
         payment_contract_path = str(resources_path / payment_contract)
 
         logging.info(f'PY_CLIENT.deploy(from_address={from_address}, gas_limit={gas_limit}, gas_price={gas_price}, '
                      f'payment_contract={payment_contract_path}, session_contract={session_contract_path}, '
-                     f'nonce={nonce})')
+                     f'nonce={deploy_nonce})')
 
-        r = self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price, payment_contract, session_contract, nonce)
+        r = self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price, payment_contract, session_contract, deploy_nonce)
         if nonce is None:
             NonceRegistry.registry[from_address] += 1
         return r

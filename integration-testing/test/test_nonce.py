@@ -22,9 +22,7 @@ def node(one_node_network):
 def deploy_and_propose(node, contract, nonce):
     node.client.deploy(session_contract = contract,
                        payment_contract = contract,
-                       nonce = nonce,
-                       private_key = "validator-0-private.pem",
-                       public_key = "validator-0-public.pem")
+                       nonce = nonce)
     node.client.propose()
 
 
@@ -35,23 +33,24 @@ def test_deploy_without_nonce(node, contract: str):
     Scenario: Deploy without nonce
     """
     with pytest.raises(NonZeroExitCodeError):
-        deploy_and_propose(node, contract, None)
-        wait_for_blocks_count_at_least(node, 2, 2, node.timeout)
+        deploy_and_propose(node, contract, '')
 
 
-@pytest.mark.parametrize("contract", ['test_helloname.wasm',])
-def test_deploy_with_lower_nonce(node, contract: str):
+@pytest.mark.parametrize("contracts", [['test_helloname.wasm', 'test_helloworld.wasm', 'test_counterdefine.wasm']])
+def test_deploy_with_lower_nonce(node, contracts: List[str]):
     """
     Feature file: deploy.feature
     Scenario: Deploy with lower nonce
     """
-    for i in range(4):
+    
+    for i, contract in enumerate(contracts, 1):
         deploy_and_propose(node, contract, i)
-        wait_for_blocks_count_at_least(node, i+1, i+1, node.timeout)
+
+    n = len(contracts) + 1  # add one for genesis block
+    wait_for_blocks_count_at_least(node, n, n, node.timeout)
 
     with pytest.raises(NonZeroExitCodeError):
-        deploy_and_propose(node, contract, 3)
-
+        deploy_and_propose(node, contract, 2)
 
 
 @pytest.mark.parametrize("contract", ['test_helloname.wasm',])
