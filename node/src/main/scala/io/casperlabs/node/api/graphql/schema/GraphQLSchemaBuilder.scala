@@ -6,6 +6,8 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.ipc
+import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.Utils
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql._
@@ -70,7 +72,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
           ),
           Field(
             "globalState",
-            ListType(globalstate.types.Value),
+            ListType(OptionType(globalstate.types.Value)),
             arguments = globalstate.arguments.StateQueryArgument :: blocks.arguments.BlockHashPrefix :: Nil,
             resolve = { c =>
               val queries               = c.arg(globalstate.arguments.StateQueryArgument)
@@ -79,13 +81,21 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
               val program = for {
                 info      <- BlockAPI.getBlockInfo[F](blockHashBase16Prefix)
                 stateHash = info.getSummary.getHeader.getState.postStateHash
-                values <- queries.toList.traverse { query =>
-                           for {
-                             key <- Utils.toKey[F](query.keyType, query.key)
-                             possibleResponse <- ExecutionEngineService[F]
-                                                  .query(stateHash, key, query.pathSegments)
-                             value <- MonadThrowable[F].fromEither(possibleResponse)
-                           } yield value
+                values <- queries.toList.traverse {
+                           query =>
+                             for {
+                               key <- Utils.toKey[F](query.keyType, query.key)
+                               possibleResponse <- ExecutionEngineService[F]
+                                                    .query(stateHash, key, query.pathSegments)
+                               value <- MonadThrowable[F]
+                                         .fromEither(possibleResponse)
+                                         .map(_.some)
+                                         .handleError {
+                                           case SmartContractEngineError(message)
+                                               if message contains "Value not found" =>
+                                             none[ipc.Value]
+                                         }
+                             } yield value
                          }
               } yield values
 
