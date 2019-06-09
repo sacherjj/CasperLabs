@@ -1,4 +1,8 @@
+import docker
 import logging
+import os
+from typing import Callable, Dict, List
+
 from test.cl_node.casperlabs_node import CasperLabsNode
 from test.cl_node.common import random_string
 from test.cl_node.docker_base import DockerConfig
@@ -10,9 +14,6 @@ from test.cl_node.wait import (
     wait_for_node_started,
     wait_for_peers_count_at_least,
 )
-from typing import Callable, Dict, List
-
-import docker
 
 
 class CasperLabsNetwork:
@@ -51,7 +52,8 @@ class CasperLabsNetwork:
         raise NotImplementedError("Must implement '_create_network' in subclass.")
 
     def create_docker_network(self) -> str:
-        network_name = f'casperlabs{random_string(5)}'
+        tag_name = os.environ.get("TAG_NAME") or 'test'
+        network_name = f'casperlabs_{random_string(5)}_{tag_name}'
         self._created_networks.append(network_name)
         self.docker_client.networks.create(network_name, driver="bridge")
         logging.info(f'Docker network {network_name} created.')

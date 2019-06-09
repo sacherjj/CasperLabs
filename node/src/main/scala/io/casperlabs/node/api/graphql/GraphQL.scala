@@ -38,7 +38,7 @@ object GraphQL {
   private implicit val logSource: LogSource = LogSource(getClass)
 
   /* Entry point */
-  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: SafetyOracle: BlockStore: FinalizedBlocksStream](
       executionContext: ExecutionContext
   ): HttpRoutes[F] = {
     implicit val ec: ExecutionContext                            = executionContext

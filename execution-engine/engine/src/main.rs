@@ -18,6 +18,7 @@ use std::iter::Iterator;
 
 use clap::{App, Arg, ArgMatches};
 
+use common::key::Key;
 use execution_engine::engine_state::error::RootNotFound;
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
@@ -173,14 +174,14 @@ fn main() {
         logging::log_info(SERVER_NO_WASM_MESSAGE);
     }
 
-    let account_addr: [u8; 32] = {
+    let account_addr = {
         let mut address = [48u8; 32];
         matches
             .value_of("address")
             .map(str::as_bytes)
             .map(|bytes| address.copy_from_slice(bytes))
             .expect("Error when parsing address");
-        address
+        Key::Account(address)
     };
 
     let gas_limit: u64 = matches
@@ -198,7 +199,7 @@ fn main() {
     let timestamp: u64 = 100_000;
     let protocol_version: u64 = 1;
 
-    let init_state = mocked_account(account_addr);
+    let init_state = mocked_account(account_addr.as_account().unwrap());
     let global_state = InMemoryGlobalState::from_pairs(CorrelationId::new(), &init_state)
         .expect("Could not create global state");
     let mut state_hash: Blake2bHash = global_state.root_hash;

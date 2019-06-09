@@ -43,7 +43,9 @@ final case class CasperConf(
     autoProposeCheckInterval: FiniteDuration,
     autoProposeMaxInterval: FiniteDuration,
     autoProposeMaxCount: Int
-) extends SubConfig
+) extends SubConfig {
+  def chainId = shardId
+}
 
 object CasperConf {
   private implicit val logSource: LogSource = LogSource(this.getClass)

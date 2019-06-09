@@ -10,6 +10,7 @@ import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.info._
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.casper._
@@ -89,7 +90,7 @@ object GrpcCasperService extends StateConversions {
           Observable.fromTask(deploys).flatMap(Observable.fromIterable)
         }
 
-        override def getBlockState(request: GetBlockStateRequest): Task[State.Value] =
+        override def getBlockState(request: GetBlockStateRequest): Task[state.Value] =
           batchGetBlockState(
             BatchGetBlockStateRequest(request.blockHashBase16, List(request.getQuery))
           ) map {
@@ -106,7 +107,7 @@ object GrpcCasperService extends StateConversions {
           } yield BatchGetBlockStateResponse(values)
         }
 
-        private def getState(stateHash: ByteString, query: StateQuery): F[State.Value] =
+        private def getState(stateHash: ByteString, query: StateQuery): F[state.Value] =
           for {
             key <- toKey[F](query.keyVariant, query.keyBase16)
             possibleResponse <- ExecutionEngineService[F].query(

@@ -797,7 +797,7 @@ pub trait Executor<A> {
         &self,
         parity_module: A,
         args: &[u8],
-        account_addr: [u8; 32],
+        account: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
@@ -817,7 +817,7 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        account_addr: [u8; 32],
+        acct_key: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
@@ -829,7 +829,6 @@ impl Executor<Module> for WasmiExecutor {
     where
         R::Error: Into<Error>,
     {
-        let acct_key = Key::Account(account_addr);
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
         #[allow(unreachable_code)]
@@ -882,7 +881,8 @@ impl Executor<Module> for WasmiExecutor {
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
-        let rng = create_rng(&account_addr, timestamp, nonce);
+        let account_bytes = acct_key.as_account().unwrap();
+        let rng = create_rng(&account_bytes, timestamp, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
@@ -1046,6 +1046,7 @@ mod tests {
 
         let executor = WasmiExecutor;
         let account_address = [0u8; 32];
+        let account_key: Key = Key::Account(account_address);
         let parity_module: Module = ModuleBuilder::new()
             .with_import(ImportEntry::new(
                 "env".to_string(),
@@ -1060,7 +1061,7 @@ mod tests {
         let exec_result = executor.exec(
             parity_module,
             &[],
-            account_address,
+            account_key,
             0u64,
             invalid_nonce,
             100u64,

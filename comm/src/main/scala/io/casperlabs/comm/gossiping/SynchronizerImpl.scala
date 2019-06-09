@@ -72,7 +72,7 @@ class SynchronizerImpl[F[_]: Sync: Log: Metrics](
 
     effect.onError {
       case NonFatal(e) =>
-        Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e") *>
+        Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e) *>
           Metrics[F].incrementCounter("syncs_failed")
     }
   }
