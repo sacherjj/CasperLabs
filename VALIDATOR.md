@@ -84,7 +84,7 @@ export LD_LIBRARY_PATH=/usr/local/lib
 
 To continue to have working lib folder, consider adding last line to bottom of `.bashrc` or relevent file with:
 
-`echo "export LD_LIBRARY_PATH=/use/local/lib" >> ~/.bashrc`
+`echo "export LD_LIBRARY_PATH=/usr/local/lib" >> ~/.bashrc`
 
 You might want to add `/usr/local/ssh/bin` to your `/etc/environment` file so that the right executable is found; check it by running `openssl version`.
 

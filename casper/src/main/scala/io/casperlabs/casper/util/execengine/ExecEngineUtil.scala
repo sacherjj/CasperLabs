@@ -24,12 +24,18 @@ case class DeploysCheckpoint(
     postStateHash: StateHash,
     deploysForBlock: Seq[Block.ProcessedDeploy],
     invalidNonceDeploys: Seq[InvalidNonceDeploy],
+    deploysToDiscard: Seq[PreconditionFailure],
     blockNumber: Long,
     protocolVersion: ProtocolVersion
 )
 
 object ExecEngineUtil {
   type StateHash = ByteString
+
+  case class InvalidDeploys(
+      invalidNonceDeploys: List[InvalidNonceDeploy],
+      preconditionFailures: List[PreconditionFailure]
+  )
 
   def computeDeploysCheckpoint[F[_]: MonadThrowable: BlockStore: Log: ExecutionEngineService](
       merged: MergeResult[TransformMap, Block],
@@ -43,19 +49,20 @@ object ExecEngineUtil {
                            deploys,
                            protocolVersion
                          )
-      processedDeployResults = zipDeploysResults(deploys, processedDeploys)
-      invalidNonceDeploys <- processedDeployResults.toList.flatTraverse[F, InvalidNonceDeploy] {
-                              case d: InvalidNonceDeploy => List(d).pure[F]
-                              case PreconditionFailure(deploy, errorMessage) => {
-                                // Log precondition failures as we will be getting rid of them.
-                                Log[F].warn(
-                                  s"Deploy ${PrettyPrinter.buildString(deploy.deployHash)} failed precondition error: $errorMessage"
-                                ) *> List.empty[InvalidNonceDeploy].pure[F]
-                              }
-                              case _ =>
-                                // We are collecting only InvalidNonceDeploy deploys
-                                List.empty[InvalidNonceDeploy].pure[F]
-                            }
+      processedDeployResults = zipDeploysResults(deploys, processedDeploys).toList
+      invalidDeploys <- processedDeployResults.foldM[F, InvalidDeploys](InvalidDeploys(Nil, Nil)) {
+                         case (acc, d: InvalidNonceDeploy) =>
+                           acc.copy(invalidNonceDeploys = d :: acc.invalidNonceDeploys).pure[F]
+                         case (acc, d: PreconditionFailure) =>
+                           // Log precondition failures as we will be getting rid of them.
+                           Log[F].warn(
+                             s"Deploy ${PrettyPrinter.buildString(d.deploy.deployHash)} failed precondition error: ${d.errorMessage}"
+                           ) as {
+                             acc.copy(preconditionFailures = d :: acc.preconditionFailures)
+                           }
+                         case (acc, _) =>
+                           acc.pure[F]
+                       }
       deployEffects                 = findCommutingEffects(processedDeployResults)
       (deploysForBlock, transforms) = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
       postStateHash                 <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
@@ -78,7 +85,8 @@ object ExecEngineUtil {
         preStateHash,
         postStateHash,
         deploysForBlock,
-        invalidNonceDeploys,
+        invalidDeploys.invalidNonceDeploys,
+        invalidDeploys.preconditionFailures,
         number,
         protocolVersion
       )

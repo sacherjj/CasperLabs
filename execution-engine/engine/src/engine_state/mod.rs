@@ -54,7 +54,7 @@ where
         &self,
         module_bytes: &[u8],
         args: &[u8],
-        address: [u8; 32],
+        address: Key,
         timestamp: u64,
         nonce: u64,
         prestate_hash: Blake2bHash,

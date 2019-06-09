@@ -11,8 +11,7 @@ import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.blockstorage._
-import io.casperlabs.casper.consensus
-import io.casperlabs.casper._
+import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
@@ -23,8 +22,8 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, Time}
 import monix.tail.Iterant
-
 import scala.collection.immutable.Queue
+import scala.util.control.NonFatal
 
 class GossipServiceCasperTestNode[F[_]](
     local: Node,
@@ -64,6 +63,9 @@ class GossipServiceCasperTestNode[F[_]](
   val ownValidatorKey = validatorId match {
     case ValidatorIdentity(key, _, _) => ByteString.copyFrom(key)
   }
+
+  implicit val lastFinalizedBlockHashContainer =
+    NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
 
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it
@@ -112,7 +114,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   ): F[GossipServiceCasperTestNode[F]] = {
     val name               = "standalone"
     val identity           = peerNode(name, 40400)
-    val logicalTime        = new LogicalTime[F]
+    implicit val timeEff   = new LogicalTime[F]
     implicit val log       = new LogStub[F](printEnabled = false)
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val nodeAsk   = makeNodeAsk(identity)(concurrentF)
@@ -145,7 +147,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             concurrentF,
             blockStore,
             blockDagStorage,
-            logicalTime,
+            timeEff,
             metricEff,
             casperState,
             log
@@ -187,7 +189,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       .toList
       .traverse {
         case (peer, sk) =>
-          val logicalTime        = new LogicalTime[F]
+          implicit val timeEff   = new LogicalTime[F]
           implicit val log       = new LogStub[F](peer.host, printEnabled = false)
           implicit val metricEff = new Metrics.MetricsNOP[F]
           implicit val nodeAsk   = makeNodeAsk(peer)(concurrentF)
@@ -231,7 +233,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   concurrentF,
                   blockStore,
                   blockDagStorage,
-                  logicalTime,
+                  timeEff,
                   metricEff,
                   casperState,
                   log
@@ -267,7 +269,7 @@ object GossipServiceCasperTestNodeFactory {
     }
 
   /** Accumulate messages until receive is called by the test. */
-  class TestGossipService[F[_]: Concurrent: Timer: Par: Log](host: String)
+  class TestGossipService[F[_]: Concurrent: Timer: Time: Par: Log](host: String)
       extends GossipService[F] {
 
     implicit val metrics = new Metrics.MetricsNOP[F]
@@ -355,11 +357,19 @@ object GossipServiceCasperTestNodeFactory {
                 latest <- dag.latestMessageHashes
               } yield latest.values.toList
 
-            override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
-              // TODO: Presently the Validation only works on full blocks.
-              Log[F].debug(
-                s"Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
-              )
+            override def validate(blockSummary: consensus.BlockSummary): F[Unit] = {
+              implicit val functorRaiseInvalidBlock = Validate.raiseValidateErrorThroughSync[F]
+              for {
+                dag <- casper.blockDag
+                _ <- Log[F].debug(
+                      s"Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
+                    )
+                _ <- Validate.blockSummary[F](
+                      blockSummary,
+                      "casperlabs"
+                    )
+              } yield ()
+            }
 
             override def notInDag(blockHash: ByteString): F[Boolean] =
               isInDag(blockHash).map(!_)
