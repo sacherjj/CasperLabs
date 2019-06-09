@@ -29,7 +29,7 @@ def deploy_and_propose(node, contract, nonce):
 
 
 @pytest.mark.parametrize("contract", ['test_helloname.wasm',])
-def disabled_test_deploy_without_nonce(node, contract: str):
+def test_deploy_without_nonce(node, contract: str):
     """
     Feature file: deploy.feature
     Scenario: Deploy without nonce
@@ -40,7 +40,7 @@ def disabled_test_deploy_without_nonce(node, contract: str):
 
 
 @pytest.mark.parametrize("contract", ['test_helloname.wasm',])
-def disabled_test_deploy_with_lower_nonce(node, contract: str):
+def test_deploy_with_lower_nonce(node, contract: str):
     """
     Feature file: deploy.feature
     Scenario: Deploy with lower nonce
