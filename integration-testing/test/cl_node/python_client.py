@@ -2,6 +2,7 @@ from typing import Optional
 import logging
 
 from test.cl_node.client_base import CasperLabsClient
+from test.cl_node.nonce_registry import NonceRegistry
 from casper_client import CasperClient
 
 
@@ -24,29 +25,39 @@ class PythonClient(CasperLabsClient):
                from_address: str = "00000000000000000000000000000000",
                gas_limit: int = 1000000,
                gas_price: int = 1,
-               nonce: int = 0,
+               nonce: int = None,
                session_contract: Optional[str] = 'test_helloname.wasm',
                payment_contract: Optional[str] = 'test_helloname.wasm') -> str:
+
+        deploy_nonce = nonce if nonce is not None else NonceRegistry.registry[from_address]
+
+        logging.info(f'PY_CLIENT.deploy(from_address={from_address}, gas_limit={gas_limit}, gas_price={gas_price}, '
+                     f'payment_contract={payment_contract}, session_contract={session_contract}, '
+                     f'nonce={deploy_nonce})')
 
         resources_path = self.node.resources_folder
         session_contract_path = str(resources_path / session_contract)
         payment_contract_path = str(resources_path / payment_contract)
+
         logging.info(f'PY_CLIENT.deploy(from_address={from_address}, gas_limit={gas_limit}, gas_price={gas_price}, '
                      f'payment_contract={payment_contract_path}, session_contract={session_contract_path}, '
                      f'nonce={nonce})')
-        return self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price,
-                                  payment_contract_path, session_contract_path, nonce)
+
+        r = self.client.deploy(from_address.encode('UTF-8'), gas_limit, gas_price, payment_contract, session_contract, nonce)
+        if nonce is None:
+            NonceRegistry.registry[from_address] += 1
+        return r
 
     def propose(self) -> str:
         logging.info(f'PY_CLIENT.propose() for {self.node.container_name}')
         return self.client.propose()
 
     def show_block(self, block_hash: str) -> str:
+        # TODO:
         pass
 
     def show_blocks(self, depth: int):
         return self.client.showBlocks(depth)
 
     def get_blocks_count(self, depth: int) -> int:
-        block_count = sum([1 for _ in self.show_blocks(depth)])
-        return block_count
+        return len(list(self.show_blocks(depth)))

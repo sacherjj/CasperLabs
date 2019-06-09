@@ -2,6 +2,7 @@ import docker
 import logging
 import os
 from typing import Callable, Dict, List
+from collections import defaultdict
 
 from test.cl_node.casperlabs_node import CasperLabsNode
 from test.cl_node.common import random_string
@@ -14,6 +15,8 @@ from test.cl_node.wait import (
     wait_for_node_started,
     wait_for_peers_count_at_least,
 )
+from test.cl_node.nonce_registry import NonceRegistry
+
 
 
 class CasperLabsNetwork:
@@ -31,6 +34,7 @@ class CasperLabsNetwork:
         self.docker_client = docker_client
         self.cl_nodes: List[CasperLabsNode] = []
         self._created_networks: List[str] = []
+        NonceRegistry.registry = defaultdict(lambda: 1)
 
     @property
     def node_count(self) -> int:
