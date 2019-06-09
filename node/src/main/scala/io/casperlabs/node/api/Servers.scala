@@ -104,7 +104,7 @@ object Servers {
     ) *>
       Resource.liftF(Log[F].info(s"External gRPC services started on port ${port}."))
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: SafetyOracle: BlockStore: ContextShift: FinalizedBlocksStream](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: SafetyOracle: BlockStore: ContextShift: FinalizedBlocksStream: ExecutionEngineService](
       port: Int,
       conf: Configuration,
       id: NodeIdentifier,
