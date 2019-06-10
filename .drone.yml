@@ -223,9 +223,8 @@ pipeline:
         - push
         - tag
 
-  docker-build-artifacts-merge:
+  docker-build-ee-merge:
     commands:
-      - "sbt node/docker:publishLocal client/docker:publishLocal"
       - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
       - "make docker-build/execution-engine"
     environment:
@@ -242,9 +241,9 @@ pipeline:
         - push
         - tag
 
-  package-sbt-artifacts:
+  package-sbt-artifacts-merge:
     commands:
-      - "sbt update coverage test coverageReport client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
+      - "sbt update coverage test coverageReport client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin node/docker:publishLocal client/docker:publishLocal"
       - "mkdir -p artifacts/${DRONE_BRANCH}"
       - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
       - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
