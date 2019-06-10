@@ -298,7 +298,7 @@ pub fn add_key(public_key: PublicKey, weight: Weight) -> Result<(), AddKeyFailur
     let (public_key_ptr, public_key_size, _bytes) = to_ptr(&public_key);
     // Cast of u8 (weight) into i32 is assumed to be always safe
     let result =
-        unsafe { ext_ffi::add_key(public_key_ptr, public_key_size, weight.value() as i32) };
+        unsafe { ext_ffi::add_key(public_key_ptr, public_key_size, weight.value().into()) };
     // Translates FFI
     match result {
         d if d <= 0 => Ok(()),
@@ -314,8 +314,8 @@ pub fn remove_key(public_key: PublicKey) -> bool {
 }
 
 pub fn set_threshold(permission_level: ActionType, threshold: Weight) -> bool {
-    let permission_level = permission_level as i32;
-    let threshold = threshold.value() as i32;
+    let permission_level = permission_level as u32;
+    let threshold = threshold.value().into();
     let result = unsafe { ext_ffi::set_threshold(permission_level, threshold) };
     result != 0
 }
