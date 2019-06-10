@@ -18,7 +18,7 @@ use wasmi::{
 
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
-use common::value::account::{PublicKey, Weight};
+use common::value::account::{ActionType, PublicKey, Weight};
 use common::value::Value;
 use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
@@ -31,8 +31,8 @@ use functions::{
     GAS_FUNC_INDEX, GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX,
     GET_READ_FUNC_INDEX, GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, IS_VALID_FN_INDEX,
     LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX, PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX,
-    REMOVE_KEY_FN_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX, STORE_FN_INDEX,
-    WRITE_FUNC_INDEX,
+    REMOVE_KEY_FN_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX, SET_THRESHOLD_FN_INDEX,
+    STORE_FN_INDEX, WRITE_FUNC_INDEX,
 };
 use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
@@ -464,6 +464,16 @@ where
         let result = associated_keys.remove_key(&public_key);
         Ok(result as i32)
     }
+
+    fn set_threshold(&mut self, action_type: ActionType, threshold: Weight) -> Result<i32, Trap> {
+        let account = Rc::clone(&self.context.account());
+        // Mutably borrows associated keys of a given account avoiding temporary
+        // account object.
+        let mut action_thresholds = RefMut::map(account.borrow_mut(), |account| {
+            account.action_thresholds_mut()
+        });
+        Ok(action_thresholds.set_threshold(action_type, threshold) as i32)
+    }
 }
 
 fn as_usize(u: u32) -> usize {
@@ -710,6 +720,20 @@ where
                 };
                 let result = self.remove_key(public_key)?;
                 Ok(Some(RuntimeValue::I32(result)))
+            }
+
+            SET_THRESHOLD_FN_INDEX => {
+                // args(0) = action type
+                // args(1) = new threshold
+                let (action_type_value, threshold_value): (u32, u32) = Args::parse(args)?;
+                let action_type = ActionType::from(action_type_value);
+                let threshold = threshold_value
+                    .try_into()
+                    .map(Weight::new)
+                    // Raises an invalid conversion to int
+                    .map_err(|_| Trap::new(TrapKind::InvalidConversionToInt))?;
+                let result = self.set_threshold(action_type, threshold)?;
+                Ok(Some(RuntimeValue::I32(result as i32)))
             }
 
             _ => panic!("unknown function index"),

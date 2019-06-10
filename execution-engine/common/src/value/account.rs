@@ -4,13 +4,30 @@ use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+#[repr(u32)]
 pub enum ActionType {
     /// Required by deploy execution.
-    Deployment,
+    Deployment = 0,
     /// Required when adding/removing associated keys, changing threshold levels.
     KeyManagement,
     /// Required when recovering inactive account.
     InactiveAccountRecovery,
+}
+
+impl From<u32> for ActionType {
+    fn from(value: u32) -> ActionType {
+        // This doesn't use `num_derive` traits such as FromPrimitive and ToPrimitive
+        // that helps to automatically create `from_u32` and `to_u32`. This approach
+        // gives better control over generated code.
+        match value {
+            d if d == ActionType::Deployment as u32 => ActionType::Deployment,
+            d if d == ActionType::KeyManagement as u32 => ActionType::KeyManagement,
+            d if d == ActionType::InactiveAccountRecovery as u32 => {
+                ActionType::InactiveAccountRecovery
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 /// Thresholds that has to be met when executing an action of certain type.
@@ -56,6 +73,16 @@ impl ActionThresholds {
 
     pub fn key_management(&self) -> &Weight {
         &self.key_management
+    }
+
+    /// Unified function that takes an action type, and changes appropriate
+    /// threshold defined by the [ActionType] variants.
+    pub fn set_threshold(&mut self, action_type: ActionType, new_threshold: Weight) -> bool {
+        match action_type {
+            ActionType::Deployment => self.set_deployment_threshold(new_threshold),
+            ActionType::KeyManagement => self.set_key_management_threshold(new_threshold),
+            _ => false,
+        }
     }
 }
 
@@ -286,6 +313,10 @@ impl Account {
 
     pub fn action_thresholds(&self) -> &ActionThresholds {
         &self.action_thresholds
+    }
+
+    pub fn action_thresholds_mut(&mut self) -> &mut ActionThresholds {
+        &mut self.action_thresholds
     }
 
     pub fn account_activity(&self) -> &AccountActivity {
