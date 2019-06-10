@@ -68,7 +68,7 @@ class ForkchoiceTest
                HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
              )
         dag <- blockDagStorage.getRepresentation
-        forkchoice <- Estimator.lmdMainchainGhost[Task](
+        forkchoice <- Estimator.lmdSingleParentGhost[Task](
                        dag,
                        genesis.blockHash,
                        Map.empty[Validator, BlockHash]
@@ -133,7 +133,7 @@ class ForkchoiceTest
           v1 -> b8.blockHash,
           v2 -> b6.blockHash
         )
-        forkchoice <- Estimator.lmdMainchainGhost[Task](
+        forkchoice <- Estimator.lmdSingleParentGhost[Task](
                        dag,
                        genesis.blockHash,
                        latestBlocks
@@ -203,7 +203,7 @@ class ForkchoiceTest
           v2 -> b8.blockHash,
           v3 -> b7.blockHash
         )
-        forkchoice <- Estimator.lmdMainchainGhost[Task](
+        forkchoice <- Estimator.lmdSingleParentGhost[Task](
                        dag,
                        genesis.blockHash,
                        latestBlocks
@@ -357,7 +357,7 @@ class ForkchoiceTest
             v2 -> h.blockHash,
             v3 -> i.blockHash
           )
-          tips <- Estimator.lmdMainchainGhost(dag, genesis.blockHash, latestBlocks)
+          tips <- Estimator.lmdSingleParentGhost(dag, genesis.blockHash, latestBlocks)
           _    = tips.head shouldEqual i.blockHash
         } yield ()
   }

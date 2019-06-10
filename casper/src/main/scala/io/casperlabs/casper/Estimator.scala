@@ -18,11 +18,12 @@ object Estimator {
 
   def tips[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
-      genesis: BlockHash
+      lastFinalizedBlockHash: BlockHash
   ): F[IndexedSeq[BlockHash]] =
     for {
       latestMessageHashes <- blockDag.latestMessageHashes
-      result              <- Estimator.lmdMainchainGhost[F](blockDag, genesis, latestMessageHashes)
+      result <- Estimator
+                 .lmdSingleParentGhost[F](blockDag, lastFinalizedBlockHash, latestMessageHashes)
     } yield result.toIndexedSeq
 
   /**
@@ -107,26 +108,18 @@ object Estimator {
           }
     }
 
-  def lmdMainchainGhost[F[_]: Monad](
+  def lmdSingleParentGhost[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       genesis: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
     def mainChild(blockHash: BlockHash, scores: Map[BlockHash, Long]): F[BlockHash] =
-      blockDag.children(blockHash).flatMap {
+      blockDag.getMainChildren(blockHash).flatMap {
         case None =>
           blockHash.pure[F]
         case Some(children) =>
           for {
-            mainChildren <- children.toList.filterA {
-                             case child if scores.contains(child) ⇒
-                               blockDag.lookup(child).map {
-                                 // make sure child's main parent's hash equal to `blockHash`
-                                 case Some(blockMetadata) ⇒ blockMetadata.parents.head == blockHash
-                                 case None                ⇒ false
-                               }
-                             case _ ⇒ false.pure[F]
-                           }
+            mainChildren <- children.filterA(b => scores.contains(b).pure[F])
             result <- if (mainChildren.isEmpty) {
                        blockHash.pure[F]
                      } else {
@@ -163,11 +156,11 @@ object Estimator {
       } yield result
 
     for {
-      score         <- lmdScoring(blockDag, latestMessagesHashes)
-      mainChild     <- mainChild(genesis, score)
-      children      <- tips(latestMessagesHashes.values.toList)
-      otherChildren = children.filter(_ != mainChild)
-    } yield mainChild +: otherChildren
+      score            <- lmdScoring(blockDag, latestMessagesHashes)
+      newMainParent    <- mainChild(genesis, score)
+      parents          <- tips(latestMessagesHashes.values.toList)
+      secondaryParents = parents.filter(_ != newMainParent)
+    } yield newMainParent +: secondaryParents
   }
 
   private def buildScoresMap[F[_]: Monad](
