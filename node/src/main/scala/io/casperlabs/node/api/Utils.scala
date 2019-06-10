@@ -9,7 +9,7 @@ import io.casperlabs.ipc
 object Utils {
   def toKey[F[_]](keyType: String, keyBytes: ByteString)(
       implicit appErr: ApplicativeError[F, Throwable]
-  ): F[ipc.Key] = {
+  ): F[ipc.Key] =
     keyType.toLowerCase match {
       case "hash" =>
         keyBytes.size match {
@@ -48,5 +48,4 @@ object Utils {
           )
         )
     }
-  }
 }

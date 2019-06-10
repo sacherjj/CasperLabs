@@ -1,11 +1,13 @@
 package io.casperlabs.node.api.graphql.schema
 
 import cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.Utils
@@ -89,7 +91,10 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                values <- queries.toList.traverse {
                                           query =>
                                             for {
-                                              key <- Utils.toKey[F](query.keyType, query.key)
+                                              key <- Utils.toKey[F](
+                                                      query.keyType,
+                                                      ByteString.copyFrom(Base16.decode(query.key))
+                                                    )
                                               possibleResponse <- ExecutionEngineService[F]
                                                                    .query(
                                                                      stateHash,

@@ -1,5 +1,6 @@
 package io.casperlabs.node.api
 
+import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.node.api.GrpcDeployService.splitPath
@@ -24,7 +25,7 @@ class GrpcCasperService extends FlatSpec with EitherValues with Matchers {
     typeTest(key) shouldBe true
 
     val bytes = bytesExtract(key)
-    Base16.encode(bytes) shouldBe keyValue
+    bytes shouldBe keyValue
   }
 
   "toKey" should "convert a hash-type key successfully" in {
@@ -80,9 +81,9 @@ class GrpcCasperService extends FlatSpec with EitherValues with Matchers {
     splitPath(pathC) shouldBe Seq("a", "b")
   }
 
-  private def randomBytes(length: Int): String =
-    Base16.encode(Array.fill(length)(util.Random.nextInt(256).toByte))
+  private def randomBytes(length: Int): Array[Byte] =
+    Array.fill(length)(util.Random.nextInt(256).toByte)
 
-  private def attemptToKey(keyType: String, keyValue: String): Either[Throwable, ipc.Key] =
-    Utils.toKey[Task](keyType, keyValue).attempt.runSyncUnsafe()
+  private def attemptToKey(keyType: String, keyBytes: Array[Byte]): Either[Throwable, ipc.Key] =
+    Utils.toKey[Task](keyType, ByteString.copyFrom(keyBytes)).attempt.runSyncUnsafe()
 }
