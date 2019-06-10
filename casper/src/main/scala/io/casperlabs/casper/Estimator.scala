@@ -32,10 +32,11 @@ object Estimator {
   ): F[List[BlockHash]] = {
 
     def replaceBlockHashWithChildren(
-        b: BlockHash
+        b: BlockHash,
+        scores: Map[BlockHash, Long]
     ): F[List[BlockHash]] =
       for {
-        c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]))
+        c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains))
       } yield if (c.nonEmpty) c.toList else List(b)
 
     def stillSame(
@@ -48,21 +49,25 @@ object Estimator {
      * it will return latestMessages except those blocks whose descendant
      * exists in latestMessages.
      */
-    def tipsOfLatestMessages(blocks: List[BlockHash]): F[List[BlockHash]] =
+    def tipsOfLatestMessages(
+        blocks: List[BlockHash],
+        scores: Map[BlockHash, Long]
+    ): F[List[BlockHash]] =
       for {
-        cr       <- blocks.flatTraverse(replaceBlockHashWithChildren)
+        cr       <- blocks.flatTraverse(replaceBlockHashWithChildren(_, scores))
         children = cr.distinct
         result <- if (stillSame(blocks, children)) {
                    children.pure[F]
                  } else {
-                   tipsOfLatestMessages(children)
+                   tipsOfLatestMessages(children, scores)
                  }
       } yield result
 
     for {
-      score            <- lmdScoring(blockDag, latestMessagesHashes)
-      newMainParent    <- forkChoiceTip(blockDag, lastFinalizedBlockHash, score)
-      parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList)
+      scores           <- lmdScoring(blockDag, latestMessagesHashes)
+      newMainParent    <- forkChoiceTip(blockDag, lastFinalizedBlockHash, scores)
+      parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
+      sortedParents    = parents.sortBy(b => scores.getOrElse(b, 0L) -> b.toString())
       secondaryParents = parents.filter(_ != newMainParent)
     } yield newMainParent +: secondaryParents
   }
