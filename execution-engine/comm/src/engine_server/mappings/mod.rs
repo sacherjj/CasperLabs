@@ -768,7 +768,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         }
                         ExecutionError::Revert(status) => {
                             let error_msg = format!("Exit code: {}", status);
-                            execution_error(error_msg, cost, effect.into())
+                            execution_error(error_msg, cost, effect)
                         }
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
@@ -1028,16 +1028,19 @@ mod tests {
         assert!(ipc_result.has_execution_result());
         let ipc_execution_result = ipc_result.get_execution_result();
         assert_eq!(ipc_execution_result.cost, 10);
-        assert_eq!(ipc_execution_result.get_error().get_exec_error().message, "Exit code: 10");
+        assert_eq!(
+            ipc_execution_result.get_error().get_exec_error().message,
+            "Exit code: 10"
+        );
     }
 
     use common::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
-    use engine_server::ipc::{TransformEntry, DeployResult};
+    use engine_server::ipc::{DeployResult, TransformEntry};
     use engine_server::mappings::CommitTransforms;
-    use proptest::prelude::*;
-    use shared::transform::gens::transform_arb;
     use execution_engine::engine_state::error::Error::ExecError;
     use execution_engine::execution::Error;
+    use proptest::prelude::*;
+    use shared::transform::gens::transform_arb;
 
     proptest! {
         #[test]
