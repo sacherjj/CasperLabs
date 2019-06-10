@@ -66,6 +66,7 @@ class DockerClient(CasperLabsClient):
                    f" --session=/data/{session_contract}"
                    f" --payment=/data/{payment_contract}")
 
+        # For testing CLI: option will not be passed to CLI if nonce is ''
         if deploy_nonce != '':
             command += f" --nonce {deploy_nonce}" 
 
