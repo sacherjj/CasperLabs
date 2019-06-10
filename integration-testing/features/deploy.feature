@@ -50,7 +50,7 @@ Feature: Deploy Operation
   Scenario: Deploy with lower nonce
      Given: Single Node Network
        And: Nonce is 3 for account
-      When: Deploy is performed with nonce of 3
+      When: Deploy is performed with nonce of 2
       Then: Block proposed shows error because of nonce
 
   # Implemented (stub): test_nonce.py : test_deploy_with_higher_nonce
