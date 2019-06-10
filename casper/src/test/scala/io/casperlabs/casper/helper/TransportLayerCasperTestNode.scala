@@ -9,9 +9,8 @@ import cats.implicits._
 import cats.temp.par.Par
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
-import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
   CasperPacketHandlerImpl,
@@ -79,6 +78,9 @@ class TransportLayerCasperTestNode[F[_]](
 
   implicit val labF =
     LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
+
+  implicit val lastFinalizedBlockHashContainer =
+    NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
 
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](

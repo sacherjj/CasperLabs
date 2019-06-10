@@ -57,6 +57,7 @@ package object transport {
       rpConfState: MonadState[Task, RPConf],
       multiParentCasperRef: MultiParentCasperRef[Effect],
       executionEngineService: ExecutionEngineService[Effect],
+      finalizationHandler: LastFinalizedBlockHashContainer[Effect],
       scheduler: Scheduler
   ): Resource[Effect, Unit] = Resource {
     for {
@@ -94,7 +95,7 @@ package object transport {
       time                  = effects.time
       timeEff: Time[Effect] = Time.eitherTTime(Monad[Task], time)
 
-      defaultTimeout = conf.server.defaultTimeout.millis
+      defaultTimeout = conf.server.defaultTimeout
 
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](
@@ -119,6 +120,7 @@ package object transport {
                                 multiParentCasperRef,
                                 blockDagStorage,
                                 executionEngineService,
+                                finalizationHandler,
                                 scheduler
                               )
 

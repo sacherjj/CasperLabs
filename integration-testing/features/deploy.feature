@@ -40,29 +40,32 @@ Feature: Deploy Operation
       When: Deploy is performed with all fields
       Then: Deploy is successful
 
-  #Not Implemented
+  # Implemented: test_nonce.py : test_deploy_without_nonce
   Scenario: Deploy without nonce
-     Given: Client exists
+     Given: Single Node Network
       When: Deploy is performed with all fields except nonce
       Then: Client error occurs
 
-  #Not Implemented
+  # Implemented: test_nonce.py : test_deploy_with_lower_nonce
   Scenario: Deploy with lower nonce
      Given: Single Node Network
-       And: Nonce is 4 for account
-      When: Deploy is performed with nonce of 3
+       And: Nonce is 3 for account
+      When: Deploy is performed with nonce of 2
       Then: Block proposed shows error because of nonce
 
-  #Not Implemented
+  # Implemented: test_nonce.py : test_deploy_with_higher_nonce
   Scenario: Deploy with higher nonce
      Given: Single Node Network
-       And: Nonce is 4 for account
-      When: Deploy is performed with nonce of 5
-      Then: TODO: Does this hang until nonce of 4 is deployed???
+       And: Nonce is 1 for account
+      When: Deploy is performed with nonce of 3
+      Then: Propose will fail
+       And: Deploy with nonce of 2 is successful
+       And: Propose of block deployed with nonce of 2 is successful
+       And: Subsequent propose of block deployed with nonce of 3 is successful
 
-  #Not Implemented
+  # Implemented: test_nonce.py : test_deploy_with_lower_nonce (first part of the test)
   Scenario: Deploy with correct nonce
      Given: Single Node Network
-       And: Nonce is 4 for account
+       And: Nonce is 3 for account
       When: Deploy is performed with nonce of 4
       Then: Block is proposed with successful execution

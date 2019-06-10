@@ -2,23 +2,23 @@ package io.casperlabs.node.api
 
 import cats.effect._
 import cats.implicits._
-import com.google.protobuf.empty.Empty
 import com.google.protobuf.ByteString
+import com.google.protobuf.empty.Empty
 import io.casperlabs.blockstorage.BlockStore
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.SafetyOracle
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.consensus.info._
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.comm.ServiceError.InvalidArgument
+import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
-import io.casperlabs.comm.ServiceError.InvalidArgument
 import io.casperlabs.smartcontracts.ExecutionEngineService
-import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.ipc
-import monix.execution.Scheduler
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 
@@ -89,7 +89,7 @@ object GrpcCasperService extends StateConversions {
           Observable.fromTask(deploys).flatMap(Observable.fromIterable)
         }
 
-        override def getBlockState(request: GetBlockStateRequest): Task[State.Value] =
+        override def getBlockState(request: GetBlockStateRequest): Task[state.Value] =
           batchGetBlockState(
             BatchGetBlockStateRequest(request.blockHashBase16, List(request.getQuery))
           ) map {
@@ -106,7 +106,7 @@ object GrpcCasperService extends StateConversions {
           } yield BatchGetBlockStateResponse(values)
         }
 
-        private def getState(stateHash: ByteString, query: StateQuery): F[State.Value] =
+        private def getState(stateHash: ByteString, query: StateQuery): F[state.Value] =
           for {
             key <- toKey[F](query.keyVariant, query.keyBase16)
             possibleResponse <- ExecutionEngineService[F].query(
@@ -123,7 +123,7 @@ object GrpcCasperService extends StateConversions {
     }
 
   def toKey[F[_]: MonadThrowable](keyType: StateQuery.KeyVariant, keyValue: String): F[ipc.Key] =
-    GrpcDeployService.toKey[F](keyType.name, keyValue).handleErrorWith {
+    Utils.toKey[F](keyType.name, keyValue).handleErrorWith {
       case ex: java.lang.IllegalArgumentException =>
         MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
     }

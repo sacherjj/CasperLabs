@@ -296,12 +296,11 @@ impl TryFrom<&super::ipc::Account> for common::value::account::Account {
 
     fn try_from(value: &super::ipc::Account) -> Result<Self, Self::Error> {
         let pub_key: [u8; 32] = {
-            let mut buff = [0u8; 32];
             if value.pub_key.len() != 32 {
                 return parse_error("Public key has to be exactly 32 bytes long.".to_string());
-            } else {
-                buff.copy_from_slice(&value.pub_key);
             }
+            let mut buff = [0u8; 32];
+            buff.copy_from_slice(&value.pub_key);
             buff
         };
         let uref_map: URefMap = value.get_known_urefs().try_into()?;
@@ -465,8 +464,12 @@ impl TryFrom<&ipc::Account_AssociatedKey> for (PublicKey, Weight) {
         if value.get_weight() > u8::max_value().into() {
             parse_error("Key weight cannot be bigger 256.".to_string())
         } else {
+            let source = &value.get_pub_key();
+            if source.len() != 32 {
+                return parse_error("Public key has to be exactly 32 bytes long.".to_string());
+            }
             let mut pub_key = [0u8; 32];
-            pub_key.copy_from_slice(value.get_pub_key());
+            pub_key.copy_from_slice(source);
             Ok((
                 PublicKey::new(pub_key),
                 Weight::new(value.get_weight() as u8),
@@ -515,18 +518,36 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
 
     fn try_from(ipc_key: &super::ipc::Key) -> Result<Self, ParsingError> {
         if ipc_key.has_account() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_account().account);
+            let arr = {
+                let source = &ipc_key.get_account().account;
+                if source.len() != 32 {
+                    return parse_error("Account key has to be 32 bytes long.".to_string());
+                }
+                let mut dest = [0u8; 32];
+                dest.copy_from_slice(source);
+                dest
+            };
             Ok(common::key::Key::Account(arr))
         } else if ipc_key.has_hash() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_hash().key);
+            let arr = {
+                let source = &ipc_key.get_hash().key;
+                if source.len() != 32 {
+                    return parse_error("Hash key has to be 32 bytes long.".to_string());
+                }
+                let mut dest = [0u8; 32];
+                dest.copy_from_slice(source);
+                dest
+            };
             Ok(common::key::Key::Hash(arr))
         } else if ipc_key.has_uref() {
             let ipc_uref = ipc_key.get_uref();
             let addr = {
+                let source = &ipc_uref.uref;
+                if source.len() != 32 {
+                    return parse_error("URef key has to be 32 bytes long.".to_string());
+                }
                 let mut ret = [0u8; 32];
-                ret.clone_from_slice(&ipc_uref.uref);
+                ret.copy_from_slice(source);
                 ret
             };
             let uref = {

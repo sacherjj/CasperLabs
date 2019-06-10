@@ -798,13 +798,14 @@ pub trait Executor<A> {
         &self,
         parity_module: A,
         args: &[u8],
-        account_addr: [u8; 32],
+        account: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
+        nonce_check: bool,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -817,18 +818,18 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        account_addr: [u8; 32],
+        acct_key: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
+        nonce_check: bool,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>,
     {
-        let acct_key = Key::Account(account_addr);
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
         #[allow(unreachable_code)]
@@ -852,34 +853,37 @@ impl Executor<Module> for WasmiExecutor {
             }
         };
 
-        // Check the difference of a request nonce and account nonce.
-        // Since both nonce and account's nonce are unsigned, so line below performs
-        // a checked subtraction, where underflow (or overflow) would be safe.
-        let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
-        // Difference should always be 1 greater than current nonce for a
-        // given account.
-        if delta != 1 {
-            return ExecutionResult::precondition_failure(
-                Error::InvalidNonce {
-                    deploy_nonce: nonce,
-                    expected_nonce: account.nonce() + 1,
-                }
-                .into(),
+        if nonce_check {
+            // Check the difference of a request nonce and account nonce.
+            // Since both nonce and account's nonce are unsigned, so line below performs
+            // a checked subtraction, where underflow (or overflow) would be safe.
+            let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
+            // Difference should always be 1 greater than current nonce for a
+            // given account.
+            if delta != 1 {
+                return ExecutionResult::precondition_failure(
+                    Error::InvalidNonce {
+                        deploy_nonce: nonce,
+                        expected_nonce: account.nonce() + 1,
+                    }
+                    .into(),
+                );
+            }
+
+            let mut updated_account = account.clone();
+            updated_account.increment_nonce();
+            // Store updated account with new nonce
+            tc.borrow_mut().write(
+                validated_key,
+                Validated::new(updated_account.into(), Validated::valid).unwrap(),
             );
         }
-
-        let mut updated_account = account.clone();
-        updated_account.increment_nonce();
-        // Store updated account with new nonce
-        tc.borrow_mut().write(
-            validated_key,
-            Validated::new(updated_account.into(), Validated::valid).unwrap(),
-        );
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
-        let rng = create_rng(&account_addr, timestamp, nonce);
+        let account_bytes = acct_key.as_account().unwrap();
+        let rng = create_rng(&account_bytes, timestamp, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
@@ -1043,6 +1047,7 @@ mod tests {
 
         let executor = WasmiExecutor;
         let account_address = [0u8; 32];
+        let account_key: Key = Key::Account(account_address);
         let parity_module: Module = ModuleBuilder::new()
             .with_import(ImportEntry::new(
                 "env".to_string(),
@@ -1057,13 +1062,14 @@ mod tests {
         let exec_result = executor.exec(
             parity_module,
             &[],
-            account_address,
+            account_key,
             0u64,
             invalid_nonce,
             100u64,
             1u64,
             CorrelationId::new(),
             tc,
+            true,
         );
 
         match exec_result {

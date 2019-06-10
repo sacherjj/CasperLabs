@@ -60,7 +60,7 @@ object Configuration extends ParserImplicits {
       kademliaPort: Int,
       dynamicHostAddress: Boolean,
       noUpnp: Boolean,
-      defaultTimeout: Int,
+      defaultTimeout: FiniteDuration,
       bootstrap: Option[Node],
       dataDir: Path,
       storeType: StoreType,
