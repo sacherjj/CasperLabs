@@ -6,11 +6,15 @@ use core::fmt;
 use core::marker::PhantomData;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct NoAccessRightsError;
+pub enum AccessRightsError {
+    NoAccessRights,
+}
 
-impl fmt::Display for NoAccessRightsError {
+impl fmt::Display for AccessRightsError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "URef has no access rights")
+        match self {
+            AccessRightsError::NoAccessRights => write!(f, "URef has no access rights"),
+        }
     }
 }
 
@@ -27,11 +31,11 @@ impl<T> UPointer<T> {
         UPointer(id, rights, PhantomData)
     }
 
-    pub fn from_uref(uref: URef) -> Result<Self, NoAccessRightsError> {
+    pub fn from_uref(uref: URef) -> Result<Self, AccessRightsError> {
         if let Some(access_rights) = uref.access_rights() {
             Ok(UPointer(uref.addr(), access_rights, PhantomData))
         } else {
-            Err(NoAccessRightsError)
+            Err(AccessRightsError::NoAccessRights)
         }
     }
 }
