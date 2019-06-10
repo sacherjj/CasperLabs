@@ -122,7 +122,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 SEED_FN_INDEX,
             ),
             "add_key" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 ADD_KEY_FN_INDEX,
             ),
             _ => {
