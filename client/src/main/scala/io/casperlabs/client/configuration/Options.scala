@@ -52,7 +52,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val from = opt[String](
       descr = "Purse address that will be used to pay for the deployment.",
       default = Option("00"),
-      required = true
+      required = false
     )
 
     val gasLimit =

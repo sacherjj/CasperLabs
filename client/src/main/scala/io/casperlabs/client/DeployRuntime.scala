@@ -118,7 +118,7 @@ object DeployRuntime {
     })
 
   def deployFileProgram[F[_]: Sync: DeployService](
-      from: String,
+      from: Option[String],
       nonce: Long,
       sessionCode: File,
       paymentCode: File,
@@ -154,6 +154,12 @@ object DeployRuntime {
           maybePrivateKey.flatMap(Ed25519.tryToPublic).pure[F]
         }
       }
+      accountPublicKey <- Sync[F].fromOption(
+                           from
+                             .map(ByteString.copyFromUtf8)
+                             .orElse(maybePublicKey.map(ByteString.copyFrom)),
+                           new IllegalArgumentException("--from or --public-key must be presented")
+                         )
     } yield {
       val deploy = consensus
         .Deploy()
@@ -161,7 +167,7 @@ object DeployRuntime {
           consensus.Deploy
             .Header()
             .withTimestamp(System.currentTimeMillis)
-            .withAccountPublicKey(ByteString.copyFromUtf8(from))
+            .withAccountPublicKey(accountPublicKey)
             .withNonce(nonce)
         )
         .withBody(
