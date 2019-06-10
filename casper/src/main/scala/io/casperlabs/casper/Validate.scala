@@ -546,7 +546,7 @@ object Validate {
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.getHeader.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, genesisBlockHash, latestMessagesHashes)
+      tipHashes            <- Estimator.lmdSingleParentGhost[F](dag, genesisBlockHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
