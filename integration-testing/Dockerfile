@@ -8,8 +8,8 @@ RUN python3 -m pip install pipenv docker pytest pytest-json pytest-mypy pytest-p
 ENTRYPOINT ["/root/integration-testing/run_tests.sh"]
 
 WORKDIR /root/integration-testing
+RUN mkdir -p /root/integration-testing
+COPY ./ /root/integration-testing/
 
-# We still need to copy this rather than volume,
-# because it is "behind" the location where we docker-compose.
 RUN mkdir -p /root/protobuf
 COPY ./protobuf/ /root/protobuf/

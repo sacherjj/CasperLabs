@@ -33,7 +33,6 @@ services:
     volumes:
       - /tmp:/tmp
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./:/root/integration-testing
     networks:
       - cl-||TAG||-0
       - cl-||TAG||-1
