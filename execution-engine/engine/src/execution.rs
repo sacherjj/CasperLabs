@@ -1,5 +1,6 @@
 use std::cell::{RefCell, RefMut};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::convert::TryInto;
 use std::fmt;
 use std::iter::IntoIterator;
 use std::rc::Rc;
@@ -12,7 +13,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use wasmi::{
     Error as InterpreterError, Externals, HostError, ImportsBuilder, MemoryRef, ModuleInstance,
-    ModuleRef, RuntimeArgs, RuntimeValue, Trap,
+    ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind,
 };
 
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
@@ -661,14 +662,21 @@ where
             ADD_KEY_FN_INDEX => {
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = weight of the key
-                let (public_key_ptr, weight): (u32, u8) = Args::parse(args)?;
+                let (public_key_ptr, weight): (u32, u32) = Args::parse(args)?;
                 let public_key = {
                     let source = self.bytes_from_mem(public_key_ptr, 32)?;
                     let mut public_key_bytes = [0; KEY_SIZE];
                     public_key_bytes.copy_from_slice(&source);
                     PublicKey::new(public_key_bytes)
                 };
-                let result = self.add_key(public_key, Weight::new(weight))?;
+                // Safely consume a passed weight (u32) and convert it into
+                // weight object (u8 newtype).
+                let weight = weight
+                    .try_into()
+                    .map(Weight::new)
+                    // Raises an invalid conversion to int
+                    .map_err(|_| Trap::new(TrapKind::InvalidConversionToInt))?;
+                let result = self.add_key(public_key, weight)?;
                 Ok(Some(RuntimeValue::I32(result)))
             }
 
