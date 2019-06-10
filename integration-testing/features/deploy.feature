@@ -56,9 +56,11 @@ Feature: Deploy Operation
   # Implemented (stub): test_nonce.py : test_deploy_with_higher_nonce
   Scenario: Deploy with higher nonce
      Given: Single Node Network
-       And: Nonce is 3 for account
-      When: Deploy is performed with nonce of 5
-      Then: TODO: Does this hang until nonce of 4 is deployed???
+       And: Nonce is 1 for account
+      When: Deploy is performed with nonce of 3
+      Then: Propose will fail
+       And: Deploy with nonce of 2 is successful
+       And: Propose of block deployed with nonce of 1 is successful
 
   # Implemented: test_nonce.py : test_deploy_with_lower_nonce (first part of the test)
   Scenario: Deploy with correct nonce

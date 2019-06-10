@@ -60,24 +60,27 @@ def test_deploy_with_higher_nonce(node, contracts: List[str]):
 
     Scenario: Deploy with higher nonce
     """
+    # Deploy successfully with nonce 1 => Nonce is 1 for account.
     deploy_and_propose(node, contracts[0], 1)
 
-    # There should be the genesis block and the one we just deployed annd proposed
+    # Now there should be the genesis block and the one we just deployed and proposed.
     wait_for_blocks_count_at_least(node, 2, 2, node.timeout)
 
-    node.client.deploy(session_contract = contracts[2],
-                       payment_contract = contracts[2],
-                       nonce = 3)
+    node.client.deploy(session_contract = contracts[2], payment_contract = contracts[2], nonce = 3)
+
     with pytest.raises(NonZeroExitCodeError):
         node.client.propose()
 
-    h2 = deploy_and_propose(node, contracts[1], 2)
+    deploy_and_propose(node, contracts[1], 2)
 
-    # The deploy with nonce 3 can be proposed now
+    # The deploy with nonce 3 can be proposed now.
     node.client.propose()  
 
     blocks = parse_show_blocks(node.client.show_blocks(100))
-    deploy_counts = [b.deploy_count for b in blocks]
+
+
+    # Deploy counts of all blocks except the genesis block.
+    deploy_counts = [b.deploy_count for b in blocks][:-1]
 
     assert sum(deploy_counts) == len(contracts)
 
