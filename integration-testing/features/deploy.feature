@@ -60,7 +60,8 @@ Feature: Deploy Operation
       When: Deploy is performed with nonce of 3
       Then: Propose will fail
        And: Deploy with nonce of 2 is successful
-       And: Propose of block deployed with nonce of 1 is successful
+       And: Propose of block deployed with nonce of 2 is successful
+       And: Propose of block deployed with nonce of 3 is successful
 
   # Implemented: test_nonce.py : test_deploy_with_lower_nonce (first part of the test)
   Scenario: Deploy with correct nonce
