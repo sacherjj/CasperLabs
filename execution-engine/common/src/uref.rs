@@ -2,12 +2,13 @@ use bitflags;
 
 use crate::alloc::vec::Vec;
 use crate::bytesrepr;
-use crate::bytesrepr::U32_SIZE;
+use crate::bytesrepr::{OPTION_SIZE, U32_SIZE};
 use crate::contract_api::pointers::UPointer;
 
 const UREF_ADDR_SIZE: usize = 32;
 const ACCESS_RIGHTS_SIZE: usize = 1;
-pub const UREF_SIZE_SERIALIZED: usize = U32_SIZE + UREF_ADDR_SIZE + U32_SIZE + ACCESS_RIGHTS_SIZE;
+pub const UREF_SIZE_SERIALIZED: usize =
+    U32_SIZE + UREF_ADDR_SIZE + OPTION_SIZE + ACCESS_RIGHTS_SIZE;
 
 bitflags! {
     #[allow(clippy::derive_hash_xor_eq)]
