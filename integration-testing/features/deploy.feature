@@ -53,7 +53,7 @@ Feature: Deploy Operation
       When: Deploy is performed with nonce of 2
       Then: Block proposed shows error because of nonce
 
-  # Implemented (stub): test_nonce.py : test_deploy_with_higher_nonce
+  # Implemented: test_nonce.py : test_deploy_with_higher_nonce
   Scenario: Deploy with higher nonce
      Given: Single Node Network
        And: Nonce is 1 for account
