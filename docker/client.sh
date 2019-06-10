@@ -9,7 +9,7 @@ set -e
 # for example:
 #
 # ./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release \
-#     --from 00000000000000000000000000000000 \
+#     --from 303030303030303030303030303030303030303030303030303030303030303030 \
 #     --gas-price 1 \
 #     --session /data/helloname.wasm \
 #     --payment /data/helloname.wasm

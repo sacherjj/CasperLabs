@@ -24,10 +24,9 @@ import monix.execution.Scheduler
 import monix.reactive.Observable
 
 object GrpcDeployService {
-  def toKey[F[_]](keyType: String, keyValue: String)(
+  def toKey[F[_]](keyType: String, keyBytes: ByteString)(
       implicit appErr: ApplicativeError[F, Throwable]
-  ): F[ipc.Key] = {
-    val keyBytes = ByteString.copyFrom(Base16.decode(keyValue))
+  ): F[ipc.Key] =
     keyType.toLowerCase match {
       case "hash" =>
         keyBytes.size match {
@@ -66,7 +65,6 @@ object GrpcDeployService {
           )
         )
     }
-  }
 
   def splitPath(path: String): Seq[String] =
     path.split("/").filter(_.nonEmpty)
@@ -93,7 +91,7 @@ object GrpcDeployService {
       override def queryState(q: QueryStateRequest): Task[QueryStateResponse] = q match {
         case QueryStateRequest(blockHash, keyType, keyValue, path) =>
           val f = for {
-            key <- toKey[F](keyType, keyValue)
+            key <- toKey[F](keyType, ByteString.copyFrom(Base16.decode(keyValue)))
             bq  <- BlockAPI.showBlock[F](BlockQuery(blockHash))
             state <- Concurrent[F]
                       .fromOption(bq.blockInfo, new Exception(s"Block $blockHash not found!"))

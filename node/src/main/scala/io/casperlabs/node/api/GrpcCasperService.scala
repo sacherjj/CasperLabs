@@ -109,7 +109,7 @@ object GrpcCasperService extends StateConversions {
 
         private def getState(stateHash: ByteString, query: StateQuery): F[state.Value] =
           for {
-            key <- toKey[F](query.keyVariant, query.keyBase16)
+            key <- toKey[F](query.keyVariant, query.keyBase)
             possibleResponse <- ExecutionEngineService[F].query(
                                  stateHash,
                                  key,
@@ -123,7 +123,10 @@ object GrpcCasperService extends StateConversions {
       }
     }
 
-  def toKey[F[_]: MonadThrowable](keyType: StateQuery.KeyVariant, keyValue: String): F[ipc.Key] =
+  def toKey[F[_]: MonadThrowable](
+      keyType: StateQuery.KeyVariant,
+      keyValue: ByteString
+  ): F[ipc.Key] =
     GrpcDeployService.toKey[F](keyType.name, keyValue).handleErrorWith {
       case ex: java.lang.IllegalArgumentException =>
         MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))

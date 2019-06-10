@@ -353,7 +353,7 @@ In the root of CasperLabs.
 In the root of CasperLabs, run:
 
 ```
-./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 deploy --from 00000000000000000000000000000000 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
+./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 deploy --from 303030303030303030303030303030303030303030303030303030303030303030 --gas-price 1 --session <contract wasm file> --payment <payment wasm file>
 ```
 
 At the moment, payment wasm file is not used so use the same file as for the `--session`.

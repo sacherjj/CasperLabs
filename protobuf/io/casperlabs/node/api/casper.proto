@@ -102,7 +102,8 @@ message StreamBlockDeploysRequest {
 
 message StateQuery {
     KeyVariant key_variant = 1;
-    string key_base16 = 2;
+    // Address of the base key, represented in base16 and parsed to bytes.
+    bytes key_base = 2;
     // Path of human readable names to the value.
     repeated string path_segments = 3;
 

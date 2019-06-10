@@ -22,7 +22,7 @@ class PythonClient(CasperLabsClient):
         return 'python'
 
     def deploy(self,
-               from_address: str = "00000000000000000000000000000000",
+               from_address: str = "303030303030303030303030303030303030303030303030303030303030303030",
                gas_limit: int = 1000000,
                gas_price: int = 1,
                nonce: int = None,

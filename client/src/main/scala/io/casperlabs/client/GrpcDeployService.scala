@@ -6,6 +6,8 @@ import cats.implicits._
 import cats.mtl.implicits._
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
+
+import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus
@@ -118,7 +120,11 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
       ) { kv =>
         val req = GetBlockStateRequest(blockHash)
           .withQuery(
-            StateQuery(kv, keyValue, path.split('/').filterNot(_.isEmpty))
+            StateQuery(
+              kv,
+              ByteString.copyFrom(Base16.decode(keyValue)),
+              path.split('/').filterNot(_.isEmpty)
+            )
           )
 
         casperServiceStub
