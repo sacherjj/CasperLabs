@@ -310,47 +310,145 @@ object BlockAPI {
       .traverse(ProtoUtil.unsafeGetBlock[F](_))
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, accountPublicKey, timestamp)))
 
+  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      deployHashBase16: String
+  ): F[Option[DeployInfo]] =
+    // LMDB throws an exception if a key isn't 32 bytes long, so we fail-fast here
+    if (deployHashBase16.length != 64) {
+      Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
+    } else {
+      unsafeWithCasper[F, Option[DeployInfo]]("Could not show deploy.") { implicit casper =>
+        val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
+
+        BlockStore[F].findBlockHashesWithDeployhash(deployHash) flatMap {
+          case blockHashes if blockHashes.nonEmpty =>
+            for {
+              blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
+              blockInfos <- blocks.traverse { block =>
+                             val summary =
+                               BlockSummary(block.blockHash, block.header, block.signature)
+                             makeBlockInfo[F](summary, block.some)
+                           }
+              results = (blocks zip blockInfos).flatMap {
+                case (block, info) =>
+                  block.getBody.deploys
+                    .find(_.getDeploy.deployHash == deployHash)
+                    .map(_ -> info)
+              }
+              info = DeployInfo(
+                deploy = results.headOption.flatMap(_._1.deploy),
+                processingResults = results.map {
+                  case (processedDeploy, blockInfo) =>
+                    DeployInfo
+                      .ProcessingResult(
+                        cost = processedDeploy.cost,
+                        isError = processedDeploy.isError,
+                        errorMessage = processedDeploy.errorMessage
+                      )
+                      .withBlockInfo(blockInfo)
+                }
+              )
+            } yield info.some
+
+          case _ =>
+            casper.bufferedDeploys.map { deploys =>
+              deploys.get(deployHash) map { deploy =>
+                DeployInfo().withDeploy(deploy)
+              }
+            }
+        }
+      }
+    }
+
+  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      deployHashBase16: String
+  ): F[DeployInfo] =
+    getDeployInfoOpt[F](deployHashBase16).flatMap(
+      _.fold(
+        MonadThrowable[F]
+          .raiseError[DeployInfo](NotFound(s"Cannot find deploy with hash $deployHashBase16"))
+      )(_.pure[F])
+    )
+
+  def getBlockDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStore](
+      blockHashBase16: String
+  ): F[Seq[Block.ProcessedDeploy]] =
+    unsafeWithCasper[F, Seq[Block.ProcessedDeploy]]("Could not show deploys.") { implicit casper =>
+      getByHashPrefix(blockHashBase16) {
+        ProtoUtil.unsafeGetBlock[F](_).map(_.some)
+      }.map(_.get.getBody.deploys)
+    }
+
+  def makeBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle](
+      summary: BlockSummary,
+      maybeBlock: Option[Block]
+  ): F[BlockInfo] =
+    for {
+      dag            <- MultiParentCasper[F].blockDag
+      faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, summary.blockHash)
+      initialFault <- MultiParentCasper[F].normalizedInitialFault(
+                       ProtoUtil.weightMap(summary.getHeader)
+                     )
+      maybeStats = maybeBlock.map { block =>
+        BlockStatus
+          .Stats()
+          .withBlockSizeBytes(block.serializedSize)
+          .withDeployErrorCount(
+            block.getBody.deploys.count(_.isError)
+          )
+      }
+      status = BlockStatus(
+        faultTolerance = faultTolerance - initialFault,
+        stats = maybeStats
+      )
+      info = BlockInfo()
+        .withSummary(summary)
+        .withStatus(status)
+    } yield info
+
+  def makeBlockInfo[F[_]: Monad: BlockStore: MultiParentCasper: SafetyOracle](
+      summary: BlockSummary,
+      full: Boolean
+  ): F[(BlockInfo, Option[Block])] =
+    for {
+      maybeBlock <- if (full) {
+                     BlockStore[F]
+                       .get(summary.blockHash)
+                       .map(_.get.blockMessage)
+                   } else {
+                     none[Block].pure[F]
+                   }
+      info <- makeBlockInfo[F](summary, maybeBlock)
+    } yield (info, maybeBlock)
+
+  def getBlockInfoWithBlock[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      blockHash: BlockHash,
+      full: Boolean = false
+  ): F[(BlockInfo, Option[Block])] =
+    unsafeWithCasper[F, (BlockInfo, Option[Block])]("Could not show block.") { implicit casper =>
+      BlockStore[F].getBlockSummary(blockHash).flatMap { maybeSummary =>
+        maybeSummary.fold(
+          MonadThrowable[F]
+            .raiseError[(BlockInfo, Option[Block])](
+              NotFound(s"Cannot find block matching hash ${Base16.encode(blockHash.toByteArray)}")
+            )
+        )(makeBlockInfo[F](_, full))
+      }
+    }
+
   def getBlockInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
       blockHashBase16: String,
       full: Boolean = false
-  ): F[Option[BlockInfo]] =
-    unsafeWithCasper[F, Option[BlockInfo]]("Could not show block.") { implicit casper =>
-      getByHashPrefix[F, BlockSummary](blockHashBase16)(
-        BlockStore[F].getBlockSummary(_)
-      ).flatMap { maybeSummary =>
-        maybeSummary.fold(none[BlockInfo].pure[F]) { summary =>
-          for {
-            dag            <- MultiParentCasper[F].blockDag
-            faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, summary.blockHash)
-            initialFault <- MultiParentCasper[F].normalizedInitialFault(
-                             ProtoUtil.weightMap(summary.getHeader)
-                           )
-            maybeBlockAndStats <- if (full) {
-                                   BlockStore[F]
-                                     .get(summary.blockHash)
-                                     .map(_.get.getBlockMessage)
-                                     .map { block =>
-                                       val stats = BlockStatus
-                                         .Stats()
-                                         .withBlockSizeBytes(block.serializedSize)
-                                         .withDeployErrorCount(
-                                           block.getBody.deploys.count(_.isError)
-                                         )
-                                       (block, stats).some
-                                     }
-                                 } else {
-                                   none[(Block, BlockStatus.Stats)].pure[F]
-                                 }
-            status = BlockStatus(
-              faultTolerance = faultTolerance - initialFault,
-              stats = maybeBlockAndStats.map(_._2)
-            )
-            result = BlockInfo()
-              .withSummary(summary)
-              .withStatus(status)
-          } yield result.some
+  ): F[Option[(BlockInfo, Option[Block])]] =
+    unsafeWithCasper[F, Option[(BlockInfo, Option[Block])]]("Could not show block.") {
+      implicit casper =>
+        getByHashPrefix[F, BlockSummary](blockHashBase16)(
+          BlockStore[F].getBlockSummary(_)
+        ).flatMap { maybeSummary =>
+          maybeSummary.fold(none[(BlockInfo, Option[Block])].pure[F])(
+            makeBlockInfo[F](_, full).map(_.some)
+          )
         }
-      }
     }
 
   def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
@@ -363,8 +461,35 @@ object BlockAPI {
           .raiseError[BlockInfo](
             NotFound(s"Cannot find block matching hash $blockHashBase16")
           )
-      )(_.pure[F])
+      )(_._1.pure[F])
     )
+
+  /** Return block infos and maybe according blocks (if 'full' is true) in the a slice of the DAG.
+    * Use `maxRank` 0 to get the top slice,
+    * then we pass previous ranks to paginate backwards. */
+  def getBlockInfosMaybeWithBlocks[F[_]: MonadThrowable: Log: MultiParentCasperRef: SafetyOracle: BlockStore](
+      depth: Int,
+      maxRank: Long = 0,
+      full: Boolean = false
+  ): F[List[(BlockInfo, Option[Block])]] =
+    unsafeWithCasper[F, List[(BlockInfo, Option[Block])]]("Could not show blocks.") {
+      implicit casper =>
+        casper.blockDag flatMap { dag =>
+          maxRank match {
+            case 0 => dag.topoSortTail(depth)
+            case r => dag.topoSort(endBlockNumber = r, startBlockNumber = r - depth + 1)
+          }
+        } handleErrorWith {
+          case ex: StorageError =>
+            MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
+          case ex: IllegalArgumentException =>
+            MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
+        } map { ranksOfHashes =>
+          ranksOfHashes.flatten.reverse.map(h => Base16.encode(h.toByteArray))
+        } flatMap { hashes =>
+          hashes.toList.flatTraverse(getBlockInfoOpt[F](_, full).map(_.toList))
+        }
+    }
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
@@ -373,23 +498,7 @@ object BlockAPI {
       maxRank: Long = 0,
       full: Boolean = false
   ): F[List[BlockInfo]] =
-    unsafeWithCasper[F, List[BlockInfo]]("Could not show blocks.") { implicit casper =>
-      casper.blockDag flatMap { dag =>
-        maxRank match {
-          case 0 => dag.topoSortTail(depth)
-          case r => dag.topoSort(endBlockNumber = r, startBlockNumber = r - depth + 1)
-        }
-      } handleErrorWith {
-        case ex: StorageError =>
-          MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
-        case ex: IllegalArgumentException =>
-          MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-      } map { ranksOfHashes =>
-        ranksOfHashes.flatten.reverse.map(h => Base16.encode(h.toByteArray))
-      } flatMap { hashes =>
-        hashes.toList.traverse(getBlockInfo[F](_, full))
-      }
-    }
+    getBlockInfosMaybeWithBlocks[F](depth, maxRank, full).map(_.map(_._1))
 
   @deprecated("To be removed before devnet. Use `getBlockInfo`.", "0.4")
   def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
@@ -530,7 +639,7 @@ object BlockAPI {
   private def getByHashPrefix[F[_]: Monad: MultiParentCasper: BlockStore, A](
       blockHashBase16: String
   )(f: ByteString => F[Option[A]]): F[Option[A]] =
-    if (blockHashBase16.size == 64) {
+    if (blockHashBase16.length == 64) {
       f(ByteString.copyFrom(Base16.decode(blockHashBase16)))
     } else {
       for {

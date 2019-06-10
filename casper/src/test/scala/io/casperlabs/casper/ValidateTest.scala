@@ -7,20 +7,20 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockDagStorageFixture, BlockGenerator, HashSetCasperTestNode}
-import io.casperlabs.casper.consensus._, Block.Justification
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.execengine.{ExecEngineUtil, ExecutionEngineServiceStub}
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
-import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.casper.util.execengine.{
   DeploysCheckpoint,
   ExecEngineUtil,
   ExecutionEngineServiceStub
 }
+import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
@@ -31,8 +31,9 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
 
@@ -143,7 +144,12 @@ class ValidateTest
       b.withSignature(b.getSignature.withSigAlgorithm(sigAlgorithm))
     def changeSig(sig: ByteString): Block =
       b.withSignature(b.getSignature.withSig(sig))
+
   }
+
+  // Originally validation methods wanted blocks, now they work on summaries.
+  implicit def `Block => BlockSummary`(b: Block) =
+    BlockSummary(b.blockHash, b.header, b.signature)
 
   "Block signature validation" should "return false on unknown algorithms" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -159,11 +165,13 @@ class ValidateTest
                    .map(_.changeSigAlgorithm(rsa))
         _ <- Validate.blockSignature[Task](block0) shouldBeF false
         _ = log.warns.last
-          .contains(s"signature algorithm $unknownAlgorithm is unsupported") should be(
+          .contains(s"signature algorithm '$unknownAlgorithm' is unsupported") should be(
           true
         )
-        _      <- Validate.blockSignature[Task](block1) shouldBeF false
-        result = log.warns.last.contains(s"signature algorithm $rsa is unsupported") should be(true)
+        _ <- Validate.blockSignature[Task](block1) shouldBeF false
+        result = log.warns.last.contains(s"signature algorithm '$rsa' is unsupported") should be(
+          true
+        )
       } yield result
   }
 
@@ -182,7 +190,7 @@ class ValidateTest
         block4       <- signedBlock(4).map(_.changeSig(invalidKey))
         block5       <- signedBlock(5).map(_.changeSig(block0.getSignature.sig)) //wrong sig
         blocks       = Vector(block0, block1, block2, block3, block4, block5)
-        _            <- blocks.existsM[Task](Validate.blockSignature[Task]) shouldBeF false
+        _            <- blocks.existsM[Task](b => Validate.blockSignature[Task](b)) shouldBeF false
         _            = log.warns.size should be(blocks.length)
         result       = log.warns.forall(_.contains("signature is invalid")) should be(true)
       } yield result
@@ -422,10 +430,8 @@ class ValidateTest
         invalidBlock <- blockDagStorage
                          .lookupByIdUnsafe(2)
                          .map(_.changeValidator(impostor))
-        dag    <- blockDagStorage.getRepresentation
-        _      <- Validate.blockSender[Task](genesis, genesis, dag) shouldBeF true
-        _      <- Validate.blockSender[Task](validBlock, genesis, dag) shouldBeF true
-        result <- Validate.blockSender[Task](invalidBlock, genesis, dag) shouldBeF false
+        _      <- Validate.blockSender[Task](validBlock) shouldBeF true
+        result <- Validate.blockSender[Task](invalidBlock) shouldBeF false
       } yield result
   }
 
@@ -502,7 +508,7 @@ class ValidateTest
   }
 
   // Creates a block with an invalid block number and sequence number
-  "Block summary validation" should "short circuit after first invalidity" in withStorage {
+  "Block validation" should "short circuit after first invalidity" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
         _        <- createChain[Task](2)
@@ -516,17 +522,19 @@ class ValidateTest
                         sk,
                         Ed25519
                       )
-        _ <- Validate
-              .blockSummary[Task](
-                signedBlock,
-                Block.defaultInstance,
-                dag,
-                "casperlabs",
-                Block.defaultInstance.blockHash
-              )
-              .attempt shouldBeF Left(InvalidBlockNumber)
-        result = log.warns.size should be(1)
-      } yield result
+        result <- Validate
+                   .blockFull[Task](
+                     signedBlock,
+                     dag,
+                     "casperlabs",
+                     Block.defaultInstance.some
+                   )
+                   .attempt
+        _ = result shouldBe Left(
+          Validate.DropErrorWrapper(InvalidUnslashableBlock)
+        )
+
+      } yield ()
   }
 
   "Justification follow validation" should "return valid for proper justifications and failed otherwise" in withStorage {
@@ -718,7 +726,7 @@ class ValidateTest
         _       <- Validate.formatOfFields[Task](genesis) shouldBeF true
         _       <- Validate.formatOfFields[Task](genesis.withBlockHash(ByteString.EMPTY)) shouldBeF false
         _       <- Validate.formatOfFields[Task](genesis.clearHeader) shouldBeF false
-        _       <- Validate.formatOfFields[Task](genesis.clearBody) shouldBeF false
+        _       <- Validate.formatOfFields[Task](genesis.clearBody) shouldBeF true // Body is only checked in `Validate.blockFull`
         _ <- Validate.formatOfFields[Task](
               genesis.withSignature(genesis.getSignature.withSig(ByteString.EMPTY))
             ) shouldBeF false
@@ -887,7 +895,7 @@ class ValidateTest
                               deploys,
                               ProtocolVersion(1)
                             )
-        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _) = deploysCheckpoint
+        DeploysCheckpoint(preStateHash, computedPostStateHash, processedDeploys, _, _, _, _) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq.empty,
                   deploys = processedDeploys,

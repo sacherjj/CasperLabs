@@ -40,7 +40,6 @@ mod ext_ffi {
         pub fn get_read(value_ptr: *mut u8); //can only be called after `read_value`
         pub fn write(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
         pub fn add(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
-        //TODO: update the FFI to take the initial value to place in the GS under the new URef
         pub fn new_uref(key_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
         pub fn serialize_function(name_ptr: *const u8, name_size: usize) -> usize;
         pub fn get_function(dest_ptr: *mut u8); //can only be called after `serialize_function`

@@ -40,8 +40,9 @@ object Main {
       configuration: Configuration
   ): F[Unit] =
     configuration match {
-      case ShowBlock(hash) => DeployRuntime.showBlock(hash)
-
+      case ShowBlock(hash)   => DeployRuntime.showBlock(hash)
+      case ShowDeploy(hash)  => DeployRuntime.showDeploy(hash)
+      case ShowDeploys(hash) => DeployRuntime.showDeploys(hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
 
       case Deploy(from, nonce, sessionCode, paymentCode, maybePublicKey, maybePrivateKey) =>

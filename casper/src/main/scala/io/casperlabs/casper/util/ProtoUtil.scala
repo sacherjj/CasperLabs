@@ -77,6 +77,20 @@ object ProtoUtil {
     } yield mainChain
   }
 
+  def unsafeGetBlockSummary[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[BlockSummary] =
+    for {
+      maybeBlock <- BlockStore[F].getBlockSummary(hash)
+      block <- maybeBlock match {
+                case Some(b) => b.pure[F]
+                case None =>
+                  MonadThrowable[F].raiseError(
+                    new NoSuchElementException(
+                      s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}"
+                    )
+                  )
+              }
+    } yield block
+
   def unsafeGetBlock[F[_]: MonadThrowable: BlockStore](hash: BlockHash): F[Block] =
     for {
       maybeBlock <- BlockStore[F].getBlockMessage(hash)
@@ -92,10 +106,13 @@ object ProtoUtil {
     } yield block
 
   def creatorJustification(block: Block): Option[Justification] =
-    block.getHeader.justifications
+    creatorJustification(block.getHeader)
+
+  def creatorJustification(header: Block.Header): Option[Justification] =
+    header.justifications
       .find {
         case Justification(validator: Validator, _) =>
-          validator == block.getHeader.validatorPublicKey
+          validator == header.validatorPublicKey
       }
 
   def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
@@ -192,11 +209,11 @@ object ProtoUtil {
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
-  def mainParent[F[_]: Monad: BlockStore](block: Block): F[Option[Block]] = {
-    val maybeParentHash = block.getHeader.parentHashes.headOption
+  private def mainParent[F[_]: Monad: BlockStore](header: Block.Header): F[Option[BlockSummary]] = {
+    val maybeParentHash = header.parentHashes.headOption
     maybeParentHash match {
-      case Some(parentHash) => BlockStore[F].getBlockMessage(parentHash)
-      case None             => none[Block].pure[F]
+      case Some(parentHash) => BlockStore[F].getBlockSummary(parentHash)
+      case None             => none[BlockSummary].pure[F]
     }
   }
 
@@ -218,18 +235,27 @@ object ProtoUtil {
     } yield result
 
   def weightFromValidator[F[_]: Monad: BlockStore](
-      b: Block,
+      header: Block.Header,
       validator: ByteString
   ): F[Long] =
     for {
-      maybeMainParent <- mainParent[F](b)
+      maybeMainParent <- mainParent[F](header)
       weightFromValidator = maybeMainParent
-        .map(weightMap(_).getOrElse(validator, 0L))
-        .getOrElse(weightMap(b).getOrElse(validator, 0L)) //no parents means genesis -- use itself
+        .map(p => weightMap(p.getHeader).getOrElse(validator, 0L))
+        .getOrElse(weightMap(header).getOrElse(validator, 0L)) //no parents means genesis -- use itself
     } yield weightFromValidator
+
+  def weightFromValidator[F[_]: Monad: BlockStore](
+      b: Block,
+      validator: ByteString
+  ): F[Long] =
+    weightFromValidator[F](b.getHeader, validator)
 
   def weightFromSender[F[_]: Monad: BlockStore](b: Block): F[Long] =
     weightFromValidator[F](b, b.getHeader.validatorPublicKey)
+
+  def weightFromSender[F[_]: Monad: BlockStore](header: Block.Header): F[Long] =
+    weightFromValidator[F](header, header.validatorPublicKey)
 
   def parentHashes(b: Block): Seq[ByteString] =
     b.getHeader.parentHashes
@@ -263,6 +289,9 @@ object ProtoUtil {
     b.getHeader.getState.preStateHash
 
   def bonds(b: Block): Seq[Bond] =
+    b.getHeader.getState.bonds
+
+  def bonds(b: BlockSummary): Seq[Bond] =
     b.getHeader.getState.bonds
 
   def blockNumber(b: Block): Long =
@@ -378,15 +407,17 @@ object ProtoUtil {
     ByteString.copyFrom(Base16.decode(string))
 
   def basicDeploy[F[_]: Monad: Time](
-      id: Int
+      nonce: Int
   ): F[Deploy] =
     Time[F].currentMillis.map { now =>
-      basicDeploy(now, ByteString.EMPTY)
+      basicDeploy(now, ByteString.EMPTY, nonce)
     }
 
   def basicDeploy(
       timestamp: Long,
-      sessionCode: ByteString = ByteString.EMPTY
+      sessionCode: ByteString = ByteString.EMPTY,
+      nonce: Long = 0,
+      accountPublicKey: ByteString = ByteString.EMPTY
   ): Deploy = {
     val b = Deploy
       .Body()
@@ -394,8 +425,9 @@ object ProtoUtil {
       .withPayment(Deploy.Code())
     val h = Deploy
       .Header()
-      .withAccountPublicKey(ByteString.EMPTY)
+      .withAccountPublicKey(accountPublicKey)
       .withTimestamp(timestamp)
+      .withNonce(nonce)
       .withBodyHash(protoHash(b))
     Deploy()
       .withDeployHash(protoHash(h))
@@ -441,4 +473,15 @@ object ProtoUtil {
       .toSet
     (missingParents union missingJustifications).toList
   }
+
+  implicit class DeployOps(d: Deploy) {
+    def incrementNonce(): Deploy =
+      this.withNonce(d.header.get.nonce + 1)
+
+    def withNonce(newNonce: Long): Deploy =
+      d.withHeader(d.header.get.withNonce(newNonce))
+  }
+
+  def randomAccountAddress(): ByteString =
+    ByteString.copyFrom(scala.util.Random.nextString(32), "UTF-8")
 }

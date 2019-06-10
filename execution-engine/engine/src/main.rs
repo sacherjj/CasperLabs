@@ -11,13 +11,16 @@ extern crate storage;
 extern crate wasm_prep;
 
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter::Iterator;
 
 use clap::{App, Arg, ArgMatches};
 
+use common::key::Key;
 use execution_engine::engine_state::error::RootNotFound;
+use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::EngineState;
 use execution_engine::execution::WasmiExecutor;
@@ -26,9 +29,10 @@ use shared::logging;
 use shared::logging::log_level::LogLevel;
 use shared::logging::log_settings;
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
-use shared::newtypes::Blake2bHash;
+use shared::newtypes::{Blake2bHash, CorrelationId};
 use storage::global_state::in_memory::InMemoryGlobalState;
 use storage::global_state::CommitResult;
+use storage::global_state::History;
 use wasm_prep::{wasm_costs::WasmCosts, WasmiPreprocessor};
 
 // exe / proc
@@ -38,6 +42,7 @@ const SERVER_START_MESSAGE: &str = "starting Execution Engine Standalone";
 const SERVER_STOP_MESSAGE: &str = "stopping Execution Engine Standalone";
 const SERVER_NO_WASM_MESSAGE: &str = "no wasm files to process";
 const SERVER_NO_GAS_LIMIT_MESSAGE: &str = "gas limit is 0";
+const VALIDATE_NONCE: &str = "validate-nonce";
 
 // loglevel
 const ARG_LOG_LEVEL: &str = "loglevel";
@@ -62,6 +67,80 @@ lazy_static! {
 struct Task {
     path: String,
     bytes: Vec<u8>,
+}
+
+fn apply_effects<H>(
+    correlation_id: CorrelationId,
+    engine_state: &EngineState<H>,
+    pre_state_hash: &Blake2bHash,
+    effects: ExecutionEffect,
+) -> (
+    LogLevel,
+    String,
+    BTreeMap<String, String>,
+    Option<Blake2bHash>,
+)
+where
+    H: History,
+    H::Error: Into<execution_engine::execution::Error> + Debug,
+{
+    match engine_state.apply_effect(correlation_id, *pre_state_hash, effects.1) {
+        Ok(CommitResult::RootNotFound) => {
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+            let error_message = format!("root {:?} not found", pre_state_hash);
+            properties.insert(String::from("root-hash"), format!("{:?}", pre_state_hash));
+            (LogLevel::Warning, error_message, properties, None)
+        }
+        Ok(CommitResult::KeyNotFound(key)) => {
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+            let error_message = format!("key {:?} not found", key);
+            (LogLevel::Warning, error_message, properties, None)
+        }
+        Ok(CommitResult::TypeMismatch(type_mismatch)) => {
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+            let error_message = format!("type mismatch: {:?} ", type_mismatch);
+            (LogLevel::Warning, error_message, properties, None)
+        }
+        Ok(CommitResult::Success(new_root_hash)) => {
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+            properties.insert(
+                String::from("post-state-hash"),
+                format!("{:?}", new_root_hash),
+            );
+            (
+                LogLevel::Info,
+                String::new(),
+                properties,
+                Some(new_root_hash),
+            )
+        }
+        Err(storage_err) => {
+            let mut properties: BTreeMap<String, String> = BTreeMap::new();
+            let error_message = format!("{:?}", storage_err);
+            (LogLevel::Error, error_message, properties, None)
+        }
+    }
+}
+
+fn log_message(
+    log_level: LogLevel,
+    error_message: String,
+    mut properties: BTreeMap<String, String>,
+) {
+    let success = error_message.is_empty();
+    properties.insert(String::from("success"), format!("{:?}", success));
+
+    if !success {
+        properties.insert(String::from("error"), error_message);
+    }
+
+    let message_format: String = if success {
+        String::from("{wasm-path} success: {success} gas_cost: {gas-cost}")
+    } else {
+        String::from("{wasm-path} error: {error} gas_cost: {gas-cost}")
+    };
+
+    logging::log_details(log_level, message_format, properties);
 }
 
 #[allow(unreachable_code)]
@@ -95,14 +174,14 @@ fn main() {
         logging::log_info(SERVER_NO_WASM_MESSAGE);
     }
 
-    let account_addr: [u8; 32] = {
+    let account_addr = {
         let mut address = [48u8; 32];
         matches
             .value_of("address")
             .map(str::as_bytes)
             .map(|bytes| address.copy_from_slice(bytes))
             .expect("Error when parsing address");
-        address
+        Key::Account(address)
     };
 
     let gas_limit: u64 = matches
@@ -114,19 +193,17 @@ fn main() {
         logging::log_info(SERVER_NO_GAS_LIMIT_MESSAGE);
     }
 
+    let validate_nonce = matches.is_present(VALIDATE_NONCE);
+
     // TODO: move to arg parser
     let timestamp: u64 = 100_000;
-    let nonce: u64 = 1;
     let protocol_version: u64 = 1;
 
-    // let path = std::path::Path::new("./tmp/");
-    // TODO: Better error handling?
-    //    let global_state = LmdbGs::new(&path).unwrap();
-    let init_state = mocked_account(account_addr);
-    let global_state =
-        InMemoryGlobalState::from_pairs(&init_state).expect("Could not create global state");
+    let init_state = mocked_account(account_addr.as_account().unwrap());
+    let global_state = InMemoryGlobalState::from_pairs(CorrelationId::new(), &init_state)
+        .expect("Could not create global state");
     let mut state_hash: Blake2bHash = global_state.root_hash;
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, validate_nonce);
 
     let wasmi_executor = WasmiExecutor;
     let wasm_costs = WasmCosts::from_version(protocol_version).unwrap_or_else(|| {
@@ -137,7 +214,9 @@ fn main() {
     });
     let wasmi_preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
 
-    for wasm_bytes in wasm_files.iter() {
+    for (i, wasm_bytes) in wasm_files.iter().enumerate() {
+        let correlation_id = CorrelationId::new();
+        let nonce = i as u64 + 1;
         let result = engine_state.run_deploy(
             &wasm_bytes.bytes,
             &[], // TODO: consume args from CLI
@@ -147,80 +226,65 @@ fn main() {
             state_hash,
             gas_limit,
             protocol_version,
+            correlation_id,
             &wasmi_executor,
             &wasmi_preprocessor,
         );
 
-        let mut log_level = LogLevel::Info;
-        let mut properties: BTreeMap<String, String> = BTreeMap::new();
-        let mut error_message: String = String::new();
+        let mut properties = BTreeMap::new();
 
+        properties.insert(
+            String::from("validate-nonce"),
+            format!("{:?}", validate_nonce),
+        );
         properties.insert(String::from("pre-state-hash"), format!("{:?}", state_hash));
         properties.insert(String::from("wasm-path"), wasm_bytes.path.to_owned());
+        properties.insert(String::from("nonce"), format!("{}", nonce));
 
         match result {
             Err(RootNotFound(hash)) => {
-                log_level = LogLevel::Error;
-                error_message = format!("root {:?} not found", hash);
+                let log_level = LogLevel::Error;
+                let error_message = format!("root {:?} not found", hash);
                 properties.insert(String::from("root-hash"), format!("{:?}", hash));
+                log_message(log_level, error_message, properties);
             }
-            Ok(ExecutionResult {
-                result: Ok(effects),
+            Ok(ExecutionResult::Success {
+                effect: effects,
                 cost,
             }) => {
                 properties.insert("gas-cost".to_string(), format!("{:?}", cost));
+                let (log_level, error_message, mut new_properties, new_state_hash) =
+                    apply_effects(correlation_id, &engine_state, &state_hash, effects);
 
-                match engine_state.apply_effect(state_hash, effects.1) {
-                    Ok(CommitResult::RootNotFound) => {
-                        log_level = LogLevel::Warning;
-                        error_message = format!("root {:?} not found", state_hash);
-                        properties.insert(String::from("root-hash"), format!("{:?}", state_hash));
-                    }
-                    Ok(CommitResult::KeyNotFound(key)) => {
-                        log_level = LogLevel::Warning;
-                        error_message = format!("key {:?} not found", key);
-                    }
-                    Ok(CommitResult::TypeMismatch(type_mismatch)) => {
-                        log_level = LogLevel::Warning;
-                        error_message = format!("type mismatch: {:?} ", type_mismatch);
-                    }
-                    Ok(CommitResult::Success(new_root_hash)) => {
-                        state_hash = new_root_hash; // we need to keep updating the post state hash after each deploy
-                        properties.insert(
-                            String::from("post-state-hash"),
-                            format!("{:?}", new_root_hash),
-                        );
-                    }
-                    Err(storage_err) => {
-                        log_level = LogLevel::Error;
-                        error_message = format!("{:?}", storage_err);
-                    }
+                if let Some(hash) = new_state_hash {
+                    state_hash = hash;
                 }
+
+                properties.append(&mut new_properties);
+                log_message(log_level, error_message, properties);
             }
-            Ok(ExecutionResult {
-                result: Err(error),
+            Ok(ExecutionResult::Failure {
+                error,
+                effect: effects,
                 cost,
             }) => {
-                log_level = LogLevel::Error;
+                let log_level = LogLevel::Error;
                 properties.insert("gas-cost".to_string(), format!("{:?}", cost));
-                error_message = format!("{:?}", error);
+
+                let (new_log_level, new_error_message, mut new_properties, new_state_hash) =
+                    apply_effects(correlation_id, &engine_state, &state_hash, effects);
+
+                if let Some(hash) = new_state_hash {
+                    state_hash = hash;
+                }
+
+                new_properties.append(&mut properties.clone());
+                log_message(new_log_level, new_error_message, new_properties);
+
+                let error_message = format!("{:?}", error);
+                log_message(log_level, error_message, properties);
             }
         }
-
-        let success = error_message.is_empty();
-        properties.insert(String::from("success"), format!("{:?}", success));
-
-        if !success {
-            properties.insert(String::from("error"), error_message);
-        }
-
-        let message_format: String = if success {
-            String::from("{wasm-path} success: {success} gas_cost: {gas-cost}")
-        } else {
-            String::from("{wasm-path} error: {error} gas_cost: {gas-cost}")
-        };
-
-        logging::log_details(log_level, message_format, properties);
     }
 
     logging::log_info(SERVER_STOP_MESSAGE);
@@ -267,19 +331,20 @@ fn get_args() -> ArgMatches<'static> {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("wasm")
-                .long("wasm")
-                .multiple(true)
-                .required(true)
-                .index(1),
-        )
-        .arg(
             Arg::with_name(ARG_LOG_LEVEL)
                 .required(false)
                 .long(ARG_LOG_LEVEL)
                 .takes_value(true)
                 .value_name(ARG_LOG_LEVEL_VALUE)
                 .help(ARG_LOG_LEVEL_HELP),
+        )
+        .arg(Arg::with_name(VALIDATE_NONCE).long(VALIDATE_NONCE))
+        .arg(
+            Arg::with_name("wasm")
+                .long("wasm")
+                .multiple(true)
+                .required(true)
+                .index(1),
         )
         .get_matches()
 }

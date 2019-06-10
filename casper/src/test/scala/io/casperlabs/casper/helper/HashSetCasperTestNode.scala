@@ -11,7 +11,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{Block, Bond}
-import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
@@ -22,6 +21,7 @@ import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
+import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
@@ -32,6 +32,7 @@ import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler
 
+import scala.collection.mutable.{Map => MutMap}
 import scala.util.Random
 
 /** Base class for test nodes with fields used by tests exposed as public. */
@@ -40,7 +41,8 @@ abstract class HashSetCasperTestNode[F[_]](
     sk: PrivateKey,
     val genesis: Block,
     val blockDagDir: Path,
-    val blockStoreDir: Path
+    val blockStoreDir: Path,
+    val validateNonces: Boolean
 )(
     implicit
     concurrentF: Concurrent[F],
@@ -59,7 +61,7 @@ abstract class HashSetCasperTestNode[F[_]](
     .map(b => PublicKey(b.validatorPublicKey.toByteArray) -> b.stake)
     .toMap
 
-  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds)
+  implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[F](bonds, validateNonces)
 
   /** Handle one message. */
   def receive(): F[Unit]
@@ -135,7 +137,8 @@ trait HashSetCasperTestNodeFactory {
       genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Float = 0f,
+      validateNonces: Boolean = true
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
@@ -148,9 +151,17 @@ trait HashSetCasperTestNodeFactory {
       genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Float = 0f,
+      validateNonces: Boolean = true
   ): Effect[IndexedSeq[TestNode[Effect]]] =
-    networkF[Effect](sks, genesis, transforms, storageSize, faultToleranceThreshold)(
+    networkF[Effect](
+      sks,
+      genesis,
+      transforms,
+      storageSize,
+      faultToleranceThreshold,
+      validateNonces
+    )(
       ApplicativeError_[Effect, CommError],
       Concurrent[Effect],
       Par[Effect],
@@ -241,10 +252,17 @@ object HashSetCasperTestNode {
 
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
   def simpleEEApi[F[_]: Defer: Applicative](
-      initialBonds: Map[PublicKey, Long]
+      initialBonds: Map[PublicKey, Long],
+      validateNonces: Boolean = true
   ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
       import ipc._
+
+      // NOTE: Some tests would benefit from tacking this per pre-state-hash,
+      // but when I tried to do that a great many more failed.
+      private val accountNonceTracker: MutMap[ByteString, Long] =
+        MutMap.empty.withDefaultValue(0)
+
       private val zero  = Array.fill(32)(0.toByte)
       private var bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
 
@@ -260,6 +278,22 @@ object HashSetCasperTestNode {
         ExecutionEffect(Seq(opEntry), Seq(transforEntry))
       }
 
+      // Validate that account's nonces increment monotonically by 1.
+      // Assumes that any account address already exists in the GlobalState with nonce = 0.
+      private def validateNonce(prestate: ByteString, deploy: Deploy): Int = synchronized {
+        if (!validateNonces) {
+          0
+        } else {
+          val deployAccount = deploy.address
+          val deployNonce   = deploy.nonce
+          val oldNonce      = accountNonceTracker(deployAccount)
+          val expected      = oldNonce + 1
+          val sign          = math.signum(deployNonce - expected)
+          if (sign == 0) accountNonceTracker(deployAccount) = deployNonce
+          sign.toInt
+        }
+      }
+
       override def emptyStateHash: ByteString = ByteString.EMPTY
 
       override def exec(
@@ -271,7 +305,24 @@ object HashSetCasperTestNode {
         //regardless of their wasm code. It pretends to have run all the deploys,
         //but it doesn't really; it just returns the same result no matter what.
         deploys
-          .map(d => DeployResult(10, DeployResult.Result.Effects(getExecutionEffect(d))))
+          .map { d =>
+            validateNonce(prestate, d) match {
+              case 0 =>
+                DeployResult(
+                  ExecutionResult(
+                    ipc.DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
+                  )
+                )
+              case 1 =>
+                DeployResult(DeployResult.Value.InvalidNonce(DeployResult.InvalidNonce(d.nonce)))
+              case -1 =>
+                DeployResult(
+                  DeployResult.Value.PreconditionFailure(
+                    DeployResult.PreconditionFailure("Nonce was less then expected.")
+                  )
+                )
+            }
+          }
           .asRight[Throwable]
           .pure[F]
 

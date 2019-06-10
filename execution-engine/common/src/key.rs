@@ -1,5 +1,5 @@
 use super::alloc::vec::Vec;
-use super::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
+use super::bytesrepr::{Error, FromBytes, ToBytes, N32, OPTION_SIZE, U32_SIZE};
 use crate::contract_api::pointers::*;
 use bitflags;
 
@@ -64,6 +64,14 @@ impl Key {
         }
     }
 
+    /// Returns bytes of an account
+    pub fn as_account(&self) -> Option<[u8; 32]> {
+        match self {
+            Account(bytes) => Some(*bytes),
+            _ => None,
+        }
+    }
+
     pub fn normalize(self) -> Key {
         match self {
             Key::URef(id, _) => Key::URef(id, None),
@@ -79,7 +87,9 @@ const LOCAL_ID: u8 = 3;
 
 const KEY_ID_SIZE: usize = 1; // u8 used to determine the ID
 const ACCESS_RIGHTS_SIZE: usize = 1; // u8 used to tag AccessRights
-pub const UREF_SIZE: usize = U32_SIZE + N32 + KEY_ID_SIZE + ACCESS_RIGHTS_SIZE;
+const ACCOUNT_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
+const HASH_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
+pub const UREF_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32 + OPTION_SIZE + ACCESS_RIGHTS_SIZE;
 const LOCAL_SIZE: usize = KEY_ID_SIZE + U32_SIZE + LOCAL_SEED_SIZE + U32_SIZE + LOCAL_KEY_HASH_SIZE;
 
 impl ToBytes for AccessRights {
@@ -103,13 +113,13 @@ impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
             Account(addr) => {
-                let mut result = Vec::with_capacity(37);
+                let mut result = Vec::with_capacity(ACCOUNT_KEY_SIZE);
                 result.push(ACCOUNT_ID);
                 result.append(&mut addr.to_bytes()?);
                 Ok(result)
             }
             Hash(hash) => {
-                let mut result = Vec::with_capacity(37);
+                let mut result = Vec::with_capacity(HASH_KEY_SIZE);
                 result.push(HASH_ID);
                 result.append(&mut hash.to_bytes()?);
                 Ok(result)
@@ -138,9 +148,7 @@ impl FromBytes for Key {
         match id {
             ACCOUNT_ID => {
                 let (addr, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;
-                let mut addr_array = [0u8; 32];
-                addr_array.copy_from_slice(&addr);
-                Ok((Account(addr_array), rem))
+                Ok((Account(addr), rem))
             }
             HASH_ID => {
                 let (hash, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(rest)?;

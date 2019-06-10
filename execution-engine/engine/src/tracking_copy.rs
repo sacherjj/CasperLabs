@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 
 use common::key::Key;
 use common::value::Value;
-use shared::newtypes::Validated;
+use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::{self, Transform, TypeMismatch};
 use storage::global_state::StateReader;
 
@@ -105,11 +105,15 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         }
     }
 
-    pub fn get(&mut self, k: &Key) -> Result<Option<Value>, R::Error> {
+    pub fn get(
+        &mut self,
+        correlation_id: CorrelationId,
+        k: &Key,
+    ) -> Result<Option<Value>, R::Error> {
         if let Some(value) = self.cache.get(k) {
             return Ok(Some(value.to_owned()));
         }
-        if let Some(value) = self.reader.read(k)? {
+        if let Some(value) = self.reader.read(correlation_id, k)? {
             self.cache.insert_read(*k, value.to_owned());
             Ok(Some(value))
         } else {
@@ -117,9 +121,13 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         }
     }
 
-    pub fn read(&mut self, k: &Validated<Key>) -> Result<Option<Value>, R::Error> {
+    pub fn read(
+        &mut self,
+        correlation_id: CorrelationId,
+        k: &Validated<Key>,
+    ) -> Result<Option<Value>, R::Error> {
         let k = k.normalize();
-        if let Some(value) = self.get(&k)? {
+        if let Some(value) = self.get(correlation_id, &k)? {
             add(&mut self.ops, k, Op::Read);
             add(&mut self.fns, k, Transform::Identity);
             Ok(Some(value))
@@ -139,9 +147,14 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     /// Ok(None) represents missing key to which we want to "add" some value.
     /// Ok(Some(unit)) represents successful operation.
     /// Err(error) is reserved for unexpected errors when accessing global state.
-    pub fn add(&mut self, k: Validated<Key>, v: Validated<Value>) -> Result<AddResult, R::Error> {
+    pub fn add(
+        &mut self,
+        correlation_id: CorrelationId,
+        k: Validated<Key>,
+        v: Validated<Value>,
+    ) -> Result<AddResult, R::Error> {
         let k = k.normalize();
-        match self.get(&k)? {
+        match self.get(correlation_id, &k)? {
             None => Ok(AddResult::KeyNotFound(k)),
             Some(curr) => {
                 let t = match v.into_raw() {
@@ -180,9 +193,14 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         ExecutionEffect(self.ops.clone(), self.fns.clone())
     }
 
-    pub fn query(&mut self, base_key: Key, path: &[String]) -> Result<QueryResult, R::Error> {
+    pub fn query(
+        &mut self,
+        correlation_id: CorrelationId,
+        base_key: Key,
+        path: &[String],
+    ) -> Result<QueryResult, R::Error> {
         let validated_key = Validated::new(base_key, Validated::valid)?;
-        match self.read(&validated_key)? {
+        match self.read(correlation_id, &validated_key)? {
             None => Ok(QueryResult::ValueNotFound(self.error_path_msg(
                 base_key,
                 path,
@@ -202,7 +220,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                             Value::Account(account) => {
                                 if let Some(key) = account.urefs_lookup().get(name) {
                                     let validated_key = Validated::new(*key, Validated::valid)?;
-                                    self.read_key_or_stop(validated_key, i)
+                                    self.read_key_or_stop(correlation_id, validated_key, i)
                                 } else {
                                     Err(Ok((i, format!("Name {} not found in Account at path:", name))))
                                 }
@@ -211,7 +229,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                             Value::Contract(contract) => {
                                 if let Some(key) = contract.urefs_lookup().get(name) {
                                     let validated_key = Validated::new(*key, Validated::valid)?;
-                                    self.read_key_or_stop(validated_key, i)
+                                    self.read_key_or_stop(correlation_id, validated_key, i)
                                 } else {
                                     Err(Ok((i, format!("Name {} not found in Contract at path:", name))))
                                 }
@@ -237,10 +255,11 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
 
     fn read_key_or_stop(
         &mut self,
+        correlation_id: CorrelationId,
         key: Validated<Key>,
         i: usize,
     ) -> Result<Value, Result<(usize, String), R::Error>> {
-        match self.read(&key) {
+        match self.read(correlation_id, &key) {
             // continue recursing
             Ok(Some(value)) => Ok(value),
             // key not found in the global state; stop recursing
@@ -289,6 +308,7 @@ mod tests {
         AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight, KEY_SIZE,
     };
     use engine_state::op::Op;
+    use shared::newtypes::CorrelationId;
     use tracking_copy::TrackingCopy;
 
     struct CountingDb {
@@ -314,7 +334,11 @@ mod tests {
 
     impl StateReader<Key, Value> for CountingDb {
         type Error = !;
-        fn read(&self, _key: &Key) -> Result<Option<Value>, Self::Error> {
+        fn read(
+            &self,
+            _correlation_id: CorrelationId,
+            _key: &Key,
+        ) -> Result<Option<Value>, Self::Error> {
             let count = self.count.get();
             let value = match self.value {
                 Some(ref v) => v.clone(),
@@ -338,6 +362,7 @@ mod tests {
 
     #[test]
     fn tracking_copy_caching() {
+        let correlation_id = CorrelationId::new();
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(Rc::clone(&counter));
         let mut tc = TrackingCopy::new(db);
@@ -346,7 +371,10 @@ mod tests {
         let zero = Value::Int32(0);
         // first read
         let value = tc
-            .read(&Validated::new(k, Validated::valid).unwrap())
+            .read(
+                correlation_id,
+                &Validated::new(k, Validated::valid).unwrap(),
+            )
             .unwrap()
             .unwrap();
         assert_eq!(value, zero);
@@ -354,7 +382,10 @@ mod tests {
         // second read; should use cache instead
         // of going back to the DB
         let value = tc
-            .read(&Validated::new(k, Validated::valid).unwrap())
+            .read(
+                correlation_id,
+                &Validated::new(k, Validated::valid).unwrap(),
+            )
             .unwrap()
             .unwrap();
         let db_value = counter.get();
@@ -364,6 +395,7 @@ mod tests {
 
     #[test]
     fn tracking_copy_read() {
+        let correlation_id = CorrelationId::new();
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(Rc::clone(&counter));
         let mut tc = TrackingCopy::new(db);
@@ -371,7 +403,10 @@ mod tests {
 
         let zero = Value::Int32(0);
         let value = tc
-            .read(&Validated::new(k, Validated::valid).unwrap())
+            .read(
+                correlation_id,
+                &Validated::new(k, Validated::valid).unwrap(),
+            )
             .unwrap()
             .unwrap();
         // value read correctly
@@ -424,6 +459,7 @@ mod tests {
 
     #[test]
     fn tracking_copy_add_i32() {
+        let correlation_id = CorrelationId::new();
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
         let mut tc = TrackingCopy::new(db);
@@ -433,6 +469,7 @@ mod tests {
 
         // adding should work
         let add = tc.add(
+            correlation_id,
             Validated::new(k, Validated::valid).unwrap(),
             Validated::new(three.clone(), Validated::valid).unwrap(),
         );
@@ -447,6 +484,7 @@ mod tests {
 
         // adding again should update the values
         let add = tc.add(
+            correlation_id,
             Validated::new(k, Validated::valid).unwrap(),
             Validated::new(three, Validated::valid).unwrap(),
         );
@@ -459,6 +497,7 @@ mod tests {
 
     #[test]
     fn tracking_copy_add_named_key() {
+        let correlation_id = CorrelationId::new();
         // DB now holds an `Account` so that we can test adding a `NamedKey`
         let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; KEY_SIZE]), Weight::new(1));
         let account = common::value::Account::new(
@@ -486,6 +525,7 @@ mod tests {
 
         // adding the wrong type should fail
         let failed_add = tc.add(
+            correlation_id,
             Validated::new(k, Validated::valid).unwrap(),
             Validated::new(Value::Int32(3), Validated::valid).unwrap(),
         );
@@ -495,6 +535,7 @@ mod tests {
 
         // adding correct type works
         let add = tc.add(
+            correlation_id,
             Validated::new(k, Validated::valid).unwrap(),
             Validated::new(named_key, Validated::valid).unwrap(),
         );
@@ -511,6 +552,7 @@ mod tests {
             map.insert(name, key);
         }
         let add = tc.add(
+            correlation_id,
             Validated::new(k, Validated::valid).unwrap(),
             Validated::new(other_named_key, Validated::valid).unwrap(),
         );
@@ -523,6 +565,7 @@ mod tests {
 
     #[test]
     fn tracking_copy_rw() {
+        let correlation_id = CorrelationId::new();
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
         let mut tc = TrackingCopy::new(db);
@@ -530,7 +573,10 @@ mod tests {
 
         // reading then writing should update the op
         let value = Value::Int32(3);
-        let _ = tc.read(&Validated::new(k, Validated::valid).unwrap());
+        let _ = tc.read(
+            correlation_id,
+            &Validated::new(k, Validated::valid).unwrap(),
+        );
         tc.write(
             Validated::new(k, Validated::valid).unwrap(),
             Validated::new(value.clone(), Validated::valid).unwrap(),
@@ -543,6 +589,7 @@ mod tests {
 
     #[test]
     fn tracking_copy_ra() {
+        let correlation_id = CorrelationId::new();
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
         let mut tc = TrackingCopy::new(db);
@@ -550,8 +597,12 @@ mod tests {
 
         // reading then adding should update the op
         let value = Value::Int32(3);
-        let _ = tc.read(&Validated::new(k, Validated::valid).unwrap());
+        let _ = tc.read(
+            correlation_id,
+            &Validated::new(k, Validated::valid).unwrap(),
+        );
         let _ = tc.add(
+            correlation_id,
             Validated::new(k, Validated::valid).unwrap(),
             Validated::new(value, Validated::valid).unwrap(),
         );
@@ -564,6 +615,7 @@ mod tests {
 
     #[test]
     fn tracking_copy_aw() {
+        let correlation_id = CorrelationId::new();
         let counter = Rc::new(Cell::new(0));
         let db = CountingDb::new(counter);
         let mut tc = TrackingCopy::new(db);
@@ -573,6 +625,7 @@ mod tests {
         let value = Value::Int32(3);
         let write_value = Value::Int32(7);
         let _ = tc.add(
+            correlation_id,
             Validated::new(k, Validated::valid).unwrap(),
             Validated::new(value, Validated::valid).unwrap(),
         );
@@ -589,17 +642,18 @@ mod tests {
     proptest! {
         #[test]
         fn query_empty_path(k in key_arb(), missing_key in key_arb(), v in value_arb()) {
-            let gs = InMemoryGlobalState::from_pairs(&[(k, v.to_owned())]).unwrap();
+            let correlation_id = CorrelationId::new();
+            let gs = InMemoryGlobalState::from_pairs(correlation_id, &[(k, v.to_owned())]).unwrap();
             let mut tc = TrackingCopy::new(gs);
             let empty_path = Vec::new();
-            if let Ok(QueryResult::Success(result)) = tc.query(k, &empty_path) {
+            if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, k, &empty_path) {
                 assert_eq!(v, result);
             } else {
                 panic!("Query failed when it should not have!");
             }
 
             if missing_key != k {
-                let result = tc.query(missing_key, &empty_path);
+                let result = tc.query(correlation_id, missing_key, &empty_path);
                 assert_matches!(result, Ok(QueryResult::ValueNotFound(_)));
             }
         }
@@ -613,25 +667,26 @@ mod tests {
             body in vec(any::<u8>(), 1..1000), // contract body
             hash in u8_slice_32(), // hash for contract key
         ) {
+            let correlation_id = CorrelationId::new();
             let mut known_urefs = BTreeMap::new();
             known_urefs.insert(name.clone(), k);
             let contract: Value = Contract::new(body, known_urefs, 1).into();
             let contract_key = Key::Hash(hash);
 
-            let gs = InMemoryGlobalState::from_pairs(&[
-                (k, v.to_owned()),
-                (contract_key, contract),
-            ]).unwrap();
+            let gs = InMemoryGlobalState::from_pairs(
+                correlation_id,
+                &[(k, v.to_owned()), (contract_key, contract)]
+            ).unwrap();
             let mut tc = TrackingCopy::new(gs);
             let path = vec!(name.clone());
-            if let Ok(QueryResult::Success(result)) = tc.query(contract_key, &path) {
+            if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, contract_key, &path) {
                 assert_eq!(v, result);
             } else {
                 panic!("Query failed when it should not have!");
             }
 
             if missing_name != name {
-                let result = tc.query(contract_key, &[missing_name]);
+                let result = tc.query(correlation_id, contract_key, &[missing_name]);
                 assert_matches!(result, Ok(QueryResult::ValueNotFound(_)));
             }
         }
@@ -647,6 +702,7 @@ mod tests {
             nonce in any::<u64>(), // account nonce
             address in u8_slice_32(), // address for account key
         ) {
+            let correlation_id = CorrelationId::new();
             let known_urefs = iter::once((name.clone(), k)).collect();
             let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
             let account = Account::new(
@@ -659,20 +715,20 @@ mod tests {
             );
             let account_key = Key::Account(address);
 
-            let gs = InMemoryGlobalState::from_pairs(&[
-                (k, v.to_owned()),
-                (account_key, Value::Account(account)),
-            ]).unwrap();
+            let gs = InMemoryGlobalState::from_pairs(
+                correlation_id,
+                &[(k, v.to_owned()), (account_key, Value::Account(account))],
+            ).unwrap();
             let mut tc = TrackingCopy::new(gs);
             let path = vec!(name.clone());
-            if let Ok(QueryResult::Success(result)) = tc.query(account_key, &path) {
+            if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, account_key, &path) {
                 assert_eq!(v, result);
             } else {
                 panic!("Query failed when it should not have!");
             }
 
             if missing_name != name {
-                let result = tc.query(account_key, &[missing_name]);
+                let result = tc.query(correlation_id, account_key, &[missing_name]);
                 assert_matches!(result, Ok(QueryResult::ValueNotFound(_)));
             }
         }
@@ -689,6 +745,7 @@ mod tests {
             body in vec(any::<u8>(), 1..1000), //contract body
             hash in u8_slice_32(), // hash for contract key
         ) {
+            let correlation_id = CorrelationId::new();
             // create contract which knows about value
             let mut contract_known_urefs = BTreeMap::new();
             contract_known_urefs.insert(state_name.clone(), k);
@@ -709,14 +766,14 @@ mod tests {
             );
             let account_key = Key::Account(address);
 
-            let gs = InMemoryGlobalState::from_pairs(&[
+            let gs = InMemoryGlobalState::from_pairs(correlation_id, &[
                 (k, v.to_owned()),
                 (contract_key, contract),
                 (account_key, Value::Account(account)),
             ]).unwrap();
             let mut tc = TrackingCopy::new(gs);
             let path = vec!(contract_name, state_name);
-            if let Ok(QueryResult::Success(result)) = tc.query(account_key, &path) {
+            if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, account_key, &path) {
                 assert_eq!(v, result);
             } else {
                 panic!("Query failed when it should not have!");

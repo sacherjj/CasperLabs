@@ -9,9 +9,8 @@ import cats.implicits._
 import cats.temp.par.Par
 import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
-import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
   CasperPacketHandlerImpl,
@@ -45,7 +44,8 @@ class TransportLayerCasperTestNode[F[_]](
     blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
-    chainId: String = "casperlabs"
+    chainId: String = "casperlabs",
+    validateNonces: Boolean = true
 )(
     implicit
     concurrentF: Concurrent[F],
@@ -60,7 +60,8 @@ class TransportLayerCasperTestNode[F[_]](
       sk,
       genesis,
       blockDagDir,
-      blockStoreDir
+      blockStoreDir,
+      validateNonces
     )(concurrentF, blockStore, blockDagStorage, metricEff, casperState) {
 
   implicit val logEff: LogStub[F] = new LogStub[F](local.host, printEnabled = false)
@@ -77,6 +78,9 @@ class TransportLayerCasperTestNode[F[_]](
 
   implicit val labF =
     LastApprovedBlock.unsafe[F](Some(ApprovedBlockWithTransforms(approvedBlock, transforms)))
+
+  implicit val lastFinalizedBlockHashContainer =
+    NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
 
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
@@ -169,7 +173,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Float = 0f,
+      validateNonces: Boolean = true
   )(
       implicit errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
@@ -211,7 +216,8 @@ trait TransportLayerCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                     blockDagDir,
                     blockStoreDir,
                     semaphore,
-                    faultToleranceThreshold
+                    faultToleranceThreshold,
+                    validateNonces = validateNonces
                   )(
                     concurrentF,
                     blockStore,

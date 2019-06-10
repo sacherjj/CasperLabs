@@ -1,13 +1,15 @@
 mod uint;
 
-use protobuf::ProtobufEnum;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::{TryFrom, TryInto};
 
 use common::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, Weight,
 };
-use engine_server::ipc::{Account_AccountActivity, Account_ActionThresholds, KeyURef_AccessRights};
+use engine_server::ipc::{
+    Account_AccountActivity, Account_ActionThresholds,
+    {DeployResult_ExecutionResult, KeyURef_AccessRights},
+};
 use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
 use execution_engine::engine_state::execution_effect::ExecutionEffect;
 use execution_engine::engine_state::execution_result::ExecutionResult;
@@ -15,6 +17,7 @@ use execution_engine::engine_state::op::Op;
 use execution_engine::execution::Error as ExecutionError;
 use execution_engine::utils;
 use ipc;
+use protobuf::ProtobufEnum;
 use shared::logging;
 use shared::logging::log_level;
 use shared::newtypes::Blake2bHash;
@@ -292,12 +295,11 @@ impl TryFrom<&super::ipc::Account> for common::value::account::Account {
 
     fn try_from(value: &super::ipc::Account) -> Result<Self, Self::Error> {
         let pub_key: [u8; 32] = {
-            let mut buff = [0u8; 32];
             if value.pub_key.len() != 32 {
                 return parse_error("Public key has to be exactly 32 bytes long.".to_string());
-            } else {
-                buff.copy_from_slice(&value.pub_key);
             }
+            let mut buff = [0u8; 32];
+            buff.copy_from_slice(&value.pub_key);
             buff
         };
         let uref_map: URefMap = value.get_known_urefs().try_into()?;
@@ -461,8 +463,12 @@ impl TryFrom<&ipc::Account_AssociatedKey> for (PublicKey, Weight) {
         if value.get_weight() > u8::max_value().into() {
             parse_error("Key weight cannot be bigger 256.".to_string())
         } else {
+            let source = &value.get_pub_key();
+            if source.len() != 32 {
+                return parse_error("Public key has to be exactly 32 bytes long.".to_string());
+            }
             let mut pub_key = [0u8; 32];
-            pub_key.copy_from_slice(value.get_pub_key());
+            pub_key.copy_from_slice(source);
             Ok((
                 PublicKey::new(pub_key),
                 Weight::new(value.get_weight() as u8),
@@ -514,18 +520,36 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
 
     fn try_from(ipc_key: &super::ipc::Key) -> Result<Self, ParsingError> {
         if ipc_key.has_account() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_account().account);
+            let arr = {
+                let source = &ipc_key.get_account().account;
+                if source.len() != 32 {
+                    return parse_error("Account key has to be 32 bytes long.".to_string());
+                }
+                let mut dest = [0u8; 32];
+                dest.copy_from_slice(source);
+                dest
+            };
             Ok(common::key::Key::Account(arr))
         } else if ipc_key.has_hash() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_hash().key);
+            let arr = {
+                let source = &ipc_key.get_hash().key;
+                if source.len() != 32 {
+                    return parse_error("Hash key has to be 32 bytes long.".to_string());
+                }
+                let mut dest = [0u8; 32];
+                dest.copy_from_slice(source);
+                dest
+            };
             Ok(common::key::Key::Hash(arr))
         } else if ipc_key.has_uref() {
             let ipc_uref = ipc_key.get_uref();
             let id = {
+                let source = &ipc_uref.uref;
+                if source.len() != 32 {
+                    return parse_error("URef key has to be 32 bytes long.".to_string());
+                }
                 let mut ret = [0u8; 32];
-                ret.clone_from_slice(&ipc_uref.uref);
+                ret.copy_from_slice(source);
                 ret
             };
             let maybe_access_rights = {
@@ -674,18 +698,21 @@ impl From<TypeMismatch> for ipc::TypeMismatch {
 impl From<ExecutionResult> for ipc::DeployResult {
     fn from(er: ExecutionResult) -> ipc::DeployResult {
         match er {
-            ExecutionResult {
-                result: Ok(effects),
+            ExecutionResult::Success {
+                effect: effects,
                 cost,
             } => {
                 let mut ipc_ee = effects.into();
                 let mut deploy_result = ipc::DeployResult::new();
-                deploy_result.set_effects(ipc_ee);
-                deploy_result.set_cost(cost);
+                let mut execution_result = ipc::DeployResult_ExecutionResult::new();
+                execution_result.set_effects(ipc_ee);
+                execution_result.set_cost(cost);
+                deploy_result.set_execution_result(execution_result);
                 deploy_result
             }
-            ExecutionResult {
-                result: Err(err),
+            ExecutionResult::Failure {
+                error: err,
+                effect,
                 cost,
             } => {
                 match err {
@@ -693,27 +720,51 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
                     EngineError::StorageError(storage_err) => {
-                        let mut err = wasm_error(storage_err.to_string());
-                        err.set_cost(cost);
-                        err
+                        execution_error(storage_err.to_string(), cost, effect)
                     }
-                    EngineError::PreprocessingError(err_msg) => {
-                        let mut err = wasm_error(err_msg);
-                        err.set_cost(cost);
-                        err
-                    }
+                    EngineError::PreprocessingError(error_msg) => precondition_failure(error_msg),
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {
                             let mut deploy_result = ipc::DeployResult::new();
-                            let mut deploy_error = ipc::DeployError::new();
-                            deploy_error.set_gasErr(ipc::OutOfGasError::new());
-                            deploy_result.set_error(deploy_error);
-                            deploy_result.set_cost(cost);
+                            let deploy_error = {
+                                let mut tmp = ipc::DeployError::new();
+                                tmp.set_gas_error(ipc::DeployError_OutOfGasError::new());
+                                tmp
+                            };
+                            let exec_result = {
+                                let mut tmp = DeployResult_ExecutionResult::new();
+                                tmp.set_error(deploy_error);
+                                tmp.set_cost(cost);
+                                tmp.set_effects(effect.into());
+                                tmp
+                            };
+
+                            deploy_result.set_execution_result(exec_result);
                             deploy_result
                         }
                         ExecutionError::KeyNotFound(key) => {
                             let msg = format!("Key {:?} not found.", key);
-                            wasm_error(msg)
+                            execution_error(msg, cost, effect)
+                        }
+                        ExecutionError::InvalidNonce {
+                            deploy_nonce,
+                            expected_nonce,
+                        } if deploy_nonce <= expected_nonce => {
+                            // Deploys with nonce lower than (or equal to) current account's nonce will always fail.
+                            // They won't be repeated so we treat them as precondition failures.
+                            let error_msg = format!("Deploy nonce: {:?} was lower (or equal to) than expected nonce {:?}", deploy_nonce, expected_nonce);
+                            precondition_failure(error_msg)
+                        }
+                        ExecutionError::InvalidNonce {
+                            deploy_nonce,
+                            expected_nonce,
+                        } => {
+                            let mut deploy_result = ipc::DeployResult::new();
+                            let mut invalid_nonce = ipc::DeployResult_InvalidNonce::new();
+                            invalid_nonce.set_deploy_nonce(deploy_nonce);
+                            invalid_nonce.set_expected_nonce(expected_nonce);
+                            deploy_result.set_invalid_nonce(invalid_nonce);
+                            deploy_result
                         }
                         ExecutionError::Revert(status) => {
                             let mut deploy_result = ipc::DeployResult::new();
@@ -728,9 +779,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
                             let msg = format!("{:?}", other);
-                            let mut err = wasm_error(msg);
-                            err.set_cost(cost);
-                            err
+                            execution_error(msg, cost, effect)
                         }
                     },
                 }
@@ -803,19 +852,39 @@ where
     }
 }
 
-fn wasm_error(msg: String) -> ipc::DeployResult {
+/// Constructs an instance of [[ipc::DeployResult]] with an error set to [[ipc::DeployError_PreconditionFailure]].
+fn precondition_failure(msg: String) -> ipc::DeployResult {
     let mut deploy_result = ipc::DeployResult::new();
-    let mut deploy_error = ipc::DeployError::new();
-    let mut err = ipc::WasmError::new();
-    err.set_message(msg.to_owned());
-    deploy_error.set_wasmErr(err);
-    deploy_result.set_error(deploy_error);
+    let mut precondition_failure = ipc::DeployResult_PreconditionFailure::new();
+    precondition_failure.set_message(msg);
+    deploy_result.set_precondition_failure(precondition_failure);
+    deploy_result
+}
+
+/// Constructs an instance of [[ipc::DeployResult]] with error set to [[ipc::DeployError_ExecutionError]].
+fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::DeployResult {
+    let mut deploy_result = ipc::DeployResult::new();
+    let deploy_error = {
+        let mut tmp = ipc::DeployError::new();
+        let mut err = ipc::DeployError_ExecutionError::new();
+        err.set_message(msg.to_owned());
+        tmp.set_exec_error(err);
+        tmp
+    };
+    let execution_result = {
+        let mut tmp = DeployResult_ExecutionResult::new();
+        tmp.set_error(deploy_error);
+        tmp.set_cost(cost);
+        tmp.set_effects(effect.into());
+        tmp
+    };
+    deploy_result.set_execution_result(execution_result);
     deploy_result
 }
 
 #[cfg(test)]
 mod tests {
-    use super::wasm_error;
+    use super::execution_error;
     use common::key::AccessRights;
     use common::key::Key;
     use execution_engine::engine_state::error::{Error as EngineError, RootNotFound};
@@ -829,13 +898,15 @@ mod tests {
     // Test that wasm_error function actually returns DeployResult with result set to WasmError
     #[test]
     fn wasm_error_result() {
-        let error_msg = "WasmError";
-        let mut result = wasm_error(error_msg.to_owned());
-        assert!(result.has_error());
-        let mut ipc_error = result.take_error();
-        assert!(ipc_error.has_wasmErr());
-        let ipc_wasm_error = ipc_error.take_wasmErr();
-        let ipc_error_msg = ipc_wasm_error.get_message();
+        let error_msg = "ExecError";
+        let mut result = execution_error(error_msg.to_owned(), 0, Default::default());
+        assert!(result.has_execution_result());
+        let mut exec_result = result.take_execution_result();
+        assert!(exec_result.has_error());
+        let mut ipc_error = exec_result.take_error();
+        assert!(ipc_error.has_exec_error());
+        let ipc_exec_error = ipc_error.take_exec_error();
+        let ipc_error_msg = ipc_exec_error.get_message();
         assert_eq!(ipc_error_msg, error_msg);
     }
 
@@ -860,13 +931,18 @@ mod tests {
         let execution_effect: ExecutionEffect =
             ExecutionEffect(HashMap::new(), input_transforms.clone());
         let cost: u64 = 123;
-        let execution_result: ExecutionResult = ExecutionResult::success(execution_effect, cost);
+        let execution_result: ExecutionResult = ExecutionResult::Success {
+            effect: execution_effect,
+            cost,
+        };
         let mut ipc_deploy_result: super::ipc::DeployResult = execution_result.into();
-        assert_eq!(ipc_deploy_result.get_cost(), cost);
+        assert!(ipc_deploy_result.has_execution_result());
+        let mut success = ipc_deploy_result.take_execution_result();
+        assert_eq!(success.get_cost(), cost);
 
         // Extract transform map from the IPC message and parse it back to the domain
         let ipc_transforms: HashMap<Key, Transform> = {
-            let mut ipc_effects = ipc_deploy_result.take_effects();
+            let mut ipc_effects = success.take_effects();
             let ipc_effects_tnfs = ipc_effects.take_transform_map().into_vec();
             ipc_effects_tnfs
                 .iter()
@@ -878,13 +954,19 @@ mod tests {
     }
 
     fn into_execution_failure<E: Into<EngineError>>(error: E, cost: u64) -> ExecutionResult {
-        ExecutionResult::failure(error.into(), cost)
+        ExecutionResult::Failure {
+            error: error.into(),
+            effect: Default::default(),
+            cost,
+        }
     }
 
     fn test_cost<E: Into<EngineError>>(expected_cost: u64, err: E) -> u64 {
         let execution_failure = into_execution_failure(err, expected_cost);
         let ipc_deploy_result: super::ipc::DeployResult = execution_failure.into();
-        ipc_deploy_result.get_cost()
+        assert!(ipc_deploy_result.has_execution_result());
+        let success = ipc_deploy_result.get_execution_result();
+        success.get_cost()
     }
 
     #[test]
@@ -895,14 +977,6 @@ mod tests {
         // assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
         let bytesrepr_err = common::bytesrepr::Error::EarlyEndOfStream;
         assert_eq!(test_cost(cost, BytesRepr(bytesrepr_err)), cost);
-    }
-
-    #[test]
-    fn preprocessing_err_has_cost() {
-        let cost: u64 = 100;
-        // it doesn't matter what error type it is
-        let preprocessing_error = wasm_prep::PreprocessingError::NoExportSection;
-        assert_eq!(test_cost(cost, preprocessing_error), cost);
     }
 
     #[test]
