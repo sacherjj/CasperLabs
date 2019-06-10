@@ -220,7 +220,7 @@ class ForkchoiceTest
          *
          *
          *
-	 		   *   d  e   f
+         *   d  e   f
          *    \ /   |
          *     a    b   c
          *      \   |   /
@@ -267,8 +267,8 @@ class ForkchoiceTest
         /* The DAG looks like:
          *
          *
-         *         i
-         *         |
+         *        i
+         *        |
          *        g   h
          *       | \ /  \
          *       d  e   f
@@ -325,7 +325,7 @@ class ForkchoiceTest
          *        |
          *        g   h
          *       | \ /  \
-         *        d  e   f
+         *       d  e   f
          *      / \/   /
          *     a  b   c
          *      \ |  /

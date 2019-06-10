@@ -110,7 +110,7 @@ object Estimator {
 
   def lmdSingleParentGhost[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
-      genesis: BlockHash,
+      lastFinalizedBlockHash: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
     def mainParent(blockHash: BlockHash, scores: Map[BlockHash, Long]): F[BlockHash] =
@@ -119,7 +119,7 @@ object Estimator {
           blockHash.pure[F]
         case Some(mainChildren) =>
           for {
-            // make sure they are reachable from tips
+            // make sure they are reachable from latestMessages
             reachableMainChildren <- mainChildren.filterA(b => scores.contains(b).pure[F])
             result <- if (reachableMainChildren.isEmpty) {
                        blockHash.pure[F]
@@ -145,21 +145,25 @@ object Estimator {
     ): Boolean =
       children.toSet == nextChildren.toSet
 
-    def tips(blocks: List[BlockHash]): F[List[BlockHash]] =
+    /*
+     * it will return latestMessages except those blocks whose descendant
+     * exists in latestMessages.
+     */
+    def tipsOfLatestMessages(blocks: List[BlockHash]): F[List[BlockHash]] =
       for {
         cr       <- blocks.flatTraverse(replaceBlockHashWithChildren)
         children = cr.distinct
         result <- if (stillSame(blocks, children)) {
                    children.pure[F]
                  } else {
-                   tips(children)
+                   tipsOfLatestMessages(children)
                  }
       } yield result
 
     for {
       score            <- lmdScoring(blockDag, latestMessagesHashes)
-      newMainParent    <- mainParent(genesis, score)
-      parents          <- tips(latestMessagesHashes.values.toList)
+      newMainParent    <- mainParent(lastFinalizedBlockHash, score)
+      parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList)
       secondaryParents = parents.filter(_ != newMainParent)
     } yield newMainParent +: secondaryParents
   }
