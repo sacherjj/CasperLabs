@@ -113,18 +113,19 @@ object Estimator {
       genesis: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
-    def mainChild(blockHash: BlockHash, scores: Map[BlockHash, Long]): F[BlockHash] =
+    def mainParent(blockHash: BlockHash, scores: Map[BlockHash, Long]): F[BlockHash] =
       blockDag.getMainChildren(blockHash).flatMap {
         case None =>
           blockHash.pure[F]
-        case Some(children) =>
+        case Some(mainChildren) =>
           for {
-            mainChildren <- children.filterA(b => scores.contains(b).pure[F])
-            result <- if (mainChildren.isEmpty) {
+            // make sure they are reachable from tips
+            reachableMainChildren <- mainChildren.filterA(b => scores.contains(b).pure[F])
+            result <- if (reachableMainChildren.isEmpty) {
                        blockHash.pure[F]
                      } else {
-                       mainChild(
-                         mainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toString()),
+                       mainParent(
+                         reachableMainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toString()),
                          scores
                        )
                      }
@@ -157,7 +158,7 @@ object Estimator {
 
     for {
       score            <- lmdScoring(blockDag, latestMessagesHashes)
-      newMainParent    <- mainChild(genesis, score)
+      newMainParent    <- mainParent(genesis, score)
       parents          <- tips(latestMessagesHashes.values.toList)
       secondaryParents = parents.filter(_ != newMainParent)
     } yield newMainParent +: secondaryParents
