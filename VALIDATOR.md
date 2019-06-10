@@ -159,7 +159,7 @@ Use them sign a deploy as:
     --private-key ed25519-developer-public.pem \
     --from <purse address that will be used to pay for the deployment> \
     --gas-price <The price of gas for this transaction in units dust/gas> \
-    --nonce <This allows you to overwrite your own pending transactions that use the same nonce> \
+    --nonce <The counter that should be incremented during each deploy> \
     --session <path to the file with session code> \
     --payment <path to the file with payment code>
 ```
