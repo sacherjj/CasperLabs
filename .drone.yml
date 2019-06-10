@@ -98,9 +98,9 @@ pipeline:
         - pull_request
 
 # This section is for bors' branches only
-  sbt-compile-test-bors:
+  sbt-test-docker-bors:
     commands:
-      - "sbt test"
+      - "sbt test node/docker:publishLocal client/docker:publishLocal"
     environment:
       - "_JAVA_OPTIONS=-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
     image: "casperlabs/buildenv:latest"
@@ -175,9 +175,8 @@ pipeline:
         - staging
         - trying
 
-  docker-build-artifacts-bors:
+  docker-build-ee-int-bors:
     commands:
-      - "sbt node/docker:publishLocal client/docker:publishLocal"
       - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
       - "make docker-build/execution-engine"
       - "make docker-build/integration-testing"
