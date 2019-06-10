@@ -1,9 +1,12 @@
-import docker
-import logging
 import os
-from typing import Callable, Dict, List
+import logging
 from collections import defaultdict
+from typing import Callable, Dict, List
 
+import docker
+import docker.errors
+
+from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_node import CasperLabsNode
 from test.cl_node.common import random_string
 from test.cl_node.docker_base import DockerConfig
@@ -136,7 +139,10 @@ class CasperLabsNetwork:
 
     def cleanup(self):
         for network_name in self._created_networks:
-            self.docker_client.networks.get(network_name).remove()
+            try:
+                self.docker_client.networks.get(network_name).remove()
+            except docker.errors.NotFound:
+                pass
 
 
 class OneNodeNetwork(CasperLabsNetwork):
