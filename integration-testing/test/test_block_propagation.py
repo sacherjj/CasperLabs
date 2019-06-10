@@ -3,12 +3,13 @@ from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
 from typing import List
 import pytest
+import logging
 
 from . import conftest
 from .cl_node.casperlabs_network import ThreeNodeNetwork, CustomConnectionNetwork
 from .cl_node.casperlabsnode import extract_block_hash_from_propose_output
 from .cl_node.common import random_string
-from .cl_node.wait import wait_for_blocks_count_at_least
+from .cl_node.wait import wait_for_blocks_count_at_least, wait_for_peers_count_at_least
 
 
 class DeployThread(threading.Thread):
@@ -100,7 +101,7 @@ def not_all_connected_directly_nodes(docker_client_fixture):
         network.disconnect((0, 2))
         yield network.docker_nodes
 
-    
+
 def test_blocks_infect_network(not_all_connected_directly_nodes):
     """
     Feature file: block_gossiping.feature
@@ -113,4 +114,77 @@ def test_blocks_infect_network(not_all_connected_directly_nodes):
     blocks = parse_show_blocks(last.client.show_blocks(2))
     blocks_hashes = set([b.block_hash[:10] for b in blocks])
     assert block_hash in blocks_hashes
-    
+
+
+@pytest.fixture()
+def four_nodes_network(docker_client_fixture):
+    with CustomConnectionNetwork(docker_client_fixture) as network:
+
+        # Initially all nodes are connected to each other
+        network.create_cl_network(4, [(i, j) for i in range(4) for j in range(4) if i != j and i < j])
+
+        # Wait till all nodes have the genesis block.
+        for node in network.docker_nodes:
+            wait_for_blocks_count_at_least(node, 1, 1, node.timeout)
+
+        yield network
+
+C = ["test_helloname.wasm", "test_mailinglistdefine.wasm", "test_helloworld.wasm"]
+
+def test_network_partition_and_rejoin(four_nodes_network):
+    """
+    Feature file: block_gossiping.feature
+    Scenario: Network partition occurs and rejoin occurs
+    """
+    # Partition the network so node0 connected to node1 and node2 connected to node3 only.
+    connections_between_partitions = [(i, j) for i in (0,1) for j in (2,3)]
+
+    logging.info("DISCONNECT PARTITIONS")
+    for connection in connections_between_partitions:
+        four_nodes_network.disconnect(connection)
+
+    nodes = four_nodes_network.docker_nodes
+    n = len(nodes)
+    partitions = nodes[:int(n/2)], nodes[int(n/2):]
+
+    # Propose separately in each partition. They should not see each others' blocks,
+    # so everyone has the genesis plus the 1 block proposed in its partition.
+    deploy_and_propose(partitions[0][0], C[0])
+    deploy_and_propose(partitions[1][0], C[1])
+
+    for node in nodes:
+        wait_for_blocks_count_at_least(node, 2, 2, node.timeout * 2)
+
+    logging.info("CONNECT PARTITIONS")
+    #four_nodes_network.connect((p[0] for p in partitions))
+    for connection in connections_between_partitions:
+        four_nodes_network.connect(connection)
+
+    #for node in nodes: wait_for_peers_count_at_least(node, n-1, node.timeout)
+    logging.info("PARTITIONS CONNECTED")
+
+    # NOTE: Currently `NodeDiscoveryImpl.alivePeersInAscendingDistance` pings the peers
+    # before returning a list, from which we take a random subset for gossiping,
+    # so when we do a deploy the node will see the peers it previously knew about
+    # as alive as soon as the network is re-established.
+    # However, NODE-561 may change this and push pinging into the background in
+    # which case it may take a bit longer for the peers to pick up each outhers's presence.
+
+    # When we propose a node in partition[0] it should propagate to partition[1],
+    # however, nodes in partition[0] will still not see blocks from partition[1]
+    # until they also propose a new one on top of the block the created during
+    # the network outage.
+    deploy_and_propose(nodes[0], C[2])
+
+    # NOTE: Currently the node closes the channel only after it has detected a failure,
+    # but the syncing will not retry it. A second attempt will create a new channel though.
+    deploy_and_propose(nodes[0], C[2])
+
+    for node in partitions[0]:
+        logging.info(f"CHECK {node} HAS ALL BLOCKS")
+        wait_for_blocks_count_at_least(node, 4, 4, node.timeout * 2)
+
+    for node in partitions[1]:
+        logging.info(f"CHECK {node} HAS ALL NODES")
+        wait_for_blocks_count_at_least(node, 5, 5, node.timeout * 2)
+

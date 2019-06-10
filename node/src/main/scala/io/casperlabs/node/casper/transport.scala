@@ -95,7 +95,7 @@ package object transport {
       time                  = effects.time
       timeEff: Time[Effect] = Time.eitherTTime(Monad[Task], time)
 
-      defaultTimeout = conf.server.defaultTimeout.millis
+      defaultTimeout = conf.server.defaultTimeout
 
       casperPacketHandler <- CasperPacketHandler
                               .of[Effect](

@@ -28,6 +28,7 @@ import io.casperlabs.shared.{Cell, Log, Resources, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.grpc.ManagedChannel
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
+import java.util.concurrent.TimeUnit
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import monix.eval.TaskLike
 import monix.execution.Scheduler
@@ -59,7 +60,7 @@ package object gossiping {
 
     for {
       cachedConnections <- makeConnectionsCache(
-                            conf.server.maxMessageSize,
+                            conf,
                             clientSslContext,
                             grpcScheduler
                           )
@@ -183,7 +184,7 @@ package object gossiping {
 
   /** Cached connection resources, closed at the end. */
   private def makeConnectionsCache[F[_]: Concurrent: Log: Metrics](
-      maxMessageSize: Int,
+      conf: Configuration,
       clientSslContext: SslContext,
       grpcScheduler: Scheduler
   ): Resource[F, CachedConnections[F, Unit]] = Resource {
@@ -192,7 +193,7 @@ package object gossiping {
       cache = makeCache {
         makeGossipChannel(
           _,
-          maxMessageSize,
+          conf,
           clientSslContext,
           grpcScheduler
         )
@@ -210,7 +211,7 @@ package object gossiping {
   /** Open a gRPC channel for gossiping. */
   private def makeGossipChannel[F[_]: Sync: Log](
       peer: Node,
-      maxMessageSize: Int,
+      conf: Configuration,
       clientSslContext: SslContext,
       grpcScheduler: Scheduler
   ): F[ManagedChannel] =
@@ -220,10 +221,13 @@ package object gossiping {
                NettyChannelBuilder
                  .forAddress(peer.host, peer.protocolPort)
                  .executor(grpcScheduler)
-                 .maxInboundMessageSize(maxMessageSize)
+                 .maxInboundMessageSize(conf.server.maxMessageSize)
                  .negotiationType(NegotiationType.TLS)
                  .sslContext(clientSslContext)
                  .overrideAuthority(Base16.encode(peer.id.toByteArray))
+                 // https://github.com/grpc/grpc-java/issues/3470 indicates that the timeout will raise Unavailable when a connection is attempted.
+                 .keepAliveTimeout(conf.server.defaultTimeout.toMillis, TimeUnit.MILLISECONDS)
+                 .idleTimeout(60, TimeUnit.SECONDS) // This just puts the channel in a low resource state.
                  .build()
              }
     } yield chan

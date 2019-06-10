@@ -29,7 +29,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
-import io.casperlabs.smartcontracts.GrpcExecutionEngineService
+import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 
@@ -79,11 +79,13 @@ class NodeRuntime private[node] (
 
     rpConfState >>= (_.runState { implicit state =>
       val resources = for {
-        executionEngineService <- GrpcExecutionEngineService[Effect](
-                                   conf.grpc.socket,
-                                   conf.server.maxMessageSize,
-                                   initBonds = Map.empty
-                                 )
+        implicit0(executionEngineService: ExecutionEngineService[Effect]) <- GrpcExecutionEngineService[
+                                                                              Effect
+                                                                            ](
+                                                                              conf.grpc.socket,
+                                                                              conf.server.maxMessageSize,
+                                                                              initBonds = Map.empty
+                                                                            )
 
         metrics                     = diagnostics.effects.metrics[Task]
         metricsEff: Metrics[Effect] = Metrics.eitherT[CommError, Task](Monad[Task], metrics)
@@ -98,7 +100,7 @@ class NodeRuntime private[node] (
         implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                           id,
                                                           kademliaPort,
-                                                          conf.server.defaultTimeout.millis
+                                                          conf.server.defaultTimeout
                                                         )(
                                                           maybeBootstrap
                                                         )(
@@ -354,7 +356,7 @@ class NodeRuntime private[node] (
       RPConf(
         local,
         maybeBootstrap,
-        conf.server.defaultTimeout.millis,
+        conf.server.defaultTimeout,
         ClearConnectionsConf(
           conf.server.maxNumOfConnections,
           // TODO read from conf
