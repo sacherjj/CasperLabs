@@ -7,6 +7,7 @@ use self::pointers::*;
 use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
 use crate::ext_ffi;
 use crate::key::{Key, LOCAL_KEY_HASH_SIZE, LOCAL_SEED_SIZE, UREF_SIZE};
+use crate::value::account::{AddKeyFailure, PublicKey, Weight};
 use crate::value::{Contract, Value};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -290,4 +291,17 @@ pub fn is_valid<T: Into<Value>>(t: T) -> bool {
     let (value_ptr, value_size, _bytes) = to_ptr(&value);
     let result = unsafe { ext_ffi::is_valid(value_ptr, value_size) };
     result != 0
+}
+
+/// Adds a public key with associated weight to an account.
+pub fn add_key(public_key: PublicKey, weight: Weight) -> Result<(), AddKeyFailure> {
+    let (public_key_ptr, public_key_size, _bytes) = to_ptr(&public_key);
+    // Cast of u8 (weight) into i32 is assumed to be always safe
+    let result =
+        unsafe { ext_ffi::add_key(public_key_ptr, public_key_size, weight.value() as i32) };
+    // Translates FFI
+    match result {
+        d if d <= 0 => Ok(()),
+        d => Err(AddKeyFailure::from(d)),
+    }
 }

@@ -18,7 +18,7 @@ use wasmi::{
 
 use common::bytesrepr::{deserialize, Error as BytesReprError, ToBytes};
 use common::key::{AccessRights, Key};
-use common::value::account::{PublicKey, Weight, KEY_SIZE};
+use common::value::account::{PublicKey, Weight};
 use common::value::Value;
 use shared::newtypes::{CorrelationId, Validated};
 use shared::transform::TypeMismatch;
@@ -662,12 +662,15 @@ where
             ADD_KEY_FN_INDEX => {
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = weight of the key
-                let (public_key_ptr, weight): (u32, u32) = Args::parse(args)?;
+                let (public_key_ptr, public_key_size, weight): (u32, u32, u32) = Args::parse(args)?;
                 let public_key = {
-                    let source = self.bytes_from_mem(public_key_ptr, 32)?;
-                    let mut public_key_bytes = [0; KEY_SIZE];
-                    public_key_bytes.copy_from_slice(&source);
-                    PublicKey::new(public_key_bytes)
+                    // Public key as serialized bytes
+                    let source_serialized =
+                        self.bytes_from_mem(public_key_ptr, public_key_size as usize)?;
+                    // Public key deserialized
+                    let source: PublicKey =
+                        deserialize(&source_serialized).map_err(Error::BytesRepr)?;
+                    source
                 };
                 // Safely consume a passed weight (u32) and convert it into
                 // weight object (u8 newtype).

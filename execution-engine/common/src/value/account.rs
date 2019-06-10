@@ -171,6 +171,19 @@ pub enum AddKeyFailure {
     DuplicateKey,
 }
 
+impl From<i32> for AddKeyFailure {
+    fn from(value: i32) -> AddKeyFailure {
+        // This doesn't use `num_derive` traits such as FromPrimitive and ToPrimitive
+        // that helps to automatically create `from_i32` and `to_i32`. This approach
+        // gives better control over generated code.
+        match value {
+            d if d == AddKeyFailure::MaxKeysLimit as i32 => AddKeyFailure::MaxKeysLimit,
+            d if d == AddKeyFailure::DuplicateKey as i32 => AddKeyFailure::DuplicateKey,
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
 pub struct AssociatedKeys(BTreeMap<PublicKey, Weight>);
 
