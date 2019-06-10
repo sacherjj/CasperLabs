@@ -219,10 +219,8 @@ where
     pub fn insert_named_uref(&mut self, name: String, key: Validated<Key>) {
         if let Key::URef(uref) = *key {
             self.insert_uref(uref);
-            self.uref_lookup.insert(name, *key);
-        } else {
-            panic!("key must be a Key::URef")
         }
+        self.uref_lookup.insert(name, *key);
     }
 
     pub fn insert_uref(&mut self, uref: URef) {
