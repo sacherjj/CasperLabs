@@ -18,7 +18,7 @@ snapshot of the key-value store at a particular point in time the
 "global state". The global state contains all the data which is
 important to users of the system (e.g. token balances, smart contract
 logic, etc.). Keys for the key-value store come in three forms:
-`Address`, `Hash`, `Local` and `URef`. Each key type serves a different
+`Address`, `Hash`, and `URef`. Each key type serves a different
 purpose. `Address`-type keys have accounts as the associated value
 (more details on accounts will follow), `Hash`-type keys store "smart
 contracts", and `URef`-type keys store any data which can be
@@ -76,13 +76,13 @@ with four parameters:
   - The hash is presented as a base-16 encoded string.
 - Key type
   - Specified the type of key from which to start the query. Allowed
-    values are `ADDRESS`, `HASH`, `LOCAL` and `UREF`, same as the types of keys
+    values are `ADDRESS`, `HASH` and `UREF`, same as the types of keys
     described above.
   - The key type is passed as lowercased string on the CLI.
 - Key bytes
-  - The bytes which are used to identify the particular key. `URef`, `Address`
-    and `Hash` type keys use 32-byte identifiers, while `LOCAL` uses
-    only 64 bytes (these bytes are commonly known as the account
+  - The bytes which are used to identify the particular key. `URef`
+    and `Hash` type keys use 32-byte identifiers, while `Address` uses
+    only 20 bytes (these bytes are commonly known as the account
     address).
   - The bytes are presented as a base16-encoded string.
 - Path
