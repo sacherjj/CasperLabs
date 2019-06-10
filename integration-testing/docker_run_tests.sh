@@ -14,6 +14,7 @@ fi
 MAX_NODE_COUNT=10
 
 cleanup() {
+    echo "Removing networks for Python Client..."
     for num in $(seq 0 $MAX_NODE_COUNT)
     do
         # Network might get tore down with docker-compose rm, so "|| true" to ignore failure
@@ -31,6 +32,7 @@ cleanup() {
 }
 trap cleanup 0
 
+echo "Setting up networks for Python Client..."
 for num in $(seq 0 $MAX_NODE_COUNT)
 do
     docker network create cl-${TAG_NAME}-${num}
@@ -42,4 +44,4 @@ sed 's/||TAG||/'"${TAG_NAME}"'/g' docker-compose.yml.template > docker-compose.y
 
 docker-compose up --exit-code-from test --abort-on-container-exit
 result_code=$?
-exit $result_code
+exit ${result_code}

@@ -1,36 +1,16 @@
-package io.casperlabs.node.api.graphql
+package io.casperlabs.node.api.graphql.schema.blocks
 
-import java.time.{Instant, ZoneId, ZonedDateTime}
-
-import cats.effect.Effect
-import cats.effect.implicits._
-import cats.implicits._
-import fs2.Stream
-import io.casperlabs.blockstorage.BlockStore
-import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.SafetyOracle
-import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import cats.syntax.either._
+import cats.syntax.option._
+import io.casperlabs.casper.consensus.Block._
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
-import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
-import io.casperlabs.casper.consensus.{Approval, Block, Deploy, Signature}
+import io.casperlabs.casper.consensus.info._
 import io.casperlabs.crypto.codec.{Base16, Base64}
-import io.casperlabs.shared.Log
+import io.casperlabs.node.api.graphql.schema.utils.DateType
 import sangria.schema._
 
-import scala.util.Random
-
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Effect: MultiParentCasperRef: SafetyOracle: BlockStore] {
-
-  // Not defining inputs yet because it's a read-only field
-  val DateType: ScalarType[Long] = ScalarType[Long](
-    "Date",
-    coerceUserInput = _ => ???,
-    coerceOutput =
-      (l, _) => ZonedDateTime.ofInstant(Instant.ofEpochMilli(l), ZoneId.of("Z")).toString,
-    coerceInput = _ => ???
-  )
-
+package object types {
   val SignatureType = ObjectType(
     "Signature",
     "Signature used to sign Block or Deploy",
@@ -287,83 +267,4 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ef
       )
     )
   )
-
-  val BlockHashPrefix =
-    Argument(
-      "blockHashBase16Prefix",
-      StringType,
-      description = "Prefix or full base-16 hash of a block"
-    )
-
-  val DeployHash =
-    Argument(
-      "deployHashBase16",
-      StringType,
-      description = "Base-16 hash of a deploy, must be 64 characters long"
-    )
-
-  val randomBytes: List[Array[Byte]] = (for {
-    _ <- 0 until 5
-  } yield {
-    val arr = Array.ofDim[Byte](32)
-    Random.nextBytes(arr)
-    arr
-  }).toList
-
-  def hasAtLeastOne(projections: Vector[ProjectedName], fields: Set[String]): Boolean = {
-    def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
-      if (ps.isEmpty) {
-        acc
-      } else {
-        val h = ps.head
-        flatToSet(ps.tail, acc + h.name) ++ flatToSet(h.children, acc)
-      }
-
-    flatToSet(projections, Set.empty).intersect(fields).nonEmpty
-  }
-
-  /* TODO: Temporary mock implementation  */
-  def createSchema: Schema[Unit, Unit] =
-    Schema(
-      query = ObjectType(
-        "Query",
-        fields[Unit, Unit](
-          Field(
-            "block",
-            OptionType(BlockType),
-            arguments = BlockHashPrefix :: Nil,
-            resolve = Projector { (context, projections) =>
-              BlockAPI
-                .getBlockInfoOpt[F](
-                  blockHashBase16 = context.arg(BlockHashPrefix),
-                  full =
-                    hasAtLeastOne(projections, Set("blockSizeBytes", "deployErrorCount", "deploys"))
-                )
-                .toIO
-                .unsafeToFuture()
-            }
-          ),
-          Field(
-            "deploy",
-            OptionType(DeployInfoType),
-            arguments = DeployHash :: Nil,
-            resolve = c => BlockAPI.getDeployInfoOpt[F](c.arg(DeployHash)).toIO.unsafeToFuture()
-          )
-        )
-      ),
-      subscription = ObjectType(
-        "Subscription",
-        fields[Unit, Unit](
-          Field.subs(
-            name = "latestBlocks",
-            fieldType = StringType,
-            description = "Subscribes to new blocks".some,
-            resolve = _ =>
-              Stream.emits[F, Action[Unit, String]](
-                randomBytes.map(bs => Action(Base16.encode(bs)))
-              )
-          )
-        )
-      ).some
-    )
 }
