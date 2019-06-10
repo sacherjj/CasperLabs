@@ -53,15 +53,31 @@ def test_deploy_with_lower_nonce(node, contracts: List[str]):
         deploy_and_propose(node, contract, 2)
 
 
-@pytest.mark.parametrize("contract", ['test_helloname.wasm',])
-def disabled_test_deploy_with_higher_nonce(node, contract: str):
+@pytest.mark.parametrize("contracts", [['test_helloname.wasm', 'test_helloworld.wasm', 'test_counterdefine.wasm']])
+def test_deploy_with_higher_nonce(node, contracts: List[str]):
     """
-      Scenario: Deploy with higher nonce
-         Given: Single Node Network
-           And: Nonce is 3 for account
-          When: Deploy is performed with nonce of 5
-          Then: TODO: Does this hang until nonce of 4 is deployed???
+    Feature file: deploy.feature
+
+    Scenario: Deploy with higher nonce
     """
-    # TODO:
-    raise Exception('Not implemented yet')
+    deploy_and_propose(node, contracts[0], 1)
+
+    # There should be the genesis block and the one we just deployed annd proposed
+    wait_for_blocks_count_at_least(node, 2, 2, node.timeout)
+
+    node.client.deploy(session_contract = contracts[2],
+                       payment_contract = contracts[2],
+                       nonce = 3)
+    with pytest.raises(NonZeroExitCodeError):
+        node.client.propose()
+
+    h2 = deploy_and_propose(node, contracts[1], 2)
+
+    # The deploy with nonce 3 can be proposed now
+    node.client.propose()  
+
+    blocks = parse_show_blocks(node.client.show_blocks(100))
+    deploy_counts = [b.deploy_count for b in blocks]
+
+    assert sum(deploy_counts) == len(contracts)
 
