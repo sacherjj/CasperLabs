@@ -22,55 +22,14 @@ object Estimator {
     for {
       latestMessageHashes <- blockDag.latestMessageHashes
       result <- Estimator
-                 .lmdSingleParentGhost[F](blockDag, lastFinalizedBlockHash, latestMessageHashes)
+                 .tips[F](blockDag, lastFinalizedBlockHash, latestMessageHashes)
     } yield result.toIndexedSeq
 
-  /*
-   * Compute the scores for LMD GHOST.
-   * @return The scores map
-   */
-  def lmdScoring[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
-      latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[Map[BlockHash, Long]] =
-    latestMessagesHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
-      case (acc, (validator, latestMessageHash)) =>
-        DagOperations
-          .bfTraverseF[F, BlockHash](List(latestMessageHash))(
-            hash => blockDag.lookup(hash).map(_.get.parents.take(1))
-          )
-          .foldLeftF(acc) {
-            case (acc2, blockHash) =>
-              for {
-                weight   <- weightFromValidatorByDag(blockDag, blockHash, validator)
-                oldValue = acc2.getOrElse(blockHash, 0L)
-              } yield acc2.updated(blockHash, weight + oldValue)
-          }
-    }
-
-  def lmdSingleParentGhost[F[_]: Monad](
+  def tips[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       lastFinalizedBlockHash: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[List[BlockHash]] = {
-    def mainParent(blockHash: BlockHash, scores: Map[BlockHash, Long]): F[BlockHash] =
-      blockDag.getMainChildren(blockHash).flatMap {
-        case None =>
-          blockHash.pure[F]
-        case Some(mainChildren) =>
-          for {
-            // make sure they are reachable from latestMessages
-            reachableMainChildren <- mainChildren.filterA(b => scores.contains(b).pure[F])
-            result <- if (reachableMainChildren.isEmpty) {
-                       blockHash.pure[F]
-                     } else {
-                       mainParent(
-                         reachableMainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toString()),
-                         scores
-                       )
-                     }
-          } yield result
-      }
 
     def replaceBlockHashWithChildren(
         b: BlockHash
@@ -102,9 +61,57 @@ object Estimator {
 
     for {
       score            <- lmdScoring(blockDag, latestMessagesHashes)
-      newMainParent    <- mainParent(lastFinalizedBlockHash, score)
+      newMainParent    <- forkChoiceTip(blockDag, lastFinalizedBlockHash, score)
       parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList)
       secondaryParents = parents.filter(_ != newMainParent)
     } yield newMainParent +: secondaryParents
   }
+
+  /*
+   * Compute the scores for LMD GHOST.
+   * @return The scores map
+   */
+  def lmdScoring[F[_]: Monad](
+      blockDag: BlockDagRepresentation[F],
+      latestMessagesHashes: Map[Validator, BlockHash]
+  ): F[Map[BlockHash, Long]] =
+    latestMessagesHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
+      case (acc, (validator, latestMessageHash)) =>
+        DagOperations
+          .bfTraverseF[F, BlockHash](List(latestMessageHash))(
+            hash => blockDag.lookup(hash).map(_.get.parents.take(1))
+          )
+          .foldLeftF(acc) {
+            case (acc2, blockHash) =>
+              for {
+                weight   <- weightFromValidatorByDag(blockDag, blockHash, validator)
+                oldValue = acc2.getOrElse(blockHash, 0L)
+              } yield acc2.updated(blockHash, weight + oldValue)
+          }
+    }
+
+  def forkChoiceTip[F[_]: Monad](
+      blockDag: BlockDagRepresentation[F],
+      blockHash: BlockHash,
+      scores: Map[BlockHash, Long]
+  ): F[BlockHash] =
+    blockDag.getMainChildren(blockHash).flatMap {
+      case None =>
+        blockHash.pure[F]
+      case Some(mainChildren) =>
+        for {
+          // make sure they are reachable from latestMessages
+          reachableMainChildren <- mainChildren.filterA(b => scores.contains(b).pure[F])
+          result <- if (reachableMainChildren.isEmpty) {
+                     blockHash.pure[F]
+                   } else {
+                     forkChoiceTip[F](
+                       blockDag,
+                       reachableMainChildren.maxBy(b => scores.getOrElse(b, 0L) -> b.toString()),
+                       scores
+                     )
+                   }
+        } yield result
+    }
+
 }
