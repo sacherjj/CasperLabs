@@ -77,6 +77,7 @@ mod ext_ffi {
         pub fn seed(dest: *mut u8);
         pub fn is_valid(value_ptr: *const u8, value_size: usize) -> i32;
         pub fn add_key(public_key_ptr: *const u8, public_key_size: usize, weight: i32) -> i32;
+        pub fn remove_key(public_key_ptr: *const u8, public_key_size: usize) -> i32;
     }
 }
 

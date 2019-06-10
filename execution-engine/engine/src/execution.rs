@@ -31,7 +31,8 @@ use functions::{
     GAS_FUNC_INDEX, GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX,
     GET_READ_FUNC_INDEX, GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, IS_VALID_FN_INDEX,
     LOAD_ARG_FUNC_INDEX, NEW_FUNC_INDEX, PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX,
-    RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX, STORE_FN_INDEX, WRITE_FUNC_INDEX,
+    REMOVE_KEY_FN_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX, STORE_FN_INDEX,
+    WRITE_FUNC_INDEX,
 };
 use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
@@ -452,6 +453,17 @@ where
             Err(e) => Ok(e as i32),
         }
     }
+
+    fn remove_key(&mut self, public_key: PublicKey) -> Result<i32, Trap> {
+        let account = Rc::clone(&self.context.account());
+        // Mutably borrows associated keys of a given account avoiding temporary
+        // account object.
+        let mut associated_keys = RefMut::map(account.borrow_mut(), |account| {
+            account.associated_keys_mut()
+        });
+        let result = associated_keys.remove_key(&public_key);
+        Ok(result as i32)
+    }
 }
 
 fn as_usize(u: u32) -> usize {
@@ -680,6 +692,23 @@ where
                     // Raises an invalid conversion to int
                     .map_err(|_| Trap::new(TrapKind::InvalidConversionToInt))?;
                 let result = self.add_key(public_key, weight)?;
+                Ok(Some(RuntimeValue::I32(result)))
+            }
+
+            REMOVE_KEY_FN_INDEX => {
+                // args(0) = pointer to array of bytes of a public key
+                // args(1) = size of serialized bytes of public key
+                let (public_key_ptr, public_key_size): (u32, u32) = Args::parse(args)?;
+                let public_key = {
+                    // Public key as serialized bytes
+                    let source_serialized =
+                        self.bytes_from_mem(public_key_ptr, public_key_size as usize)?;
+                    // Public key deserialized
+                    let source: PublicKey =
+                        deserialize(&source_serialized).map_err(Error::BytesRepr)?;
+                    source
+                };
+                let result = self.remove_key(public_key)?;
                 Ok(Some(RuntimeValue::I32(result)))
             }
 

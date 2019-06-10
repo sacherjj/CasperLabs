@@ -125,6 +125,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 ADD_KEY_FN_INDEX,
             ),
+            "remove_key" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                REMOVE_KEY_FN_INDEX,
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",

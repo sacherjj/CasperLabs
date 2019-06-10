@@ -305,3 +305,10 @@ pub fn add_key(public_key: PublicKey, weight: Weight) -> Result<(), AddKeyFailur
         d => Err(AddKeyFailure::from(d)),
     }
 }
+
+/// Removes a public key from associated keys on an account
+pub fn remove_key(public_key: PublicKey) -> bool {
+    let (public_key_ptr, public_key_size, _bytes) = to_ptr(&public_key);
+    let result = unsafe { ext_ffi::remove_key(public_key_ptr, public_key_size) };
+    result != 0
+}

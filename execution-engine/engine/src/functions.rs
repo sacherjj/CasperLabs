@@ -19,3 +19,4 @@ pub const PROTOCOL_VERSION_FUNC_INDEX: usize = 17;
 pub const SEED_FN_INDEX: usize = 18;
 pub const IS_VALID_FN_INDEX: usize = 19;
 pub const ADD_KEY_FN_INDEX: usize = 20;
+pub const REMOVE_KEY_FN_INDEX: usize = 21;
