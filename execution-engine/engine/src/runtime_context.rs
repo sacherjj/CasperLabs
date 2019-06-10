@@ -272,20 +272,22 @@ where
     /// and whether the version of a key that contract wants to use, has access rights
     /// that are less powerful than access rights' of the key in the `known_urefs`.
     pub fn validate_key(&self, key: &Key) -> Result<(), Error> {
-        match key {
-            Key::URef(uref) if uref.access_rights().is_some() => {
-                let new_rights = uref.access_rights().unwrap(); // panic is unreachable
-                self.known_urefs
-                    .get(&uref.addr()) // Check if the `key` is known
-                    .map(|known_rights| {
-                        known_rights
-                            .iter()
-                            .any(|right| *right & new_rights == new_rights)
-                    }) // are we allowed to use it this way?
-                    .map(|_| ()) // at this point we know it's valid to use `key`
-                    .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
-            }
-            _ => Ok(()),
+        let uref = match key {
+            Key::URef(uref) => uref,
+            _ => return Ok(()),
+        };
+        if let Some(new_rights) = uref.access_rights() {
+            self.known_urefs
+                .get(&uref.addr()) // Check if the `key` is known
+                .map(|known_rights| {
+                    known_rights
+                        .iter()
+                        .any(|right| *right & new_rights == new_rights)
+                }) // are we allowed to use it this way?
+                .map(|_| ()) // at this point we know it's valid to use `key`
+                .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
+        } else {
+            Ok(())
         }
     }
 
