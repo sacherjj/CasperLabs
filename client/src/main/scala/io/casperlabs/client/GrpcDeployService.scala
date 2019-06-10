@@ -122,7 +122,7 @@ class GrpcDeployService(host: String, portExternal: Int, portInternal: Int)
           .withQuery(
             StateQuery(
               kv,
-              ByteString.copyFrom(Base16.decode(keyValue)),
+              keyValue,
               path.split('/').filterNot(_.isEmpty)
             )
           )

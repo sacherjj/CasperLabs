@@ -48,7 +48,7 @@ object GrpcDeployService {
       override def queryState(q: QueryStateRequest): Task[QueryStateResponse] = q match {
         case QueryStateRequest(blockHash, keyType, keyValue, path) =>
           val f = for {
-            key <- toKey[F](keyType, ByteString.copyFrom(Base16.decode(keyValue)))
+            key <- toKey[F](keyType, keyValue)
             bq  <- BlockAPI.showBlock[F](BlockQuery(blockHash))
             state <- Concurrent[F]
                       .fromOption(bq.blockInfo, new Exception(s"Block $blockHash not found!"))

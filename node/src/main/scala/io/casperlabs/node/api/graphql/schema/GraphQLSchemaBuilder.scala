@@ -93,7 +93,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                             for {
                                               key <- Utils.toKey[F](
                                                       query.keyType,
-                                                      ByteString.copyFrom(Base16.decode(query.key))
+                                                      query.key
                                                     )
                                               possibleResponse <- ExecutionEngineService[F]
                                                                    .query(

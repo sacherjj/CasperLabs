@@ -7,9 +7,10 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 
 object Utils {
-  def toKey[F[_]](keyType: String, keyBytes: ByteString)(
+  def toKey[F[_]](keyType: String, keyValue: String)(
       implicit appErr: ApplicativeError[F, Throwable]
-  ): F[ipc.Key] =
+  ): F[ipc.Key] = {
+    val keyBytes = ByteString.copyFrom(Base16.decode(keyValue))
     keyType.toLowerCase match {
       case "hash" =>
         keyBytes.size match {
@@ -48,4 +49,5 @@ object Utils {
           )
         )
     }
+  }
 }
