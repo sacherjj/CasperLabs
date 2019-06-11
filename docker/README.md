@@ -104,6 +104,7 @@ To sign deploy you'll need to [generate and ed25519 keypair](/VALIDATOR.md#setti
 ```console
 ./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --gas-price 1 \
+     --from='00000000000000000000000000000000'
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm \
      --public-key /keys/public.key \

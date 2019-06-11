@@ -212,17 +212,17 @@ class LastFinalisedHash(LogsContainMessage):
 
 
 class BlocksCountAtLeast:
-    def __init__(self, node: 'Node', blocks_count: int, max_retrieved_blocks: int) -> None:
+    def __init__(self, node: 'Node', blocks_count: int, depth: int) -> None:
         self.node = node
         self.blocks_count = blocks_count
-        self.max_retrieved_blocks = max_retrieved_blocks
+        self.depth = depth
 
     def __str__(self) -> str:
-        args = ', '.join(repr(a) for a in (self.node.name, self.blocks_count, self.max_retrieved_blocks))
+        args = ', '.join(repr(a) for a in (self.node.name, self.blocks_count, self.depth))
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        actual_blocks_count = self.node.client.get_blocks_count(self.max_retrieved_blocks)
+        actual_blocks_count = self.node.client.get_blocks_count(self.depth)
         logging.info("THE ACTUAL BLOCKS COUNT: {}".format(actual_blocks_count))
         return actual_blocks_count >= self.blocks_count
 
