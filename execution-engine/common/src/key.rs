@@ -128,6 +128,42 @@ impl Key {
             other => other,
         }
     }
+
+    /// Creates an instance of [Key::Hash] variant from the base16 encoded String.
+    /// Returns `None` if [addr] is not valid Blake2b hash.
+    pub fn parse_hash(addr: String) -> Option<Key> {
+        let mut buff = [0u8; 32];
+        match binascii::hex2bin(addr.as_bytes(), &mut buff) {
+            Ok(_) => Some(Key::Hash(buff)),
+            _ => None,
+        }
+    }
+
+    /// Creates an instance of [Key::URef] variant from the base16 encoded String.
+    /// Returns `None` if [addr] is not valid Blake2b hash.
+    pub fn parse_uref(addr: String, access_rights: AccessRights) -> Option<Key> {
+        let mut buff = [0u8; 32];
+        match binascii::hex2bin(addr.as_bytes(), &mut buff) {
+            Ok(_) => Some(Key::URef(buff, Some(access_rights))),
+            _ => None,
+        }
+    }
+
+    /// Creates an instance of [Key::Local] variant from the base16 encoded String.
+    /// Returns `None` if either [seed] or [key_hash] is not valid Blake2b hash.
+    pub fn parse_local(seed: String, key_hash: String) -> Option<Key> {
+        let mut seed_buff = [0u8; 32];
+        let mut key_buff = [0u8; 32];
+        match binascii::hex2bin(seed.as_bytes(), &mut seed_buff)
+            .and(binascii::hex2bin(key_hash.as_bytes(), &mut key_buff))
+        {
+            Ok(_) => Some(Key::Local {
+                seed: seed_buff,
+                key_hash: key_buff,
+            }),
+            _ => None,
+        }
+    }
 }
 
 const ACCOUNT_ID: u8 = 0;
@@ -326,5 +362,38 @@ mod tests {
             format!("{}", local_key),
             format!("Local({}, {})", expected_hash, expected_hash)
         );
+    }
+
+    use proptest::prelude::*;
+    use proptest::string::{string_regex, RegexGeneratorStrategy};
+
+    /// Create a base16 string of [[length]] size.
+    fn base16_str_arb(length: usize) -> RegexGeneratorStrategy<String> {
+        string_regex(&format!("[0-9a-f]{{{}}}", length)).unwrap()
+    }
+
+    proptest! {
+
+        #[test]
+        fn should_parse_32_base16_to_key(base16_addr in base16_str_arb(32)) {
+            assert!(Key::parse_hash(base16_addr.clone()).is_some());
+            assert!(Key::parse_uref(base16_addr.clone(), AccessRights::READ).is_some());
+            assert!(Key::parse_local(base16_addr.clone(), base16_addr.clone()).is_some());
+        }
+
+        #[test]
+        fn should_parse_64_base16_to_key(base16_addr in base16_str_arb(64)) {
+            assert!(Key::parse_hash(base16_addr.clone()).is_some());
+            assert!(Key::parse_uref(base16_addr.clone(), AccessRights::READ).is_some());
+            assert!(Key::parse_local(base16_addr.clone(), base16_addr).is_some());
+        }
+
+        #[test]
+        fn should_fail_parse_base16_to_key(base16_addr in base16_str_arb(70)) {
+            assert!(Key::parse_hash(base16_addr.clone()).is_none());
+            assert!(Key::parse_uref(base16_addr.clone(), AccessRights::READ).is_none());
+            assert!(Key::parse_local(base16_addr.clone(), base16_addr.clone()).is_none());
+        }
+
     }
 }

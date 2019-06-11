@@ -11,6 +11,8 @@
 #[macro_use]
 extern crate alloc;
 
+extern crate binascii;
+
 #[macro_use]
 extern crate uint;
 extern crate failure;
