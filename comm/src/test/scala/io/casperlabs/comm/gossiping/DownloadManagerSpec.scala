@@ -414,22 +414,22 @@ class DownloadManagerSpec
             for {
               w <- manager
                     .scheduleDownload(summaryOf(block), source, false)
-              _ <- Task.sleep(500.milliseconds)
+              _ <- Task.sleep(200.millis)
               _ <- Task {
                     log.warns should have size 1
                     log.warns.last should include("attempt: 1")
                   }
-              _ <- Task.sleep(1.second)
+              _ <- Task.sleep(1800.millis)
               _ <- Task {
                     log.warns should have size 2
                     log.warns.last should include("attempt: 2")
                   }
-              _ <- Task.sleep(2.seconds)
+              _ <- Task.sleep(3000.millis)
               _ <- Task {
                     log.warns should have size 3
                     log.warns.last should include("attempt: 3")
                   }
-              _ <- Task.sleep(5.seconds)
+              _ <- Task.sleep(4000.millis)
               _ <- Task {
                     log.warns should have size 3
                     log.warns.last should include("attempt: 3")
