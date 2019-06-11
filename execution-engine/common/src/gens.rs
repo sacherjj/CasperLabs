@@ -1,4 +1,5 @@
 use crate::key::*;
+use crate::uref::{AccessRights, URef};
 use crate::value::account::{
     AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, Weight, MAX_KEYS,
 };
@@ -6,8 +7,8 @@ use crate::value::*;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use proptest::collection::{btree_map, vec};
-use proptest::option;
 use proptest::prelude::*;
+use proptest::{array, bits, option};
 
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
     vec(any::<u8>(), 32).prop_map(|b| {
@@ -33,12 +34,19 @@ pub fn access_rights_arb() -> impl Strategy<Value = AccessRights> {
     ]
 }
 
+pub fn uref_arb() -> impl Strategy<Value = URef> {
+    (
+        array::uniform32(bits::u8::ANY),
+        option::weighted(option::Probability::new(0.8), access_rights_arb()),
+    )
+        .prop_map(|(id, maybe_access_rights)| URef::unsafe_new(id, maybe_access_rights))
+}
+
 pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
         u8_slice_32().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
-        option::weighted(option::Probability::new(0.8), access_rights_arb())
-            .prop_flat_map(|right| { u8_slice_32().prop_map(move |addr| Key::URef(addr, right)) }),
+        uref_arb().prop_map(Key::URef),
         (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key_hash)| Key::Local { seed, key_hash })
     ]
 }

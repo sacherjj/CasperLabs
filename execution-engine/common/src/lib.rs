@@ -32,6 +32,7 @@ pub mod gens;
 pub mod key;
 #[cfg(any(test, feature = "gens"))]
 pub mod test_utils;
+pub mod uref;
 pub mod value;
 
 mod ext_ffi {
