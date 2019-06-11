@@ -1,8 +1,12 @@
-import docker
-import logging
 import os
+import logging
+from collections import defaultdict
 from typing import Callable, Dict, List
 
+import docker
+import docker.errors
+
+from test.cl_node.docker_base import DockerConfig
 from test.cl_node.casperlabs_node import CasperLabsNode
 from test.cl_node.common import random_string
 from test.cl_node.docker_base import DockerConfig
@@ -14,6 +18,8 @@ from test.cl_node.wait import (
     wait_for_node_started,
     wait_for_peers_count_at_least,
 )
+from test.cl_node.nonce_registry import NonceRegistry
+
 
 
 class CasperLabsNetwork:
@@ -31,6 +37,7 @@ class CasperLabsNetwork:
         self.docker_client = docker_client
         self.cl_nodes: List[CasperLabsNode] = []
         self._created_networks: List[str] = []
+        NonceRegistry.registry = defaultdict(lambda: 1)
 
     @property
     def node_count(self) -> int:
@@ -132,7 +139,10 @@ class CasperLabsNetwork:
 
     def cleanup(self):
         for network_name in self._created_networks:
-            self.docker_client.networks.get(network_name).remove()
+            try:
+                self.docker_client.networks.get(network_name).remove()
+            except docker.errors.NotFound:
+                pass
 
 
 class OneNodeNetwork(CasperLabsNetwork):
@@ -232,10 +242,7 @@ class CustomConnectionNetwork(CasperLabsNetwork):
             self.add_cl_node(config, network_with_bootstrap=False)
 
         for network_members in network_connections:
-            network_name = self.create_docker_network()
-            self.network_names[tuple(network_members)] = network_name
-            for node_num in network_members:
-                self.docker_nodes[node_num].connect_to_network(network_name)
+            self.connect(network_members)
 
         for node_number in range(1, node_count):
             self.wait_method(wait_for_approved_block_received_handler_state, node_number)
@@ -252,11 +259,17 @@ class CustomConnectionNetwork(CasperLabsNetwork):
             if peer_count > 0:
                 wait_for_peers_count_at_least(self.docker_nodes[node_num], peer_count, timeout)
 
+    def connect(self, network_members):
+        network_name = self.create_docker_network()
+        self.network_names[tuple(network_members)] = network_name
+        for node_num in network_members:
+            self.docker_nodes[node_num].connect_to_network(network_name)
 
     def disconnect(self, connection):
         network_name = self.network_names[tuple(connection)]
         for node_num in connection:
             self.docker_nodes[node_num].disconnect_from_network(network_name)
+        del self.network_names[tuple(connection)]
 
 
 if __name__ == '__main__':

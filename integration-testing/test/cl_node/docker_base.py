@@ -1,14 +1,36 @@
 import logging
+import json
 import os
 import threading
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from queue import Empty
-from test.cl_node.common import random_string
-from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
 from typing import Any, Dict, Optional, Tuple, Union
 
+from test.cl_node.common import random_string
+from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
+
 from docker import DockerClient
+import docker.errors
+
+
+def humanify(line):
+    """
+    Decode json dump of execution engine's structured log and render a human friendly line,
+    containing, together with prefix rendered by the Python test framewoork, all useful
+    information. The original dictionary in the EE structured log looks like follows:
+
+        {'timestamp': '2019-06-08T17:51:35.308Z', 'process_id': 1, 'process_name': 'casperlabs-engine-grpc-server', 'host_name': 'execution-engine-0-mlgtn', 'log_level': 'Info', 'priority': 5, 'message_type': 'ee-structured', 'message_type_version': '1.0.0', 'message_id': '14039567985248808663', 'description': 'starting Execution Engine Server', 'properties': {'message': 'starting Execution Engine Server', 'message_template': '{message}'}}
+    """
+    if not 'execution-engine-' in line:
+        return line
+    try:
+        _, payload = line.split('payload=')
+    except:
+        return line
+
+    d = json.loads(payload)
+    return ' '.join(str(d[k]) for k in ('log_level', 'description',))
 
 
 class LoggingThread(threading.Thread):
@@ -25,7 +47,8 @@ class LoggingThread(threading.Thread):
                 if self.terminate_thread_event.is_set():
                     break
                 line = next(containers_log_lines_generator)
-                self.logger.info(f"  {self.container.name}: {line.decode('utf-8').rstrip()}")
+                s = line.decode('utf-8').rstrip()
+                self.logger.info(f"  {self.container.name}: {humanify(s)}")
         except StopIteration:
             pass
 
@@ -56,7 +79,7 @@ class DockerConfig:
 
     def node_command_options(self, server_host: str) -> dict:
         bootstrap_path = '/root/.casperlabs/bootstrap'
-        options = {'--server-default-timeout': 10000,
+        options = {'--server-default-timeout': "10second",
                    '--server-host': server_host,
                    '--casper-validator-private-key': self.node_private_key,
                    '--grpc-socket': '/root/.casperlabs/sockets/.casper-node.sock',
@@ -201,7 +224,10 @@ class DockerBase:
         if self.container:
             for network_name in self.connected_networks:
                 self.disconnect_from_network(network_name)
-            self.container.remove(force=True, v=True)
+            try:
+                self.container.remove(force=True, v=True)
+            except docker.errors.NotFound:
+                pass
 
 
 class LoggingDockerBase(DockerBase):
