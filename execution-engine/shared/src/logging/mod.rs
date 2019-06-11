@@ -149,12 +149,8 @@ pub fn log_metric(
 
     // https://prometheus.io/docs/instrumenting/exposition_formats/
     let tsd_metric = format!(
-        "{}{{tag=\"{}\", correlation_id=\"{}\"}} {} {:?}",
-        metric,
-        tag,
-        correlation_id.to_string(),
-        metric_value,
-        milliseconds_since_epoch
+        "{}{{tag=\"{}\"}} {} {:?}",
+        metric, tag, metric_value, milliseconds_since_epoch
     );
 
     properties.insert("correlation_id".to_string(), correlation_id.to_string());
