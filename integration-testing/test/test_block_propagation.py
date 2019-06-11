@@ -1,6 +1,8 @@
 import threading
+import time
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
+from test.cl_node.errors import NonZeroExitCodeError
 from typing import List
 import pytest
 import logging
@@ -13,11 +15,17 @@ from .cl_node.wait import wait_for_blocks_count_at_least, wait_for_peers_count_a
 
 
 class DeployThread(threading.Thread):
-    def __init__(self, node: DockerNode, batches_of_contracts: List[List[str]]) -> None:
+    def __init__(self,
+            node: DockerNode,
+            batches_of_contracts: List[List[str]],
+            max_attempts,
+            retry_seconds) -> None:
         threading.Thread.__init__(self)
         self.node = node
         self.batches_of_contracts = batches_of_contracts
         self.deployed_blocks_hashes = set()
+        self.max_attempts = max_attempts
+        self.retry_seconds = retry_seconds
 
     def propose(self):
         propose_output = self.node.client.propose()
@@ -30,8 +38,25 @@ class DeployThread(threading.Thread):
                                                             payment_contract = contract,
                                                             private_key="validator-0-private.pem",
                                                             public_key="validator-0-public.pem")
-            block_hash = self.propose()
-            self.deployed_blocks_hashes.add(block_hash)
+            # With many threads using the same account the nonces will be interleaved.
+            # Only one node can propose at a time, the others have to wait until they
+            # receive the block and then try proposing again.
+            attempt = 0
+            while True:
+                try:
+                    block_hash = self.propose()
+                    self.deployed_blocks_hashes.add(block_hash)
+                except NonZeroExitCodeError:
+                    if attempt < self.max_attempts:
+                        logging.debug("Could not propose; retrying later.")
+                        attempt += 1
+                        time.sleep(self.retry_seconds)
+                    else:
+                        logging.debug("Could not propose; no more retries!")
+                        raise ex
+                else:
+                    break
+
 
 
 
@@ -47,16 +72,17 @@ def nodes(docker_client_fixture):
 
 
 @pytest.mark.parametrize("contract_paths, expected_number_of_blocks", [
-                         ([['test_helloname.wasm'],['test_helloworld.wasm']], 5),
+                         ([['test_helloname.wasm'],['test_helloworld.wasm']], 7),
                          ])
 def test_block_propagation(nodes,
-                           contract_paths: List[List[str]], expected_number_of_blocks):
+                           contract_paths: List[List[str]],
+                           expected_number_of_blocks):
     """
     Feature file: consensus.feature
     Scenario: test_helloworld.wasm deploy and propose by all nodes and stored in all nodes blockstores
     """
 
-    deploy_threads = [DeployThread(node, contract_paths) for node in nodes]
+    deploy_threads = [DeployThread(node, contract_paths, max_attempts = 5, retry_seconds = 3) for node in nodes]
 
     for t in deploy_threads:
         t.start()

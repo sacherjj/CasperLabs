@@ -58,7 +58,7 @@ class DockerClient(CasperLabsClient):
                private_key: Optional[str] = None,
                public_key: Optional[str] = None) -> str:
 
-        deploy_nonce = nonce if nonce is not None else NonceRegistry.registry[from_address]
+        deploy_nonce = nonce if nonce is not None else NonceRegistry.next(from_address)
 
         command = (f"deploy --from {from_address}"
                    f" --gas-limit {gas_limit}"
@@ -68,17 +68,15 @@ class DockerClient(CasperLabsClient):
 
         # For testing CLI: option will not be passed to CLI if nonce is ''
         if deploy_nonce != '':
-            command += f" --nonce {deploy_nonce}" 
+            command += f" --nonce {deploy_nonce}"
 
         if public_key and private_key:
             command += (f" --private-key=/data/{private_key}"
                         f" --public-key=/data/{public_key}")
 
         r = self.invoke_client(command)
-        if 'Success' in r and nonce is None:
-            NonceRegistry.registry[from_address] += 1
         return r
-        
+
 
     def show_block(self, block_hash: str) -> str:
         return self.invoke_client(f'show-block {block_hash}')

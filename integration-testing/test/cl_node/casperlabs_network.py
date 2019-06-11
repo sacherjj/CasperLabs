@@ -1,6 +1,5 @@
 import os
 import logging
-from collections import defaultdict
 from typing import Callable, Dict, List
 
 import docker
@@ -37,7 +36,7 @@ class CasperLabsNetwork:
         self.docker_client = docker_client
         self.cl_nodes: List[CasperLabsNode] = []
         self._created_networks: List[str] = []
-        NonceRegistry.registry = defaultdict(lambda: 1)
+        NonceRegistry.reset()
 
     @property
     def node_count(self) -> int:
