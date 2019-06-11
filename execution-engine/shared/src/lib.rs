@@ -5,6 +5,7 @@ extern crate chrono;
 extern crate common;
 #[macro_use]
 extern crate lazy_static;
+extern crate base16;
 extern crate libc;
 extern crate log;
 extern crate num;
