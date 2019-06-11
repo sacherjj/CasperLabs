@@ -5,7 +5,7 @@ use std::convert::{TryFrom, TryInto};
 
 use common::uref::URef;
 use common::value::account::{
-    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, Weight,
+    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
 };
 use engine_server::ipc::{
     Account_AccountActivity, Account_ActionThresholds,
@@ -36,6 +36,47 @@ pub struct ParsingError(pub String);
 /// Smart constructor for parse errors
 fn parse_error<T>(message: String) -> Result<T, ParsingError> {
     Err(ParsingError(message))
+}
+
+impl TryFrom<&super::ipc::KeyURef> for URef {
+    type Error = ParsingError;
+
+    fn try_from(ipc_uref: &super::ipc::KeyURef) -> Result<Self, Self::Error> {
+        let addr = {
+            let source = &ipc_uref.uref;
+            if source.len() != 32 {
+                return parse_error("URef key has to be 32 bytes long.".to_string());
+            }
+            let mut ret = [0u8; 32];
+            ret.copy_from_slice(source);
+            ret
+        };
+        let uref = {
+            let access_rights_value: i32 = ipc_uref.access_rights.value();
+            if access_rights_value != 0 {
+                let access_rights_bits = access_rights_value.try_into().unwrap();
+                let access_rights =
+                    common::uref::AccessRights::from_bits(access_rights_bits).unwrap();
+                URef::new(addr, access_rights)
+            } else {
+                URef::new(addr, common::uref::AccessRights::READ).remove_access_rights()
+            }
+        };
+        Ok(uref)
+    }
+}
+
+impl From<URef> for super::ipc::KeyURef {
+    fn from(uref: URef) -> Self {
+        let mut key_uref = super::ipc::KeyURef::new();
+        key_uref.set_uref(uref.addr().to_vec());
+        if let Some(access_rights) = uref.access_rights() {
+            key_uref.set_access_rights(
+                KeyURef_AccessRights::from_i32(access_rights.bits().into()).unwrap(),
+            );
+        }
+        key_uref
+    }
 }
 
 impl TryFrom<&super::ipc::Transform> for transform::Transform {
@@ -249,6 +290,7 @@ impl From<common::value::account::Account> for super::ipc::Account {
         let mut ipc_account = super::ipc::Account::new();
         ipc_account.set_pub_key(account.pub_key().to_vec());
         ipc_account.set_nonce(account.nonce());
+        ipc_account.set_purse_id(account.purse_id().value().into());
         let associated_keys: Vec<super::ipc::Account_AssociatedKey> = account
             .get_associated_keys()
             .get_all()
@@ -260,7 +302,6 @@ impl From<common::value::account::Account> for super::ipc::Account {
                 ipc_associated_key
             })
             .collect();
-
         let action_thresholds = {
             let mut tmp = Account_ActionThresholds::new();
             tmp.set_key_management_threshold(u32::from(
@@ -304,6 +345,7 @@ impl TryFrom<&super::ipc::Account> for common::value::account::Account {
             buff
         };
         let uref_map: URefMap = value.get_known_urefs().try_into()?;
+        let purse_id: PurseId = PurseId::new(value.get_purse_id().try_into()?);
         let associated_keys: AssociatedKeys = {
             let mut keys = AssociatedKeys::empty();
             value.get_associated_keys().iter().try_for_each(|k| {
@@ -355,6 +397,7 @@ impl TryFrom<&super::ipc::Account> for common::value::account::Account {
             pub_key,
             value.nonce,
             uref_map.0,
+            purse_id,
             associated_keys,
             action_thresholds,
             account_activity,
@@ -493,14 +536,8 @@ impl From<&common::key::Key> for super::ipc::Key {
                 k.set_hash(key_hash);
             }
             common::key::Key::URef(uref) => {
-                let mut key_uref = super::ipc::KeyURef::new();
-                key_uref.set_uref(uref.addr().to_vec());
-                if let Some(access_rights) = uref.access_rights() {
-                    key_uref.set_access_rights(
-                        KeyURef_AccessRights::from_i32(access_rights.bits().into()).unwrap(),
-                    );
-                }
-                k.set_uref(key_uref);
+                let uref: super::ipc::KeyURef = (*uref).into();
+                k.set_uref(uref);
             }
             common::key::Key::Local { seed, key_hash } => {
                 let mut key_local = super::ipc::KeyLocal::new();
@@ -540,27 +577,7 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
             };
             Ok(common::key::Key::Hash(arr))
         } else if ipc_key.has_uref() {
-            let ipc_uref = ipc_key.get_uref();
-            let addr = {
-                let source = &ipc_uref.uref;
-                if source.len() != 32 {
-                    return parse_error("URef key has to be 32 bytes long.".to_string());
-                }
-                let mut ret = [0u8; 32];
-                ret.copy_from_slice(source);
-                ret
-            };
-            let uref = {
-                let access_rights_value: i32 = ipc_uref.access_rights.value();
-                if access_rights_value != 0 {
-                    let access_rights_bits = access_rights_value.try_into().unwrap();
-                    let access_rights =
-                        common::uref::AccessRights::from_bits(access_rights_bits).unwrap();
-                    URef::new(addr, access_rights)
-                } else {
-                    URef::new(addr, common::uref::AccessRights::READ).remove_access_rights()
-                }
-            };
+            let uref = ipc_key.get_uref().try_into()?;
             Ok(common::key::Key::URef(uref))
         } else if ipc_key.has_local() {
             let ipc_local_key = ipc_key.get_local();

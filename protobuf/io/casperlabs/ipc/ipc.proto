@@ -169,9 +169,10 @@ message Account {
     bytes pub_key = 1; // Should have 32 elements
     uint64 nonce = 2;
     repeated NamedKey known_urefs = 3;
-    repeated AssociatedKey associated_keys = 4;
-    ActionThresholds action_threshold = 5;
-    AccountActivity account_activity = 6;
+    KeyURef purse_id = 4;
+    repeated AssociatedKey associated_keys = 5;
+    ActionThresholds action_threshold = 6;
+    AccountActivity account_activity = 7;
 }
 message Contract {
     bytes body = 1;
