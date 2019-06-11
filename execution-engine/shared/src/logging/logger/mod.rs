@@ -224,6 +224,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn should_log_structured_message() {
         let message_id: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
 
