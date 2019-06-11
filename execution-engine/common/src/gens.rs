@@ -1,7 +1,8 @@
 use crate::key::*;
 use crate::uref::{AccessRights, URef};
 use crate::value::account::{
-    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, Weight, MAX_KEYS,
+    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+    MAX_KEYS,
 };
 use crate::value::*;
 use alloc::collections::BTreeMap;
@@ -87,6 +88,7 @@ prop_compose! {
         account_activity in account_activity_arb(),
         mut associated_keys in associated_keys_arb(MAX_KEYS - 1),
     ) -> Account {
+            let purse_id = PurseId::new(purse_id);
             associated_keys.add_key(pub_key.into(), Weight::new(1)).unwrap();
             Account::new(
                 pub_key,

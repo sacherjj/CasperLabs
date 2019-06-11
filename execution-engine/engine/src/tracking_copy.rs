@@ -306,7 +306,7 @@ mod tests {
 
     use super::{AddResult, QueryResult, Validated};
     use common::value::account::{
-        AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight, KEY_SIZE,
+        AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight, KEY_SIZE,
     };
     use engine_state::op::Op;
     use shared::newtypes::CorrelationId;
@@ -505,7 +505,7 @@ mod tests {
             [0u8; KEY_SIZE],
             0u64,
             BTreeMap::new(),
-            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
             Default::default(),
             AccountActivity::new(BlockTime(0), BlockTime(100)),
@@ -706,7 +706,7 @@ mod tests {
         ) {
             let correlation_id = CorrelationId::new();
             let known_urefs = iter::once((name.clone(), k)).collect();
-            let purse_id = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
+            let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
             let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
             let account = Account::new(
                 pk,
@@ -759,7 +759,7 @@ mod tests {
             // create account which knows about contract
             let mut account_known_urefs = BTreeMap::new();
             account_known_urefs.insert(contract_name.clone(), contract_key);
-            let purse_id = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
+            let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
             let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
             let account = Account::new(
                 pk,

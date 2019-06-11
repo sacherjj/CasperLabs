@@ -13,7 +13,7 @@ use casperlabs_contract_ffi::bytesrepr::{FromBytes, ToBytes};
 use casperlabs_contract_ffi::key::Key;
 use casperlabs_contract_ffi::uref::{AccessRights, URef};
 use casperlabs_contract_ffi::value::account::{
-    AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight,
+    AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
 };
 use casperlabs_contract_ffi::value::{
     account::Account,
@@ -353,8 +353,8 @@ fn make_known_urefs() -> BTreeMap<String, Key> {
     urefs
 }
 
-fn make_purse_id() -> URef {
-    URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)
+fn make_purse_id() -> PurseId {
+    PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE))
 }
 
 fn make_contract() -> Contract {

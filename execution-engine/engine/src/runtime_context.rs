@@ -393,7 +393,9 @@ mod tests {
     use storage::global_state::{CommitResult, History};
 
     use super::{Error, RuntimeContext, URefAddr, Validated};
-    use common::value::account::{AccountActivity, AssociatedKeys, BlockTime, PublicKey, Weight};
+    use common::value::account::{
+        AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
+    };
     use execution::{create_rng, vec_key_rights_to_map};
     use shared::newtypes::{Blake2bHash, CorrelationId};
     use tracking_copy::TrackingCopy;
@@ -429,7 +431,7 @@ mod tests {
             addr,
             0,
             BTreeMap::new(),
-            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
             Default::default(),
             AccountActivity::new(BlockTime(0), BlockTime(100)),

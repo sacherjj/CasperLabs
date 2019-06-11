@@ -5,6 +5,19 @@ use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PurseId(URef);
+
+impl PurseId {
+    pub fn new(uref: URef) -> Self {
+        PurseId(uref)
+    }
+
+    pub fn value(&self) -> URef {
+        self.0
+    }
+}
+
 pub enum ActionType {
     /// Required by deploy execution.
     Deployment,
@@ -219,7 +232,7 @@ pub struct Account {
     public_key: [u8; 32],
     nonce: u64,
     known_urefs: BTreeMap<String, Key>,
-    purse_id: URef,
+    purse_id: PurseId,
     associated_keys: AssociatedKeys,
     action_thresholds: ActionThresholds,
     account_activity: AccountActivity,
@@ -230,7 +243,7 @@ impl Account {
         public_key: [u8; 32],
         nonce: u64,
         known_urefs: BTreeMap<String, Key>,
-        purse_id: URef,
+        purse_id: PurseId,
         associated_keys: AssociatedKeys,
         action_thresholds: ActionThresholds,
         account_activity: AccountActivity,
@@ -262,7 +275,7 @@ impl Account {
         &self.public_key
     }
 
-    pub fn purse_id(&self) -> URef {
+    pub fn purse_id(&self) -> PurseId {
         self.purse_id
     }
 
@@ -455,7 +468,7 @@ impl ToBytes for Account {
         result.extend(&self.public_key.to_bytes()?);
         result.append(&mut self.nonce.to_bytes()?);
         result.append(&mut self.known_urefs.to_bytes()?);
-        result.append(&mut self.purse_id.to_bytes()?);
+        result.append(&mut self.purse_id.value().to_bytes()?);
         result.append(&mut self.associated_keys.to_bytes()?);
         result.append(&mut self.action_thresholds.to_bytes()?);
         result.append(&mut self.account_activity.to_bytes()?);
@@ -472,6 +485,7 @@ impl FromBytes for Account {
         let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
         let (action_thresholds, rem): (ActionThresholds, &[u8]) = FromBytes::from_bytes(rem)?;
         let (account_activity, rem): (AccountActivity, &[u8]) = FromBytes::from_bytes(rem)?;
+        let purse_id = PurseId::new(purse_id);
         Ok((
             Account {
                 public_key,
@@ -491,8 +505,8 @@ impl FromBytes for Account {
 mod tests {
     use crate::uref::{AccessRights, URef};
     use crate::value::account::{
-        Account, AccountActivity, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, Weight,
-        KEY_SIZE, MAX_KEYS,
+        Account, AccountActivity, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
+        Weight, KEY_SIZE, MAX_KEYS,
     };
     use alloc::collections::btree_map::BTreeMap;
 
@@ -502,7 +516,7 @@ mod tests {
             [0u8; 32],
             0,
             BTreeMap::new(),
-            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1)),
             Default::default(),
             AccountActivity::new(BlockTime(0), BlockTime(0)),

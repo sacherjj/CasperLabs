@@ -5,7 +5,7 @@ use std::convert::{TryFrom, TryInto};
 
 use common::uref::URef;
 use common::value::account::{
-    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, Weight,
+    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
 };
 use engine_server::ipc::{
     Account_AccountActivity, Account_ActionThresholds,
@@ -290,7 +290,7 @@ impl From<common::value::account::Account> for super::ipc::Account {
         let mut ipc_account = super::ipc::Account::new();
         ipc_account.set_pub_key(account.pub_key().to_vec());
         ipc_account.set_nonce(account.nonce());
-        ipc_account.set_purse_id(account.purse_id().into());
+        ipc_account.set_purse_id(account.purse_id().value().into());
         let associated_keys: Vec<super::ipc::Account_AssociatedKey> = account
             .get_associated_keys()
             .get_all()
@@ -345,7 +345,7 @@ impl TryFrom<&super::ipc::Account> for common::value::account::Account {
             buff
         };
         let uref_map: URefMap = value.get_known_urefs().try_into()?;
-        let purse_id: URef = value.get_purse_id().try_into()?;
+        let purse_id: PurseId = PurseId::new(value.get_purse_id().try_into()?);
         let associated_keys: AssociatedKeys = {
             let mut keys = AssociatedKeys::empty();
             value.get_associated_keys().iter().try_for_each(|k| {
