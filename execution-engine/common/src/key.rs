@@ -389,10 +389,18 @@ mod tests {
         }
 
         #[test]
-        fn should_fail_parse_base16_to_key(base16_addr in base16_str_arb(70)) {
+        fn should_fail_parse_invalid_length_base16_to_key(base16_addr in base16_str_arb(70)) {
             assert!(Key::parse_hash(base16_addr.clone()).is_none());
             assert!(Key::parse_uref(base16_addr.clone(), AccessRights::READ).is_none());
-            assert!(Key::parse_local(base16_addr.clone(), base16_addr.clone()).is_none());
+            assert!(Key::parse_local(base16_addr.clone()).is_none());
+        }
+
+        #[test]
+        fn should_fail_parse_not_base16_input(invalid_addr in "[f-z]{32}") {
+            // Only a-f characters are valid hex.
+            assert!(Key::parse_hash(invalid_addr.clone()).is_none());
+            assert!(Key::parse_uref(invalid_addr.clone(), AccessRights::READ).is_none());
+            assert!(Key::parse_local(invalid_addr.clone(), invalid_addr).is_none());
         }
 
     }
