@@ -49,7 +49,7 @@ class DockerClient(CasperLabsClient):
         return self.invoke_client('propose')
 
     def deploy(self,
-               from_address: str = "303030303030303030303030303030303030303030303030303030303030303030",
+               from_address: str = "3030303030303030303030303030303030303030303030303030303030303030",
                gas_limit: int = 1000000,
                gas_price: int = 1,
                nonce: int = None,

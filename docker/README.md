@@ -71,7 +71,7 @@ Assuming that you cloned and compiled the [contract-examples](https://github.com
 
 ```console
 ./client.sh node-0 deploy $PWD/../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
-     --from 303030303030303030303030303030303030303030303030303030303030303030 \
+     --from 3030303030303030303030303030303030303030303030303030303030303030 \
      --gas-price 1 \
      --session /data/helloname.wasm \
      --payment /data/helloname.wasm
