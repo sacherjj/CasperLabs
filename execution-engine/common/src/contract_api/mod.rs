@@ -281,6 +281,14 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
     deserialize(&res_bytes).unwrap()
 }
 
+/// Stops execution of a contract and reverts execution effects
+/// with a given reason.
+pub fn revert(status: u32) -> ! {
+    unsafe {
+        ext_ffi::revert(status);
+    }
+}
+
 /// Checks if all the keys contained in the given `Value`
 /// (rather, thing that can be turned into a `Value`) are
 /// valid, in the sense that all of the urefs (and their access rights)

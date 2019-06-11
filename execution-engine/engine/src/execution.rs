@@ -29,8 +29,8 @@ use functions::{
     ADD_FUNC_INDEX, ADD_UREF_FUNC_INDEX, CALL_CONTRACT_FUNC_INDEX, GAS_FUNC_INDEX,
     GET_ARG_FUNC_INDEX, GET_CALL_RESULT_FUNC_INDEX, GET_FN_FUNC_INDEX, GET_READ_FUNC_INDEX,
     GET_UREF_FUNC_INDEX, HAS_UREF_FUNC_INDEX, IS_VALID_FN_INDEX, LOAD_ARG_FUNC_INDEX,
-    NEW_FUNC_INDEX, PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX, SEED_FN_INDEX,
-    SER_FN_FUNC_INDEX, STORE_FN_INDEX, WRITE_FUNC_INDEX,
+    NEW_FUNC_INDEX, PROTOCOL_VERSION_FUNC_INDEX, READ_FUNC_INDEX, RET_FUNC_INDEX,
+    REVERT_FUNC_INDEX, SEED_FN_INDEX, SER_FN_FUNC_INDEX, STORE_FN_INDEX, WRITE_FUNC_INDEX,
 };
 use resolvers::create_module_resolver;
 use resolvers::error::ResolverError;
@@ -62,6 +62,8 @@ pub enum Error {
         deploy_nonce: u64,
         expected_nonce: u64,
     },
+    /// Reverts execution with a provided status
+    Revert(u32),
 }
 
 impl fmt::Display for Error {
@@ -434,6 +436,11 @@ where
             .set(dest_ptr, &seed)
             .map_err(|e| Error::Interpreter(e).into())
     }
+
+    /// Reverts contract execution with a status specified.
+    pub fn revert(&mut self, status: u32) -> Trap {
+        Error::Revert(status).into()
+    }
 }
 
 fn as_usize(u: u32) -> usize {
@@ -623,6 +630,13 @@ where
 
             PROTOCOL_VERSION_FUNC_INDEX => Ok(Some(self.context.protocol_version().into())),
 
+            REVERT_FUNC_INDEX => {
+                // args(0) = status u32
+                let status = Args::parse(args)?;
+
+                Err(self.revert(status))
+            }
+
             SEED_FN_INDEX => {
                 let dest_ptr = Args::parse(args)?;
                 self.write_seed(dest_ptr)?;
@@ -708,12 +722,21 @@ where
                 // If the "error" was in fact a trap caused by calling `ret` then
                 // this is normal operation and we should return the value captured
                 // in the Runtime result field.
-                if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
-                    //insert extra urefs returned from call
-                    let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
-                        vec_key_rights_to_map(ret_urefs.clone());
-                    current_runtime.context.add_urefs(ret_urefs_map);
-                    return Ok(runtime.result);
+                let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
+                match downcasted_error {
+                    Error::Ret(ref ret_urefs) => {
+                        //insert extra urefs returned from call
+                        let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
+                            vec_key_rights_to_map(ret_urefs.clone());
+                        current_runtime.context.add_urefs(ret_urefs_map);
+                        return Ok(runtime.result);
+                    }
+                    Error::Revert(status) => {
+                        // Propagate revert as revert, instead of passing it as
+                        // InterpreterError.
+                        return Err(Error::Revert(*status));
+                    }
+                    _ => {}
                 }
             }
             Err(Error::Interpreter(e))

@@ -53,7 +53,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
       _      <- casper.deploy(sampleDeployData)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 0
-      _      <- Timer[Task].sleep(500.millis)
+      _      <- Timer[Task].sleep(1.second)
       _      = casper.proposalCount shouldBe 1
     } yield ()
   }

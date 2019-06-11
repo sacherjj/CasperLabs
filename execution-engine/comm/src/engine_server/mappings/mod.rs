@@ -764,6 +764,41 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             deploy_result.set_invalid_nonce(invalid_nonce);
                             deploy_result
                         }
+                        ExecutionError::Revert(status) => {
+                            let error_msg = format!("Exit code: {}", status);
+                            execution_error(error_msg, cost, effect)
+                        }
+                        ExecutionError::Interpreter(error) => {
+                            // If the error happens during contract execution it's mapped to HostError
+                            // and wrapped in Interpreter error, so we may end up with InterpreterError(HostError(InterpreterError))).
+                            // In order to provide clear error messages we have to downcast and match on the inner error,
+                            // otherwise we end up with `Host(Trap(Trap(TrapKind:InterpreterError)))`.
+                            // TODO: This really should be happening in the `Executor::exec`.
+                            match error.as_host_error() {
+                                Some(host_error) => {
+                                    let downcasted_error =
+                                        host_error.downcast_ref::<ExecutionError>().unwrap();
+                                    match downcasted_error {
+                                        ExecutionError::Revert(status) => {
+                                            let errors_msg = format!("Exit code: {}", status);
+                                            execution_error(errors_msg, cost, effect)
+                                        }
+                                        ExecutionError::KeyNotFound(key) => {
+                                            let errors_msg = format!("Key {:?} not found.", key);
+                                            execution_error(errors_msg, cost, effect)
+                                        }
+                                        other => {
+                                            execution_error(format!("{:?}", other), cost, effect)
+                                        }
+                                    }
+                                }
+
+                                None => {
+                                    let msg = format!("{:?}", error);
+                                    execution_error(msg, cost, effect)
+                                }
+                            }
+                        }
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
                             let msg = format!("{:?}", other);
@@ -1010,9 +1045,29 @@ mod tests {
         assert_eq!(expected_transform, *commit_transform.unwrap())
     }
 
+    #[test]
+    fn revert_error_maps_to_execution_error() {
+        let revert_error = Error::Revert(10);
+        let exec_result = ExecutionResult::Failure {
+            error: ExecError(revert_error),
+            effect: Default::default(),
+            cost: 10,
+        };
+        let ipc_result: DeployResult = exec_result.into();
+        assert!(ipc_result.has_execution_result());
+        let ipc_execution_result = ipc_result.get_execution_result();
+        assert_eq!(ipc_execution_result.cost, 10);
+        assert_eq!(
+            ipc_execution_result.get_error().get_exec_error().message,
+            "Exit code: 10"
+        );
+    }
+
     use common::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
-    use engine_server::ipc::TransformEntry;
+    use engine_server::ipc::{DeployResult, TransformEntry};
     use engine_server::mappings::CommitTransforms;
+    use execution_engine::engine_state::error::Error::ExecError;
+    use execution_engine::execution::Error;
     use proptest::prelude::*;
     use shared::transform::gens::transform_arb;
 

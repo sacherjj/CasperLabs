@@ -43,7 +43,7 @@ use storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
 // exe / proc
 const PROC_NAME: &str = "casperlabs-engine-grpc-server";
-const APP_NAME: &str = "Execution Engine Server";
+const APP_NAME: &str = "CasperLabs Execution Engine Server";
 const SERVER_START_MESSAGE: &str = "starting Execution Engine Server";
 const SERVER_LISTENING_TEMPLATE: &str = "{listener} is listening on socket: {socket}";
 const SERVER_START_EXPECT: &str = "failed to start Execution Engine Server";

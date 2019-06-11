@@ -75,6 +75,7 @@ mod ext_ffi {
         pub fn add_uref(name_ptr: *const u8, name_size: usize, key_ptr: *const u8, key_size: usize);
         pub fn protocol_version() -> u64;
         pub fn seed(dest: *mut u8);
+        pub fn revert(status: u32) -> !;
         pub fn is_valid(value_ptr: *const u8, value_size: usize) -> i32;
     }
 }

@@ -166,7 +166,8 @@ object DeployRuntime {
             .withAccountPublicKey(
               // Allowing --from until we explicitly require signing.
               // It's an account address but there's no other field to carry it.
-              maybePublicKey.map(ByteString.copyFrom(_)) getOrElse ByteString.copyFromUtf8(from)
+              maybePublicKey.map(ByteString.copyFrom(_)) getOrElse ByteString
+                .copyFrom(Base16.decode(from))
             )
             .withNonce(nonce)
         )
