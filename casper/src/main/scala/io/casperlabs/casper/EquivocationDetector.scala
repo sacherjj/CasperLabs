@@ -325,7 +325,7 @@ object EquivocationDetector {
         equivocationChildren.pure[F]
       }
     } else {
-      // Latest according to the justificationBlock
+      // Latest message according to the justificationBlock
       val maybeLatestEquivocatingValidatorBlockHash: Option[BlockHash] =
         toLatestMessageHashes(justificationBlock.getHeader.justifications)
           .get(equivocatingValidator)
