@@ -253,6 +253,7 @@ fn main() {
                 cost,
             }) => {
                 properties.insert("gas-cost".to_string(), format!("{:?}", cost));
+                properties.insert("effects".to_string(), format!("{:?}", effects.1.clone()));
                 let (log_level, error_message, mut new_properties, new_state_hash) =
                     apply_effects(correlation_id, &engine_state, &state_hash, effects);
 
