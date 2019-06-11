@@ -551,7 +551,10 @@ object Validate {
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
       computedParentHashes = merged.parents.map(_.blockHash)
-      _ <- if (parentHashes == computedParentHashes)
+      parentHashes         = ProtoUtil.parentHashes(b)
+      _ <- if (parentHashes.isEmpty)
+            RaiseValidationError[F].raise[Unit](InvalidParents)
+          else if (parentHashes == computedParentHashes)
             Applicative[F].unit
           else {
             val parentsString =

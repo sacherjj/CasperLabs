@@ -468,22 +468,22 @@ class ValidateTest
         } yield block
 
       for {
-        b0 <- createBlock[Task](Seq.empty, bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 0)
-        b2 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 1)
-        b3 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 2)
-        b4 <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
-        b5 <- createValidatorBlock[Task](Seq(b3, b1, b2), Seq(b1, b2, b3), 1)
-        b6 <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
-        b7 <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
-        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
-        b9 <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0) //empty justification
+        b0  <- createBlock[Task](Seq.empty, bonds = bonds)
+        b1  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 0)
+        b2  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 1)
+        b3  <- createValidatorBlock[Task](Seq(b0), Seq.empty, 2)
+        b4  <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
+        b5  <- createValidatorBlock[Task](Seq(b3, b1, b2), Seq(b1, b2, b3), 1)
+        b6  <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
+        b7  <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
+        b8  <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
+        b9  <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0) //empty justification
+        b10 <- createValidatorBlock[Task](Seq.empty, Seq.empty, 0) //empty justification
         result <- for {
                    dag              <- blockDagStorage.getRepresentation
                    genesisBlockHash = b0.blockHash
 
                    // Valid
-                   _ <- Validate.parents[Task](b0, b0.blockHash, genesisBlockHash, dag)
                    _ <- Validate.parents[Task](b1, b0.blockHash, genesisBlockHash, dag)
                    _ <- Validate.parents[Task](b2, b0.blockHash, genesisBlockHash, dag)
                    _ <- Validate.parents[Task](b3, b0.blockHash, genesisBlockHash, dag)
@@ -495,6 +495,7 @@ class ValidateTest
                    _ <- Validate.parents[Task](b7, b0.blockHash, genesisBlockHash, dag).attempt
                    _ <- Validate.parents[Task](b8, b0.blockHash, genesisBlockHash, dag).attempt
                    _ <- Validate.parents[Task](b9, b0.blockHash, genesisBlockHash, dag).attempt
+                   _ <- Validate.parents[Task](b10, b0.blockHash, genesisBlockHash, dag).attempt
 
                    _ = log.warns should have size (3)
                    result = log.warns.forall(
