@@ -1,3 +1,5 @@
+use core::fmt::Write;
+
 use super::alloc::vec::Vec;
 use super::bytesrepr::{Error, FromBytes, ToBytes, N32, OPTION_SIZE, U32_SIZE};
 use crate::contract_api::pointers::*;
@@ -30,11 +32,26 @@ impl AccessRights {
     }
 }
 
+impl core::fmt::Display for AccessRights {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            &AccessRights::READ => write!(f, "READ"),
+            &AccessRights::WRITE => write!(f, "WRITE"),
+            &AccessRights::ADD => write!(f, "ADD"),
+            &AccessRights::READ_ADD => write!(f, "READ_ADD"),
+            &AccessRights::READ_WRITE => write!(f, "READ_WRITE"),
+            &AccessRights::ADD_WRITE => write!(f, "ADD_WRITE"),
+            &AccessRights::READ_ADD_WRITE => write!(f, "READ_ADD_WRITE"),
+            _ => write!(f, "UNKNOWN"),
+        }
+    }
+}
+
 pub const LOCAL_SEED_SIZE: usize = 32;
 pub const LOCAL_KEY_HASH_SIZE: usize = 32;
 
 #[repr(C)]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Key {
     Account([u8; 32]),
     Hash([u8; 32]),
@@ -45,6 +62,39 @@ pub enum Key {
     },
 }
 
+// There is no impl LowerHex for neither [u8; 32] nor &[u8] in std.
+// I can't impl them b/c they're not living in current crate.
+fn addr_to_hex(addr: &[u8; 32]) -> String {
+    let mut str = String::new();
+    for b in addr {
+        write!(&mut str, "{:02x}", b).unwrap();
+    }
+    str
+}
+
+impl core::fmt::Display for Key {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Key::Account(addr) => write!(f, "Account({})", addr_to_hex(addr)),
+            Key::Hash(addr) => write!(f, "Hash({})", addr_to_hex(addr)),
+            Key::URef(addr, Some(access_rights)) => {
+                write!(f, "URef({}, {})", addr_to_hex(addr), access_rights)
+            }
+            Key::URef(addr, None) => write!(f, "URef({}, None)", addr_to_hex(addr)),
+            Key::Local { seed, key_hash } => {
+                write!(f, "Local({}, {})", addr_to_hex(seed), addr_to_hex(key_hash))
+            }
+        }
+    }
+}
+
+impl core::fmt::Debug for Key {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+use alloc::string::String;
 use Key::*;
 
 impl Key {
@@ -79,6 +129,25 @@ impl Key {
         }
     }
 }
+
+//impl core::fmt::Display for Key {
+//    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+//        match self {
+//            Key::Hash(addr) => write!(f, "Hash({:#x})", &addr[..]),
+//            Key::Account(addr) => write!(f, "Account({:#x})", &addr[..]),
+//            Key::URef(addr, access_rights) => write!(f, "URef({:#x}, {})", &addr[..], access_rights),
+//            Key::Local {
+//                seed, key_hash
+//            } => write!(f, "Local({:#x}, {:#x})", &seed[..], &key_hash[..]),
+//        }
+//    }
+//}
+//
+//impl core::fmt::Debug for Key {
+//    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+//        core::fmt::Display::fmt(self, f)
+//    }
+//}
 
 const ACCOUNT_ID: u8 = 0;
 const HASH_ID: u8 = 1;
@@ -204,6 +273,8 @@ impl ToBytes for Vec<Key> {
 #[cfg(test)]
 mod tests {
     use crate::key::AccessRights;
+    use crate::key::Key;
+    use alloc::string::String;
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)
@@ -248,5 +319,19 @@ mod tests {
         test_addable(AccessRights::READ, false);
         test_addable(AccessRights::WRITE, false);
         test_addable(AccessRights::READ_ADD_WRITE, true);
+    }
+
+    #[test]
+    fn should_display_key() {
+        let expected_hash = core::iter::repeat("0").take(64).collect::<String>();
+        let addr_array = [0u8; 32];
+        let account_key = Key::Account(addr_array);
+        assert_eq!(format!("{}", account_key), format!("Account({})", expected_hash));
+        let uref_key = Key::URef(addr_array, Some(AccessRights::READ));
+        assert_eq!(format!("{}", uref_key), format!("URef({}, READ)", expected_hash));
+        let hash_key = Key::Hash(addr_array);
+        assert_eq!(format!("{}", hash_key), format!("Hash({})", expected_hash));
+        let local_key = Key::Local { seed: addr_array, key_hash: addr_array };
+        assert_eq!(format!("{}", local_key), format!("Local({}, {})", expected_hash, expected_hash));
     }
 }
