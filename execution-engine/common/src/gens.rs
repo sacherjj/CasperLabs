@@ -37,7 +37,7 @@ pub fn access_rights_arb() -> impl Strategy<Value = AccessRights> {
 pub fn uref_arb() -> impl Strategy<Value = URef> {
     (
         array::uniform32(bits::u8::ANY),
-        option::of(access_rights_arb()),
+        option::weighted(option::Probability::new(0.8), access_rights_arb()),
     )
         .prop_map(|(id, maybe_access_rights)| URef::unsafe_new(id, maybe_access_rights))
 }

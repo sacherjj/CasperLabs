@@ -131,7 +131,7 @@ where
         match self.base_key {
             Key::Account(bytes) => bytes,
             Key::Hash(bytes) => bytes,
-            Key::URef(uref) => uref.id(),
+            Key::URef(uref) => uref.addr(),
             Key::Local { seed, key_hash } => Blake2bHash::new(&[seed, key_hash].concat()).into(),
         }
     }
@@ -165,11 +165,13 @@ where
     }
 
     pub fn new_uref(&mut self, value: Value) -> Result<Key, Error> {
-        let mut key = [0u8; 32];
-        self.rng.fill_bytes(&mut key);
-        let key = Key::URef(URef::new(key, AccessRights::READ_ADD_WRITE));
-        let validated_key = Validated::new(key, Validated::valid)?;
-        self.insert_uref(validated_key);
+        let uref = {
+            let mut addr = [0u8; 32];
+            self.rng.fill_bytes(&mut addr);
+            URef::new(addr, AccessRights::READ_ADD_WRITE)
+        };
+        let key = Key::URef(uref);
+        self.insert_uref(uref);
         self.write_gs(key, value)?;
         Ok(key)
     }
@@ -215,19 +217,19 @@ where
     }
 
     pub fn insert_named_uref(&mut self, name: String, key: Validated<Key>) {
-        self.insert_uref(key.clone());
+        if let Key::URef(uref) = *key {
+            self.insert_uref(uref);
+        }
         self.uref_lookup.insert(name, *key);
     }
 
-    pub fn insert_uref(&mut self, key: Validated<Key>) {
-        if let Key::URef(uref) = *key {
-            if let Some(rights) = uref.access_rights() {
-                let entry_rights = self
-                    .known_urefs
-                    .entry(uref.id())
-                    .or_insert_with(|| std::iter::empty().collect());
-                entry_rights.insert(rights);
-            }
+    pub fn insert_uref(&mut self, uref: URef) {
+        if let Some(rights) = uref.access_rights() {
+            let entry_rights = self
+                .known_urefs
+                .entry(uref.addr())
+                .or_insert_with(|| std::iter::empty().collect());
+            entry_rights.insert(rights);
         }
     }
 
@@ -268,20 +270,22 @@ where
     /// and whether the version of a key that contract wants to use, has access rights
     /// that are less powerful than access rights' of the key in the `known_urefs`.
     pub fn validate_key(&self, key: &Key) -> Result<(), Error> {
-        match key {
-            Key::URef(uref) if uref.access_rights().is_some() => {
-                let new_rights = uref.access_rights().unwrap(); // panic is unreachable
-                self.known_urefs
-                    .get(&uref.id()) // Check if the `key` is known
-                    .map(|known_rights| {
-                        known_rights
-                            .iter()
-                            .any(|right| *right & new_rights == new_rights)
-                    }) // are we allowed to use it this way?
-                    .map(|_| ()) // at this point we know it's valid to use `key`
-                    .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
-            }
-            _ => Ok(()),
+        let uref = match key {
+            Key::URef(uref) => uref,
+            _ => return Ok(()),
+        };
+        if let Some(new_rights) = uref.access_rights() {
+            self.known_urefs
+                .get(&uref.addr()) // Check if the `key` is known
+                .map(|known_rights| {
+                    known_rights
+                        .iter()
+                        .any(|right| *right & new_rights == new_rights)
+                }) // are we allowed to use it this way?
+                .map(|_| ()) // at this point we know it's valid to use `key`
+                .ok_or_else(|| Error::ForgedReference(*key)) // otherwise `key` is forged
+        } else {
+            Ok(())
         }
     }
 

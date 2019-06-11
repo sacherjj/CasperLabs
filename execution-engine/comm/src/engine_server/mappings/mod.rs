@@ -42,30 +42,34 @@ impl TryFrom<&super::ipc::KeyURef> for URef {
     type Error = ParsingError;
 
     fn try_from(ipc_uref: &super::ipc::KeyURef) -> Result<Self, Self::Error> {
-        let id = {
+        let addr = {
+            let source = &ipc_uref.uref;
+            if source.len() != 32 {
+                return parse_error("URef key has to be 32 bytes long.".to_string());
+            }
             let mut ret = [0u8; 32];
-            ret.clone_from_slice(&ipc_uref.uref);
+            ret.copy_from_slice(source);
             ret
         };
-        let maybe_access_rights = {
+        let uref = {
             let access_rights_value: i32 = ipc_uref.access_rights.value();
             if access_rights_value != 0 {
                 let access_rights_bits = access_rights_value.try_into().unwrap();
                 let access_rights =
                     common::uref::AccessRights::from_bits(access_rights_bits).unwrap();
-                Some(access_rights)
+                URef::new(addr, access_rights)
             } else {
-                None
+                URef::new(addr, common::uref::AccessRights::READ).remove_access_rights()
             }
         };
-        Ok(URef::unsafe_new(id, maybe_access_rights))
+        Ok(uref)
     }
 }
 
 impl From<URef> for super::ipc::KeyURef {
     fn from(uref: URef) -> Self {
         let mut key_uref = super::ipc::KeyURef::new();
-        key_uref.set_uref(uref.id().to_vec());
+        key_uref.set_uref(uref.addr().to_vec());
         if let Some(access_rights) = uref.access_rights() {
             key_uref.set_access_rights(
                 KeyURef_AccessRights::from_i32(access_rights.bits().into()).unwrap(),
@@ -333,12 +337,11 @@ impl TryFrom<&super::ipc::Account> for common::value::account::Account {
 
     fn try_from(value: &super::ipc::Account) -> Result<Self, Self::Error> {
         let pub_key: [u8; 32] = {
-            let mut buff = [0u8; 32];
             if value.pub_key.len() != 32 {
                 return parse_error("Public key has to be exactly 32 bytes long.".to_string());
-            } else {
-                buff.copy_from_slice(&value.pub_key);
             }
+            let mut buff = [0u8; 32];
+            buff.copy_from_slice(&value.pub_key);
             buff
         };
         let uref_map: URefMap = value.get_known_urefs().try_into()?;
@@ -504,8 +507,12 @@ impl TryFrom<&ipc::Account_AssociatedKey> for (PublicKey, Weight) {
         if value.get_weight() > u8::max_value().into() {
             parse_error("Key weight cannot be bigger 256.".to_string())
         } else {
+            let source = &value.get_pub_key();
+            if source.len() != 32 {
+                return parse_error("Public key has to be exactly 32 bytes long.".to_string());
+            }
             let mut pub_key = [0u8; 32];
-            pub_key.copy_from_slice(value.get_pub_key());
+            pub_key.copy_from_slice(source);
             Ok((
                 PublicKey::new(pub_key),
                 Weight::new(value.get_weight() as u8),
@@ -548,12 +555,26 @@ impl TryFrom<&super::ipc::Key> for common::key::Key {
 
     fn try_from(ipc_key: &super::ipc::Key) -> Result<Self, ParsingError> {
         if ipc_key.has_account() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_account().account);
+            let arr = {
+                let source = &ipc_key.get_account().account;
+                if source.len() != 32 {
+                    return parse_error("Account key has to be 32 bytes long.".to_string());
+                }
+                let mut dest = [0u8; 32];
+                dest.copy_from_slice(source);
+                dest
+            };
             Ok(common::key::Key::Account(arr))
         } else if ipc_key.has_hash() {
-            let mut arr = [0u8; 32];
-            arr.clone_from_slice(&ipc_key.get_hash().key);
+            let arr = {
+                let source = &ipc_key.get_hash().key;
+                if source.len() != 32 {
+                    return parse_error("Hash key has to be 32 bytes long.".to_string());
+                }
+                let mut dest = [0u8; 32];
+                dest.copy_from_slice(source);
+                dest
+            };
             Ok(common::key::Key::Hash(arr))
         } else if ipc_key.has_uref() {
             let uref = ipc_key.get_uref().try_into()?;
@@ -759,6 +780,41 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             invalid_nonce.set_expected_nonce(expected_nonce);
                             deploy_result.set_invalid_nonce(invalid_nonce);
                             deploy_result
+                        }
+                        ExecutionError::Revert(status) => {
+                            let error_msg = format!("Exit code: {}", status);
+                            execution_error(error_msg, cost, effect)
+                        }
+                        ExecutionError::Interpreter(error) => {
+                            // If the error happens during contract execution it's mapped to HostError
+                            // and wrapped in Interpreter error, so we may end up with InterpreterError(HostError(InterpreterError))).
+                            // In order to provide clear error messages we have to downcast and match on the inner error,
+                            // otherwise we end up with `Host(Trap(Trap(TrapKind:InterpreterError)))`.
+                            // TODO: This really should be happening in the `Executor::exec`.
+                            match error.as_host_error() {
+                                Some(host_error) => {
+                                    let downcasted_error =
+                                        host_error.downcast_ref::<ExecutionError>().unwrap();
+                                    match downcasted_error {
+                                        ExecutionError::Revert(status) => {
+                                            let errors_msg = format!("Exit code: {}", status);
+                                            execution_error(errors_msg, cost, effect)
+                                        }
+                                        ExecutionError::KeyNotFound(key) => {
+                                            let errors_msg = format!("Key {:?} not found.", key);
+                                            execution_error(errors_msg, cost, effect)
+                                        }
+                                        other => {
+                                            execution_error(format!("{:?}", other), cost, effect)
+                                        }
+                                    }
+                                }
+
+                                None => {
+                                    let msg = format!("{:?}", error);
+                                    execution_error(msg, cost, effect)
+                                }
+                            }
                         }
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
@@ -1006,9 +1062,29 @@ mod tests {
         assert_eq!(expected_transform, *commit_transform.unwrap())
     }
 
+    #[test]
+    fn revert_error_maps_to_execution_error() {
+        let revert_error = Error::Revert(10);
+        let exec_result = ExecutionResult::Failure {
+            error: ExecError(revert_error),
+            effect: Default::default(),
+            cost: 10,
+        };
+        let ipc_result: DeployResult = exec_result.into();
+        assert!(ipc_result.has_execution_result());
+        let ipc_execution_result = ipc_result.get_execution_result();
+        assert_eq!(ipc_execution_result.cost, 10);
+        assert_eq!(
+            ipc_execution_result.get_error().get_exec_error().message,
+            "Exit code: 10"
+        );
+    }
+
     use common::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
-    use engine_server::ipc::TransformEntry;
+    use engine_server::ipc::{DeployResult, TransformEntry};
     use engine_server::mappings::CommitTransforms;
+    use execution_engine::engine_state::error::Error::ExecError;
+    use execution_engine::execution::Error;
     use proptest::prelude::*;
     use shared::transform::gens::transform_arb;
 

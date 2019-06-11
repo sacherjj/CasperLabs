@@ -42,8 +42,8 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
         //   transfer funds in a separate call.
         let balance_uref: Key = contract_api::new_uref(balance).into();
 
-        let purse_key: Key = contract_api::new_uref(()).into();
-        let purse_id: WithdrawId = WithdrawId::from_key(purse_key).unwrap();
+        let purse_key: URef = contract_api::new_uref(()).into();
+        let purse_id: WithdrawId = WithdrawId::from_uref(purse_key).unwrap();
 
         // store balance uref so that the runtime knows the mint has full access
         contract_api::add_uref(&format!("{:?}", purse_id.raw_id()), &balance_uref);
@@ -79,29 +79,29 @@ pub extern "C" fn mint_ext() {
         "create" => {
             let amount: U512 = contract_api::get_arg(1);
             let purse_id = mint.create(amount);
-            let purse_key = Key::URef(URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE));
+            let purse_key = URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE);
             contract_api::ret(&purse_key, &vec![purse_key])
         }
 
         "balance" => {
-            let key: Key = contract_api::get_arg(1);
-            let purse_id: WithdrawId = WithdrawId::from_key(key).unwrap();
+            let key: URef = contract_api::get_arg(1);
+            let purse_id: WithdrawId = WithdrawId::from_uref(key).unwrap();
             let balance_uref = mint.lookup(purse_id);
             let balance: Option<U512> = balance_uref.map(|uref| contract_api::read(uref.into()));
             contract_api::ret(&balance, &vec![])
         }
 
         "transfer" => {
-            let source_key: Key = contract_api::get_arg(1);
-            let target_key: Key = contract_api::get_arg(2);
+            let source: URef = contract_api::get_arg(1);
+            let target: URef = contract_api::get_arg(2);
             let amount: U512 = contract_api::get_arg(3);
 
-            let source: WithdrawId = match WithdrawId::from_key(source_key) {
+            let source: WithdrawId = match WithdrawId::from_uref(source) {
                 Ok(withdraw_id) => withdraw_id,
                 Err(error) => contract_api::ret(&format!("Error: {}", error), &vec![]),
             };
 
-            let target: DepositId = match DepositId::from_key(target_key) {
+            let target: DepositId = match DepositId::from_uref(target) {
                 Ok(deposit_id) => deposit_id,
                 Err(error) => contract_api::ret(&format!("Error: {}", error), &vec![]),
             };

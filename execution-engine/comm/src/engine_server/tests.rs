@@ -21,7 +21,7 @@ fn should_query_with_metrics() {
     let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = global_state.root_hash.to_vec();
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, false);
 
     let mut query_request = QueryRequest::new();
     {
@@ -73,7 +73,7 @@ fn should_exec_with_metrics() {
     let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = global_state.root_hash.to_vec();
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, false);
 
     let mut exec_request = ExecRequest::new();
     {
@@ -123,7 +123,7 @@ fn should_commit_with_metrics() {
     let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let root_hash = global_state.root_hash.to_vec();
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, false);
 
     let request_options = RequestOptions::new();
 
@@ -169,7 +169,7 @@ fn should_validate_with_metrics() {
     let correlation_id = CorrelationId::new();
     let mocked_account = mocked_account(MOCKED_ACCOUNT_ADDRESS);
     let global_state = InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
-    let engine_state = EngineState::new(global_state);
+    let engine_state = EngineState::new(global_state, false);
 
     let mut validate_request = ValidateRequest::new();
 

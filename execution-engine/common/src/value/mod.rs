@@ -6,6 +6,7 @@ use crate::bytesrepr::{
     Error, FromBytes, ToBytes, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U8_SIZE,
 };
 use crate::key::{self, UREF_SIZE};
+use crate::uref::URef;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
@@ -263,6 +264,12 @@ from_try_from_impl!(String, String);
 from_try_from_impl!(key::Key, Key);
 from_try_from_impl!(account::Account, Account);
 from_try_from_impl!(contract::Contract, Contract);
+
+impl From<URef> for Value {
+    fn from(uref: URef) -> Self {
+        Key(key::Key::URef(uref))
+    }
+}
 
 impl From<(String, key::Key)> for Value {
     fn from(tuple: (String, key::Key)) -> Self {

@@ -83,7 +83,7 @@ object UPnP {
   ): F[List[Boolean]] =
     ports.traverse { p =>
       for {
-        res    <- Sync[F].delay(addPort(gateway, p, "TCP", "RChain"))
+        res    <- Sync[F].delay(addPort(gateway, p, "TCP", "CasperLabs"))
         resMsg = if (res.isRight) "[success]" else "[failed]"
         _      <- Log[F].info(s"Adding a port mapping for port TCP/$p $resMsg")
       } yield res.isRight

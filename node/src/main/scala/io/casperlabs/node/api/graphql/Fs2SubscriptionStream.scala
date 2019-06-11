@@ -72,3 +72,10 @@ private[graphql] class Fs2SubscriptionStream[F[_]: Effect](implicit val ec: Exec
       case e: Throwable => fn(e)
     }
 }
+
+private[graphql] object Fs2SubscriptionStream {
+  def apply[F[_]](
+      implicit fs2SubscriptionStream: Fs2SubscriptionStream[F]
+  ): Fs2SubscriptionStream[F] =
+    fs2SubscriptionStream
+}

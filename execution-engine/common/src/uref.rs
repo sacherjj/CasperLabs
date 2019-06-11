@@ -2,11 +2,13 @@ use bitflags;
 
 use crate::alloc::vec::Vec;
 use crate::bytesrepr;
-use crate::bytesrepr::U32_SIZE;
+use crate::bytesrepr::{OPTION_SIZE, U32_SIZE};
+use crate::contract_api::pointers::UPointer;
 
-const UREF_ID_SIZE: usize = 32;
+const UREF_ADDR_SIZE: usize = 32;
 const ACCESS_RIGHTS_SIZE: usize = 1;
-pub const UREF_SIZE_SERIALIZED: usize = U32_SIZE + UREF_ID_SIZE + U32_SIZE + ACCESS_RIGHTS_SIZE;
+pub const UREF_SIZE_SERIALIZED: usize =
+    U32_SIZE + UREF_ADDR_SIZE + OPTION_SIZE + ACCESS_RIGHTS_SIZE;
 
 bitflags! {
     #[allow(clippy::derive_hash_xor_eq)]
@@ -53,22 +55,25 @@ impl bytesrepr::FromBytes for AccessRights {
 
 /// Represents an unforgeable reference
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct URef([u8; UREF_ID_SIZE], Option<AccessRights>);
+pub struct URef([u8; UREF_ADDR_SIZE], Option<AccessRights>);
 
 impl URef {
     /// Creates a [`URef`] from an id and access rights.
-    pub fn new(id: [u8; UREF_ID_SIZE], access_rights: AccessRights) -> Self {
+    pub fn new(id: [u8; UREF_ADDR_SIZE], access_rights: AccessRights) -> Self {
         URef(id, Some(access_rights))
     }
 
     /// Creates a [`URef`] from an id and optional access rights.  [`URef::new`] is the
     /// preferred constructor for most common use-cases.
-    pub fn unsafe_new(id: [u8; UREF_ID_SIZE], maybe_access_rights: Option<AccessRights>) -> Self {
+    pub(crate) fn unsafe_new(
+        id: [u8; UREF_ADDR_SIZE],
+        maybe_access_rights: Option<AccessRights>,
+    ) -> Self {
         URef(id, maybe_access_rights)
     }
 
-    /// Returns the id of this URef.
-    pub fn id(&self) -> [u8; UREF_ID_SIZE] {
+    /// Returns the address of this URef.
+    pub fn addr(&self) -> [u8; UREF_ADDR_SIZE] {
         self.0
     }
 
@@ -122,6 +127,42 @@ impl bytesrepr::FromBytes for URef {
         let (maybe_access_rights, rem): (Option<AccessRights>, &[u8]) =
             bytesrepr::FromBytes::from_bytes(rem)?;
         Ok((URef(id, maybe_access_rights), rem))
+    }
+}
+
+impl bytesrepr::FromBytes for Vec<URef> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+        let (size, mut stream): (u32, &[u8]) = bytesrepr::FromBytes::from_bytes(bytes)?;
+        let mut result: Vec<URef> = Vec::with_capacity(size as usize);
+        for _ in 0..size {
+            let (uref, rem): (URef, &[u8]) = bytesrepr::FromBytes::from_bytes(stream)?;
+            result.push(uref);
+            stream = rem;
+        }
+        Ok((result, stream))
+    }
+}
+
+impl bytesrepr::ToBytes for Vec<URef> {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let size = self.len() as u32;
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE);
+        result.extend(size.to_bytes()?);
+        result.extend(
+            self.iter()
+                .map(bytesrepr::ToBytes::to_bytes)
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .flatten(),
+        );
+        Ok(result)
+    }
+}
+
+impl<T> From<UPointer<T>> for URef {
+    fn from(uptr: UPointer<T>) -> Self {
+        let UPointer(id, access_rights, _) = uptr;
+        URef(id, Some(access_rights))
     }
 }
 
