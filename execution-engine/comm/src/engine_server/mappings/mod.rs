@@ -734,6 +734,12 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // TODO(mateusz.gorski): Fix error model for the storage errors.
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
+                    err @ EngineError::AddKeyFailure(_) => {
+                        execution_error(err.to_string(), cost, effect)
+                    }
+                    err @ EngineError::WASMSerializationError(_) => {
+                        execution_error(err.to_string(), cost, effect)
+                    }
                     EngineError::StorageError(storage_err) => {
                         execution_error(storage_err.to_string(), cost, effect)
                     }

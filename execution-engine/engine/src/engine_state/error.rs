@@ -1,5 +1,6 @@
 use failure::Fail;
 
+use common::value::account;
 use shared::newtypes::Blake2bHash;
 
 #[derive(Fail, Debug)]
@@ -10,6 +11,10 @@ pub enum Error {
     ExecError(::execution::Error),
     #[fail(display = "Storage error")]
     StorageError(storage::error::Error),
+    #[fail(display = "Add key error")]
+    AddKeyFailure(common::value::account::AddKeyFailure),
+    #[fail(display = "WASM serialization error")]
+    WASMSerializationError(parity_wasm::SerializationError),
 }
 
 impl From<wasm_prep::PreprocessingError> for Error {
@@ -32,7 +37,6 @@ impl From<wasm_prep::PreprocessingError> for Error {
             }
             wasm_prep::PreprocessingError::StackLimiterError => {
                 Error::PreprocessingError(String::from("Wasm contract error: Stack limiter error."))
-
             }
         }
     }
@@ -47,6 +51,18 @@ impl From<storage::error::Error> for Error {
 impl From<::execution::Error> for Error {
     fn from(error: ::execution::Error) -> Self {
         Error::ExecError(error)
+    }
+}
+
+impl From<account::AddKeyFailure> for Error {
+    fn from(error: account::AddKeyFailure) -> Self {
+        Error::AddKeyFailure(error)
+    }
+}
+
+impl From<parity_wasm::SerializationError> for Error {
+    fn from(error: parity_wasm::SerializationError) -> Self {
+        Error::WASMSerializationError(error)
     }
 }
 

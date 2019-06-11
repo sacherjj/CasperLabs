@@ -57,6 +57,8 @@ pub trait History {
         prestate_hash: Blake2bHash,
         effects: HashMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error>;
+
+    fn current_root(&self) -> Blake2bHash;
 }
 
 const GLOBAL_STATE_COMMIT_READS: &str = "global_state_commit_reads";

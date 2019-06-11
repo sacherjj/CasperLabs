@@ -11,6 +11,7 @@ extern crate lmdb;
 extern crate parity_wasm;
 extern crate proptest;
 extern crate protobuf;
+extern crate rand;
 extern crate shared;
 extern crate storage;
 extern crate wabt;
@@ -32,12 +33,11 @@ use engine_server::*;
 use execution_engine::engine_state::EngineState;
 use lmdb::DatabaseFlags;
 
-use shared::init::mocked_account;
 use shared::logging::log_settings::{LogLevelFilter, LogSettings};
 use shared::logging::{log_level, log_settings};
 use shared::newtypes::CorrelationId;
 use shared::os::get_page_size;
-use shared::{logging, socket};
+use shared::{init, logging, socket};
 use storage::global_state::lmdb::LmdbGlobalState;
 use storage::trie_store::lmdb::{LmdbEnvironment, LmdbTrieStore};
 
@@ -274,7 +274,7 @@ fn get_engine_state(
     };
 
     let global_state = {
-        let init_state = mocked_account([48u8; 32]);
+        let init_state = init::mocked_account([48u8; 32]);
         LmdbGlobalState::from_pairs(
             CorrelationId::new(),
             Arc::clone(&environment),

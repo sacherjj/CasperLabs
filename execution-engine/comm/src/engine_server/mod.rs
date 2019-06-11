@@ -5,6 +5,7 @@ use std::marker::{Send, Sync};
 use std::time::Instant;
 
 use common::key::Key;
+use common::value::U512;
 use execution_engine::engine_state::error::Error as EngineError;
 use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::EngineState;
@@ -15,7 +16,7 @@ use mappings::*;
 use shared::logging;
 use shared::logging::log_duration;
 use shared::newtypes::{Blake2bHash, CorrelationId};
-use storage::global_state::History;
+use storage::global_state::{CommitResult, History};
 use wasm_prep::wasm_costs::WasmCosts;
 use wasm_prep::{Preprocessor, WasmiPreprocessor};
 
@@ -290,6 +291,54 @@ where
         );
 
         grpc::SingleResponse::completed(validate_result)
+    }
+
+    #[allow(dead_code)]
+    fn run_genesis(
+        &self,
+        _request_options: ::grpc::RequestOptions,
+        genesis_request: ipc::GenesisRequest,
+    ) -> ::grpc::SingleResponse<ipc::GenesisResponse> {
+        let correlation_id = CorrelationId::new();
+
+        let account_addr = {
+            let mut ret = [0u8; 32];
+            ret.clone_from_slice(&genesis_request.address);
+            ret
+        };
+
+        let initial_tokens: U512 = genesis_request.get_initial_tokens().try_into().unwrap();
+
+        let timestamp: u64 = genesis_request.get_timestamp();
+
+        let mint_bytes = genesis_request.get_mint_code().get_code().to_vec();
+
+        let deploy_bytes = &[];
+
+        let protocol_version = genesis_request.get_protocol_version().version;
+
+        match self.commit_genesis(
+            correlation_id,
+            account_addr,
+            initial_tokens,
+            timestamp,
+            &mint_bytes,
+            deploy_bytes,
+            protocol_version,
+        ) {
+            Ok(CommitResult::Success(post_state_hash)) => {
+                let genesis_response = {
+                    let mut genesis_response = ipc::GenesisResponse::new();
+                    let mut genesis_result = ipc::GenesisResult::new();
+                    genesis_result.set_poststate_hash(post_state_hash.to_vec());
+                    genesis_response.set_success(genesis_result);
+                    genesis_response
+                };
+
+                grpc::SingleResponse::completed(genesis_response)
+            }
+            _ => unimplemented!(),
+        }
     }
 }
 

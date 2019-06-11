@@ -336,6 +336,32 @@ message ValidateRequest {
     bytes payment_code = 2;
 }
 
+message GenesisRequest {
+    // genesis account public key, length 32 bytes
+    bytes address = 1;
+    RustBigInt initial_tokens = 2;
+    uint64 timestamp = 3;
+    DeployCode mint_code = 4;
+    DeployCode proof_of_stake_code = 5;
+    ProtocolVersion protocol_version = 6;
+}
+
+message GenesisResult {
+    bytes poststate_hash = 1;
+}
+
+message GenesisDeployError {
+    string message = 1;
+}
+
+message GenesisResponse {
+    oneof result {
+        GenesisResult success = 1;
+        GenesisDeployError failed_deploy = 2;
+    }
+}
+
+
 // Definition of the service.
 // ExecutionEngine implements server part while Consensus implements client part.
 service ExecutionEngineService {
@@ -343,4 +369,5 @@ service ExecutionEngineService {
     rpc commit (CommitRequest) returns (CommitResponse) {}
     rpc query (QueryRequest) returns (QueryResponse) {}
     rpc validate (ValidateRequest) returns (ValidateResponse) {}
+    rpc run_genesis (GenesisRequest) returns (GenesisResponse) {}
 }
