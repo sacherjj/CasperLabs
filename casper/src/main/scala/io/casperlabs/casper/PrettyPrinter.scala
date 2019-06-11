@@ -52,10 +52,10 @@ object PrettyPrinter {
           pk,
           nonce,
           urefs,
+          purseId,
           associatedKeys,
           actionThresholds,
-          accountActivity,
-          purseId
+          accountActivity
         )
         ) =>
       s"Account(${buildString(pk)}, $nonce, {${urefs.map(buildString).mkString(",")}}, ${purseId
