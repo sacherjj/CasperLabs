@@ -65,7 +65,7 @@ pub enum Key {
 // There is no impl LowerHex for neither [u8; 32] nor &[u8] in std.
 // I can't impl them b/c they're not living in current crate.
 fn addr_to_hex(addr: &[u8; 32]) -> String {
-    let mut str = String::new();
+    let mut str = String::with_capacity(64);
     for b in addr {
         write!(&mut str, "{:02x}", b).unwrap();
     }
