@@ -463,7 +463,8 @@ object ProtoUtil {
         sys.env.get("CL_DEFAULT_GAS_LIMIT").map(_.toLong).getOrElse(GAS_LIMIT)
       } else 0L,
     gasPrice = GAS_PRICE,
-    nonce = d.getHeader.nonce
+    nonce = d.getHeader.nonce,
+    authorizationKeys = d.approvals.map(_.approverPublicKey)
   )
 
   def dependenciesHashesOf(b: Block): List[BlockHash] = {

@@ -89,7 +89,10 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                values <- queries.toList.traverse {
                                           query =>
                                             for {
-                                              key <- Utils.toKey[F](query.keyType, query.key)
+                                              key <- Utils.toKey[F](
+                                                      query.keyType,
+                                                      query.key
+                                                    )
                                               possibleResponse <- ExecutionEngineService[F]
                                                                    .query(
                                                                      stateHash,

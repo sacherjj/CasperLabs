@@ -9,6 +9,7 @@ import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
 import io.casperlabs.casper.consensus
 import io.casperlabs.client.configuration.Streaming
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
@@ -156,7 +157,7 @@ object DeployRuntime {
       }
       accountPublicKey <- Sync[F].fromOption(
                            from
-                             .map(ByteString.copyFromUtf8)
+                             .map(account => ByteString.copyFrom(Base16.decode(account)))
                              .orElse(maybePublicKey.map(ByteString.copyFrom)),
                            new IllegalArgumentException("--from or --public-key must be presented")
                          )
