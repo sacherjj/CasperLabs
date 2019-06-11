@@ -26,24 +26,34 @@ impl<T> From<PoisonError<T>> for AccumulationError {
     }
 }
 
+/// A purpose-built, time-bounded queue where we have [`drain`](Accumulator::drain) instead of `pop`.
+/// By "time-bounded", we mean that if the queue isn't drained within a given duration since
+/// creation or the last call to [`drain`](Accumulator::drain), then each subsequent
+/// [`push`](Accumulator::push) will remove the oldest item in the queue.
+
+/// It can be shared across threads. Because it is purpose-built for this application, it is
+/// expected that there will be a single pusher and a single drainer, though it can support multiple
+/// drainers. It is designed to ensure that a call to push is not blocked by a call to drain. The
+/// behavior with multiple pushers is unspecified, as it is currently not designed to be used with
+/// multiple pushers.
 pub struct Accumulator<T> {
     main: Arc<Mutex<VecDeque<T>>>,
     alt: Arc<Mutex<VecDeque<T>>>,
     timer: Arc<RwLock<Instant>>,
-    poll_length: Arc<Duration>,
+    expiration_duration: Arc<Duration>,
 }
 
 impl<T: Clone> Accumulator<T> {
-    pub fn new(poll_length: Duration) -> Self {
+    pub fn new(expiration_duration: Duration) -> Self {
         let main = Arc::new(Mutex::new(VecDeque::new()));
         let alt = Arc::new(Mutex::new(VecDeque::new()));
         let timer = Arc::new(RwLock::new(Instant::now()));
-        let poll_length = Arc::new(poll_length);
+        let expiration_duration = Arc::new(expiration_duration);
         Accumulator {
             main,
             alt,
             timer,
-            poll_length,
+            expiration_duration,
         }
     }
 }
@@ -59,7 +69,7 @@ impl<T: Clone> Pusher<T> for Accumulator<T> {
             }
             let expired = {
                 let timer = self.timer.read()?;
-                timer.elapsed() > *self.poll_length
+                timer.elapsed() > *self.expiration_duration
             };
             if expired {
                 main_guard.pop_front();
@@ -91,12 +101,12 @@ impl<T> Clone for Accumulator<T> {
         let main = Arc::clone(&self.main);
         let alt = Arc::clone(&self.alt);
         let timer = Arc::clone(&self.timer);
-        let poll_length = Arc::clone(&self.poll_length);
+        let poll_length = Arc::clone(&self.expiration_duration);
         Accumulator {
             main,
             alt,
             timer,
-            poll_length,
+            expiration_duration: poll_length,
         }
     }
 }
