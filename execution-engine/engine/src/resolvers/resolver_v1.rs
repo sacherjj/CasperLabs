@@ -113,6 +113,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(vec![], Some(ValueType::I64)),
                 PROTOCOL_VERSION_FUNC_INDEX,
             ),
+            "revert" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                REVERT_FUNC_INDEX,
+            ),
             "is_valid" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 IS_VALID_FN_INDEX,

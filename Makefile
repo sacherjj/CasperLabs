@@ -140,13 +140,13 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:test
 	mkdir -p $(dir $@) && touch $@
 
-# Make a test tagged version of client so all tags exist for integration-testing
+# Make a test tagged version of client so all tags exist for integration-testing.
 .make/docker-build/test/client: \
 		.make/docker-build/universal/client
 	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:test
 	mkdir -p $(dir $@) && touch $@
 
-# Make a test tagged version of client so all tags exist for integration-testing
+# Make an image to run Python tests under integration-testing.
 .make/docker-build/test/integration-testing: \
 		.make/docker-build/integration-testing
 	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:test
