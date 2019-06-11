@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Optional
 from collections import defaultdict
 
@@ -47,6 +48,23 @@ class DockerClient(CasperLabsClient):
 
     def propose(self) -> str:
         return self.invoke_client('propose')
+
+    def propose_with_retry(self, max_attempts: int, retry_seconds: int) -> str:
+        # With many threads using the same account the nonces will be interleaved.
+        # Only one node can propose at a time, the others have to wait until they
+        # receive the block and then try proposing again.
+        attempt = 0
+        while True:
+            try:
+                return self.propose()
+            except NonZeroExitCodeError:
+                if attempt < max_attempts:
+                    logging.debug("Could not propose; retrying later.")
+                    attempt += 1
+                    time.sleep(retry_seconds)
+                else:
+                    logging.debug("Could not propose; no more retries!")
+                    raise ex
 
     def deploy(self,
                from_address: str = "3030303030303030303030303030303030303030303030303030303030303030",

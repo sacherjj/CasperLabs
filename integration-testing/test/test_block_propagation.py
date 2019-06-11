@@ -1,5 +1,4 @@
 import threading
-import time
 from test.cl_node.client_parser import parse_show_blocks
 from test.cl_node.docker_node import DockerNode
 from test.cl_node.errors import NonZeroExitCodeError
@@ -18,18 +17,14 @@ class DeployThread(threading.Thread):
     def __init__(self,
             node: DockerNode,
             batches_of_contracts: List[List[str]],
-            max_attempts,
-            retry_seconds) -> None:
+            max_attempts: int,
+            retry_seconds: int) -> None:
         threading.Thread.__init__(self)
         self.node = node
         self.batches_of_contracts = batches_of_contracts
         self.deployed_blocks_hashes = set()
         self.max_attempts = max_attempts
         self.retry_seconds = retry_seconds
-
-    def propose(self):
-        propose_output = self.node.client.propose()
-        return extract_block_hash_from_propose_output(propose_output)
 
     def run(self) -> None:
         for batch in self.batches_of_contracts:
@@ -38,26 +33,10 @@ class DeployThread(threading.Thread):
                                                             payment_contract = contract,
                                                             private_key="validator-0-private.pem",
                                                             public_key="validator-0-public.pem")
-            # With many threads using the same account the nonces will be interleaved.
-            # Only one node can propose at a time, the others have to wait until they
-            # receive the block and then try proposing again.
-            attempt = 0
-            while True:
-                try:
-                    block_hash = self.propose()
-                    self.deployed_blocks_hashes.add(block_hash)
-                except NonZeroExitCodeError:
-                    if attempt < self.max_attempts:
-                        logging.debug("Could not propose; retrying later.")
-                        attempt += 1
-                        time.sleep(self.retry_seconds)
-                    else:
-                        logging.debug("Could not propose; no more retries!")
-                        raise ex
-                else:
-                    break
 
-
+            propose_output = self.node.client.propose_with_retry(self.max_attempts, self.retry_seconds)
+            block_hash = extract_block_hash_from_propose_output(propose_output)
+            self.deployed_blocks_hashes.add(block_hash)
 
 
 @pytest.fixture()
