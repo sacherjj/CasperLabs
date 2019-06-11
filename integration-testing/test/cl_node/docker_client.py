@@ -52,9 +52,9 @@ class DockerClient(CasperLabsClient):
                from_address: str = "3030303030303030303030303030303030303030303030303030303030303030",
                gas_limit: int = 1000000,
                gas_price: int = 1,
-               nonce: int = None,
-               session_contract: Optional[str] = 'test_helloname.wasm',
-               payment_contract: Optional[str] = 'test_helloname.wasm',
+               nonce: Optional[int] = None,
+               session_contract: str = 'test_helloname.wasm',
+               payment_contract: str = 'test_helloname.wasm',
                private_key: Optional[str] = None,
                public_key: Optional[str] = None) -> str:
 

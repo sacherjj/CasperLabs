@@ -103,11 +103,12 @@ def test_block_propagation(nodes,
 
 
 
-def deploy_and_propose(node, contract):
+def deploy_and_propose(node, contract, nonce=None):
     assert 'Success' in node.client.deploy(session_contract = contract,
                                            payment_contract = contract,
                                            private_key="validator-0-private.pem",
-                                           public_key="validator-0-public.pem")
+                                           public_key="validator-0-public.pem",
+                                           nonce = nonce)
     propose_output = node.client.propose()
     return extract_block_hash_from_propose_output(propose_output)
 
@@ -175,18 +176,18 @@ def test_network_partition_and_rejoin(four_nodes_network):
 
     # Propose separately in each partition. They should not see each others' blocks,
     # so everyone has the genesis plus the 1 block proposed in its partition.
-    deploy_and_propose(partitions[0][0], C[0])
-    deploy_and_propose(partitions[1][0], C[1])
+    # Using the same nonce in both partitions because otherwise one of them will
+    # sit there unable to propose; should use separate accounts really.
+    deploy_and_propose(partitions[0][0], C[0], nonce = 1)
+    deploy_and_propose(partitions[1][0], C[1], nonce = 1)
 
     for node in nodes:
         wait_for_blocks_count_at_least(node, 2, 2, node.timeout * 2)
 
     logging.info("CONNECT PARTITIONS")
-    #four_nodes_network.connect((p[0] for p in partitions))
     for connection in connections_between_partitions:
         four_nodes_network.connect(connection)
 
-    #for node in nodes: wait_for_peers_count_at_least(node, n-1, node.timeout)
     logging.info("PARTITIONS CONNECTED")
 
     # NOTE: Currently `NodeDiscoveryImpl.alivePeersInAscendingDistance` pings the peers
@@ -200,17 +201,17 @@ def test_network_partition_and_rejoin(four_nodes_network):
     # however, nodes in partition[0] will still not see blocks from partition[1]
     # until they also propose a new one on top of the block the created during
     # the network outage.
-    deploy_and_propose(nodes[0], C[2])
+    deploy_and_propose(nodes[0], C[2], nonce = 2)
 
     # NOTE: Currently the node closes the channel only after it has detected a failure,
     # but the syncing will not retry it. A second attempt will create a new channel though.
-    deploy_and_propose(nodes[0], C[2])
+    deploy_and_propose(nodes[0], C[2], nonce = 3)
 
     for node in partitions[0]:
-        logging.info(f"CHECK {node} HAS ALL BLOCKS")
+        logging.info(f"CHECK {node} HAS ALL BLOCKS CREATED IN PARTITION 1")
         wait_for_blocks_count_at_least(node, 4, 4, node.timeout * 2)
 
     for node in partitions[1]:
-        logging.info(f"CHECK {node} HAS ALL NODES")
+        logging.info(f"CHECK {node} HAS ALL BLOCKS CREATED IN PARTITION 1 and 2")
         wait_for_blocks_count_at_least(node, 5, 5, node.timeout * 2)
 
