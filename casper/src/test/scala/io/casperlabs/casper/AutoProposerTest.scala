@@ -27,7 +27,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
 
   behavior of "AutoProposer"
 
-  val waitForCheck = Timer[Task].sleep(5 * DefaultCheckInterval)
+  val waitForCheck = Timer[Task].sleep(10 * DefaultCheckInterval)
 
   it should "propose if more than max-count deploys are accumulated within max-interval" in TestFixture(
     maxInterval = 5.seconds,
@@ -126,7 +126,7 @@ object AutoProposerTest {
     def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
   }
 
-  val DefaultCheckInterval = 10.millis
+  val DefaultCheckInterval = 25.millis
 
   object TestFixture {
     def apply(
