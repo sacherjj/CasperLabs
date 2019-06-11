@@ -67,7 +67,7 @@ object Estimator {
       scores           <- lmdScoring(blockDag, latestMessagesHashes)
       newMainParent    <- forkChoiceTip(blockDag, lastFinalizedBlockHash, scores)
       parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
-      sortedParents    = parents.sortBy(b => scores.getOrElse(b, 0L) -> b.toString())
+      sortedParents    = parents.sortBy(b => -scores.getOrElse(b, 0L) -> b.toString())
       secondaryParents = parents.filter(_ != newMainParent)
     } yield newMainParent +: secondaryParents
   }
