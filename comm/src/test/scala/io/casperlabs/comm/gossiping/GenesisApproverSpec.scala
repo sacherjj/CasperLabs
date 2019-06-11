@@ -98,7 +98,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
       ) { approver =>
         for {
           r0 <- approver.getCandidate
-          _  <- Task.sleep(200.millis)
+          _  <- Task.sleep(500.millis)
           r1 <- approver.getCandidate
         } yield {
           r0.isLeft shouldBe true
