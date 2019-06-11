@@ -461,8 +461,10 @@ where
         let mut associated_keys = RefMut::map(account.borrow_mut(), |account| {
             account.associated_keys_mut()
         });
-        let result = associated_keys.remove_key(&public_key);
-        Ok(result as i32)
+        match associated_keys.remove_key(&public_key) {
+            Ok(_) => Ok(0),
+            Err(e) => Ok(e as i32),
+        }
     }
 
     fn set_threshold(&mut self, action_type: ActionType, threshold: Weight) -> Result<i32, Trap> {

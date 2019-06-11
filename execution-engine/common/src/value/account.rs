@@ -211,6 +211,21 @@ impl From<i32> for AddKeyFailure {
     }
 }
 
+#[repr(i32)]
+pub enum RemoveKeyFailure {
+    /// Key does not exist in the list of associated keys.
+    MissingKey = 1,
+}
+
+impl From<i32> for RemoveKeyFailure {
+    fn from(value: i32) -> RemoveKeyFailure {
+        match value {
+            d if d == RemoveKeyFailure::MissingKey as i32 => RemoveKeyFailure::MissingKey,
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Debug)]
 pub struct AssociatedKeys(BTreeMap<PublicKey, Weight>);
 
@@ -241,8 +256,11 @@ impl AssociatedKeys {
 
     /// Removes key from the associated keys set.
     /// Returns true if value was found in the set prior to the removal, false otherwise.
-    pub fn remove_key(&mut self, key: &PublicKey) -> bool {
-        self.0.remove(key).is_some()
+    pub fn remove_key(&mut self, key: &PublicKey) -> Result<(), RemoveKeyFailure> {
+        self.0
+            .remove(key)
+            .map(|_| ())
+            .ok_or(RemoveKeyFailure::MissingKey)
     }
 
     pub fn get(&self, key: &PublicKey) -> Option<&Weight> {
@@ -587,7 +605,7 @@ mod tests {
         let pk = PublicKey([0u8; KEY_SIZE]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk, weight);
-        assert!(keys.remove_key(&pk));
-        assert!(!keys.remove_key(&PublicKey([1u8; KEY_SIZE])));
+        assert!(keys.remove_key(&pk).is_ok());
+        assert!(keys.remove_key(&PublicKey([1u8; KEY_SIZE])).is_err());
     }
 }
