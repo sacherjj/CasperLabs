@@ -406,8 +406,8 @@ class DownloadManagerSpec
       "try again later with exponential backoff" in {
         TestFixture(
           remote = _ => Task.raiseError(io.grpc.Status.UNAVAILABLE.asRuntimeException()),
-          // * -> 1 second -> * -> 2 seconds -> * -> 4 seconds -> fail
-          retriesConf = RetriesConf(3, 1.second, 2.0),
+          // * -> 1 second -> * -> 2 seconds -> *  -> fail
+          retriesConf = RetriesConf(2, 1.second, 2.0),
           timeout = 10.seconds
         ) {
           case (manager, _) =>
@@ -424,23 +424,23 @@ class DownloadManagerSpec
                     log.warns should have size 2
                     log.warns.last should include("attempt: 2")
                   }
-              _ <- Task.sleep(3000.millis)
+              _ <- Task.sleep(2000.millis)
               _ <- Task {
                     log.warns should have size 3
                     log.warns.last should include("attempt: 3")
                   }
+              // Next try would be after 4 second delay, but it shouldn't try any more.
               _ <- Task.sleep(4000.millis)
               _ <- Task {
                     log.warns should have size 3
                     log.warns.last should include("attempt: 3")
                     log.causes should have size 1
-                    log.causes.head shouldBe an[DownloadManagerImpl.RetriesFailure]
-                    log.causes.head
-                      .asInstanceOf[DownloadManagerImpl.RetriesFailure]
-                      .getCause shouldBe an[io.grpc.StatusRuntimeException]
                   }
-              _ <- w.attempt
-            } yield ()
+              r <- w.attempt
+            } yield {
+              r.isLeft shouldBe true
+              r.left.get shouldBe an[io.grpc.StatusRuntimeException]
+            }
         }
       }
     }
