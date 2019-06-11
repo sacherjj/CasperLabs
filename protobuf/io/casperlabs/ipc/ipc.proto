@@ -8,13 +8,17 @@ message DeployCode {
 }
 
 message Deploy {
-    bytes address = 1; // length 20 bytes
+    // Public key of the account which is the context of the execution.
+    bytes address = 1; // length 32 bytes
     uint64 timestamp = 2;
     DeployCode session = 3;
     DeployCode payment = 4;
     uint64 gas_limit = 5;
     uint64 gas_price = 6;
     uint64 nonce = 7;
+    // Public keys used to sign this deploy, to be checked against the keys
+    // associated with the account.
+    repeated bytes authorization_keys = 8;
 }
 
 message ProtocolVersion  {

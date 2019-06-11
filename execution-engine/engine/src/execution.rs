@@ -56,6 +56,8 @@ pub enum Error {
         deploy_nonce: u64,
         expected_nonce: u64,
     },
+    /// Reverts execution with a provided status
+    Revert(u32),
 }
 
 impl fmt::Display for Error {
@@ -428,6 +430,11 @@ where
             .set(dest_ptr, &seed)
             .map_err(|e| Error::Interpreter(e).into())
     }
+
+    /// Reverts contract execution with a status specified.
+    pub fn revert(&mut self, status: u32) -> Trap {
+        Error::Revert(status).into()
+    }
 }
 
 fn as_usize(u: u32) -> usize {
@@ -637,6 +644,13 @@ where
                     Ok(Some(RuntimeValue::I32(0)))
                 }
             }
+
+            FunctionIndex::RevertFuncIndex => {
+                // args(0) = status u32
+                let status = Args::parse(args)?;
+
+                Err(self.revert(status))
+            }
         }
     }
 }
@@ -703,12 +717,21 @@ where
                 // If the "error" was in fact a trap caused by calling `ret` then
                 // this is normal operation and we should return the value captured
                 // in the Runtime result field.
-                if let Error::Ret(ret_urefs) = host_error.downcast_ref::<Error>().unwrap() {
-                    //insert extra urefs returned from call
-                    let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
-                        vec_key_rights_to_map(ret_urefs.clone());
-                    current_runtime.context.add_urefs(ret_urefs_map);
-                    return Ok(runtime.result);
+                let downcasted_error = host_error.downcast_ref::<Error>().unwrap();
+                match downcasted_error {
+                    Error::Ret(ref ret_urefs) => {
+                        //insert extra urefs returned from call
+                        let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
+                            vec_key_rights_to_map(ret_urefs.clone());
+                        current_runtime.context.add_urefs(ret_urefs_map);
+                        return Ok(runtime.result);
+                    }
+                    Error::Revert(status) => {
+                        // Propagate revert as revert, instead of passing it as
+                        // InterpreterError.
+                        return Err(Error::Revert(*status));
+                    }
+                    _ => {}
                 }
             }
             Err(Error::Interpreter(e))
@@ -793,13 +816,14 @@ pub trait Executor<A> {
         &self,
         parity_module: A,
         args: &[u8],
-        account_addr: [u8; 32],
+        account: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
+        nonce_check: bool,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -812,18 +836,18 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        account_addr: [u8; 32],
+        acct_key: Key,
         timestamp: u64,
         nonce: u64,
         gas_limit: u64,
         protocol_version: u64,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
+        nonce_check: bool,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>,
     {
-        let acct_key = Key::Account(account_addr);
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
         #[allow(unreachable_code)]
@@ -847,34 +871,37 @@ impl Executor<Module> for WasmiExecutor {
             }
         };
 
-        // Check the difference of a request nonce and account nonce.
-        // Since both nonce and account's nonce are unsigned, so line below performs
-        // a checked subtraction, where underflow (or overflow) would be safe.
-        let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
-        // Difference should always be 1 greater than current nonce for a
-        // given account.
-        if delta != 1 {
-            return ExecutionResult::precondition_failure(
-                Error::InvalidNonce {
-                    deploy_nonce: nonce,
-                    expected_nonce: account.nonce() + 1,
-                }
-                .into(),
+        if nonce_check {
+            // Check the difference of a request nonce and account nonce.
+            // Since both nonce and account's nonce are unsigned, so line below performs
+            // a checked subtraction, where underflow (or overflow) would be safe.
+            let delta = nonce.checked_sub(account.nonce()).unwrap_or(0);
+            // Difference should always be 1 greater than current nonce for a
+            // given account.
+            if delta != 1 {
+                return ExecutionResult::precondition_failure(
+                    Error::InvalidNonce {
+                        deploy_nonce: nonce,
+                        expected_nonce: account.nonce() + 1,
+                    }
+                    .into(),
+                );
+            }
+
+            let mut updated_account = account.clone();
+            updated_account.increment_nonce();
+            // Store updated account with new nonce
+            tc.borrow_mut().write(
+                validated_key,
+                Validated::new(updated_account.into(), Validated::valid).unwrap(),
             );
         }
-
-        let mut updated_account = account.clone();
-        updated_account.increment_nonce();
-        // Store updated account with new nonce
-        tc.borrow_mut().write(
-            validated_key,
-            Validated::new(updated_account.into(), Validated::valid).unwrap(),
-        );
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
         let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
             vec_key_rights_to_map(uref_lookup_local.values().cloned());
-        let rng = create_rng(&account_addr, timestamp, nonce);
+        let account_bytes = acct_key.as_account().unwrap();
+        let rng = create_rng(&account_bytes, timestamp, nonce);
         let gas_counter = 0u64;
         let fn_store_id = 0u32;
 
@@ -1038,6 +1065,7 @@ mod tests {
 
         let executor = WasmiExecutor;
         let account_address = [0u8; 32];
+        let account_key: Key = Key::Account(account_address);
         let parity_module: Module = ModuleBuilder::new()
             .with_import(ImportEntry::new(
                 "env".to_string(),
@@ -1052,13 +1080,14 @@ mod tests {
         let exec_result = executor.exec(
             parity_module,
             &[],
-            account_address,
+            account_key,
             0u64,
             invalid_nonce,
             100u64,
             1u64,
             CorrelationId::new(),
             tc,
+            true,
         );
 
         match exec_result {

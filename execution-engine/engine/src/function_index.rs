@@ -24,6 +24,7 @@ pub enum FunctionIndex {
     ProtocolVersionFuncIndex = 17,
     SeedFnIndex = 18,
     IsValidFnIndex = 19,
+    RevertFuncIndex = 20,
 }
 
 impl Into<usize> for FunctionIndex {

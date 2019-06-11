@@ -16,7 +16,7 @@ import io.casperlabs.node._
 import io.casperlabs.node.api.casper.CasperGrpcMonix
 import io.casperlabs.node.api.control.ControlGrpcMonix
 import io.casperlabs.node.api.diagnostics.DiagnosticsGrpcMonix
-import io.casperlabs.node.api.graphql.GraphQL
+import io.casperlabs.node.api.graphql.{FinalizedBlocksStream, GraphQL}
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.node.diagnostics.effects.diagnosticsService
 import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
@@ -104,7 +104,7 @@ object Servers {
     ) *>
       Resource.liftF(Log[F].info(s"External gRPC services started on port ${port}."))
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: SafetyOracle: BlockStore: ContextShift](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: SafetyOracle: BlockStore: ContextShift: FinalizedBlocksStream: ExecutionEngineService](
       port: Int,
       conf: Configuration,
       id: NodeIdentifier,

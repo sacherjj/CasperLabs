@@ -4,11 +4,12 @@ use std::io::ErrorKind;
 use std::marker::{Send, Sync};
 use std::time::Instant;
 
+use common::key::Key;
 use execution_engine::engine_state::error::Error as EngineError;
+use execution_engine::engine_state::execution_result::ExecutionResult;
 use execution_engine::engine_state::EngineState;
 use execution_engine::execution::{Executor, WasmiExecutor};
 use execution_engine::tracking_copy::QueryResult;
-use ipc::*;
 use ipc_grpc::ExecutionEngineService;
 use mappings::*;
 use shared::logging;
@@ -156,7 +157,7 @@ where
 
         let executor = WasmiExecutor;
 
-        let deploys_result: Result<Vec<DeployResult>, RootNotFound> = run_deploys(
+        let deploys_result: Result<Vec<ipc::DeployResult>, ipc::RootNotFound> = run_deploys(
             &self,
             &executor,
             &preprocessor,
@@ -234,8 +235,8 @@ where
     fn validate(
         &self,
         _request_options: ::grpc::RequestOptions,
-        validate_request: ValidateRequest,
-    ) -> grpc::SingleResponse<ValidateResponse> {
+        validate_request: ipc::ValidateRequest,
+    ) -> grpc::SingleResponse<ipc::ValidateResponse> {
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
@@ -267,15 +268,15 @@ where
 
         let validate_result = match pay_mod.and(ses_mod) {
             Ok(_) => {
-                let mut validate_result = ValidateResponse::new();
-                validate_result.set_success(ValidateResponse_ValidateSuccess::new());
+                let mut validate_result = ipc::ValidateResponse::new();
+                validate_result.set_success(ipc::ValidateResponse_ValidateSuccess::new());
                 validate_result
             }
             Err(cause) => {
                 let cause_msg = cause.to_string();
                 logging::log_error(&cause_msg);
 
-                let mut validate_result = ValidateResponse::new();
+                let mut validate_result = ipc::ValidateResponse::new();
                 validate_result.set_failure(cause_msg);
                 validate_result
             }
@@ -298,9 +299,9 @@ fn run_deploys<A, H, E, P>(
     preprocessor: &P,
     prestate_hash: Blake2bHash,
     deploys: &[ipc::Deploy],
-    protocol_version: &ProtocolVersion,
+    protocol_version: &ipc::ProtocolVersion,
     correlation_id: CorrelationId,
-) -> Result<Vec<DeployResult>, RootNotFound>
+) -> Result<Vec<ipc::DeployResult>, ipc::RootNotFound>
 where
     H: History,
     E: Executor<A>,
@@ -319,11 +320,19 @@ where
             let session_contract = deploy.get_session();
             let module_bytes = &session_contract.code;
             let args = &session_contract.args;
-            let address: [u8; 32] = {
-                let mut tmp = [0u8; 32];
-                tmp.copy_from_slice(&deploy.address);
-                tmp
+            let address = {
+                if deploy.address.len() != 32 {
+                    let err = EngineError::PreprocessingError(
+                        "Public key has to be exactly 32 bytes long.".to_string(),
+                    );
+                    let failure = ExecutionResult::precondition_failure(err);
+                    return Ok(failure.into());
+                }
+                let mut dest = [0; 32];
+                dest.copy_from_slice(&deploy.address);
+                Key::Account(dest)
             };
+
             let timestamp = deploy.timestamp;
             let nonce = deploy.nonce;
             let gas_limit = deploy.gas_limit as u64;

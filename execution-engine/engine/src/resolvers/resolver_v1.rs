@@ -121,6 +121,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::SeedFnIndex.into(),
             ),
+            "revert" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::RevertFuncIndex.into(),
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",

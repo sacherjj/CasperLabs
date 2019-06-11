@@ -20,7 +20,7 @@ dynamic-host-address = false
 no-upnp = false
 
 # Default timeout for roundtrip connections.
-default-timeout = 2000
+default-timeout = "5second"
 
 # Bootstrap casperlabs node address for initial seed.
 # bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"

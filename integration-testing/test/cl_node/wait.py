@@ -1,15 +1,13 @@
 import logging
 import re
 import time
-from typing import TYPE_CHECKING, List
+from test.cl_node.errors import NonZeroExitCodeError
+from typing import List
 
 import pytest
 import typing_extensions
 
 from .common import Network, WaitTimeoutError
-
-
-from test.cl_node.errors import NonZeroExitCodeError
 
 
 class PredicateProtocol(typing_extensions.Protocol):
@@ -146,6 +144,28 @@ class TotalBlocksOnNode:
         count = int(total_blocks.group(1)) - int(dup_blocks.group(1) or 0) + int(api_blocks.group(1) or 0)
         logging.info(count)
         return count == self.number_of_blocks
+
+
+class NodeDidNotGossip:
+    def __init__(self, node: 'Node') -> None:
+        self.node = node
+
+    def is_satisfied(self) -> bool:
+        _, data = self.node.get_metrics()
+        relay_accepted_total = re.compile(r"^casperlabs_comm_gossiping_Relaying_relay_accepted_total (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+        relay_rejected_total = re.compile(r"^casperlabs_comm_gossiping_Relaying_relay_rejected_total (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+        accepted_blocks = relay_accepted_total.search(data)
+        rejected_blocks = relay_rejected_total.search(data)
+        if None in [accepted_blocks, rejected_blocks]:
+            return False
+        return int(accepted_blocks.group(1)) == 0 and int(rejected_blocks.group(1)) == 0
+
+
+def get_new_blocks_requests_total(node: 'Node') -> int:
+    _, data = node.get_metrics()
+    new_blocks_requests = re.compile(r"^casperlabs_comm_grpc_GossipService_NewBlocks_requests_total (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+    new_blocks_requests_total = new_blocks_requests.search(data)
+    return int(new_blocks_requests_total.group(1))
 
 
 class HasAtLeastPeers:
@@ -295,6 +315,11 @@ def wait_for_peers_count_at_least(node: 'Node', npeers: int, timeout_seconds: in
 
 def wait_for_metrics_and_assert_blocks_avaialable(node: 'Node', timeout_seconds: int, number_of_blocks: int) -> None:
     predicate = MetricsAvailable(node, number_of_blocks)
+    wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
+
+
+def wait_for_gossip_metrics_and_assert_blocks_gossiped(node: 'Node', timeout_seconds: int, number_of_blocks: int) -> None:
+    predicate = NodeDidNotGossip(node)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 
