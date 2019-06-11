@@ -770,6 +770,34 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             let error_msg = format!("Exit code: {}", status);
                             execution_error(error_msg, cost, effect)
                         }
+                        ExecutionError::Interpreter(error) => {
+                            // If the error happens during contract execution it's mapped to HostError
+                            // and wrapped in Interpreter error, so we may end up with InterpreterError(HostError(InterpreterError))).
+                            // In order to provide clear error messages we have to downcast and match on the inner error,
+                            // otherwise we end up with `Host(Trap(Trap(TrapKind:InterpreterError)))`.
+                            // TODO: This really should be happening in the `Executor::exec`.
+                            match error.as_host_error() {
+                                Some(host_error) => {
+                                    let downcasted_error = host_error.downcast_ref::<ExecutionError>().unwrap();
+                                    match downcasted_error {
+                                        ExecutionError::Revert(status) => {
+                                            let errors_msg = format!("Exit code: {}", status);
+                                            execution_error(errors_msg, cost, effect)
+                                        },
+                                        ExecutionError::KeyNotFound(key) => {
+                                            let errors_msg = format!("Key {:?} not found.", key);
+                                            execution_error(errors_msg, cost, effect)
+                                        }
+                                        other => execution_error(format!("{:?}", other), cost, effect)
+                                    }
+                                },
+
+                                None =>  {
+                                    let msg = format!("{:?}", error);
+                                    execution_error(msg, cost, effect)
+                                }
+                            }
+                        }
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
                             let msg = format!("{:?}", other);
