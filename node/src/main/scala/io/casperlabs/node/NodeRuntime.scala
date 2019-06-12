@@ -12,7 +12,12 @@ import cats.syntax.show._
 import com.olegpy.meow.effects._
 import io.casperlabs.blockstorage.util.fileIO.IOError
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.{BlockDagFileStorage, BlockStore, FileLMDBIndexBlockStore}
+import io.casperlabs.blockstorage.{
+  BlockDagFileStorage,
+  BlockStore,
+  CachingBlockStore,
+  FileLMDBIndexBlockStore
+}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.catscontrib.Catscontrib._
@@ -120,11 +125,20 @@ class NodeRuntime private[node] (
                                                       logEff,
                                                       raiseIOError,
                                                       metricsEff
-                                                    )
+                                                    ) evalMap { underlying =>
+                                                      CachingBlockStore[Effect](
+                                                        underlying,
+                                                        maxSizeBytes =
+                                                          conf.blockstorage.cacheMaxSizeBytes
+                                                      )(
+                                                        Sync[Effect],
+                                                        metricsEff
+                                                      )
+                                                    }
 
         blockDagStorage <- BlockDagFileStorage[Effect](
-                            conf.server.dataDir,
                             dagStoragePath,
+                            conf.blockstorage.latestMessagesLogMaxSizeFactor,
                             blockStore
                           )(
                             Concurrent[Effect],

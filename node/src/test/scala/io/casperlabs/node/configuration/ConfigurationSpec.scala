@@ -127,9 +127,9 @@ class ConfigurationSpec
       maxReaders = 1,
       useTls = false
     )
-    val blockStorage = BlockDagFileStorage.Config(
+    val blockStorage = Configuration.BlockStorage(
       latestMessagesLogMaxSizeFactor = 1,
-      dir = Paths.get("/tmp/block-dag-file-storage")
+      cacheMaxSizeBytes = 1
     )
     val kamonSettings = Configuration.Kamon(
       prometheus = false,

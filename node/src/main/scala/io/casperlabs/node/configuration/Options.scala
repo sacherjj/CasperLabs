@@ -488,6 +488,10 @@ private[configuration] final case class Options private (
       gen[Int]("Size factor for squashing block storage latest messages.")
 
     @scallop
+    val blockstorageCacheMaxSizeBytes =
+      gen[Long]("Maximum size of the in-memory block cache in bytes.")
+
+    @scallop
     val casperValidatorPublicKey =
       gen[String](
         "base-64 or PEM encoding of the public key to use for signing a proposed blocks. " +

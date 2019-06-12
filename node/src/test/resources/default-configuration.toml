@@ -82,6 +82,7 @@ auto-propose-max-count = 1
 
 [blockstorage]
 latest-messages-log-max-size-factor = 1
+cache-max-size-bytes = 1
 
 [metrics]
 prometheus = false
